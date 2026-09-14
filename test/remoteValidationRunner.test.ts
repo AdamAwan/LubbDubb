@@ -24,9 +24,12 @@ import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { StateQueryInput, ValidationCheck, ValidationCheckInput } from '../src/types.js';
 
 /*
- * The runner seam and the pre-flight. Every project-supplied command in this design is a live shell
- * command against a real environment — a browser suite most of all — so what these tests assert
- * about the fake is asserted on **its own record of what it was asked for**, never on an absence.
+ * The runner seam, and what assembly does *not* ask of it. Every project-supplied command in this
+ * design is a live shell command against a real environment — a browser suite most of all — so what
+ * these tests assert about the fake is asserted on **its own record of what it was asked for**,
+ * never on an absence. The harness asks a runner for one thing only: the offering refresh on its own
+ * clock. The listing a sheet is read against is taken by the **run**, in its pinned checkout
+ * (`test/remoteValidationListing.test.ts`).
  *
  * → docs/spec/36-remote-validation.md#the-runner-contract
  */
@@ -80,9 +83,9 @@ function reader(): FakeStateReader {
 }
 
 /**
- * The column, written directly. An area is really inherited from the `coverage` of a test part the
- * check covers (`test/planCoverageArea.test.ts`); these tests are about what the pre-flight does with
- * one, so they set it where the join would have.
+ * The column, written directly. An area is really named by a `suite` step
+ * (`test/planCoverageArea.test.ts`); these tests are about what a sheet does with one, so they set it
+ * where the step would have.
  */
 function setArea(file: string, goalRef: string, checkId: string, area: string): void {
   const db = new Database(file);
@@ -227,7 +230,7 @@ test('an area holding the delimiter its own list is joined on blocks its row at 
     const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
     assert.match(row?.blockedReason ?? '', /LUBBDUBB_SELECTORS/, 'and the reason names the delimiter');
     assert.match(row?.blockedReason ?? '', /two selectors that do not exist/);
-    assert.equal(row?.matched, null, 'the pre-flight leaves a row another cause has already blocked');
+    assert.equal(row?.matched, null, 'and nothing at assembly counts a row another cause has already blocked');
     assert.deepEqual(
       runnableSelectors(b.store, ACCEPTANCE, 'issue:12', b.store.remoteValidation.listRemoteSheetRows()),
       [],
@@ -325,116 +328,43 @@ test('the fake drives all three methods and spawns nothing, on its own record of
   assert.equal(runner.asked[1]?.tenant, 'validation-customer-1');
 });
 
-test('the pre-flight writes the matched count from the listing, before any press', async () => {
-  const b = bench(new FakeRemoteRunner({ acceptance: { listing: JSON.stringify([{ selector: AREA, tests: 12 }]) } }));
-  try {
-    seed(b);
-    await b.desk.run();
-
-    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
-    assert.equal(row?.matched, 12, 'the count is the listing’s, and nothing in this part has ever seen a report');
-    assert.equal(row?.blockedReason, null);
-    assert.equal(b.runner.asked[0]?.command, ACCEPTANCE.validate?.browser?.listSelectors);
-    assert.equal(b.runner.asked[0]?.profile, 'acc-uk');
-    assert.equal(b.runner.asked[0]?.tenant, 'validation-customer-1');
-  } finally {
-    shut(b);
-  }
-});
-
-test('a check whose area the listing does not offer is blocked before a press, and writes nothing on the check', async () => {
+test('assembly asks a runner nothing, and the sheet it writes carries no matched and no blockedReason', async () => {
   const b = bench(new FakeRemoteRunner({ acceptance: { listing: 'refunds\nsearch\n' } }));
-  try {
-    seed(b);
-    await b.desk.run();
-
-    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
-    assert.equal(row?.matched, 0, 'zero matched, and zero matched is never a pass');
-    assert.match(row?.blockedReason ?? '', /offers no selector `checkout`/);
-
-    // A blocked row writes nothing at all: no reading, no verdict, no world event.
-    assert.deepEqual(
-      b.store.remoteValidation.listRemoteReadings().filter((r) => r.rowId === row?.rowId),
-      [],
-    );
-    assert.equal(checkOf(b.store).state, 'unrun', 'the check is exactly as it was');
-    assert.equal(checkOf(b.store).resultBy, null);
-    assert.deepEqual(b.store.world.listWorldEvents(), [], 'and the pre-flight is a new writer: no WorldEvent');
-    assert.deepEqual(b.store.watches.listWatchReadings(), [], 'nor anything in watch_readings');
-  } finally {
-    shut(b);
-  }
-});
-
-test('a listing that could not answer blocks the check rows and leaves every other reading standing', async () => {
-  const b = bench(new FakeRemoteRunner({ acceptance: { listingFailure: 'the command exited 1: no such project' } }));
-  try {
-    seed(b);
-    await b.desk.run();
-
-    const rows = b.store.remoteValidation.listRemoteSheetRows();
-    const check = rows.find((r) => r.kind === 'check');
-    assert.match(check?.blockedReason ?? '', /could not say which selectors it offers/);
-    assert.equal(check?.matched, null, 'an unanswered listing counts nothing rather than counting zero');
-
-    // `blocked` resolves per row, never per run.
-    const state = rows.find((r) => r.kind === 'state');
-    assert.equal(state?.blockedReason, null, 'the state row is untouched by a runner that could not answer');
-    assert.equal(
-      b.store.remoteValidation.listRemoteReadings().find((r) => r.rowId === state?.rowId)?.outcome,
-      'passed',
-      'and the reading it already landed stands',
-    );
-  } finally {
-    shut(b);
-  }
-});
-
-test('a check that names no area is a person’s, and the pre-flight asks nothing about it', async () => {
-  const b = bench(new FakeRemoteRunner({ acceptance: { listing: 'refunds' } }));
-  try {
-    seed(b, null);
-    await b.desk.run();
-
-    const row = b.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
-    assert.equal(row?.blockedReason, null, 'a check declaring no area is manual, exactly as every check is today');
-    assert.equal(row?.matched, null);
-    assert.equal(
-      b.runner.asked.length,
-      1,
-      'the one listing is the offering refresh, which is about the environment and not about this check',
-    );
-    await b.desk.run();
-    assert.equal(b.runner.asked.length, 1, 'and the pre-flight asks nothing at all about a check naming no area');
-  } finally {
-    shut(b);
-  }
-});
-
-test('the pre-flight runs on the assembly pass only, and inside the desk’s cap of five', async () => {
-  const b = bench(new FakeRemoteRunner({ acceptance: { listing: JSON.stringify([{ selector: AREA, tests: 1 }]) } }));
   try {
     for (let n = 1; n <= 7; n += 1) seed(b, AREA, `issue:${String(n)}`);
     await b.desk.run();
-    assert.equal(
-      b.runner.asked.length,
-      6,
-      'a process spawn per sheet, bounded by the cap rather than the watch’s, beside the one offering refresh',
+    await b.desk.run();
+
+    // `refunds\nsearch` offers no `checkout`, which is exactly what the assembly-time listing used to
+    // block every one of these rows for. Assembly asks nothing now, so it blocks nothing: the
+    // mismatch is the run's own listing to find, one press later.
+    const rows = b.store.remoteValidation.listRemoteSheetRows().filter((r) => r.kind === 'check');
+    assert.equal(rows.length, 7, 'every sheet is assembled exactly as it always was, five to a pass');
+    for (const row of rows) {
+      assert.equal(row.blockedReason, null, 'nothing at assembly blocks a row on what a runner offers');
+      assert.equal(row.matched, null, 'and nothing at assembly writes a denominator');
+    }
+    assert.deepEqual(
+      runnableSelectors(b.store, ACCEPTANCE, 'issue:1', b.store.remoteValidation.listRemoteSheetRows()),
+      [AREA],
+      'so the row is pressable, and the press is where its area is put to the deployed runner',
     );
 
+    assert.equal(
+      b.runner.asked.length,
+      1,
+      'the one listing is the offering refresh, which is about the environment and not about any sheet',
+    );
     await b.desk.run();
-    assert.equal(b.runner.asked.length, 8, 'the backlog drains in a fixed order and nothing starves');
-
-    await b.desk.run();
-    assert.equal(b.runner.asked.length, 8, 'and a stamped arrival is never re-listed');
+    assert.equal(b.runner.asked.length, 1, 'and a third pass over seven sheets asks a runner nothing at all');
   } finally {
     shut(b);
   }
 });
 
-test('a pre-flight that throws is recorded through errors.record and never fails the cycle', async () => {
+test('an offering refresh that throws is recorded through errors.record and never fails the cycle', async () => {
   const logged: string[] = [];
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-preflight-throw-'));
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-listing-throw-'));
   const file = join(dir, 'harness.sqlite');
   const store = new Store(file);
   try {
@@ -457,9 +387,8 @@ test('a pre-flight that throws is recorded through errors.record and never fails
     seed({ store, file });
     await desk.run();
 
-    assert.equal(logged.length, 2, 'the offering refresh and the pre-flight each record their own failure');
+    assert.equal(logged.length, 1, 'the offering refresh is the one thing assembly asks a runner for');
     assert.match(logged[0] ?? '', /listing the selectors acceptance offers failed: the runner blew up/);
-    assert.match(logged[1] ?? '', /pre-flight for issue:12 on acceptance failed: the runner blew up/);
     assert.equal(
       store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
       'passed',
@@ -471,7 +400,7 @@ test('a pre-flight that throws is recorded through errors.record and never fails
   }
 });
 
-test('the pre-flight leaves a row another cause already blocked exactly as it is', () => {
+test('the listing read leaves a row another cause already blocked exactly as it is', () => {
   assert.deepEqual(
     preflightRows({
       environment: 'acceptance',
@@ -502,10 +431,15 @@ test('buildSystem takes remoteRunner, and defaults to the command implementation
   try {
     seedSystem(system, join(dir, 'harness.sqlite'));
     await system.harness.runCycle('manual');
-    assert.match(
-      system.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check')?.blockedReason ?? '',
-      /offers no selector `checkout`/,
+    assert.deepEqual(
+      system.store.remoteValidation.listSelectorOfferings().map((o) => o.selector),
+      ['refunds'],
       'the default spawned the project’s own command and read what it printed',
+    );
+    assert.equal(
+      system.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check')?.blockedReason,
+      null,
+      'and the offering is a convenience: it decides nothing about a row, which the run’s own listing does',
     );
   } finally {
     system.store.close();

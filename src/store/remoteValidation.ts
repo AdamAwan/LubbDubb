@@ -242,26 +242,6 @@ export class RemoteValidationStore {
   }
 
   /**
-   * What the pre-flight learned about a `check` row before any press was spent on it: how many tests
-   * the deployed runner's own listing attributes to the row's area, and why nothing can be learned
-   * here where it offers none. The count is written from the listing and from nowhere else.
-   */
-  recordRemotePreflight(
-    goalRef: string,
-    environment: string,
-    verdicts: readonly { rowId: string; matched: number | null; blockedReason: string | null }[],
-  ): void {
-    const now = this.ctx.now();
-    const write = this.ctx.prep(
-      `UPDATE remote_sheet_rows SET matched=@matched, blocked_reason=@blockedReason, updated_at=@now
-        WHERE goal_ref=@goalRef AND environment=@environment AND row_id=@rowId`,
-    );
-    this.ctx.db.transaction(() => {
-      for (const verdict of verdicts) write.run({ ...verdict, goalRef, environment, now });
-    })();
-  }
-
-  /**
    * What the run's own listing attributes to a `check` row's area, and **nothing else on the row**.
    * A reason the listing found is a `blocked` reading against the run, never a `blocked_reason`: a
    * reason on the row is a cause no press can overcome, and a mismatch a listing found is amendable.

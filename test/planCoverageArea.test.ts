@@ -243,8 +243,8 @@ test('with the area written, a sheet’s check row confirms and the run has a se
     await desk.run();
 
     const row = store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
-    assert.equal(row?.blockedReason, null, 'the pre-flight found the area the step named');
-    assert.equal(row?.matched, 4, 'and counted the tests the runner attributes to it');
+    assert.equal(row?.blockedReason, null, 'the area the step named is nothing the sheet blocks on');
+    assert.equal(row?.matched, null, 'and the denominator is the run’s own listing to write, never assembly’s');
     assert.deepEqual(
       runnableSelectors(store, ACCEPTANCE, 'issue:12', store.remoteValidation.listRemoteSheetRows()),
       ['Checkout Tests'],

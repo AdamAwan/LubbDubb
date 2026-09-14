@@ -20,8 +20,9 @@
 > the **run row** with the commits every reading through it straddled, and the **tenant** in its three
 > shapes with its `reseed` command and the age drawn at the gate ([Tenants](#tenants)); and — as of
 > the runner seam — the **`RemoteRunner` seam** with its scripted fake
-> ([Seams](#seams-and-why-the-fake-comes-first)), the **pre-flight** that asks the deployed runner
-> which selectors it offers before an operator consents to anything
+> ([Seams](#seams-and-why-the-fake-comes-first)), over which the harness now asks one thing only —
+> what each browser environment offers, on its own clock — the assembly-time **pre-flight** having
+> since been **retired** in favour of the listing the run takes for itself
 > ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)), and
 > `validation_checks.area`, the selector a `check` row is verified against
 > ([Migrations](#migrations)); and — as of the dispatch — **rule `remote-validation`**
@@ -42,7 +43,7 @@
 > sweep — **the sweep's arm**, which settles a `dispatched` run whose task is no longer active and
 > releases the `(environment, tenant)` lock it was holding ([The desk](#the-desk)); and — as of the
 > named expectations — **`validation_checks.expects`**, the concrete spec names a check wrote down for
-> its area, with the pre-flight arm that blocks a row whose runner no longer offers one of them
+> its area, with the listing arm that blocks a row whose runner no longer offers one of them
 > ([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)); and —
 > as of the run's own listing — **the listing step the run agent takes**, in the read-only checkout
 > pinned to the deployed commit, which is what writes `matched`
@@ -53,7 +54,12 @@
 > (`src/remoteValidation/listing.ts`) as the one reader of that file and the one writer of `matched`,
 > the four listing arms writing a run's **`blocked` reading** rather than the row's `blockedReason`,
 > the fold's refusal to read a report over a row the listing blocked, and **`remote_runs.listing_path`**
-> ([Migrations](#migrations)).
+> ([Migrations](#migrations)); and — as of the retirement — **the assembly-time pre-flight is gone**,
+> with `RemoteValidationDesk.preflight` and `recordRemotePreflight` deleted, so **assembly spawns no
+> browser command at all** and a selector mismatch is found one press later, by the run
+> ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)). The
+> `RemoteRunner` seam stays, spawning `listSelectors` on the offering refresh's own clock and nowhere
+> else ([The desk](#the-desk)).
 >
 > The **test part** landed in another goal: `plan_parts.coverage`'s
 > bar on `issue-plan` and `issue-replan`, and the critical path's allow-list rule
@@ -288,8 +294,8 @@ merged like every other part ([08](08-planning.md)).
 A part declares the area it covers in an optional `coverage` field on the plan document
 (`src/plans/planDocument.ts`), stored on `plan_parts.coverage` (`src/store/plans.ts`) and carried back
 on `PlanPart.coverage`. It is **prose** — _checkout with a saved card_, not `Checkout Tests` and not
-`tests/checkout.spec.ts` — and no selector is resolved from it: what the pre-flight puts to a runner
-is `validation_checks.area`, named by a `suite` step of a test plan written later, against the merged
+`tests/checkout.spec.ts` — and no selector is resolved from it: what the run's own listing puts to a
+runner is `validation_checks.area`, named by a `suite` step of a test plan written later, against the merged
 code ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)). Everything else about
 it is an ordinary part: it produces code, it has per-part `acceptance`, it merges, and
 `partDeclarationNote` (`src/plans/parts.ts`) shows the building agent the area it was asked to cover.
@@ -390,10 +396,9 @@ It reads as a misconfiguration and is not one.
 The join is two things, and **which of them the exact string is picked at** is the whole of the design.
 
 **A `suite` step carries it, and the validation planner picks it from the runner's own offering.** The
-pre-flight compares the string **exactly**, so an area described in prose — _amend the checkout area
-to accept the new confirmation step_, against a runner offering `Checkout Tests` — can never match,
-and reconciling the two fuzzily at the pre-flight would be the harness guessing which area an author
-meant, which is what this design refuses everywhere else. So `validationPlanNote`
+listing is read against the string **exactly**, so an area described in prose — _amend the checkout
+area to accept the new confirmation step_, against a runner offering `Checkout Tests` — can never
+match, and reconciling the two fuzzily would be the harness guessing which area an author meant, which is what this design refuses everywhere else. So `validationPlanNote`
 (`src/validation/authoring.ts`) is given what each browser environment's runner last said it offers
 and names it beside the environment that offers it: the area on a `suite` step is a **pick from a
 list**, copied exactly. `stepArea` (`src/validation/steps.ts`) reads the first such step and
@@ -401,7 +406,7 @@ list**, copied exactly. `stepArea` (`src/validation/steps.ts`) reads the first s
 every amendment — so an author that moves the step, or drops it, moves the area with it rather than
 leaving a selector the runner no longer offers. Where nothing has been listed the note names no areas
 and **nothing is withheld**: a deployment whose runner has never answered still authors a check set,
-and the pre-flight is where the area is put to a runner either way.
+and the run's own listing is where the area is put to a runner either way.
 
 **A part's `coverage` is prose, and nothing is checked against a listing.** It is the one string in
 this chain written before the code exists, which makes an exact pick a guess taken at the worst
@@ -438,17 +443,20 @@ A validation planner picks from a listing taken on one commit; the run happens a
 cache never decides anything at a press: `RemoteValidationDesk.refreshSelectorOfferings` asks each
 browser environment's runner what it offers on its own clock — every 30 minutes, paced to the suite's
 rate of change rather than the pulse's, because a check set is written **before** anything has arrived
-and the pre-flight's own listing only runs when something does — and the pre-flight asks the deployed
-runner again at assembly. Its answer is what a row blocks on. A stale cache costs an area that lists
-today and not tomorrow, which the pre-flight catches as a `blocked` row either way; the reverse —
-trusting the cache at the press — would be the harness reporting on a listing nobody took.
+— and it is written where a planner can be shown it and **nowhere a row is read against**. A stale
+cache costs an area that lists today and not tomorrow, which the run's own listing catches as a
+`blocked` reading either way; the reverse — trusting the cache at the press — would be the harness
+reporting on a listing nobody took.
 
-The same argument runs one step further than this heading does, and the run is where it ends: the
-pre-flight's own listing is taken in the harness's clone, and the **run's** is taken in a checkout
-pinned to the deployed commit, so it is the run's that `matched` finally holds
-([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)). Three
-readings, each later and better-founded than the last — the cache for the planner, the pre-flight for
-the operator's consent, the run's for the number a row is graded against.
+**The authority is the run's listing, and the heading's "pre-flight" is history.** The assembly-time
+pre-flight is retired: it took this same listing in the _harness's_ clone, at whatever commit the
+operator's checkout stood on, which is a second and worse answer to a question the run now answers
+properly in a checkout pinned to the deployed commit
+([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)). Two readings,
+the later better-founded than the first — the cache for the planner, and the run's for the number a
+row is graded against. The cache outlives the pre-flight because the two answer different questions:
+the planner needs to know which areas **exist** before there is anything to arrive, and a row needs to
+know what the **deployed commit** holds at the moment it is read.
 
 The offering lives in `remote_selector_offerings`, replaced whole per environment, and **only an
 answered listing is written**: a listing that could not say leaves the last one standing with its own
@@ -464,7 +472,7 @@ Two shapes are ordinary rather than exceptional, and the join answers each.
 
 **A check may cover several parts, and it no longer matters.** While the area was inherited, a check
 covering two parts declaring different areas was **refused where it was authored** — `twoAreaRefusal`
-— because a check is matched against one selector at the pre-flight and read under one, and taking the
+— because a check is matched against one selector when the run's listing is read, and read under one, and taking the
 first silently would report a pass for coverage nothing exercised. That refusal went with the
 inheritance: the ambiguity it guarded cannot arise once a step names the area, because the author is
 naming it rather than being assigned it. Where a plan writes two `suite` steps, the **first** is the
@@ -603,53 +611,36 @@ What runs at assembly, without asking:
   the operator arrives at a sheet with those readings already on it. That is a better-informed press
   than an empty one, and it keeps the gate from becoming the bottleneck that makes people
   rubber-stamp it.
-- **A pre-flight.** **Built**, in `src/remoteValidation/preflight.ts`, over the `RemoteRunner` seam.
-  Ask the deployed runner, through `validate.browser.listSelectors`, which selectors it actually
-  offers, and compare against what the sheet's `check` rows name in `validation_checks.area`. A
-  selector is a compatibility surface between a harness-held check and a runner config in a
-  repository that moves, and a mismatch is one of this design's own `blocked` causes — so it belongs
-  **before** the consent, not afterwards as a blocked row that wasted the press. It writes the
-  **matched** count the [consistency check](#the-runner-contract) compares against onto
-  `remote_sheet_rows.matched`, which is read from nowhere else — never derived from the post-run
-  report, because derived that way a selector that matched nothing reads as a clean pass.
+- **Nothing that asks a runner anything.** Assembly spawns **no browser command at all**. It reads
+  the checks, the watches and the approved queries out of the store, writes the sheet's rows, and
+  takes the deterministic readings above; `remote_sheet_rows.matched` and every row's
+  `blockedReason` are left exactly as the fold that wrote them left them.
 
-  **The pre-flight's count is a first reading and the run's own listing is the last.** The number the
-  operator presses on is taken here, at assembly, in the harness's own clone; the number a row is
-  finally read against is taken by the run agent in a checkout pinned to the commit the environment is
-  running, and it **overwrites** this one
-  ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)). That
-  direction is the design rather than a race: the later reading is the better-founded one, and the
-  earlier one exists to put a mismatch in front of the operator **before** they consent to spend
-  minutes and an agent on it. Two writers of one column is the shape this document distrusts
-  everywhere else, and it survives here only because the two are ordered — assembly, then the run —
-  and the run's is the authority.
+  **There used to be a pre-flight here, and it is retired.** It asked the deployed runner, through
+  `validate.browser.listSelectors`, which selectors it offered, and blocked a `check` row whose area
+  the answer did not hold. The listing it took was taken in **the harness's own clone**, at whatever
+  commit the operator's checkout happened to stand on — so the denominator an operator pressed on
+  described the operator's machine rather than the deployed build, which is the one thing `matched`
+  must never describe ([The runner contract](#the-runner-contract)). The run agent now takes that
+  listing itself, in a checkout pinned to the deployed commit, and that is the only listing a row is
+  read against ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)).
+  A second writer of one column was tolerable only while the two were ordered and the later won;
+  with the earlier one gone there is one writer, which is the shape this document prefers everywhere.
 
-  **It blocks a row on four counts, in this order**, and the order is the argument each arm makes:
-  the listing **could not be taken** at all; the listing holds **no offer** for the area the check
-  names; the offer it holds is **empty**, which is a selector that matched zero tests and must not read
-  as a clean pass; and the check named **specs the listing does not offer**
-  ([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)). The
-  fourth is last because the three before it are about the area itself, and a name inside an area is
-  only worth asking after about an area that exists and holds something.
+  **A mismatch is therefore discovered one press later than it used to be, and that is the accepted
+  cost.** A renamed area, a deleted spec or a wrong profile no longer blocks at the gate: assembly
+  withholds nothing, so the operator consents, the rule leases a worktree, cuts a read-only checkout
+  at the deployed sha and spends an agent turn before anybody is told. What is bought for it is that
+  the answer is **true of the commit the environment is running** instead of true of somebody's
+  checkout — and a wrong answer at the gate was never cheap either: it blocked a pressable row on a
+  mismatch that existed only on the operator's machine, which costs an amendment nobody needed.
 
-  **The listing may be prefixed, and it may not be guessed at.** A suite's own config prints ahead of
-  its report — a dotenv banner is the ordinary case — so `parseSelectorListing` _seeks_ the JSON array
-  in the output rather than requiring it at byte 0, and seeks it at each `[` rather than at the first
-  brace, because a banner holds a brace of its own. What it will not do is read prose as areas: a
-  line-form listing holding a line that is not a name — a brace, a `//`, or more than 120 characters —
-  is **refused**, `offers: null`, exactly as a kill is. A banner read as one name per line offers
-  areas no check can match, and every row then blocks naming a renamed area against a runner that
-  offered precisely the right ones — this arm's own stated danger one step out, since a garbage
-  listing read as an answer has the same shape as an empty one.
-
-  Two rows the pre-flight leaves exactly as they are, and both matter. One another cause has already
-  blocked keeps the reason it has — a kind this environment does not permit is not a mismatch. And a
-  check that **names no area** is a person's, exactly as every check is today: the pre-flight asks a
-  runner about areas, and a check declaring none was never a question for it. Where the listing
-  itself could not answer — a non-zero exit, a kill, nothing printed — every `check` row that names
-  an area is `blocked` with that reason and **nothing else on the sheet is touched**: `blocked`
-  resolves per row and never per run, so the `state`, `signal` and `measure` readings that landed
-  beside it stand.
+  What keeps the cost to a checkout rather than a full suite run is that the listing is a **step of
+  its own**, taken before the runner is invoked and answered by a tool that hands back only the
+  selectors that survived. The rows a listing blocked are simply not in that answer, so the agent
+  never invokes them: the spend is a lease, a checkout and a listing command — seconds of suite time
+  — and not the minutes a browser run costs. That ordering is the whole reason this is affordable,
+  and moving the listing after the invocation would turn the deferral into a real bill.
 
 Everything else waits for the press. The bench obligation is _this is ready to run — review it and go_,
 and four things happen there:
@@ -657,7 +648,7 @@ and four things happen there:
 - **Query approval** — the dry run, for anything not yet accepted here.
 - **Amendment** — a check written at plan time against code that did not exist yet, reread against
   code that now does, through `validation_amend` ([20](20-validation.md#amendment)). A check whose
-  selector the pre-flight could not find is exactly a check that needs rewording.
+  selector a run's listing could not find is exactly a check that needs rewording.
 - **Selection and waiving** — a row that does not apply to this environment, or that the operator will
   do by hand, is deselected; a check the product has genuinely moved past is **waived with a reason**.
 - **Consent to spend** — browser rows cost minutes and an agent. Starting them automatically spends on
@@ -672,8 +663,9 @@ not offer blocks the row.** `validation_checks.expects` is a JSON list of them. 
 `suite` step exactly as the area does and is written from there and nowhere else — `stepExpects`
 (`src/validation/steps.ts`) reads the first `suite` step that names any and `checkAmendment` writes
 the column, recomputed on every ingest and every amendment. One writer, for the reason `area` has one
-([How a check comes to have an area](#how-a-check-comes-to-have-an-area)): these are strings the
-pre-flight compares **character for character**, and a second author for one of them is a silent undo.
+([How a check comes to have an area](#how-a-check-comes-to-have-an-area)): these are strings a
+listing is read against **character for character**, and a second author for one of them is a silent
+undo.
 `resolveSteps` normalises the field the same way — a `suite` step's names, null on every other kind.
 
 **Naming them up front is the only thing that can see a spec that has been deleted.** A check selects
@@ -683,7 +675,7 @@ reports a pass for coverage that no longer exists — which is this document's o
 green row standing for nothing.
 
 **The counts cannot reach this, and that is why the field exists.** `matched` is the denominator the
-listing gives _today_ ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)),
+run's own listing gives _today_ ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)),
 so a deleted spec lowers the executed side and the listed side **together** and the consistency
 check's `executed < matched` ([The runner contract](#the-runner-contract)) never fires. Every number
 on the row moves with the deletion. Only a name somebody wrote down can be missed. It is also why a
@@ -694,8 +686,8 @@ field, which is the same string in both places for the reason every step field i
 ([20](20-validation.md#the-test-plan)).
 
 **Null is _no expectation was named_, and never _expected nothing_.** It is true of every row written
-before the column and of every check whose author named none, and the difference the pre-flight takes
-is computed **only** where there is an expectation to take it against. Fold the two readings together
+before the column and of every check whose author named none, and the difference the listing read
+takes is computed **only** where there is an expectation to take it against. Fold the two readings together
 and every check on every deployment blocks on an empty expectation the moment the column ships — a
 whole bench of rows refusing to run, naming nothing missing, with nothing red. An empty list is the
 same fact said a second way and normalises to null at both ends, in `stepExpects` on the way in and in
@@ -706,8 +698,8 @@ there is no `runOnce` ([Migrations](#migrations)).
 step on: a pass on what is left is a pass for coverage that is gone, exactly as a selector matching
 zero tests is not a clean pass. The reason names the missing specs and what the runner does offer, so
 the operator meets the two lists side by side and can tell a renamed spec from a deleted one without
-leaving the sheet. Amendment is the remedy, at the bench, where a check whose selector the pre-flight
-could not find is already sent ([20](20-validation.md#amendment)).
+leaving the sheet. Amendment is the remedy, at the bench, where a check whose selector a listing could
+not find is already sent ([20](20-validation.md#amendment)).
 
 **`matched` is unchanged by any of it.** It still comes from the area's own offer and from nowhere
 else — a blocked row carries the count the listing gave, because the count is a reading of the
@@ -830,18 +822,34 @@ handed, and before it invokes anything.
 **It hands back a path, and the harness parses the file.** The agent writes what the listing command
 printed into the run's own `listing` directory and calls `remote_validation_listing` with that path,
 which is recorded on `remote_runs.listing_path`. It names no selector and states no count — the tool
-has no field for either — so what reaches the column is the runner's own output, read through the
-same `parseSelectorListing` the pre-flight reads, prefix-seeking and prose-refusing arms and all. **A
-path says where a file is, not what is in it**, which is the whole of why a denominator may come
+has no field for either — so what reaches the column is the runner's own output, read through
+`parseSelectorListing`. **A path says where a file is, not what is in it**, which is the whole of why a denominator may come
 through an agent at all: it is `reportPath`'s own argument, unchanged, one column over. A tool with a
 `selectors` field would be a tool through which a model's recollection of the suite becomes the
 number its own run is graded against.
 
-**The tool answers with the selectors that survived, and those are the ones the run invokes.** The
-four arms are the pre-flight's four, in the same order and through the same `preflightRows` — the
-listing could not be taken, the area has no offer, the offer is empty, a named expectation is missing
-([the four](#when-a-sheet-is-assembled-and-what-runs-without-asking)) — so a row any of them blocked
-is simply not in the answer, and `LUBBDUBB_SELECTORS` is the answer comma-joined.
+**The listing may be prefixed, and it may not be guessed at.** A suite's own config prints ahead of
+its report — a dotenv banner is the ordinary case — so `parseSelectorListing` _seeks_ the JSON array in
+the output rather than requiring it at byte 0, and seeks it at each `[` rather than at the first brace,
+because a banner holds a brace of its own. What it will not do is read prose as areas: a line-form
+listing holding a line that is not a name — a brace, a `//`, or more than 120 characters — is
+**refused**, `offers: null`, exactly as a kill is. A banner read as one name per line offers areas no
+check can match, and every row then blocks naming a renamed area against a runner that offered
+precisely the right ones — an empty listing read as an answer and a garbage one have the same shape.
+
+**The tool answers with the selectors that survived, and those are the ones the run invokes.** It
+blocks a row on **four counts, in this order**, through `preflightRows` (`src/remoteValidation/preflight.ts`,
+which kept its name from the pre-flight it outlived): the listing **could not be taken** at all; the
+listing holds **no offer** for the area the check names; the offer it holds is **empty**, which is a
+selector that matched zero tests and must not read as a clean pass; and the check named **specs the
+listing does not offer**
+([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)). The
+fourth is last because the three before it are about the area itself, and a name inside an area is only
+worth asking after about an area that exists and holds something. Two rows it leaves exactly as they
+are: one another cause has already blocked keeps the reason it has — a kind this environment does not
+permit is not a mismatch — and a check that **names no area** is a person's, which was never a question
+for a runner. A row any arm blocked is simply not in the answer, and `LUBBDUBB_SELECTORS` is the answer
+comma-joined.
 
 **A listing arm writes a `blocked` _reading_, and never the row's `blockedReason`.** This is the
 distinction the whole step turns on. A `blockedReason` is a cause **no press can overcome** — an
@@ -852,9 +860,10 @@ inside a run as a `blockedReason`, a mismatch this afternoon's merge already fix
 permanently unpressable, with nothing red, on exactly the deployments whose suite moves most. A run's
 `blocked` is a reading — of this run, at this moment — which the next press is entitled to take
 again, and it is the same word the report's own arms write for the same reason
-([A row that learned nothing](#the-report-is-the-only-source-of-row-outcomes)). The assembly
-pre-flight still writes the row's own reason, because it reads **before** anybody consents to
-anything and the bench is where a row is amended.
+([A row that learned nothing](#the-report-is-the-only-source-of-row-outcomes)). **Nothing writes a
+row's own `blockedReason` from a listing at all now.** The assembly pre-flight did, and could, because
+it read before anybody consented; with it retired every cause left on that column is one no press can
+overcome, and every listing verdict is a reading.
 
 **The fold never reads a report over a row this run's listing blocked.** `RemoteReadingDesk.settle`
 drops those rows before it folds anything and counts each one blocked. It is the one place in this
@@ -937,8 +946,8 @@ backfill ([Migrations](#migrations)).
 
 **A row that learned nothing writes a `blocked` _reading_, not a `blockedReason` on the sheet row.**
 The two are different facts and folding them would cost the sheet its next press: a row's own
-`blockedReason` is a cause a press cannot overcome — an unpermitted kind, an unapproved query, a
-selector the pre-flight could not find — where a run's `blocked` is a reading, of this run, at this
+`blockedReason` is a cause a press cannot overcome — an unpermitted kind, an unapproved query, an
+area holding the list's own delimiter — where a run's `blocked` is a reading, of this run, at this
 moment, which the next press is entitled to take again. Both draw the same word and say why in the
 same words; only one of them keeps the row out of the next invocation.
 
@@ -1345,11 +1354,11 @@ needs no migration — `toRemoteRun` narrows it and folds anything it does not r
 `abandoned`, which is the safe direction: a run this build cannot name is a run nothing will ever
 report against.
 
-| Status       | Means                                                                                               |
-| ------------ | --------------------------------------------------------------------------------------------------- |
-| `pending`    | The press opened it and no agent has claimed it. **Live.**                                          |
-| `dispatched` | The conditional flip claimed it for exactly one task. **Live.**                                     |
-| `ended`      | Settled with a report recorded against it.                                                          |
+| Status       | Means                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| `pending`    | The press opened it and no agent has claimed it. **Live.**                                         |
+| `dispatched` | The conditional flip claimed it for exactly one task. **Live.**                                    |
+| `ended`      | Settled with a report recorded against it.                                                         |
 | `abandoned`  | Settled with none, and never will be: the pin refused it, an operator called it off, or `blocked`. |
 
 The pair is what the design needs and one status could not carry. `pending` is a run the rule may
@@ -1580,20 +1589,23 @@ inferred from a green build, a merged pull request or an absence of errors.
 
 `RemoteValidationDesk` (`src/remoteValidation/desk.ts`) is the one owner of every sheet write. Five
 passes: refresh what each browser runner says it offers, assemble the sheets for arrivals nothing has
-assembled yet, run the approved deterministic rows and the pre-flight on a freshly assembled sheet,
-refresh what the bench row says, and sweep runs that have gone away.
+assembled yet, run the approved deterministic rows on a freshly assembled sheet, refresh what the
+bench row says, and sweep runs that have gone away.
 
-**The offering refresh runs first and is about the environment rather than any goal**, which is why it
-is not folded into the pre-flight: a validation planner needs to know which areas exist **before**
-there is anything to arrive, and the pre-flight's listing only runs when something does. It is
-throttled to thirty minutes per environment, so on a deployment already listing for its sheets it costs at most one
-extra spawn an hour. → [The cached offering](#the-cached-offering-is-a-convenience-and-the-pre-flight-is-the-authority)
+**The offering refresh is the one thing the desk asks a runner for, and it is about the environment
+rather than any goal.** A validation planner needs to know which areas exist **before** there is
+anything to arrive, which is why it runs on its own clock and not off an arrival. It is throttled to
+thirty minutes per environment, so it costs at most two spawns an hour per browser environment and
+nothing at all on a deployment that declares none.
+→ [The cached offering](#the-cached-offering-is-a-convenience-and-the-pre-flight-is-the-authority)
 
-**All five are built.** What runs is the offering refresh, the assembly, the pre-flight over the sheet's `check` rows, the
-approved `state`, `signal` and `measure` rows on a sheet it has just assembled, and — through
-`RemoteRunDesk` ([The press](#the-press)) rather than the pulse — the same rows again under a
-press's pin. The pre-flight runs on the **assembly** pass only and inside its cap: it is a process
-spawn per sheet, and a sheet already assembled is never re-listed. The bench line is refreshed by
+**All five are built.** What runs is the offering refresh, the assembly, the approved `state`,
+`signal` and `measure` rows on a sheet it has just assembled, and — through `RemoteRunDesk`
+([The press](#the-press)) rather than the pulse — the same rows again under a press's pin. **The
+assembly pass spawns nothing**: the listing a row is read against is the run's own, taken in its
+pinned checkout ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)),
+and a sheet already assembled is never reassembled. Assembly keeps its cap of five per pass — it is
+now a bound on sheet writes rather than on spawns, and the backlog drains in a fixed order. The bench line is refreshed by
 `ValidationReadyDesk` reading the rows out of the store, which is why the desk's position above it is
 load-bearing rather than tidy. An operator's own `.../cancel` remains a settle path beside the sweep —
 it is how a run is called off before its agent has gone anywhere — and it stopped being the _only_
@@ -1752,10 +1764,9 @@ silent:
 - a `validate` block whose `permits` is **empty**, which reads as a configuration and permits nothing;
 - `permits` naming `check` with **no `browser` block**, or naming `state` with no `state.run` — a kind
   permitted with nothing able to run it is every row of that kind `blocked`, forever;
-- a `browser` with a `runner` and **no `listSelectors`**, which leaves the pre-flight unable to answer
-  and every selector unverifiable until after a press has been spent — and leaves the run's own
-  listing with no command to take either, so `matched` stays null and the rows block through the arm
-  that null has always blocked through
+- a `browser` with a `runner` and **no `listSelectors`**, which leaves the run's own listing step with
+  no command to take, so `matched` stays null and the rows block through the arm that null has always
+  blocked through — the refusal names that step rather than the pre-flight it used to name
   ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness));
 - **more than one** of `tenant`, `tenantEnv` and `ensureTenant`, which is two answers to one question;
 - a `reseed` or a `tenantFreshnessMs` with **no tenant of any shape**, which is freshness about
@@ -1908,6 +1919,16 @@ succeeds.
 | `StateReader` (`src/remoteValidation/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                   |
 | `TenantKeeper` (`src/remoteValidation/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**   | `ensureTenant`, `reseed`                      |
 
+**Of the three browser commands, the harness itself spawns exactly one, on exactly one path**: the
+offering refresh's `listSelectors`, every thirty minutes per environment
+([The desk](#the-desk)). `runner` and `publishArtefacts` are invoked by the run agent in its own
+shell, from its pinned checkout, and so is the listing a row is actually read against — the harness
+parses the file the agent points it at and spawns nothing to get it
+([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)). The seam is
+still the seam, and a test that configures a `validate.browser` block and injects no `remoteRunner`
+still reaches `CommandRemoteRunner` through that refresh — on **every** cycle, not only when a sheet
+is assembled — which is why the `CLAUDE.md` entry stands unchanged.
+
 Three rules hold them honest:
 
 - **Tests build a whole `System`** via `buildSystem(config, opts)` with the fakes injected and
@@ -1953,7 +1974,7 @@ not turned this on from reading as a deployment where it is broken.
 It draws one block per environment that has a sheet: the tenant and its age against the declared
 freshness window, the deployed commit, every row with its kind, its outcome and its reason, the
 artefact link on a browser row, matched-versus-executed and retries and wall-clock, the selector
-mismatches the pre-flight found, and the four controls the gate is made of — approve a query on its
+mismatches the run's own listing found, and the four controls the gate is made of — approve a query on its
 dry run, deselect a row, reseed, press go. A row waived through the check's own control draws its
 reason and does not run. **An `unknown` from a query and a `blocked` row say why in words**, and never
 in the vocabulary of a clean one.
@@ -2083,21 +2104,27 @@ and waiving is **not** a route here — the retire path is
 `POST /api/issues/:number/validation/:checkId/waive`, its reason is required, a waived check counts as
 clear at close-out and a **deferred** one does not.
 
-The runner seam and the pre-flight are built and their tests are in
+The runner seam is built, and what **assembly does not ask of it** is asserted in
 `test/remoteValidationRunner.test.ts`: the parameters of a run reach a spawn as **environment only**
 and the command is the committed one verbatim, asserted value by value; `remoteValidation.runTimeoutMs`
 is the kill for a **runner** invocation while the listing and the publish keep the ordinary
 30-second one, asserted as a pair, and a kill **answers nothing** rather than answering emptily; the
 exit code is never read for a run; all three methods drive the fake and **no process is spawned**,
-asserted on the fake's own record; the **matched** count on a row comes from the listing; a check
-whose area the listing does not offer is `blocked` **before** a press with nothing written on the
-check — no reading, no `WorldEvent`, nothing in `watch_readings`; a listing that could not answer
-blocks the check rows and leaves the sheet's other readings standing; a check naming no area is a
-person's and the pre-flight spawns nothing about it; the pre-flight runs on the assembly pass only and
-inside the cap of five, and a throw goes through `errors.record`; `buildSystem` takes `remoteRunner`
-and defaults to the command implementation, and an environment with no `validate.browser` block
-declares no command for it to run; and a database written before `validation_checks.steps` reads null
-as **no steps**, with nothing backfilled.
+asserted on the fake's own record; `parseSelectorListing` reads a listing as areas, never reads a
+kill or an empty print as an offering of nothing, seeks a JSON array behind a banner and **refuses**
+prose rather than guessing at it; an area holding the list's own delimiter blocks its row at assembly,
+which is a `blockedReason` and not a listing verdict. And the retirement itself: seven sheets assemble
+over two passes, five to a pass, with **no `matched` and no `blockedReason`** written on any of them
+and the rows left pressable, while the runner is asked **exactly once** across three passes — the
+offering refresh, which is about the environment and not about any sheet; a refresh that throws goes
+through `errors.record` and never fails the cycle, and it is now the only failure that pass can record;
+`buildSystem` takes `remoteRunner` and defaults to the command implementation, asserted through the
+offering the default spawn wrote and on that offering deciding nothing about a row; an environment with
+no `validate.browser` block declares no command for it to run; and a database written before
+`validation_checks.area` gains it on boot with nothing backfilled. The four arms a listing blocks on
+are asserted where they now live, against the **run's** listing
+(`test/remoteValidationListing.test.ts`) and against `preflightRows` directly
+(`test/validationExpects.test.ts`).
 
 `test/planCoverageArea.test.ts` covers the join: the test-part bar asks for the coverage **in words**
 and names no listing to copy from, asserted in both directions so a reword cannot quietly put a pick
@@ -2105,8 +2132,8 @@ back; a `coverage` naming anything at all is accepted through both plan transpor
 a genuinely new area could not get through before; a `suite` step's area lands on the row and
 a `covers` entry lands nothing; an area on any other step kind is refused where it is authored, as is
 a `suite` step naming none; the first `suite` step wins, so a check is still verified against one
-selector; and with the area written the sheet's check row confirms, is counted by the pre-flight and
-yields a selector for the run to carry — the whole of what the browser half was missing.
+selector; and with the area written the sheet's check row confirms, carries **no** denominator from
+assembly and yields a selector for the run to carry — the whole of what the browser half was missing.
 `test/validationSteps.test.ts` covers the assignment, the segment boundary and the column. The offering cache is covered in `test/planCoverageArea.test.ts` too: one spawn with no goal in sight, throttled
 after it, and a listing that could not say leaving the last answer standing.
 
