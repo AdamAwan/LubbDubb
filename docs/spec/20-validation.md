@@ -139,11 +139,11 @@ verdict, and — on `delivered` — the check set.
 first, with `assess_issue`; `validation_plan` comes after it. That makes every way the turn can end
 survivable:
 
-| The turn ends | What stands | What happens next |
-| --- | --- | --- |
-| Before the verdict | Nothing decided | The goal comes back round to an assessor, on the attempt cap it has always had — unchanged |
-| After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did |
-| After both | Parked and authored | Nothing further; `validation-plan` sees an authored set and stands down |
+| The turn ends                     | What stands                 | What happens next                                                                          |
+| --------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| Before the verdict                | Nothing decided             | The goal comes back round to an assessor, on the attempt cap it has always had — unchanged |
+| After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did                   |
+| After both                        | Parked and authored         | Nothing further; `validation-plan` sees an authored set and stands down                    |
 
 So **rule `validation-plan` stays**, and is now the catch-up rather than the ordinary path. Removing it
 would put the check set behind a turn that has to reach its end, which is the one thing a crashed,
@@ -295,6 +295,39 @@ set and nothing would say it was refused. The operator's words ride to the next 
 `rejectionGuidance`, which is why a rejected `validation_plan` is excluded from `rejectionSignalQuery`
 alongside a rejected `plan`: both are settled by the harness re-asking its own author, not by the world
 moving on the goal.
+
+### A plan-time check set that nobody has run
+
+A goal carrying checks from its plan document is not, by that fact alone, a goal whose check set has
+been authored — and reading it as one is what kept the whole authoring half of this subsystem from
+ever running.
+
+The rows a plan document writes are written before the code exists, so they carry no
+[`steps`](#the-test-plan) and therefore no `area`, and an area is the only thing that lets the browser
+half run at all ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)). Counted as an
+authored set, such a goal is skipped by rule `validation-plan` for ever: it never sees a planner, no
+check on it ever gains a step, and every one of them falls to a person on a deployment configured to
+automate them. Nothing is red, because a bench of manual rows is exactly what a bench of manual rows
+looks like — which is how the state survives weeks of somebody looking straight at it.
+
+So `checkSetAuthored`'s second arm protects **the reading, never the row**. A set carrying any
+operator verdict — passed, failed, waived, deferred — or any check somebody has claimed, or handed to
+the fleet, is work in progress and is left exactly where it is: re-authoring supersedes checks and withdraws readings, and
+handing a person back an afternoon they already spent is worse than leaving the set manual. A set
+whose live checks are every one of them `unrun`, unclaimed and still a person's, has no reading to lose, so the planner is
+dispatched and writes a better set against the merged code. The old rows are superseded rather than
+deleted, greyed on the record with their letters retired, and the new set goes to the
+[approval gate](#the-check-set-is-proposed-before-it-is-work) before anything reads it as work.
+
+A superseded row is not work in progress: it is already off the bench, kept as the account of what a
+replan dropped.
+
+**There is no backfill, and deliberately so.** Nothing sweeps historical goals: the rule is evaluated
+on the ordinary pulse, against whatever the goal holds when the pulse reaches it, so a deployment that
+has been ingesting plan-time sets un-sticks exactly the goals where nothing is lost and keeps the rest.
+A goal an operator worked through stays theirs, permanently, and the cockpit says which one it is
+looking at rather than leaving a manual set indistinguishable from an authored one
+([The cockpit](#the-cockpit)).
 
 ### Saying nothing was worth running
 
@@ -537,7 +570,10 @@ planner writes from it, through its own transport. The two shapes are kept apart
 document that could declare an executable check set would be a second author for the thing
 [Amendment](#amendment) exists to keep single. A plan document from before this change, carrying a
 full `checks` array, is ingested exactly as it always was — the rows are real and an operator may be
-halfway through them, and re-reading them as a hint would delete a check set somebody is using.
+halfway through them, and re-reading them as a hint would delete a check set somebody is using. What it is **not** is an
+authored check set: once nobody is part-way through it the validation planner writes one against the
+delivered code and these rows are superseded
+([A plan-time check set that nobody has run](#a-plan-time-check-set-that-nobody-has-run)).
 
 **An omitted array is not an empty one, and the block had to learn the difference.** `checks` and
 `resources` were `.default([])`, which makes a hint-only block indistinguishable after parsing from
@@ -985,16 +1021,16 @@ dispatched for that check may report, and every other caller is refused **by nam
 just built the thing, which has every reason to believe the goal works and no way to have run a check
 nobody sent it to run.
 
-| `result`   | Writes                                              | Because                                                    |
-| ---------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| `passed`   | The reading, `resultBy: 'agent'`                    | Attributed, and drawn wherever the reading is — see below. |
-| `failed`   | The reading, `resultBy: 'agent'`                    | A real finding about the goal, and worth having.           |
-| `blocked`  | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
+| `result`  | Writes                                              | Because                                                    |
+| --------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| `passed`  | The reading, `resultBy: 'agent'`                    | Attributed, and drawn wherever the reading is — see below. |
+| `failed`  | The reading, `resultBy: 'agent'`                    | A real finding about the goal, and worth having.           |
+| `blocked` | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
 
 **The verdict is `blocked`; the record it writes is a hand-back.** Two facts wear one word easily here
-and they are not one. `blocked` is what an agent *says* — it could not carry this check out — and it is
+and they are not one. `blocked` is what an agent _says_ — it could not carry this check out — and it is
 the same word the local ([32](32-local-validation.md)) and remote ([36](36-remote-validation.md)) paths
-take for the same fact. The hand-back is what the harness *writes*: `handback_note` on the row and
+take for the same fact. The hand-back is what the harness _writes_: `handback_note` on the row and
 `actor` back to `human`, through `recordValidationHandback`. That is a check returning to a person's
 queue rather than a verdict, so it keeps its name — and the column keeps it for a second reason, that a
 renamed column is invisible on every database from before the rename ([14](14-persistence.md#migrations)).
@@ -1477,6 +1513,13 @@ A **settled** head — passed or waived — is drawn a step back from one still 
 as the work that is left rather than as the whole list. Scoped to the head, lifted when the row is
 opened, and lighter than the treatment a withdrawn check gets: withdrawn and done are not the same
 news. → [17](17-cockpit.md#validation-on-the-goal)
+
+A set the plan document wrote draws a band of its own saying so: **written at plan time**, no test
+plan on any row, nothing here the fleet can run, and superseded once the planner writes a set against
+the delivered code. Without it a plan-time set is indistinguishable from an authored one — identical
+rows, all of them a person's — which is the state that went four weeks unnoticed on a deployment
+configured to automate them. The band reads off `authoredAt` being null, which is the same fact the
+rule cuts on. → [A plan-time check set that nobody has run](#a-plan-time-check-set-that-nobody-has-run)
 
 Both surfaces draw the **empty** case off the goal's `ValidationPlanRecord` rather than off the
 absence of rows, and they draw it identically — the digest and the section describe one check set,

@@ -37,8 +37,22 @@ export function checkSetAuthoringIssue(originRef: string | null): number | null 
 
 /**
  * A goal whose check set is authored: either the validation planner has written one, or the goal
- * carries checks a plan document ingested before authoring moved. Both are a set somebody may be
- * halfway through, and neither is a goal the planner should be dispatched for.
+ * carries a plan-time set somebody is **halfway through**. Neither is a goal the planner should be
+ * dispatched for.
+ *
+ * The second arm is the narrow one, and narrowing it is the whole of why a plan-time set is not
+ * simply "authored". A plan document writes its checks before the code exists, so they carry no
+ * `steps` and therefore no `area` — and an area is what lets the browser half run at all
+ * ([36](../../docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)). Counted as an
+ * authored set, such a goal never sees a planner, never gains a step, and every check on it falls to
+ * a person for good, on a deployment configured to automate them. Nothing is red, because a bench of
+ * manual rows is what a bench of manual rows looks like.
+ *
+ * So what is protected is the **reading**, never the row: a set carrying any operator verdict —
+ * passed, failed, waived, deferred — is work in progress and is left exactly where it is, because
+ * re-authoring supersedes checks and withdraws what somebody already ran. A set whose live checks are
+ * every one of them `unrun` has no reading to lose, and the planner writes a better one against the
+ * merged code. → docs/spec/20-validation.md#a-plan-time-check-set-that-nobody-has-run
  */
 export function checkSetAuthored(input: {
   record: ValidationPlanRecord | null;
@@ -50,7 +64,19 @@ export function checkSetAuthored(input: {
   // — and reading them as somebody's live set here would leave the goal with no planner and a refused
   // check set nobody ever rewrites. → docs/spec/20-validation.md#when-an-operator-sends-a-check-set-back
   if (input.record?.note != null) return false;
-  return input.checks.length > 0;
+  return input.checks.some(planTimeCheckIsUnderway);
+}
+
+/**
+ * Whether one plan-time check is work somebody has started. A reading is the obvious case; a claim
+ * and a hand-over are the two quiet ones — an operator who handed a check to the fleet has acted on
+ * that row as deliberately as one who ran it, and re-authoring would supersede the hand-over before
+ * the agent it was handed to ever reached it. A superseded row is none of these: it is already off
+ * the bench, kept as the record of what a replan dropped.
+ */
+function planTimeCheckIsUnderway(check: ValidationCheck): boolean {
+  if (check.supersededReason !== null) return false;
+  return check.state !== 'unrun' || check.claimedBy !== null || check.actor !== 'human';
 }
 
 /**
