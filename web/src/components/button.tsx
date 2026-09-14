@@ -80,3 +80,33 @@ export function Button({
     </button>
   );
 }
+
+/**
+ * A row of buttons, which is a thing rather than a `div` each surface arranges
+ * for itself.
+ *
+ * The cockpit had at least three spellings of it — `.cn-acts` in the console,
+ * the feature board's own, and a bare flex row wherever somebody needed two
+ * controls side by side — which is the same drift `.cn-btn` was, one level up:
+ * the button was settled and the group it sits in was not, so the gap between
+ * two controls depended on which surface you were looking at.
+ *
+ * `bar` is the group at the foot of something it settles — an ask, a form. It
+ * takes a rule above it and the room to go with it, so the controls read as the
+ * end of that thing rather than as the last paragraph of it. It is a property of
+ * the group, not of the surface: the row that answers an ask wants the same
+ * treatment on the rail, in the ask panel and on the overview, and a selector
+ * scoped to one of those three is how the other two drift.
+ */
+export function ButtonRow({
+  bar,
+  className,
+  children,
+}: {
+  bar?: boolean;
+  className?: string;
+  children: ReactNode;
+}): JSX.Element {
+  const parts = ['btn-row', ...(bar === true ? ['bar'] : []), ...(className === undefined ? [] : [className])];
+  return <div className={parts.join(' ')}>{children}</div>;
+}

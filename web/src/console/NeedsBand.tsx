@@ -18,7 +18,7 @@ import { refusedDispatchFor } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
-import { Button } from '../components/button.js';
+import { Button, ButtonRow } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -99,7 +99,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       <>
         <p>{task.title}</p>
         {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-        <div className="cn-acts">
+        <ButtonRow bar>
           <HumanTaskActions
             task={task}
             look={{ tone: 'secondary' }}
@@ -108,7 +108,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
             onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
           />
-        </div>
+        </ButtonRow>
       </>
     );
   }
@@ -134,7 +134,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           The hold clears by itself when the goal&rsquo;s own text changes, so answering those on the ticket is the
           other way out and costs no click here. Overriding says the brief is good enough as it stands.
         </p>
-        <div className="cn-acts">
+        <ButtonRow bar>
           <AsyncButton
             tone="primary"
             onClick={() => actions.setIssueAppraisal(issue.number, 'workable')}
@@ -147,7 +147,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             prompt={discussPrompt(issue.number)}
             explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."
           />
-        </div>
+        </ButtonRow>
       </>
     );
   }
@@ -172,7 +172,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           {described ?? appraisal.summary} Nothing is dispatched for this goal until you say which to use — that is one
           click either way, and it is not a rejection.
         </p>
-        <div className="cn-acts">
+        <ButtonRow bar>
           <AsyncButton
             tone="primary"
             onClick={() => actions.setIssueProfile(issue.number, proposed)}
@@ -190,7 +190,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           >
             {pinned === null ? 'Leave it unpinned' : `Keep “${pinned}”`}
           </AsyncButton>
-        </div>
+        </ButtonRow>
       </>
     );
   }
@@ -214,12 +214,12 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           Nothing failed and nothing is lost: the branch, the worktree and the conversation are as the agent left them.
           Resuming re-opens that conversation where it stopped.
         </p>
-        <div className="cn-acts">
+        <ButtonRow bar>
           <AsyncButton tone="primary" onClick={() => actions.resumeAgent(agent.id)} pendingLabel="Resuming…">
             Resume
           </AsyncButton>
           <Button onClick={() => actions.select(agent.id)}>Open transcript</Button>
-        </div>
+        </ButtonRow>
       </>
     );
   }
@@ -314,7 +314,7 @@ function WatchFinding({
     <>
       <p>{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-      <div className="cn-acts">
+      <ButtonRow bar>
         <HumanTaskActions
           task={task}
           look={{ tone: 'secondary' }}
@@ -331,7 +331,7 @@ function WatchFinding({
             Raise a bug…
           </Button>
         )}
-      </div>
+      </ButtonRow>
       {raising && issue && (
         <RaiseBugModal
           issueNumber={issue.number}
@@ -404,7 +404,7 @@ function AreaPathAsk({
         It is still on the project root, which is where an item nobody has filed sits. Nothing is held up — the work
         happens either way — but until it is filed it is on nobody’s board.
       </p>
-      <div className="cn-acts">
+      <ButtonRow bar>
         <AsyncButton
           tone="primary"
           onClick={() => actions.setIssueAreaPath(issue.number, proposed)}
@@ -442,7 +442,7 @@ function AreaPathAsk({
         >
           Not applicable
         </AsyncButton>
-      </div>
+      </ButtonRow>
     </>
   );
 }

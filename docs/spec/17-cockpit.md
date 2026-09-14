@@ -1451,6 +1451,20 @@ toggle, a drop target, a close cross — passes that class beside the props, whi
 of a caller's tone uses `withShape`, so the caller's half and the station's half stay two things:
 `withShape(look, onCloseTicket === null && 'go')`.
 
+**A row of buttons is a thing too** — `ButtonRow`, dressed by `.btn-row`. The button was settled and
+the group it sits in was not, so the cockpit carried at least three spellings of "two controls side by
+side": `.cn-acts` in the console, the feature board's own, and a bare flex row wherever somebody needed
+one. That is the same drift `.cn-btn` was, one level up — the gap between two controls depended on which
+panel you were looking at, and nobody had decided it.
+
+`bar` is the group **at the foot of something it settles**: an ask, a form. It takes a rule above it and
+the room to go with it, so the controls read as the end of that thing rather than as the last paragraph
+of it. It is a property of the group and not of the surface, which is the whole reason it is a prop
+rather than a selector: the row that answers an ask wants this on the rail, in the ask panel and on the
+overview's one-at-a-time shape, and a rule scoped to one of the three is how the other two drift. The
+kinds that end in a form of their own — an escalation's answer box, already a bordered card — pass no
+`bar` and keep their shape.
+
 **`buttonClass` is the seam for the controls that are not buttons.** The three async components resolve
 their class through it and add their own ring; `DesktopLink` reaches it for itself, because a deep link is a
 destination, and wears the button's look through the same call. It is what `CONTROL_CLASS` is for the

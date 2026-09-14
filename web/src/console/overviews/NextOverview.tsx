@@ -6,7 +6,7 @@ import type { NeedRow } from '../../view/needsYou.js';
 import { Ref } from '../../components/refs.js';
 import { buildGoalPage, goalIssue, type GoalPartView, type PartGroup } from '../../view/goalPage.js';
 import { relTime } from '../../components/util.js';
-import { Button } from '../../components/button.js';
+import { Button, ButtonRow } from '../../components/button.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '../QueueRail.js';
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
@@ -115,7 +115,7 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
               ends up hunting for the control they press most. Here it is the same
               place on every ask, and beside the count that says what pressing it
               does. */}
-          <span className="cn-ov-next-nav">
+          <ButtonRow className="cn-ov-next-nav">
             <span className="cn-ov-next-count">
               {at + 1} of {rows.length}
             </span>
@@ -139,7 +139,7 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             >
               Next ›
             </Button>
-          </span>
+          </ButtonRow>
         </div>
 
         {/* Setting beside the act rather than over it. Stacked, the plan pushed the

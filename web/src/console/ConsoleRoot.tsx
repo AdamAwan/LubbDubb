@@ -35,7 +35,7 @@ import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Modal } from '../components/Modal.js';
-import { Button } from '../components/button.js';
+import { Button, ButtonRow } from '../components/button.js';
 import { relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
 
@@ -557,7 +557,7 @@ function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitAction
   const { errors } = view.state;
   return (
     <>
-      <div className="cn-acts">
+      <ButtonRow>
         <ConfirmButton
           ghost
           label="Clear"
@@ -565,7 +565,7 @@ function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitAction
           title={`Delete all ${errors.length} recorded faults — this cannot be undone, for any cockpit`}
           onConfirm={() => actions.clearErrors()}
         />
-      </div>
+      </ButtonRow>
       <div className="cn-rows">
         {errors.length === 0 && <p className="cn-empty">No fault has been recorded.</p>}
         {errors.slice(0, FAULT_ROWS).map((err) => (

@@ -3407,12 +3407,6 @@ button.cn-grow {
   border-color: var(--cn-accent);
   background: var(--cn-blue-bg);
 }
-.cn-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
 /* The console has no button family of its own. One `.btn` in `styles.css` dresses
    every button in the cockpit, so `primary` is one hue and one shape wherever it
    is pressed. What used to be here — `.cn-btn` and its four modifiers — was a
@@ -4992,11 +4986,10 @@ button.cn-grow {
 /* The counter and the two controls, pinned to the card's top right so they are
    in one place on every ask whatever its body's height. */
 .cn-ov-next-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin-top: 0;
   margin-left: auto;
   flex: none;
+  flex-wrap: nowrap;
 }
 .cn-ov-next-count {
   font-variant-numeric: tabular-nums;
@@ -5066,20 +5059,6 @@ button.cn-grow {
 }
 .cn-ov-next-body {
   margin-top: 16px;
-}
-/* The ask's own controls, given a place instead of ending wherever its prose
-   did. `needBody` writes the row; this anchors it as the column's action bar —
-   a rule above it, flush with the column's edges — so Done sits in the same
-   relation to the ask on every kind rather than floating mid-column with the
-   footer's rule stranded underneath.
-
-   Only where the row really is the body's last child, which is how the task
-   kinds end. The kinds that finish with a form of their own — an escalation's
-   answer box — keep their own shape, and the rule never lands mid-body. */
-.cn-ov-next-body > .cn-acts:last-child {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--cn-line);
 }
 
 /* A caption under the bar rather than a second band: it is a reading, and a rule
