@@ -5496,6 +5496,73 @@ button.cn-grow {
 .cn-ov-next-main > .cn-ov-ask-label:first-child {
   margin-top: 0;
 }
+/* TRIAL — Option E, not yet written into 17-cockpit.md. The card is a dialog:
+   the head (pips, Prev/Next, the ask's title) and the foot are fixed, and only
+   the reading between them scrolls, so the ask's own verbs stay on the screen
+   however long its body is. Below 1100px the card keeps its old shape, where
+   height is cheaper than width. */
+@media (min-width: 1100px) {
+  .cn-ov-next {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .cn-ov-switch {
+    flex: none;
+  }
+  .cn-ov-next-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .cn-ov-next-head,
+  .cn-ov-next-foot {
+    flex: none;
+  }
+  .cn-ov-next-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    margin-inline: -24px;
+    padding-inline: 24px;
+  }
+  /* The split fills the scroller rather than ending where its content does, which
+     is what gives the ask's controls a floor to sit on when the body is short. */
+  .cn-ov-next-scroll > .cn-ov-next-split {
+    margin-top: 0;
+    padding-top: 14px;
+    min-height: 100%;
+    align-items: stretch;
+  }
+  .cn-ov-next-main,
+  .cn-ov-next-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .cn-ov-next-body {
+    flex: 1;
+  }
+  .cn-ov-next-foot {
+    margin: 0 -24px;
+    padding: 10px 24px 0;
+    border-top: 1px solid var(--cn-line);
+  }
+  /* The ask's own controls, on the floor of the card at every length of body:
+     `margin-top: auto` puts them there when the reading is short, and the sticky
+     bottom holds them there once it is long enough to scroll under them. */
+  .cn-ov-next-main .btn-row.bar {
+    margin: auto -8px 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding: 10px 8px;
+    background: var(--cn-panel);
+    border-top: 1px solid var(--cn-line);
+  }
+}
+
 @media (min-width: 1100px) {
   .cn-ov-next-split {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);

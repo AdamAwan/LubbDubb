@@ -90,56 +90,74 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
       <OverviewSwitch shape="next" actions={actions} />
 
       <div className={`cn-ov-next-card cn-t-${KIND_TONE[row.kind]}`}>
-        {/* The pips are the whole queue and each is a way into it: a bar that only
+        <div className="cn-ov-next-head">
+          {/* The pips are the whole queue and each is a way into it: a bar that only
             reports a position, on a surface whose complaint about the rail was
             that it could not be acted on, would be the same mistake one size
             down. They carry the ask's tone, so the column also says what kind of
             thing is waiting where. */}
-        <div className="cn-ov-next-progress">
-          <span className="cn-ov-pips">
-            {rows.map((r, i) => (
-              <button
-                key={r.id}
-                type="button"
-                className={`cn-ov-pip cn-t-${KIND_TONE[r.kind]} ${i === at ? 'cn-ov-pip-here' : ''}`}
-                aria-label={`${i + 1} of ${rows.length} — ${KIND_LABEL[r.kind]}: ${r.title}`}
-                aria-current={i === at}
-                title={`${KIND_LABEL[r.kind]} — ${r.title}`}
-                onClick={() => go(i)}
-              />
-            ))}
-          </span>
-          {/* The controls sit with the counter rather than under the ask, because
+          <div className="cn-ov-next-progress">
+            <span className="cn-ov-pips">
+              {rows.map((r, i) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className={`cn-ov-pip cn-t-${KIND_TONE[r.kind]} ${i === at ? 'cn-ov-pip-here' : ''}`}
+                  aria-label={`${i + 1} of ${rows.length} — ${KIND_LABEL[r.kind]}: ${r.title}`}
+                  aria-current={i === at}
+                  title={`${KIND_LABEL[r.kind]} — ${r.title}`}
+                  onClick={() => go(i)}
+                />
+              ))}
+            </span>
+            {/* The controls sit with the counter rather than under the ask, because
               the ask's own height is whatever its body happens to be — a footer
               puts Next somewhere different on every one of them, and the operator
               ends up hunting for the control they press most. Here it is the same
               place on every ask, and beside the count that says what pressing it
               does. */}
-          <ButtonRow className="cn-ov-next-nav">
-            <span className="cn-ov-next-count">
-              {at + 1} of {rows.length}
+            <ButtonRow className="cn-ov-next-nav">
+              <span className="cn-ov-next-count">
+                {at + 1} of {rows.length}
+              </span>
+              <Button
+                tone="secondary"
+                ghost
+                size="small"
+                disabled={at === 0}
+                onClick={() => go(at - 1)}
+                title="The ask before this one (←)"
+              >
+                ‹ Prev
+              </Button>
+              <Button
+                tone="secondary"
+                ghost
+                size="small"
+                disabled={at >= rows.length - 1}
+                onClick={() => go(at + 1)}
+                title="The ask after this one (→)"
+              >
+                Next ›
+              </Button>
+            </ButtonRow>
+          </div>
+
+          <h3 className="cn-ov-ctx-label cn-ov-ask-label">Your move</h3>
+          <h2 className="cn-ov-next-title">
+            <span className="cn-sym" aria-hidden="true">
+              {KIND_SYMBOL[row.kind]}
             </span>
-            <Button
-              tone="secondary"
-              ghost
-              size="small"
-              disabled={at === 0}
-              onClick={() => go(at - 1)}
-              title="The ask before this one (←)"
-            >
-              ‹ Prev
-            </Button>
-            <Button
-              tone="secondary"
-              ghost
-              size="small"
-              disabled={at >= rows.length - 1}
-              onClick={() => go(at + 1)}
-              title="The ask after this one (→)"
-            >
-              Next ›
-            </Button>
-          </ButtonRow>
+            {row.title}
+          </h2>
+
+          <div className="cn-ov-next-meta">
+            <span className="cn-ov-ask-kind">{KIND_LABEL[row.kind]}</span>
+            {subject !== null && <span className="cn-ov-ask-subject">{subject}</span>}
+            {row.goalRef !== null && <Ref to={row.goalRef} />}
+            {row.originRef !== null && row.originRef !== row.goalRef && <Ref to={row.originRef} />}
+            {row.raisedAt !== '' && <span className="cn-ov-ask-age">{relTime(row.raisedAt, view.now)}</span>}
+          </div>
         </div>
 
         {/* Setting beside the act rather than over it. Stacked, the plan pushed the
@@ -147,47 +165,33 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
             argument is that the thing to do is in front of you, with the thing to
             do scrolled off. They collapse back into one column below 1100px,
             where the height is cheaper than the width. */}
-        <div className="cn-ov-next-split">
-          <aside className="cn-ov-next-aside">
-            <Context row={row} view={view} actions={actions} />
-          </aside>
+        <div className="cn-ov-next-scroll">
+          <div className="cn-ov-next-split">
+            <aside className="cn-ov-next-aside">
+              <Context row={row} view={view} actions={actions} />
+            </aside>
 
-          <div className="cn-ov-next-main">
-            <h3 className="cn-ov-ctx-label cn-ov-ask-label">Your move</h3>
-            <h2 className="cn-ov-next-title">
-              <span className="cn-sym" aria-hidden="true">
-                {KIND_SYMBOL[row.kind]}
-              </span>
-              {row.title}
-            </h2>
+            <div className="cn-ov-next-main">
+              {row.holding > 0 && (
+                <p className="cn-ov-next-cost">
+                  <b>{holdingLabel(row.holding)}</b> waiting on this answer.
+                </p>
+              )}
 
-            <div className="cn-ov-next-meta">
-              <span className="cn-ov-ask-kind">{KIND_LABEL[row.kind]}</span>
-              {subject !== null && <span className="cn-ov-ask-subject">{subject}</span>}
-              {row.goalRef !== null && <Ref to={row.goalRef} />}
-              {row.originRef !== null && row.originRef !== row.goalRef && <Ref to={row.originRef} />}
-              {row.raisedAt !== '' && <span className="cn-ov-ask-age">{relTime(row.raisedAt, view.now)}</span>}
+              {row.note !== undefined && <p className="cn-ov-ask-note">{row.note}</p>}
+
+              <div className="cn-ov-next-body">{body}</div>
             </div>
-
-            {row.holding > 0 && (
-              <p className="cn-ov-next-cost">
-                <b>{holdingLabel(row.holding)}</b> waiting on this answer.
-              </p>
-            )}
-
-            {row.note !== undefined && <p className="cn-ov-ask-note">{row.note}</p>}
-
-            <div className="cn-ov-next-body">{body}</div>
-
-            <footer className="cn-ov-next-foot">
-              <span className="cn-ov-next-rest">
-                {rows.length - at - 1 === 0
-                  ? 'last one'
-                  : `${rows.length - at - 1} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
-              </span>
-            </footer>
           </div>
         </div>
+
+        <footer className="cn-ov-next-foot">
+          <span className="cn-ov-next-rest">
+            {rows.length - at - 1 === 0
+              ? 'last one'
+              : `${rows.length - at - 1} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
+          </span>
+        </footer>
       </div>
     </div>
   );
