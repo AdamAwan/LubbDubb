@@ -5205,6 +5205,12 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cn-ov-lead-wait {
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .cn-ov-lead-name:hover {
   color: var(--cn-accent);
 }

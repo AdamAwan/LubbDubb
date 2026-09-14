@@ -10,6 +10,7 @@ import { Button, ButtonRow } from '../../components/button.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '../QueueRail.js';
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
+import { waitedFor } from '../GoalPage.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { byWeight, partsHeld } from './asks.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
@@ -318,8 +319,8 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
           <>
             <h3 className="cn-ov-ctx-label">Nothing to look at either</h3>
             <p className="cn-ov-lead-say">
-              Nothing is queued, every tracker item the fleet can see is picked up, and no pull request is open. The
-              fleet is out of work rather than between it.
+              None of the readings this panel watches has anything in it — nothing queued, nothing unwatched, no goal
+              sitting unattended, nothing waiting on your approval. The fleet is out of work rather than between it.
             </p>
             <ButtonRow>
               <Button tone="primary" size="small" onClick={() => actions.openPanel('launch')}>
@@ -332,7 +333,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
             <h3 className="cn-ov-ctx-label">Worth a look</h3>
             <ul className="cn-ov-leads">
               {leads.map((lead) => (
-                <LeadRow key={lead.key} lead={lead} actions={actions} />
+                <LeadRow key={lead.key} lead={lead} now={view.now} actions={actions} />
               ))}
             </ul>
           </>
@@ -348,7 +349,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
  * beside them — a name with no way to it is the dead end this document keeps
  * naming, and a ref inside a button is the other half of the same rule.
  */
-function LeadRow({ lead, actions }: { lead: Lead; actions: CockpitActions }): JSX.Element {
+function LeadRow({ lead, now, actions }: { lead: Lead; now: number; actions: CockpitActions }): JSX.Element {
   return (
     <li className="cn-ov-lead">
       <div className="cn-ov-lead-head">
@@ -375,6 +376,11 @@ function LeadRow({ lead, actions }: { lead: Lead; actions: CockpitActions }): JS
               <span className="cn-refs">
                 <Ref to={item.ref} />
               </span>
+              {/* The wait is the whole reason an unapproved pull request is a lead,
+                  so it is drawn on the row rather than left to the page behind it. */}
+              {item.since !== undefined && (
+                <span className="cn-ov-lead-wait">waiting {waitedFor(item.since, now)}</span>
+              )}
             </li>
           ))}
         </ul>

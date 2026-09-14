@@ -3524,7 +3524,7 @@ readings that are true right now and have somewhere to go:
 | _n_ **queued, and nobody is out**                | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
 | _n_ **tracker items nobody has picked up**       | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
 | _n_ **goals in flight with nobody on them**      | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
-| _n_ **open pull requests with no agent on them** | the open set, less the branches `agentOnBranch` holds                 | the **Cards** shape                    |
+| _n_ **open pull requests nobody has approved**   | `approved === false`, less the branches `agentOnBranch` holds          | the **Cards** shape                    |
 | _n_ **faults recorded**                          | `errors`                                                              | the fault log                          |
 
 Five rules run through them.
@@ -3543,6 +3543,17 @@ opens.
 **The queue lead is conditional on an idle fleet, and it is the only one that is.** A full queue behind
 a working fleet _is_ the fleet working, and a lead pointing at normal on a surface that has just said
 nothing needs you teaches an operator that the leads are decoration.
+
+**The pull request lead cuts on the approval, not on the agent.** An approval is the operator's own
+act and the one nothing else on the deployment can do for them — so an open pull request nobody has
+approved is the likeliest thing here to be quietly waiting, and the lead says so with the wait beside
+each name (`attention.reviewWaitingSince`, longest first; an unmeasured wait sorts behind every
+measured one rather than reading as none). The cut is `approved === false` and never `!== true`,
+because the field is optional: an unreported approval is an **unknown**, and folding it into a missing
+one would have this lead claim every open pull request on a provider that does not report reviews. The
+branches an agent is out on are still taken off, for the reason a readying row is not an agent — the
+fleet is still writing those, and the harness raises a `merge` ask of its own when it wants one
+merged.
 
 **Each lead names up to three of its own things, and every name is a way there.** The figure says how
 many there are; the names are what make a lead concrete enough to press — and the surface it opens is

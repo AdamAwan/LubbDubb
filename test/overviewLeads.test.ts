@@ -89,6 +89,47 @@ test('every lead and every named item carries a way there', () => {
   }
 });
 
+/* An approval is the operator's own act and nothing else raises an ask for it, so
+   the pull requests nobody has approved are what this lead is for. `approved` is
+   optional on the wire: an unreported approval is an unknown, and folding it into
+   `false` would claim every open pull request on a provider that does not report
+   reviews. */
+test('the pull request lead counts only what is reported unapproved', () => {
+  const v = view();
+  const lead = buildLeads(v).find((l) => l.key === 'prs');
+  const unapproved = v.state.world.pullRequests.filter(
+    (pr) => pr.approved === false && !v.agentOnBranch.has(pr.branch),
+  );
+  assert.equal(lead?.count ?? 0, unapproved.length);
+  for (const item of lead?.items ?? []) {
+    const pr = v.state.world.pullRequests.find((p) => `pr:${p.number}` === item.ref);
+    assert.equal(pr?.approved, false, `${item.ref} is reported unapproved`);
+  }
+});
+
+test('an approval the provider never reported is not an unapproved pull request', () => {
+  const base = view();
+  const prs = base.state.world.pullRequests.map((pr) => {
+    const { approved: _approved, ...rest } = pr;
+    return rest;
+  });
+  const v: CockpitView = { ...base, state: { ...base.state, world: { ...base.state.world, pullRequests: prs } } };
+  assert.equal(
+    buildLeads(v).find((l) => l.key === 'prs'),
+    undefined,
+  );
+});
+
+/* Longest-waiting first: the one sitting a week is the one worth naming. */
+test('the pull request lead names its longest wait first', () => {
+  const lead = buildLeads(view()).find((l) => l.key === 'prs');
+  const waits = (lead?.items ?? []).flatMap((i) => (i.since === undefined ? [] : [Date.parse(i.since)]));
+  assert.deepEqual(
+    waits,
+    [...waits].sort((a, b) => a - b),
+  );
+});
+
 test('the reservoir lead counts the unwatched and nothing else', () => {
   const v = view();
   const lead = buildLeads(v).find((l) => l.key === 'reservoir');

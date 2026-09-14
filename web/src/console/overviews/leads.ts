@@ -1,4 +1,5 @@
 import type { CockpitView } from '../../view/viewModel.js';
+import type { OpenPullRequest } from '../../types.js';
 import { IN_FLIGHT } from '../Overview.js';
 
 // → docs/spec/17-cockpit.md#when-nothing-needs-you
@@ -23,6 +24,8 @@ interface LeadItem {
   label: string;
   ref: string;
   where: LeadWhere;
+  /** What it has been waiting since, where the reading has one — drawn as the wait. */
+  since?: string;
 }
 
 export interface Lead {
@@ -122,21 +125,30 @@ export function buildLeads(view: CockpitView): Lead[] {
     });
   }
 
-  const waiting = pullRequests.filter((pr) => !view.agentOnBranch.has(pr.branch)).sort((a, b) => a.number - b.number);
-  if (waiting.length > 0) {
+  /* `approved === false` and never `!== true`: the field is optional, so an
+     unreported approval is an **unknown** rather than a missing one, and folding
+     the two would have this lead claim every open pull request on a provider that
+     does not report reviews. Minus the branches an agent is out on, for the
+     reason the readying rows are not agents: the fleet is still writing those,
+     and the harness raises a merge ask of its own when it wants one merged. */
+  const unapproved = pullRequests
+    .filter((pr) => pr.approved === false && !view.agentOnBranch.has(pr.branch))
+    .sort(byWait);
+  if (unapproved.length > 0) {
     out.push({
       key: 'prs',
-      count: waiting.length,
+      count: unapproved.length,
       title:
-        waiting.length === 1 ? 'open pull request with no agent on it' : 'open pull requests with no agent on them',
-      say: 'Each of these is in somebody’s court. Which court, and what its checks say, is on its own page.',
+        unapproved.length === 1 ? 'open pull request nobody has approved' : 'open pull requests nobody has approved',
+      say: 'None of these is asking yet, and an approval is nobody’s but yours — which makes an unapproved pull request the likeliest thing on the deployment to be quietly waiting on you.',
       go: 'See them on Cards',
       where: { kind: 'cards' },
-      items: waiting.slice(0, NAMED).map((pr) => ({
+      items: unapproved.slice(0, NAMED).map((pr) => ({
         key: `pr:${pr.number}`,
         label: pr.title,
         ref: `pr:${pr.number}`,
         where: { kind: 'pr', number: pr.number },
+        ...(pr.attention.reviewWaitingSince === undefined ? {} : { since: pr.attention.reviewWaitingSince }),
       })),
     });
   }
@@ -160,4 +172,31 @@ export function buildLeads(view: CockpitView): Lead[] {
 function goalItem(issue: { number: number; title: string }): LeadItem {
   const ref = `issue:${issue.number}`;
   return { key: ref, label: `#${issue.number} ${issue.title}`, ref, where: { kind: 'goal', ref } };
+}
+
+/**
+ * Longest-waiting first, which is the cut the lead is about: `reviewWaitingSince`
+ * is the server's own reading of when a pull request went into somebody's court,
+ * and the one that has been sitting a week is the one worth naming. A pull
+ * request with no such reading has not been measured rather than waited no time,
+ * so it sorts behind every measured one and on its number.
+ */
+function byWait(a: OpenPullRequest, b: OpenPullRequest): number {
+  const at = since(a);
+  const bt = since(b);
+  if (at === bt) return a.number - b.number;
+  /* Each arm on its own, because the subtraction cannot answer this: an
+     unmeasured wait against a measured one gives ±Infinity and against another
+     unmeasured one gives NaN, and both fall through a `isFinite` guard into the
+     number order — which drew a three-day wait *below* two pull requests whose
+     wait nobody had measured. */
+  if (!Number.isFinite(at)) return 1;
+  if (!Number.isFinite(bt)) return -1;
+  return at - bt;
+}
+
+/** When a pull request went into somebody's court, or `Infinity` where nothing measured it. */
+function since(pr: OpenPullRequest): number {
+  const at = Date.parse(pr.attention.reviewWaitingSince ?? '');
+  return Number.isFinite(at) ? at : Infinity;
 }
