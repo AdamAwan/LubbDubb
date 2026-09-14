@@ -18,18 +18,22 @@ export interface SlotProcess {
 }
 
 export interface SlotProcesses {
-  /** The processes holding `dir`, or `null` where the probe itself could not say. */
-  holding(dir: string): Promise<SlotProcess[] | null>;
+  /**
+   * The processes holding `dir`, or `null` where the probe itself could not say. `paths` are the
+   * individual paths a wipe has already been refused on: given them, the probe asks who holds those
+   * and nothing else.
+   */
+  holding(dir: string, paths?: string[]): Promise<SlotProcess[] | null>;
   stop(held: SlotProcess[]): Promise<void>;
 }
 
 export class CommandSlotProcesses implements SlotProcesses {
   constructor(private readonly onWarning?: (message: string) => void) {}
 
-  async holding(dir: string): Promise<SlotProcess[] | null> {
+  async holding(dir: string, paths?: string[]): Promise<SlotProcess[] | null> {
     const root = resolve(dir);
     try {
-      const walk = process.platform === 'win32' ? await mapped(root) : await occupying(root);
+      const walk = await this.probe(root, paths ?? []);
       const found = walk.held.filter((p) => !ours(walk.held, p.pid));
       if (walk.complete) return found;
       this.onWarning?.(partialWalk(root, found.length));
@@ -38,6 +42,11 @@ export class CommandSlotProcesses implements SlotProcesses {
       this.onWarning?.(`Could not list the processes holding ${root}: ${probeFailure(err)}`);
       return null;
     }
+  }
+
+  private probe(root: string, paths: string[]): Promise<Walk> {
+    if (process.platform !== 'win32') return occupying(root);
+    return paths.length > 0 ? holdersOf(paths) : running(root);
   }
 
   stop(held: SlotProcess[]): Promise<void> {
@@ -88,13 +97,12 @@ function ours(found: SlotProcess[], pid: number): boolean {
 const run = promisify(execFile);
 
 const TABLE_TIMEOUT_MS = 20_000;
-const WALK_BUDGET_MS = 15_000;
 const TABLE_BUFFER = 8 * 1024 * 1024;
+const PATHS_ASKED = 8;
 
 /**
  * A walk of the process table, and whether it got all the way through. An incomplete walk carries
- * every holder it did find: the arms that answer the common case run to the end whatever the budget
- * does, so hits from those are a complete reading of them.
+ * every holder it did find: what it found, it found.
  */
 interface Walk {
   held: SlotProcess[];
@@ -102,18 +110,52 @@ interface Walk {
 }
 
 /**
- * What an operator is told when the walk ran out of budget. It is not the probe failing — the cheap
- * arms answered in full — so the sentence says which arm was cut short and what follows from it.
+ * The paths a `git clean` refusal names, absolute. Git reports one `failed to remove <path>` per
+ * path it could not unlink, relative to the directory it was run in, quoted where the path needs
+ * it — and that path is the whole question the second probe asks.
+ *
+ * @public the pool asks the probe with these, and its test reads them back
+ */
+export function refusedPaths(dir: string, detail: string): string[] {
+  const paths: string[] = [];
+  for (const line of detail.split(/\r?\n/)) {
+    const named = /failed to (?:remove|delete) (.+)$/.exec(line.trim());
+    if (named === null || named[1] === undefined) continue;
+    const path = unquote(named[1].trim());
+    if (path === '') continue;
+    const full = resolve(dir, path);
+    if (!paths.includes(full)) paths.push(full);
+  }
+  return paths;
+}
+
+function unquote(text: string): string {
+  const quoted = /^"((?:[^"\\]|\\.)*)"/.exec(text);
+  if (quoted !== null) {
+    try {
+      return JSON.parse(quoted[0]) as string;
+    } catch {
+      return quoted[1] ?? '';
+    }
+  }
+  const errno = text.indexOf(': ');
+  return errno === -1 ? text : text.slice(0, errno);
+}
+
+/**
+ * What an operator is told when the probe could not ask about everything. It is not the probe
+ * failing — what it did ask, it answered — so the sentence says what was left unasked and what
+ * follows from it.
  *
  * @public the pool's warning and its test read the sentence back
  */
 export function partialWalk(root: string, found: number): string {
   return (
-    `The walk for processes holding ${root} ran past ${WALK_BUDGET_MS}ms and stopped before it had asked every ` +
-    `process for its loaded modules. ${
+    `The probe for what is holding ${root} could not ask about all of it: more than ${PATHS_ASKED} paths were ` +
+    `refused, or the handle table declined one of them. ${
       found === 0
-        ? 'Nothing was found by the arms that did run, so what is holding it is unknown rather than nothing.'
-        : `The ${found} found by the arms that did run are swept; a holder only the module walk could have named is not.`
+        ? 'Nothing was found by the paths it did ask about, so what is holding it is unknown rather than nothing.'
+        : `The ${found} found by the paths it did ask about are swept; a holder of a path it did not reach is not.`
     }`
   );
 }
@@ -142,21 +184,13 @@ function firstLine(text: string): string {
 }
 
 /**
- * Windows: what refuses an unlink is a *mapped image*, so the question asked is which processes
- * have a module loaded out of the slot — `Get-Process`'s module list, filtered in the shell so only
- * the hits cross the pipe. The executable path and the command line are asked first because they
- * are on the cheap CIM table and answer the common case without enumerating anything. `Get-Process`
- * is walked once into a table keyed by pid: asked per pid it re-walks the whole process list each
- * time, which on a busy machine is what takes the probe past its timeout.
- *
- * The two arms run as two passes, not one, and the module pass carries its own `WALK_BUDGET_MS`
- * deadline: the cheap pass therefore answers for *every* process however busy the machine is, and a
- * module pass that runs out of budget reports what it has rather than being killed at
- * `TABLE_TIMEOUT_MS` with the cheap answers still in it.
+ * Windows, with no path to ask about yet: the executable path and the command line off the cheap
+ * CIM table, which is one walk over the process list and answers for every process on the machine
+ * however busy it is.
  */
-async function mapped(root: string): Promise<Walk> {
-  const { stdout } = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', HOLDERS_PS1], {
-    env: { ...process.env, LUBBDUBB_SLOT: root, LUBBDUBB_SLOT_BUDGET_MS: String(WALK_BUDGET_MS) },
+async function running(root: string): Promise<Walk> {
+  const { stdout } = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', RUNNING_PS1], {
+    env: { ...process.env, LUBBDUBB_SLOT: root },
     windowsHide: true,
     timeout: TABLE_TIMEOUT_MS,
     maxBuffer: TABLE_BUFFER,
@@ -164,16 +198,11 @@ async function mapped(root: string): Promise<Walk> {
   return parseWalk(stdout);
 }
 
-const HOLDERS_PS1 = [
+const RUNNING_PS1 = [
   "$ErrorActionPreference = 'SilentlyContinue'",
   '$root = $env:LUBBDUBB_SLOT',
-  '$budget = [int]$env:LUBBDUBB_SLOT_BUDGET_MS',
   '$cmp = [System.StringComparison]::OrdinalIgnoreCase',
-  '$clock = [System.Diagnostics.Stopwatch]::StartNew()',
   '$hits = New-Object System.Collections.ArrayList',
-  '$rest = New-Object System.Collections.ArrayList',
-  '$live = @{}',
-  'foreach ($g in Get-Process) { $live[[int]$g.Id] = $g }',
   'foreach ($p in Get-CimInstance Win32_Process) {',
   '  if ($p.ProcessId -le 4) { continue }',
   '  $why = $null',
@@ -181,29 +210,114 @@ const HOLDERS_PS1 = [
   '  elseif ($p.CommandLine -and $p.CommandLine.IndexOf($root, $cmp) -ge 0) { $why = $p.CommandLine }',
   '  if ($why) {',
   '    [void]$hits.Add([pscustomobject]@{ pid = $p.ProcessId; ppid = $p.ParentProcessId; detail = $why })',
-  '  } elseif ($live[[int]$p.ProcessId]) {',
-  '    [void]$rest.Add($p)',
   '  }',
   '}',
-  '$complete = $true',
-  'foreach ($p in $rest) {',
-  '  if ($clock.ElapsedMilliseconds -ge $budget) { $complete = $false; break }',
-  '  try {',
-  '    $g = $live[[int]$p.ProcessId]',
-  '    $m = $g.Modules | Where-Object { $_.FileName -and $_.FileName.StartsWith($root, $cmp) } | Select-Object -First 1',
-  '    if ($m) {',
-  '      [void]$hits.Add([pscustomobject]@{ pid = $p.ProcessId; ppid = $p.ParentProcessId; detail = $m.FileName })',
-  '    }',
-  '  } catch { }',
+  'ConvertTo-Json -Compress -Depth 3 -InputObject ([pscustomobject]@{ complete = $true; held = @($hits) })',
+].join('\n');
+
+/**
+ * Windows, asked about the paths a wipe was refused on: the Restart Manager answers which processes
+ * hold a named file out of the kernel's own handle table, in milliseconds and per path, rather than
+ * asking every process on the machine what it has mapped.
+ */
+async function holdersOf(paths: string[]): Promise<Walk> {
+  const asked = paths.slice(0, PATHS_ASKED);
+  const { stdout } = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', HOLDERS_PS1], {
+    env: { ...process.env, LUBBDUBB_SLOT_PATHS: asked.join('\n') },
+    windowsHide: true,
+    timeout: TABLE_TIMEOUT_MS,
+    maxBuffer: TABLE_BUFFER,
+  });
+  const walk = parseWalk(stdout);
+  return { held: walk.held, complete: walk.complete && asked.length === paths.length };
+}
+
+const RM_SIGNATURES = [
+  '[StructLayout(LayoutKind.Sequential)]',
+  'public struct RM_UNIQUE_PROCESS {',
+  '  public int dwProcessId;',
+  '  public System.Runtime.InteropServices.ComTypes.FILETIME ProcessStartTime;',
   '}',
-  'ConvertTo-Json -Compress -Depth 3 -InputObject ([pscustomobject]@{ complete = $complete; held = @($hits) })',
+  '[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]',
+  'public struct RM_PROCESS_INFO {',
+  '  public RM_UNIQUE_PROCESS Process;',
+  '  [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string strAppName;',
+  '  [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string strServiceShortName;',
+  '  public int ApplicationType;',
+  '  public uint AppStatus;',
+  '  public uint TSSessionId;',
+  '  [MarshalAs(UnmanagedType.Bool)] public bool bRestartable;',
+  '}',
+  '[DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]',
+  'public static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, StringBuilder strSessionKey);',
+  '[DllImport("rstrtmgr.dll")]',
+  'public static extern int RmEndSession(uint pSessionHandle);',
+  '[DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]',
+  'public static extern int RmRegisterResources(uint pSessionHandle, uint nFiles, string[] rgsFilenames,',
+  '  uint nApplications, RM_UNIQUE_PROCESS[] rgApplications, uint nServices, string[] rgsServiceNames);',
+  '[DllImport("rstrtmgr.dll")]',
+  'public static extern int RmGetList(uint dwSessionHandle, out uint pnProcInfoNeeded, ref uint pnProcInfo,',
+  '  [In, Out] RM_PROCESS_INFO[] rgAffectedApps, ref uint lpdwRebootReasons);',
+].join('\n');
+
+const HOLDERS_PS1 = [
+  "$ErrorActionPreference = 'Stop'",
+  '$paths = @($env:LUBBDUBB_SLOT_PATHS -split "`n" | Where-Object { $_ -ne \'\' })',
+  '$complete = $true',
+  '$hits = @{}',
+  'try {',
+  "  Add-Type -Namespace LubbDubb -Name Restart -UsingNamespace System.Text -MemberDefinition @'",
+  RM_SIGNATURES,
+  "'@",
+  '  $parents = @{}',
+  '  foreach ($p in Get-CimInstance Win32_Process) { $parents[[int]$p.ProcessId] = [int]$p.ParentProcessId }',
+  '  foreach ($path in $paths) {',
+  '    $handle = [uint32]0',
+  '    $key = New-Object System.Text.StringBuilder 256',
+  '    if ([LubbDubb.Restart]::RmStartSession([ref]$handle, 0, $key) -ne 0) { $complete = $false; continue }',
+  '    try {',
+  '      $files = [string[]]@($path)',
+  '      if ([LubbDubb.Restart]::RmRegisterResources($handle, [uint32]1, $files, [uint32]0, $null, [uint32]0, $null) -ne 0) {',
+  '        $complete = $false',
+  '        continue',
+  '      }',
+  '      $needed = [uint32]0',
+  '      $count = [uint32]0',
+  '      $reason = [uint32]0',
+  '      $rc = [LubbDubb.Restart]::RmGetList($handle, [ref]$needed, [ref]$count, $null, [ref]$reason)',
+  '      if ($rc -eq 234) {',
+  "        $info = New-Object 'LubbDubb.Restart+RM_PROCESS_INFO[]' $needed",
+  '        $count = $needed',
+  '        $rc = [LubbDubb.Restart]::RmGetList($handle, [ref]$needed, [ref]$count, $info, [ref]$reason)',
+  '        if ($rc -ne 0) { $complete = $false; continue }',
+  '        for ($i = 0; $i -lt $count; $i++) {',
+  '          $id = [int]$info[$i].Process.dwProcessId',
+  '          if ($id -le 4 -or $id -eq $pid) { continue }',
+  '          if (-not $hits.ContainsKey($id)) {',
+  '            $hits[$id] = [pscustomobject]@{',
+  '              pid = $id',
+  '              ppid = [int]$parents[$id]',
+  '              detail = "$($info[$i].strAppName) has $path open"',
+  '            }',
+  '          }',
+  '        }',
+  '      } elseif ($rc -ne 0) { $complete = $false }',
+  '    } finally {',
+  '      [void][LubbDubb.Restart]::RmEndSession($handle)',
+  '    }',
+  '  }',
+  '} catch {',
+  '  $complete = $false',
+  '}',
+  'ConvertTo-Json -Compress -Depth 3 -InputObject ([pscustomobject]@{ complete = $complete; held = @($hits.Values) })',
 ].join('\n');
 
 /**
  * POSIX: the process table plus, where /proc exists, each process's own cwd and executable link.
  * Nothing here holds an unlink — POSIX unlinks a running image and a live process's cwd quite
  * happily — so this exists for the other half of the release: a watcher left running would go on
- * writing into the tree the next occupant is about to be handed.
+ * writing into the tree the next occupant is about to be handed. It is the same walk whether or not
+ * a path was named, because it is already complete and already cheap.
  */
 async function occupying(root: string): Promise<Walk> {
   const { stdout } = await run('ps', ['-eo', 'pid=,ppid=,args='], {

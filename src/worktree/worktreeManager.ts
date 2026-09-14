@@ -3,7 +3,13 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from '../git/gitCli.js';
 import { runSerial } from '../git/serialQueue.js';
-import { CommandSlotProcesses, slotUnusable, type SlotProcess, type SlotProcesses } from './slotProcesses.js';
+import {
+  CommandSlotProcesses,
+  refusedPaths,
+  slotUnusable,
+  type SlotProcess,
+  type SlotProcesses,
+} from './slotProcesses.js';
 
 // → docs/spec/09-execution.md#worktrees
 
@@ -305,14 +311,18 @@ export class WorktreeManager implements Worktrees {
     rmSync(resolve(dir, HARNESS_ARTEFACTS), { recursive: true, force: true });
     const wipe = ['clean', warm ? '-ffd' : '-ffdx'];
     let refused = await this.wiped(dir, wipe);
-    if (refused !== null && swept !== null && swept.length > 0) {
-      // A kill returns before the handles come back: on Windows `taskkill /F` is an ask, and the
-      // mapped images are released as the process is torn down rather than as it answers.
-      await new Promise((settled) => setTimeout(settled, HANDLES_SETTLE_MS));
-      refused = await this.wiped(dir, wipe);
+    let named: SlotProcess[] | null = swept;
+    if (refused !== null) {
+      named = await this.sweep(dir, refusedPaths(dir, refused));
+      if ((swept !== null && swept.length > 0) || (named !== null && named.length > 0)) {
+        // A kill returns before the handles come back: on Windows `taskkill /F` is an ask, and the
+        // mapped images are released as the process is torn down rather than as it answers.
+        await new Promise((settled) => setTimeout(settled, HANDLES_SETTLE_MS));
+        refused = await this.wiped(dir, wipe);
+      }
     }
     if (refused !== null) {
-      await this.condemn(dir, refused, swept);
+      await this.condemn(dir, refused, named);
       return false;
     }
     try {
@@ -329,9 +339,9 @@ export class WorktreeManager implements Worktrees {
    * It never throws: a sweep that could not answer answers `null`, which is not `nothing was
    * holding it` and must never be read as one.
    */
-  private async sweep(dir: string): Promise<SlotProcess[] | null> {
+  private async sweep(dir: string, paths?: string[]): Promise<SlotProcess[] | null> {
     try {
-      const held = await this.processes.holding(dir);
+      const held = await this.processes.holding(dir, paths);
       if (held !== null && held.length > 0) await this.processes.stop(held);
       return held;
     } catch (err) {
@@ -354,25 +364,21 @@ export class WorktreeManager implements Worktrees {
 
   private async condemn(dir: string, detail: string, swept: SlotProcess[] | null): Promise<void> {
     if (this.condemned.has(dir)) return;
-    const remaining = await this.processes.holding(dir).catch(() => swept);
+    const remaining = await this.processes.holding(dir, refusedPaths(dir, detail)).catch(() => swept);
     this.errors?.record({ source: 'cycle', message: slotUnusable(dir, detail, remaining) });
-    this.condemned.set(dir, {
-      reason: `the wipe was refused (${firstLine(detail)})`,
-      processBound: swept === null || remaining === null || swept.length > 0 || remaining.length > 0,
-    });
+    this.condemned.set(dir, { reason: `the wipe was refused (${firstLine(detail)})` });
   }
 
   /**
-   * Takes condemned slots back into the pool once nothing is holding them. It runs at the dead end
-   * and nowhere else, for the reason the salvage does: asking costs a process-table walk per slot,
-   * and until the alternative is a rejected dispatch there is nothing to buy with it.
+   * Takes condemned slots back into the pool once they can be emptied again, by attempting the wipe
+   * that was refused rather than by asking who is holding them. It runs at the dead end and nowhere
+   * else, for the reason the salvage does: it is a wipe per condemned slot, and until the
+   * alternative is a rejected dispatch there is nothing to buy with it.
    */
   private async revive(): Promise<number> {
     let freed = 0;
     for (const [dir, condemnation] of [...this.condemned]) {
-      if (!condemnation.processBound) continue;
-      const held = await this.processes.holding(dir).catch(() => null);
-      if (held === null || held.length > 0) continue;
+      if (existsSync(dir) && (await this.wiped(dir, ['clean', '-ffdx'])) !== null) continue;
       this.condemned.delete(dir);
       freed += 1;
       this.errors?.record({ source: 'cycle', message: revived(dir, condemnation.reason) });
@@ -596,12 +602,6 @@ interface SalvageReport {
 interface Condemnation {
   /** The short form, for the slot's line in the exhaustion refusal. */
   reason: string;
-  /**
-   * Whether a live process was involved at all. A condemnation without one is never revived: nothing
-   * on disk would have to change for the retry to fail in exactly the same way, and re-offering it
-   * is the loop this whole mechanism exists to stop.
-   */
-  processBound: boolean;
 }
 
 const HANDLES_SETTLE_MS = 500;
@@ -617,8 +617,8 @@ const CONDEMNED_REASON_CHARS = 160;
 
 function revived(dir: string, reason: string): string {
   return (
-    `Worktree slot ${dir} is back in the pool: it was taken out because ${reason}, and nothing is holding it ` +
-    'any more. It is wiped and handed over on the next dispatch that needs a slot, like any other.'
+    `Worktree slot ${dir} is back in the pool: it was taken out because ${reason}, and the wipe it refused has ` +
+    'now gone through. It is handed over on the next dispatch that needs a slot, like any other.'
   );
 }
 

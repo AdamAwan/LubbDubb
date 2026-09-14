@@ -12,6 +12,7 @@ import {
   parseWalk,
   partialWalk,
   probeFailure,
+  refusedPaths,
   type SlotProcess,
 } from '../src/worktree/slotProcesses.js';
 import { tmpDir } from './support/gitRepo.js';
@@ -206,6 +207,51 @@ test('a slot comes back into the pool once nothing is holding it', async () => {
   assert.equal(errors.entries.filter((e) => e.message.includes('is back in the pool')).length, 1);
 });
 
+test('a slot comes back into the pool even where the probe can never answer', async () => {
+  const repo = initRepo();
+  const processes = new FakeSlotProcesses();
+  const errors = recorder();
+  const wt = manager(repo, 1, processes, errors);
+
+  const only = await wt.ensure('feature/x');
+  await wt.remove('feature/x');
+  const release = wedge(only);
+  // A machine busy enough that the probe never gets through the table: every reading is `null`,
+  // which is the steady state rather than the exception it was taken for.
+  processes.unreadable(only);
+  await assert.rejects(wt.ensure('feature/y'));
+
+  await release();
+
+  const back = await wt.ensure('feature/z');
+  assert.equal(back, only, 'the revival asks the wipe, not the probe');
+  assert.equal(errors.entries.filter((e) => e.message.includes('is back in the pool')).length, 1);
+});
+
+test('a refused wipe is probed again for the paths git named, not for the whole table', async () => {
+  const repo = initRepo();
+  const processes = new FakeSlotProcesses();
+  const wt = manager(repo, 1, processes, recorder());
+
+  const only = await wt.ensure('feature/x');
+  await wt.remove('feature/x');
+  const release = wedge(only);
+  processes.asked.length = 0;
+  processes.askedPaths.length = 0;
+
+  try {
+    await assert.rejects(wt.ensure('feature/y'));
+    assert.ok(processes.askedPaths.length >= 2, 'the sweep, then a probe of what the wipe refused');
+    assert.deepEqual(processes.askedPaths[0], [], 'the sweep has no path to ask about yet');
+    assert.ok(
+      processes.askedPaths.slice(1).some((paths) => paths.length > 0),
+      'the probes after the refusal name the paths git could not unlink',
+    );
+  } finally {
+    await release();
+  }
+});
+
 test('a slot condemned while the process table could not be read comes back once it can', async () => {
   const repo = initRepo();
   const processes = new FakeSlotProcesses();
@@ -254,10 +300,31 @@ test('a walk that ran out of budget is read as incomplete, and nothing to read i
   });
 });
 
-test('a cut-short walk says which arm was cut short, and what follows from it', () => {
-  assert.match(partialWalk('D:/slot-0', 0), /ran past 15000ms/);
+test('a probe that could not ask about everything says so, and what follows from it', () => {
+  assert.match(partialWalk('D:/slot-0', 0), /could not ask about all of it/);
   assert.match(partialWalk('D:/slot-0', 0), /unknown rather than nothing/);
-  assert.match(partialWalk('D:/slot-0', 2), /The 2 found by the arms that did run are swept/);
+  assert.match(partialWalk('D:/slot-0', 2), /The 2 found by the paths it did ask about are swept/);
+});
+
+test('the paths a refused wipe names are what the second probe asks about', () => {
+  const slot = process.platform === 'win32' ? 'D:\\slot-0' : '/slots/slot-0';
+  const refusal = [
+    'Command failed: git clean -ffdx',
+    'warning: failed to remove node_modules/.bin/vite.exe: Invalid argument',
+    'warning: failed to remove node_modules/esbuild/: Invalid argument',
+    'warning: failed to remove node_modules/.bin/vite.exe: Invalid argument',
+  ].join('\n');
+
+  assert.deepEqual(refusedPaths(slot, refusal), [
+    join(slot, 'node_modules', '.bin', 'vite.exe'),
+    join(slot, 'node_modules', 'esbuild'),
+  ]);
+  assert.deepEqual(
+    refusedPaths(slot, 'warning: failed to remove "a dir/left behind.txt": Invalid argument'),
+    [join(slot, 'a dir', 'left behind.txt')],
+    'git quotes a path that needs it, and the quoting is not part of the path',
+  );
+  assert.deepEqual(refusedPaths(slot, 'Command failed: git clean -ffdx'), [], 'a refusal naming nothing asks nothing');
 });
 
 test('children are signalled before their parents, however the list arrives', () => {
