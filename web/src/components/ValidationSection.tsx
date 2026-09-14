@@ -85,6 +85,7 @@ export function ValidationSection({
   refUrls,
   desktopFolder,
   look = { ghost: true, size: 'small' },
+  openOutstanding = false,
   onResult,
   onDefer,
   onWaive,
@@ -98,6 +99,13 @@ export function ValidationSection({
   refUrls: Record<string, string>;
   desktopFolder: string;
   look?: ButtonLook;
+  /**
+   * Draw every check that is still owed already expanded. The section's own home is a goal page,
+   * where a collapsed row is a summary somebody chose to open; an ask asks for the work itself, and
+   * a row that hides the steps behind a click is the prose that ask used to be.
+   * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+   */
+  openOutstanding?: boolean;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -184,6 +192,7 @@ export function ValidationSection({
           look={look}
           issueNumber={issueNumber}
           desktopFolder={desktopFolder}
+          startOpen={openOutstanding && check.state !== 'passed' && check.state !== 'waived'}
           onResult={(result, note) => onResult(check.id, result, note)}
           onDefer={(reason) => onDefer(check.id, reason)}
           onWaive={(reason) => onWaive(check.id, reason)}
@@ -317,6 +326,7 @@ function CheckBlock({
   look,
   issueNumber,
   desktopFolder,
+  startOpen,
   onResult,
   onDefer,
   onWaive,
@@ -329,13 +339,14 @@ function CheckBlock({
   look: ButtonLook;
   issueNumber: number;
   desktopFolder: string;
+  startOpen: boolean;
   onResult: (result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (reason: string) => Promise<unknown> | unknown;
   onWaive: (reason: string) => Promise<unknown> | unknown;
   onReset: () => Promise<unknown> | unknown;
   onHandover: (to: 'fleet' | 'human') => Promise<unknown> | unknown;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [verb, setVerb] = useState<Verb | null>(null);
   const [note, setNote] = useState('');
   const send = useAsyncAction();

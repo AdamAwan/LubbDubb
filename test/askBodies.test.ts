@@ -1,0 +1,170 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import * as React from 'react';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { buildViewModel } from '../web/src/view/viewModel.js';
+import type { CockpitView } from '../web/src/view/viewModel.js';
+import type { CockpitActions } from '../web/src/cockpit/actions.js';
+import type { NeedRow } from '../web/src/view/needsYou.js';
+
+(globalThis as { React?: typeof React }).React = React;
+
+const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { needBody } = await import('../web/src/console/NeedsBand.js');
+const { RefLinks } = await import('../web/src/components/refs.js');
+const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
+
+function view(state: CockpitView['state'] = buildDemoState().state): CockpitView {
+  return buildViewModel({
+    state,
+    now: Date.now(),
+    connected: true,
+    demo: true,
+    setup: null,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: Date.now(),
+    viewingPlan: null,
+    viewingRetro: null,
+    hatching: null,
+    viewingScratchpad: null,
+    insightsView: 'economics',
+    insightsWindow: '7d',
+    selectedGoal: null,
+    consolePanel: null,
+    tab: 'overview',
+  });
+}
+
+const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
+
+function askBody(v: CockpitView, row: NeedRow): string {
+  return renderToStaticMarkup(
+    createElement(RefLinks, {
+      refUrls: v.state.refUrls,
+      openGoal: () => undefined,
+      hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(v.state, n),
+      children: needBody(row, v, actions),
+    }),
+  );
+}
+
+function rowOfKind(v: CockpitView, kind: NeedRow['kind']): NeedRow {
+  const row = v.needsYou.find((n) => n.kind === kind);
+  assert.ok(row !== undefined, `the demo state has no ${kind} row to draw`);
+  return row;
+}
+
+const validateRow = (v: CockpitView): NeedRow => rowOfKind(v, 'validate');
+
+test('a validate ask draws the goal’s own check rows, not only the sentence naming them', () => {
+  const v = view();
+  const html = askBody(v, validateRow(v));
+  const checks = v.state.validationChecks?.filter((c) => c.originRef === 'issue:395' && c.supersededReason === null);
+  assert.ok(checks !== undefined && checks.length > 0, 'the goal the row is about has no checks');
+  for (const check of checks) {
+    assert.ok(html.includes(check.id), `check ${check.letter} is not drawn on the ask at all`);
+  }
+});
+
+test('a validate ask opens every check still owed, and leaves the settled ones closed', () => {
+  const v = view();
+  const html = askBody(v, validateRow(v));
+  const live = v.state.validationChecks!.filter((c) => c.originRef === 'issue:395' && c.supersededReason === null);
+  const owed = live.filter((c) => c.state !== 'passed' && c.state !== 'waived');
+  assert.ok(owed.length > 0 && owed.length < live.length, 'the goal must owe some checks and not all of them');
+  /* Counted off the row's own disclosure rather than matched on its prose: what an
+     open row draws is its `do`, its `expect` and its steps, and every one of those
+     is markdown by the time it reaches the page. */
+  const open = html.split('aria-expanded="true"').length - 1;
+  assert.equal(open, owed.length, 'the rows drawn open are not the rows still owed');
+});
+
+test('a validate ask still carries the row’s own verbs', () => {
+  const v = view();
+  const html = askBody(v, validateRow(v));
+  assert.match(html, /Done/, 'the bench row cannot be settled from the ask');
+  assert.match(html, /Decline/, 'the bench row cannot be declined from the ask');
+});
+
+test('the close-out ask draws the checks its own note is about', () => {
+  const v = view();
+  const row = rowOfKind(v, 'close_out');
+  const html = askBody(v, row);
+  const live = (v.state.validationChecks ?? []).filter(
+    (c) => c.originRef === row.goalRef && c.supersededReason === null,
+  );
+  assert.ok(live.length > 0, 'the goal being closed out has no checks, so there is nothing to assert');
+  for (const check of live) {
+    assert.ok(html.includes(check.id), `check ${check.letter} is not drawn on the close-out ask`);
+  }
+  /* The note on `Done` says the outstanding checks are listed above it. It is the
+     sentence this body has to keep honest, so the rows it names are drawn before
+     the verbs, and waiving one is a control here rather than a trip to the goal. */
+  assert.ok(html.indexOf('pm-vrow') < html.indexOf('>Decline<'), 'the checks are drawn below the verbs');
+});
+
+test('the runway ask lists the items it is asking to be put in play, with the control that does it', () => {
+  const v = view();
+  const state = {
+    ...v.state,
+    humanTasks: [
+      ...(v.state.humanTasks ?? []),
+      {
+        id: 'hum-supply',
+        title: 'The fleet is waiting on you, not on work',
+        detail: 'Nothing is eligible for pickup and 2 of 4 slots are empty. 4 open issues nobody has watched.',
+        originRef: null,
+        partId: null,
+        kind: 'supply' as const,
+        agentId: null,
+        taskId: null,
+        status: 'open' as const,
+        resolution: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        resolvedAt: null,
+        dismissedAt: null,
+      },
+    ],
+  };
+  const withAsk = view(state);
+  const row = rowOfKind(withAsk, 'supply');
+  const html = askBody(withAsk, row);
+  /* The list is the server's own verdict — `pickup.status` — never a label read
+     here, so what the ask names and what the count behind it counted are one set. */
+  const unwatched = withAsk.state.world.issues.filter((i) => i.pickup.status === 'unwatched');
+  assert.ok(unwatched.length > 0, 'the demo has nothing unwatched, so there is nothing to assert');
+  for (const issue of unwatched.slice(0, 8)) {
+    assert.ok(html.includes(issue.title), `issue #${String(issue.number)} is not drawn on the runway ask`);
+  }
+  assert.match(html, />Watch</, 'the ask offers no way to put anything in play');
+});
+
+test('an assigned pull request draws its waiting threads and its reasons apart', () => {
+  const v = view();
+  const row = rowOfKind(v, 'assigned');
+  const html = askBody(v, row);
+  const number = Number(/^assigned:pr:(\d+)$/.exec(row.id)?.[1]);
+  const pr = v.state.world.pullRequests.find((p) => p.number === number);
+  assert.ok(pr !== undefined, 'the assigned row names a pull request the snapshot does not carry');
+  const waiting = (pr.reviewThreads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened');
+  assert.ok(waiting.length > 0, 'the assigned pull request has no waiting thread to draw');
+  for (const thread of waiting) {
+    assert.ok(html.includes(thread.author), `the thread from ${thread.author} is not drawn`);
+  }
+  const resolved = (pr.reviewThreads ?? []).filter((t) => t.state === 'resolved');
+  for (const thread of resolved) {
+    assert.ok(!html.includes(thread.body), 'a resolved thread is drawn as something still waiting');
+  }
+  /* Each reason is its own line. Joined with a separator they read as one sentence
+     nobody wrote, and they are separate facts: who put this on you, and what the
+     harness is not doing about it. */
+  assert.ok(!html.includes((pr.attention?.reasons ?? []).join(' · ')), 'the reasons are drawn as one joined line');
+});

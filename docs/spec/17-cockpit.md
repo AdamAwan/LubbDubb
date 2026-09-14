@@ -703,7 +703,8 @@ Both would be the same ask twice, which is how a queue teaches an operator to sk
 
 Keyed on that field and never on the assignment itself, for the reason `dispatch` keys on an outcome
 rather than a sentence: a surface matching the leading reason's wording would file every future
-rewording of it as "not assigned".
+rewording of it as "not assigned". Its **body** draws what is waiting on the pull request rather
+than only naming it → [an ask that asks for work draws the work](#an-ask-that-asks-for-work-draws-the-work).
 
 **Its age is how long the pull request has been waiting on _them_** — `reviewWaitingSince`, the
 review-wait watermark the pulse folds, which the verdict carries on an assigned court for exactly this
@@ -1032,6 +1033,62 @@ screen.
 when quiet is indistinguishable from one that broke, and a column that came and went would reflow the
 whole shell every time the last ask was answered. A group with no rows draws no heading, though — an
 empty "Yours to do" under a full "Blocking" is furniture.
+
+### An ask that asks for work draws the work
+
+Almost every ask on this surface is answered *by* the ask: a verdict, a pick, a sentence in a box. The
+`validate` bench row is not — it asks somebody to go and run a delivered goal's checks and record what
+they saw ([20](20-validation.md#saying-so-on-the-bench)) — and its body used to be the desk's prose and
+nothing else: a paragraph, a line per outstanding check naming it, and the ticket's link. On the rail
+that is a reasonable summary. In "One ask at a time" it is the surface's own argument failing: the
+whole of the situation area given to an ask, and the ask telling the operator to go and find the work.
+
+So the body draws the goal's **own check rows**, from the same `ValidationSection`
+(`web/src/components/ValidationSection.tsx`) the goal page manages them with — the steps, the
+resources, and the four readings — with every check still owed **already open**. One component, so a
+check cannot read one way in the ask and another on the goal page, and recording a result here is the
+same write it is there. It is `needBody`, so the ask panel and the goal page's band get it too: this
+is one ask drawn three ways, not a fourth ask.
+
+The desk's prose stays above the rows. It is the harness's own refreshed statement of what the goal
+owes — the sheet assembled for an environment, the ticket's link — and it is what the row says
+everywhere the rows are not in front of the reader. Where the snapshot holds no checks for the goal,
+the prose is the whole body, as it was: a row filed against a goal whose checks this cockpit cannot
+see is still a row somebody has to settle.
+
+**A settled check is drawn closed.** Open is what "this one is yours" looks like here, so opening the
+passed and waived ones with them would say nothing, and the rows still owed would be the ones nobody
+could find. `test/askBodies.test.ts` pins both halves off the row's own disclosure.
+
+**The `close_out` row draws the same rows**, and for a reason it was already stating in prose: the note
+on its `Done` says that closing a goal whose validation is flagged costs a sentence about the
+outstanding checks, or waiving them first — a sentence about _a list drawn as prose one paragraph
+above it_. Both answers it offers are controls on the rows, so the rows come with it. It is the same
+`GoalChecks` block, above the verbs, so the note's "listed above" stays literally true.
+
+The same reading applies to two more asks, and the rule it follows in each is: **draw the thing the
+answer is about, keep the desk's prose, and never re-derive what the server already decided.**
+
+**`supply` — the items it is asking to be put in play.** The runway ask said _how much_ work is
+missing ("4 open issues nobody has watched") and never _which_, which made it the one ask whose answer
+was a trip to another tab and a search. It now lists them, each with the same `setIssueWatched` control
+the tickets board uses, and points at the tickets tab past the first few rather than becoming a second
+board.
+
+**The list is `issue.pickup.status`, never a label read in the cockpit.** The runway reading counts an
+issue as unwatched off that status, from the same pickup context the snapshot stamps it with, so a
+list built the same way names exactly what the count counted. Built from `config.watchLabel` and
+`issue.labels` instead, it would ignore `ownWorkOnly` — which resolves the label against
+`labelsAddedByViewer` — and the precedence a paused, delivered or appraising goal takes over
+`unwatched`, and the ask would name issues the sentence above it never counted.
+→ [06](06-issue-pickup.md), [25](25-supply.md)
+
+**`assigned` — what is waiting on the pull request.** Somebody put a pull request on the operator
+where the fleet cannot see it, so the ask is an index of what that costs: the threads still open or
+reopened, read through `buildPrPage`, the pull request page's own reading, so the two cannot disagree
+about which thread is still waiting. Its attention reasons are drawn **one per line**: they are
+separate facts — who put it there, and what the harness is not doing about it — and joined with a
+separator they read as one sentence nobody wrote.
 
 ### The action bar
 

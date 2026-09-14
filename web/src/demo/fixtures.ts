@@ -491,6 +491,37 @@ export function buildDemoState(): DemoSeed {
           viewerAssignment: 'reviewer-optional',
           ciStatus: 'passing',
           unresolvedComments: [],
+          // Somebody else's pull request, with somebody else's threads on it. The fleet acts on none
+          // of this — what the ask draws is what is waiting, so the row says how big an evening it is.
+          reviewThreads: [
+            {
+              id: 'thread-415-1',
+              author: 'Priya Raman',
+              body: 'Is a flat 3 retries right here, or should it back off until the window the 429 names?',
+              state: 'open',
+              replies: [],
+              path: 'src/sweep/reconcile.ts',
+              line: 88,
+            },
+            {
+              id: 'thread-415-2',
+              author: 'Tom Beck',
+              body: 'This swallows the 429 body — we lose the Retry-After the provider sends.',
+              state: 'open',
+              replies: [],
+              path: 'src/sweep/http.ts',
+              line: 41,
+            },
+            {
+              id: 'thread-415-3',
+              author: 'Priya Raman',
+              body: 'Renamed, thanks.',
+              state: 'resolved',
+              replies: [],
+              path: 'src/sweep/http.ts',
+              line: 12,
+            },
+          ],
           approved: false,
           mergeable: true,
           baseBranch: 'main',
@@ -2621,6 +2652,35 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(72),
         updatedAt: ago(52),
         resolvedAt: ago(52),
+        dismissedAt: null,
+      },
+      // The bench row that asks for a delivered goal's checks. It is here because it is the one ask
+      // whose body is not the ask — the cockpit draws issue #395's own check rows under it, with the
+      // ones still owed already open. → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+      {
+        id: 'hum-5',
+        title: 'Run the validation checks for issue #395',
+        detail:
+          '**Snapshot downloads 401 in the review console** is delivered, and its validation plan has 5 checks ' +
+          'for you to run — of 9 checks in all.\n\n' +
+          'B. **With auth off, snapshot downloads still serve** — unrun\n' +
+          'C. **A tampered capability is refused** — unrun\n' +
+          'E. **The download link is reachable on a narrow viewport** — unrun (handed back — An agent could not ' +
+          'run this check: it needs a browser at a set viewport, and I have none.)\n' +
+          'G. **A pruned snapshot mints no capability** — failed\n' +
+          'H. **A download survives a signer key rotation** — deferred\n\n' +
+          'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates ' +
+          'no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+        originRef: 'issue:395',
+        partId: null,
+        kind: 'validate',
+        agentId: null,
+        taskId: null,
+        status: 'open',
+        resolution: null,
+        createdAt: ago(20),
+        updatedAt: ago(1),
+        resolvedAt: null,
         dismissedAt: null,
       },
       {

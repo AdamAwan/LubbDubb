@@ -246,6 +246,11 @@ A `supply` human task ([13](13-jobs-and-tickets.md)), on `SpendBurnDesk`'s terms
 dispatches nobody, holds nothing, and no rule reads what it writes. `healthy` and `unknown` file
 nothing.
 
+**The cockpit draws the row as the items it is asking for**, each with the watch control, off
+`issue.pickup.status` — the same status this reading counts, never a label read a second time in the
+browser. The figures stay in the detail, where this document's own dedup rule puts them.
+→ [17](17-cockpit.md#an-ask-that-asks-for-work-draws-the-work)
+
 Joining the bench is what gets the notification for free — `NeedKind` gains `supply`, and
 `notify.ts` diffs the rendered needs-you queue by row id ([17](17-cockpit.md)). Its tone is **amber**
 and its group is **yours**: a gate rather than a fault, and no agent is parked on it.

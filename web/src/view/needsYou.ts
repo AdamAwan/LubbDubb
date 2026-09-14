@@ -196,7 +196,15 @@ function askLine(summary: string, goalRef: string | null, state: AppState): stri
 
 const MAX_SUMMARY = 110;
 
-function oneLine(text: string | null | undefined): string {
+/**
+ * A summary's first line, clamped. Exported because an ask *body* indexing what is
+ * waiting — the threads on an assigned pull request — is asking the same question
+ * of the same kind of text, and two clamps drift into two different summaries of
+ * one comment.
+ *
+ * @public shared with the ask bodies in `web/src/console/NeedsBand.tsx`
+ */
+export function oneLine(text: string | null | undefined): string {
   const line = (text ?? '').split('\n')[0]?.trim() ?? '';
   return line.length <= MAX_SUMMARY ? line : `${line.slice(0, MAX_SUMMARY - 1).trimEnd()}…`;
 }

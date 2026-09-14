@@ -683,6 +683,11 @@ find, the tenant's age — lands with the pre-flight. The press is a person's ac
 for one even where every remaining check is automatable, and **no second bench kind is added**: a
 sheet waiting to be run is this row's business. → [36](36-remote-validation.md#the-desk)
 
+**The cockpit draws the row as the checks themselves**, not as the sentence naming them: the goal's own
+check rows, with the ones still owed already open, under the desk's prose. The detail above them is
+still what this desk writes and still refreshed every pulse — it is what the row says on every surface
+that has no check rows to draw. → [17](17-cockpit.md#an-ask-that-asks-for-work-draws-the-work)
+
 **It blocks nothing**, which is the table at the top of this document holding: the row gates no
 dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running
 the checks is an obligation with a place to sit rather than a thing somebody remembers.
