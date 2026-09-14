@@ -127,13 +127,8 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **A test that dispatches a code agent must inject `worktrees`.** `config.repoRoot` defaults to
   `process.cwd()`, so without `FakeWorktreeManager` the test cuts a **real branch in your checkout**
   and nothing deletes it. Use the real manager only when git behaviour _is_ the subject, pointed at a
-  throwaway repo from `test/support/gitRepo.ts`.
+  throwaway repo from `test/support/gitRepo.ts`, and with `FakeSlotProcesses` — its default **kills** live processes.
   → [19](docs/spec/19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)
-- **A test that builds a real `WorktreeManager` must inject `FakeSlotProcesses`.** The default is
-  `CommandSlotProcesses`, which walks the **machine's** process table and **terminates** whatever it
-  finds under the slot — seconds per release, and a release that outlives the test lands its error in
-  a closed store. `test/support/worktrees.ts` already does it; a manager built inline must too.
-  → [09](docs/spec/09-execution.md#a-process-left-standing-in-a-slot)
 - **A test that touches `GET /api/issues/filing-target` or `POST /api/issues` must inject
   `upstream`.** The default is the real `gh` CLI against **AdamAwan/LubbDubb** — a test without
   `FakeUpstreamIssues` files a live issue on the project's tracker and passes while doing it.
@@ -307,19 +302,12 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   unreachable.** The reset form rewinds a branch that already has commits — a re-dispatch, a retry —
   and loses them. Check the ref exists first; only reach `switch -c` for one that does not.
   → [09](docs/spec/09-execution.md#handing-a-slot-over)
-- **A slot handed to a _different_ branch is wiped with `git clean -ffdx` first.** Weakening the
-  wipe puts another branch's `dist/` and lockfile-resolved dependencies in front of an agent as its
-  own output. The cold install is the trade on purpose. → [09](docs/spec/09-execution.md#handing-a-slot-over)
+- **A slot handed to a _different_ branch is swept of live processes, then wiped `git clean -ffdx`.**
+  A weaker wipe hands another branch's `dist/` on as the agent's own output; an unswept one leaves a mapped
+  image Windows cannot unlink, and a refused wipe condemns it. → [09](docs/spec/09-execution.md#handing-a-slot-over)
 - **`ensure` grows the pool before it evicts a free slot still on a branch.** Evicting early burns
   the tree a CI fix on that branch would have come back to; every re-dispatch then pays a cold
   install, which nothing measures. → [09](docs/spec/09-execution.md#worktrees)
-- **A slot is swept of live processes before it is wiped, and a wipe that still fails must not be
-  re-proposed.** On Windows a mapped image cannot be unlinked while its process lives, so one dev
-  server an agent left running refuses `git clean -ffdx` for ever — identical failure, every pulse,
-  nothing red. `remove` and the hand-over both go through `SlotProcesses`; a wipe refused after that
-  **condemns** the slot (off the survey, error log once, dispatch sent to another slot), and a
-  condemnation with no process behind it is never revived, because nothing on disk would have to
-  change for the retry to fail the same way. → [09](docs/spec/09-execution.md#a-process-left-standing-in-a-slot)
 - **The lease is the only thing keeping two agents out of one directory.** Anything that hands out
   a slot goes through `WorktreeManager.ensure`; anything that frees one goes through `remove` /
   `deleteBranch`. → [09](docs/spec/09-execution.md#the-lease)
