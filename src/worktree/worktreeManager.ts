@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from '../git/gitCli.js';
+import { CommandSlotProcesses, slotUnusable, type SlotProcess, type SlotProcesses } from './slotProcesses.js';
 
 // → docs/spec/09-execution.md#worktrees
 
@@ -16,6 +17,7 @@ export interface Worktrees {
 
 export class WorktreeManager implements Worktrees {
   private readonly leases = new Map<string, string>();
+  private readonly condemned = new Map<string, Condemnation>();
 
   constructor(
     private readonly repoRoot: string,
@@ -26,6 +28,9 @@ export class WorktreeManager implements Worktrees {
     },
     private readonly previewRoot: string,
     private readonly errors?: ErrorRecorder,
+    private readonly processes: SlotProcesses = new CommandSlotProcesses((message) =>
+      errors?.record({ source: 'cycle', message }),
+    ),
   ) {}
 
   ensure(branch: string, base?: string): Promise<string> {
@@ -73,8 +78,8 @@ export class WorktreeManager implements Worktrees {
     if (survey.own !== null) return this.lease(req.name, survey.own);
     const take = survey.warm ?? survey.spare;
     if (take !== null) {
-      await this.handOver(take, req);
-      return this.lease(req.name, take);
+      if (await this.handedOver(take, req)) return this.lease(req.name, take);
+      return this.acquire(req, salvaged);
     }
 
     const minted = this.nextSlotPath(slots);
@@ -85,12 +90,14 @@ export class WorktreeManager implements Worktrees {
     }
 
     if (survey.evictable !== null) {
-      await this.handOver(survey.evictable, req);
-      return this.lease(req.name, survey.evictable);
+      if (await this.handedOver(survey.evictable, req)) return this.lease(req.name, survey.evictable);
+      return this.acquire(req, salvaged);
     }
 
-    const report = salvaged ?? (await this.salvage(survey.blocked));
-    if (salvaged === undefined && report.freed > 0) return this.acquire(req, report);
+    if (salvaged !== undefined) throw new Error(this.exhausted(req, survey.blocked, salvaged, slots));
+    const report = await this.salvage(survey.blocked);
+    const revived = await this.revive();
+    if (report.freed > 0 || revived > 0) return this.acquire(req, report);
     throw new Error(this.exhausted(req, survey.blocked, report, slots));
   }
 
@@ -110,9 +117,10 @@ export class WorktreeManager implements Worktrees {
     return null;
   }
 
-  remove(branch: string): Promise<void> {
+  async remove(branch: string): Promise<void> {
+    const dir = this.leases.get(branch);
     this.leases.delete(branch);
-    return Promise.resolve();
+    if (dir !== undefined) await this.sweep(dir);
   }
 
   async deleteBranch(branch: string): Promise<void> {
@@ -145,6 +153,11 @@ export class WorktreeManager implements Worktrees {
     let spare: string | null = null;
     let evictable: string | null = null;
     for (const slot of slots) {
+      const condemnation = this.condemned.get(slot.path);
+      if (condemnation !== undefined) {
+        blocked.push({ path: slot.path, reason: condemnation.reason, stuck: false });
+        continue;
+      }
       const mark = readMark(this.markPath(slot.path));
       const holder = this.holder(slot, mark);
       if (holder !== null) {
@@ -234,18 +247,86 @@ export class WorktreeManager implements Worktrees {
     }
   }
 
-  private async handOver(dir: string, req: Request): Promise<void> {
+  private async handedOver(dir: string, req: Request): Promise<boolean> {
     const mark = readMark(this.markPath(dir));
     const warm = req.readOnly && mark !== null && mark.of === req.of;
     const onto = await this.switchOnto(req);
     this.mark(dir, null);
+    const swept = await this.sweep(dir);
+    const wipe = ['clean', warm ? '-ffd' : '-ffdx'];
+    let refused = await this.wiped(dir, wipe);
+    if (refused !== null && swept.length > 0) {
+      // A kill returns before the handles come back: on Windows `taskkill /F` is an ask, and the
+      // mapped images are released as the process is torn down rather than as it answers.
+      await new Promise((settled) => setTimeout(settled, HANDLES_SETTLE_MS));
+      refused = await this.wiped(dir, wipe);
+    }
+    if (refused !== null) {
+      await this.condemn(dir, refused, swept);
+      return false;
+    }
     try {
-      await runGit(dir, ['clean', warm ? '-ffd' : '-ffdx']);
       await runGit(dir, onto);
     } catch (err) {
       throw new Error(`Cannot hand worktree slot ${dir} to ${describe(req)}: ${(err as Error).message}`);
     }
     if (req.readOnly) this.mark(dir, { key: req.name, of: req.of });
+    return true;
+  }
+
+  /**
+   * Terminates everything the harness can find standing inside the slot, children before parents.
+   * It never throws: a sweep that could not answer leaves the wipe to say so.
+   */
+  private async sweep(dir: string): Promise<SlotProcess[]> {
+    try {
+      const held = await this.processes.holding(dir);
+      if (held.length > 0) await this.processes.stop(held);
+      return held;
+    } catch (err) {
+      this.errors?.record({
+        source: 'cycle',
+        message: `Could not clear the processes standing in the worktree slot ${dir}: ${(err as Error).message}`,
+      });
+      return [];
+    }
+  }
+
+  private async wiped(dir: string, wipe: string[]): Promise<string | null> {
+    try {
+      await runGit(dir, wipe);
+      return null;
+    } catch (err) {
+      return (err as Error).message;
+    }
+  }
+
+  private async condemn(dir: string, detail: string, swept: SlotProcess[]): Promise<void> {
+    if (this.condemned.has(dir)) return;
+    const remaining = await this.processes.holding(dir).catch(() => swept);
+    this.errors?.record({ source: 'cycle', message: slotUnusable(dir, detail, remaining) });
+    this.condemned.set(dir, {
+      reason: `the wipe was refused (${firstLine(detail)})`,
+      processBound: swept.length > 0 || remaining.length > 0,
+    });
+  }
+
+  /**
+   * Takes condemned slots back into the pool once nothing is holding them. It runs at the dead end
+   * and nowhere else, for the reason the salvage does: asking costs a process-table walk per slot,
+   * and until the alternative is a rejected dispatch there is nothing to buy with it.
+   */
+  private async revive(): Promise<number> {
+    let freed = 0;
+    for (const [dir, condemnation] of [...this.condemned]) {
+      if (!condemnation.processBound) continue;
+      const held = await this.processes.holding(dir).catch(() => [{ pid: 0, parentPid: 0, detail: '' }]);
+      if (held.length > 0) continue;
+      this.condemned.delete(dir);
+      freed += 1;
+      this.errors?.record({ source: 'cycle', message: revived(dir, condemnation.reason) });
+    }
+    return freed;
   }
 
   private async create(dir: string, req: Request): Promise<void> {
@@ -360,6 +441,7 @@ export class WorktreeManager implements Worktrees {
     if (!existsSync(dir)) return;
     const entries = await this.registered();
     if (entries.some((e) => e.path === dir)) return;
+    await this.sweep(dir);
     await this.git(['worktree', 'remove', '--force', dir]).catch(() => {});
     try {
       rmSync(dir, { recursive: true, force: true, maxRetries: RMDIR_RETRIES, retryDelay: RMDIR_RETRY_DELAY_MS });
@@ -409,8 +491,9 @@ function reclaimFailure(dir: string, err: NodeJS.ErrnoException): string {
     `${(RMDIR_RETRIES * RMDIR_RETRY_DELAY_MS) / 1000}s. That is almost always a process an earlier agent ` +
     `started and left running — a shell, a watcher, a test runner — whose working directory is still ` +
     `inside it; on Windows being a live process's cwd is by itself enough to refuse the removal. ` +
-    `Stop that process and the branch dispatches again on the next cycle; until then every dispatch ` +
-    `onto it will fail here.`
+    `Everything the harness could find standing in the directory has already been terminated, so ` +
+    `this one is outside what it can see. Stop that process and the branch dispatches again on the ` +
+    `next cycle; until then every dispatch onto it will fail here.`
   );
 }
 
@@ -455,6 +538,35 @@ interface Blocked {
 interface SalvageReport {
   freed: number;
   notes: string[];
+}
+
+interface Condemnation {
+  /** The short form, for the slot's line in the exhaustion refusal. */
+  reason: string;
+  /**
+   * Whether a live process was involved at all. A condemnation without one is never revived: nothing
+   * on disk would have to change for the retry to fail in exactly the same way, and re-offering it
+   * is the loop this whole mechanism exists to stop.
+   */
+  processBound: boolean;
+}
+
+const HANDLES_SETTLE_MS = 500;
+
+function firstLine(detail: string): string {
+  const line = detail.split(/\r?\n/).find((l) => l.trim() !== '') ?? detail;
+  return line.trim().length > CONDEMNED_REASON_CHARS
+    ? `${line.trim().slice(0, CONDEMNED_REASON_CHARS - 1)}…`
+    : line.trim();
+}
+
+const CONDEMNED_REASON_CHARS = 160;
+
+function revived(dir: string, reason: string): string {
+  return (
+    `Worktree slot ${dir} is back in the pool: it was taken out because ${reason}, and nothing is holding it ` +
+    'any more. It is wiped and handed over on the next dispatch that needs a slot, like any other.'
+  );
 }
 
 const SALVAGE_REFS = 'refs/lubbdubb/salvage';

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
 import { tmpDir } from './support/gitRepo.js';
 import { repoPath } from './support/paths.js';
 
@@ -33,7 +34,14 @@ function commitOn(dir: string, branch: string, file: string): void {
 }
 
 function manager(repo: string, size = 4, held: (branch: string) => boolean = () => false): WorktreeManager {
-  return new WorktreeManager(repo, join(repo, '.wt'), { size, held }, join(repo, '.preview'));
+  return new WorktreeManager(
+    repo,
+    join(repo, '.wt'),
+    { size, held },
+    join(repo, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
 }
 
 function warmable(repo: string, size = 4): WorktreeManager {
@@ -382,15 +390,36 @@ test('the pool bound defaults to the concurrency cap plus slack', () => {
 test('a restart holds the slot of work still outstanding, and releases it once recovery settles', async () => {
   const repo = initRepo();
   const root = join(repo, '.wt');
-  const before = new WorktreeManager(repo, root, { size: 2, held: () => false }, join(repo, '.preview'));
+  const before = new WorktreeManager(
+    repo,
+    root,
+    { size: 2, held: () => false },
+    join(repo, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
   const restored = await before.ensure('issue/1');
 
   const outstanding = new Set(['issue/1']);
-  const after = new WorktreeManager(repo, root, { size: 2, held: (b) => outstanding.has(b) }, join(repo, '.preview'));
+  const after = new WorktreeManager(
+    repo,
+    root,
+    { size: 2, held: (b) => outstanding.has(b) },
+    join(repo, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
   assert.notEqual(await after.ensure('issue/2'), restored, "a restored agent's slot is not reissued under it");
 
   outstanding.clear();
-  const later = new WorktreeManager(repo, root, { size: 2, held: () => false }, join(repo, '.preview'));
+  const later = new WorktreeManager(
+    repo,
+    root,
+    { size: 2, held: () => false },
+    join(repo, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
   assert.equal(await later.ensure('issue/3'), restored);
 });
 

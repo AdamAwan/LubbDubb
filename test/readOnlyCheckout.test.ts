@@ -8,6 +8,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { readOnlyDispatch } from '../src/dispatcher/rules/readOnlyDispatch.js';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
+import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem } from '../src/system.js';
@@ -235,7 +236,14 @@ function git(dir: string, args: string[]): string {
 }
 
 function manager(repo: string, size = 4, held: (name: string) => boolean = () => false): WorktreeManager {
-  return new WorktreeManager(repo, join(repo, '.wt'), { size, held }, join(repo, '.preview'));
+  return new WorktreeManager(
+    repo,
+    join(repo, '.wt'),
+    { size, held },
+    join(repo, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
 }
 
 function warmableRepo(): string {
