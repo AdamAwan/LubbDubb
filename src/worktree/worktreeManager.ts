@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from '../git/gitCli.js';
@@ -10,6 +10,7 @@ import {
   type SlotProcess,
   type SlotProcesses,
 } from './slotProcesses.js';
+import { lockPaths, slotNotSwitchable, staleLockCleared } from './staleLocks.js';
 
 // → docs/spec/09-execution.md#worktrees
 
@@ -328,10 +329,63 @@ export class WorktreeManager implements Worktrees {
     try {
       await runGit(dir, onto);
     } catch (err) {
-      throw new Error(`Cannot hand worktree slot ${dir} to ${describe(req)}: ${(err as Error).message}`);
+      const detail = (err as Error).message;
+      if (!(await this.unlocked(dir, detail))) return this.condemnSwitch(dir, req, detail);
+      try {
+        await runGit(dir, onto);
+      } catch (again) {
+        return this.condemnSwitch(dir, req, (again as Error).message);
+      }
     }
     if (req.readOnly) this.mark(dir, { key: req.name, of: req.of });
     return true;
+  }
+
+  /**
+   * Clears the stale git locks a refused switch names, and answers whether it cleared any — which
+   * is whether the switch is worth attempting again. A lock is stale by its **age**: nothing the
+   * harness or an agent runs holds one for `STALE_LOCK_MS`, and a process that does hold it is
+   * named rather than predicted. It never throws: a lock it cannot clear is one it did not clear.
+   */
+  private async unlocked(dir: string, detail: string): Promise<boolean> {
+    const gitDir = await this.gitDir(dir);
+    let cleared = false;
+    for (const path of lockPaths(dir, detail)) {
+      if (gitDir === null || !isUnder(gitDir, path)) continue;
+      const age = lockAge(path);
+      if (age === null || age < STALE_LOCK_MS) continue;
+      // `null` is not `nothing`: the probe being unable to say is not evidence of a holder, and the
+      // age is the evidence this turns on. Only a named holder keeps the lock.
+      const held = await this.processes.holding(dir, [path]).catch(() => null);
+      if (held !== null && held.length > 0) continue;
+      try {
+        rmSync(path, { force: true });
+      } catch {
+        continue;
+      }
+      if (existsSync(path)) continue;
+      cleared = true;
+      this.errors?.record({ source: 'cycle', message: staleLockCleared(dir, path, age, held) });
+    }
+    return cleared;
+  }
+
+  private async gitDir(dir: string): Promise<string | null> {
+    try {
+      const { stdout } = await runGit(dir, ['rev-parse', '--absolute-git-dir']);
+      const path = stdout.trim();
+      return path === '' ? null : resolve(path);
+    } catch {
+      return null;
+    }
+  }
+
+  private condemnSwitch(dir: string, req: Request, detail: string): boolean {
+    if (this.condemned.has(dir)) return false;
+    const blockers = lockPaths(dir, detail).filter((path) => existsSync(path));
+    this.errors?.record({ source: 'cycle', message: slotNotSwitchable(dir, describe(req), detail, blockers) });
+    this.condemned.set(dir, { reason: `the switch was refused (${firstLine(detail)})`, blockers });
+    return false;
   }
 
   /**
@@ -378,10 +432,13 @@ export class WorktreeManager implements Worktrees {
   private async revive(): Promise<number> {
     let freed = 0;
     for (const [dir, condemnation] of [...this.condemned]) {
-      if (existsSync(dir) && (await this.wiped(dir, ['clean', '-ffdx'])) !== null) continue;
+      if (existsSync(dir)) {
+        if ((condemnation.blockers ?? []).some((path) => existsSync(path))) continue;
+        if ((await this.wiped(dir, ['clean', '-ffdx'])) !== null) continue;
+      }
       this.condemned.delete(dir);
       freed += 1;
-      this.errors?.record({ source: 'cycle', message: revived(dir, condemnation.reason) });
+      this.errors?.record({ source: 'cycle', message: revived(dir, condemnation) });
     }
     return freed;
   }
@@ -602,6 +659,27 @@ interface SalvageReport {
 interface Condemnation {
   /** The short form, for the slot's line in the exhaustion refusal. */
   reason: string;
+  /**
+   * Files whose presence is the condemnation, observed rather than predicted: while one is there
+   * the wipe the revival performs answers a question this slot is not failing on.
+   */
+  blockers?: string[];
+}
+
+/**
+ * How old a git lock must be before the harness will call it stale and remove it. Longer than any
+ * single git command the harness or an agent runs, and shorter by orders of magnitude than the
+ * lifetime of one left by a process that died mid-write.
+ */
+const STALE_LOCK_MS = 10 * 60_000;
+
+function lockAge(path: string): number | null {
+  try {
+    const age = Date.now() - statSync(path).mtimeMs;
+    return age < 0 ? 0 : age;
+  } catch {
+    return null;
+  }
 }
 
 const HANDLES_SETTLE_MS = 500;
@@ -615,10 +693,14 @@ function firstLine(detail: string): string {
 
 const CONDEMNED_REASON_CHARS = 160;
 
-function revived(dir: string, reason: string): string {
+function revived(dir: string, condemnation: Condemnation): string {
+  const gone =
+    (condemnation.blockers ?? []).length > 0
+      ? 'what was standing in the way of the checkout is no longer there'
+      : 'the wipe it refused has now gone through';
   return (
-    `Worktree slot ${dir} is back in the pool: it was taken out because ${reason}, and the wipe it refused has ` +
-    'now gone through. It is handed over on the next dispatch that needs a slot, like any other.'
+    `Worktree slot ${dir} is back in the pool: it was taken out because ${condemnation.reason}, and ${gone}. ` +
+    'It is handed over on the next dispatch that needs a slot, like any other.'
   );
 }
 

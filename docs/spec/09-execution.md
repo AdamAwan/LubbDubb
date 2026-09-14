@@ -1170,10 +1170,15 @@ re-dispatch, a retry, a part picked up again — they discard that work silently
 anywhere. Existence is checked first and the create form is only ever reached for a branch that does
 not exist.
 
-A failure at the **switch** is a **rejected dispatch naming the branch and the slot**, never a silent
-fall back to a fresh directory — which would put two agents in one tree. A failure at the **wipe**
-[takes the slot out of the pool](#a-slot-that-cannot-be-emptied) and sends the dispatch to another
-one, which is the same refusal to share a tree arrived at from the other side.
+A failure at either end takes the slot **out of the pool** and sends the dispatch to another one —
+never a silent fall back to a fresh directory, which would put two agents in one tree. A failure at
+the **wipe** condemns it [below](#a-slot-that-cannot-be-emptied); a failure at the **switch** is
+first offered the one repair the harness can make — [a stale lock](#a-lock-left-behind-in-a-slot) —
+and condemns the slot the same way if the retry refuses too. Both are the same refusal to share a
+tree, arrived at from two sides. The switch arm must **condemn** rather than throw: a throw leaves
+the slot in the survey, so the next pulse picks the same one, fails identically, and goes on doing
+so for ever — a fleet with headroom, a full "Up next" queue and nothing red, which is exactly what
+one 17-day-old `index.lock` did.
 
 ### A process left standing in a slot
 
@@ -1260,6 +1265,40 @@ is therefore sweep, wipe, ask what the wipe refused, sweep that, wipe again — 
   something — either sweep — is retried once, half a second later, before anything is concluded from
   it. A refusal neither sweep found anything to answer is not retried: nothing has changed.
 
+### A lock left behind in a slot
+
+A git process that dies mid-command leaves its lock file behind — `index.lock` in the slot's own
+metadata directory, or a `refs/<name>.lock` — and **nothing removes it**. Git says so in the refusal
+itself ("a git process may have crashed in this repository earlier: remove the file manually to
+continue") and then waits for a person indefinitely. None of the machinery above can reach it:
+
+- The **sweep** looks for a process. A stale lock is a file left by one that is already dead, so
+  there is nothing to find, and the reading that comes back is _nothing is holding it_ — or, on a
+  busy Windows machine, an unknown that costs the probe's whole timeout to arrive at.
+- The **wipe** is `git clean`, which only touches the **working tree**. A lock under the metadata
+  directory is not in it, so the wipe cleanly succeeds and the hand-over walks into the switch.
+
+So the switch arm asks one more question before it condemns. `staleLocks.ts` reads the lock paths out
+of git's own refusal (`Unable to create '<path>.lock'`), and a lock is removed and the switch retried
+**once** when all three hold:
+
+- **It is inside this slot's own git directory**, by `git rev-parse --absolute-git-dir` run in the
+  slot. The refusal's path is taken as a string and never as a licence: nothing outside that
+  directory is removed however git spells it.
+- **It is older than `STALE_LOCK_MS`** (10 minutes). The age is the whole evidence. No git command
+  the harness or an agent runs holds a lock for that long, and a lock left by a crash is days or
+  weeks old — the two populations are not close enough to need a finer test.
+- **Nothing is named as holding it.** The probe is asked about the **lock path**, not about the
+  slot, so it is the cheap question — the Restart Manager over one path — and not the process-table
+  walk. A probe that **could not say** does not block the removal: `null` is not a holder, and the
+  age is what this turns on. Only a named live process keeps the lock, and that is a lock the harness
+  was wrong about rather than a stale one.
+
+A removal is recorded to the error log as the repair it is, naming the lock and its age, because a
+slot needing it after every dispatch is a git process being killed mid-write in it and that is the
+thing to go and find. A lock too young, held, or outside the git directory is left exactly where it
+is and the slot is condemned with it named.
+
 ### A slot that cannot be emptied
 
 A wipe still refused after the sweep is the failure everything above exists to bound. Retrying it is
@@ -1288,6 +1327,15 @@ from the survey, so the retry terminates at the pool's size with no counter to t
   condemned slot and buys nothing until the alternative is a rejected dispatch. Each condemned slot
   is offered the `git clean -ffdx` it refused, and one that goes through is back in the pool with the
   return recorded. A slot deleted by hand is back too: there is nothing left to empty.
+- **A condemnation the wipe does not answer carries what does.** The revival performs the pool's
+  question — _can I hand this out_ — and the wipe is that question for a slot that could not be
+  emptied. It is **not** that question for a slot whose switch was refused by a lock: the lock is
+  metadata, so the wipe succeeds every time, and reviving on it alone puts the slot back, hands it
+  the same dispatch, and condemns it again on every dead end for ever. So such a condemnation carries
+  the **blockers** it was condemned with — the lock files still present — and stays out while any of
+  them is there. Observed, never predicted: the file's own existence is the reading, taken fresh each
+  time, so a lock cleared by hand revives the slot on the next dead end like a deleted directory
+  does.
 - **Revival performs the question instead of predicting the answer, and that is the whole point.**
   The pool's question is _can I hand this out_, and the wipe answers it outright — so no
   condemnation has to be excluded from the retry to stop the re-offer loop: a slot that would refuse
@@ -1304,7 +1352,8 @@ from the survey, so the retry terminates at the pool's size with no counter to t
   whatever the pool refuses for, and whatever it turns out to refuse for next, an operator is told
   rather than left with a queue that keeps refilling.
 
-Tests: `test/slotProcessSweep.test.ts`. Its acceptance case is Windows-only — a real binary copied
+Tests: `test/slotProcessSweep.test.ts` and `test/staleLocks.test.ts`, the latter over a planted
+lock file of each age against the real manager. `slotProcessSweep`'s acceptance case is Windows-only — a real binary copied
 into the slot's `node_modules` and run, the wipe watched to fail while it lives, and the next
 hand-over watched to succeed with no manual cleanup. POSIX has nothing there to reproduce.
 
