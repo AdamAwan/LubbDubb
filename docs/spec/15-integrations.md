@@ -133,10 +133,20 @@ separate `upsertIssueComment`, because a close reason is a provider's own two-wo
 prose does not fit in it. It is its own capability rather than a method on `WorkItemStateCapable` for
 `PrBaseUpdateCapable`'s reason: **GitHub** closes an issue and has no workflow state at all, while
 **Azure** has a dozen states and no generic close, and which of them means _we are not doing this_
-belongs to the project's process template rather than to the harness. So Azure is deliberately not
-capable, `ActionSink.canCloseIssue()` answers false there, and the back-out reports that the item was
-left open instead of guessing a state word — the goal is concluded and un-watched either way, so the
-fleet is stopped and only the card on the board is left for a human to move.
+belongs to the project's process template rather than to the harness.
+
+So Azure is capable **only where the deployment has said the words**: `issueCompletedState` and
+`issueNotPlannedState` ([02](02-configuration.md#closing-an-item)) name the state each of the two
+reasons moves the work item to, and `closeIssue` is that one `System.State` patch. This is the one
+capability whose probe is not purely structural — `IssueCloseCapable` carries an optional
+`canCloseIssue()`, and `isIssueCloseCapable` asks it, so an integration that _could_ close but has
+been told no state reports itself uncapable rather than being found by the composite and failing at
+the write. Name neither key and Azure reads exactly as it did when it implemented nothing:
+`ActionSink.canCloseIssue()` answers false, and the back-out reports that the item was left open
+instead of guessing a state word — the goal is concluded and un-watched either way, so the fleet is
+stopped and only the card on the board is left for a human to move. Name one and not the other and a
+close for the unnamed reason **throws naming the key that would answer it**; the back-out records the
+failure and says the item is still open, rather than closing it into the other reason's word.
 
 `IssueCreateCapable` **creates** a tracker item — the seam the four filing arms had no answer for, so
 each of them composed a `gh`/`az` command as a string and spent a desk agent typing it back

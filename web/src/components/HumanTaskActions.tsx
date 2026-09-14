@@ -63,7 +63,7 @@ export function HumanTaskActions({
               onRefused={setRefusal}
               title="Close the item in the tracker and settle this row with it"
             >
-              Close the ticket
+              Mark as closed
             </AsyncButton>
           ) : (
             <Button
@@ -71,7 +71,7 @@ export function HumanTaskActions({
               onClick={() => open('close')}
               title="Close the item in the tracker — and say what you are doing about what is outstanding"
             >
-              Close the ticket…
+              Mark as closed…
             </Button>
           ))}
         {noteOnDone === null ? (

@@ -119,7 +119,7 @@ function closeOutDetail(
     `${by} marked **${issue.title}** delivered${delivery.summary ? ` — "${delivery.summary}"` : ''}.`,
     '',
     canClose
-      ? 'The item is still open in the tracker. **Close the ticket** here does it and settles this row with it — or close it in the tracker yourself and this settles itself on the next pulse, or mark it done here, or decline it and say why.'
+      ? 'The item is still open in the tracker. **Mark as closed** here does it and settles this row with it — or close it in the tracker yourself and this settles itself on the next pulse, or mark it done here, or decline it and say why.'
       : 'The item is still open in the tracker. Close it there and this settles itself on the next pulse — or mark it done here, or decline it and say why.',
   ];
   if (validation && validation.verdict.state === 'flagged') {

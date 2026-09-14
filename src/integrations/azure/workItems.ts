@@ -1,6 +1,7 @@
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
+  IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -15,6 +16,7 @@ import type { AreaPathTree } from '../../intake/placement.js';
 import type {
   WorldCapability,
   Integration,
+  IssueCloseCapable,
   IssueCommentCapable,
   IssueCreateCapable,
   IssueLabelCapable,
@@ -42,6 +44,8 @@ interface AzureWorkItemsOpts {
   workItemTag?: string;
   assignedTo?: string;
   ownershipTag?: string;
+  completedState?: string;
+  notPlannedState?: string;
 }
 
 export class AzureDevOpsWorkItemsIntegration
@@ -49,6 +53,7 @@ export class AzureDevOpsWorkItemsIntegration
     Integration,
     RefResolvable,
     WorkItemStateCapable,
+    IssueCloseCapable,
     WorkItemLinkCapable,
     WorkItemPlacementCapable,
     AreaPathCapable,
@@ -195,6 +200,26 @@ export class AzureDevOpsWorkItemsIntegration
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     await this.opts.api.setWorkItemState(input.number, input.state);
     return { ok: true };
+  }
+
+  canCloseIssue(): boolean {
+    return this.closeState('completed') !== null || this.closeState('not_planned') !== null;
+  }
+
+  async closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    const state = this.closeState(input.reason);
+    if (state === null)
+      throw new Error(
+        `${input.reason === 'completed' ? 'issueCompletedState' : 'issueNotPlannedState'} names no state on this ` +
+          'deployment, so there is no column a work item closed for that reason moves to. Name it in the config.',
+      );
+    await this.opts.api.setWorkItemState(input.number, state);
+    return { ok: true, ref: `#${input.number} -> ${state}` };
+  }
+
+  private closeState(reason: IssueCloseInput['reason']): string | null {
+    const named = reason === 'completed' ? this.opts.completedState : this.opts.notPlannedState;
+    return named !== undefined && named.trim() !== '' ? named : null;
   }
 
   async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {

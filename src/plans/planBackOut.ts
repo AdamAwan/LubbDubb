@@ -94,7 +94,8 @@ async function closeTicket(ctx: BackOutContext, issueNumber: number): Promise<st
   if (!ctx.sink.canCloseIssue())
     return `left #${issueNumber} open — this tracker has no close the harness can write, so that stays a human act`;
   try {
-    await ctx.sink.closeIssue({ number: issueNumber, reason: 'not_planned' });
+    const result = await ctx.sink.closeIssue({ number: issueNumber, reason: 'not_planned' });
+    if (!result.ok) return `left #${issueNumber} open — the tracker refused the close`;
     return `closed #${issueNumber} as not planned`;
   } catch (err) {
     const message = (err as Error).message;

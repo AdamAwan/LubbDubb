@@ -587,7 +587,7 @@ The same reading is what stops it filing noise. A GitHub issue a merged `Closes 
 never in the open set, so nothing is ever owed for it.
 
 **The row can also do the close itself.** The obligation is a close in the tracker, so the row that
-states it carries the button that takes it: **Close the ticket** posts
+states it carries the button that takes it: **Mark as closed** posts
 `POST /api/human-tasks/:id/close-ticket` ([16](16-http-api.md)), which closes the item through the
 same outbound seam the plan back-out uses (`ActionSink.closeIssue`, reason `completed`) and settles
 the row with it. What it saves is the round trip — the operator was being asked to leave the cockpit,

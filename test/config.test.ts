@@ -614,3 +614,19 @@ test('a work-item walk that can never take a step is refused at load', () => {
     'listing the in-progress state is redundant, not wrong',
   );
 });
+
+test('a closed state the fleet also picks up from is refused at load', () => {
+  assert.throws(
+    () => loadConfig({ issuePickupStates: ['New'], issueCompletedState: 'New' }),
+    /issueCompletedState is "New", which is also in issuePickupStates/,
+    'the fleet would pick up the work it has just finished',
+  );
+  assert.throws(
+    () => loadConfig({ issuePickupStates: ['New'], issueNotPlannedState: 'New' }),
+    /issueNotPlannedState is "New", which is also in issuePickupStates/,
+  );
+  assert.doesNotThrow(
+    () => loadConfig({ issueCompletedState: 'Closed', issueNotPlannedState: 'Removed' }),
+    'closing is not gated on the pickup list the way the transitions are',
+  );
+});
