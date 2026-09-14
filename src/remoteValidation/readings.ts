@@ -110,6 +110,17 @@ export class RemoteReadingDesk {
     const rows = confirmedCheckRows(store.remoteValidation.listRemoteSheetRows(), run);
     const checks = new Map(store.validation.listValidationChecks(run.goalRef).map((check) => [check.id, check]));
 
+    // **A `blocked` reading the listing took is never overwritten by a later pass.** The agent picks
+    // which selectors it invokes, so it can invoke one the listing did not survive — and this fold
+    // reads the report against `area` alone, which would let exactly that row come back green over
+    // the block the harness already wrote on it.
+    const listingBlocked = new Set(
+      store.remoteValidation
+        .listRemoteReadings()
+        .filter((reading) => reading.runId === run.id && reading.outcome === 'blocked')
+        .map((reading) => reading.rowId),
+    );
+
     let read = 0;
     let blocked = 0;
     let wrote = 0;
@@ -117,6 +128,10 @@ export class RemoteReadingDesk {
     const kept: string[] = [];
 
     for (const row of rows) {
+      if (listingBlocked.has(row.rowId)) {
+        blocked += 1;
+        continue;
+      }
       const check = checks.get(row.sourceId);
       if (check === undefined) continue;
       // Two instruments, and which one this row ran decides both what the report is read against and

@@ -957,6 +957,7 @@ class DemoServer {
         note: null,
         taskId: null,
         reportPath: null,
+        listingPath: null,
         artefacts: null,
       };
       const run = sheet.run;

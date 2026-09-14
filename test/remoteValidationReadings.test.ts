@@ -334,7 +334,12 @@ test('a row whose matched count is zero is blocked rather than quietly clean', a
     await settle(b, runId, report(b, [{ selector: AREA, status: 'passed' }]));
 
     assert.equal(reading(b, CHECK.id).outcome, 'blocked');
-    assert.match(reading(b, CHECK.id).detail ?? '', /attributed no tests/);
+    assert.match(reading(b, CHECK.id).detail ?? '', /no listing attributes a test to/);
+    assert.match(
+      reading(b, CHECK.id).detail ?? '',
+      /the runner offers nothing under this area/,
+      'zero is the listing having been taken and having found nothing, which is the half of the reason that fits',
+    );
   } finally {
     b.close();
   }

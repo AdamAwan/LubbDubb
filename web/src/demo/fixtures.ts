@@ -1136,6 +1136,7 @@ export function buildDemoState(): DemoSeed {
           note: null,
           taskId: null,
           reportPath: null,
+          listingPath: null,
           artefacts: null,
         },
         tenant: {

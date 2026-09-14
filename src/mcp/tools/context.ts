@@ -26,6 +26,7 @@ import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { WatchDryRunner } from '../../environments/watchDryRun.js';
 import type { StateQueryDesk } from '../../remoteValidation/stateQueries.js';
 import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
+import type { RemoteListingDesk } from '../../remoteValidation/listing.js';
 import type { PrRefStyle } from '../../pr/prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
@@ -150,6 +151,11 @@ export interface McpToolDeps {
    * holds neither — the tool stays an origin fence and a parse call.
    */
   remoteReadings?: () => RemoteReadingDesk;
+  /**
+   * The one reader of a run's selector listing, and the one writer of `matched`. A seam here for
+   * `remoteReadings`' reason: the tool stays an origin fence and a parse call.
+   */
+  remoteListings?: () => RemoteListingDesk;
   localRun?: () => { runner: LocalRunner; watch: LocalRunWatch };
   repoRoot?: string;
   /**

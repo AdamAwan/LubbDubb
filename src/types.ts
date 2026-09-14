@@ -1654,8 +1654,10 @@ export interface RemoteSheetRow {
   blockedReason: string | null;
   awaitingApproval: boolean;
   /**
-   * How many tests the pre-flight's listing attributes to this row's area. Null on a row the
-   * pre-flight had nothing to ask about, and never derived from a report.
+   * How many tests the runner's own listing attributes to this row's area, taken by the run agent in
+   * its pinned checkout. **Null means the listing has not been taken for this row yet** — never a
+   * selector that matched nothing — and it is never derived from a report: derived that way, a
+   * selector matching nothing reads as a clean pass.
    */
   matched: number | null;
 }
@@ -1723,6 +1725,11 @@ export interface RemoteRun {
   taskId: string | null;
   /** Where the agent said the runner's machine-readable report landed. Parsing it is another part. */
   reportPath: string | null;
+  /**
+   * Where the agent said the runner's own selector listing landed. A path, never what is in it —
+   * the denominator is parsed out of that file and is never a thing an agent states.
+   */
+  listingPath: string | null;
   /** The URL the publish command printed, where it ran. */
   artefacts: string | null;
 }

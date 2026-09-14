@@ -32,7 +32,7 @@ export interface RunReport {
 
 /**
  * What one row's tests came to. `matched` is **not** in here: it comes off `remote_sheet_rows.matched`,
- * written by the pre-flight's own listing, and derived from a report instead a selector that matched
+ * written from the runner's own listing, and derived from a report instead a selector that matched
  * nothing reads as a clean pass.
  */
 export interface RowOutcome {
@@ -127,7 +127,7 @@ interface FoldInput {
    * told to report under. Two instruments, one report, and never one selector.
    */
   area: string;
-  /** `remote_sheet_rows.matched`, from the pre-flight's listing. Null where it never counted. */
+  /** `remote_sheet_rows.matched`, from the runner's listing. Null where it has not been taken yet. */
   matched: number | null;
   /**
    * Which of the two browser instruments ran. It is not cosmetic: a `spec` row is read against the
@@ -218,8 +218,9 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
     return {
       outcome: 'blocked',
       detail:
-        `the pre-flight attributed no tests to \`${area}\`, so there is nothing here to read the report ` +
-        'against. A row whose selector matched nothing is never a pass.',
+        `no listing attributes a test to \`${area}\`: either the run's listing step was never taken, or it ` +
+        'was and the runner offers nothing under this area. Either way there is nothing here to read the ' +
+        'report against, and a row whose selector matched nothing is never a pass.',
       ...measured,
     };
 

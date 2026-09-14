@@ -61,6 +61,7 @@ import { StateQueryDesk } from './remoteValidation/stateQueries.js';
 import { RemoteValidationDesk } from './remoteValidation/desk.js';
 import { RemoteRunDesk } from './remoteValidation/run.js';
 import { RemoteReadingDesk } from './remoteValidation/readings.js';
+import { RemoteListingDesk } from './remoteValidation/listing.js';
 import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
 import { CommandRemoteRunner, type RemoteRunner } from './remoteValidation/runner.js';
 import { WatchDesk } from './environments/watchDesk.js';
@@ -137,6 +138,7 @@ export interface System {
   remoteValidation: RemoteValidationDesk;
   remoteRuns: RemoteRunDesk;
   remoteReadings: RemoteReadingDesk;
+  remoteListings: RemoteListingDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -322,6 +324,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
     localValidations: (): LocalValidationDesk => localValidations,
     remoteReadings: (): RemoteReadingDesk => remoteReadings,
+    remoteListings: (): RemoteListingDesk => remoteListings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
     reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
@@ -638,6 +641,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  const remoteListings = new RemoteListingDesk({ store, errors });
+
   const remoteReadings = new RemoteReadingDesk({
     store,
     environments: config.environments,
@@ -938,6 +943,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteValidation,
     remoteRuns,
     remoteReadings,
+    remoteListings,
     updates,
     runtimeControl,
     pets,

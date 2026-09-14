@@ -32,6 +32,7 @@ import { validationAmend } from './tools/validationAmend.js';
 import { validationPlan } from './tools/validationPlan.js';
 import { validationReport } from './tools/validationReport.js';
 import { remoteValidationReport } from './tools/remoteValidationReport.js';
+import { remoteValidationListing } from './tools/remoteValidationListing.js';
 import { localValidationPlan } from './tools/localValidationPlan.js';
 import { localRunRead } from './tools/localRunRead.js';
 import { localValidationReport } from './tools/localValidationReport.js';
@@ -66,6 +67,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   validation_plan: validationPlan,
   validation_report: validationReport,
   remote_validation_report: remoteValidationReport,
+  remote_validation_listing: remoteValidationListing,
   local_validation_plan: localValidationPlan,
   local_run_read: localRunRead,
   local_validation_report: localValidationReport,

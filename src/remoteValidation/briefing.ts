@@ -70,6 +70,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
         environment: environment.name,
         profile: browser.profile ?? null,
         runner: browser.runner,
+        listSelectors: browser.listSelectors ?? null,
         publish: browser.publishArtefacts ?? null,
         tenant,
         selectors,
@@ -78,6 +79,7 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
         titles: confirmed.map((row) => row.title),
         reportDir: `${runDir}/report`,
         artefactDir: `${runDir}/artefacts`,
+        listingDir: `${runDir}/listing`,
         deployedSha: run.startedSha,
       }),
     });
@@ -217,6 +219,8 @@ interface BriefingInput {
   environment: string;
   profile: string | null;
   runner: string;
+  /** `validate.browser.listSelectors` — the listing the run agent takes in its pinned checkout. */
+  listSelectors: string | null;
   publish: string | null;
   /** The tenant's **name** — for a `tenantEnv` shape, the variable's own name. Never its value. */
   tenant: string | null;
@@ -226,6 +230,7 @@ interface BriefingInput {
   titles: readonly string[];
   reportDir: string;
   artefactDir: string;
+  listingDir: string;
   deployedSha: string;
 }
 
@@ -251,6 +256,45 @@ function briefing(input: BriefingInput): string {
       'a short age, so an invented name survives about an hour and its disappearance presents as mysterious ' +
       'mass failure.',
     '',
+  ];
+
+  if (input.listSelectors !== null) {
+    lines.push(
+      '## Listing what this runner offers',
+      '',
+      'First, and before you invoke anything: ask the deployed runner which selectors it actually offers. The ' +
+        'project declares that command too, and you invoke **that**, from this pinned checkout, with the same ' +
+        'environment set as below:',
+      '',
+      '```',
+      input.listSelectors,
+      '```',
+      '',
+      `Write what it prints to a file in \`${input.listingDir}\`, and call **remote_validation_listing** with ` +
+        '`listingPath` set to that file. The harness parses the runner’s own output and reads every confirmed ' +
+        'row’s area against it.',
+      '',
+      '**You say nothing about what is in it.** The tool has no field for a selector and none for a count, ' +
+        'deliberately: how many tests an area holds is the denominator every row is read against, and a ' +
+        'denominator an agent stated is a denominator nobody took. A path says where a file is, not what is ' +
+        'in it, which is why this can come through you at all.',
+      '',
+      'It answers with **the selectors that survived**, and those are the ones you run — those and no others. ' +
+        'A row whose area the listing did not survive is already blocked here, with the reason in front of the ' +
+        'operator, and nothing you invoke afterwards turns it green.',
+      '',
+      'It matters that this is taken **here**, in a checkout pinned to the commit the environment is running: ' +
+        'a listing taken anywhere else describes a different build, and the denominator would then belong to ' +
+        'some other product than the one under test.',
+      '',
+      'If the runner cannot be asked at all — it will not answer, the install failed, the credentials are not ' +
+        'here — give `blocked` and the reason instead of a path. Every check row it would have answered for ' +
+        'carries your reason to the operator, and whatever else this run owes is still yours to carry out.',
+      '',
+    );
+  }
+
+  lines.push(
     '## The command to invoke',
     '',
     'The project declares it and you invoke **that**, verbatim. Never construct an invocation of your own: a ' +
@@ -269,7 +313,9 @@ function briefing(input: BriefingInput): string {
     `LUBBDUBB_ENVIRONMENT=${input.environment}`,
     ...(input.profile === null ? [] : [`LUBBDUBB_PROFILE=${input.profile}`]),
     ...(input.tenant === null || input.tenant === '' ? [] : [`LUBBDUBB_TENANT=${input.tenant}`]),
-    `LUBBDUBB_SELECTORS=${input.selectors.join(',')}`,
+    input.listSelectors === null
+      ? `LUBBDUBB_SELECTORS=${input.selectors.join(',')}`
+      : 'LUBBDUBB_SELECTORS=<the selectors remote_validation_listing answered with, comma-joined>',
     `LUBBDUBB_REPORT_DIR=${input.reportDir}`,
     '```',
     '',
@@ -290,7 +336,7 @@ function briefing(input: BriefingInput): string {
     ...(input.screens.length === 0
       ? []
       : input.screens.map((screen) => `- \`${screen.checkId}\` — ${screen.title}, a screen to hand back`)),
-  ];
+  );
 
   if (input.scripts.length > 0) {
     lines.push(
@@ -400,6 +446,14 @@ function briefing(input: BriefingInput): string {
     '',
     '## How to answer',
     '',
+    ...(input.listSelectors === null
+      ? []
+      : [
+          'The listing was its own call, earlier and separate: that one takes the path to what the listing ' +
+            'command printed, and this one takes the path to the report. Neither says what is in the file it ' +
+            'points at.',
+          '',
+        ]),
     'Call **remote_validation_report** exactly once, at the end. Which run you are reporting on is already ' +
       'decided by what you were dispatched for, so what you say is only where things landed:',
     '',
@@ -421,7 +475,9 @@ function briefing(input: BriefingInput): string {
     '- **Do not edit the suite.** Not a selector, not a timeout, not a retry, not a skip. A spec changed to ' +
       'make a run go green is a reading of nothing, and the specs are reviewed in pull requests, which is the ' +
       'whole of what makes them worth running.',
-    `- **Write nothing outside \`${input.reportDir}\` and \`${input.artefactDir}\`.**`,
+    input.listSelectors === null
+      ? `- **Write nothing outside \`${input.reportDir}\` and \`${input.artefactDir}\`.**`
+      : `- **Write nothing outside \`${input.reportDir}\`, \`${input.artefactDir}\` and \`${input.listingDir}\`.**`,
     '- **Do not diagnose what you find.** A failed row reaches its own rule with its own agent. Your job ends ' +
       'at saying where the report is.',
   );

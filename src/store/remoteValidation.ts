@@ -45,7 +45,10 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // A run row a dispatched agent reports against: which task claimed it, and where the report and
   // the artefacts landed. Columns on a table that was new one release ago, which is what this entry
   // exists for — without them they are invisible on every database from before they existed.
-  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT' },
+  // Where the run agent said the runner's own selector listing landed. No backfill: null means *no
+  // listing was reported on this run*, which is true of every run written before the column and
+  // stays true — there is nothing to compute it from and nothing that would be right to invent.
+  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT' },
   remote_tenants: {},
   remote_selector_offerings: {},
 };
@@ -258,6 +261,31 @@ export class RemoteValidationStore {
     })();
   }
 
+  /**
+   * What the run's own listing attributes to a `check` row's area, and **nothing else on the row**.
+   * A reason the listing found is a `blocked` reading against the run, never a `blocked_reason`: a
+   * reason on the row is a cause no press can overcome, and a mismatch a listing found is amendable.
+   */
+  recordRemoteMatched(
+    goalRef: string,
+    environment: string,
+    verdicts: readonly { rowId: string; matched: number | null }[],
+  ): void {
+    const now = this.ctx.now();
+    const write = this.ctx.prep(
+      `UPDATE remote_sheet_rows SET matched=@matched, updated_at=@now
+        WHERE goal_ref=@goalRef AND environment=@environment AND row_id=@rowId`,
+    );
+    this.ctx.db.transaction(() => {
+      for (const verdict of verdicts) write.run({ ...verdict, goalRef, environment, now });
+    })();
+  }
+
+  /** Where the run agent said the runner's own listing landed. A path, and never what is in it. */
+  recordRemoteListingPath(id: string, listingPath: string): void {
+    this.ctx.prep(`UPDATE remote_runs SET listing_path=? WHERE id=?`).run(listingPath, id);
+  }
+
   blockRemoteSheetRow(goalRef: string, environment: string, rowId: string, reason: string): void {
     this.ctx
       .prep(
@@ -346,6 +374,7 @@ export class RemoteValidationStore {
         note: null,
         taskId: null,
         reportPath: null,
+        listingPath: null,
         artefacts: null,
       };
       this.ctx
@@ -604,6 +633,7 @@ interface RunRow {
   note: string | null;
   task_id: string | null | undefined;
   report_path: string | null | undefined;
+  listing_path: string | null | undefined;
   artefacts: string | null | undefined;
 }
 
@@ -630,6 +660,7 @@ function toRemoteRun(row: RunRow): RemoteRun {
     note: row.note,
     taskId: row.task_id ?? null,
     reportPath: row.report_path ?? null,
+    listingPath: row.listing_path ?? null,
     artefacts: row.artefacts ?? null,
   };
 }
