@@ -3,9 +3,12 @@ import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 
 // → docs/spec/14-persistence.md
 
-const MAX_STANDING = 1_200;
+/* Two sentences of lede and a handful of short bullets under it. The caps were
+   1200 and 2000, which is four paragraphs — long enough that the board's one
+   piece of prose became the thing a reader skipped. → docs/spec/17-cockpit.md#the-feature-summary */
+const MAX_STANDING = 360;
 
-const MAX_SECTION = 2_000;
+const MAX_SECTION = 600;
 
 export function featureSummaryOrigin(featureNumber: number): string {
   return issueOriginRef('summary', featureNumber);
@@ -50,15 +53,24 @@ export function validateFeatureSummary(
   if (standing.length > MAX_STANDING) {
     return {
       ok: false,
-      error: `standing is too long (${standing.length} chars, max ${MAX_STANDING}). The sections below it carry the detail.`,
+      error:
+        `standing is too long (${standing.length} chars, max ${MAX_STANDING}). It is two sentences: what works ` +
+        `and what it is waiting on. The bullets below it carry the detail.`,
     };
   }
   const sections = [text(args.usable), text(args.blocked), text(args.remaining)];
   const trimmed = sections.some((s) => s !== null && s.length > MAX_SECTION);
-  const [usable = null, blocked = null, remaining = null] = sections.map((s) =>
-    s === null ? null : s.slice(0, MAX_SECTION),
-  );
+  const [usable = null, blocked = null, remaining = null] = sections.map(clip);
   return { ok: true, input: { standing, usable, blocked, remaining }, trimmed };
+}
+
+/* Cut at a line boundary where there is one: the sections are drawn as bullets,
+   and a slice taken mid-word leaves half a bullet on the card. */
+function clip(section: string | null): string | null {
+  if (section === null || section.length <= MAX_SECTION) return section;
+  const cut = section.slice(0, MAX_SECTION);
+  const lastLine = cut.lastIndexOf('\n');
+  return (lastLine > 0 ? cut.slice(0, lastLine) : cut).trimEnd();
 }
 
 function text(raw: unknown): string | null {

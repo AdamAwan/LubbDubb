@@ -12,11 +12,15 @@ export const featureSummary: ToolFactory = ({ deps, agent, ok }) => ({
     'who asked for the Feature and does not read the tracker: say where it is in their terms, not in ' +
     "the fleet's. No status words, no percentages, no dates — you have no grounds for a forecast and " +
     'a reader who is given one stops reading the rest.\n\n' +
+    'Keep it short enough to take in at a glance: two sentences of lede, then short one-line bullets. ' +
+    'The lengths are enforced rather than advised — an over-long `standing` is refused and an ' +
+    'over-long section is cut at a line boundary, so choose what to leave out yourself.\n\n' +
     'You are handed every item under the Feature, where each one stands, and the sentence whoever ' +
-    'ruled on it wrote. Quote and attribute where a verdict earns it; restate a shortfall as what it ' +
-    'means for the Feature ("a bucket turned off still shows results on three screens"), not as the ' +
-    'assessor said it to another agent. Where the record cannot answer something, say so — an honest ' +
-    '"nobody has looked at these four items" is worth more than a confident sentence about them.\n\n' +
+    'ruled on it wrote. Restate a shortfall as what it means for the Feature ("a bucket turned off ' +
+    'still shows results on three screens"), not as the assessor said it to another agent. The items ' +
+    'are drawn beside your summary, so a bullet per ticket says the same thing twice; where the ' +
+    'record cannot answer something, say so — an honest "nobody has looked at these four items" is ' +
+    'worth more than a confident sentence about them.\n\n' +
     'This is read on the feature board and nowhere else. It schedules nothing, closes nothing, gates ' +
     'nothing and is posted to no tracker. It is rewritten whenever something under the Feature moves, ' +
     'so write where things are now rather than a history of how they got here.',
@@ -25,32 +29,35 @@ export const featureSummary: ToolFactory = ({ deps, agent, ok }) => ({
       standing: z
         .string()
         .describe(
-          'Required. Two or three sentences: where this Feature actually is. What works, what it is ' +
-            'waiting on, and the one thing a reader should take away. This is the whole of what the card ' +
-            'shows before anything is expanded.',
+          'Required. Two sentences, 360 characters at the outside: where this Feature actually is. ' +
+            'What works, and the one thing standing between the reader and the rest. This is the whole ' +
+            'of what the card shows before anything is expanded, and the bullets carry the detail.',
         ),
       usable: z
         .string()
         .describe(
-          'What a person can see or do today, and where — which environment holds it, and what they ' +
-            'would look at to judge it for themselves. Omit it where nothing has shipped anywhere: ' +
-            '"nothing yet" belongs in `standing`, not in a section invented to fill the shape.',
+          'Up to four bullets, one line each, each beginning with "- ": what a person can see or do ' +
+            'today and where — name the environment, because "built" and "on live" are the difference ' +
+            'the reader cares about. Omit it where nothing has shipped anywhere: "nothing yet" belongs ' +
+            'in `standing`, not in a section invented to fill the shape.',
         )
         .optional(),
       blocked: z
         .string()
         .describe(
-          'What is stopping the rest, and what it needs from a person — a decision, an answer, an ' +
-            'environment. Say which, because "answer me" and "decide" are different asks. Omit it for a ' +
-            'Feature that is simply being worked.',
+          'Up to four bullets, same shape: what is stopping the rest, and what it wants from a person ' +
+            '— an answer, a decision, a deploy. Say which, because "answer me", "decide" and "release ' +
+            'it" read the same on a board and are not the same ask. Drawn under "Needs a person". Omit ' +
+            'it for a Feature that is simply being worked.',
         )
         .optional(),
       remaining: z
         .string()
         .describe(
-          'What is left, item by item where that reads better than a paragraph. Include the items ' +
-            'nobody is working — an item no agent can see is not queued behind anything, and a reader ' +
-            'who is not told that will assume it is in hand. Omit it where nothing is outstanding.',
+          'One line, drawn as a footnote under the two blocks above. What nobody is working, as a ' +
+            'count where a count says it — an item no agent can see is not queued behind anything, and ' +
+            'a reader who is not told that will assume it is in hand. Omit it where nothing is ' +
+            'outstanding.',
         )
         .optional(),
     }),

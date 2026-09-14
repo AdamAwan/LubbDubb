@@ -13,6 +13,7 @@ import { buildFeatureBoard } from '../src/features/featureBoard.js';
 import type { FeatureSummary, Task } from '../src/types.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
+import { summarySection } from '../web/src/view/summarySection.js';
 
 const NOW = '2026-08-27T12:00:00.000Z';
 
@@ -80,6 +81,22 @@ test('a summary needs a lede and nothing else', () => {
   const shouted = validateFeatureSummary({ standing: 'x'.repeat(5_000) });
   assert.equal(shouted.ok, false);
   assert.match(shouted.ok === false ? shouted.error : '', /too long/);
+});
+
+test('the card is capped at a glance, and a cut section keeps whole bullets', () => {
+  const essay = validateFeatureSummary({ standing: 'Where it is. '.repeat(40) });
+  assert.equal(essay.ok, false, 'four paragraphs of lede is the thing a reader skips');
+  assert.match(essay.ok === false ? essay.error : '', /max 360/);
+
+  const bullets = [...Array(20)].map((_, i) => `- bullet ${i} ${'y'.repeat(40)}`).join('\n');
+  const cut = validateFeatureSummary({ standing: 'Going.', usable: bullets });
+  assert.equal(cut.ok, true);
+  assert.equal(cut.ok && cut.trimmed, true);
+  const kept = (cut.ok && cut.input.usable) || '';
+  assert.ok(kept.length <= 600);
+  for (const line of kept.split('\n')) {
+    assert.match(line, /^- bullet \d+ y+$/, 'cut at a line boundary, never mid-bullet');
+  }
 });
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
@@ -254,4 +271,23 @@ test('a second submission revises one row and keeps the date it was first writte
   assert.equal(second.createdAt, first.createdAt, 'still dates the first time anybody said where this was');
   assert.equal(store.tickets.getFeatureSummary('issue:29857')?.standing, 'On hallway now.');
   assert.equal(store.tickets.getFeatureSummary('issue:29857')?.standingKey, 'k2');
+});
+
+test('a section is drawn as bullets where it was written as bullets, and as prose where it was not', () => {
+  assert.deepEqual(summarySection('- New blank customers — live\n- Maintenance job — hallway'), {
+    kind: 'bullets',
+    items: ['New blank customers — live', 'Maintenance job — hallway'],
+  });
+  for (const mark of ['*', '•', '–']) {
+    assert.deepEqual(summarySection(`${mark} one`), { kind: 'bullets', items: ['one'] });
+  }
+  assert.deepEqual(summarySection('Switching a customer over keeps their pairs.'), {
+    kind: 'prose',
+    text: 'Switching a customer over keeps their pairs.',
+  });
+  assert.deepEqual(summarySection('One thing.\n\nAnd another.'), {
+    kind: 'prose',
+    text: 'One thing. And another.',
+  });
+  assert.deepEqual(summarySection('-   '), { kind: 'prose', text: '-' }, 'a bullet with nothing in it is not a list');
 });

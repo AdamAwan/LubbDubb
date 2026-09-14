@@ -1438,6 +1438,13 @@ The agent submits with `feature_summary` ([11](11-mcp-tools.md)); `standing` is 
 sections are optional and trimmed rather than refused, and the write upserts on the container so a
 revision is one row. Nothing is posted to the tracker and nothing is scheduled from what it says.
 
+**The prompt asks for the shape the card draws, and the lengths it names are enforced.** Two
+sentences of lede, then one-line bullets under `usable` and `blocked` and a single line for
+`remaining` — a card is read in about ten seconds, and what the agent will not cut, `validateFeatureSummary`
+cuts for it: an over-long `standing` is refused outright and an over-long section is clipped at a line
+boundary so no half-bullet reaches the board. An operator's override that relaxes the wording does not
+relax the caps. → [17](17-cockpit.md#the-feature-summary)
+
 ## `pr-base-update` — two arms
 
 `needsBaseUpdate(pr)` ([07](07-pull-requests.md#needsbaseupdate)) is one predicate over two very

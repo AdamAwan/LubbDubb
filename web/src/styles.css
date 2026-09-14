@@ -9212,6 +9212,16 @@ select:disabled {
   flex-direction: column;
   gap: 9px;
 }
+/* The two questions a reader opens a Feature with — what can I use, what do you
+   need from me — beside each other where the column is wide enough for two and
+   stacked where it is not. `auto-fit` rather than two tracks because either one
+   can be absent, and a missing block must not leave a dead column beside the
+   other. → docs/spec/17-cockpit.md#the-feature-summary */
+.cn-fb-sum-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 9px 14px;
+}
 .cn-fb-sum-block h4 {
   margin: 0 0 3px;
   font-size: var(--label-size-sm);
@@ -9227,13 +9237,61 @@ select:disabled {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.cn-fb-sum-block ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cn-fb-sum-block li {
+  position: relative;
+  padding-left: 13px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cn-fg-dim);
+  overflow-wrap: anywhere;
+}
+.cn-fb-sum-block li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
 /* The two blocks that are a *state* rather than a section: something is usable,
    something is waiting on a person. The heading carries it. */
 .cn-fb-sum-usable h4 {
   color: var(--cn-green-ink);
 }
+.cn-fb-sum-usable li::before {
+  background: var(--cn-green-ink);
+  opacity: 1;
+}
 .cn-fb-sum-blocked h4 {
   color: var(--cn-red-ink);
+}
+.cn-fb-sum-blocked li::before {
+  background: var(--cn-red-ink);
+  opacity: 1;
+}
+/* What is left is a footnote to the two above it, not a third question: it is
+   the one field that is often "nothing", and a heading over one line reads as a
+   section with something in it. */
+.cn-fb-sum-foot {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--cn-line);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cn-fg-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .cn-fb-brief-list h4 {
   margin: 0 0 4px;
