@@ -83,6 +83,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How far back a provider looks for pull requests that have left the open set.',
   },
   {
+    path: 'closedPrCatchUpMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'The furthest back a read may reach to catch up on closes it missed while the harness was down. The window above is the ordinary reach; this is the cap on the extra.',
+  },
+  {
     path: 'obstacleDormantMs',
     type: 'number',
     ms: true,

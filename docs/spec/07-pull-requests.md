@@ -239,9 +239,9 @@ unwatched base still attributes.
 ### `retargetsFor(openPrs, closedPrs, defaultBranch)`
 
 The rungs whose base should move, as `PrBaseInput[]`. For each open PR whose `baseBranch` names the
-branch of a PR that left the open set **merged** (`prState`, within `closedPrWindowMs`), the target is
-that merged PR's own base — the default branch for a two-deep stack, the next rung down for a taller
-one.
+branch of a PR that left the open set **merged** (`prState`, within the closed-PR read — see
+[15](15-integrations.md#the-closed-pull-request-read)), the target is that merged PR's own base — the
+default branch for a two-deep stack, the next rung down for a taller one.
 
 - **Merged parents only.** An **abandoned** parent strands the rung above it on purpose: the work
   beneath never landed, so rebasing onto the default branch would silently drop the premise the rung
@@ -251,6 +251,13 @@ one.
 - **Run on both providers.** The write is a no-op on GitHub, which has already done it. A
   provider-conditional would be a second answer to "who retargets" living nowhere near the one that
   matters.
+- **The condition it repairs is permanent; its input is not.** A rung stacked on a merged parent stays
+  stacked for ever, and on Azure — where there is no provider-side retarget — this desk is the only
+  thing that moves it. So the merge has to be _seen_: a merged parent the closed-PR read never carried
+  leaves the rung open, healthy, stacked and in no rule's reach, for ever, with nothing red. That is
+  why the read is floored on a sweep mark rather than measured from the clock alone
+  ([15](15-integrations.md#the-closed-pull-request-read)) — a harness that was down for the six hours
+  after a rung merged used to lose that rung's whole stack, permanently.
 
 Performed by `PrNamingDesk` on the pulse through `ActionSink.setPullBase`. Mechanical bookkeeping like
 the plan's status comment, so it goes through no proposal; a failure is recorded and never fails the cycle.

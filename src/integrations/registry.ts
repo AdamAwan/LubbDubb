@@ -35,6 +35,8 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
+        closedPrCatchUpMs: ctx.config.closedPrCatchUpMs,
+        closedSweep: ctx.store.prArchive,
         sentReplies: ctx.store.prReplies,
       });
     },
@@ -49,6 +51,8 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         repository: az.repository,
         policyChecks: az.policyChecks,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
+        closedPrCatchUpMs: ctx.config.closedPrCatchUpMs,
+        closedSweep: ctx.store.prArchive,
         sentReplies: ctx.store.prReplies,
       });
     },

@@ -13,7 +13,7 @@ One instant of the outside world, produced by `Connector.getState()`:
 interface WorldSnapshot {
   takenAt: string; // ISO
   pullRequests: PullRequest[]; // OPEN pull requests, and only those
-  closedPullRequests?: PullRequest[]; // PRs that left the open set within closedPrWindowMs
+  closedPullRequests?: PullRequest[]; // PRs that left the open set within the closed-PR read
   issues: Issue[];
   staleSources?: string[]; // integration ids serving a last-good slice, absent when all are current
 }
@@ -296,7 +296,11 @@ already written.
 `config.closedPrWindowMs` (default 6h, `0` disables) bounds how far back a provider looks for PRs that
 have left the open set. `src/integrations/closedWindow.ts` holds the provider-agnostic half:
 
-- `closedWindowStart(nowMs, windowMs)` — the ISO instant to look back to.
+- `closedReadSince(nowMs, windowMs, sweptTo, catchUpMs)` — the ISO instant to look back to: the window,
+  extended back to the sweep mark when the harness has been down through part of it, floored at
+  `closedPrCatchUpMs`. The window measured from `now` alone is a claim about the clock, not about what
+  has been seen, and everything fed from this list loses a merge that fell in the gap
+  ([15](15-integrations.md#the-closed-pull-request-read)).
 - `withinClosedWindow(closedAt, since)` — the honest client-side cut. Providers filter server-side
   where the API allows, but the coarse filters available (GitHub sorts by _updated_; Azure's time
   range is boundary-inclusive) let older rows through. A PR with no recorded close time is dropped:
