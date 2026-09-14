@@ -22,6 +22,7 @@ import { CommentsMark } from './CommentsMark.js';
 import { PackMark } from './PackMark.js';
 import { ReviewMark } from './ReviewMark.js';
 import { heldByAccepting, waitsOn, wavesOf } from '../view/sequence.js';
+import { summarySection } from '../view/summarySection.js';
 import { fmtUsd, relAge } from './util.js';
 import type {
   FeatureBoardPayload,
@@ -604,11 +605,14 @@ function Movement({ landings, now }: { landings: readonly FeatureLandingRow[]; n
 
 function Summary({ summary }: { summary: FeatureSummary | null }): JSX.Element | null {
   if (summary === null) return null;
+  if (summary.usable === null && summary.blocked === null && summary.remaining === null) return null;
   return (
     <div className="cn-fb-summary">
-      <SummaryBlock title="Usable now" body={summary.usable} tone="usable" />
-      <SummaryBlock title="Blocking" body={summary.blocked} tone="blocked" />
-      <SummaryBlock title="Left to do" body={summary.remaining} />
+      <div className="cn-fb-sum-pair">
+        <SummaryBlock title="Usable now" body={summary.usable} tone="usable" />
+        <SummaryBlock title="Needs a person" body={summary.blocked} tone="blocked" />
+      </div>
+      {summary.remaining !== null && <p className="cn-fb-sum-foot">Left to do — {summary.remaining}</p>}
     </div>
   );
 }
@@ -620,13 +624,22 @@ function SummaryBlock({
 }: {
   title: string;
   body: string | null;
-  tone?: 'blocked' | 'usable';
+  tone: 'blocked' | 'usable';
 }): JSX.Element | null {
   if (body === null) return null;
+  const section = summarySection(body);
   return (
-    <div className={`cn-fb-sum-block${tone === undefined ? '' : ` cn-fb-sum-${tone}`}`}>
+    <div className={`cn-fb-sum-block cn-fb-sum-${tone}`}>
       <h4>{title}</h4>
-      <p>{body}</p>
+      {section.kind === 'prose' ? (
+        <p>{section.text}</p>
+      ) : (
+        <ul>
+          {section.items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

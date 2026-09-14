@@ -4674,10 +4674,35 @@ three lists of holds and a row per child are each true, and a reader assembles _
 out of them themselves — which two readers do differently. The summary is that sentence, said once,
 by somebody who read the whole Feature.
 
-It is four fields, not a document: **where this is** (required), **usable now**, **blocking**, **left
-to do**. They are four questions, and a reader must not have to find each of them inside a paragraph.
-A field the agent left out is drawn as nothing at all, never an empty heading: nothing usable yet,
-nothing blocked and nothing left are ordinary states, and the lede is where an agent says so.
+It is four fields, not a document: **where this is** (required), **usable now**, **needs a person**,
+**left to do**. They are four questions, and a reader must not have to find each of them inside a
+paragraph. A field the agent left out is drawn as nothing at all, never an empty heading: nothing
+usable yet, nothing blocked and nothing left are ordinary states, and the lede is where an agent says
+so.
+
+#### The layout is the structure, so the prose does not have to be
+
+The lede sits on the brief. The two fields that are a **question the reader is holding** — what can I
+use, and what do you need from me — are drawn beside each other under it, bulleted, one line per
+thing; `remaining` is drawn under both as a single footnote line rather than a third heading, because
+it is the field most often "nothing", and a heading over one line reads as a section with something in
+it. The pair is `repeat(auto-fit, minmax(190px, 1fr))` and not two tracks: either block can be absent,
+and a missing one must not leave a dead column beside the other.
+
+**Blocking is drawn as _needs a person_**, which is the same field renamed at the glass. A reader
+scanning the board is not looking for a status, they are looking for the row with their name on it,
+and "blocking" says a thing is stuck without saying who can unstick it.
+
+**A section is bulleted where it was written as bullets, and prose where it was not**
+(`summarySection`, `web/src/view/summarySection.ts`). One leading `-`, `*`, `•` or dash is stripped
+and each line becomes an item; a section with no marker on any line is drawn as the paragraph it is.
+The board is still composing nothing — it is splitting on the lines the agent wrote, and a summary
+written before this shape existed draws exactly as it always did.
+
+**The caps are the surface's, enforced at the tool.** `standing` is 360 characters and refused above
+it; each section is 600 and clipped at a **line boundary**, so what reaches the card is whole bullets
+or nothing. They were 1200 and 2000 — four paragraphs, which made the one piece of prose on the board
+the thing a reader skipped. → [05](05-dispatcher.md#feature-summary--where-a-feature-is)
 
 **It is a quotation like everything else on this card.** The board still composes no sentence: what it
 draws is the four fields as they were submitted, stamped and attributable. That is not the same thing
