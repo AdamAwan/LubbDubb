@@ -29,6 +29,7 @@ import {
   replyProposalRef,
 } from '../proposals/proposals.js';
 import { validationPlanProposalHold, validationPlanProposalRef } from '../validation/planApproval.js';
+import { applyDeclines, declineDetail, resolveDeclines } from '../validation/planDecline.js';
 import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
 import { amendmentWarnings, applyPlanAmendment, describeAmendment } from '../plans/planAmendment.js';
 import { proposedPlanDiff } from '../plans/planDiff.js';
@@ -60,6 +61,7 @@ import { handoverNote, handoverResumeFor, type HandoverResume } from './handover
 import { isActiveTask } from '../tasks.js';
 import type {
   Action,
+  CheckDecline,
   DecisionOutcome,
   FeatureSequence,
   PlanAmendment,
@@ -633,6 +635,12 @@ export class ActionExecutor {
   async runAuthorized(
     proposal: Proposal,
     pulseCycleId?: string,
+    /**
+     * The rows the operator struck out of the set they are accepting, carried here rather than read
+     * off the proposal because they are the operator's answer and not part of what was asked. Only
+     * a `validation_plan` has any. → docs/spec/20-validation.md#declining-a-single-row
+     */
+    declined: readonly CheckDecline[] = [],
   ): Promise<{ outcome: DecisionOutcome; detail: string }> {
     const { store } = this.deps;
     const { cycleId, by, approved } = authorityOf(proposal, pulseCycleId ?? null);
@@ -652,12 +660,17 @@ export class ActionExecutor {
     }
     if (act.kind === 'validation_plan') {
       const released = store.validation.releaseValidationPlan(act.originRef);
-      return released?.releasedAt != null
-        ? audit(
-            'executed',
-            `Released the validation check set for ${act.originRef} — authorized by ${by} (${proposal.id}).`,
-          )
-        : audit('skipped', `Nothing to release for ${act.originRef}: no check set is authored (${proposal.id}).`);
+      if (released?.releasedAt == null)
+        return audit('skipped', `Nothing to release for ${act.originRef}: no check set is authored (${proposal.id}).`);
+      // Struck after the release and not instead of it: the press releases the set and settles the
+      // rows the operator said no to, which is one verdict on one set rather than two.
+      const resolution = resolveDeclines(store.validation.listValidationChecks(act.originRef), declined);
+      const struck = applyDeclines(store, act.originRef, resolution.resolved);
+      return audit(
+        'executed',
+        `Released the validation check set for ${act.originRef} — authorized by ${by} (${proposal.id})` +
+          `${declineDetail(struck, resolution.unknown)}.`,
+      );
     }
     if (act.kind === 'plan_amendment') {
       const settled = applyPlanAmendment(store, act.amendmentId);

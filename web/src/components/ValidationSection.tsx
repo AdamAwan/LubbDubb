@@ -654,6 +654,11 @@ function stateTone(state: ValidationCheckState): TagTone | undefined {
   // started*, which is wrong — the work is done and the screen is here — and green
   // would say it passed, which is the one thing a capture never gets to claim.
   if (state === 'captured') return 'captured';
+  // Its own hue beside `waived`'s default grey, because the two are different acts and an operator
+  // reading the row a month later is entitled to know which one it was: a waiver says *this does not
+  // need running*, a decline says *I did not accept this row into the set*.
+  // → docs/spec/20-validation.md#declining-a-single-row
+  if (state === 'declined') return 'violet';
   return undefined;
 }
 

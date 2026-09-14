@@ -86,6 +86,7 @@ import type {
   WorldEvent,
   WorldEventKind,
   CaveatAnswerInput,
+  CheckDecline,
   PlanCaveat,
 } from '../types.js';
 import type { ReviewPackReading, WsClient } from '../api.js';
@@ -1254,6 +1255,7 @@ class DemoServer {
     note?: string,
     acknowledged?: string[],
     answers?: CaveatAnswerInput[],
+    declined?: CheckDecline[],
   ): Promise<{ ok: boolean; detail: string }> {
     const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
     if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
@@ -1261,6 +1263,7 @@ class DemoServer {
     const unticked = raised.filter((c) => !(acknowledged ?? []).includes(c.id));
     if (unticked.length > 0) return { ok: false, detail: `${unticked.length} thing(s) still to acknowledge` };
     this.recordCaveatAnswers(proposal, raised, answers ?? []);
+    this.recordDeclines(proposal, declined ?? []);
     this.settle(proposal, 'accepted', note);
     const prNumber = proposal.action.prNumber as number | undefined;
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
@@ -1277,6 +1280,21 @@ class DemoServer {
     this.addDecision(proposal.action.type, 'executed', detail);
     this.dirty();
     return { ok: true, detail };
+  }
+
+  /** The rows struck out of an accepted check set, written onto the demo's own checks. */
+  private recordDeclines(proposal: Proposal, declined: readonly CheckDecline[]): void {
+    const origin = proposal.ref.replace(/:validate-plan$/, '');
+    if (proposal.kind !== 'validation_plan' || declined.length === 0) return;
+    const at = new Date().toISOString();
+    for (const { letter, reason } of declined) {
+      const check = (this.state.validationChecks ?? []).find((c) => c.originRef === origin && c.letter === letter);
+      if (!check) continue;
+      check.state = 'declined';
+      check.resultNote = reason;
+      check.resultBy = 'operator';
+      check.resultAt = at;
+    }
   }
 
   private recordCaveatAnswers(proposal: Proposal, raised: PlanCaveat[], answers: CaveatAnswerInput[]): void {

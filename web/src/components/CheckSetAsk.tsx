@@ -1,6 +1,7 @@
-import type { JSX } from 'react';
-import type { ProposedCheck } from '../types.js';
+import { useState, type JSX } from 'react';
+import type { CheckDecline, ProposedCheck } from '../types.js';
 import type { ProposedCheckSet } from '../checkSet.js';
+import { Button } from './button.js';
 import { Tag } from './tag.js';
 
 // → docs/spec/17-cockpit.md
@@ -17,7 +18,7 @@ import { Tag } from './tag.js';
  *
  * @public drawn by `EscalationCard` for a `validation_plan` proposal
  */
-export function CheckSetAsk({ set }: { set: ProposedCheckSet }): JSX.Element {
+export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines?: CheckDeclines }): JSX.Element {
   const queries = set.checks.filter((c) => c.carriesQuery).map((c) => c.letter);
   return (
     <div className="vp-ask">
@@ -41,9 +42,15 @@ export function CheckSetAsk({ set }: { set: ProposedCheckSet }): JSX.Element {
       ) : (
         <ul className="vp-rows">
           {set.checks.map((check) => (
-            <Row key={check.letter} check={check} />
+            <Row key={check.letter} check={check} declines={declines} />
           ))}
         </ul>
+      )}
+      {declines !== undefined && declines.whole && (
+        <p className="vp-whole">
+          Every check is declined, so this is a rejection: the set goes back to be written again, and your reasons go
+          with it.
+        </p>
       )}
       {queries.length > 0 && (
         <p className="vp-queries">
@@ -55,9 +62,10 @@ export function CheckSetAsk({ set }: { set: ProposedCheckSet }): JSX.Element {
   );
 }
 
-function Row({ check }: { check: ProposedCheck }): JSX.Element {
+function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclines }): JSX.Element {
+  const struck = declines?.reasons[check.letter];
   return (
-    <li className="vp-row">
+    <li className={`vp-row${struck === undefined ? '' : ' vp-struck'}`}>
       <span className="vp-letter">{check.letter}</span>
       <div className="vp-body">
         <div className="vp-title">{check.title}</div>
@@ -92,6 +100,41 @@ function Row({ check }: { check: ProposedCheck }): JSX.Element {
           )
         )}
       </div>
+      {/* The brake, on the row it applies to. Whole-set reject is too blunt to be one: using it
+          costs the operator the rows they were happy with, which is why an expensive row gets
+          accepted instead of struck. → docs/spec/20-validation.md#declining-a-single-row */}
+      {declines !== undefined && (
+        <div className="vp-decline">
+          {struck === undefined ? (
+            <Button
+              size="small"
+              ghost
+              title="Strike this one check out of the set — the rest release, and no planner is asked again"
+              onClick={() => declines.decline(check.letter)}
+            >
+              Decline
+            </Button>
+          ) : (
+            <>
+              <input
+                className="vp-why"
+                autoFocus
+                placeholder="Why this one is not worth running — required"
+                value={struck}
+                onChange={(e) => declines.say(check.letter, e.target.value)}
+              />
+              <Button
+                size="small"
+                ghost
+                title="Put this check back into the set"
+                onClick={() => declines.keep(check.letter)}
+              >
+                Keep it
+              </Button>
+            </>
+          )}
+        </div>
+      )}
       {/* Only what the steps beside them do *not* already say. A chip repeating the
           actor of every step is a second reading of the same fact, stranded at the
           far edge of a wide card; the nomination has its own line under the steps. */}
@@ -107,4 +150,51 @@ function Row({ check }: { check: ProposedCheck }): JSX.Element {
       </div>
     </li>
   );
+}
+
+interface CheckDeclines {
+  /** The words typed against each struck letter, empty string included — an untyped reason is not sent. */
+  reasons: Readonly<Record<string, string>>;
+  decline: (letter: string) => void;
+  keep: (letter: string) => void;
+  say: (letter: string, reason: string) => void;
+  /** What rides on the accept: only the rows carrying a reason. */
+  declined: CheckDecline[];
+  /** A struck row with nothing typed against it. The accept is held on this. */
+  unsaid: string[];
+  /** Every row in the set is struck, so the press is a rejection rather than an accept. */
+  whole: boolean;
+}
+
+/**
+ * The operator's declines, held here rather than on the card, so the same state reaches the rows that
+ * draw the control and the button that sends them. Nothing is sent until a reason is typed: the route
+ * refuses a reasonless decline, and a control that let the click through would put that refusal in
+ * front of somebody who had no way to see it coming.
+ *
+ * @public the seam `EscalationCard` holds a `validation_plan`'s per-row verdicts on
+ */
+export function useCheckDeclines(set: ProposedCheckSet | null): CheckDeclines {
+  const [reasons, setReasons] = useState<Readonly<Record<string, string>>>({});
+  const letters = set?.checks.map((c) => c.letter) ?? [];
+  // Only the letters still in the set. A row superseded while the card was open leaves its words
+  // behind, and sending them would name a check the operator is no longer looking at.
+  const live = Object.entries(reasons).filter(([letter]) => letters.includes(letter));
+  const declined = live.flatMap(([letter, reason]) =>
+    reason.trim() === '' ? [] : [{ letter, reason: reason.trim() }],
+  );
+  return {
+    reasons,
+    decline: (letter) => setReasons((prev) => ({ ...prev, [letter]: '' })),
+    keep: (letter) =>
+      setReasons((prev) => {
+        const next = { ...prev };
+        delete next[letter];
+        return next;
+      }),
+    say: (letter, reason) => setReasons((prev) => ({ ...prev, [letter]: reason })),
+    declined,
+    unsaid: live.filter(([, reason]) => reason.trim() === '').map(([letter]) => letter),
+    whole: letters.length > 0 && declined.length === letters.length,
+  };
 }

@@ -279,6 +279,80 @@ pre-approved against production because somebody accepted a plan. So the ask **n
 carry one and says the accept does not cover them; leaving them off the card is the other failure, where
 an operator accepts four checks and meets a `blocked` row they thought they had cleared.
 
+### Declining a single row
+
+**Built.** A check set used to be accepted or sent back **whole**, and an operator who agreed with
+four rows out of five had two bad options: accept all five and meet a row they had already judged not
+worth running — on the sheet, dispatched for, and waivable only at close, after it had cost
+everything it was going to cost — or send the whole set back, discarding four rows they were happy
+with and spending another planner dispatch to get most of them again, with `rejectionGuidance`
+carrying words about one row to an agent re-deciding all five. Neither is what they mean. What they
+mean is _this one, no; the rest, yes_.
+
+**A row can be declined on its own, in the same press that accepts the rest.** The decline is the
+operator's verdict on that row and not a refusal of the set: it does not clear `authored_at`, does not
+withdraw the release, and does not go back to the planner. The other rows release exactly as they do
+today.
+
+**It is the brake on an expensive row, and that is why it exists.** Once a validation planner can
+nominate an agent driving a browser — the least reproducible and most expensive instrument on the
+table ([36](36-remote-validation.md)) — the only thing standing between a planner that reaches for it
+by default and a fleet that burns a browser run on every goal is a person able to strike that row
+without torching the four good ones beside it. Whole-set reject is too blunt to be that brake, because
+using it costs the operator the rows they wanted, so the row gets accepted instead of struck.
+
+**A declined row is settled, and settled is not passed.** `declined` is a value on `state`, written
+through `recordValidationResult` like every other reading, attributed to `operator` and carrying the
+operator's words as `result_note`. A person looked at it and answered, so it is never an open row: it
+is not assembled onto a sheet ([36](36-remote-validation.md#a-declined-row-is-not-on-the-sheet)), rule
+`validate-check` never dispatches for it — it cuts on `unrun`, as it always did — and `owedToAPerson`
+does not count it, so the bench does not ask for it back on the next pulse. It is equally not a pass:
+`validationVerdict` counts it apart from `waived` and against `clear`, exactly as `deferred` is
+counted, and `closeOutDetail` names it with the reason. A set whose only interesting row was declined
+must not read clear.
+
+**Kept apart from a waiver on purpose**, the same discipline `deferred` and `waived` are kept apart
+by. A waiver is _this does not need running_, written at close about a row that was in the set; a
+decline is _I am not accepting this row into the set_, written at the gate. Folding them lets the
+word said at the gate do the expensive word's job at close-out, and lets a reader a month later see
+neither act for what it was. They are drawn distinctly and counted distinctly.
+
+**A decline is not permanent.** `reset` is its undo, as it is for every other reading: a row the
+operator later wants comes back to `unrun` through the route that already exists, and the arrival
+looking worse than expected is exactly the case it is there for. Nothing else undoes one — the accept
+is pressed once.
+
+**A reason is required, and the route refuses without one.** `validation_plan` requires `note` on
+every call and `emptyReason` on an empty set, on the principle that a null with no account of itself
+is the failure this document keeps meeting; a decline is the same shape of null and carries the same
+obligation. The card holds the accept while a struck row has nothing typed against it, because a
+control that let the click through would put the route's refusal in front of somebody who had no way
+to see it coming ([17](17-cockpit.md#saying-the-sentence-a-refusal-asks-for)).
+
+**Declining every row is still sending the set back.** `ProposalDesk.accept` reads the declines
+against the goal's live rows before it decides anything, and where they cover all of them it lands on
+`reject` — the existing machinery, `withdrawValidationAuthoring` and all — with the operator's
+row-by-row reasons gathered into the rejection's note so they reach the next planner through
+`rejectionGuidance`. Otherwise an operator declining row by row arrives at a **released set of
+nothing**, which reads identically to a planner that legitimately declared no checks with an
+`emptyReason` ([above](#saying-nothing-was-worth-running)) — and those two must stay distinguishable,
+because one is a set somebody refused and the other is a verdict somebody wrote.
+
+**The declines are resolved by letter, and a letter naming nothing is dropped.** The letter is the
+handle the ask drew and the one thing about a check that is assigned once and never reused or
+reassigned ([above](#the-letter-is-assigned-never-positional)), which is what makes an amendment
+landing between the ask and the answer harmless — `C` is still the check the operator read. A letter
+naming no live row is ignored rather than refused: an accept that failed whole because one row was
+superseded while the card was open would cost the operator the four rows they were happy with, which
+is the exact thing this exists to stop. The audit line says which letters were struck and which were
+ignored.
+
+**The control goes on the row the ask already draws.** The set rides on the action as one entry per
+check and `CheckSetAsk` draws it as rows for exactly this reason: a verdict is being asked for on the
+set, so the set has to be scannable. What rides on the action stays what is drawn — an amendment
+landing between the ask and the answer must not change what the operator is agreeing to — so the
+control adds a verdict to each drawn row and changes nothing about what was proposed.
+
 ### When an operator sends a check set back
 
 Rejecting is not a refusal of validation; it is a refusal of _this_ set. `withdrawValidationAuthoring`
@@ -423,9 +497,12 @@ from any of them.
 | `waived`   | An operator decided it does not need running.                                                                                                                                                                                                                                                                                                                                             |
 | `deferred` | It is waiting on something named, with `deferUntil` where the deferral said when.                                                                                                                                                                                                                                                                                                         |
 | `captured` | A `screenshot` step took the picture and it is on the row, waiting to be looked at. It asserts nothing, and a person's reading is what makes it passed or failed. Written by either channel that can take one — the goal's own validation sheet, and the `validate-check` dispatch where the fleet can reach the screen. → [36](36-remote-validation.md#a-screen-from-the-sheets-own-run) |
+| `declined` | The operator struck this row out of the set at the accept gate, with their reason. Settled: never assembled, never dispatched for, owed to nobody — and never clear. → [Declining a single row](#declining-a-single-row) |
 
-**`captured` is a value on the existing column and needs no `ALTER TABLE`**, exactly as `result_by`
-gained `agent`, `desktop` and `spec`. It is counted apart from `unrun` on `ValidationVerdict`: the
+**`captured` and `declined` are values on the existing column and need no `ALTER TABLE`**, exactly as
+`result_by` gained `agent`, `desktop` and `spec`. `checkStateOf` narrows anything it does not
+recognise to `unrun`, which is the direction that makes adding one safe: a row from a database before
+the value existed lands on _nobody has got to it_ rather than on a settlement nobody wrote. It is counted apart from `unrun` on `ValidationVerdict`: the
 two ask different things of whoever reads them — _nobody has started_ against _the only thing left
 is your eyes_.
 
@@ -1342,11 +1419,12 @@ Two operator acts with opposite effects on the flag, kept apart because collapsi
 one of them dishonest. "The test environment is rebuilt on Thursday" is not "I am not going to check
 this".
 
-|              | `deferred`                                      | `waived`                    |
-| ------------ | ----------------------------------------------- | --------------------------- |
-| Means        | Not yet, and here is what I am waiting for      | Deliberately not doing this |
-| Reason       | Required, with an optional `until`              | Required                    |
-| At close-out | **Counts as not clear**, listed with its reason | Counts as clear             |
+|              | `deferred`                                      | `waived`                    | `declined`                                      |
+| ------------ | ----------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| Means        | Not yet, and here is what I am waiting for      | Deliberately not doing this | Not accepting this row into the set             |
+| Written      | Any time, on the goal                           | Any time, on the goal       | Once, at the accept gate                        |
+| Reason       | Required, with an optional `until`              | Required                    | Required                                        |
+| At close-out | **Counts as not clear**, listed with its reason | Counts as clear             | **Counts as not clear**, listed with its reason |
 
 **Deferral cannot be used to reach a clear goal.** That is the whole guard: it takes a check out of
 today's work and does not take it out of the count. Otherwise it becomes the quiet exit that `unrun`
@@ -1451,6 +1529,12 @@ always allowed; it stops something from happening.
 `:number` is the goal and `:checkId` is the check's id, never its letter — the letter is what a person types, the id is what
 the store is keyed on. A check whose plan has superseded it answers **409**, not 404: the commonest
 cause is not a typo but an amendment landing between the sheet being drawn and the click.
+
+A decline is **not** one of these routes. It is not a reading somebody records on a goal they are
+working; it is part of the answer to an ask, so it rides on `POST /api/proposals/:id/accept` as
+`declined: [{letter, reason}]` and is written by the press that releases the rest of the set
+([16](16-http-api.md), [Declining a single row](#declining-a-single-row)). A reasonless entry is a
+400. `reset` above is its undo, like every other reading's.
 
 **No route here runs a cycle.** Nothing schedules work, so a pulse per checkbox would be the cost of
 saying nothing.

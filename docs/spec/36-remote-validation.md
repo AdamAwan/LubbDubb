@@ -166,6 +166,23 @@ Rows keep their own downstream consequences. A failed `check` still reaches `val
 ([20](20-validation.md#when-a-check-fails)); a regressed `measure` still holds nothing unless asked
 ([29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)).
 
+### A declined row is not on the sheet
+
+**Built.** A check the operator declined at the accept gate ([20](20-validation.md#declining-a-single-row))
+is settled: they read that row, said no to it, and accepted the rest of the set. `sheetRows` skips it,
+so it is never assembled, never selected, never confirmed, never pressed, never counted by the three
+`runnable*` halves and never reported on.
+
+Assembling it would undo the decline by the one surface that never saw it. A sheet is a list of what
+is still to run, and a struck row on it is pressed like any other: dispatched for, driven in a
+browser on somebody's acceptance environment — the exact spend the decline exists to refuse — and
+then written back onto the goal's own check as a reading, over the operator's. The decline would
+survive as a note nothing acted on.
+
+It is skipped rather than blocked, because `blocked` is a row a reading could not be taken for and
+this is a row nobody asked for a reading of. The goal's own record still carries it, with the
+operator's reason, drawn distinctly on the goal page.
+
 ### What a row can come back as
 
 | Outcome    | Means                                                                                                       | Writes on the check                                                                                                                                                             |

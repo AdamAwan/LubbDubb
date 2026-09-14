@@ -102,7 +102,17 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
     openPullRequests: [openPr()],
     issue: {
       ...page.issue,
-      validation: { state: 'flagged', total: 3, passed: 1, failed: 1, unrun: 1, deferred: 0, waived: 0, captured: 0 },
+      validation: {
+        state: 'flagged',
+        total: 3,
+        passed: 1,
+        failed: 1,
+        unrun: 1,
+        deferred: 0,
+        waived: 0,
+        captured: 0,
+        declined: 0,
+      },
     },
   };
   assert.equal(goalTabOpening(flagged).tab, 'validation');
@@ -111,7 +121,17 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
     ...flagged,
     issue: {
       ...page.issue,
-      validation: { state: 'clear', total: 3, passed: 3, failed: 0, unrun: 0, deferred: 0, waived: 0, captured: 0 },
+      validation: {
+        state: 'clear',
+        total: 3,
+        passed: 3,
+        failed: 0,
+        unrun: 0,
+        deferred: 0,
+        waived: 0,
+        captured: 0,
+        declined: 0,
+      },
     },
   };
   assert.equal(clear.issue.validation?.state, 'clear');

@@ -786,6 +786,7 @@ export function buildDemoState(): DemoSeed {
             unrun: 3,
             deferred: 0,
             captured: 0,
+            declined: 0,
             waived: 0,
           },
           retrospective: {
@@ -927,6 +928,7 @@ export function buildDemoState(): DemoSeed {
             deferred: 1,
             waived: 1,
             captured: 0,
+            declined: 0,
           },
         }),
         demoIssue({

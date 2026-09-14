@@ -892,6 +892,7 @@ export type {
   StateQuery,
   TaskSummary,
   TenantStanding,
+  CheckDecline,
   ProposedCheck,
   ValidationCheck,
   ValidationCheckActor,

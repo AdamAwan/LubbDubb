@@ -841,8 +841,24 @@ export interface PlanEvidence {
  * does not recognise to `unrun`, so the old rows land on the state that means *nobody has got to
  * it* rather than on the one that means *there is an image here for you*.
  * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
+ *
+ * `declined` is the operator's own verdict at the accept gate: they read the row, said no to it, and
+ * accepted the rest of the set. It is settled — never assembled onto a sheet, never dispatched for,
+ * never owed to a person — and it is not a pass: it counts against the goal's flag exactly as
+ * `deferred` does, with the reason they gave beside it.
+ * → docs/spec/20-validation.md#declining-a-single-row
  */
-export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred' | 'captured';
+export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred' | 'captured' | 'declined';
+
+/**
+ * One row an operator strikes out of the set they are accepting, by the letter the ask drew it under.
+ * The reason is required for `validation_plan`'s reason: null with no account of itself is the
+ * failure that document keeps meeting. → docs/spec/20-validation.md#declining-a-single-row
+ */
+export interface CheckDecline {
+  letter: string;
+  reason: string;
+}
 
 export type ValidationCheckActor = 'human' | 'fleet';
 
@@ -1103,6 +1119,14 @@ export interface ValidationVerdict {
    * → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
    */
   captured: number;
+  /**
+   * Declined by the operator at the accept gate. Counted apart from `waived` because the two are
+   * different acts at different moments — *I am not accepting this row into the set* against *this
+   * one does not need running after all* — and folding them would let the cheap word at the gate do
+   * the expensive word's job at close-out. It counts against `clear` exactly as `deferred` does, and
+   * `total` is the sum of the seven. → docs/spec/20-validation.md#declining-a-single-row
+   */
+  declined: number;
 }
 
 export type PartSize = 's' | 'm' | 'l';

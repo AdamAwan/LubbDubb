@@ -9,6 +9,7 @@ import type {
   SnoozeTarget,
   WorkNodeView,
   CaveatAnswerInput,
+  CheckDecline,
 } from '../types.js';
 import type { FeatureMode, OverviewShape, Place } from './place.js';
 import type { GoalTab } from '../view/goalPage.js';
@@ -80,6 +81,7 @@ export interface CockpitActions {
     note?: string,
     acknowledged?: string[],
     answers?: CaveatAnswerInput[],
+    declined?: CheckDecline[],
   ): Promise<void>;
   backOutProposal(id: string, verdict: 'close' | 'hold', note?: string): Promise<void>;
   overruleShortfall(issueNumber: number, proposalId: string, text: string): Promise<void>;
