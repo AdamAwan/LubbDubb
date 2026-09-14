@@ -484,6 +484,8 @@ once.
 | `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
 | `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
+| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                       |
+| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                     |
 | `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -2553,6 +2555,13 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
+The overview has **two shapes**, and which one is drawn is a [place](#the-address-bar) — `?overview=`,
+with `cards` the absent value. They answer different questions and the deployment picks per operator
+rather than the product picking once: **Cards** answers _what is happening_, and **Next** answers
+_what do I do about it_. → [one ask at a time](#one-ask-at-a-time)
+
+### Cards
+
 What the situation area shows when no goal is selected: three cards, rows rather than pictures, in
 reading order — **Fleet**, **Goals in flight**, **Pull requests**. The
 fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
@@ -3374,6 +3383,68 @@ is an estimate — the bubble is `display: none` until it is wanted, so there is
 before deciding where to put it — and it is sized against the long end of what it holds, so the
 answer errs towards flipping. That fails to a bubble with room to spare rather than to one cut off at
 the card's edge.
+
+### One ask at a time
+
+`?overview=next`, drawn by `web/src/console/overviews/NextOverview.tsx`. The **whole** of the
+situation area is one ask — the one holding the most work — with the control that answers it, and the
+operator moves along the queue rather than choosing from it.
+
+**What it is answering is that Cards has no room for the operator's own move.** Every reading there is
+true continuously — six agents out, four goals in flight, three pull requests open — and none of it is
+a question addressed to anybody. The ask that *is* a question lives on the rail beside it, in a column
+narrow enough that its reason has to be a tooltip. The rail already computes the better reading:
+`needsYou.ts` gives every ask its kind, its tier and **`holding`**, the count of plan parts stalled
+behind it, which is the number that should decide what is opened first. This shape is that list, one
+row at a time, at full width.
+
+**The order is `byWeight` — tier first, then `holding`.** Both halves are the rail's own; nothing here
+re-decides what the server decided.
+
+**It absorbs the rail.** Drawing the queue beside a surface that *is* the queue is the same list twice,
+and the copy on the rail is the one with no room for the reason — so `.cn-body` loses its first track
+while this shape is the situation area. Not on a goal page reached from it: that is a place one rung
+in, and the queue belongs where it has always been.
+
+#### The setting beside the act
+
+An ask read alone is a decision with no stakes on it. "Approve this merge" means very little until you
+can see it is the fourth of five parts and which of them are waiting on it — so the left column carries
+the goal, its standing, and **its plan as named parts**, off the goal page's own `parts` fold.
+
+**The part the ask is about is marked**, in the ask's own tone, off the `issue:<n>:part:<slug>` its
+origin already carries. That mark is most of what the column is for: the reader is looking for where
+this decision sits in the work, and a column of named rows with none of them marked leaves them
+counting. An ask belonging to no goal — an upgrade, a config gap — says so rather than drawing an empty
+column, because a band that silently vanishes reads as one that failed to load.
+
+**Beside, not above.** Stacked, the plan pushed the ask under the fold on a wide screen, which is the
+one thing this shape exists to prevent. Below 1100px they collapse back into one column, where height
+is cheaper than width.
+
+**Every region wears its name.** An unlabelled band over an unlabelled track is a row of boxes whose
+meaning the reader infers differently for each one, which is the cost this shape was meant to remove.
+
+#### Moving along the queue
+
+**The cursor is held by id, never by index.** The queue re-sorts under the operator — answering an ask
+removes it — and an index would slide a *different* ask under the cursor. On a surface whose next
+control is `Approve merge`, that is how somebody approves what they were not looking at. The id is
+resolved back to an index each render; where it is gone, the position it held is where the next ask
+falls.
+
+**The pips are the whole queue and each is a way into it.** A bar that only reports a position, on a
+surface whose complaint about the rail was that it could not be acted on, would be that mistake one
+size down. They wear each ask's tone, so the strip also says what kind of thing waits where.
+
+**Prev and Next sit with the counter, not under the ask.** An ask's height is whatever its body
+happens to be — a plan with a tick-list runs several times a bench row — so a footer puts the
+most-pressed control somewhere different on every one of them. The arrow keys move the cursor too,
+except where the operator is writing: every ask that takes a note puts a field on the page, and an
+arrow inside one is a caret move.
+
+**There is no set-aside.** Skip was a one-way door with no way back short of a reload, which made every
+press a small decision rather than navigation. Passing an ask leaves it where the server put it.
 
 ## The record panel
 
@@ -4425,6 +4496,33 @@ would send whoever reported it looking for a token problem.
 this gate hold it: a deployment with the flag off, or a tracker with no hierarchy, summarises nothing
 and does not read the mirror to find out whether anything moved. That is worth stating where the flag
 is described, because "draw a tab" is not what an operator expects to start a fleet.
+
+### Board or focus
+
+The tab has **two modes**, a [place](#the-address-bar) on `?fmode=`, with `board` the absent value.
+`focus` is `web/src/components/FeatureFocus.tsx`.
+
+The board answers _how is the Environments work going_, which is the question nobody outside the fleet
+can otherwise ask, and it answers it well. What it does not answer is _what do I do about it_:
+`featureHolds` already splits every hold into three courts — **yours**, the fleet's, the world's — and
+`holds.you` reaches the card as a count in the corner, one more reading on a surface made of them, with
+no way from the number to the thing it counts.
+
+**Focus keeps the context and puts the act in front of it.** One Feature at a time: the summariser's own
+account and its counts above, because that is what makes an ask legible; then its asks **one at a time**
+with the control that answers them; then its goals as lanes saying whose move each is. Every other
+Feature stays one press away with its own count on it, since the argument for focusing on one is lost
+if choosing which costs a trip back.
+
+**Nothing here is recomputed** — it is the board's own readings in the order somebody sitting down to
+work would want them. The account is the summariser's, the standings are `ticketOutcomes`', the courts
+are `featureHolds`', and the controls are `needBody`, so they carry the refusal rules the rail's carry
+rather than being a compact copy of them.
+
+**The scoping is what this has over [the overview's one-at-a-time shape](#one-ask-at-a-time).** There,
+"1 of 15" spans unrelated work; here "1 of 2 on this Feature" is two asks about one body of work, so the
+account just read still applies to the next one. What it gives up is the ask belonging to no Feature —
+an upgrade, a config gap — which has no lane and stays on the rail.
 
 ### Six standings, because they are six different facts
 
