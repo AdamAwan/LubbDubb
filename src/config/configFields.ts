@@ -399,6 +399,18 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'State an item moves to once an agent is working it. Do not also list it in the pickup states.',
   },
   {
+    path: 'issueCompletedState',
+    type: 'string',
+    access: 'plain',
+    why: 'State a work item moves to when the harness closes it as done. Unset = the harness cannot close items.',
+  },
+  {
+    path: 'issueNotPlannedState',
+    type: 'string',
+    access: 'plain',
+    why: 'State a work item moves to when it is closed as not planned. Unset = a back-out leaves the item open.',
+  },
+  {
     path: 'issueContainerTypes',
     type: 'stringList',
     access: 'plain',

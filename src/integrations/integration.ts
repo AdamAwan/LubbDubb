@@ -186,10 +186,13 @@ export function isIssueLabelCapable(x: Integration): x is Integration & IssueLab
 
 export interface IssueCloseCapable {
   closeIssue(input: IssueCloseInput): Promise<SendResult>;
+  /** Answers false where the provider could close but this deployment has not said with which state. */
+  canCloseIssue?(): boolean;
 }
 
 export function isIssueCloseCapable(x: Integration): x is Integration & IssueCloseCapable {
-  return typeof (x as Partial<IssueCloseCapable>).closeIssue === 'function';
+  const candidate = x as Partial<IssueCloseCapable>;
+  return typeof candidate.closeIssue === 'function' && (candidate.canCloseIssue?.() ?? true);
 }
 
 export interface WorkItemStateCapable {

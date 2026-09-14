@@ -422,10 +422,10 @@ test("through a real store, the standing row's warning follows the goal's checks
 test('the row states the way out the deployment actually has', () => {
   const closable = pass({ issues: [issue(12)], deliveries: [delivery(12)], canClose: true });
   assert.equal(closable.length, 1);
-  assert.match((closable[0] as { detail: string }).detail, /\*\*Close the ticket\*\* here does it/);
+  assert.match((closable[0] as { detail: string }).detail, /\*\*Mark as closed\*\* here does it/);
 
   const manual = pass({ issues: [issue(12)], deliveries: [delivery(12)], canClose: false });
-  assert.doesNotMatch((manual[0] as { detail: string }).detail, /Close the ticket/);
+  assert.doesNotMatch((manual[0] as { detail: string }).detail, /Mark as closed/);
   assert.match((manual[0] as { detail: string }).detail, /Close it there/);
 });
 

@@ -14,6 +14,7 @@ import {
   normalizeMergeState,
   stripRef,
 } from '../src/integrations/azure/sourceControl.js';
+import { isIssueCloseCapable } from '../src/integrations/integration.js';
 import {
   AzureDevOpsWorkItemsIntegration,
   linkedPrFromRelations,
@@ -1153,6 +1154,36 @@ test('setWorkItemState transitions the work item and records a connector event',
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.stateSets, [{ id: 101, state: 'In Review' }]);
   store.close();
+});
+
+test('azure closes a work item into the state the deployment named for the reason', async () => {
+  const { api, recorded } = fakeApi();
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, completedState: 'Closed', notPlannedState: 'Removed' });
+  assert.equal(issues.canCloseIssue(), true);
+  assert.equal((await issues.closeIssue({ number: 101, reason: 'completed' })).ok, true);
+  assert.equal((await issues.closeIssue({ number: 102, reason: 'not_planned' })).ok, true);
+  assert.deepEqual(recorded.stateSets, [
+    { id: 101, state: 'Closed' },
+    { id: 102, state: 'Removed' },
+  ]);
+});
+
+test('azure is not close-capable while no closed state is named', async () => {
+  const { api } = fakeApi();
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  assert.equal(issues.canCloseIssue(), false);
+  assert.equal(isIssueCloseCapable(issues), false);
+});
+
+test('a close for the reason whose state is unnamed is refused by name, never the other word', async () => {
+  const { api, recorded } = fakeApi();
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, completedState: 'Closed' });
+  assert.equal(isIssueCloseCapable(issues), true);
+  await assert.rejects(
+    () => issues.closeIssue({ number: 101, reason: 'not_planned' }),
+    /issueNotPlannedState names no state/,
+  );
+  assert.deepEqual(recorded.stateSets, []);
 });
 
 test('work items snapshot passes the tag filter through to the API', async () => {
