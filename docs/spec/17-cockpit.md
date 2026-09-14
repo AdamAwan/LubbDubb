@@ -3506,6 +3506,92 @@ arrow inside one is a caret move.
 **There is no set-aside.** Skip was a one-way door with no way back short of a reload, which made every
 press a small decision rather than navigation. Passing an ask leaves it where the server put it.
 
+#### When nothing needs you
+
+`buildLeads` in `web/src/console/overviews/leads.ts`, drawn by the shape's `Clear` panel.
+
+**An empty ask queue is not an empty deployment.** It says one thing only: nothing is blocked on a
+person — which is the state a fleet spends most of its hours in. What was drawn for it was a green
+sentence and a count of working agents, on the one surface whose whole argument is that the thing to
+do is in front of you. So the surface that exists to say what to do said there was nothing, while the
+tracker held items the fleet could not see, a pull request sat in somebody's court, and four goals
+were in flight with no agent out on one.
+
+That is not a coincidence: **the work nobody is asking about is the work nobody is looking at**. An
+ask is raised when something is _stopped_, and nothing raises one for a ticket the fleet has never
+been shown or a goal quietly waiting on its own plan. So the clear state draws **leads** — the
+readings that are true right now and have somewhere to go:
+
+| Lead                                             | The cut                                                               | Where it goes                          |
+| ------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------- |
+| _n_ **open pull requests nobody has approved**   | `approved === false`, less the branches `agentOnBranch` holds          | the **Cards** shape                    |
+| _n_ **queued, and nobody is out**                | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
+| _n_ **tracker items nobody has picked up**       | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
+| _n_ **goals in flight with nobody on them**      | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
+| _n_ **faults recorded**                          | `errors`                                                              | the fault log                          |
+
+**The order is what the operator can act on, first.** An approval is theirs alone, so the pull
+requests lead; then the queue and the reservoir, which are work waiting to enter the fleet; then the
+goals quietly working their own plans; then the faults, which are nobody's move. The order is the
+module's own, fixed rather than sorted — these are five different kinds of thing and there is no
+figure to rank them by.
+
+**Each band wears its lead's tone, and one of them wears none.** `LEAD_TONE` is total over the keys,
+like the rail's own tables, and it answers *whose* the reading is rather than how bad it is: amber the
+operator's own move, blue the fleet's supply, red something wrong, and **no tone at all** on the goals
+quietly working their plans — a colour on every row is a colour that says nothing. It reaches the glass
+as a rule down the band's left edge and the figure's ink, and nothing else: a fill behind five rows is
+a page of colour. The rule is the tone's *line* at rest and its ink on hover, where the band also takes
+a ground — five saturated edges down one panel is the loudest thing on a surface whose subject is that
+nothing is urgent.
+
+Five more rules run through them.
+
+**A lead with nothing in it is never built.** This panel is read at the moment an operator is deciding
+whether there is anything here at all, and a column of rows reading `0` is the furniture that answers
+that question wrongly. The figure is the lead's own count, so a drawn lead always counts something —
+`test/overviewLeads.test.ts` asserts that from both sides.
+
+**Nothing here re-decides what the server decided.** Every cut above is a `pickup.status`, the queue's
+own row, or `errors` — the leads choose which reading to put in front of somebody and no more. The
+reservoir lead counts the issues it also names rather than `runway.reservoir`, for that reason: two
+opinions of one number, drawn in one panel, is a figure an operator cannot check against the list it
+opens.
+
+**The queue lead is conditional on an idle fleet, and it is the only one that is.** A full queue behind
+a working fleet _is_ the fleet working, and a lead pointing at normal on a surface that has just said
+nothing needs you teaches an operator that the leads are decoration.
+
+**The pull request lead cuts on the approval, not on the agent.** An approval is the operator's own
+act and the one nothing else on the deployment can do for them — so an open pull request nobody has
+approved is the likeliest thing here to be quietly waiting, and the lead says so with the wait beside
+each name (`attention.reviewWaitingSince`, longest first; an unmeasured wait sorts behind every
+measured one rather than reading as none). The cut is `approved === false` and never `!== true`,
+because the field is optional: an unreported approval is an **unknown**, and folding it into a missing
+one would have this lead claim every open pull request on a provider that does not report reviews. The
+branches an agent is out on are still taken off, for the reason a readying row is not an agent — the
+fleet is still writing those, and the harness raises a `merge` ask of its own when it wants one
+merged.
+
+**Each lead names up to three of its own things, and every name is a way there.** The figure says how
+many there are; the names are what make a lead concrete enough to press — and the surface it opens is
+the list. The reservoir names its newest first, because the item filed this morning is the one a lead
+has any chance of being about; the quiet goals and the pull requests name their oldest first, for the
+opposite reason and the opposite cut — what makes an unstaffed goal worth finding is how long it has
+been sitting. A named thing is drawn as the control with its refs beside it, never a ref inside a
+button. → [links](#links)
+
+**Where a lead goes is a value, not a callback.** `LeadWhere` is a union and the routing is one
+`switch` in `NextOverview`, total over it, so a lead added with nowhere to go fails the typecheck
+rather than drawing a control that does nothing — this document's most repeated bug, and the reason
+`refs` on a row is required.
+
+**With no lead at all, the panel says so and offers the launch desk.** Nothing queued, nothing
+unwatched, no pull request open, no fault recorded: the fleet is out of work rather than between it,
+and the answer to that is to give it some, not another reading. The paused fleet is said in the
+panel's own first line beside the count of working agents, because it is a fact about what the fleet
+is doing rather than a place to look — the control for it is the bar's.
+
 ## The record panel
 
 The durable record: `RecordPanel`, opened from the **Record** reading on the top bar. It is **the one

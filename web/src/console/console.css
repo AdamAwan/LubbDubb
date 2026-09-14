@@ -5127,6 +5127,118 @@ button.cn-grow {
   margin: 0 0 16px;
 }
 
+/* ── Worth a look: the clear state's leads ───────────────────────────────────
+   Bands rather than cards, for the overview's own reason — this is a list of
+   readings, and a grid of tiles would make five of them look like a dashboard
+   somebody has to take in before they can press anything.
+
+   Each band wears its lead's tone as a rule down its left edge and on its
+   figure, and nothing else: a fill behind five rows is a page of colour, while
+   the rule is enough to say *whose* each row is at a glance — amber the
+   operator's own, blue the fleet's supply, red something wrong, and the plain
+   line where the reading is none of those. The rule is the tone's *line*
+   rather than its ink, because five saturated edges down one panel is the
+   loudest thing on a surface whose whole subject is that nothing is urgent. The figures share a right-aligned column so
+   the eye reads down them, and the waits share another at the far edge.
+   → docs/spec/17-cockpit.md#when-nothing-needs-you */
+
+.cn-ov-leads {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cn-ov-lead {
+  padding: 11px 12px 12px 13px;
+  border-radius: var(--cn-r-sm);
+  box-shadow: inset 2px 0 0 var(--cn-tone-line, var(--cn-line));
+  transition: background 120ms ease;
+}
+/* The ground arrives on hover rather than sitting under every band: five filled
+   strips is the shape an eye learns to skip, and what wants marking here is the
+   one the pointer is on — which is also where the rule comes up to its full
+   tone, the softer line being what the band wears at rest. */
+.cn-ov-lead:hover {
+  background: var(--cn-panel-2);
+  box-shadow: inset 2px 0 0 var(--cn-tone, var(--cn-line));
+}
+.cn-ov-lead-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.cn-ov-lead-n {
+  min-width: 26px;
+  text-align: right;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--cn-tone, var(--cn-fg));
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-lead-title {
+  font-size: 13.5px;
+  color: var(--cn-fg);
+}
+/* Pinned right, so the control is in the same place on every lead however long
+   the phrase beside the figure runs. */
+.cn-ov-lead-go {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+}
+.cn-ov-lead-say {
+  margin: 5px 0 0 36px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  max-width: 62ch;
+}
+.cn-ov-lead-items {
+  list-style: none;
+  margin: 9px 0 0 36px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cn-ov-lead-items > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.cn-ov-lead-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The far edge, so several waits read as a column rather than as a tail on each
+   name — the figure they are being compared against is each other. */
+.cn-ov-lead-wait {
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cn-ov-lead-name:hover {
+  color: var(--cn-accent);
+}
+.cn-ov-lead-name:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: 2px;
+}
+
 /* The one-at-a-time shape absorbs the rail, so the body is one track rather than
    two and the situation area takes the width the rail was holding. The wide
    arrangement places its children by grid line, so both have to be re-placed

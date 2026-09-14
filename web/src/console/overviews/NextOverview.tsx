@@ -10,8 +10,10 @@ import { Button, ButtonRow } from '../../components/button.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '../QueueRail.js';
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
+import { waitedFor } from '../GoalPage.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { byWeight, partsHeld } from './asks.js';
+import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
 // → docs/spec/17-cockpit.md#the-overview
 
@@ -67,20 +69,7 @@ export function NextOverview({ view, actions }: { view: CockpitView; actions: Co
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  if (row === undefined) {
-    return (
-      <div className="cn-ov-next">
-        <OverviewSwitch shape="next" actions={actions} />
-        <div className="cn-ov-next-clear">
-          <h2>Nothing needs you.</h2>
-          <p>
-            {view.live.length} {view.live.length === 1 ? 'agent is' : 'agents are'} working. The next thing that wants
-            an answer will land here.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (row === undefined) return <Clear view={view} actions={actions} />;
 
   const body = needBody(row, view, actions);
   const subject = subjectLabel(row);
@@ -297,3 +286,137 @@ const GROUP_WORD: Record<PartGroup, string> = {
   held: 'held',
   waiting: 'not started',
 };
+
+/**
+ * What the surface says when the ask queue is empty.
+ *
+ * An empty queue is not an empty deployment — it says only that nothing is
+ * blocked on a person — and the sentence alone left the operator on the one
+ * surface whose whole argument is that the thing to do is in front of them, with
+ * nothing in front of them. So the work nobody is *asking* about is drawn instead:
+ * the leads, each a reading that is true now and a way to the surface that owns
+ * it. → {@link buildLeads}
+ *
+ * Where there is not even a lead, the panel says so in the same words it would
+ * have used for a reading and offers the launch desk, because the answer to an
+ * empty fleet is to give it something.
+ */
+function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const leads = buildLeads(view);
+  const working = view.live.length;
+
+  return (
+    <div className="cn-ov-next">
+      <OverviewSwitch shape="next" actions={actions} />
+      <div className="cn-ov-next-clear">
+        <h2>Nothing needs you.</h2>
+        <p>
+          {working} {working === 1 ? 'agent is' : 'agents are'} working
+          {view.state.control.paused && ', and dispatch is paused'}. The next thing that wants an answer will land here.
+        </p>
+
+        {leads.length === 0 ? (
+          <>
+            <h3 className="cn-ov-ctx-label">Nothing to look at either</h3>
+            <p className="cn-ov-lead-say">
+              None of the readings this panel watches has anything in it — nothing queued, nothing unwatched, no goal
+              sitting unattended, nothing waiting on your approval. The fleet is out of work rather than between it.
+            </p>
+            <ButtonRow>
+              <Button tone="primary" size="small" onClick={() => actions.openPanel('launch')}>
+                Write a brief
+              </Button>
+            </ButtonRow>
+          </>
+        ) : (
+          <>
+            <h3 className="cn-ov-ctx-label">
+              Worth a look <span>{leads.length === 1 ? '1 reading' : `${leads.length} readings`}</span>
+            </h3>
+            <ul className="cn-ov-leads">
+              {leads.map((lead) => (
+                <LeadRow key={lead.key} lead={lead} now={view.now} actions={actions} />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One lead: the figure, what it counts, why it is worth a look, and the way
+ * there. The things it names are drawn as their own controls with their refs
+ * beside them — a name with no way to it is the dead end this document keeps
+ * naming, and a ref inside a button is the other half of the same rule.
+ */
+function LeadRow({ lead, now, actions }: { lead: Lead; now: number; actions: CockpitActions }): JSX.Element {
+  return (
+    <li className={`cn-ov-lead ${lead.tone === null ? '' : `cn-t-${lead.tone}`}`}>
+      <div className="cn-ov-lead-head">
+        <b className="cn-ov-lead-n">{lead.count}</b>
+        <span className="cn-ov-lead-title">{lead.title}</span>
+        <Button
+          tone="secondary"
+          ghost
+          size="small"
+          className="cn-ov-lead-go"
+          onClick={() => goLead(lead.where, actions)}
+        >
+          {lead.go} →
+        </Button>
+      </div>
+      <p className="cn-ov-lead-say">{lead.say}</p>
+      {lead.items.length > 0 && (
+        <ul className="cn-ov-lead-items">
+          {lead.items.map((item) => (
+            <li key={item.key}>
+              <button type="button" className="cn-ov-lead-name" onClick={() => goLead(item.where, actions)}>
+                {item.label}
+              </button>
+              <span className="cn-refs">
+                <Ref to={item.ref} />
+              </span>
+              {/* The wait is the whole reason an unapproved pull request is a lead,
+                  so it is drawn on the row rather than left to the page behind it. */}
+              {item.since !== undefined && (
+                <span className="cn-ov-lead-wait">waiting {waitedFor(item.since, now)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+/**
+ * The one place a lead becomes navigation. Total over `LeadWhere`, so a lead
+ * added with nowhere to go fails the typecheck here.
+ */
+function goLead(where: LeadWhere, actions: CockpitActions): void {
+  switch (where.kind) {
+    case 'upnext':
+      actions.openPanel('upnext');
+      return;
+    case 'faults':
+      actions.openPanel('faults');
+      return;
+    case 'reservoir':
+      actions.openTab('tickets');
+      actions.setTicketQuery({ ticketWatch: 'unwatched', ticketTracking: 'live', ticketState: 'any' });
+      return;
+    /* The readings these two are about are the Cards shape's own cards, so the
+       lead hands the operator that shape rather than a copy of it here. */
+    case 'cards':
+      actions.setOverviewShape('cards');
+      return;
+    case 'goal':
+      actions.selectGoal(where.ref);
+      return;
+    case 'pr':
+      actions.selectPr(where.number);
+      return;
+  }
+}
