@@ -127,7 +127,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **A test that dispatches a code agent must inject `worktrees`.** `config.repoRoot` defaults to
   `process.cwd()`, so without `FakeWorktreeManager` the test cuts a **real branch in your checkout**
   and nothing deletes it. Use the real manager only when git behaviour _is_ the subject, pointed at a
-  throwaway repo from `test/support/gitRepo.ts`.
+  throwaway repo from `test/support/gitRepo.ts`, and with `FakeSlotProcesses` — its default **kills** live processes.
   → [19](docs/spec/19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)
 - **A test that touches `GET /api/issues/filing-target` or `POST /api/issues` must inject
   `upstream`.** The default is the real `gh` CLI against **AdamAwan/LubbDubb** — a test without
@@ -302,9 +302,9 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   unreachable.** The reset form rewinds a branch that already has commits — a re-dispatch, a retry —
   and loses them. Check the ref exists first; only reach `switch -c` for one that does not.
   → [09](docs/spec/09-execution.md#handing-a-slot-over)
-- **A slot handed to a _different_ branch is wiped with `git clean -ffdx` first.** Weakening the
-  wipe puts another branch's `dist/` and lockfile-resolved dependencies in front of an agent as its
-  own output. The cold install is the trade on purpose. → [09](docs/spec/09-execution.md#handing-a-slot-over)
+- **A slot handed to a _different_ branch is swept of live processes, then wiped `git clean -ffdx`.**
+  A weaker wipe hands another branch's `dist/` on as the agent's own output; an unswept one leaves a mapped
+  image Windows cannot unlink, and a refused wipe condemns it. → [09](docs/spec/09-execution.md#handing-a-slot-over)
 - **`ensure` grows the pool before it evicts a free slot still on a branch.** Evicting early burns
   the tree a CI fix on that branch would have come back to; every re-dispatch then pays a cold
   install, which nothing measures. → [09](docs/spec/09-execution.md#worktrees)

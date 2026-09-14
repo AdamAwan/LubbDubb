@@ -5,6 +5,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
 import { PrewarmDesk } from '../src/worktree/prewarmDesk.js';
 import type { ErrorLogEntry, ErrorLogInput } from '../src/types.js';
 import type { ErrorRecorder } from '../src/errorLog.js';
@@ -35,7 +36,14 @@ function git(dir: string, args: string[]): string {
 }
 
 function manager(dir: string, size: number, held: (branch: string) => boolean = () => false): WorktreeManager {
-  return new WorktreeManager(dir, join(dir, '.wt'), { size, held }, join(dir, '.preview'));
+  return new WorktreeManager(
+    dir,
+    join(dir, '.wt'),
+    { size, held },
+    join(dir, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
 }
 
 function item(branch: string, over: Partial<QueueItem> = {}): QueueItem {

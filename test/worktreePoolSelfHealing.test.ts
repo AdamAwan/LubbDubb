@@ -9,6 +9,7 @@ import { RuntimeControl } from '../src/runtimeControl.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
+import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
 import { tmpDir } from './support/gitRepo.js';
 
 function initRepo(): string {
@@ -53,7 +54,14 @@ function strand(dir: string): void {
 }
 
 function manager(repo: string, size: number, errors?: ReturnType<typeof recorder>): WorktreeManager {
-  return new WorktreeManager(repo, join(repo, '.wt'), { size, held: () => false }, join(repo, '.preview'), errors);
+  return new WorktreeManager(
+    repo,
+    join(repo, '.wt'),
+    { size, held: () => false },
+    join(repo, '.preview'),
+    errors,
+    new FakeSlotProcesses(),
+  );
 }
 
 test('the pool bound follows the live cap, not the cap the harness booted with', async () => {

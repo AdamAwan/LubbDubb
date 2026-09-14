@@ -1,6 +1,7 @@
 import type { Config } from '../../src/config/config.js';
 import type { System } from '../../src/system.js';
 import { WorktreeManager } from '../../src/worktree/worktreeManager.js';
+import { FakeSlotProcesses } from '../../src/worktree/fakeSlotProcesses.js';
 
 export function pinnedPool(
   config: Config,
@@ -22,6 +23,10 @@ export function pinnedPool(
           system.store.ejections.ejectionOnBranch(branch) !== null),
     },
     config.localRunRoot,
+    undefined,
+    // Never the real one: it walks the machine's process table and terminates what it finds
+    // standing in the slot, which is neither this test's to do nor fast enough for one.
+    new FakeSlotProcesses(),
   );
   return {
     worktrees,

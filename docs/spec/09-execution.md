@@ -1147,7 +1147,10 @@ This runs **only for a branch the slot is not already on** — `ensure`'s reuse 
 other case — so everything standing in the directory belongs to some other branch. In this order, and
 the order is load-bearing:
 
-1. **`git clean -ffdx`** — everything untracked, ignored files included. `-x` is what takes the
+1. **The sweep** — every process the harness can find standing inside the slot is terminated, for
+   the reason [below](#a-process-left-standing-in-a-slot). It runs before the wipe and never throws:
+   a sweep that could not answer leaves the wipe to say so.
+2. **`git clean -ffdx`** — everything untracked, ignored files included. `-x` is what takes the
    previous occupant's dependency tree and build output, and the second `-f` is for a nested
    repository inside them (a git-sourced dependency), which a single `-f` skips — leaving exactly the
    half-deleted dependency tree this is trying not to hand anyone. Nothing is excluded by name: an
@@ -1155,7 +1158,7 @@ the order is load-bearing:
    one hand-over that keeps them is read-only to read-only on the same ref
    ([above](#the-read-only-checkout)), where the output answers the same source and `-ffd` takes only
    the last agent's scratch.
-2. **`git switch <branch>`** when the ref exists, `git switch -c <branch> <commit>` when it does not,
+3. **`git switch <branch>`** when the ref exists, `git switch -c <branch> <commit>` when it does not,
    `git switch --detach <commit>` for a read-only checkout. The wipe must precede it because
    `git switch` refuses when an untracked file would be overwritten. The mark is cleared ahead of
    both, so a failure in between leaves a slot claiming nothing rather than claiming to be a checkout
@@ -1167,8 +1170,91 @@ re-dispatch, a retry, a part picked up again — they discard that work silently
 anywhere. Existence is checked first and the create form is only ever reached for a branch that does
 not exist.
 
-A failure at either step is a **rejected dispatch naming the branch and the slot**, never a silent
-fall back to a fresh directory — which would put two agents in one tree.
+A failure at the **switch** is a **rejected dispatch naming the branch and the slot**, never a silent
+fall back to a fresh directory — which would put two agents in one tree. A failure at the **wipe**
+[takes the slot out of the pool](#a-slot-that-cannot-be-emptied) and sends the dispatch to another
+one, which is the same refusal to share a tree arrived at from the other side.
+
+### A process left standing in a slot
+
+An agent's own subtree is reaped when the agent ends
+([10](10-agent-runtimes.md#reaping-the-process-subtree)), but a process an agent **started and walked
+away from** — a dev server, a watch-mode bundler, a test UI, a language server, a browser driver —
+outlives the session that launched it, and nothing can walk to it. On Windows that is not
+untidiness, it is a wedge: a mapped executable image cannot be unlinked while a process holding it
+is alive, so `git clean -ffdx` comes back with
+`warning: failed to remove …/node_modules/…/<binary>: Invalid argument` for every binary the
+survivor has open, and the slot cannot be handed to anybody. The failure is **state on disk, not a
+transient**: the identical clean produces the identical failure for as long as that process lives.
+
+So `SlotProcesses` (`src/worktree/slotProcesses.ts`) answers _what is holding this directory_, and
+the pool sweeps at **both** ends of a slot's life — on `remove`, which is the release the agent reap
+and `abandonUnstarted` both come through ([below](#release)), and again immediately before a
+hand-over's wipe, because the release cannot cover a process started after it, or a slot whose
+previous occupant outlived a release that never ran.
+[Reclaiming an orphaned directory](#reclaiming-an-orphaned-directory) sweeps too, for the same hold
+one layer down.
+
+- **The harness's own line is excluded, and only that line.** This process and whichever of its
+  ancestors are in the set are passed over; its **descendants** are not, because an agent's
+  abandoned shell is exactly a descendant and exactly what this is for. The walk stops the moment it
+  leaves the set, since an ancestor outside it was never a candidate to signal.
+- **Children before parents.** A parent signalled first re-parents its children, and the next sweep
+  has no link left to walk to them. The order is `childrenFirst`, over the parent links inside the
+  set, and each one goes down through the same `killProcessTree` an agent's own reap uses — so a
+  subtree reaching outside the slot goes with it.
+- **What counts as holding it is per-platform, because what _refuses the unlink_ is.** On Windows it
+  is a mapped image, so the question asked is which processes have a module loaded out of the slot:
+  the executable path and the command line first, off the cheap CIM table, then `Get-Process`'s
+  module list, filtered in the shell so only the hits cross the pipe. That last arm catches the case
+  the first two cannot — a `node.exe` from outside the slot with a `.node` binding loaded out of the
+  slot's own `node_modules`. On POSIX nothing here holds an unlink at all (it removes a running
+  image and a live process's cwd quite happily), so the sweep is for the other half of the release —
+  a watcher that would go on writing into the tree the next occupant is about to be handed — and
+  reads `/proc/<pid>/cwd` and `/proc/<pid>/exe` where `/proc` exists.
+- **A kill returns before the handles do.** `taskkill /F` is an ask, and the images come back as the
+  process is torn down rather than as it answers. So a wipe refused after a sweep that actually took
+  something is retried once, half a second later, before anything is concluded from it.
+
+### A slot that cannot be emptied
+
+A wipe still refused after the sweep is the failure everything above exists to bound. Retrying it is
+pointless by construction — nothing about the directory has changed — and until this existed the
+rule that proposed the dispatch simply re-fired on every pulse, with no backoff and no ceiling.
+
+So the slot is **condemned**: taken off the survey, recorded to the error log **once**, and the
+dispatch continues to a different slot inside the same `ensure`. Each condemnation removes one slot
+from the survey, so the retry terminates at the pool's size with no counter to tune.
+
+- **Once, not once a pulse.** A standing condition recorded every pulse is a hundred rows an hour of
+  one fact, in the one place where shape means "something threw once"
+  ([18](18-observability.md#the-error-log)) — the same reasoning that keeps the
+  [repeating refusal](#a-refusal-that-keeps-repeating) off the error log and on the queue rail.
+- **The fault names the processes, not the errno.** `slotUnusable` says which slot, what git refused,
+  and which processes were **still** holding it after the sweep: the pid and the file each one has
+  open. The operator's next move is to go and stop that process, and neither `Invalid argument` nor
+  `EBUSY` contains it. Where nothing is holding it any more the message says so plainly, because
+  that is a different problem — a permission, a handle from off the machine, a scanner — and points
+  somewhere else.
+- **The exhaustion refusal names it too.** A condemned slot is a `blocked` entry carrying the wipe's
+  own first line as its reason, so a pool that has run out says which of its slots were taken out
+  and why, rather than going quiet by one.
+- **It comes back on its own, and only where something could have changed.** At `ensure`'s dead end,
+  and nowhere else, for the reason the [salvage](#reclaiming-a-stranded-slot) runs there: asking
+  costs a process-table walk per slot and buys nothing until the alternative is a rejected dispatch.
+  Each condemned slot is asked again, and one nothing is holding any more is taken back into the
+  pool with the return recorded. A condemnation where **no process was involved at all** is never
+  revived: nothing on disk would have to change for the retry to fail in exactly the same way, and
+  re-offering it is the loop this exists to stop.
+- **A proposal that keeps repeating is caught one layer up, and stays there.** A dispatch rejected on
+  three separate pulses running raises a `dispatch` row on the queue rail
+  ([above](#a-refusal-that-keeps-repeating)), keyed on the outcome rather than on the sentence — so
+  whatever the pool refuses for, and whatever it turns out to refuse for next, an operator is told
+  rather than left with a queue that keeps refilling.
+
+Tests: `test/slotProcessSweep.test.ts`. Its acceptance case is Windows-only — a real binary copied
+into the slot's `node_modules` and run, the wipe watched to fail while it lives, and the next
+hand-over watched to succeed with no manual cleanup. POSIX has nothing there to reproduce.
 
 ### Warming a slot ahead of the dispatch
 
@@ -1194,6 +1280,11 @@ three things removed:
   behind every spare. Warming is never in the way of the work it guessed wrong about.
 - **No eviction and no salvage.** Both cost another branch something, and this is a guess about what
   dispatches next. Only a `spare` is taken; with none, the pass ends having done nothing.
+- **No second slot after a refused wipe.** A hand-over whose wipe fails
+  [condemns the slot](#a-slot-that-cannot-be-emptied) here exactly as it does under `ensure` — that
+  is real state and belongs out of the pool either way — but the pass then ends having warmed
+  nothing, rather than trying the next spare. There is no dispatch waiting on this to send elsewhere,
+  and a guess is not worth a second wipe.
 - **No branch is created.** A branch that does not already exist locally is skipped, because
   `ensure` is reuse-first and **ignores `base` once the branch exists** — warming a name the dispatch
   would have cut from its own base would hand the agent a branch rooted at HEAD instead, with nothing
@@ -1352,7 +1443,10 @@ executor's `catch` puts that text in the decision log as a rejected dispatch.
 
 This is the residue of [10](10-agent-runtimes.md#reaping-the-process-subtree): stopping an agent now
 takes its whole subtree down, so the common case no longer arises — but an agent that exits by itself
-leaves descendants nothing can walk to, and `reclaim` is where that shows up. Tests:
+leaves descendants nothing can walk to, and `reclaim` is where that shows up. It
+[sweeps first](#a-process-left-standing-in-a-slot) for exactly those, which is what reaches a
+descendant no subtree walk can; what survives the sweep is what the retries and this message are
+still for. Tests:
 `test/worktreeManager.test.ts` (Windows-only for the lock itself — POSIX permits removing a live
 process's cwd, so there is nothing there to reproduce).
 
@@ -1370,7 +1464,8 @@ is not a disk cost but a wedged slot.
 
 ### Release
 
-`remove(name)` releases the lease and **deletes nothing**. That is the whole change: the slot stays on
+`remove(name)` [sweeps the slot](#a-process-left-standing-in-a-slot), releases the lease and
+**deletes nothing** else. That is the whole change: the slot stays on
 its branch (or at its commit, for a read-only checkout) with everything git ignores in it, and a
 failed or killed agent's tree stays readable until the slot is reissued. A read-only checkout needs no
 other ending: there is no ref for a reap to collect, which is the whole of why it exists.

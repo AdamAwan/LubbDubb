@@ -10,6 +10,7 @@ import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
+import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
@@ -497,7 +498,14 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
 test("a part's stale stored base is harmless, because `ensure` is reuse-first", async () => {
   const repoRoot = gitRepo();
   const worktrees = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
-  const manager = new WorktreeManager(repoRoot, worktrees, { size: 4, held: () => false }, join(repoRoot, '.preview'));
+  const manager = new WorktreeManager(
+    repoRoot,
+    worktrees,
+    { size: 4, held: () => false },
+    join(repoRoot, '.preview'),
+    undefined,
+    new FakeSlotProcesses(),
+  );
 
   execFileSync('git', ['branch', 'issue/12/schema'], { cwd: repoRoot });
   const first = await manager.ensure('issue/12/api', 'issue/12/schema');
