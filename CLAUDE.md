@@ -116,14 +116,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   before test plans. False is a plan whose first step is a person's, which can never execute. Fold them
   and every prose check on the deployment stops being dispatchable, with a full "Up next" queue and
   nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
-- **A plan-time check set is not an authored one, and counting it as one skips rule `validation-plan`
-  for ever.** A plan document writes its checks before the code exists, so they carry no `steps` and
-  therefore no `area` — and an area is the only thing that lets the browser half run. `checkSetAuthored`
-  protects the **reading, never the row**: a check passed, failed, waived, deferred, claimed or handed
-  to the fleet is somebody's work in progress and is left alone; a set whose live checks are every one
-  of them `unrun` is re-authored against the merged code. Widen that arm back to `checks.length > 0`
-  and every goal on the deployment stays manual for good, with a full bench and nothing red.
-  → [20](docs/spec/20-validation.md#a-plan-time-check-set-that-nobody-has-run)
 - **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's
   **delivery** row, and the delivery is what parks the goal: writing one un-parks it, settles the
   close-out obligation and declines the validation bench row — the reading deleting the rows it was
