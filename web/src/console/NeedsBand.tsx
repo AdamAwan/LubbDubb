@@ -15,7 +15,8 @@ import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { buildGoalPage, goalIssue } from '../view/goalPage.js';
-import { refusedDispatchFor } from '../view/needsYou.js';
+import { buildPrPage } from '../view/prPage.js';
+import { oneLine, refusedDispatchFor } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
@@ -92,7 +93,17 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
     if (!task) return null;
     return <ValidateAsk task={task} view={view} actions={actions} />;
   }
-  if (row.kind === 'bench' || row.kind === 'close_out' || row.kind === 'burn' || row.kind === 'supply') {
+  if (row.kind === 'close_out') {
+    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
+    if (!task) return null;
+    return <CloseOutAsk task={task} view={view} actions={actions} />;
+  }
+  if (row.kind === 'supply') {
+    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
+    if (!task) return null;
+    return <SupplyAsk task={task} view={view} actions={actions} />;
+  }
+  if (row.kind === 'bench' || row.kind === 'burn') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
     return (
@@ -225,12 +236,43 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
     const number = Number(/^assigned:pr:(\d+)$/.exec(row.id)?.[1]);
     const pr = view.state.world.pullRequests.find((p) => p.number === number);
     if (!pr) return null;
+    /* The threads waiting on a reply, because that is what somebody assigning a
+       pull request to you is usually asking for, and a count of them is the one
+       fact that says how much of an evening this is. Drawn through `buildPrPage`,
+       the pull request page's own reading, so the two cannot disagree about which
+       thread is still open.
+       → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+    const page = buildPrPage(view.state, pr.number);
+    const waiting = (page?.threads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened');
     return (
       <>
         <p>
           <strong>{pr.title}</strong>
         </p>
-        <p className="cn-tick">{pr.attention?.reasons.join(' · ')}</p>
+        {/* One reason per line, not joined: they are separate facts about why this
+            is in front of you — who put it there, what the harness is not doing
+            about it — and a `·` between them reads as one sentence nobody wrote. */}
+        {(pr.attention?.reasons ?? []).length > 0 && (
+          <ul className="cn-tick cn-ask-why">
+            {(pr.attention?.reasons ?? []).map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        )}
+        {waiting.length > 0 && (
+          <ul className="cn-ask-threads">
+            {waiting.slice(0, THREADS_SHOWN).map((thread) => (
+              <li key={thread.id}>
+                <b>{thread.author}</b>
+                <span className="cn-grow">{oneLine(thread.body)}</span>
+                {thread.path !== undefined && <i className="cn-n">{thread.path}</i>}
+              </li>
+            ))}
+            {waiting.length > THREADS_SHOWN && (
+              <li className="cn-ask-supply-rest">{waiting.length - THREADS_SHOWN} more waiting on the pull request.</li>
+            )}
+          </ul>
+        )}
         <p className="cn-tick">
           Nothing in the harness will act on this. It is here because somebody put it on you where the fleet cannot see
           it, and it stops being drawn the moment they take it off you again.
@@ -302,18 +344,11 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
  * sentence. This one is answered somewhere else — somebody runs the checks and
  * records what they saw — so a body that only names them is a page that tells the
  * operator to go and find the work, on the one surface whose whole argument is
- * that the thing to do is in front of you. So the goal's own check rows are drawn
- * here, from the same {@link ValidationSection} the goal page manages them with,
- * with the ones still owed already open: the steps, the resources and the four
- * readings are where the ask is rather than a goal page away.
+ * that the thing to do is in front of you.
  *
- * The prose stays above them. It is the desk's own refreshed statement of what the
- * goal owes — the sheet assembled for an environment, the ticket's link — and it is
- * what the row says everywhere the checks are not in front of the reader.
- *
- * Where the snapshot holds no checks for the goal, the prose is the whole body, as
- * it was: a row filed against a goal this cockpit cannot see the checks of is still
- * a row somebody has to settle.
+ * The desk's prose stays above the rows. It is its own refreshed statement of what
+ * the goal owes — the sheet assembled for an environment, the ticket's link — and
+ * it is what the row says everywhere the rows are not in front of the reader.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
 function ValidateAsk({
@@ -325,33 +360,164 @@ function ValidateAsk({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const page = task.originRef === null ? null : buildGoalPage(view.state, task.originRef, view.needsYou, null);
-  const number = Number(/^issue:(\d+)$/.exec(task.originRef ?? '')?.[1]);
-  const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
   return (
     <>
       <p>{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-      {page !== null && Number.isFinite(number) && live.length > 0 && (
-        <div className="cn-ask-checks">
-          <ValidationSection
-            checks={page.checks}
-            plan={page.checkPlan}
-            issueNumber={number}
-            resources={page.checkResources}
-            refUrls={view.state.refUrls}
-            desktopFolder={view.state.config.desktopFolder}
-            look={{ tone: 'secondary' }}
-            openOutstanding
-            onResult={(checkId, result, note) =>
-              actions.setValidation(number, checkId, { kind: 'result', result, note })
-            }
-            onDefer={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'defer', reason })}
-            onWaive={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'waive', reason })}
-            onReset={(checkId) => actions.setValidation(number, checkId, { kind: 'reset' })}
-            onHandover={(checkId, to) => actions.setValidation(number, checkId, { kind: 'handover', to })}
-          />
-        </div>
+      <GoalChecks originRef={task.originRef} view={view} actions={actions} />
+      <HumanTaskActions
+        task={task}
+        look={{ tone: 'secondary' }}
+        noteOnDone={null}
+        onDone={(id, note) => actions.completeHumanTask(id, note)}
+        onDecline={(id, note) => actions.declineHumanTask(id, note)}
+        onCloseTicket={null}
+      />
+    </>
+  );
+}
+
+/**
+ * The ask that says the goal is delivered and its ticket is still open.
+ *
+ * The decision it asks for is *what to do about the checks*: the desk's own note
+ * on `Done` says so in as many words — closing a goal whose validation is flagged
+ * costs a sentence about the outstanding ones, or waiving them first. It said it
+ * about a list drawn as prose. So the rows come with it, and both answers the note
+ * offers are controls on this page rather than a trip to the goal.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+function CloseOutAsk({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <>
+      <p>{task.title}</p>
+      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+      <GoalChecks originRef={task.originRef} view={view} actions={actions} />
+      <HumanTaskActions
+        task={task}
+        look={{ tone: 'secondary' }}
+        noteOnDone={noteOwedOnDone(task, view)}
+        onDone={(id, note) => actions.completeHumanTask(id, note)}
+        onDecline={(id, note) => actions.declineHumanTask(id, note)}
+        onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+      />
+    </>
+  );
+}
+
+/**
+ * A goal's validation checks, drawn inside the ask that is about them, from the
+ * same {@link ValidationSection} the goal page manages them with — the steps, the
+ * resources and the four readings — with every check still owed already open.
+ *
+ * Two asks share it because the same rows answer both questions. `validate` asks
+ * for the readings; `close_out` asks what closing the goal does about the ones
+ * nobody took. A body that only names them is an ask that tells the operator to go
+ * and find the work, which on "One ask at a time" is the whole surface arguing
+ * against itself.
+ *
+ * Nothing where the snapshot holds no live check for the goal: a row filed against
+ * a goal whose checks this cockpit cannot see is still a row somebody has to
+ * settle, and the desk's prose above is what it says then.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+function GoalChecks({
+  originRef,
+  view,
+  actions,
+}: {
+  originRef: string | null;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const page = originRef === null ? null : buildGoalPage(view.state, originRef, view.needsYou, null);
+  const number = Number(/^issue:(\d+)$/.exec(originRef ?? '')?.[1]);
+  const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
+  if (page === null || !Number.isFinite(number) || live.length === 0) return null;
+  return (
+    <div className="cn-ask-checks">
+      <ValidationSection
+        checks={page.checks}
+        plan={page.checkPlan}
+        issueNumber={number}
+        resources={page.checkResources}
+        refUrls={view.state.refUrls}
+        desktopFolder={view.state.config.desktopFolder}
+        look={{ tone: 'secondary' }}
+        openOutstanding
+        onResult={(checkId, result, note) => actions.setValidation(number, checkId, { kind: 'result', result, note })}
+        onDefer={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'defer', reason })}
+        onWaive={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'waive', reason })}
+        onReset={(checkId) => actions.setValidation(number, checkId, { kind: 'reset' })}
+        onHandover={(checkId, to) => actions.setValidation(number, checkId, { kind: 'handover', to })}
+      />
+    </div>
+  );
+}
+
+/**
+ * The runway ask: the fleet has slots and nothing eligible to put in them.
+ *
+ * What it asks for is that somebody put work in play, and the prose said how much
+ * — "N open issues nobody has watched" — without saying *which*, which leaves the
+ * only ask on this surface whose answer is a trip to another tab and a search.
+ * So the issues themselves are drawn, each with the watch control the tickets
+ * board uses, and the ask is answered where it is read.
+ *
+ * **The list is the server's own verdict, never a label read here.** An issue is
+ * unwatched because `issue.pickup.status` says so — the same status the runway
+ * reading counts, off the same pickup context — and not because the cockpit went
+ * looking for the watch label: the label alone ignores `ownWorkOnly` and the
+ * precedence a paused or delivered goal takes, so a list derived that way would
+ * name issues the count behind it never counted.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+function SupplyAsk({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const unwatched = view.state.world.issues.filter((i) => i.pickup.status === 'unwatched');
+  const showing = unwatched.slice(0, SUPPLY_SHOWN);
+  return (
+    <>
+      <p>{task.title}</p>
+      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+      {showing.length > 0 && (
+        <ul className="cn-ask-supply">
+          {showing.map((issue) => (
+            <li key={issue.number}>
+              <span className="cn-grow">{issue.title}</span>
+              <span className="cn-refs">
+                <Ref to={`issue:${issue.number}`} title="Open the item on the tracker" />
+              </span>
+              <AsyncButton
+                tone="secondary"
+                onClick={() => actions.setIssueWatched(issue.number, true)}
+                title="Put this in play — the harness picks it up on the next pulse"
+              >
+                Watch
+              </AsyncButton>
+            </li>
+          ))}
+          {unwatched.length > showing.length && (
+            <li className="cn-ask-supply-rest">
+              {unwatched.length - showing.length} more on the tickets tab, where they can be sorted and filtered.
+            </li>
+          )}
+        </ul>
       )}
       <HumanTaskActions
         task={task}
@@ -364,6 +530,12 @@ function ValidateAsk({
     </>
   );
 }
+
+/** How many unwatched items the runway ask draws before it points at the tickets tab. */
+const SUPPLY_SHOWN = 8;
+
+/** How many waiting threads the assigned-pull-request ask draws before it points at the pull request. */
+const THREADS_SHOWN = 5;
 
 function WatchFinding({
   task,

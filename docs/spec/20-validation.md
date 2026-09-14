@@ -139,11 +139,11 @@ verdict, and — on `delivered` — the check set.
 first, with `assess_issue`; `validation_plan` comes after it. That makes every way the turn can end
 survivable:
 
-| The turn ends | What stands | What happens next |
-| --- | --- | --- |
-| Before the verdict | Nothing decided | The goal comes back round to an assessor, on the attempt cap it has always had — unchanged |
-| After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did |
-| After both | Parked and authored | Nothing further; `validation-plan` sees an authored set and stands down |
+| The turn ends                     | What stands                 | What happens next                                                                          |
+| --------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| Before the verdict                | Nothing decided             | The goal comes back round to an assessor, on the attempt cap it has always had — unchanged |
+| After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did                   |
+| After both                        | Parked and authored         | Nothing further; `validation-plan` sees an authored set and stands down                    |
 
 So **rule `validation-plan` stays**, and is now the catch-up rather than the ordinary path. Removing it
 would put the check set behind a turn that has to reach its end, which is the one thing a crashed,
@@ -985,16 +985,16 @@ dispatched for that check may report, and every other caller is refused **by nam
 just built the thing, which has every reason to believe the goal works and no way to have run a check
 nobody sent it to run.
 
-| `result`   | Writes                                              | Because                                                    |
-| ---------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| `passed`   | The reading, `resultBy: 'agent'`                    | Attributed, and drawn wherever the reading is — see below. |
-| `failed`   | The reading, `resultBy: 'agent'`                    | A real finding about the goal, and worth having.           |
-| `blocked`  | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
+| `result`  | Writes                                              | Because                                                    |
+| --------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| `passed`  | The reading, `resultBy: 'agent'`                    | Attributed, and drawn wherever the reading is — see below. |
+| `failed`  | The reading, `resultBy: 'agent'`                    | A real finding about the goal, and worth having.           |
+| `blocked` | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
 
 **The verdict is `blocked`; the record it writes is a hand-back.** Two facts wear one word easily here
-and they are not one. `blocked` is what an agent *says* — it could not carry this check out — and it is
+and they are not one. `blocked` is what an agent _says_ — it could not carry this check out — and it is
 the same word the local ([32](32-local-validation.md)) and remote ([36](36-remote-validation.md)) paths
-take for the same fact. The hand-back is what the harness *writes*: `handback_note` on the row and
+take for the same fact. The hand-back is what the harness _writes_: `handback_note` on the row and
 `actor` back to `human`, through `recordValidationHandback`. That is a check returning to a person's
 queue rather than a verdict, so it keeps its name — and the column keeps it for a second reason, that a
 renamed column is invisible on every database from before the rename ([14](14-persistence.md#migrations)).

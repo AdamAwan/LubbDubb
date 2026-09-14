@@ -491,6 +491,37 @@ export function buildDemoState(): DemoSeed {
           viewerAssignment: 'reviewer-optional',
           ciStatus: 'passing',
           unresolvedComments: [],
+          // Somebody else's pull request, with somebody else's threads on it. The fleet acts on none
+          // of this — what the ask draws is what is waiting, so the row says how big an evening it is.
+          reviewThreads: [
+            {
+              id: 'thread-415-1',
+              author: 'Priya Raman',
+              body: 'Is a flat 3 retries right here, or should it back off until the window the 429 names?',
+              state: 'open',
+              replies: [],
+              path: 'src/sweep/reconcile.ts',
+              line: 88,
+            },
+            {
+              id: 'thread-415-2',
+              author: 'Tom Beck',
+              body: 'This swallows the 429 body — we lose the Retry-After the provider sends.',
+              state: 'open',
+              replies: [],
+              path: 'src/sweep/http.ts',
+              line: 41,
+            },
+            {
+              id: 'thread-415-3',
+              author: 'Priya Raman',
+              body: 'Renamed, thanks.',
+              state: 'resolved',
+              replies: [],
+              path: 'src/sweep/http.ts',
+              line: 12,
+            },
+          ],
           approved: false,
           mergeable: true,
           baseBranch: 'main',
