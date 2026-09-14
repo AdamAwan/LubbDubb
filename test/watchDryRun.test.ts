@@ -28,8 +28,8 @@ const TEST_UK: EnvironmentConfig = {
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
-  query: "traces | where message has 'job X timed out'",
-  presence: "traces | where operation_Name == 'job X'",
+  query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
+  presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
   tolerate: 0,
 };
 
@@ -202,13 +202,15 @@ test('an amendment merges on the id and clears the reading it replaced', async (
   await submit(system, agent, { signals: [SIGNAL] });
   assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunRows, 1);
 
-  await submit(system, agent, { signals: [{ ...SIGNAL, id: 'no-timeouts', query: 'traces | where 1 == 2' }] });
+  await submit(system, agent, {
+    signals: [{ ...SIGNAL, id: 'no-timeouts', query: 'traces | where timestamp > datetime({since}) | where 1 == 2' }],
+  });
   const rows = system.store.watches.listGoalWatches();
   assert.equal(rows.length, 1, 'merged on the id rather than filed beside it');
-  assert.equal(rows[0]!.query, 'traces | where 1 == 2');
+  assert.equal(rows[0]!.query, 'traces | where timestamp > datetime({since}) | where 1 == 2');
   assert.deepEqual(
     observer.asked.filter((a) => a.kind === 'signal').map((a) => a.query),
-    [SIGNAL.query, 'traces | where 1 == 2'],
+    [SIGNAL.query, 'traces | where timestamp > datetime({since}) | where 1 == 2'],
     'the amended query was put to the environment, not assumed to answer as its predecessor did',
   );
   system.store.close();
@@ -230,7 +232,7 @@ test('a check an amendment stopped declaring stops being asked about', async () 
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
-  query: 'requests | summarize value = percentile(duration, 95)',
+  query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
   expect: { noWorseThan: 'baseline' as const },
   unit: 'ms',
 };
@@ -281,12 +283,16 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
   await submit(system, agent, { measures: [MEASURE] });
   assert.equal(system.store.watches.listGoalWatches()[0]!.baselineValue, 8400);
 
-  await submit(system, agent, { measures: [{ ...MEASURE, query: 'requests | summarize value = avg(duration)' }] });
+  await submit(system, agent, {
+    measures: [
+      { ...MEASURE, query: 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)' },
+    ],
+  });
   const after = system.store.watches.listGoalWatches()[0]!;
-  assert.equal(after.query, 'requests | summarize value = avg(duration)');
+  assert.equal(after.query, 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)');
   assert.deepEqual(
     observer.asked.filter((a) => a.kind === 'measure').map((a) => a.query),
-    [MEASURE.query, 'requests | summarize value = avg(duration)'],
+    [MEASURE.query, 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)'],
     'the amended query was put to the environment, not assumed to answer as its predecessor did',
   );
   assert.ok(after.baselineAt !== null, 'and the reading it answered with is the new baseline');

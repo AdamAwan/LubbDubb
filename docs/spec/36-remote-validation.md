@@ -455,6 +455,13 @@ with the goal, stored on the goal, read at the sheet, and dies with it.
 `signal` and `measure` queries are the goal's watch checks and are already declared — the sheet reads
 them through `listGoalWatches` and declares nothing of its own. → [29](29-post-deploy-watch.md#who-writes-it-and-when)
 
+A watch check carries its own time bound written against `{since}`
+([29](29-post-deploy-watch.md#every-query-carries-since)), and a sheet substitutes **the goal's arrival
+on that environment** — the same instant the window's own readings are bounded to, so the sheet and the
+watch ask the same question of the same period rather than two questions that disagree by a clock. A
+`state` query carries no such token and is asked as it was written: it is one reading of the shape of
+data at a moment somebody chose, not a question about a period ([two lifetimes](#two-lifetimes)).
+
 `state` queries are new and have the same three writers, at the three moments each knows something the
 others do not:
 

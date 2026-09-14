@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { GoalWatchDeclaration, GoalWatchInput } from '../types.js';
-import { aggregatingQueryRefusal, aggregatingTail } from './watchQueryShape.js';
+import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRefusal } from './watchQueryShape.js';
 
 // → docs/spec/20-validation.md
 
@@ -47,19 +47,28 @@ const WatchMeasureSchema = z
   })
   .strict('a measure declares only id/title/query/expect/unit/why');
 
-function refuseAggregation(
-  signal: { id: string; query: string; presence: string },
+function refuseQueryShape(
+  check: { id: string; query: string; presence?: string },
+  kind: 'signal' | 'measure',
   ctx: z.RefinementCtx,
   path: (string | number)[],
 ): void {
-  for (const field of ['query', 'presence'] as const) {
-    const operator = aggregatingTail(signal[field]);
-    if (operator === null) continue;
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: [...path, field],
-      message: `signal "${signal.id}": ${aggregatingQueryRefusal(field, operator)}`,
-    });
+  const fields = check.presence === undefined ? (['query'] as const) : (['query', 'presence'] as const);
+  for (const field of fields) {
+    const query = field === 'query' ? check.query : check.presence!;
+    const operator = kind === 'signal' ? aggregatingTail(query) : null;
+    if (operator !== null)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [...path, field],
+        message: `${kind} "${check.id}": ${aggregatingQueryRefusal(field, operator)}`,
+      });
+    if (!carriesSince(query))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [...path, field],
+        message: `${kind} "${check.id}": ${missingSinceRefusal(field)}`,
+      });
   }
 }
 
@@ -77,7 +86,10 @@ export const WatchSchema = z
   .strict('a watch block declares only "signals" and "measures"')
   .superRefine((block, ctx) => {
     block.signals.forEach((signal, index) => {
-      refuseAggregation(signal, ctx, ['signals', index]);
+      refuseQueryShape(signal, 'signal', ctx, ['signals', index]);
+    });
+    block.measures.forEach((measure, index) => {
+      refuseQueryShape(measure, 'measure', ctx, ['measures', index]);
     });
     const ids = new Set<string>();
     for (const check of [...block.signals, ...block.measures]) {
@@ -97,7 +109,7 @@ export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, z.ZodTypeDef, unk
     ),
   ])
   .superRefine((check, ctx) => {
-    if (check.kind === 'signal') refuseAggregation(check, ctx, []);
+    refuseQueryShape(check, check.kind, ctx, []);
   });
 
 export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalWatchInput {

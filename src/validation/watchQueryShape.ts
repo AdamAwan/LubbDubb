@@ -37,3 +37,37 @@ export function aggregatingQueryRefusal(field: 'query' | 'presence', operator: s
     '"by" clause.'
   );
 }
+
+/**
+ * The one substitution a watch query carries: the instant the reading is about.
+ * Declared here beside the refusal that requires it, so the token the author is
+ * told to write and the token the harness replaces cannot come to disagree.
+ *
+ * @public written by the author, substituted by `preparedQuery`
+ */
+export const SINCE_TOKEN = '{since}';
+
+export function carriesSince(query: string): boolean {
+  return query.includes(SINCE_TOKEN);
+}
+
+export function withSince(query: string, since: string): string {
+  return query.replaceAll(SINCE_TOKEN, since);
+}
+
+export function missingSinceRefusal(field: 'query' | 'presence'): string {
+  const why =
+    field === 'query'
+      ? 'A query with no time bound answers about the whole history the telemetry keeps, so it counts the ' +
+        'occurrences the work was meant to stop happening alongside the ones since it shipped — a check that ' +
+        'reads regressed on the strength of the defect it fixed, on every reading, for ever.'
+      : 'A presence query with no time bound proves the code path ran at some point in the retention period, ' +
+        'which is not what it is asked: it exists to say the path is running now, on the environment the ' +
+        'window is watching.';
+  return (
+    `the ${field} carries no "${SINCE_TOKEN}", so nothing bounds it to the period being watched. ${why} ` +
+    `Bound it yourself, naming your own timestamp column — "| where timestamp > datetime(${SINCE_TOKEN})" — ` +
+    'and the harness substitutes the instant the reading is about: the moment the work arrived on that ' +
+    'environment for a watch reading, and a window before now for the dry run that takes the baseline.'
+  );
+}

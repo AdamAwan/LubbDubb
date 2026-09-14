@@ -1,7 +1,7 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { EnvironmentObserver } from '../environments/observer.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
-import { sheetableArrivals } from '../environments/watchWindow.js';
+import { sheetableArrivals, watchWindowMs } from '../environments/watchWindow.js';
 import { watchCheckVerdict } from '../environments/watchVerdict.js';
 import type { WatchResult } from '../environments/watchResult.js';
 import type { Store } from '../store/store.js';
@@ -417,6 +417,20 @@ export class RemoteValidationDesk {
     };
   }
 
+  /**
+   * What a sheet's reading of a live watch check is about: this goal's arrival on
+   * that environment, which is the same instant the window's own readings are
+   * bounded to — so the sheet and the watch answer the same question of the same
+   * period, and a sheet run before the work arrived reads the window the run is in.
+   */
+  private watchSince(environment: EnvironmentConfig, goalRef: string): string {
+    const arrivals = this.deps.store.environments
+      .listGoalArrivals()
+      .filter((a) => a.goalRef === goalRef && a.environment === environment.name);
+    const arrived = arrivals[arrivals.length - 1]?.arrivedAt;
+    return arrived ?? new Date(this.now() - watchWindowMs(environment)).toISOString();
+  }
+
   private async readWatch(
     environment: EnvironmentConfig,
     goalRef: string,
@@ -428,6 +442,7 @@ export class RemoteValidationDesk {
     if (check === undefined) return null;
     const command = environment.watch?.observe;
     if (command === undefined) return null;
+    const since = this.watchSince(environment, goalRef);
     const presence: WatchResult | null =
       check.presence === null
         ? null
@@ -437,6 +452,7 @@ export class RemoteValidationDesk {
             checkId: check.id,
             query: check.presence,
             kind: 'presence',
+            since,
           });
     const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
     const result = silent
@@ -447,6 +463,7 @@ export class RemoteValidationDesk {
           checkId: check.id,
           query: check.query,
           kind: check.kind === 'measure' ? 'measure' : 'signal',
+          since,
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading: result });
     if (verdict.verdict === 'unknown') return { outcome: 'blocked', rows: null, value: null, detail: verdict.detail };

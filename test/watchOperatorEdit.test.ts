@@ -26,8 +26,8 @@ const PLANNED: GoalWatchInput = {
   seq: 1,
   kind: 'signal',
   title: 'Job X stops timing out',
-  query: "traces | where message has 'job X timed out'",
-  presence: "traces | where operation_Name == 'job X'",
+  query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
+  presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
   tolerate: 0,
   expectUnder: null,
   expectOver: null,
@@ -74,8 +74,8 @@ test('an operator writes a check, and it is live and read without anybody approv
       kind: 'signal',
       id: 'no-timeouts',
       title: 'Job X stops timing out',
-      query: "traces | where message has 'job X timed out'",
-      presence: "traces | where operation_Name == 'job X'",
+      query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
+      presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
       tolerate: 0,
     },
   });
@@ -103,7 +103,7 @@ test('a signal without a presence query is refused, exactly as a plan document r
       kind: 'signal',
       id: 'no-timeouts',
       title: 'Job X stops timing out',
-      query: "traces | where message has 'job X timed out'",
+      query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
       tolerate: 0,
     },
   });
@@ -125,7 +125,7 @@ test('a measure with nothing that could fail it is refused', async () => {
       kind: 'measure',
       id: 'orders-p95',
       title: 'The orders proc is no slower',
-      query: 'requests | summarize value = percentile(duration, 95)',
+      query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
       expect: {},
     },
   });
@@ -145,8 +145,8 @@ test('the body and the path must name the same check', async () => {
       kind: 'signal',
       id: 'something-else',
       title: 'Job X stops timing out',
-      query: 'traces',
-      presence: 'traces',
+      query: 'traces | where timestamp > datetime({since})',
+      presence: 'traces | where timestamp > datetime({since})',
       tolerate: 0,
     },
   });
@@ -169,8 +169,8 @@ test('a replan neither reverts an operator’s edit nor sweeps the check they wr
       kind: 'signal',
       id: 'no-timeouts',
       title: 'Job X stops timing out after retries',
-      query: "traces | where message has 'job X exhausted retries'",
-      presence: "traces | where operation_Name == 'job X'",
+      query: "traces | where timestamp > datetime({since}) | where message has 'job X exhausted retries'",
+      presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
       tolerate: 0,
     },
   });
@@ -181,7 +181,7 @@ test('a replan neither reverts an operator’s edit nor sweeps the check they wr
       kind: 'measure',
       id: 'orders-p95',
       title: 'The orders proc is no slower than it was',
-      query: 'requests | summarize value = percentile(duration, 95)',
+      query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
       expect: { noWorseThan: 'baseline' },
       unit: 'ms',
     },
@@ -207,7 +207,7 @@ test('an edit keeps a measure’s baseline where the question did not change, an
     kind: 'measure',
     id: 'orders-p95',
     title: 'The orders proc is no slower than it was',
-    query: 'requests | summarize value = percentile(duration, 95)',
+    query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
     expect: { noWorseThan: 'baseline' },
     unit: 'ms',
   };
@@ -223,7 +223,7 @@ test('an edit keeps a measure’s baseline where the question did not change, an
 
   const saved = system.store.watches.saveOperatorWatch('issue:12', {
     ...system.store.watches.listGoalWatches()[0]!,
-    query: 'requests | summarize value = percentile(duration, 99)',
+    query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 99)',
   });
   assert.equal(saved.baselineValue, null, 'a reading is a reading of that query');
   assert.equal(saved.dryRunVerdict, null, 'and so is the dry run');

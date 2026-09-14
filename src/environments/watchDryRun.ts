@@ -3,6 +3,7 @@ import type { GoalWatch, WatchReadingVerdict } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentObserver } from './observer.js';
 import { scalarShaped, type WatchResult } from './watchResult.js';
+import { watchWindowMs } from './watchWindow.js';
 
 // → docs/spec/24-environments.md
 
@@ -14,10 +15,15 @@ interface WatchDryRunDeps {
   store: Store;
   environments: readonly EnvironmentConfig[];
   observer: EnvironmentObserver;
+  now?: () => number;
 }
 
 export class WatchDryRun implements WatchDryRunner {
-  constructor(private readonly deps: WatchDryRunDeps) {}
+  private readonly now: () => number;
+
+  constructor(private readonly deps: WatchDryRunDeps) {
+    this.now = deps.now ?? (() => Date.now());
+  }
 
   /** @public the seam `plan_submit` and the plan-file drain both reach it through */
   async run(originRef: string): Promise<string[]> {
@@ -44,6 +50,7 @@ export class WatchDryRun implements WatchDryRunner {
     value: number | null;
   }> {
     const command = environment.watch!.observe;
+    const since = new Date(this.now() - watchWindowMs(environment)).toISOString();
     if (check.presence !== null) {
       const probe = await this.deps.observer.observe({
         environment: environment.name,
@@ -51,6 +58,7 @@ export class WatchDryRun implements WatchDryRunner {
         checkId: check.id,
         query: check.presence,
         kind: 'presence',
+        since,
       });
       const presence = verdictOf(probe);
       if (presence === 'unknown')
@@ -79,6 +87,7 @@ export class WatchDryRun implements WatchDryRunner {
       checkId: check.id,
       query: check.query,
       kind: check.kind === 'measure' ? 'measure' : 'signal',
+      since,
     });
     const verdict = verdictOf(result);
     const presence = check.presence === null ? null : ('fires' as const);

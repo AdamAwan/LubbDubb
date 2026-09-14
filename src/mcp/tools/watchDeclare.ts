@@ -40,7 +40,11 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
                 "The query, in your telemetry's own language. It reaches the shell as a variable's value " +
                   'and is never interpolated into a command. It returns **one row per occurrence** and the ' +
                   'harness counts the rows: do not aggregate it. A query ending in a count answers one row ' +
-                  'whatever the number is, which reads as one occurrence for ever, and is refused.',
+                  'whatever the number is, which reads as one occurrence for ever, and is refused. It must ' +
+                  'carry "{since}", bounding it to the period being watched — "| where timestamp > ' +
+                  'datetime({since})", with your own timestamp column — which the harness replaces with the ' +
+                  'moment the work arrived on the environment. Without it the query answers about the whole ' +
+                  'retention period and counts the occurrences your fix was for; it is refused.',
               ),
             presence: z
               .string()
@@ -49,7 +53,9 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
                   'query naming an operation that does not exist answers zero rows, and zero rows looks ' +
                   'exactly like a healthy release — so without one your fix would be reported verified on ' +
                   'the strength of a typo. It returns rows too, and must not aggregate: a count can never ' +
-                  'answer zero, so an aggregated presence query proves nothing and is refused.',
+                  'answer zero, so an aggregated presence query proves nothing and is refused. It carries ' +
+                  '"{since}" too: presence is asked whether the path is running now, not whether it ran at ' +
+                  'some point in the retention period.',
               ),
             tolerate: z
               .number()
@@ -72,7 +78,14 @@ export const watchDeclare: ToolFactory = ({ deps, task, ok }) => ({
           z.object({
             id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
             title: z.string(),
-            query: z.string().describe('Answers exactly one row with a numeric "value".'),
+            query: z
+              .string()
+              .describe(
+                'Answers exactly one row with a numeric "value". It carries "{since}" — "| where timestamp > ' +
+                  'datetime({since})", with your own timestamp column — which the harness replaces with the ' +
+                  'moment the work arrived, so the number is about the period being watched rather than ' +
+                  'about the whole retention period. It is refused without one.',
+              ),
             expect: z
               .object({
                 under: z.number().describe('A ceiling the number must stay below.').optional(),

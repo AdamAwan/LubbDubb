@@ -1,5 +1,5 @@
 import { exec } from 'node:child_process';
-import { idProjection, parseWatchResult, unanswered, type WatchQueryKind, type WatchResult } from './watchResult.js';
+import { parseWatchResult, preparedQuery, unanswered, type WatchQueryKind, type WatchResult } from './watchResult.js';
 import { firstLine } from '../primitives.js';
 
 // → docs/spec/24-environments.md
@@ -10,6 +10,8 @@ export interface EnvironmentObservationRequest {
   checkId: string;
   query: string;
   kind: WatchQueryKind;
+  /** The instant the reading is about: what the query's `{since}` is replaced with. */
+  since: string;
 }
 
 export interface EnvironmentObserver {
@@ -25,6 +27,8 @@ export class CommandEnvironmentObserver implements EnvironmentObserver {
   ) {}
 
   observe(request: EnvironmentObservationRequest): Promise<WatchResult> {
+    const prepared = preparedQuery(request.query, request.since, request.checkId, request.kind);
+    if (prepared.query === null) return Promise.resolve(unanswered(prepared.refusal));
     return new Promise((resolve) => {
       exec(
         request.command,
@@ -36,7 +40,8 @@ export class CommandEnvironmentObserver implements EnvironmentObserver {
             ...process.env,
             LUBBDUBB_ENVIRONMENT: request.environment,
             LUBBDUBB_WATCH_ID: request.checkId,
-            LUBBDUBB_WATCH_QUERY: idProjection(request.query, request.checkId),
+            LUBBDUBB_WATCH_QUERY: prepared.query,
+            LUBBDUBB_WATCH_SINCE: request.since,
           },
         },
         (err, stdout, stderr) => {

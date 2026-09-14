@@ -265,12 +265,13 @@ function CheckForm({
           />
         </label>
         <label className="cn-sig-field">
-          <span>Query</span>
+          <span title="Bound it with {since} — the harness fills in the moment the work arrived">Query</span>
           <textarea
             className="cn-in cn-sig-area"
             rows={2}
             value={draft.query}
             onChange={(e) => set('query', e.target.value)}
+            placeholder="traces | where timestamp > datetime({since}) | where ..."
           />
         </label>
         {draft.kind === 'signal' ? (
@@ -282,6 +283,7 @@ function CheckForm({
                 rows={2}
                 value={draft.presence}
                 onChange={(e) => set('presence', e.target.value)}
+                placeholder="traces | where timestamp > datetime({since}) | where ..."
               />
             </label>
             <label className="cn-sig-field cn-sig-narrow">
@@ -380,9 +382,11 @@ function refuse(draft: Draft, taken: Set<string>, editing: boolean): string | nu
   if (!editing && taken.has(draft.id)) return `This goal already carries a check called “${draft.id}”.`;
   if (draft.title.trim() === '') return 'A title says what the check is for.';
   if (draft.query.trim() === '') return 'A check is a query.';
+  if (!draft.query.includes(SINCE_TOKEN)) return unbounded('query');
   if (draft.kind === 'signal') {
     if (draft.presence.trim() === '')
       return 'A signal needs a presence query. Without one, a typo that matches nothing reads as a clean release.';
+    if (!draft.presence.includes(SINCE_TOKEN)) return unbounded('presence');
     if (!/^\d+$/.test(draft.tolerate.trim())) return 'Tolerate is a whole number of rows — almost always 0.';
     return null;
   }
@@ -391,6 +395,16 @@ function refuse(draft: Draft, taken: Set<string>, editing: boolean): string | nu
   if (draft.under.trim() === '' && draft.over.trim() === '' && !draft.baseline)
     return 'A measure needs a threshold or a baseline — one with neither can never fail.';
   return null;
+}
+
+const SINCE_TOKEN = '{since}';
+
+function unbounded(field: 'query' | 'presence'): string {
+  return (
+    `The ${field} carries no ${SINCE_TOKEN}, so nothing bounds it to the period being watched — it would ` +
+    'answer about everything the telemetry still holds, including what happened before this work shipped. ' +
+    `Bound it with your own timestamp column: | where timestamp > datetime(${SINCE_TOKEN}).`
+  );
 }
 
 function declaration(draft: Draft): GoalWatchDeclaration {
