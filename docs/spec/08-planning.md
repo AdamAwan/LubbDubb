@@ -1111,10 +1111,11 @@ failure also goes through `errors.record`.
 
 **Where the provider has no close, that is said rather than approximated.** GitHub closes an issue;
 Azure has a dozen workflow states and no generic close, and which of them means _we are not doing
-this_ belongs to the project's process template. So `canCloseIssue()` is false there, the back-out
-says the ticket was left open, and the goal is still concluded and un-watched — the fleet is stopped
-either way, and the card on the board stays a human's to move
-([15](15-integrations.md#the-capabilities)).
+this_ belongs to the project's process template. So `canCloseIssue()` is false there **until the
+deployment names the word** — `issueNotPlannedState` ([02](02-configuration.md#closing-an-item)) is
+the state a backed-out work item moves to. Without it the back-out says the ticket was left open, and
+the goal is still concluded and un-watched — the fleet is stopped either way, and the card on the
+board stays a human's to move ([15](15-integrations.md#the-capabilities)).
 
 **A close requires the comment.** `POST /api/proposals/:id/back-out` refuses `close` with no note:
 the words go on somebody else's tracker as the reason the item closed and outlive this harness. There

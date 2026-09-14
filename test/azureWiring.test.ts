@@ -40,6 +40,28 @@ test('registry builds real azure providers when selected with a target', () => {
   store.close();
 });
 
+test('an azure connector can close issues only once the deployment names the state', () => {
+  const store = new Store(':memory:');
+  const bare = new CompositeConnector(
+    buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure' }), {
+      store,
+      config: loadConfig({ azureDevOps: TARGET }),
+      now: FIXED,
+    }),
+  );
+  assert.equal(bare.canCloseIssue(), false);
+
+  const named = new CompositeConnector(
+    buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure' }), {
+      store,
+      config: loadConfig({ azureDevOps: TARGET, issueCompletedState: 'Closed' }),
+      now: FIXED,
+    }),
+  );
+  assert.equal(named.canCloseIssue(), true);
+  store.close();
+});
+
 test('an azure-selected connector resolves refs to Azure web URLs', () => {
   const store = new Store(':memory:');
   const config = loadConfig({ azureDevOps: TARGET });

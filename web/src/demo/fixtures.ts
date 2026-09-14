@@ -2689,7 +2689,7 @@ export function buildDemoState(): DemoSeed {
         detail:
           'The assessor marked **Document the two-watcher requirement for maintenance jobs** delivered — ' +
           '"PR #410 landed the deadlock note and the console warning with it."\n\n' +
-          'The item is still open in the tracker. **Close the ticket** here does it and settles this ' +
+          'The item is still open in the tracker. **Mark as closed** here does it and settles this ' +
           'row with it — or close it in the tracker yourself and this settles itself on the next ' +
           'pulse, or mark it done here, or decline it and say why.',
         originRef: 'issue:364',

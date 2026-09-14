@@ -50,6 +50,8 @@ export interface Config {
   issuePickupStates?: string[];
   issueInReviewState?: string;
   issueInProgressState?: string;
+  issueCompletedState?: string;
+  issueNotPlannedState?: string;
   issueContainerTypes: string[];
   issueParentedTypes: string[];
   issueFilingTypes: string[];
@@ -429,6 +431,16 @@ function validateWorkItemStates(merged: Config): void {
         'never leaves the state its items are filed in. Name the states work starts in (e.g. ["New"]), or drop ' +
         'the transition keys.',
     );
+  }
+  for (const key of ['issueCompletedState', 'issueNotPlannedState'] as const) {
+    const closed = merged[key];
+    if (closed !== undefined && pickup.includes(closed)) {
+      throw new Error(
+        `Refusing to start: ${key} is "${closed}", which is also in issuePickupStates. An item the harness ` +
+          'closed into that state still reads as pickup-eligible, so the fleet picks up the work it has just ' +
+          'finished. Take it out of issuePickupStates.',
+      );
+    }
   }
   const inReview = merged.issueInReviewState;
   if (inReview !== undefined && pickup.includes(inReview)) {
