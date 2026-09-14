@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { ErrorLogEntry, ErrorLogInput } from '../src/types.js';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
-import { childrenFirst, CommandSlotProcesses, type SlotProcess } from '../src/worktree/slotProcesses.js';
+import { childrenFirst, CommandSlotProcesses, probeFailure, type SlotProcess } from '../src/worktree/slotProcesses.js';
 import { tmpDir } from './support/gitRepo.js';
 
 function initRepo(): string {
@@ -197,6 +197,44 @@ test('a slot comes back into the pool once nothing is holding it', async () => {
   const back = await wt.ensure('feature/z');
   assert.equal(back, only);
   assert.equal(errors.entries.filter((e) => e.message.includes('is back in the pool')).length, 1);
+});
+
+test('a slot condemned while the process table could not be read comes back once it can', async () => {
+  const repo = initRepo();
+  const processes = new FakeSlotProcesses();
+  const errors = recorder();
+  const wt = manager(repo, 1, processes, errors);
+
+  const only = await wt.ensure('feature/x');
+  await wt.remove('feature/x');
+  const release = wedge(only);
+  processes.unreadable(only);
+  await assert.rejects(wt.ensure('feature/y'));
+
+  const fault = errors.entries.find((e) => e.message.includes('cannot be emptied'));
+  assert.ok(fault !== undefined);
+  assert.match(fault.message, /could not read the process table/);
+  assert.doesNotMatch(fault.message, /Nothing the harness can see is holding it/);
+
+  await release();
+  processes.unreadable(only, false);
+
+  const back = await wt.ensure('feature/z');
+  assert.equal(back, only, 'an unreadable probe is not a condemnation nothing could ever change');
+});
+
+test('a probe that could not answer says why, not which script it ran', () => {
+  assert.match(
+    probeFailure(Object.assign(new Error('Command failed: powershell …'), { killed: true, signal: 'SIGTERM' })),
+    /still running after 20000ms and was killed/,
+  );
+  assert.equal(
+    probeFailure(
+      Object.assign(new Error('Command failed'), { code: 1, stderr: 'Get-Process : Access denied\nat line:1' }),
+    ),
+    'it exited 1: Get-Process : Access denied',
+  );
+  assert.equal(probeFailure(Object.assign(new Error('spawn powershell ENOENT'), { code: 'ENOENT' })), 'ENOENT');
 });
 
 test('children are signalled before their parents, however the list arrives', () => {

@@ -18,21 +18,22 @@ export interface SlotProcess {
 }
 
 export interface SlotProcesses {
-  holding(dir: string): Promise<SlotProcess[]>;
+  /** The processes holding `dir`, or `null` where the probe itself could not say. */
+  holding(dir: string): Promise<SlotProcess[] | null>;
   stop(held: SlotProcess[]): Promise<void>;
 }
 
 export class CommandSlotProcesses implements SlotProcesses {
   constructor(private readonly onWarning?: (message: string) => void) {}
 
-  async holding(dir: string): Promise<SlotProcess[]> {
+  async holding(dir: string): Promise<SlotProcess[] | null> {
     const root = resolve(dir);
     try {
       const found = process.platform === 'win32' ? await mapped(root) : await occupying(root);
       return found.filter((p) => !ours(found, p.pid));
     } catch (err) {
-      this.onWarning?.(`Could not list the processes holding ${root}: ${(err as Error).message}`);
-      return [];
+      this.onWarning?.(`Could not list the processes holding ${root}: ${probeFailure(err)}`);
+      return null;
     }
   }
 
@@ -82,14 +83,40 @@ function ours(found: SlotProcess[], pid: number): boolean {
 }
 
 const run = promisify(execFile);
+
 const TABLE_TIMEOUT_MS = 20_000;
 const TABLE_BUFFER = 8 * 1024 * 1024;
+
+/**
+ * Why the probe could not answer, rather than the command it could not answer with. `execFile`'s
+ * own message is the whole script and no reason at all, and the two readings that matter are not in
+ * it: a walk killed at `TABLE_TIMEOUT_MS`, which reports as an ordinary failure with an empty
+ * stderr, and a shell that exited non-zero, whose stderr is the only thing that says what for.
+ *
+ * @public the pool's warning and its test read the sentence back
+ */
+export function probeFailure(err: unknown): string {
+  const e = err as { killed?: boolean; signal?: string; code?: unknown; stderr?: unknown; message?: string };
+  const stderr = typeof e.stderr === 'string' ? firstLine(e.stderr) : '';
+  const said = stderr === '' ? '' : `: ${stderr}`;
+  if (e.killed === true || e.signal != null)
+    return `it was still running after ${TABLE_TIMEOUT_MS}ms and was killed${said}`;
+  if (typeof e.code === 'number') return `it exited ${e.code}${said}`;
+  if (typeof e.code === 'string') return `${e.code}${said}`;
+  return firstLine(e.message ?? String(err));
+}
+
+function firstLine(text: string): string {
+  return (text.split('\n').find((line) => line.trim() !== '') ?? '').trim();
+}
 
 /**
  * Windows: what refuses an unlink is a *mapped image*, so the question asked is which processes
  * have a module loaded out of the slot — `Get-Process`'s module list, filtered in the shell so only
  * the hits cross the pipe. The executable path and the command line are asked first because they
- * are on the cheap CIM table and answer the common case without enumerating anything.
+ * are on the cheap CIM table and answer the common case without enumerating anything. `Get-Process`
+ * is walked once into a table keyed by pid: asked per pid it re-walks the whole process list each
+ * time, which on a busy machine is what takes the probe past its timeout.
  */
 async function mapped(root: string): Promise<SlotProcess[]> {
   const { stdout } = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', HOLDERS_PS1], {
@@ -106,6 +133,8 @@ const HOLDERS_PS1 = [
   '$root = $env:LUBBDUBB_SLOT',
   '$cmp = [System.StringComparison]::OrdinalIgnoreCase',
   '$hits = New-Object System.Collections.ArrayList',
+  '$live = @{}',
+  'foreach ($g in Get-Process) { $live[[int]$g.Id] = $g }',
   'foreach ($p in Get-CimInstance Win32_Process) {',
   '  if ($p.ProcessId -le 4) { continue }',
   '  $why = $null',
@@ -113,8 +142,11 @@ const HOLDERS_PS1 = [
   '  elseif ($p.CommandLine -and $p.CommandLine.IndexOf($root, $cmp) -ge 0) { $why = $p.CommandLine }',
   '  else {',
   '    try {',
-  '      $m = (Get-Process -Id $p.ProcessId -ErrorAction Stop).Modules |',
-  '        Where-Object { $_.FileName -and $_.FileName.StartsWith($root, $cmp) } | Select-Object -First 1',
+  '      $g = $live[[int]$p.ProcessId]',
+  '      $m = $null',
+  '      if ($g) {',
+  '        $m = $g.Modules | Where-Object { $_.FileName -and $_.FileName.StartsWith($root, $cmp) } | Select-Object -First 1',
+  '      }',
   '      if ($m) { $why = $m.FileName }',
   '    } catch { }',
   '  }',
@@ -193,14 +225,17 @@ function parseHolders(stdout: string): SlotProcess[] {
  *
  * @public the pool records this to the error log, and its test reads the sentence back
  */
-export function slotUnusable(dir: string, detail: string, remaining: SlotProcess[]): string {
-  const named = remaining.slice(0, HOLDERS_NAMED).map((p) => `pid ${p.pid} (${p.detail})`);
-  const rest = remaining.length - named.length;
+export function slotUnusable(dir: string, detail: string, remaining: SlotProcess[] | null): string {
+  const named = (remaining ?? []).slice(0, HOLDERS_NAMED).map((p) => `pid ${p.pid} (${p.detail})`);
+  const rest = (remaining ?? []).length - named.length;
   const who =
-    remaining.length === 0
-      ? 'Nothing the harness can see is holding it now, so what refused the wipe is the directory itself rather ' +
-        'than a live process — a permission, a handle from off this machine, or a scanner that had it open.'
-      : `Still holding it after the sweep: ${named.join('; ')}${rest > 0 ? `, and ${rest} more` : ''}.`;
+    remaining === null
+      ? 'The harness could not read the process table at all, so what is holding it is unknown rather than ' +
+        'nothing — the warning beside this says why the probe failed.'
+      : remaining.length === 0
+        ? 'Nothing the harness can see is holding it now, so what refused the wipe is the directory itself rather ' +
+          'than a live process — a permission, a handle from off this machine, or a scanner that had it open.'
+        : `Still holding it after the sweep: ${named.join('; ')}${rest > 0 ? `, and ${rest} more` : ''}.`;
   return (
     `Worktree slot ${dir} cannot be emptied and has been taken out of the pool: ${detail} Every process the ` +
     `harness could find holding something inside the slot was terminated first, and the wipe still failed. ` +

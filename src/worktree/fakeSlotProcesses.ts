@@ -8,6 +8,7 @@ export class FakeSlotProcesses implements SlotProcesses {
   readonly killed: number[] = [];
   private readonly holders = new Map<string, SlotProcess[]>();
   private readonly survives = new Set<number>();
+  private readonly unanswerable = new Set<string>();
 
   /** Declares what the sweep finds in `dir`, and what it goes on finding until `stop` takes them. */
   standing(dir: string, held: SlotProcess[]): this {
@@ -21,9 +22,17 @@ export class FakeSlotProcesses implements SlotProcesses {
     return this;
   }
 
-  holding(dir: string): Promise<SlotProcess[]> {
+  /** A probe that cannot say — the process table refused, timed out, or was not there to read. */
+  unreadable(dir: string, cannot = true): this {
+    if (cannot) this.unanswerable.add(resolve(dir));
+    else this.unanswerable.delete(resolve(dir));
+    return this;
+  }
+
+  holding(dir: string): Promise<SlotProcess[] | null> {
     const key = resolve(dir);
     this.asked.push(key);
+    if (this.unanswerable.has(key)) return Promise.resolve(null);
     return Promise.resolve(this.holders.get(key) ?? []);
   }
 

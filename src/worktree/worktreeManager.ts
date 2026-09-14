@@ -305,7 +305,7 @@ export class WorktreeManager implements Worktrees {
     rmSync(resolve(dir, HARNESS_ARTEFACTS), { recursive: true, force: true });
     const wipe = ['clean', warm ? '-ffd' : '-ffdx'];
     let refused = await this.wiped(dir, wipe);
-    if (refused !== null && swept.length > 0) {
+    if (refused !== null && swept !== null && swept.length > 0) {
       // A kill returns before the handles come back: on Windows `taskkill /F` is an ask, and the
       // mapped images are released as the process is torn down rather than as it answers.
       await new Promise((settled) => setTimeout(settled, HANDLES_SETTLE_MS));
@@ -326,19 +326,20 @@ export class WorktreeManager implements Worktrees {
 
   /**
    * Terminates everything the harness can find standing inside the slot, children before parents.
-   * It never throws: a sweep that could not answer leaves the wipe to say so.
+   * It never throws: a sweep that could not answer answers `null`, which is not `nothing was
+   * holding it` and must never be read as one.
    */
-  private async sweep(dir: string): Promise<SlotProcess[]> {
+  private async sweep(dir: string): Promise<SlotProcess[] | null> {
     try {
       const held = await this.processes.holding(dir);
-      if (held.length > 0) await this.processes.stop(held);
+      if (held !== null && held.length > 0) await this.processes.stop(held);
       return held;
     } catch (err) {
       this.errors?.record({
         source: 'cycle',
         message: `Could not clear the processes standing in the worktree slot ${dir}: ${(err as Error).message}`,
       });
-      return [];
+      return null;
     }
   }
 
@@ -351,13 +352,13 @@ export class WorktreeManager implements Worktrees {
     }
   }
 
-  private async condemn(dir: string, detail: string, swept: SlotProcess[]): Promise<void> {
+  private async condemn(dir: string, detail: string, swept: SlotProcess[] | null): Promise<void> {
     if (this.condemned.has(dir)) return;
     const remaining = await this.processes.holding(dir).catch(() => swept);
     this.errors?.record({ source: 'cycle', message: slotUnusable(dir, detail, remaining) });
     this.condemned.set(dir, {
       reason: `the wipe was refused (${firstLine(detail)})`,
-      processBound: swept.length > 0 || remaining.length > 0,
+      processBound: swept === null || remaining === null || swept.length > 0 || remaining.length > 0,
     });
   }
 
@@ -370,8 +371,8 @@ export class WorktreeManager implements Worktrees {
     let freed = 0;
     for (const [dir, condemnation] of [...this.condemned]) {
       if (!condemnation.processBound) continue;
-      const held = await this.processes.holding(dir).catch(() => [{ pid: 0, parentPid: 0, detail: '' }]);
-      if (held.length > 0) continue;
+      const held = await this.processes.holding(dir).catch(() => null);
+      if (held === null || held.length > 0) continue;
       this.condemned.delete(dir);
       freed += 1;
       this.errors?.record({ source: 'cycle', message: revived(dir, condemnation.reason) });
