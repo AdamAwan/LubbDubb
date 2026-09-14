@@ -484,8 +484,8 @@ once.
 | `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
 | `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
-| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
-| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                    |
+| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                       |
+| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                     |
 | `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -1036,7 +1036,7 @@ empty "Yours to do" under a full "Blocking" is furniture.
 
 ### An ask that asks for work draws the work
 
-Almost every ask on this surface is answered _by_ the ask: a verdict, a pick, a sentence in a box. The
+Almost every ask on this surface is answered *by* the ask: a verdict, a pick, a sentence in a box. The
 `validate` bench row is not — it asks somebody to go and run a delivered goal's checks and record what
 they saw ([20](20-validation.md#saying-so-on-the-bench)) — and its body used to be the desk's prose and
 nothing else: a paragraph, a line per outstanding check naming it, and the ticket's link. On the rail
@@ -1066,7 +1066,7 @@ outstanding checks, or waiving them first — a sentence about _a list drawn as 
 above it_. Both answers it offers are controls on the rows, so the rows come with it. It is the same
 `GoalChecks` block, above the verbs, so the note's "listed above" stays literally true.
 
-The same reading applies to three more asks, and the rule it follows in each is: **draw the thing the
+The same reading applies to two more asks, and the rule it follows in each is: **draw the thing the
 answer is about, keep the desk's prose, and never re-derive what the server already decided.**
 
 **`supply` — the items it is asking to be put in play.** The runway ask said _how much_ work is
@@ -1532,7 +1532,7 @@ panel you were looking at, and nobody had decided it.
 settling row went out as `<ButtonRow bar><HumanTaskActions/></ButtonRow>`, and `HumanTaskActions`
 drew its own `<span>` around both buttons — so the group's gap reached that one span and the two
 buttons touched. A group whose only child is another element styles nothing, and it renders as
-_almost_ right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
+*almost* right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
 pins it: the buttons are the group's own children, with nothing in between.
 
 `bar` is the group **at the foot of something it settles**: an ask, a form. It takes a rule above it and
@@ -3449,7 +3449,7 @@ operator moves along the queue rather than choosing from it.
 
 **What it is answering is that Cards has no room for the operator's own move.** Every reading there is
 true continuously — six agents out, four goals in flight, three pull requests open — and none of it is
-a question addressed to anybody. The ask that _is_ a question lives on the rail beside it, in a column
+a question addressed to anybody. The ask that *is* a question lives on the rail beside it, in a column
 narrow enough that its reason has to be a tooltip. The rail already computes the better reading:
 `needsYou.ts` gives every ask its kind, its tier and **`holding`**, the count of plan parts stalled
 behind it, which is the number that should decide what is opened first. This shape is that list, one
@@ -3458,7 +3458,7 @@ row at a time, at full width.
 **The order is `byWeight` — tier first, then `holding`.** Both halves are the rail's own; nothing here
 re-decides what the server decided.
 
-**It absorbs the rail.** Drawing the queue beside a surface that _is_ the queue is the same list twice,
+**It absorbs the rail.** Drawing the queue beside a surface that *is* the queue is the same list twice,
 and the copy on the rail is the one with no room for the reason — so `.cn-body` loses its first track
 while this shape is the situation area. Not on a goal page reached from it: that is a place one rung
 in, and the queue belongs where it has always been.
@@ -3485,7 +3485,7 @@ meaning the reader infers differently for each one, which is the cost this shape
 #### Moving along the queue
 
 **The cursor is held by id, never by index.** The queue re-sorts under the operator — answering an ask
-removes it — and an index would slide a _different_ ask under the cursor. On a surface whose next
+removes it — and an index would slide a *different* ask under the cursor. On a surface whose next
 control is `Approve merge`, that is how somebody approves what they were not looking at. The id is
 resolved back to an index each render; where it is gone, the position it held is where the next ask
 falls.
