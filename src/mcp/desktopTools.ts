@@ -351,16 +351,13 @@ const planRead: DesktopToolFactory = (deps) => ({
 });
 
 /**
- * The test-part bar, on the discuss surface. It is the same string the planning prompts are given —
- * `testPartNote(environments, offerings)` — because `coverage` refuses to be declared without it: the
- * field is accepted here, but an agent that was never told a suite exists, or which areas it offers,
- * can only leave it out or invent an area the pre-flight will refuse. The offering cache is what makes
- * this cheap: the areas are known before anything has arrived, so a goal whose coverage was missed is
- * corrected in a discussion rather than by replanning it.
+ * The test-part bar, on the discuss surface. It is the same string the planning prompts are given,
+ * because an agent that was never told a browser suite exists can only leave `coverage` out. What it
+ * asks for is prose, so the bar is the whole of what this surface needs.
  * → docs/spec/08-planning.md#discussing-a-plan
  */
 function testPartSection(deps: DesktopToolDeps): { testPart?: string } {
-  const note = testPartNote(deps.environments, deps.store.remoteValidation.listSelectorOfferings()).trim();
+  const note = testPartNote(deps.environments).trim();
   return note === '' ? {} : { testPart: note };
 }
 
@@ -423,7 +420,7 @@ const planAmend: DesktopToolFactory = (deps) => ({
       );
     }
 
-    const parsed = validatePlanDocument(submittedPlanDocument(args), deps.store.remoteValidation.listOfferedAreas());
+    const parsed = validatePlanDocument(submittedPlanDocument(args));
     if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
 
     const result = amendPlanInPlace(

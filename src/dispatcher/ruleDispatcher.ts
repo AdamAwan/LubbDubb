@@ -118,7 +118,7 @@ interface RuleDispatcherOptions {
   watchNote?: string;
   watchDeclareNote?: string;
   localValidation?: () => LocalValidationPolicy;
-  testPartNote?: (areas: readonly SelectorOffering[]) => string;
+  testPartNote?: string;
   stateDeclareNote?: string;
   remoteValidationOn?: boolean;
   validationPlanNote?: (areas: readonly SelectorOffering[]) => string;
@@ -132,7 +132,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly prRefStyle: PrRefStyle;
   private readonly watchNote: string;
   private readonly watchDeclareNote: string;
-  private readonly testPartNote: (areas: readonly SelectorOffering[]) => string;
+  private readonly testPartNote: string;
   private readonly validationPlanNote: (areas: readonly SelectorOffering[]) => string;
   private readonly stateDeclareNote: string;
   private readonly planning: PlanningPolicy;
@@ -160,7 +160,7 @@ export class RuleDispatcher implements Dispatcher {
       watchNote = '',
       watchDeclareNote = '',
       localValidation = () => DEFAULT_LOCAL_VALIDATION,
-      testPartNote = () => '',
+      testPartNote = '',
       stateDeclareNote = '',
       remoteValidationOn = false,
       validationPlanNote = () => '',
@@ -464,7 +464,7 @@ export class RuleDispatcher implements Dispatcher {
       prRefStyle: this.prRefStyle,
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
-      testPartNote: this.testPartNote(ctx.selectorOfferings ?? []),
+      testPartNote: this.testPartNote,
       validationPlanNote: this.validationPlanNote(ctx.selectorOfferings ?? []),
       stateDeclareNote: this.stateDeclareNote,
       validationRoot: this.validationRoot,

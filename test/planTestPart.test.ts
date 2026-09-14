@@ -327,7 +327,7 @@ async function plannerPrompt(
     reviewCharters: { routing: null, modes: {} },
     watchNote: '',
     watchDeclareNote: '',
-    testPartNote: (offerings) => testPartNote(environments, offerings),
+    testPartNote: testPartNote(environments),
   });
   const { actions } = await dispatcher.decide(context);
   const action = actions.find((a) => a.rule === 'issue-plan');

@@ -191,23 +191,15 @@ const WITH_BROWSER: EnvironmentConfig[] = [
 test('plan_read hands the discussion the same test-part bar the planning prompts carry', async () => {
   const { system, session, close } = await buildDesk(WITH_BROWSER);
   seedAwaitingApprovalPlan(system);
-  system.store.remoteValidation.recordSelectorOffering('acceptance', [
-    { selector: 'Checkout Tests', tests: 4 },
-    { selector: 'Login Tests', tests: 2 },
-  ]);
 
   const read = await session.call('plan_read', { issue: 231 });
   assert.ok(!read.isError, read.content[0]?.text);
   const body = JSON.parse(read.content[0]!.text) as Record<string, unknown>;
   const bar = body.testPart as string;
   assert.ok(typeof bar === 'string' && bar !== '', 'the bar reaches the operator’s own keyboard, not only the fleet');
-  assert.equal(
-    bar,
-    testPartNote(WITH_BROWSER, system.store.remoteValidation.listSelectorOfferings()).trim(),
-    'and it is that string',
-  );
-  assert.match(bar, /`Checkout Tests`, `Login Tests`/, 'enumerated from the offering cache, so nothing is invented');
-  assert.match(bar, /silent and consequential/, 'the bar comes with it rather than the areas alone');
+  assert.equal(bar, testPartNote(WITH_BROWSER).trim(), 'and it is that string');
+  assert.match(bar, /in words rather than as a file path/, 'it asks for prose, with no listing behind it');
+  assert.match(bar, /silent and consequential/, 'and the bar comes with it');
   await close();
 });
 

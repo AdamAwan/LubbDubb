@@ -988,7 +988,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       });
       return;
     }
-    const parsed = parsePlanDocument(raw, this.store.remoteValidation.listOfferedAreas());
+    const parsed = parsePlanDocument(raw);
     if (!parsed.ok) {
       this.opts.errors?.record({
         source: 'agent',

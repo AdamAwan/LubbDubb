@@ -182,7 +182,7 @@ function dispatcher(on = true, templates?: PromptTemplates): RuleDispatcher {
     prRefStyle: '#',
     watchNote: '',
     watchDeclareNote: '',
-    testPartNote: () => '',
+    testPartNote: '',
     stateDeclareNote: '',
     remoteValidationOn: on,
   });

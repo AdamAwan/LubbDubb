@@ -210,9 +210,9 @@ that is what most checks have always been.
 
 /**
  * What the deployment can drive, and the areas its runner last said it offers — fleet-wide rather
- * than per goal, so it is folded once and handed to the rule, `testPartNote`'s own arrangement.
- * The listing is the same one a planner picks `coverage` from: the two ends of `area` have to agree
- * on the string, and the pre-flight compares it character for character.
+ * than per goal, so it is folded once and handed to the rule. A `suite` step's area is compared
+ * against the runner's own listing character for character, so the planner picks from that listing
+ * rather than describing one. A part's `coverage` is prose and is picked from nothing.
  *
  * Empty where nothing declares a `validate` block — a deployment with no configured environment
  * still authors a check set, and every check on it is a person's.

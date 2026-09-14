@@ -530,7 +530,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewCharters,
     watchNote: watchNote(config.environments),
     watchDeclareNote: watchDeclareNote(config.environments),
-    testPartNote: (offerings) => testPartNote(config.environments, offerings),
+    testPartNote: testPartNote(config.environments),
     stateDeclareNote: stateDeclareNote(config.environments),
     remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
     validationPlanNote: (offerings) => validationPlanNote(config.environments, offerings),

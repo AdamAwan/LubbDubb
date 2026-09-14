@@ -73,61 +73,22 @@ function document(input: { coverage?: string; covers?: string[] }): string {
   });
 }
 
-// --------------------------------------------------------------- the offering
+// --------------------------------------------------------------- the coverage
 
-test('the planner is handed the runner’s own offering rather than asked to describe an area', () => {
-  const enumerated = testPartNote(
-    [ACCEPTANCE],
-    [
-      { environment: 'acceptance', selector: 'Checkout Tests' },
-      { environment: 'acceptance', selector: 'Login Tests' },
-    ],
-  );
-  assert.match(enumerated, /`Checkout Tests`, `Login Tests`/, 'it names what the runner offers');
-  assert.match(enumerated, /copied exactly/, 'and says the string is compared character for character');
-  assert.doesNotMatch(enumerated, /in words rather than as a file path/, 'so it is a pick, not a description');
-
-  // Nothing listed yet is the arm that must not withhold: the prose form, and a plan still submits.
-  const prose = testPartNote([ACCEPTANCE]);
-  assert.match(prose, /in words rather than as a file path/);
-  assert.match(prose, /`coverage`/);
+test('the planner is asked to describe the coverage in words, and nothing is checked against a listing', () => {
+  const note = testPartNote([ACCEPTANCE]);
+  assert.match(note, /in words rather than as a file path/, 'it asks for prose');
+  assert.match(note, /`coverage`/);
+  assert.doesNotMatch(note, /copied exactly/, 'there is no list to copy from');
+  assert.doesNotMatch(note, /character for character/);
 });
 
-test('an offering from an environment with no browser block is not offered to the planner', () => {
-  const note = testPartNote(
-    [ACCEPTANCE, { name: 'staging', at: 'echo sha' }],
-    [
-      { environment: 'acceptance', selector: 'Checkout Tests' },
-      { environment: 'staging', selector: 'Something Else' },
-    ],
-  );
-  assert.match(note, /`Checkout Tests`/);
-  assert.doesNotMatch(note, /Something Else/, 'a runner nobody declared offers nothing here');
-});
-
-// -------------------------------------------------------------- the refusal
-
-test('a coverage the deployed suite does not offer is refused where it is authored', () => {
-  const bad = validatePlanDocument(JSON.parse(document({ coverage: 'the checkout area' })), [
-    'Checkout Tests',
-    'Login Tests',
-  ]);
-  assert.equal(bad.ok, false);
-  if (bad.ok) return;
-  assert.match(bad.error, /"checkout-coverage" names `the checkout area`/);
-  assert.match(bad.error, /`Checkout Tests`, `Login Tests`/, 'and it says what may be named instead');
-
-  const good = validatePlanDocument(JSON.parse(document({ coverage: 'Checkout Tests' })), [
-    'Checkout Tests',
-    'Login Tests',
-  ]);
-  assert.equal(good.ok, true);
-});
-
-test('an empty offering fails open — a listing nobody has taken never withholds a plan', () => {
-  const parsed = validatePlanDocument(JSON.parse(document({ coverage: 'anything at all' })), []);
-  assert.equal(parsed.ok, true, 'no listing yet, a runner that could not answer and no browser block are one arm');
-  const viaFile = parsePlanDocument(document({ coverage: 'anything at all' }));
+test('a coverage naming anything at all is accepted, through both transports', () => {
+  // The refusal this replaces is the whole of why a genuinely new area could not be declared: the
+  // planner writes about code that does not exist yet, so there was never a listing that held it.
+  const parsed = validatePlanDocument(JSON.parse(document({ coverage: 'checkout with a saved card' })));
+  assert.equal(parsed.ok, true);
+  const viaFile = parsePlanDocument(document({ coverage: 'an area no runner has ever offered' }));
   assert.equal(viaFile.ok, true, 'and the file transport is the same loader');
 });
 
@@ -315,7 +276,10 @@ test('the desk lists what each runner offers, and keeps the answer where a plann
       now: () => NOW,
     });
     await desk.run();
-    assert.deepEqual(store.remoteValidation.listOfferedAreas(), ['Checkout Tests', 'Login Tests']);
+    assert.deepEqual(
+      store.remoteValidation.listSelectorOfferings().map((o) => o.selector),
+      ['Checkout Tests', 'Login Tests'],
+    );
     assert.equal(runner.asked.length, 1, 'one spawn, with no goal in sight — the planner needs it before an arrival');
 
     await desk.run();
@@ -351,9 +315,9 @@ test('a listing that could not say leaves the offering the last answer left stan
     await desk.run();
     assert.equal(runner.asked.length, 1, 'the stale offering is re-asked');
     assert.deepEqual(
-      store.remoteValidation.listOfferedAreas(),
+      store.remoteValidation.listSelectorOfferings().map((o) => o.selector),
       ['Checkout Tests'],
-      'and an unanswered listing is never an offering of nothing — that would refuse every coverage a planner names',
+      'and an unanswered listing is never an offering of nothing — that would hand the planner an empty suite',
     );
   } finally {
     store.close();

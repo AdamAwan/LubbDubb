@@ -516,18 +516,6 @@ export class RemoteValidationStore {
     }));
   }
 
-  /**
-   * Every area any browser environment's runner offers, de-duplicated. The set a `coverage` is
-   * refused against at plan submission, and the reason the refusal is a convenience rather than an
-   * authority: it is what a listing last said, and the pre-flight asks again at assembly.
-   */
-  listOfferedAreas(): string[] {
-    const rows = this.ctx.prep(`SELECT DISTINCT selector FROM remote_selector_offerings ORDER BY selector`).all() as {
-      selector: string;
-    }[];
-    return rows.map((r) => r.selector);
-  }
-
   private nextSeq(originRef: string): number {
     const { top } = this.ctx
       .prep(`SELECT MAX(seq) AS top FROM remote_state_queries WHERE goal_ref=?`)

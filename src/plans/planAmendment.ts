@@ -64,7 +64,7 @@ export function proposePlanAmendment(
     };
   }
 
-  const parsed = validatePlanDocument(input.document, store.remoteValidation.listOfferedAreas());
+  const parsed = validatePlanDocument(input.document);
   if (!parsed.ok) return { ok: false, error: `Amendment rejected: ${parsed.error}` };
 
   const note = input.note.trim();
