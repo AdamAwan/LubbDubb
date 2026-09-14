@@ -29,8 +29,11 @@ export class CommandSlotProcesses implements SlotProcesses {
   async holding(dir: string): Promise<SlotProcess[] | null> {
     const root = resolve(dir);
     try {
-      const found = process.platform === 'win32' ? await mapped(root) : await occupying(root);
-      return found.filter((p) => !ours(found, p.pid));
+      const walk = process.platform === 'win32' ? await mapped(root) : await occupying(root);
+      const found = walk.held.filter((p) => !ours(walk.held, p.pid));
+      if (walk.complete) return found;
+      this.onWarning?.(partialWalk(root, found.length));
+      return found.length === 0 ? null : found;
     } catch (err) {
       this.onWarning?.(`Could not list the processes holding ${root}: ${probeFailure(err)}`);
       return null;
@@ -85,7 +88,35 @@ function ours(found: SlotProcess[], pid: number): boolean {
 const run = promisify(execFile);
 
 const TABLE_TIMEOUT_MS = 20_000;
+const WALK_BUDGET_MS = 15_000;
 const TABLE_BUFFER = 8 * 1024 * 1024;
+
+/**
+ * A walk of the process table, and whether it got all the way through. An incomplete walk carries
+ * every holder it did find: the arms that answer the common case run to the end whatever the budget
+ * does, so hits from those are a complete reading of them.
+ */
+interface Walk {
+  held: SlotProcess[];
+  complete: boolean;
+}
+
+/**
+ * What an operator is told when the walk ran out of budget. It is not the probe failing — the cheap
+ * arms answered in full — so the sentence says which arm was cut short and what follows from it.
+ *
+ * @public the pool's warning and its test read the sentence back
+ */
+export function partialWalk(root: string, found: number): string {
+  return (
+    `The walk for processes holding ${root} ran past ${WALK_BUDGET_MS}ms and stopped before it had asked every ` +
+    `process for its loaded modules. ${
+      found === 0
+        ? 'Nothing was found by the arms that did run, so what is holding it is unknown rather than nothing.'
+        : `The ${found} found by the arms that did run are swept; a holder only the module walk could have named is not.`
+    }`
+  );
+}
 
 /**
  * Why the probe could not answer, rather than the command it could not answer with. `execFile`'s
@@ -117,22 +148,30 @@ function firstLine(text: string): string {
  * are on the cheap CIM table and answer the common case without enumerating anything. `Get-Process`
  * is walked once into a table keyed by pid: asked per pid it re-walks the whole process list each
  * time, which on a busy machine is what takes the probe past its timeout.
+ *
+ * The two arms run as two passes, not one, and the module pass carries its own `WALK_BUDGET_MS`
+ * deadline: the cheap pass therefore answers for *every* process however busy the machine is, and a
+ * module pass that runs out of budget reports what it has rather than being killed at
+ * `TABLE_TIMEOUT_MS` with the cheap answers still in it.
  */
-async function mapped(root: string): Promise<SlotProcess[]> {
+async function mapped(root: string): Promise<Walk> {
   const { stdout } = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', HOLDERS_PS1], {
-    env: { ...process.env, LUBBDUBB_SLOT: root },
+    env: { ...process.env, LUBBDUBB_SLOT: root, LUBBDUBB_SLOT_BUDGET_MS: String(WALK_BUDGET_MS) },
     windowsHide: true,
     timeout: TABLE_TIMEOUT_MS,
     maxBuffer: TABLE_BUFFER,
   });
-  return parseHolders(stdout);
+  return parseWalk(stdout);
 }
 
 const HOLDERS_PS1 = [
   "$ErrorActionPreference = 'SilentlyContinue'",
   '$root = $env:LUBBDUBB_SLOT',
+  '$budget = [int]$env:LUBBDUBB_SLOT_BUDGET_MS',
   '$cmp = [System.StringComparison]::OrdinalIgnoreCase',
+  '$clock = [System.Diagnostics.Stopwatch]::StartNew()',
   '$hits = New-Object System.Collections.ArrayList',
+  '$rest = New-Object System.Collections.ArrayList',
   '$live = @{}',
   'foreach ($g in Get-Process) { $live[[int]$g.Id] = $g }',
   'foreach ($p in Get-CimInstance Win32_Process) {',
@@ -140,21 +179,24 @@ const HOLDERS_PS1 = [
   '  $why = $null',
   '  if ($p.ExecutablePath -and $p.ExecutablePath.StartsWith($root, $cmp)) { $why = $p.ExecutablePath }',
   '  elseif ($p.CommandLine -and $p.CommandLine.IndexOf($root, $cmp) -ge 0) { $why = $p.CommandLine }',
-  '  else {',
-  '    try {',
-  '      $g = $live[[int]$p.ProcessId]',
-  '      $m = $null',
-  '      if ($g) {',
-  '        $m = $g.Modules | Where-Object { $_.FileName -and $_.FileName.StartsWith($root, $cmp) } | Select-Object -First 1',
-  '      }',
-  '      if ($m) { $why = $m.FileName }',
-  '    } catch { }',
-  '  }',
   '  if ($why) {',
   '    [void]$hits.Add([pscustomobject]@{ pid = $p.ProcessId; ppid = $p.ParentProcessId; detail = $why })',
+  '  } elseif ($live[[int]$p.ProcessId]) {',
+  '    [void]$rest.Add($p)',
   '  }',
   '}',
-  'ConvertTo-Json -Compress -Depth 2 -InputObject @($hits)',
+  '$complete = $true',
+  'foreach ($p in $rest) {',
+  '  if ($clock.ElapsedMilliseconds -ge $budget) { $complete = $false; break }',
+  '  try {',
+  '    $g = $live[[int]$p.ProcessId]',
+  '    $m = $g.Modules | Where-Object { $_.FileName -and $_.FileName.StartsWith($root, $cmp) } | Select-Object -First 1',
+  '    if ($m) {',
+  '      [void]$hits.Add([pscustomobject]@{ pid = $p.ProcessId; ppid = $p.ParentProcessId; detail = $m.FileName })',
+  '    }',
+  '  } catch { }',
+  '}',
+  'ConvertTo-Json -Compress -Depth 3 -InputObject ([pscustomobject]@{ complete = $complete; held = @($hits) })',
 ].join('\n');
 
 /**
@@ -163,7 +205,7 @@ const HOLDERS_PS1 = [
  * happily — so this exists for the other half of the release: a watcher left running would go on
  * writing into the tree the next occupant is about to be handed.
  */
-async function occupying(root: string): Promise<SlotProcess[]> {
+async function occupying(root: string): Promise<Walk> {
   const { stdout } = await run('ps', ['-eo', 'pid=,ppid=,args='], {
     timeout: TABLE_TIMEOUT_MS,
     maxBuffer: TABLE_BUFFER,
@@ -179,7 +221,7 @@ async function occupying(root: string): Promise<SlotProcess[]> {
     if (link !== null) held.push({ pid, parentPid, detail: link });
     else if ((m[3] ?? '').includes(root)) held.push({ pid, parentPid, detail: (m[3] ?? '').trim() });
   }
-  return held;
+  return { held, complete: true };
 }
 
 function linkUnder(root: string, pid: number): string | null {
@@ -199,11 +241,22 @@ function isUnder(root: string, path: string): boolean {
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
 }
 
-function parseHolders(stdout: string): SlotProcess[] {
+/**
+ * The walk's own report. Empty output, or a document without a `complete` of its own, is read as
+ * incomplete: the script always prints its report, so nothing to read is a walk that did not finish,
+ * and the one reading that must never be invented is `the walk got all the way through`.
+ *
+ * @public the Windows probe and its test read the document back
+ */
+export function parseWalk(stdout: string): Walk {
   const text = stdout.trim();
-  if (text === '') return [];
+  if (text === '') return { held: [], complete: false };
   const parsed: unknown = JSON.parse(text);
-  const rows: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  const doc = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as {
+    complete?: unknown;
+    held?: unknown;
+  };
+  const rows: unknown[] = Array.isArray(doc.held) ? doc.held : doc.held == null ? [] : [doc.held];
   const held: SlotProcess[] = [];
   for (const row of rows) {
     if (typeof row !== 'object' || row === null) continue;
@@ -215,7 +268,7 @@ function parseHolders(stdout: string): SlotProcess[] {
       detail: typeof detail === 'string' ? detail : '',
     });
   }
-  return held;
+  return { held, complete: doc.complete === true };
 }
 
 /**

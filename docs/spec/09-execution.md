@@ -1223,6 +1223,21 @@ one layer down.
 - **The Windows walk reads `Get-Process` once.** Asked per pid it re-walks the entire process list
   each time, so a machine with a few hundred processes pays a few hundred full walks and the probe
   goes past its timeout — which presents as the fold above.
+- **The module arm carries its own deadline, and the cheap arms are never behind it.** Touching
+  `.Modules` is a `EnumProcessModules` per process and the access-denied ones are the slowest, so on a
+  busy machine the walk goes past `TABLE_TIMEOUT_MS` however few full `Get-Process` walks it does —
+  and being *killed* there throws away the executable-path and command-line hits it had already taken,
+  which is the arm that answers the common case. So the two arms are two passes: the cheap pass runs
+  over the whole CIM table unconditionally, then the module pass runs the rest until
+  `WALK_BUDGET_MS` — under the process timeout, so the script reports rather than being killed — and
+  stops there, saying so. The script's report is therefore `{ complete, held }` and not a bare list.
+- **An incomplete walk is not automatically `null`.** What it found, it found: those holders are swept
+  and the hand-over goes on. It is `null` only when it found **nothing**, because then the cut-short
+  arm is the only one that could have answered and the reading was never taken — the fold above,
+  arrived at from the other side. Either way the operator is told the walk was cut short, separately
+  from the failure sentence, because a cut-short walk is not a probe that failed. Output with no
+  `complete` of its own — an empty pipe, a shell that died mid-report — reads as incomplete: the
+  script always prints its report, so nothing to read is a walk that did not finish.
 - **A kill returns before the handles do.** `taskkill /F` is an ask, and the images come back as the
   process is torn down rather than as it answers. So a wipe refused after a sweep that actually took
   something is retried once, half a second later, before anything is concluded from it.
