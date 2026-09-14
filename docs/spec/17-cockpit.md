@@ -3521,13 +3521,28 @@ readings that are true right now and have somewhere to go:
 
 | Lead                                             | The cut                                                               | Where it goes                          |
 | ------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------- |
+| _n_ **open pull requests nobody has approved**   | `approved === false`, less the branches `agentOnBranch` holds          | the **Cards** shape                    |
 | _n_ **queued, and nobody is out**                | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
 | _n_ **tracker items nobody has picked up**       | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
 | _n_ **goals in flight with nobody on them**      | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
-| _n_ **open pull requests nobody has approved**   | `approved === false`, less the branches `agentOnBranch` holds          | the **Cards** shape                    |
 | _n_ **faults recorded**                          | `errors`                                                              | the fault log                          |
 
-Five rules run through them.
+**The order is what the operator can act on, first.** An approval is theirs alone, so the pull
+requests lead; then the queue and the reservoir, which are work waiting to enter the fleet; then the
+goals quietly working their own plans; then the faults, which are nobody's move. The order is the
+module's own, fixed rather than sorted — these are five different kinds of thing and there is no
+figure to rank them by.
+
+**Each band wears its lead's tone, and one of them wears none.** `LEAD_TONE` is total over the keys,
+like the rail's own tables, and it answers *whose* the reading is rather than how bad it is: amber the
+operator's own move, blue the fleet's supply, red something wrong, and **no tone at all** on the goals
+quietly working their plans — a colour on every row is a colour that says nothing. It reaches the glass
+as a rule down the band's left edge and the figure's ink, and nothing else: a fill behind five rows is
+a page of colour. The rule is the tone's *line* at rest and its ink on hover, where the band also takes
+a ground — five saturated edges down one panel is the loudest thing on a surface whose subject is that
+nothing is urgent.
+
+Five more rules run through them.
 
 **A lead with nothing in it is never built.** This panel is read at the moment an operator is deciding
 whether there is anything here at all, and a column of rows reading `0` is the furniture that answers

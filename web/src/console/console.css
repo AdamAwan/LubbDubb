@@ -5128,11 +5128,18 @@ button.cn-grow {
 }
 
 /* ── Worth a look: the clear state's leads ───────────────────────────────────
-   Rows rather than cards, for the overview's own reason — this is a list of
+   Bands rather than cards, for the overview's own reason — this is a list of
    readings, and a grid of tiles would make five of them look like a dashboard
-   somebody has to take in before they can press anything. The figure has a
-   fixed column so the eye reads down it, and every named thing under a lead is
-   a control with its refs beside it.
+   somebody has to take in before they can press anything.
+
+   Each band wears its lead's tone as a rule down its left edge and on its
+   figure, and nothing else: a fill behind five rows is a page of colour, while
+   the rule is enough to say *whose* each row is at a glance — amber the
+   operator's own, blue the fleet's supply, red something wrong, and the plain
+   line where the reading is none of those. The rule is the tone's *line*
+   rather than its ink, because five saturated edges down one panel is the
+   loudest thing on a surface whose whole subject is that nothing is urgent. The figures share a right-aligned column so
+   the eye reads down them, and the waits share another at the far edge.
    → docs/spec/17-cockpit.md#when-nothing-needs-you */
 
 .cn-ov-leads {
@@ -5141,25 +5148,34 @@ button.cn-grow {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 .cn-ov-lead {
-  border-top: 1px solid var(--cn-line-soft);
-  padding: 12px 0 13px;
+  padding: 11px 12px 12px 13px;
+  border-radius: var(--cn-r-sm);
+  box-shadow: inset 2px 0 0 var(--cn-tone-line, var(--cn-line));
+  transition: background 120ms ease;
 }
-.cn-ov-lead:last-child {
-  border-bottom: 1px solid var(--cn-line-soft);
+/* The ground arrives on hover rather than sitting under every band: five filled
+   strips is the shape an eye learns to skip, and what wants marking here is the
+   one the pointer is on — which is also where the rule comes up to its full
+   tone, the softer line being what the band wears at rest. */
+.cn-ov-lead:hover {
+  background: var(--cn-panel-2);
+  box-shadow: inset 2px 0 0 var(--cn-tone, var(--cn-line));
 }
 .cn-ov-lead-head {
   display: flex;
   align-items: baseline;
-  gap: 9px;
+  gap: 10px;
 }
 .cn-ov-lead-n {
   min-width: 26px;
-  font-size: 17px;
+  text-align: right;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--cn-fg);
+  line-height: 1.1;
+  color: var(--cn-tone, var(--cn-fg));
   font-variant-numeric: tabular-nums;
 }
 .cn-ov-lead-title {
@@ -5174,18 +5190,18 @@ button.cn-grow {
   white-space: nowrap;
 }
 .cn-ov-lead-say {
-  margin: 5px 0 0 35px;
+  margin: 5px 0 0 36px;
   font-size: 12px;
   color: var(--cn-fg-dim);
   max-width: 62ch;
 }
 .cn-ov-lead-items {
   list-style: none;
-  margin: 8px 0 0 35px;
+  margin: 9px 0 0 36px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .cn-ov-lead-items > li {
   display: flex;
@@ -5205,7 +5221,11 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The far edge, so several waits read as a column rather than as a tail on each
+   name — the figure they are being compared against is each other. */
 .cn-ov-lead-wait {
+  margin-left: auto;
+  padding-left: 10px;
   font-size: 11px;
   color: var(--cn-fg-faint);
   font-variant-numeric: tabular-nums;

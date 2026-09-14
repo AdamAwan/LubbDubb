@@ -330,7 +330,9 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
           </>
         ) : (
           <>
-            <h3 className="cn-ov-ctx-label">Worth a look</h3>
+            <h3 className="cn-ov-ctx-label">
+              Worth a look <span>{leads.length === 1 ? '1 reading' : `${leads.length} readings`}</span>
+            </h3>
             <ul className="cn-ov-leads">
               {leads.map((lead) => (
                 <LeadRow key={lead.key} lead={lead} now={view.now} actions={actions} />
@@ -351,7 +353,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
  */
 function LeadRow({ lead, now, actions }: { lead: Lead; now: number; actions: CockpitActions }): JSX.Element {
   return (
-    <li className="cn-ov-lead">
+    <li className={`cn-ov-lead ${lead.tone === null ? '' : `cn-t-${lead.tone}`}`}>
       <div className="cn-ov-lead-head">
         <b className="cn-ov-lead-n">{lead.count}</b>
         <span className="cn-ov-lead-title">{lead.title}</span>

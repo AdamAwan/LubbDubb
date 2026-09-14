@@ -75,6 +75,26 @@ test('an empty ask queue draws the leads rather than a sentence alone', () => {
   for (const lead of leads) assert.ok(html.includes(lead.title), `${lead.key} is drawn`);
 });
 
+/* An approval is the operator's own act, so it leads: the order is what they can
+   do something about, first. */
+test('the pull requests nobody has approved come first', () => {
+  const keys = buildLeads(view()).map((l) => l.key);
+  assert.equal(keys[0], 'prs');
+  assert.deepEqual(
+    keys,
+    ['prs', 'queued', 'reservoir', 'quiet', 'faults'].filter((k) => keys.includes(k as never)),
+  );
+});
+
+/* The hue answers whose the reading is, and the goals quietly working their own
+   plans are nobody's — so that lead wears none. */
+test('a lead wears the tone its kind was given, and only where it has one', () => {
+  const tones = new Map(buildLeads(view()).map((l) => [l.key, l.tone]));
+  assert.equal(tones.get('prs'), 'amber');
+  assert.equal(tones.get('faults'), 'red');
+  if (tones.has('quiet')) assert.equal(tones.get('quiet'), null);
+});
+
 test('no lead is ever built with nothing in it', () => {
   for (const lead of buildLeads(view())) assert.ok(lead.count > 0, `${lead.key} counts something`);
 });

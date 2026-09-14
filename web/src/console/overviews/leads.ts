@@ -30,6 +30,8 @@ interface LeadItem {
 
 export interface Lead {
   key: LeadKey;
+  /** The hue it wears, from {@link LEAD_TONE}. Null is a reading with nothing wrong and nobody's move. */
+  tone: 'red' | 'amber' | 'blue' | null;
   /** The figure, drawn in its own slot — a lead with nothing in it is never built. */
   count: number;
   /** What the figure counts, as a noun phrase reading on from it. */
@@ -43,7 +45,26 @@ export interface Lead {
   items: LeadItem[];
 }
 
-type LeadKey = 'queued' | 'reservoir' | 'quiet' | 'prs' | 'faults';
+type LeadKey = 'prs' | 'queued' | 'reservoir' | 'quiet' | 'faults';
+
+/**
+ * What each lead's hue answers is *whose* it is, which is the rail's own question
+ * and the rail's own palette. **Amber is the operator's own move** — an approval
+ * is the one act nothing else on the deployment can do for them. Blue is the
+ * fleet's supply, nothing wrong with it. Red is something wrong. And a lead that
+ * is neither — a goal quietly working its plan — wears **no tone at all**, because
+ * a colour on every row is a colour that says nothing.
+ *
+ * Total over {@link LeadKey}, like the rail's own tables, so a new lead is given a
+ * hue deliberately rather than inheriting the last one's.
+ */
+const LEAD_TONE: Record<LeadKey, Lead['tone']> = {
+  prs: 'amber',
+  queued: 'blue',
+  reservoir: 'blue',
+  quiet: null,
+  faults: 'red',
+};
 
 /**
  * How many of a lead's own things it names. The figure says how many there are;
@@ -77,6 +98,35 @@ export function buildLeads(view: CockpitView): Lead[] {
   const out: Lead[] = [];
   const { issues, pullRequests } = view.state.world;
 
+  /* `approved === false` and never `!== true`: the field is optional, so an
+     unreported approval is an **unknown** rather than a missing one, and folding
+     the two would have this lead claim every open pull request on a provider that
+     does not report reviews. Minus the branches an agent is out on, for the
+     reason the readying rows are not agents: the fleet is still writing those,
+     and the harness raises a merge ask of its own when it wants one merged. */
+  const unapproved = pullRequests
+    .filter((pr) => pr.approved === false && !view.agentOnBranch.has(pr.branch))
+    .sort(byWait);
+  if (unapproved.length > 0) {
+    out.push({
+      key: 'prs',
+      tone: LEAD_TONE.prs,
+      count: unapproved.length,
+      title:
+        unapproved.length === 1 ? 'open pull request nobody has approved' : 'open pull requests nobody has approved',
+      say: 'None of these is asking yet, and an approval is nobody’s but yours — which makes an unapproved pull request the likeliest thing on the deployment to be quietly waiting on you.',
+      go: 'See them on Cards',
+      where: { kind: 'cards' },
+      items: unapproved.slice(0, NAMED).map((pr) => ({
+        key: `pr:${pr.number}`,
+        label: pr.title,
+        ref: `pr:${pr.number}`,
+        where: { kind: 'pr', number: pr.number },
+        ...(pr.attention.reviewWaitingSince === undefined ? {} : { since: pr.attention.reviewWaitingSince }),
+      })),
+    });
+  }
+
   /* Only where nobody is out. A queue behind a working fleet is the fleet
      working, and saying so on the surface that just said nothing needs you
      would be a lead pointing at normal. */
@@ -84,6 +134,7 @@ export function buildLeads(view: CockpitView): Lead[] {
   if (idle && view.upNext.length > 0) {
     out.push({
       key: 'queued',
+      tone: LEAD_TONE.queued,
       count: view.upNext.length,
       title: view.upNext.length === 1 ? 'candidate queued, and nobody is out' : 'candidates queued, and nobody is out',
       say: 'The harness has work it has not dispatched. Each row carries the reason it is still sitting there.',
@@ -99,6 +150,7 @@ export function buildLeads(view: CockpitView): Lead[] {
   if (unwatched.length > 0) {
     out.push({
       key: 'reservoir',
+      tone: LEAD_TONE.reservoir,
       count: unwatched.length,
       title: unwatched.length === 1 ? 'tracker item nobody has picked up' : 'tracker items nobody has picked up',
       say: `Nothing watches these, so the fleet never sees one. The ${view.state.config.watchLabel} label is what lets it.`,
@@ -116,6 +168,7 @@ export function buildLeads(view: CockpitView): Lead[] {
   if (quiet.length > 0) {
     out.push({
       key: 'quiet',
+      tone: LEAD_TONE.quiet,
       count: quiet.length,
       title: quiet.length === 1 ? 'goal in flight with nobody on it' : 'goals in flight with nobody on them',
       say: 'No agent is out on these and nothing is asking about them. What happens next is on the goal’s own plan.',
@@ -125,38 +178,11 @@ export function buildLeads(view: CockpitView): Lead[] {
     });
   }
 
-  /* `approved === false` and never `!== true`: the field is optional, so an
-     unreported approval is an **unknown** rather than a missing one, and folding
-     the two would have this lead claim every open pull request on a provider that
-     does not report reviews. Minus the branches an agent is out on, for the
-     reason the readying rows are not agents: the fleet is still writing those,
-     and the harness raises a merge ask of its own when it wants one merged. */
-  const unapproved = pullRequests
-    .filter((pr) => pr.approved === false && !view.agentOnBranch.has(pr.branch))
-    .sort(byWait);
-  if (unapproved.length > 0) {
-    out.push({
-      key: 'prs',
-      count: unapproved.length,
-      title:
-        unapproved.length === 1 ? 'open pull request nobody has approved' : 'open pull requests nobody has approved',
-      say: 'None of these is asking yet, and an approval is nobody’s but yours — which makes an unapproved pull request the likeliest thing on the deployment to be quietly waiting on you.',
-      go: 'See them on Cards',
-      where: { kind: 'cards' },
-      items: unapproved.slice(0, NAMED).map((pr) => ({
-        key: `pr:${pr.number}`,
-        label: pr.title,
-        ref: `pr:${pr.number}`,
-        where: { kind: 'pr', number: pr.number },
-        ...(pr.attention.reviewWaitingSince === undefined ? {} : { since: pr.attention.reviewWaitingSince }),
-      })),
-    });
-  }
-
   const faults = view.state.errors.length;
   if (faults > 0) {
     out.push({
       key: 'faults',
+      tone: LEAD_TONE.faults,
       count: faults,
       title: faults === 1 ? 'fault recorded' : 'faults recorded',
       say: 'Failures the harness caught and carried on past. Nothing is asking you to act on one.',
