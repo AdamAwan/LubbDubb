@@ -6,7 +6,14 @@ import { join } from 'node:path';
 import type { ErrorLogEntry, ErrorLogInput } from '../src/types.js';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
-import { childrenFirst, CommandSlotProcesses, probeFailure, type SlotProcess } from '../src/worktree/slotProcesses.js';
+import {
+  childrenFirst,
+  CommandSlotProcesses,
+  parseWalk,
+  partialWalk,
+  probeFailure,
+  type SlotProcess,
+} from '../src/worktree/slotProcesses.js';
 import { tmpDir } from './support/gitRepo.js';
 
 function initRepo(): string {
@@ -235,6 +242,22 @@ test('a probe that could not answer says why, not which script it ran', () => {
     'it exited 1: Get-Process : Access denied',
   );
   assert.equal(probeFailure(Object.assign(new Error('spawn powershell ENOENT'), { code: 'ENOENT' })), 'ENOENT');
+});
+
+test('a walk that ran out of budget is read as incomplete, and nothing to read is too', () => {
+  assert.deepEqual(parseWalk('{"complete":true,"held":[]}'), { held: [], complete: true });
+  assert.deepEqual(parseWalk(''), { held: [], complete: false }, 'the script always prints its report');
+  assert.deepEqual(parseWalk('{"held":[]}'), { held: [], complete: false }, 'complete is never invented');
+  assert.deepEqual(parseWalk('{"complete":false,"held":{"pid":900,"ppid":1,"detail":"vite"}}'), {
+    held: [{ pid: 900, parentPid: 1, detail: 'vite' }],
+    complete: false,
+  });
+});
+
+test('a cut-short walk says which arm was cut short, and what follows from it', () => {
+  assert.match(partialWalk('D:/slot-0', 0), /ran past 15000ms/);
+  assert.match(partialWalk('D:/slot-0', 0), /unknown rather than nothing/);
+  assert.match(partialWalk('D:/slot-0', 2), /The 2 found by the arms that did run are swept/);
 });
 
 test('children are signalled before their parents, however the list arrives', () => {
