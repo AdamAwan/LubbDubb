@@ -79,8 +79,14 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
   return steps;
 }
 
+/**
+ * `declined` is settled and owed to nobody: the operator read that row at the accept gate and said
+ * no to it. Counting it here would put a row back on the bench as work the very press that struck
+ * it out — the ask reading "1 check for you to run" against a check nobody is going to run.
+ * → docs/spec/20-validation.md#declining-a-single-row
+ */
 function owedToAPerson(check: ValidationCheck): boolean {
-  if (check.state === 'passed' || check.state === 'waived') return false;
+  if (check.state === 'passed' || check.state === 'waived' || check.state === 'declined') return false;
   return !(check.actor === 'fleet' && check.state === 'unrun');
 }
 

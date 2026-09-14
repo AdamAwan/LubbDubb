@@ -647,13 +647,19 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
 }
 
 /**
- * Anything unrecognised narrows to `unrun`, and that direction is what makes `captured` safe to add:
+ * Anything unrecognised narrows to `unrun`, and that direction is what makes `captured` and
+ * `declined` safe to add:
  * a row written before the state existed lands on *nobody has got to it* rather than on *there is an
  * image here waiting for you*. Adding a value to a column is not a schema change — `state` gained it
  * the way `result_by` gained `agent`, `desktop` and `spec`.
  */
 function checkStateOf(raw: string): ValidationCheckState {
-  return raw === 'passed' || raw === 'failed' || raw === 'waived' || raw === 'deferred' || raw === 'captured'
+  return raw === 'passed' ||
+    raw === 'failed' ||
+    raw === 'waived' ||
+    raw === 'deferred' ||
+    raw === 'captured' ||
+    raw === 'declined'
     ? raw
     : 'unrun';
 }

@@ -217,6 +217,7 @@ export type {
   UsagePayload,
   UsageSubject,
   UsageVerb,
+  CheckDecline,
   ProposedCheck,
   ValidationCheck,
   ValidationCheckActor,

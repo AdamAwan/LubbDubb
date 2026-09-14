@@ -65,6 +65,11 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
   let seq = 0;
 
   for (const check of liveChecks(input.checks)) {
+    // A row the operator declined at the accept gate is settled, and a sheet is a list of what is
+    // still to run. Assembled, it would be pressed, dispatched for and reported on — the decline
+    // undone by the one surface that never saw it.
+    // → docs/spec/36-remote-validation.md#a-declined-row-is-not-on-the-sheet
+    if (check.state === 'declined') continue;
     seq += 1;
     out.push({
       rowId: `check:${check.id}`,

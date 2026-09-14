@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import type { AgentAskQuestion, CaveatAnswerInput, Escalation, Proposal } from '../types.js';
+import type { AgentAskQuestion, CaveatAnswerInput, CheckDecline, Escalation, Proposal } from '../types.js';
 import { relTime, untilTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
 import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
-import { CheckSetAsk } from './CheckSetAsk.js';
+import { CheckSetAsk, useCheckDeclines } from './CheckSetAsk.js';
 import { checkSetOf } from '../checkSet.js';
 import { PlanAnswers } from './PlanAnswers.js';
 import { planCaveatsOf } from '../planCaveats.js';
@@ -49,6 +49,7 @@ export function EscalationCard({
     note?: string,
     acknowledged?: string[],
     answers?: CaveatAnswerInput[],
+    declined?: CheckDecline[],
   ) => Promise<unknown> | unknown;
   onBackOut?: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
   onOverrule?: (issueNumber: number, proposalId: string, text: string) => Promise<unknown> | unknown;
@@ -84,6 +85,10 @@ export function EscalationCard({
   /* A check set is a set, not a paragraph: it rides on the proposal as structure and is drawn as rows
      rather than through `context.detail`'s markdown. → docs/spec/17-cockpit.md */
   const checkSet = checkSetOf(proposal);
+  /* The rows the operator is striking out of the set. Held on the card rather than in `CheckSetAsk`,
+     because the control is drawn on the row and the verdict is sent by the button at the foot.
+     → docs/spec/20-validation.md#declining-a-single-row */
+  const declines = useCheckDeclines(checkSet);
   /* The goal number, from the escalation's context or from the origin it was
      raised on. Both spell the same goal, and only the first is always set: a card
      that has just the origin was dropping the Claude Code hand-off, which is the
@@ -159,7 +164,7 @@ export function EscalationCard({
           "a `<details>` you have to open first is a step between you and the job"
           — and a 180px window onto a two-thousand-character assessment is the
           wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
-      {checkSet !== null ? <CheckSetAsk set={checkSet} /> : null}
+      {checkSet !== null ? <CheckSetAsk set={checkSet} declines={declines} /> : null}
 
       {context.detail && checkSet === null ? (
         <div className="esc-context">
@@ -300,11 +305,28 @@ export function EscalationCard({
             />
             <AsyncButton
               tone="primary"
-              disabled={held}
-              title={held ? heldTitle(ack.outstanding) : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')}
-              onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined, ack.acknowledged, ack.answers)}
+              disabled={held || declines.unsaid.length > 0}
+              title={
+                declines.unsaid.length > 0
+                  ? unsaidTitle(declines.unsaid)
+                  : declines.whole
+                    ? 'Every check is declined, so this sends the set back to be written again'
+                    : held
+                      ? heldTitle(ack.outstanding)
+                      : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')
+              }
+              onClick={() =>
+                onDecide!(
+                  decidable.id,
+                  'accept',
+                  text.trim() || undefined,
+                  ack.acknowledged,
+                  ack.answers,
+                  declines.declined,
+                )
+              }
             >
-              {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
+              {declines.whole ? 'Send the set back' : (ACCEPT_LABEL[decidable.kind] ?? 'Approve')}
             </AsyncButton>
             <AsyncButton
               ghost
@@ -473,4 +495,15 @@ function questionnaire(value: unknown): AgentAskQuestion[] | null {
     ];
   });
   return questions.length > 0 ? questions : null;
+}
+
+/**
+ * A declined row with nothing typed against it holds the press, and says so. The route refuses a
+ * reasonless decline; a button that let the click through would put that refusal in front of somebody
+ * with no way to have seen it coming. → docs/spec/20-validation.md#declining-a-single-row
+ */
+function unsaidTitle(unsaid: readonly string[]): string {
+  return unsaid.length === 1
+    ? `Say why ${unsaid[0]} is not worth running — a decline carries your reason`
+    : `Say why ${unsaid.join(', ')} are not worth running — a decline carries your reason`;
 }

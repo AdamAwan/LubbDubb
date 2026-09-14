@@ -11275,12 +11275,44 @@ button.pk.pk {
    a chip pinned 900px from the text it belongs to reads as decoration. */
 .vp-row {
   display: grid;
-  grid-template-columns: 2ch minmax(0, 74ch) auto;
+  grid-template-columns: 2ch minmax(0, 74ch) auto auto;
   justify-content: start;
   gap: 12px;
   align-items: start;
   padding: 9px 10px;
   background: var(--panel-2);
+}
+/* A struck row stays legible and stops asserting: the operator is still reading the
+   set they are accepting, and a row greyed out of existence is a row they cannot
+   check they struck the right one of.
+   → docs/spec/20-validation.md#declining-a-single-row */
+.vp-struck .vp-body {
+  opacity: 0.55;
+}
+.vp-struck .vp-title {
+  text-decoration: line-through;
+}
+.vp-struck .vp-letter {
+  color: var(--violet);
+}
+.vp-decline {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.vp-why {
+  min-width: 26ch;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 3px 7px;
+  font-size: 12.5px;
+}
+.vp-whole {
+  margin: 0;
+  max-width: 82ch;
+  color: var(--violet);
 }
 .vp-letter {
   font-family: var(--font-mono);
@@ -11363,8 +11395,12 @@ button.pk.pk {
   .vp-row {
     grid-template-columns: 2ch 1fr;
   }
-  .vp-flags {
+  .vp-flags,
+  .vp-decline {
     grid-column: 2;
+  }
+  .vp-why {
+    min-width: 0;
   }
   .vp-steps li {
     grid-template-columns: 11ch 1fr;

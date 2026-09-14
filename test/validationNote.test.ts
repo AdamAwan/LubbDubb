@@ -26,6 +26,7 @@ const FLAGGED: ValidationVerdict = {
   deferred: 0,
   waived: 0,
   captured: 0,
+  declined: 0,
 };
 const CLEAR: ValidationVerdict = {
   state: 'clear',
@@ -36,6 +37,7 @@ const CLEAR: ValidationVerdict = {
   deferred: 0,
   waived: 0,
   captured: 0,
+  declined: 0,
 };
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;

@@ -141,6 +141,7 @@ export function validationHeadline(verdict: ValidationVerdict): string {
   if (verdict.unrun > 0) parts.push(`${verdict.unrun} never run`);
   if (verdict.deferred > 0) parts.push(`${verdict.deferred} deferred`);
   if (verdict.captured > 0) parts.push(`${verdict.captured} captured and waiting to be looked at`);
+  if (verdict.declined > 0) parts.push(`${verdict.declined} declined by you at the accept gate`);
   const owed = parts.length > 0 ? parts.join(', ') : 'checks outstanding';
   return `Validation is not clear on this goal — ${owed}, of ${verdict.total}.`;
 }
