@@ -5528,22 +5528,35 @@ button.cn-grow {
     margin-inline: -24px;
     padding-inline: 24px;
   }
+  /* The split fills the scroller rather than ending where its content does, which
+     is what gives the ask's controls a floor to sit on when the body is short. */
   .cn-ov-next-scroll > .cn-ov-next-split {
     margin-top: 0;
     padding-top: 14px;
+    min-height: 100%;
+    align-items: stretch;
+  }
+  .cn-ov-next-main,
+  .cn-ov-next-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .cn-ov-next-body {
+    flex: 1;
   }
   .cn-ov-next-foot {
     margin: 0 -24px;
     padding: 10px 24px 0;
     border-top: 1px solid var(--cn-line);
   }
-  /* The ask's own controls, pinned to the floor of the scroller rather than left
-     at the end of whatever the body happens to be. */
+  /* The ask's own controls, on the floor of the card at every length of body:
+     `margin-top: auto` puts them there when the reading is short, and the sticky
+     bottom holds them there once it is long enough to scroll under them. */
   .cn-ov-next-main .btn-row.bar {
+    margin: auto -8px 0;
     position: sticky;
     bottom: 0;
     z-index: 2;
-    margin: 14px -8px 0;
     padding: 10px 8px;
     background: var(--cn-panel);
     border-top: 1px solid var(--cn-line);
