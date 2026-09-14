@@ -35,8 +35,8 @@ const SIGNAL: GoalWatchInput = {
   seq: 1,
   kind: 'signal',
   title: 'Job X stops timing out',
-  query: "traces | where message has 'job X timed out'",
-  presence: "traces | where operation_Name == 'job X'",
+  query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
+  presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
   tolerate: 0,
   expectUnder: null,
   expectOver: null,
@@ -340,9 +340,10 @@ test('the row carries the declaration the reading is measured against, so it can
   assert.match(detail, /Why it was declared:\*\* job X timing out is what the fix was for/);
   assert.match(
     detail,
-    /```kql\ntraces \| where message has 'job X timed out'\n```/,
-    'the query, verbatim and runnable, in a fence that names what it is',
+    /```kql\ntraces \| where timestamp > datetime\(\d{4}-[\dT:.Z-]+\) \| where message has 'job X timed out'\n```/,
+    'the query, in a fence that names what it is, carrying the instant the work arrived where it declared its bound',
   );
+  assert.doesNotMatch(detail, /\{since\}/, 'and no token left in it \u2014 the fence is runnable as it stands');
   assert.match(detail, /\*\*Raise a bug\*\*/, 'and what each of the row\u2019s three answers says');
   assert.match(detail, /\*\*Decline\*\*/);
   system.store.close();
@@ -360,10 +361,13 @@ test('a queryUrl puts a link to run the query on the row, and no template draws 
   await system.harness.runCycle();
   const detail = system.store.listHumanTasksOfKind('watch')[0]?.detail ?? '';
 
-  assert.match(
-    detail,
-    /\[Run it on testUk \u2197\]\(https:\/\/portal\.example\/logs\?q=traces%20%7C%20where%20message%20has%20'job%20X%20timed%20out'\)/,
-    'the declared query, encoded into the operator\u2019s own template',
+  const opened = system.store.listWatchWindows()[0]!.openedAt;
+  const ran = encodeURIComponent(
+    `traces | where timestamp > datetime(${opened}) | where message has 'job X timed out'`,
+  );
+  assert.ok(
+    detail.includes(`[Run it on testUk \u2197](https://portal.example/logs?q=${ran})`),
+    'the query as it was put to the environment, encoded into the operator\u2019s own template',
   );
   system.store.close();
 

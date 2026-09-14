@@ -58,7 +58,7 @@ nor a baseline reads as a check and cannot fail, which `WatchSchema`
   {
     "id": "orders-p95",
     "title": "The orders proc is no slower than it was",
-    "query": "requests | where name == 'POST /orders' | summarize value = percentile(duration, 95)",
+    "query": "requests | where timestamp > datetime({since}) | where name == 'POST /orders' | summarize value = percentile(duration, 95)",
     "expect": { "noWorseThan": "baseline" }, // or { "under": 500 } / { "over": 99.5 }
     "unit": "ms",
   },
@@ -73,6 +73,53 @@ get wrong about a comparison the thresholds already express.
 A measure declares no `presence`, and that is not an omission. Presence exists because zero rows is
 indistinguishable from a healthy release; a measure that answers no row at all is already `unknown`
 under the output contract, which requires exactly one row carrying a numeric `value`.
+
+### Every query carries `{since}`
+
+**A watch query declares its own time bound, written against the `{since}` token, and one that carries
+no token is refused at ingestion** — `carriesSince` (`src/validation/watchQueryShape.ts`), beside
+`aggregatingTail` and through the same `refuseQueryShape`, so all three writers are held to it by one
+rule. Signals, their presence queries and measures alike; the author writes the `where`, because which
+column carries the time — `timestamp`, `TimeGenerated`, something a `project` renamed — is a fact about
+their telemetry and not one the harness may guess:
+
+```kusto
+traces
+| where timestamp > datetime({since})
+| where customDimensions.MessageTemplate startswith "Statement workflow {AttemptedWorkflow} rejected"
+```
+
+The harness substitutes the instant the reading is about, before the query reaches a shell: **the
+moment the work arrived on that environment** for a window's reading (`watch_windows.opened_at`, which
+is the arrival), and **one window's length before now** for the dry run that takes the baseline. One
+query, two clocks, which is the arrangement the two readings were always asking for — the dry run
+proves the defect is real _before_ the fix, and the window asks whether it is still happening _since_
+the fix.
+
+This is the one refusal whose absence is indistinguishable from the subsystem working, and it fails in
+the direction that reads as a regression rather than as a fault:
+
+- **An unbounded signal counts the defect it was declared for.** The retention period contains every
+  occurrence from before the work shipped, so a `tolerate: 0` check reads `regressed` on its first
+  reading and on every reading after it, and settles regressed — a bench row in front of an operator
+  reporting the bug the goal fixed, with numbers that are correct and an answer that is not.
+- **An unbounded presence query proves nothing.** It answers rows because the code path ran at some
+  point in the retention period, which is not what it is asked: it exists to say the path is running
+  _now_, on the environment the window is watching, and an environment where the job has stopped
+  running answers exactly as an environment where it is running fine.
+- **An unbounded measure is not the number the work is about.** A percentile over the whole retention
+  period is dominated by the period before the change, which is the comparison the baseline already
+  makes — and makes it against itself.
+
+A check declared before the token existed is not silently read: `preparedQuery`
+(`src/environments/watchResult.ts`) hands back a refusal rather than a query, and both observers route
+through it, so the reading is `unknown` and says why. Not `regressed`, which would be the false finding
+this refusal exists to stop, and not `clean` — `unknown` never folds to clean
+([the verdict](#the-verdict)), and a query nothing bounds has not answered the question.
+
+`state` queries ([36](36-remote-validation.md)) carry no such token and are not held to this, which is
+the two lifetimes apart: a state row is one reading taken at a moment somebody chose, about the shape
+of data rather than about a period.
 
 ### A signal query returns rows, never a count
 
@@ -285,7 +332,9 @@ environment where nothing happened, and the card says so in the operator's own w
 A measure declared with `noWorseThan: "baseline"` has its query run at **declaration time**, days
 before the arrival, and that reading is stored on the check (`goal_watches.baseline_value`). It is
 the number the work has to beat, taken on the same query, from the same source, before anything
-changed.
+changed. Its `{since}` is **one window's length before now** — the same `forMs` the window
+it will be compared against runs for, through `watchWindowMs` rather than a second reading of that
+field — so the before and the after are measured over spans of the same size.
 
 **It rides the dry run rather than being a second call.** The dry run already puts the query to an
 environment the moment it is declared, so the baseline is that reading kept rather than discarded —
@@ -313,8 +362,10 @@ as `CommandEnvironmentProber` runs `at` (`src/environments/prober.ts`).
 
 ### The query is passed by environment variable, and its return is verified
 
-`LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID` and `LUBBDUBB_WATCH_QUERY`. The operator's command is
-two lines and reads the query out of the variable.
+`LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID`, `LUBBDUBB_WATCH_QUERY` and `LUBBDUBB_WATCH_SINCE`. The
+operator's command is two lines and reads the query out of the variable. `{since}` is already
+substituted in what `LUBBDUBB_WATCH_QUERY` carries — a wrapper has nothing to fill in, and the instant
+is passed beside it only so one that assembles its own query can say what period it read.
 
 This is a deliberate departure from `at`, which passes **nothing** in, and the reason for the
 departure is worth stating because it is the rule that keeps it safe. `at` refuses a parameter
@@ -585,10 +636,11 @@ row's own stylesheet rules between.
 
 The query goes in a fence that **names its language** — ` ```kql ` — which is what earns it the copy
 control and the one-operator-per-line wrap
-([17](17-cockpit.md#a-fence-that-names-a-language-carries-a-copy-control)). The fence body stays the
-declaration's query **verbatim**, and that is the invariant: the wrap is the cockpit's, the copy is
-the fence's, and a fence rewritten here to look nicer would hand an operator a query the harness never
-put to the environment. A dialect other than Kusto is a different info string, not a reflowed body.
+([17](17-cockpit.md#a-fence-that-names-a-language-carries-a-copy-control)). The fence body is the query **as it was put to the environment** — the
+declaration's own text with `{since}` substituted for the instant the work arrived, which is what makes
+it runnable as it stands rather than a template the operator has to fill in. That is the invariant: the
+wrap is the cockpit's, the copy is the fence's, and a fence rewritten here for any other reason would
+hand an operator a query the harness never put to the environment. A dialect other than Kusto is a different info string, not a reflowed body.
 
 #### Running it, where the environment said where
 

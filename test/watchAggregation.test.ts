@@ -21,8 +21,8 @@ const TEST_UK: EnvironmentConfig = {
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
-  query: "traces | where message has 'job X timed out'",
-  presence: "traces | where operation_Name == 'job X'",
+  query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
+  presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
   tolerate: 0,
 };
 
@@ -73,7 +73,12 @@ test('an aggregating presence query is refused too — a count can never answer 
 test('a query that aggregates by a key still answers one row per group, and is accepted', () => {
   assert.equal(
     WatchSchema.safeParse({
-      signals: [{ ...SIGNAL, query: "traces | where message has 'x' | summarize n = count() by role" }],
+      signals: [
+        {
+          ...SIGNAL,
+          query: "traces | where timestamp > datetime({since}) | where message has 'x' | summarize n = count() by role",
+        },
+      ],
     }).success,
     true,
   );
@@ -87,7 +92,7 @@ test('a measure is meant to aggregate and is left alone', () => {
         {
           id: 'orders-p95',
           title: 'p95',
-          query: 'requests | summarize value = percentile(duration, 95)',
+          query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
           expect: { noWorseThan: 'baseline' },
         },
       ],

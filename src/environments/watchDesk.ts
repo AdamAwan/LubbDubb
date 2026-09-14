@@ -143,6 +143,7 @@ export class WatchDesk {
             checkId: check.id,
             query: check.presence,
             kind: 'presence',
+            since: window.openedAt,
           });
     const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
     const reading = silent
@@ -153,6 +154,7 @@ export class WatchDesk {
           checkId: check.id,
           query: check.query,
           kind: check.kind === 'measure' ? 'measure' : 'signal',
+          since: window.openedAt,
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading });
     this.deps.store.recordWatchReading({

@@ -103,6 +103,12 @@ export function watchNote(environments: readonly { name: string; watch?: { schem
       'healthy release, and that is the direction that reads as success — so without one the harness would ' +
       'report your fix verified on the strength of a typo.',
     '',
+    'Every query carries `{since}`, bounding it to the period being watched — `| where timestamp > ' +
+      'datetime({since})`, with your own timestamp column. The harness substitutes the moment the work ' +
+      'arrived on the environment; a query without it answers about the whole retention period, which counts ' +
+      'the very occurrences the work is meant to stop and reads as regressed for ever. It is refused at ' +
+      'submission, both queries of a signal and a measure alike.',
+    '',
     'Both queries are run once against the environment the moment you submit, and you are told what each ' +
       'answered. A query that resolves nothing comes back to you here, where it is cheap.',
     '',
@@ -140,6 +146,11 @@ export function watchDeclareNote(environments: readonly { name: string; watch?: 
       '**measure** asks for one number and declares either a threshold or `noWorseThan: "baseline"`, which ' +
       'is the right shape for an optimisation: the same query is run the moment the operator accepts it, ' +
       'and that reading is what your work has to beat.',
+    '',
+    'Every query carries `{since}` — `| where timestamp > datetime({since})`, with your own timestamp ' +
+      'column — which the harness replaces with the moment the work arrived on that environment. Without it ' +
+      'the query answers about the whole retention period and counts the occurrences your fix was for, ' +
+      'reporting a regression on the strength of the defect it fixed. It is refused without one.',
     '',
     'Use it too where the fix changed what the right question is. A timeout fixed by adding a retry does ' +
       'not stop producing timeouts — the honest signal becomes "the job fails after retries", and only you ' +

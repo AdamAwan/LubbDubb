@@ -1,5 +1,7 @@
 // → docs/spec/24-environments.md
 
+import { carriesSince, missingSinceRefusal, withSince } from '../validation/watchQueryShape.js';
+
 export type WatchQueryKind = 'signal' | 'presence' | 'measure';
 
 type WatchRow = Record<string, string | number | boolean | null>;
@@ -19,6 +21,28 @@ export function unanswered(detail: string): WatchResult {
 
 export function idProjection(query: string, checkId: string): string {
   return `${query}\n| extend ${WATCH_ID_COLUMN} = "${checkId}"`;
+}
+
+/**
+ * The query as it is put to the environment, or **a refusal where it carries no
+ * `{since}`** — which is every check declared before the token existed. A reading
+ * that cannot be bounded to the window is not an answer: it counts what happened
+ * before the work arrived, which reads as the defect the work fixed.
+ *
+ * Both observers route through it rather than their callers, so a query reaches
+ * a shell substituted or not at all.
+ *
+ * @public read by `CommandEnvironmentObserver` and by its fake
+ */
+export function preparedQuery(
+  query: string,
+  since: string,
+  checkId: string,
+  kind: WatchQueryKind,
+): { query: string; refusal: null } | { query: null; refusal: string } {
+  if (!carriesSince(query))
+    return { query: null, refusal: missingSinceRefusal(kind === 'presence' ? 'presence' : 'query') };
+  return { query: idProjection(withSince(query, since), checkId), refusal: null };
 }
 
 export function parseWatchResult(stdout: string, checkId: string, kind: WatchQueryKind): WatchResult {

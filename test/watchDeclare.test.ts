@@ -26,14 +26,14 @@ const TEST_UK: EnvironmentConfig = {
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
-  query: "traces | where message has 'job X timed out'",
-  presence: "traces | where operation_Name == 'job X'",
+  query: "traces | where timestamp > datetime({since}) | where message has 'job X timed out'",
+  presence: "traces | where timestamp > datetime({since}) | where operation_Name == 'job X'",
 };
 
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
-  query: 'requests | summarize value = percentile(duration, 95)',
+  query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
   expect: { noWorseThan: 'baseline' },
   unit: 'ms',
 };
@@ -157,7 +157,10 @@ test('it merges on the slug, and a live check is untouched until the amendment i
   });
   assert.equal(system.store.listGoalWatches()[0]!.dryRunRows, 1);
 
-  const amended = { ...SIGNAL, query: "traces | where message has 'job X failed after retries'" };
+  const amended = {
+    ...SIGNAL,
+    query: "traces | where timestamp > datetime({since}) | where message has 'job X failed after retries'",
+  };
   const res = await declare(system, spawnWorker(system), {
     note: 'The fix adds a retry, so timeouts do not stop — the honest signal is the failure after them.',
     signals: [amended],
@@ -197,7 +200,12 @@ test("an accepted amendment clears the reading it replaced, as a planner's amend
 
   await declare(system, spawnWorker(system), {
     note: 'The right question changed with the fix.',
-    signals: [{ ...SIGNAL, query: "traces | where message has 'job X failed after retries'" }],
+    signals: [
+      {
+        ...SIGNAL,
+        query: "traces | where timestamp > datetime({since}) | where message has 'job X failed after retries'",
+      },
+    ],
   });
   system.store.ruleOnWatchProposal('issue:12', 'no-timeouts', true);
 
