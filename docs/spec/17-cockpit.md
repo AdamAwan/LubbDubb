@@ -2617,8 +2617,8 @@ this page's job is to say when it has not done it well enough.
 
 The overview has **two shapes**, and which one is drawn is a [place](#the-address-bar) — `?overview=`,
 with `cards` the absent value. They answer different questions and the deployment picks per operator
-rather than the product picking once: **Cards** answers _what is happening_, and **Next** answers
-_what do I do about it_. → [one ask at a time](#one-ask-at-a-time)
+rather than the product picking once: **Cards** answers _what is happening_, and **Focus mode**
+answers _what do I do about it_. → [one ask at a time](#one-ask-at-a-time)
 
 ### Cards
 
@@ -3446,7 +3446,12 @@ the card's edge.
 
 ### One ask at a time
 
-`?overview=next`, drawn by `web/src/console/overviews/NextOverview.tsx`. The **whole** of the
+`?overview=focus`, drawn by `web/src/console/overviews/FocusOverview.tsx`. It was `?overview=next`
+and drawn by `NextOverview`, and the switch chip read **Next** — a word that named the shape's
+_control_ rather than the shape: the queue's own Next button sits three inches away, and the panel
+answers "what am I on" rather than "what comes after this". **Focus mode** is the name now, and
+`readPlace` still lands `overview=next` on it rather than falling back to Cards, because a link
+naming it is one an operator saved or sent. → [the address bar](#the-address-bar) The **whole** of the
 situation area is one ask — the one holding the most work — with the control that answers it, and the
 operator moves along the queue rather than choosing from it.
 
@@ -3536,19 +3541,30 @@ goals quietly working their own plans; then the faults, which are nobody's move.
 module's own, fixed rather than sorted — these are five different kinds of thing and there is no
 figure to rank them by.
 
-**Each band wears its lead's tone, and one of them wears none.** `LEAD_TONE` is total over the keys,
+**They are tiles in a grid, and they were a column of bands first.** The bands read down, one at a
+time, which is the shape of a queue — and this panel is not a queue: it is five _different_ readings,
+and what an operator wants from it is to take them in at once and pick one. Side by side they do that,
+and the count in the heading stops being the only thing that says how much is here. A tile's control
+sits on its floor rather than beside its title, so the presses line up across a row whose bodies are
+different heights.
+
+**What the grid costs is measure, and it is a real cost.** A name in a 290px column truncates, and the
+name is the thing an operator clicks — `#390 Validate job payloads in the …`. The bands gave every
+name the panel's full width. The grid is the trade this surface takes: the leads are chosen for being
+worth a glance, and the list each one opens is where the full names live.
+
+**Each tile wears its lead's tone, and one of them wears none.** `LEAD_TONE` is total over the keys,
 like the rail's own tables, and it answers *whose* the reading is rather than how bad it is: amber the
 operator's own move, blue the fleet's supply, red something wrong, and **no tone at all** on the goals
-quietly working their plans — a colour on every row is a colour that says nothing. It reaches the glass
-as a rule down the band's left edge and the figure's ink, and nothing else: a fill behind five rows is
-a page of colour. The rule is the tone's *line* at rest and its ink on hover, where the band also takes
-a ground — five saturated edges down one panel is the loudest thing on a surface whose subject is that
-nothing is urgent.
+quietly working their plans — a colour on every tile is a colour that says nothing. It reaches the
+glass as a rule along the tile's top edge and the figure's ink, and nothing else: a fill behind five
+tiles is a page of colour. The rule is the tone's *line* at rest and its ink on hover — five saturated
+edges is the loudest thing on a surface whose whole subject is that nothing is urgent.
 
 Five more rules run through them.
 
 **A lead with nothing in it is never built.** This panel is read at the moment an operator is deciding
-whether there is anything here at all, and a column of rows reading `0` is the furniture that answers
+whether there is anything here at all, and a grid of tiles reading `0` is the furniture that answers
 that question wrongly. The figure is the lead's own count, so a drawn lead always counts something —
 `test/overviewLeads.test.ts` asserts that from both sides.
 
@@ -3582,7 +3598,7 @@ been sitting. A named thing is drawn as the control with its refs beside it, nev
 button. → [links](#links)
 
 **Where a lead goes is a value, not a callback.** `LeadWhere` is a union and the routing is one
-`switch` in `NextOverview`, total over it, so a lead added with nowhere to go fails the typecheck
+`switch` in `FocusOverview`, total over it, so a lead added with nowhere to go fails the typecheck
 rather than drawing a control that does nothing — this document's most repeated bug, and the reason
 `refs` on a row is required.
 

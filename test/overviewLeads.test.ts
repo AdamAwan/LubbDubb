@@ -12,7 +12,7 @@ import { buildLeads } from '../web/src/console/overviews/leads.js';
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
-const { NextOverview } = await import('../web/src/console/overviews/NextOverview.js');
+const { FocusOverview } = await import('../web/src/console/overviews/FocusOverview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
@@ -41,7 +41,7 @@ function view(over: Partial<CockpitView> = {}): CockpitView {
       selectedGoal: null,
       consolePanel: null,
       tab: 'overview',
-      overviewShape: 'next',
+      overviewShape: 'focus',
     }),
     needsYou: [],
     ...over,
@@ -56,7 +56,7 @@ function markup(v: CockpitView): string {
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
       openPr: () => undefined,
       hasPr: (n: number) => hasPrPage(v.state, n),
-      children: createElement(NextOverview, { view: v, actions }),
+      children: createElement(FocusOverview, { view: v, actions }),
     }),
   );
 }
