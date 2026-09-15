@@ -11,6 +11,7 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
 import { waitedFor } from '../GoalPage.js';
+import { PetFloor } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';
 import { byWeight, partsHeld } from './asks.js';
@@ -78,6 +79,8 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
   return (
     <div className="cn-ov-focus">
       <OverviewSwitch shape="focus" actions={actions} />
+
+      <FleetSlots view={view} actions={actions} />
 
       <div className={`cn-ov-focus-card cn-t-${KIND_TONE[row.kind]}`}>
         {/* The pips are the whole queue and each is a way into it: a bar that only
@@ -178,11 +181,35 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
             </footer>
           </div>
         </div>
-      </div>
 
-      {/* Under the ask rather than over it: at a tile's height, above pushes the
-          ask itself down the page. → {@link FleetSlots} */}
-      <FleetSlots view={view} actions={actions} />
+        <Pets view={view} actions={actions} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The vivarium's creatures on the card's own floor, without the banner.
+ *
+ * The strip the rest of the cockpit carries is suppressed on this shape — the
+ * counts, the beats and the chevron are three quiet readings, and three quiet
+ * readings pinned across the bottom of the one surface that argues for a single
+ * thing at full voice are a second surface. The creatures stay because they were
+ * never a reading: they are the corner of the room the operator looks at between
+ * decisions, and this shape is where the decisions are.
+ * → {@link PetFloor}, docs/spec/22-pets.md
+ */
+function Pets({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
+  if (view.state.pets === null) return null;
+  return (
+    <div className="cn-ov-focus-pets">
+      <PetFloor
+        pets={view.state.pets}
+        runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+        paused={view.state.control.paused}
+        onOpen={() => actions.openPanel('pets')}
+        onHatch={(id) => actions.hatchEgg(id)}
+      />
     </div>
   );
 }
@@ -313,6 +340,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
   return (
     <div className="cn-ov-focus">
       <OverviewSwitch shape="focus" actions={actions} />
+      <FleetSlots view={view} actions={actions} />
       <div className="cn-ov-focus-clear">
         <h2>Nothing needs you.</h2>
         <p>
@@ -345,8 +373,8 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
             </ul>
           </>
         )}
+        <Pets view={view} actions={actions} />
       </div>
-      <FleetSlots view={view} actions={actions} />
     </div>
   );
 }

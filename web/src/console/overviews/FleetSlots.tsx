@@ -7,7 +7,7 @@ import { standsFor } from '../../view/goalPage.js';
 import { elapsed } from '../../components/util.js';
 import { agentLamp } from '../Overview.js';
 
-// → docs/spec/17-cockpit.md#what-the-fleet-is-doing-under-the-ask
+// → docs/spec/17-cockpit.md#what-the-fleet-is-doing-above-the-ask
 
 /** How many agents get a tile before the rest become a count on the control. */
 const TILED = 5;
