@@ -1,8 +1,8 @@
-import type { SentPrReplies } from '../pr/prThreads.js';
+import { replyKey, type SentPrReplies } from '../pr/prThreads.js';
 import type { PrReplySent } from '../types.js';
 import type { StoreContext } from './context.js';
 
-// → docs/spec/14-persistence.md
+// â†’ docs/spec/14-persistence.md
 
 export class PrReplyStore implements SentPrReplies {
   constructor(private readonly ctx: StoreContext) {}
@@ -14,10 +14,13 @@ export class PrReplyStore implements SentPrReplies {
   }
 
   prReplyRefs(prNumber: number): ReadonlySet<string> {
-    const rows = this.ctx.prep(`SELECT comment_ref FROM pr_replies_sent WHERE pr_number=?`).all(prNumber) as {
+    const rows = this.ctx
+      .prep(`SELECT thread_id, comment_ref FROM pr_replies_sent WHERE pr_number=?`)
+      .all(prNumber) as {
+      thread_id: string;
       comment_ref: string;
     }[];
-    return new Set(rows.map((r) => r.comment_ref));
+    return new Set(rows.map((r) => replyKey(r.thread_id, r.comment_ref)));
   }
 
   listPrRepliesSentSince(since: string): PrReplySent[] {

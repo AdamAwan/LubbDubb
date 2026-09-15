@@ -68,7 +68,7 @@ test('the provider keeps the conversation and where it hangs, not just the root'
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
     { id: 102, authorLogin: 'bob', body: 'not convinced', inReplyToId: 100 },
   ];
-  const [built] = buildReviewThreads(comments, [], new Set(['101']));
+  const [built] = buildReviewThreads(comments, [], new Set(['100:101']));
   assert.equal(built!.id, '100');
   assert.equal(built!.path, 'src/a.ts');
   assert.equal(built!.line, 42);
@@ -111,7 +111,7 @@ test('a thread the reviewer resolved is resolved, and one the fleet answered is 
   ];
   const threads: GhReviewThread[] = [{ rootCommentId: 200, isResolved: true }];
   const states = Object.fromEntries(
-    buildReviewThreads(comments, threads, new Set(['101'])).map((t) => [t.id, t.state]),
+    buildReviewThreads(comments, threads, new Set(['100:101'])).map((t) => [t.id, t.state]),
   );
   assert.deepEqual(states, { '100': 'answered', '200': 'resolved' });
 });
