@@ -35,6 +35,7 @@ function build(): System {
   return buildSystem(
     loadConfig({
       auth: { enabled: false } as never,
+      validation: { checkSets: true } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',
@@ -254,7 +255,7 @@ function planTimeCheck(patch: Partial<ValidationCheck>): ValidationCheck {
 }
 
 test('the rule dispatches for a delivered goal with no check set, and for nothing else', async () => {
-  const d = new RuleDispatcher();
+  const d = new RuleDispatcher({ checkSets: true });
 
   const open = await d.decide(ctx({ deliveries: [] }));
   assert.deepEqual(authoringDispatches(open.actions), [], 'a goal that is not delivered has nothing to write against');
@@ -316,7 +317,7 @@ test('the rule dispatches for a delivered goal with no check set, and for nothin
 });
 
 test('the dispatch goes through the candidate list, so the headroom cut and the queue see it', async () => {
-  const d = new RuleDispatcher();
+  const d = new RuleDispatcher({ checkSets: true });
   const full = await d.decide(ctx({ agentHeadroom: 0 }));
   assert.deepEqual(authoringDispatches(full.actions), [], 'no headroom, no dispatch');
   assert.deepEqual(
@@ -327,7 +328,7 @@ test('the dispatch goes through the candidate list, so the headroom cut and the 
 });
 
 test('the prompt appends the hint, the coverage part and the environments rather than interpolating them', async () => {
-  const d = new RuleDispatcher();
+  const d = new RuleDispatcher({ checkSets: true });
   const decided = await d.decide(
     ctx({
       validationPlans: [
@@ -567,7 +568,7 @@ function assessPrompt(actions: { type: string }[]): string | null {
 }
 
 test('the assessor is briefed to write the check set, and only where there is one to write', async () => {
-  const d = new RuleDispatcher();
+  const d = new RuleDispatcher({ checkSets: true });
 
   const owed = assessPrompt((await d.decide(assessable())).actions);
   assert.ok(owed !== null, 'the assessor fires for a goal with work behind it and no verdict');
@@ -604,7 +605,7 @@ test('an assessor may write the check set, and only for a goal it has just deliv
 });
 
 test('the validation planner stays as the catch-up for a turn that ended before the second call', async () => {
-  const d = new RuleDispatcher();
+  const d = new RuleDispatcher({ checkSets: true });
 
   const owed = await d.decide(ctx());
   assert.deepEqual(

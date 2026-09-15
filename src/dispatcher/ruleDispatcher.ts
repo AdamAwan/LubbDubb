@@ -121,6 +121,7 @@ interface RuleDispatcherOptions {
   testPartNote?: string;
   stateDeclareNote?: string;
   remoteValidationOn?: boolean;
+  checkSets?: boolean;
   validationPlanNote?: string;
 }
 
@@ -140,6 +141,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly validationRoot: string;
   private readonly localValidation: () => LocalValidationPolicy;
   private readonly remoteValidationOn: boolean;
+  private readonly checkSets: boolean;
   private readonly review: PrReviewPolicy;
   private readonly reviewCharters: PrReviewCharters;
   private ci: CiPolicy;
@@ -163,9 +165,11 @@ export class RuleDispatcher implements Dispatcher {
       testPartNote = '',
       stateDeclareNote = '',
       remoteValidationOn = false,
+      checkSets = false,
       validationPlanNote = '',
     } = opts;
     this.remoteValidationOn = remoteValidationOn;
+    this.checkSets = checkSets;
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
     this.testPartNote = testPartNote;
@@ -217,6 +221,7 @@ export class RuleDispatcher implements Dispatcher {
       review: this.review.enabled,
       sequencer: this.pickup.sequencing === 'full',
       remoteValidation: this.remoteValidationOn,
+      checkSets: this.checkSets,
     };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.emittedBy !== undefined) continue;
@@ -466,6 +471,7 @@ export class RuleDispatcher implements Dispatcher {
       watchDeclareNote: this.watchDeclareNote,
       testPartNote: this.testPartNote,
       validationPlanNote: this.validationPlanNote,
+      checkSets: this.checkSets,
       stateDeclareNote: this.stateDeclareNote,
       validationRoot: this.validationRoot,
       liveLocalRun: ctx.localRun ?? null,

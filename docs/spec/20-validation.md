@@ -1,10 +1,12 @@
 # 20 — Validation
 
-`src/validation/`. **Always on** — there is no switch. It spends no agent and gates nothing, so there
-was never much to weigh in turning it off, and the cost of the switch was a branch at every call site
-that read it plus a `validationEnabled` threaded through four layers to say "yes". A config file
-still setting `validation.enabled` is warned about and ignored
-([02](02-configuration.md#retired-keys)).
+`src/validation/`. **Always on** — there is no switch on the subsystem. It spends no agent and gates
+nothing, so there was never much to weigh in turning it off, and the cost of the switch was a branch at
+every call site that read it plus a `validationEnabled` threaded through four layers to say "yes". A
+config file still setting `validation.enabled` is warned about and ignored
+([02](02-configuration.md#retired-keys)). What _is_ behind a flag is the half that **writes**: whether
+the fleet authors a check set for a goal it has delivered and puts it to an operator to accept.
+→ [The authoring gate](#the-authoring-gate)
 
 A plan says what is wrong, what will be done, and what makes each part done. It does not say **how
 anyone checks the goal was met**. `verification` — one optional narrative field, "how anyone will
@@ -244,6 +246,45 @@ paragraph is not refused, and nothing reformats what arrives. What makes the req
 the other half: `CheckSetAsk` draws both fields through `renderMarkdown` rather than as raw strings.
 Drawn as a string, an agent that took the ask writes markers an operator reads literally, which is
 worse than the prose it replaced. The two halves ship together or neither does.
+
+### The authoring gate
+
+**Built.** `validation.checkSets` — a boolean, **off by default** — is the one switch in this document.
+It gates **authoring and nothing else**: whether a delivered goal grows a check set the fleet wrote,
+and whether that set is put to an operator. Everything that _reads_ a set is outside it, which is what
+makes leaving it off safe.
+
+Off, three things do not happen and nothing else changes:
+
+| On the flag                                                | Off the flag (unchanged)                               |
+| ---------------------------------------------------------- | ------------------------------------------------------ |
+| Rule `validation-plan` dispatches a planner                 | The bench, and every check already on it                |
+| Rule `validation-plan-approval` proposes an authored set    | The hand-over, and rule `validate-check` running one    |
+| The assessor's `issue-assess` fold asking for a set         | `validation_amend`, correcting a check that exists      |
+| `validation_plan`, which refuses with the flag named        | The desktop channel, a claim, a reading, a sheet        |
+| `assess_issue`'s own answer asking for the set              | A **plan-time** set a plan document declared, ingested as ever |
+
+The last column is the point. The flag withholds no reading and deletes no row: a goal that already
+has a set keeps it, an operator who hands a check to the fleet still gets an agent on it, and a plan
+document's own `validation` block is ingested exactly as it always was
+([the check set](#the-check-set)). Turning the flag off on a running deployment stops the fleet
+_proposing_ and stops nothing else.
+
+**The tool is fenced as well as the rules.** With the flag off no prompt asks for a set, but
+`validation_plan` stays in the assessor's `tools/list` — so it refuses, naming the flag, rather than
+writing a set that rule `validation-plan-approval` is not there to put to anybody. A set written and
+never proposed is inert with nothing red, which is the failure this document is built against; and
+`assess_issue`'s own answer, the fold an override cannot drop
+([05](05-dispatcher.md#issue-assess--the-assessor)), falls silent for the same reason.
+
+**A set authored before the flag went off is proposed by nobody.** Its rows are still there and
+`released_at` is still null, so nothing reads it as work — and turning the flag back on puts it up on
+the next pulse, which is the behaviour a flag somebody is fiddling with should have.
+
+Why a flag at all, on a feature that gates nothing: the set is the first thing in the harness an
+operator is asked to _accept_ without a way to say "not for this goal" — reject sends it back to be
+rewritten rather than declining it — and until that shape is settled, a deployment should be able to
+run every other part of validation without meeting the card.
 
 ### The check set is proposed before it is work
 

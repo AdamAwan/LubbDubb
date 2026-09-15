@@ -305,6 +305,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     profiles: orderedProfiles(config.agentModels),
     reviewModes: reviewModeNames(config.review),
     reviewAllowSkip: config.review.allowSkip,
+    checkSets: config.validation.checkSets,
     repoRoot: config.repoRoot,
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
     permissions: (): PermissionDesk => permissions,
@@ -534,6 +535,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     testPartNote: testPartNote(config.environments),
     stateDeclareNote: stateDeclareNote(config.environments),
     remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
+    checkSets: config.validation.checkSets,
     validationPlanNote: validationPlanNote(config.environments),
   });
   const dispatcher: Dispatcher = rules;

@@ -73,6 +73,7 @@ function build(environments: EnvironmentConfig[]): System {
   return buildSystem(
     loadConfig({
       auth: { enabled: false } as never,
+      validation: { checkSets: true } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',

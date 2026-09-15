@@ -10,12 +10,13 @@ import type { RawAction, StageContext } from './context.js';
 // → docs/spec/05-dispatcher.md (rule `issue-assess`)
 
 /**
- * The assessor's second output, on the two gates rule `validation-plan` used to carry alone: the goal
- * has a plan (`covers` names live part slugs, and `validation_plan` refuses a goal without one) and
+ * The assessor's second output, on `validation.checkSets` and the two gates rule `validation-plan` used
+ * to carry alone: the goal has a plan (`covers` names live part slugs, and `validation_plan` refuses a goal without one) and
  * nobody has authored a check set yet. Empty for a goal failing either, so the prompt never asks for
  * something the tool would refuse.
  */
 function authoringAppendix(s: StageContext, root: string, plan: Plan | undefined): string {
+  if (!s.checkSets) return '';
   if (!plan) return '';
   const record = s.validationPlans.get(root) ?? null;
   if (checkSetAuthored({ record, checks: s.validationChecks.get(root) ?? [] })) return '';

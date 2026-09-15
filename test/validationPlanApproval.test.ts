@@ -34,6 +34,7 @@ function build(): System {
   return buildSystem(
     loadConfig({
       auth: { enabled: false } as never,
+      validation: { checkSets: true } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',
@@ -187,7 +188,7 @@ function checkDispatches(actions: { type: string }[]): string[] {
 }
 
 test('an authored check set is put to the operator, and nothing runs it until they answer', async () => {
-  const decided = await new RuleDispatcher().decide(ctx());
+  const decided = await new RuleDispatcher({ checkSets: true }).decide(ctx());
   const ask = asks(decided.actions);
   assert.equal(ask.length, 1, 'the set is proposed');
   assert.equal(ask[0]?.checks, 1);
@@ -235,7 +236,7 @@ test('the ask carries each check’s journey, who carries each step, and which r
       },
     ],
   });
-  const decided = await new RuleDispatcher().decide(ctx({ validationChecks: [withSteps] }));
+  const decided = await new RuleDispatcher({ checkSets: true }).decide(ctx({ validationChecks: [withSteps] }));
   const set = asks(decided.actions)[0]?.set ?? [];
   assert.deepEqual(
     set[0]?.steps.map((s) => [s.kind, s.actor]),
@@ -254,7 +255,9 @@ test('the ask carries each check’s journey, who carries each step, and which r
 });
 
 test('a released set is not re-proposed, and its fleet checks dispatch', async () => {
-  const decided = await new RuleDispatcher().decide(ctx({ validationPlans: [record({ releasedAt: NOW })] }));
+  const decided = await new RuleDispatcher({ checkSets: true }).decide(
+    ctx({ validationPlans: [record({ releasedAt: NOW })] }),
+  );
   assert.deepEqual(asks(decided.actions), [], 'the operator has answered; it is not asked again');
   assert.deepEqual(checkDispatches(decided.actions), ['issue:12:validate:csv-opens']);
 });
@@ -272,12 +275,12 @@ test('a pending proposal holds the ask rather than raising a second one', async 
     escalationId: 'esc-1',
     createdAt: NOW,
   };
-  const decided = await new RuleDispatcher().decide(ctx({ proposals: [pending] }));
+  const decided = await new RuleDispatcher({ checkSets: true }).decide(ctx({ proposals: [pending] }));
   assert.deepEqual(asks(decided.actions), []);
 });
 
 test('an empty set is proposed too — declaring nothing is the verdict worth a second pair of eyes', async () => {
-  const decided = await new RuleDispatcher().decide(
+  const decided = await new RuleDispatcher({ checkSets: true }).decide(
     ctx({
       validationPlans: [record({ note: 'the suite settles it', emptyReason: 'area Exports asserts the file' })],
       validationChecks: [],
