@@ -11257,6 +11257,32 @@ button.pk.pk {
 .vp-expect .lb {
   margin-right: 7px;
 }
+/* The planner's own words, as grouped bullets. The label takes its own line here
+   rather than the one it introduces: what follows is a block, and a bullet list
+   hanging off the end of a label reads as neither. Paragraphs and lists are held
+   tight — this is a card an operator scans, not a document. */
+.vp-prose > .lb {
+  display: block;
+  margin: 0 0 4px;
+}
+.vp-prose p,
+.vp-prose ul,
+.vp-prose ol {
+  margin: 0 0 5px;
+}
+.vp-prose > :last-child {
+  margin-bottom: 0;
+}
+.vp-prose ul,
+.vp-prose ol {
+  padding-left: 17px;
+}
+.vp-prose li {
+  margin: 0 0 2px;
+}
+.vp-prose strong {
+  color: var(--text);
+}
 .vp-hint {
   color: var(--muted);
 }

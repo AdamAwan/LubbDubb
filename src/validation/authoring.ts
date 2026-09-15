@@ -137,7 +137,7 @@ export function authoringBriefing(input: {
   }
 
   if (input.environments !== '') lines.push(input.environments);
-  lines.push(TEST_PLAN_NOTE);
+  lines.push(TEST_PLAN_NOTE, WRITING_NOTE);
   return lines.join('\n');
 }
 
@@ -170,6 +170,36 @@ code any check you wrote was written against moves underneath it. Say what is mi
 The rest of this section is what the check set is written from.
 `;
 }
+
+/**
+ * How the two fields that stay the planner's own words are written. Appended rather than
+ * interpolated, for the reason everything an agent must read is.
+ *
+ * The operator meets `note` and `expect` on a card, at the moment they are deciding whether to
+ * release the set — not in a document they sit down with. Written as one dense paragraph both are
+ * read by skimming, which is how an operator accepts a set whose second half they never took in.
+ * → docs/spec/20-validation.md#how-the-note-and-the-expect-are-written
+ */
+const WRITING_NOTE = `## Write the note and every \`expect\` as grouped bullets
+
+They are the two things on the approval card that stay your own words, and an operator meets them
+while deciding whether to release the set. Both are markdown, and the card draws them as markdown.
+
+- **Bullets, not paragraphs.** One fact per bullet. A bullet that needs a semicolon is two bullets.
+- **Group them under short bold headings** where there is more than a handful — \`**The numbers**\`,
+  \`**The logs**\`, \`**On screen**\`. Three or four bullets need no headings at all.
+- **Plain language, short sentences.** Write what somebody has to see, not an argument for it.
+- **Put the numbers and the log lines in the bullets** — \`41 of 74 rows\`, the line as a
+  \`code span\`. They are what the check is actually falsifiable on.
+- **Anything an operator has to weigh before accepting goes last, under its own heading** — a
+  check that needs live data, a customer named on purpose, something you deliberately did not do.
+  One or two bullets, said plainly.
+
+For \`note\`, the first group is where the set came from: the hint, or the delivered code you read in
+its place. What you deliberately left out of the set is its own group, with what already settles it.
+
+This is about form only. It removes nothing you would have said and adds nothing you would not.
+`;
 
 /**
  * The test plan, appended rather than interpolated for the reason everything an agent must read is:
