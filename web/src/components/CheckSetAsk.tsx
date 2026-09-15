@@ -3,6 +3,7 @@ import type { CheckDecline, ProposedCheck } from '../types.js';
 import type { ProposedCheckSet } from '../checkSet.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { renderMarkdown } from './markdown.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -16,6 +17,11 @@ import { Tag } from './tag.js';
  * person has to carry, or see which reads the store. A verdict is being asked for on the *set*, so the
  * set has to be scannable.
  *
+ * **The two fields that stay the planner's own words — its `note` and each check's `expect` — draw
+ * through `renderMarkdown`.** Both are asked for as grouped bullets, and drawn as a raw string the
+ * markers are what an operator reads: a paragraph of literal `- ` and `**` that is harder to scan
+ * than the prose the bullets replaced.
+ *
  * @public drawn by `EscalationCard` for a `validation_plan` proposal
  */
 export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines?: CheckDeclines }): JSX.Element {
@@ -23,10 +29,10 @@ export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines
   return (
     <div className="vp-ask">
       {set.note !== null && (
-        <p className="vp-note">
+        <div className="vp-note vp-prose">
           <span className="lb lb-sm">What the planner says</span>
-          {set.note}
-        </p>
+          {renderMarkdown(set.note)}
+        </div>
       )}
       {set.hint !== null && (
         <p className="vp-hint">
@@ -83,9 +89,9 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
           </ol>
         )}
         {check.expect !== '' && (
-          <div className="vp-expect">
+          <div className="vp-expect vp-prose">
             <span className="lb lb-sm">Passes when</span>
-            {check.expect}
+            {renderMarkdown(check.expect)}
           </div>
         )}
         {/* The planner's nomination and the fact that stops it are the two things an operator needs

@@ -155,7 +155,17 @@ export const ValidationCheckSchema = z
       .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
     title: z.string().min(1),
     do: z.string().min(1),
-    expect: z.string().min(1),
+    expect: z
+      .string()
+      .min(1)
+      .describe(
+        'What a pass looks like — everything this one run has to satisfy. Markdown, and the ' +
+          'approval card draws it as markdown: write it as **grouped bullets**, one fact per ' +
+          'bullet, under short bold headings where there is more than a handful. Put the numbers ' +
+          'and the log lines in the bullets — they are what the check is falsifiable on. An ' +
+          'operator reads this while deciding whether to release the set, so a dense paragraph is ' +
+          'read by skimming.',
+      ),
     uses: z.array(z.string().min(1)).default([]),
     covers: z.array(z.string().min(1)).default([]),
     fleetCandidate: z.boolean().default(false),

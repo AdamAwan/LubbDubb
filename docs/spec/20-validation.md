@@ -220,6 +220,31 @@ Both are refusals rather than conventions: `validation_plan` requires `note` on 
 requires `emptyReason` on a call declaring no checks. A refused call authors nothing — the stamp is
 not written, so the sheet keeps waiting rather than assembling off a set nobody wrote.
 
+### How the note and the `expect` are written
+
+Everything else on the approval card is structure the harness assembled: the rows, the steps, who each
+step falls to, the flags. The planner's `note` and each check's `expect` are the two things on it that
+stay an agent's own words — and they were arriving as one dense paragraph each, a full screen of prose
+above rows that exist precisely because prose could not be compared. An operator reads them while
+deciding whether to release the set, standing at a card rather than sitting with a document, so a
+paragraph is read by skimming and a set gets accepted on a second half nobody took in.
+
+So both are asked for as **grouped bullets**: one fact per bullet, short bold headings where there is
+more than a handful, plain sentences, and the numbers and log lines in the bullets rather than around
+them — they are what the check is falsifiable on. For a `note`, the first group is where the set came
+from and what was deliberately left out of it is its own group; anything an operator has to weigh
+before accepting goes last, under its own heading. The ask is `WRITING_NOTE` in
+`src/validation/authoring.ts`, **appended** to the rendered prompt for the reason everything an agent
+must read is ([09](09-execution.md)), so it reaches the `validation-plan` template and the
+`issue-assess` fold alike; `expect`'s own `describe` in `src/validation/checkDocument.ts` says the
+same thing on the tool schema, for an agent that reads the shape rather than the prompt.
+
+**It is a request about form and binds nothing.** No refusal enforces it — a planner that writes a
+paragraph is not refused, and nothing reformats what arrives. What makes the request worth making is
+the other half: `CheckSetAsk` draws both fields through `renderMarkdown` rather than as raw strings.
+Drawn as a string, an agent that took the ask writes markers an operator reads literally, which is
+worse than the prose it replaced. The two halves ship together or neither does.
+
 ### The check set is proposed before it is work
 
 **Built.** Authoring is not the release. A check set is a claim about what running the delivered goal
@@ -474,7 +499,7 @@ one at boot, `id` and `letter` untouched
 | `title`          | One line, the headline.                                                                                                                                                                                                                           |
 | `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                            |
 | `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. It is also where the **area** a remote run selects the check by lives, and the spec names that area is expected to run: both are read off a `suite` step (`stepArea`, `stepExpects`) and the check carries no field for either, because one fact with two homes drifts. → [The test plan](#the-test-plan), [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
-| `expect`         | What a pass looks like. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy.                                                                                                                              |
+| `expect`         | What a pass looks like, markdown. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy. Asked for as grouped bullets and drawn as markdown — [How the note and the `expect` are written](#how-the-note-and-the-expect-are-written).                                                                                                                              |
 | `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                    |
 | `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                            |
 | `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                               |
