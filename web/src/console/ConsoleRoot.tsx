@@ -130,8 +130,11 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
             between the queue and the work. The wide arrangement is unchanged — the
             sheet places it back on the rail's floor, below the rail's scrolling list,
             so a long queue scrolls behind it. Absent entirely when the snapshot ships
-            no vivarium — the feature off, or on and hidden. */}
-        {view.state.pets !== null && (
+            no vivarium — the feature off, or on and hidden, and absent on the shape
+            that draws the creatures itself: the focus shape puts them on the floor
+            of its own card without the banner, and both at once is the vivarium
+            twice. → {@link PetFloor} */}
+        {view.state.pets !== null && !railless(view) && (
           <Vivarium
             pets={view.state.pets}
             runningAgents={view.state.agents.filter((a) => a.status === 'running').length}

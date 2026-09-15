@@ -484,8 +484,8 @@ once.
 | `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
 | `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
-| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                       |
-| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                     |
+| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
+| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                    |
 | `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -1039,7 +1039,7 @@ empty "Yours to do" under a full "Blocking" is furniture.
 
 ### An ask that asks for work draws the work
 
-Almost every ask on this surface is answered *by* the ask: a verdict, a pick, a sentence in a box. The
+Almost every ask on this surface is answered _by_ the ask: a verdict, a pick, a sentence in a box. The
 `validate` bench row is not — it asks somebody to go and run a delivered goal's checks and record what
 they saw ([20](20-validation.md#saying-so-on-the-bench)) — and its body used to be the desk's prose and
 nothing else: a paragraph, a line per outstanding check naming it, and the ticket's link. On the rail
@@ -1535,7 +1535,7 @@ panel you were looking at, and nobody had decided it.
 settling row went out as `<ButtonRow bar><HumanTaskActions/></ButtonRow>`, and `HumanTaskActions`
 drew its own `<span>` around both buttons — so the group's gap reached that one span and the two
 buttons touched. A group whose only child is another element styles nothing, and it renders as
-*almost* right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
+_almost_ right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
 pins it: the buttons are the group's own children, with nothing in between.
 
 `bar` is the group **at the foot of something it settles**: an ask, a form. It takes a rule above it and
@@ -3457,7 +3457,7 @@ operator moves along the queue rather than choosing from it.
 
 **What it is answering is that Cards has no room for the operator's own move.** Every reading there is
 true continuously — six agents out, four goals in flight, three pull requests open — and none of it is
-a question addressed to anybody. The ask that *is* a question lives on the rail beside it, in a column
+a question addressed to anybody. The ask that _is_ a question lives on the rail beside it, in a column
 narrow enough that its reason has to be a tooltip. The rail already computes the better reading:
 `needsYou.ts` gives every ask its kind, its tier and **`holding`**, the count of plan parts stalled
 behind it, which is the number that should decide what is opened first. This shape is that list, one
@@ -3466,7 +3466,7 @@ row at a time, at full width.
 **The order is `byWeight` — tier first, then `holding`.** Both halves are the rail's own; nothing here
 re-decides what the server decided.
 
-**It absorbs the rail.** Drawing the queue beside a surface that *is* the queue is the same list twice,
+**It absorbs the rail.** Drawing the queue beside a surface that _is_ the queue is the same list twice,
 and the copy on the rail is the one with no room for the reason — so `.cn-body` loses its first track
 while this shape is the situation area. Not on a goal page reached from it: that is a place one rung
 in, and the queue belongs where it has always been.
@@ -3490,17 +3490,17 @@ is cheaper than width.
 **Every region wears its name.** An unlabelled band over an unlabelled track is a row of boxes whose
 meaning the reader infers differently for each one, which is the cost this shape was meant to remove.
 
-#### What the fleet is doing, under the ask
+#### What the fleet is doing, above the ask
 
-`FleetSlots` in `web/src/console/overviews/FleetSlots.tsx`, drawn below the ask card on both states of
-the shape — the ask, and [Clear](#when-nothing-needs-you).
+`FleetSlots` in `web/src/console/overviews/FleetSlots.tsx`, drawn between the shape switch and the ask
+card on both states of the shape — the ask, and [Clear](#when-nothing-needs-you).
 
 **The shape's own cost was the flick-back.** Absorbing the rail took the fleet off the screen along
 with it, so an operator sat on an ask they were answering and left it anyway, to check the fleet was
 still moving — which is the trip this shape exists to remove. The answer is not to give the fleet band
 back: it is a reading nobody is being asked to act on, and the shape's argument is that the thing to do
 is the only thing at full weight. So the reading comes to the shape at the weight it deserves — one
-card under the work, on the panel's ground, its tiles on the track's.
+strip of tiles above the work, drawn on the pane's own ground.
 
 **A tile per _slot_, not per agent.** That is what makes the free one a reading rather than a gap: the
 card answers _is the fleet full_ in the same glance as _what is it on_, and those are the two questions
@@ -3514,11 +3514,19 @@ tile is the way to Up next, or to the launch desk where nothing is queued.
 fleet holds its slot while the cap is lowered under it, so the live count outruns the cap and a raw
 difference draws a negative number of free slots. → [the account usage windows](10-agent-runtimes.md#the-account-usage-windows)
 
-**Under the ask, not over it.** At a tile's height, above pushes the ask itself down the page, which is
-the one thing this shape exists to prevent — and a tile is a thing to look at rather than a line to
-skim past, so it belongs after the work. **This is the one place the shape prefers below**: the earlier
-attempt at the reading was a single row above the switch, and one row could not carry the agent's note
-without ellipsing the task title beside it. The tile has two lines, so it carries both.
+**Above the ask, and it was below it first.** The argument for below was that a tile's height pushes the
+ask itself down the page, which is the one thing this shape exists to prevent — but below the fold is
+where a reading goes to be missed, and the flick-back it was drawn to remove survived it. What pays for
+the height is that the tiles are a **strip**, one row deep and holding one line of tiles: the ask card's
+own top is still on the first screen at every width this shape is used at. The earlier attempt at the
+reading was a single row of _text_ above the switch, which could not carry the agent's note without
+ellipsing the task title beside it; the tile has two lines, so it carries both.
+
+**It is not in a panel.** The tiles are drawn straight on the pane — no border, no ground, no padding of
+its own — because a card above the ask is a second card competing with the one the operator is meant to
+be reading, and the shape's whole argument is that the thing to do is the only thing with a frame around
+it. The tiles keep their own borders and tones, which is what stops the row reading as loose text. The
+ask card keeps its panel: that is the one object on this surface anybody is being asked to act on.
 
 **The tile's ground comes from `agentLamp`, the lamp modifier the fleet band uses**, rather than from
 the status read a second time. Read twice, the two disagreed: an agent with an open escalation drew the
@@ -3536,24 +3544,47 @@ second copy of it here, which is the answer `buildLeads` already gives for a rea
 break the claim the grid is making; left out entirely it would be a person at a keyboard the focus
 shape never mentions.
 
-**It is held back at rest and brought up when reached for** — `opacity: 0.62`, full on `:hover` and on
+**It is held back at rest and brought up when reached for** — `opacity: 0.4`, full on `:hover` and on
 `:focus-within`. It is the one block on this shape nobody is being asked to act on, and the shape's
-argument is that the thing to do is the only thing at full voice, so the card stays legible from where
-the eye already is and recedes the moment it is not being read. The opacity sits on the **card**, not
-its parts, so the tones inside keep their relationship to each other and the block moves as one.
-`:focus-within` is not decoration: without it the card a keyboard has tabbed into stays dimmed.
+argument is that the thing to do is the only thing at full voice, so the strip stays legible from where
+the eye already is and recedes the moment it is not being read. **It is held back further than it was**
+(`0.62`) because it now sits _above_ the ask rather than below it, where the eye lands first: at the
+old weight the first thing read on the surface was the one thing nobody is being asked to act on. The
+opacity sits on the **strip**, not its parts, so the tones inside keep their relationship to each other
+and the block moves as one. `:focus-within` is not decoration: without it the strip a keyboard has
+tabbed into stays dimmed.
 
 **Under `(hover: none)` it is never dimmed.** There is no hover to restore it on a touch device, so the
-rule alone would dim the card for a whole session with no way back — the quiet kind of failure, since
+rule alone would dim the strip for a whole session with no way back — the quiet kind of failure, since
 it renders and reads as a design choice.
 
-**It draws on an empty fleet too**, saying so. A card that vanishes with its reading reads as one that
+**It draws on an empty fleet too**, saying so. A strip that vanishes with its reading reads as one that
 failed to load — the same argument the ask's own aside makes for a goal-less ask.
+
+#### The vivarium on the card's floor
+
+**This shape draws no [vivarium strip](22-pets.md#the-vivarium).** `ConsoleRoot` suppresses it on the
+same `railless` cut that takes the queue rail away, and the creatures come back inside the ask card
+instead, bottom left, through `PetFloor` — the sprite floor lifted out of `Vivarium` so both can draw
+it. → [22](22-pets.md#the-focus-shapes-floor)
+
+**What is dropped is the banner, not the pets.** The strip carries three quiet readings and a chevron —
+`Pets`, _n_ of _n_, the eggs, the beats, and the date under it — and three quiet readings pinned across
+the bottom of the one surface that argues for a single thing at full voice are a second surface. The
+creatures are not a reading and never were: they are the corner of the room the operator looks at
+between decisions, and this is the shape where the decisions are. Every count the banner carried is on
+the Pets page and on every other shape, one click away through any animal.
+
+**Inside the card, on the left.** The right of this card is where every control on it lives — Prev,
+Next, and whatever the ask's own body offers — and a creature in among them reads as one more of them.
+Held at `opacity: 0.75` at rest on the same argument as the fleet strip, and full when reached for.
+The eggs still hatch and the animals still open the panel, which is the only part of the floor that
+was ever a control.
 
 #### Moving along the queue
 
 **The cursor is held by id, never by index.** The queue re-sorts under the operator — answering an ask
-removes it — and an index would slide a *different* ask under the cursor. On a surface whose next
+removes it — and an index would slide a _different_ ask under the cursor. On a surface whose next
 control is `Approve merge`, that is how somebody approves what they were not looking at. The id is
 resolved back to an index each render; where it is gone, the position it held is where the next ask
 falls.
@@ -3587,13 +3618,13 @@ ask is raised when something is _stopped_, and nothing raises one for a ticket t
 been shown or a goal quietly waiting on its own plan. So the clear state draws **leads** — the
 readings that are true right now and have somewhere to go:
 
-| Lead                                             | The cut                                                               | Where it goes                          |
-| ------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------- |
-| _n_ **open pull requests nobody has approved**   | `approved === false`, less the branches `agentOnBranch` holds          | the **Cards** shape                    |
-| _n_ **queued, and nobody is out**                | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
-| _n_ **tracker items nobody has picked up**       | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
-| _n_ **goals in flight with nobody on them**      | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
-| _n_ **faults recorded**                          | `errors`                                                              | the fault log                          |
+| Lead                                           | The cut                                                               | Where it goes                          |
+| ---------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- |
+| _n_ **open pull requests nobody has approved** | `approved === false`, less the branches `agentOnBranch` holds         | the **Cards** shape                    |
+| _n_ **queued, and nobody is out**              | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
+| _n_ **tracker items nobody has picked up**     | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
+| _n_ **goals in flight with nobody on them**    | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
+| _n_ **faults recorded**                        | `errors`                                                              | the fault log                          |
 
 **The order is what the operator can act on, first.** An approval is theirs alone, so the pull
 requests lead; then the queue and the reservoir, which are work waiting to enter the fleet; then the
@@ -3614,11 +3645,11 @@ name the panel's full width. The grid is the trade this surface takes: the leads
 worth a glance, and the list each one opens is where the full names live.
 
 **Each tile wears its lead's tone, and one of them wears none.** `LEAD_TONE` is total over the keys,
-like the rail's own tables, and it answers *whose* the reading is rather than how bad it is: amber the
+like the rail's own tables, and it answers _whose_ the reading is rather than how bad it is: amber the
 operator's own move, blue the fleet's supply, red something wrong, and **no tone at all** on the goals
 quietly working their plans — a colour on every tile is a colour that says nothing. It reaches the
 glass as a rule along the tile's top edge and the figure's ink, and nothing else: a fill behind five
-tiles is a page of colour. The rule is the tone's *line* at rest and its ink on hover — five saturated
+tiles is a page of colour. The rule is the tone's _line_ at rest and its ink on hover — five saturated
 edges is the loudest thing on a surface whose whole subject is that nothing is urgent.
 
 Five more rules run through them.

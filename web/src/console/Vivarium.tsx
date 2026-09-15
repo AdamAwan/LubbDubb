@@ -23,31 +23,7 @@ export function Vivarium({
   const eggs = pets.pets.filter((pet) => pet.openedAt === null);
   return (
     <div className="cn-viv">
-      <div className="cn-viv-floor">
-        {placed.length === 0 ? (
-          <button type="button" className="cn-viv-empty" onClick={onOpen}>
-            Nothing has hatched yet
-          </button>
-        ) : (
-          placed.map((pet) =>
-            pet.openedAt === null ? (
-              <button
-                key={pet.id}
-                type="button"
-                className="cn-viv-egg"
-                title="An egg. Click to open it."
-                onClick={() => onHatch(pet.id)}
-              >
-                <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
-              </button>
-            ) : (
-              <button key={pet.id} type="button" className="cn-viv-pet" title="Open the vivarium" onClick={onOpen}>
-                <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
-              </button>
-            ),
-          )
-        )}
-      </div>
+      <PetFloor pets={pets} runningAgents={runningAgents} paused={paused} onOpen={onOpen} onHatch={onHatch} />
       <button
         type="button"
         className="cn-viv-bar"
@@ -85,6 +61,59 @@ export function Vivarium({
         <p className="cn-viv-since" title="Actions from before this date are on record and roll nothing.">
           counting since {absDate(pets.startedAt)}
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The creatures themselves, with nothing said about them.
+ *
+ * Lifted out of the strip because the focus shape wants the vivarium without the
+ * banner: on a surface whose argument is that one thing is at full voice, a bar
+ * carrying three counts and a chevron is a second thing reading as loudly as the
+ * ask. The sprites alone are decoration, which is all this subsystem ever was —
+ * the counts keep their home on every other shape, and the Pets tab is still
+ * where they are read. → docs/spec/22-pets.md
+ */
+export function PetFloor({
+  pets,
+  runningAgents,
+  paused,
+  onOpen,
+  onHatch,
+}: {
+  pets: PetState;
+  runningAgents: number;
+  paused: boolean;
+  onOpen: () => void;
+  onHatch: (id: string) => void;
+}) {
+  const placed = pets.pets.filter((pet) => pet.placed);
+  return (
+    <div className="cn-viv-floor">
+      {placed.length === 0 ? (
+        <button type="button" className="cn-viv-empty" onClick={onOpen}>
+          Nothing has hatched yet
+        </button>
+      ) : (
+        placed.map((pet) =>
+          pet.openedAt === null ? (
+            <button
+              key={pet.id}
+              type="button"
+              className="cn-viv-egg"
+              title="An egg. Click to open it."
+              onClick={() => onHatch(pet.id)}
+            >
+              <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
+            </button>
+          ) : (
+            <button key={pet.id} type="button" className="cn-viv-pet" title="Open the vivarium" onClick={onOpen}>
+              <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
+            </button>
+          ),
+        )
       )}
     </div>
   );

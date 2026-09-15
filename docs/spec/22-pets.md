@@ -506,6 +506,29 @@ flow at both widths, so it is always in frame and never covers anything: absolut
 reserve no space and leave the last ask row permanently half-hidden.
 → [17](17-cockpit.md#the-console-at-width)
 
+### The focus shape's floor
+
+**The strip is not drawn on [focus mode](17-cockpit.md#one-ask-at-a-time).** That shape absorbs the queue
+rail, and the same `railless` cut in `ConsoleRoot` takes the vivarium with it — the creatures are drawn
+instead on the floor of the ask card, bottom left, by `PetFloor`.
+
+`PetFloor` is the sprite floor lifted out of `Vivarium`, which now renders it above its own strip: one
+piece of markup, two callers, so an animal added or a size changed cannot land on one and not the other.
+It takes the same `onOpen` and `onHatch` the strip's floor took, and nothing else — no counts, no
+destination, no date.
+
+**What the focus shape drops is the banner, not the pets.** `Pets · 4 of 4 · 1 egg · 3,340 beats ›` and
+the date beneath it are quiet readings, and a row of quiet readings pinned across the bottom of a surface
+whose whole argument is that one thing is at full voice is a second surface. The creatures survive the
+cut because they were never a reading: they are decoration, which is [what this subsystem
+is](#what-it-is-not), and decoration is the one thing that costs a focused operator nothing. Every count
+the banner carried is on [the Pets page](#the-pets-page) and on every other shape, and any animal is
+still one click from the panel.
+
+**Both at once would be the vivarium twice** — the strip at the foot of the page and the same four
+creatures inside the card — which is why the suppression is a condition in `ConsoleRoot` rather than
+something the focus shape tries to draw around.
+
 **One button per creature, rather than one over the floor.** The floor was a single button while it
 had a single destination; an egg gives it two — a shell opens its own ceremony, anything else opens
 the panel — and one click cannot have two destinations. Nested buttons are the other way to spell

@@ -5023,6 +5023,36 @@ button.cn-grow {
   background: var(--cn-panel);
   padding: 22px 24px;
 }
+/* The vivarium on the card's floor rather than in a strip of its own. Left, under
+   the setting column, because the right of this card is where every control on it
+   lives and a creature in among them reads as one. */
+.cn-ov-focus-pets {
+  display: flex;
+  margin-top: 6px;
+  opacity: 0.75;
+  transition: opacity 140ms ease;
+}
+.cn-ov-focus-pets:hover,
+.cn-ov-focus-pets:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .cn-ov-focus-pets {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cn-ov-focus-pets {
+    transition: none;
+  }
+}
+.cn-ov-focus-pets .cn-viv-floor {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  gap: 8px;
+}
+
 .cn-ov-focus-progress {
   display: flex;
   align-items: center;
@@ -5138,35 +5168,31 @@ button.cn-grow {
   max-width: 620px;
 }
 
-/* ── What the fleet is doing, under the ask ──────────────────────────────────
-   A tile per slot, at the weight of a reading rather than of the work: the card
-   takes the panel's ground and the tiles take the track's, so the block reads as
-   one object under the ask instead of five competing with it.
+/* ── What the fleet is doing, above the ask ──────────────────────────────────
+   A tile per slot, at the weight of a reading rather than of the work: no panel
+   of its own, because a card above the ask competes with the one the operator is
+   meant to be reading. The tiles keep their borders, which is what stops the row
+   reading as loose text.
 
    It does not grow with the fleet. Past the agents that get a tile the rest are a
    count on the control, and every free slot is one tile carrying its own number —
    a deployment with a cap of twelve draws six tiles, not twelve.
-   → docs/spec/17-cockpit.md#what-the-fleet-is-doing-under-the-ask */
+   → docs/spec/17-cockpit.md#what-the-fleet-is-doing-above-the-ask */
 .cn-ov-slots {
-  margin-top: 14px;
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  background: var(--cn-panel);
-  padding: 12px 14px 14px;
-  /* Held back at rest and brought up when reached for. It is the one block on
-     this shape nobody is being asked to act on, and the shape's whole argument is
-     that the thing to do is the only thing at full voice — so the card is legible
-     from where the eye already is and recedes the moment it is not being read.
-     On the card rather than on its parts, so the tones inside keep their
-     relationship to each other and the whole block moves as one. */
-  opacity: 0.62;
+  margin-bottom: 16px;
+  /* Held back at rest and brought up when reached for, and held back further than
+     it was: the strip sits above the ask now, where the eye lands first, so at the
+     old weight the first thing read on the surface was the one thing nobody is
+     being asked to act on. On the strip rather than on its parts, so the tones
+     inside keep their relationship to each other and the block moves as one. */
+  opacity: 0.4;
   transition: opacity 140ms ease;
 }
 .cn-ov-slots:hover,
 .cn-ov-slots:focus-within {
   opacity: 1;
 }
-/* Without a pointer there is no hover to restore it, so the card would be dimmed
+/* Without a pointer there is no hover to restore it, so the strip would be dimmed
    for the whole of a touch session with no way back. */
 @media (hover: none) {
   .cn-ov-slots {
