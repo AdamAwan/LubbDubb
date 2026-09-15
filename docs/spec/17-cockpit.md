@@ -3536,6 +3536,17 @@ second copy of it here, which is the answer `buildLeads` already gives for a rea
 break the claim the grid is making; left out entirely it would be a person at a keyboard the focus
 shape never mentions.
 
+**It is held back at rest and brought up when reached for** — `opacity: 0.62`, full on `:hover` and on
+`:focus-within`. It is the one block on this shape nobody is being asked to act on, and the shape's
+argument is that the thing to do is the only thing at full voice, so the card stays legible from where
+the eye already is and recedes the moment it is not being read. The opacity sits on the **card**, not
+its parts, so the tones inside keep their relationship to each other and the block moves as one.
+`:focus-within` is not decoration: without it the card a keyboard has tabbed into stays dimmed.
+
+**Under `(hover: none)` it is never dimmed.** There is no hover to restore it on a touch device, so the
+rule alone would dim the card for a whole session with no way back — the quiet kind of failure, since
+it renders and reads as a design choice.
+
 **It draws on an empty fleet too**, saying so. A card that vanishes with its reading reads as one that
 failed to load — the same argument the ask's own aside makes for a goal-less ask.
 

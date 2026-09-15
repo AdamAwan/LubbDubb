@@ -5143,6 +5143,30 @@ button.cn-grow {
   border-radius: var(--cn-r);
   background: var(--cn-panel);
   padding: 12px 14px 14px;
+  /* Held back at rest and brought up when reached for. It is the one block on
+     this shape nobody is being asked to act on, and the shape's whole argument is
+     that the thing to do is the only thing at full voice — so the card is legible
+     from where the eye already is and recedes the moment it is not being read.
+     On the card rather than on its parts, so the tones inside keep their
+     relationship to each other and the whole block moves as one. */
+  opacity: 0.62;
+  transition: opacity 140ms ease;
+}
+.cn-ov-slots:hover,
+.cn-ov-slots:focus-within {
+  opacity: 1;
+}
+/* Without a pointer there is no hover to restore it, so the card would be dimmed
+   for the whole of a touch session with no way back. */
+@media (hover: none) {
+  .cn-ov-slots {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cn-ov-slots {
+    transition: none;
+  }
 }
 .cn-ov-slots-head {
   display: flex;
