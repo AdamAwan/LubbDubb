@@ -3490,6 +3490,66 @@ is cheaper than width.
 **Every region wears its name.** An unlabelled band over an unlabelled track is a row of boxes whose
 meaning the reader infers differently for each one, which is the cost this shape was meant to remove.
 
+#### What the fleet is doing, under the ask
+
+`FleetSlots` in `web/src/console/overviews/FleetSlots.tsx`, drawn below the ask card on both states of
+the shape — the ask, and [Clear](#when-nothing-needs-you).
+
+**The shape's own cost was the flick-back.** Absorbing the rail took the fleet off the screen along
+with it, so an operator sat on an ask they were answering and left it anyway, to check the fleet was
+still moving — which is the trip this shape exists to remove. The answer is not to give the fleet band
+back: it is a reading nobody is being asked to act on, and the shape's argument is that the thing to do
+is the only thing at full weight. So the reading comes to the shape at the weight it deserves — one
+card under the work, on the panel's ground, its tiles on the track's.
+
+**A tile per _slot_, not per agent.** That is what makes the free one a reading rather than a gap: the
+card answers _is the fleet full_ in the same glance as _what is it on_, and those are the two questions
+that were sending people to Cards. The free tile is drawn **once** and carries its own count, so a
+deployment with a cap of twelve draws one dashed tile reading "8 slots free" rather than eight boxes.
+What it says is about the **queue** — an idle slot with work waiting is a fleet about to move, an idle
+slot with nothing queued is a fleet out of work, and only that difference is worth acting on — so the
+tile is the way to Up next, or to the launch desk where nothing is queued.
+
+**Free slots are clamped at zero, never subtracted blind.** An agent parked on a limit or taken off the
+fleet holds its slot while the cap is lowered under it, so the live count outruns the cap and a raw
+difference draws a negative number of free slots. → [the account usage windows](10-agent-runtimes.md#the-account-usage-windows)
+
+**Under the ask, not over it.** At a tile's height, above pushes the ask itself down the page, which is
+the one thing this shape exists to prevent — and a tile is a thing to look at rather than a line to
+skim past, so it belongs after the work. **This is the one place the shape prefers below**: the earlier
+attempt at the reading was a single row above the switch, and one row could not carry the agent's note
+without ellipsing the task title beside it. The tile has two lines, so it carries both.
+
+**The tile's ground comes from `agentLamp`, the lamp modifier the fleet band uses**, rather than from
+the status read a second time. Read twice, the two disagreed: an agent with an open escalation drew the
+asking lamp on the _running_ ground, and the ground is the half taken in at a glance. The ground keeps
+the cut the glance needs — moving, or waiting on you — and the lamp keeps the finer one. **Amber, not
+red, for the one that asked**: red put three shouting tiles under an ask on a deployment with three
+open escalations, red on this surface belongs to the ask itself, and every escalation is already an ask
+in the queue the operator is working through.
+
+**The card does not grow with the fleet.** Past the five agents that get tiles the rest are a count on
+the control, which hands over the Cards shape — the shape that owns the fleet band, rather than a
+second copy of it here, which is the answer `buildLeads` already gives for a reading the cards draw.
+
+**Desk runs are in the sentence, not in a tile.** A desk run takes no slot, so a tile for one would
+break the claim the grid is making; left out entirely it would be a person at a keyboard the focus
+shape never mentions.
+
+**It is held back at rest and brought up when reached for** — `opacity: 0.62`, full on `:hover` and on
+`:focus-within`. It is the one block on this shape nobody is being asked to act on, and the shape's
+argument is that the thing to do is the only thing at full voice, so the card stays legible from where
+the eye already is and recedes the moment it is not being read. The opacity sits on the **card**, not
+its parts, so the tones inside keep their relationship to each other and the block moves as one.
+`:focus-within` is not decoration: without it the card a keyboard has tabbed into stays dimmed.
+
+**Under `(hover: none)` it is never dimmed.** There is no hover to restore it on a touch device, so the
+rule alone would dim the card for a whole session with no way back — the quiet kind of failure, since
+it renders and reads as a design choice.
+
+**It draws on an empty fleet too**, saying so. A card that vanishes with its reading reads as one that
+failed to load — the same argument the ask's own aside makes for a goal-less ask.
+
 #### Moving along the queue
 
 **The cursor is held by id, never by index.** The queue re-sorts under the operator — answering an ask

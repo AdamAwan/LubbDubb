@@ -12,6 +12,7 @@ import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
 import { waitedFor } from '../GoalPage.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
+import { FleetSlots } from './FleetSlots.js';
 import { byWeight, partsHeld } from './asks.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
@@ -178,6 +179,10 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
           </div>
         </div>
       </div>
+
+      {/* Under the ask rather than over it: at a tile's height, above pushes the
+          ask itself down the page. → {@link FleetSlots} */}
+      <FleetSlots view={view} actions={actions} />
     </div>
   );
 }
@@ -341,6 +346,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
           </>
         )}
       </div>
+      <FleetSlots view={view} actions={actions} />
     </div>
   );
 }
