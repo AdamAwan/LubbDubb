@@ -474,6 +474,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Changed files past which a pull request is asked whether it is one piece of work or several — the number the planner and every code agent are told to build under, and the trigger for rule `pr-split`. Judgement, not a limit: the assessment is a model’s reading of the diff and a wide-but-coherent change is left alone. 0 turns both off.',
   },
   {
+    path: 'validation.checkSets',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Whether the fleet writes a validation check set for a goal it has delivered and puts it to you for approval. Off, no goal grows a set it did not already have, and nothing is proposed — the bench, the hand-over, the desktop channel and a plan-time set are untouched, which is what makes it safe to leave off. It gates authoring and never reading, and it is off by default while what the approval card is asking an operator to accept is still being worked out.',
+  },
+  {
     path: 'validation.desktopClaimMinutes',
     type: 'number',
     access: 'plain',

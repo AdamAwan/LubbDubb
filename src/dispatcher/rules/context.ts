@@ -97,6 +97,12 @@ export interface StageContext {
   stateDeclareNote: string;
   /** What each configured environment can drive, and the areas its runner last offered. */
   validationPlanNote: string;
+  /**
+   * `validation.checkSets`. Read by rule `issue-assess` as well as by the two rules it gates, because
+   * the assessor's second output is a check set and the fold asking for it is appended to its prompt.
+   * → docs/spec/20-validation.md#the-authoring-gate
+   */
+  checkSets: boolean;
   validationRoot: string;
   liveLocalRun: LocalRun | null;
   /** Every live run row, with what the agent must read already rendered. → 36-remote-validation.md */

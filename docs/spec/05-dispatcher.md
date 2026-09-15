@@ -198,7 +198,7 @@ unconditional.
 | `local-validation-fix`     | Fix what a local validation found    | —                    | A local validation was reported `failed` with findings: one writable code agent on the branch that was validated. Once per reading, latched on the row. Never a shortfall. → [32](32-local-validation.md#when-it-fails)                                                                                                                                                                                                         |
 | `plan-part`                | Plan part ready                      | —                    | A part of an active plan is `ready` and unstaffed.                                                                                                                                                                                                                                                                                                                                                                              |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                                                                                                                                                                                                                                                                   |
-| `validation-plan-approval` | A check set needs your acceptance    | —                    | A delivered goal's validation check set has been authored and not yet accepted. Raises a proposal and dispatches nobody; until it is answered no sheet assembles off the set and `validate-check` dispatches nothing for it. Below `validation-plan`, which writes its input; above `validate-check`, which reads what it releases. → [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)                        |
+| `validation-plan-approval` | A check set needs your acceptance    | `checkSets`          | A delivered goal's validation check set has been authored and not yet accepted. Raises a proposal and dispatches nobody; until it is answered no sheet assembles off the set and `validate-check` dispatches nothing for it. Below `validation-plan`, which writes its input; above `validate-check`, which reads what it releases. → [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)                        |
 | `validate-check`           | Handed-over validation check         | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                                               |
 | `remote-validation`        | Validation sheet pressed             | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed  | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                                                |
@@ -1041,7 +1041,8 @@ moving — so the validation planner that used to be dispatched next opened a fr
 what this one had just finished. The verdict is cast **first** and the check set after it, which is
 what makes every way the turn can end survivable; rule `validation-plan` stays as the catch-up for the
 one that ends between them. The briefing is **appended** to the rendered prompt, and only for a goal
-that has a plan and no check set — the two gates `validation-plan` itself refuses on.
+that has a plan and no check set — the two gates `validation-plan` itself refuses on — and only where
+`validation.checkSets` is on ([20](20-validation.md#the-authoring-gate)).
 → [20](20-validation.md#one-agent-two-outputs)
 
 ## `issue-shortfall` — routing a failed assessment
@@ -1274,7 +1275,9 @@ tracker and nothing is scheduled from what it says.
 ## `validation-plan` — writing the check set
 
 `validation-plan` puts one code agent on a delivered goal that has no validation check set, to write
-it. It is the **catch-up rather than the ordinary path**: the assessor writes the set in the turn it
+it. It runs only where **`validation.checkSets`** is on, with `validation-plan-approval` and the
+assessor's fold ([20](20-validation.md#the-authoring-gate)). It is the **catch-up rather than the
+ordinary path**: the assessor writes the set in the turn it
 answers `delivered` ([20](20-validation.md#one-agent-two-outputs)), so this rule now fires for the
 turn that ended between the two calls — a crash, a kill, a spent attempt cap — and for a goal an
 operator parked by hand. It costs nothing when the fold works, because an authored set answers its own
@@ -1311,7 +1314,8 @@ that is [20](20-validation.md#when-the-check-set-is-written); the dispatcher's h
 ## `validation-plan-approval` — putting the check set to you
 
 `validation-plan-approval` raises a proposal and dispatches nobody. The argument for the gate is
-[20](20-validation.md#the-check-set-is-proposed-before-it-is-work); the dispatcher's half is:
+[20](20-validation.md#the-check-set-is-proposed-before-it-is-work); it runs only where
+**`validation.checkSets`** is on ([20](20-validation.md#the-authoring-gate)); the dispatcher's half is:
 
 - Emits `propose_validation_plan` for a goal **parked as delivered** whose `validation_plans` row is
   **authored** and **not released**, unless a `validation_plan` proposal is already pending on the ref.

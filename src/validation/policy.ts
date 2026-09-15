@@ -4,6 +4,7 @@ import { join } from 'node:path';
 // → docs/spec/20-validation.md
 
 export interface ValidationPolicy {
+  checkSets: boolean;
   desktopClaimMinutes: number;
   desktopSocketPath: string;
   desktopCredentialPath: string;
@@ -11,6 +12,7 @@ export interface ValidationPolicy {
 }
 
 export const DEFAULT_VALIDATION: ValidationPolicy = {
+  checkSets: false,
   desktopClaimMinutes: 60,
   // TECHDEBT: under the OS tmpdir for the fleet socket's reason: POSIX caps a socket path
   // at about 104 characters, which a repo-relative path clears easily.

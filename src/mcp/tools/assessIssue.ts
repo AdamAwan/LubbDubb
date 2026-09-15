@@ -14,9 +14,12 @@ import type { McpToolDeps, ToolFactory } from './context.js';
  * ([20](docs/spec/20-validation.md#when-the-check-set-is-written)), and the tool's own answer says so
  * as well as the prompt does — an operator override of `issue-assess` carries its own body, and this
  * is what makes the fold reach one anyway. Silent for a goal with no plan or a set somebody has
- * already written, which are the two gates `validation_plan` itself refuses on.
+ * already written, which are the two gates `validation_plan` itself refuses on — and silent where
+ * `validation.checkSets` is off, which is the third: nothing is owed where no rule would ever put the
+ * set to anybody. → docs/spec/20-validation.md#the-authoring-gate
  */
 function checkSetOwed(deps: McpToolDeps, origin: string): boolean {
+  if (deps.checkSets !== true) return false;
   if (deps.store.plans.getPlanByOrigin(origin) === null) return false;
   return !checkSetAuthored({
     record: deps.store.validation.getValidationPlanRecord(origin),

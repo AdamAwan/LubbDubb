@@ -99,6 +99,16 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
     }),
   ),
   handler: (args) => {
+    // The gate the two briefing rules read, applied here as well: with `validation.checkSets` off no
+    // prompt asks for a set, and a set written anyway is one no rule would ever put to an operator.
+    // → docs/spec/20-validation.md#the-authoring-gate
+    if (deps.checkSets !== true) {
+      return toolError(
+        'This deployment does not have validation check sets turned on (`validation.checkSets`), so a set ' +
+          'written here would be put to nobody and read as work by nothing. Say what you believe is worth ' +
+          'running against the delivered goal in your verdict instead.',
+      );
+    }
     const issueNumber = checkSetAuthoringIssue(task.originRef);
     if (issueNumber === null) {
       return toolError(

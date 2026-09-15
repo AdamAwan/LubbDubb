@@ -130,6 +130,13 @@ export interface McpToolDeps {
   areaPaths?: () => AreaPathTree | null;
   reviewModes?: string[];
   reviewAllowSkip?: boolean;
+  /**
+   * `validation.checkSets`. The fence on the authoring tools: absent is **off**, because the two rules
+   * that brief an agent to call them are off there too, and a tool that stays callable with nothing
+   * asking for it writes a set no rule will ever propose.
+   * → docs/spec/20-validation.md#the-authoring-gate
+   */
+  checkSets?: boolean;
   permissions?: PermissionDesk;
   openPr?: {
     sink: ActionSink;
