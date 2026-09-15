@@ -247,8 +247,6 @@ function planTimeCheck(patch: Partial<ValidationCheck>): ValidationCheck {
     revision: null,
     amendedAt: null,
     amendNote: null,
-    area: null,
-    expects: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...patch,
@@ -494,11 +492,17 @@ test('the environment note lists what each environment can drive, and the areas 
     '',
     'nothing configured, nothing said',
   );
-  const note = validationPlanNote(
-    [{ name: 'acceptance', validate: { permits: ['check', 'state'], browser: { runner: 'npm test' } } }],
-    [{ environment: 'acceptance', selector: 'Checkout Tests', tests: 4, listedAt: NOW }],
+  const note = validationPlanNote([
+    { name: 'acceptance', validate: { permits: ['check', 'state'], browser: { runner: 'npm test' } } },
+  ]);
+  assert.match(note, /drives a browser/, 'the note says what the deployment can drive, by step kind');
+  assert.doesNotMatch(
+    note,
+    /last offered/,
+    'and names no area: nothing pre-resolves one at plan time, so a list here would be a listing taken from ' +
+      'the harness’s own checkout offered as the answer the run will give',
   );
-  assert.match(note, /`Checkout Tests`/, 'the area is a pick from the runner’s own listing, copied exactly');
+  assert.match(note, /resolved against the deployed commit/, 'it says where the area is resolved instead');
   assert.match(note, /No tenant is configured/, 'and a run that writes is told it has nowhere to write');
 });
 

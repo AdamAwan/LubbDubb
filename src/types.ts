@@ -957,19 +957,6 @@ export interface ValidationCheck {
   amendedAt: string | null;
   amendNote: string | null;
   /**
-   * The selector a runner offers for this check, compared against the pre-flight's own listing. Null
-   * is *no area declared* — a check a person carries out, exactly as every check is today.
-   */
-  area: string | null;
-  /**
-   * The concrete spec names the planner expected this check's area to run, written down so that a
-   * spec **deleted** since the check was authored is visible: the count cannot catch that on its own,
-   * because a deleted spec lowers the listing's own denominator with it. Null is *no expectation was
-   * named*, which is every row written before the column and every check whose author named none —
-   * never "expected nothing". → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
-   */
-  expects: string[] | null;
-  /**
    * The check's test plan: one ordered journey through the delivered goal. Empty is **no steps**,
    * which is every check written before the column existed and every check whose author declared
    * only prose — `fleetCandidate` keeps its meaning there and nowhere else.
@@ -1006,20 +993,6 @@ export interface ValidationCheckInput {
   covers: string[];
   fleetCandidate: boolean;
   candidateWhy: string | null;
-  /**
-   * The selector this check is verified against. It comes from a `suite` step naming one, and from
-   * nothing else — a `covers` entry is a bibliography and no longer decides what runs. Null is no
-   * area declared, which is a check a person carries out.
-   * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
-   */
-  area?: string | null;
-  /**
-   * The concrete spec names the area is expected to run. It comes from the same `suite` step the
-   * area does, and from nothing else. Null and omitted are the same fact — *no expectation named* —
-   * and neither is "expected nothing".
-   * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
-   */
-  expects?: string[] | null;
   /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
   steps?: ValidationStep[];
 }
@@ -1660,6 +1633,16 @@ export interface RemoteSheetRow {
    * selector matching nothing reads as a clean pass.
    */
   matched: number | null;
+  /**
+   * Why a press reads nothing here and dispatches for nothing, in words. Null is a row the press
+   * reads or an agent is sent for. It is **not** a `blockedReason`: a block is a cause no press can
+   * overcome, and most checks on most deployments are a person's journey end to end, which is the
+   * ordinary answer rather than a misconfiguration. It is folded on the server, beside the row it
+   * describes, because a cockpit that worked out for itself which rows a press would touch would be
+   * a second opinion drawn beside the reading.
+   * → docs/spec/36-remote-validation.md#a-row-no-press-can-read
+   */
+  idleReason: string | null;
 }
 
 /**
@@ -1758,18 +1741,6 @@ export interface RemoteRunBrief {
 }
 
 /** When an environment's tenant was last provisioned and last reseeded. */
-/**
- * One area an environment's runner said it offers, as of the listing that last answered. It is a
- * convenience for the planner and never an authority: the pre-flight asks the runner again at
- * assembly, and a row blocks on that answer rather than on this one.
- */
-export interface SelectorOffering {
-  environment: string;
-  selector: string;
-  tests: number | null;
-  listedAt: string;
-}
-
 export interface RemoteTenant {
   environment: string;
   tenant: string;

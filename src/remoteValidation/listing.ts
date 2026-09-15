@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow } from '../types.js';
+import { stepArea } from '../validation/steps.js';
 import { preflightRows } from './preflight.js';
 import { parseSelectorListing, type SelectorListing } from './runner.js';
 
@@ -122,7 +123,7 @@ export class RemoteListingDesk {
     if (listingPath !== null) store.remoteValidation.recordRemoteListingPath(run.id, listingPath);
 
     const survived = new Set(verdicts.filter((v) => v.blockedReason === null).map((v) => v.rowId));
-    const areas = new Map(checks.map((check) => [check.id, check.area]));
+    const areas = new Map(checks.map((check) => [check.id, stepArea(check.steps)]));
     const selectors: string[] = [];
     for (const row of rows) {
       if (!survived.has(row.rowId)) continue;

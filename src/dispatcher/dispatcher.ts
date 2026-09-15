@@ -28,7 +28,6 @@ import type {
   LocalRun,
   LocalValidation,
   RemoteRunBrief,
-  SelectorOffering,
   ValidationCheck,
   ValidationPlanRecord,
   Ejection,
@@ -67,8 +66,6 @@ export interface DispatchContext {
   localRun?: LocalRun | null;
   localValidations?: LocalValidation[];
   remoteRuns?: RemoteRunBrief[];
-  /** The areas each browser environment's runner last said it offers, for the planner to pick from. */
-  selectorOfferings?: SelectorOffering[];
   priorityOverrides?: PriorityOverride[];
   goalPriorities?: GoalPriority[];
   goalPauses?: GoalPause[];

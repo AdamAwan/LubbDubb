@@ -12,7 +12,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
@@ -26,13 +25,20 @@ import { MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
 import { buildTools } from '../src/mcp/tools.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { Agent, Issue, IssueDelivery, RemoteRunBrief, ValidationCheckInput } from '../src/types.js';
+import type {
+  Agent,
+  Issue,
+  IssueDelivery,
+  RemoteRunBrief,
+  ValidationCheckInput,
+  ValidationStep,
+} from '../src/types.js';
 
 /*
  * The dispatch, the origin, the prompt and the report tool.
  * → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
  *
- * Every test that builds a system here injects `FakeRemoteRunner`, `FakeStateReader`,
+ * Every test that builds a system here injects `FakeStateReader`,
  * `FakeTenantKeeper`, `FakeEnvironmentProber` and `FakeWorktreeManager`: the defaults are the
  * command implementations and the real worktree manager, so a test that configures a
  * `validate.browser` block and injects none of them drives a browser against somebody's acceptance
@@ -101,13 +107,29 @@ function delivered(): IssueDelivery {
 }
 
 /**
- * How an author *declares* an area is not built — the column is, and null means no area declared. A
- * test writes one the way whatever declares it later will: onto the column, on a check that exists.
+ * An area, where an area lives: a `suite` step of the check's own test plan. There is no column left
+ * to write — the row still carries one and nothing reads it — so a test that wrote that column
+ * instead would set up a check the run declares no area for and pass on the silence.
  */
 function setArea(file: string, area: string): void {
   const db = new Database(file);
+  const step: ValidationStep = {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
   try {
-    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, 'issue:12', CHECK.id);
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([step]),
+      'issue:12',
+      CHECK.id,
+    );
   } finally {
     db.close();
   }
@@ -135,6 +157,7 @@ function seedSheet(store: Store, environment = 'acceptance'): void {
       blockedReason: null,
       awaitingApproval: false,
       matched: 4,
+      idleReason: null,
     },
   ]);
 }
@@ -515,7 +538,6 @@ function system(dbPath = ':memory:'): System {
     {
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
-      remoteRunner: new FakeRemoteRunner(),
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
       environmentProber: new FakeEnvironmentProber({ acceptance: [DEPLOYED] }),

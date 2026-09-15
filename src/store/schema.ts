@@ -902,7 +902,8 @@ CREATE TABLE IF NOT EXISTS remote_sheet_rows (
   selected          INTEGER NOT NULL DEFAULT 1,
   blocked_reason    TEXT,
   awaiting_approval INTEGER NOT NULL DEFAULT 0,
-  matched           INTEGER,         -- tests the pre-flight's listing attributes to this row's area
+  matched           INTEGER,         -- tests the run's listing attributes to this row's area
+  idle_reason       TEXT,            -- why a press reads nothing here; NULL is a row a press reads
   updated_at        TEXT NOT NULL,
   PRIMARY KEY (goal_ref, environment, row_id)
 );
@@ -971,20 +972,6 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
   ensured_at  TEXT,
   reseeded_at TEXT,
   PRIMARY KEY (environment, tenant)
-);
-
--- What each environment's runner last said it offers, cached so a planner can be
--- shown the areas it may name rather than asked to describe one in prose (see
--- RemoteValidationStore). It is a convenience and never an authority: the pre-flight
--- asks the runner again at assembly, and its answer is what a row blocks on. Only an
--- answered listing is written, so a listing that could not say leaves the last one
--- standing with its own listed_at saying how old it is.
-CREATE TABLE IF NOT EXISTS remote_selector_offerings (
-  environment TEXT NOT NULL,
-  selector    TEXT NOT NULL,     -- the area, exactly as the runner names it
-  tests       INTEGER,           -- how many tests it holds, where the runner counted them
-  listed_at   TEXT NOT NULL,
-  PRIMARY KEY (environment, selector)
 );
 
 -- Goals the operator has said are not waiting on an environment: a docs change, a

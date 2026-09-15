@@ -1,24 +1,4 @@
-import { exec } from 'node:child_process';
-import { firstLine } from '../primitives.js';
-
 // → docs/spec/36-remote-validation.md#the-runner-contract
-
-/**
- * What the parameters of a run are, whichever of the three commands is being invoked. Every one of
- * them rides in the spawn env: a command is **never** assembled from them, and the command itself
- * comes only from committed project config.
- */
-export interface RunnerRequest {
-  environment: string;
-  /** The project's own command, verbatim from `validate.browser`. */
-  command: string;
-  /** The suite's own name for this place, where the environment declares one. */
-  profile: string | null;
-  /** `resolveTenant(...).value` — never a `tenantEnv`'s variable name, and never invented. */
-  tenant: string | null;
-  selectors: readonly string[];
-  reportDir: string | null;
-}
 
 /** One area the deployed runner says it offers, and how many tests it holds where it counted them. */
 interface SelectorOffer {
@@ -33,42 +13,13 @@ export interface SelectorListing {
   detail: string | null;
 }
 
-export interface RunnerOutcome {
-  /** What the command printed, first line. Null where the invocation answered nothing at all. */
-  said: string | null;
-  /** Why it could not be carried out. Null where it ran — **an exit code is never a row outcome**. */
-  detail: string | null;
-}
-
 /**
- * `validate.browser.listSelectors`, `validate.browser.runner` and `validate.browser.publishArtefacts`
- * — three live shell commands against a real environment, behind one injectable seam. A test without
- * the fake drives a browser against somebody's acceptance environment and passes while doing it.
+ * The one character `LUBBDUBB_SELECTORS` is joined on, and the one an area may therefore not hold.
+ * The harness spawns none of the project's browser commands — the run agent invokes them in its
+ * pinned checkout — so the variable is named in one place, the briefing, and the delimiter it is
+ * joined on in one place, here, beside the guard that refuses an area holding it.
  */
-export interface RemoteRunner {
-  listSelectors(request: RunnerRequest): Promise<SelectorListing>;
-  run(request: RunnerRequest): Promise<RunnerOutcome>;
-  publishArtefacts(request: RunnerRequest): Promise<RunnerOutcome>;
-}
-
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
-
-/** The one character `LUBBDUBB_SELECTORS` is joined on, and the one an area may therefore not hold. */
-const SELECTOR_DELIMITER = ',';
-
-/**
- * The parameters of a run, as the spawn env alone. Exported because it is the one place they are
- * written, and the one place a test can read what a real spawn would carry without spawning one.
- */
-export function runnerEnv(request: RunnerRequest): Record<string, string> {
-  const env: Record<string, string> = { LUBBDUBB_ENVIRONMENT: request.environment };
-  if (request.profile !== null) env['LUBBDUBB_PROFILE'] = request.profile;
-  if (request.tenant !== null) env['LUBBDUBB_TENANT'] = request.tenant;
-  if (request.selectors.length > 0) env['LUBBDUBB_SELECTORS'] = request.selectors.join(SELECTOR_DELIMITER);
-  if (request.reportDir !== null) env['LUBBDUBB_REPORT_DIR'] = request.reportDir;
-  return env;
-}
+export const SELECTOR_DELIMITER = ',';
 
 /**
  * Longer than any area anybody names, and the length at which a line stops being a name and starts
@@ -208,81 +159,4 @@ function offersOf(entries: readonly unknown[]): SelectorOffer[] {
     offers.push({ selector: selector.trim(), tests: typeof tests === 'number' && tests >= 0 ? tests : null });
   }
   return offers;
-}
-
-export class CommandRemoteRunner implements RemoteRunner {
-  constructor(
-    private readonly repoRoot: string,
-    /** `remoteValidation.runTimeoutMs` — the kill for a **runner** invocation, and for nothing else. */
-    private readonly runTimeoutMs: number = DEFAULT_RUN_TIMEOUT_MS,
-    private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
-  ) {}
-
-  async listSelectors(request: RunnerRequest): Promise<SelectorListing> {
-    const said = await this.spawn(request, this.timeoutMs);
-    if (said.failed !== null) return { offers: null, detail: said.failed };
-    return parseSelectorListing(said.stdout);
-  }
-
-  /**
-   * The one invocation `remoteValidation.runTimeoutMs` is the kill for: 30 seconds is the wrong
-   * number for a browser suite, and every other command in this design keeps the ordinary one.
-   *
-   * **The exit code is never read.** One invocation carries many rows and one code, so inferring
-   * anything from it is guaranteed to be wrong for some row — what a run answers is where its report
-   * landed, and only a kill leaves it having answered nothing.
-   */
-  async run(request: RunnerRequest): Promise<RunnerOutcome> {
-    const said = await this.spawn(request, this.runTimeoutMs);
-    if (said.killed !== null) return { said: null, detail: said.killed };
-    return { said: said.stdout.trim() === '' ? null : said.stdout, detail: null };
-  }
-
-  async publishArtefacts(request: RunnerRequest): Promise<RunnerOutcome> {
-    const said = await this.spawn(request, this.timeoutMs);
-    if (said.failed !== null) return { said: null, detail: said.failed };
-    return { said: firstLine(said.stdout), detail: null };
-  }
-
-  /**
-   * The command is the project's own, verbatim; the parameters reach it as environment only. A kill
-   * **answers nothing** rather than answering emptily — an empty listing read as an answer is every
-   * selector matching zero, which is the shape that makes a mismatch read as a clean pass.
-   */
-  private spawn(
-    request: RunnerRequest,
-    timeoutMs: number,
-  ): Promise<{ stdout: string; killed: string | null; failed: string | null }> {
-    return new Promise((resolve) => {
-      exec(
-        request.command,
-        {
-          cwd: this.repoRoot,
-          timeout: timeoutMs,
-          windowsHide: true,
-          maxBuffer: 8 * 1024 * 1024,
-          env: { ...process.env, ...runnerEnv(request) },
-        },
-        (err, stdout, stderr) => {
-          if (err === null) return resolve({ stdout, killed: null, failed: null });
-          const failure = err as ExecFailure;
-          if (failure.killed === true || (failure.signal !== null && failure.signal !== undefined)) {
-            const killed = `the command was killed after ${failure.signal ?? 'timeout'}`;
-            return resolve({ stdout, killed, failed: killed });
-          }
-          resolve({
-            stdout,
-            killed: null,
-            failed: `the command exited ${String(failure.code ?? 'unknown')}: ${firstLine(stderr) ?? failure.message}`,
-          });
-        },
-      );
-    });
-  }
-}
-
-interface ExecFailure extends Error {
-  code?: number | string;
-  killed?: boolean;
-  signal?: NodeJS.Signals | null;
 }

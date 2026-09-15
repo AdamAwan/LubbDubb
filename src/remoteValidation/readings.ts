@@ -7,7 +7,7 @@ import type { EnvironmentProber } from '../environments/prober.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { validationGoalDir } from '../validation/resources.js';
-import { handsBackAScreen, stepScript } from '../validation/steps.js';
+import { handsBackAScreen, stepArea, stepScript } from '../validation/steps.js';
 import { remoteValidationRunDir } from './origin.js';
 import { foldCapture, foldRowOutcome, parseRunReport, type RowOutcome, type RunReport } from './report.js';
 
@@ -139,8 +139,9 @@ export class RemoteReadingDesk {
       // against the pre-flight's listing; a one-off script has no listing — it was written for this
       // check — and reports under the check's own id. A check declaring both is read as a spec: the
       // reviewed instrument is the stronger evidence, and the two are never folded into one word.
+      const area = stepArea(check.steps);
       const instrument =
-        check.area !== null ? ('spec' as const) : stepScript(check.steps) !== null ? ('script' as const) : null;
+        area !== null ? ('spec' as const) : stepScript(check.steps) !== null ? ('script' as const) : null;
       // A `screenshot` step is neither: it asserts nothing, so it is not a third instrument and it
       // never decides what a reading is worth. A check that only hands a screen back still runs
       // here — this is the only channel with a browser and a tenant — and one that also asserts
@@ -153,7 +154,7 @@ export class RemoteReadingDesk {
           : this.moveAware(
               foldRowOutcome({
                 environment: run.environment,
-                area: instrument === 'spec' ? (check.area as string) : check.id,
+                area: instrument === 'spec' && area !== null ? area : check.id,
                 matched: row.matched,
                 instrument,
                 report,

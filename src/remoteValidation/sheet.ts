@@ -8,7 +8,7 @@ import type {
   StateQuery,
   ValidationCheck,
 } from '../types.js';
-import { stepScript } from '../validation/steps.js';
+import { handsBackAScreen, stepArea, stepScript } from '../validation/steps.js';
 import { liveChecks } from '../validation/verdict.js';
 import { selectorFault } from './runner.js';
 
@@ -80,10 +80,11 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       selected: true,
       blockedReason:
         unpermitted('check', permits, environment.name) ??
-        (check.area === null ? null : selectorFault(check.area)) ??
+        areaFault(stepArea(check.steps)) ??
         scriptTenantFault(check, input.tenant, environment.name),
       awaitingApproval: false,
       matched: null,
+      idleReason: idleReason(check, environment),
       run: null,
     });
   }
@@ -102,6 +103,9 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       blockedReason: unpermittedReason ?? (approved ? null : unapproved(environment.name)),
       awaitingApproval: unpermittedReason === null && !approved,
       matched: null,
+      // A query row is read by the press itself, synchronously and under the pin: there is no
+      // instrument for it to be missing.
+      idleReason: null,
       run: 'state',
     });
   }
@@ -128,11 +132,57 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
           : `${environment.name} declares no "watch.observe" command, so there is nothing here to put this query to.`),
       awaitingApproval: unpermittedReason === null && observable && !approved,
       matched: null,
+      idleReason: null,
       run: 'watch',
     });
   }
 
   return out;
+}
+
+/** The delimiter guard, asked only of a check that declares an area. */
+function areaFault(area: string | null): string | null {
+  return area === null ? null : selectorFault(area);
+}
+
+/**
+ * Why a press reads nothing on this check's row and sends nobody for it. This is the quietest shape
+ * this subsystem holds: the row stays `selected`, the gate still offers to run it, the press settles
+ * `ended` on the spot and the row reads as one that was never run — a sheet that looks like it ran
+ * and did not.
+ *
+ * It is a **sentence and never a `blockedReason`**. A block is a cause no press can overcome, and
+ * this one is overcome by amending the check or writing the configuration block it names; and every
+ * honest prose check — which is most checks — would be caught by it, so a sheet would report "N
+ * blocked" on every goal and read as a misconfiguration it is not.
+ *
+ * What a run carries is named by a step and by nothing else: a `suite` step's area, a `browser`
+ * step's one-off script, a `screenshot` step's screen. The three arms are the three ways a check
+ * names none of them, and each says what would.
+ * → docs/spec/36-remote-validation.md#a-row-no-press-can-read
+ */
+function idleReason(check: ValidationCheck, environment: EnvironmentConfig): string | null {
+  const runnable = environment.validate?.browser?.runner !== undefined;
+  const names = stepArea(check.steps) !== null || stepScript(check.steps) !== null || handsBackAScreen(check.steps);
+  if (runnable && names) return null;
+  if (check.steps.length === 0)
+    return (
+      'this check declares no test plan, so nothing names an instrument to run it with: a `suite` step names ' +
+      'an area of the project’s own browser suite, a `browser` step carries a one-off script, and a ' +
+      '`screenshot` step hands a screen back. It is a person’s to carry out, which is what it has always ' +
+      'been — a press reads nothing here and sends nobody for it.'
+    );
+  // The first step's own `why`, which `stepFault` already wrote and which names the configuration
+  // block that would have carried it. Nothing here forms a second opinion about that.
+  const why = check.steps[0]?.why ?? null;
+  if (check.steps.every((step) => step.actor === 'human') && why !== null)
+    return `every step of this check is a person’s — ${why} A press reads nothing here and sends nobody for it.`;
+  return (
+    `nothing in this check’s test plan is an instrument a run on ${environment.name} can carry: it names no ` +
+    '`suite` area, no one-off script and no screen to hand back' +
+    (runnable ? '' : `, and ${environment.name} declares no "validate.browser.runner" to carry one`) +
+    '. A press reads nothing here and sends nobody for it.'
+  );
 }
 
 /**

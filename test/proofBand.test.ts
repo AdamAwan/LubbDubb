@@ -11,7 +11,7 @@ import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import type { GoalWatch, PlanPart, StateQuery, ValidationCheck } from '../src/types.js';
+import type { GoalWatch, PlanPart, StateQuery, ValidationCheck, ValidationStep } from '../src/types.js';
 import type { PlanPartView } from '../src/wire.js';
 
 (globalThis as { React?: typeof React }).React = React;
@@ -24,7 +24,7 @@ const { RefLinks } = await import('../web/src/components/refs.js');
 test('the band counts a plan’s four kinds of proof, and jumps rather than drawing rows', () => {
   const html = sheet({
     parts: [part({ slug: 'route' }), part({ slug: 'e2e-download', coverage: 'Snapshots' })],
-    checks: [check({ id: 'a-person-opens-it' }), check({ id: 'the-suite-opens-it', area: 'Snapshots' })],
+    checks: [check({ id: 'a-person-opens-it' }), check({ id: 'the-suite-opens-it', steps: [suiteStep('Snapshots')] })],
     watches: [watch({ id: 'download-401s' }), watch({ id: 'download-p95', kind: 'measure' })],
     queries: [query({ id: 'no-capability-persisted' })],
   });
@@ -45,15 +45,15 @@ test('the band counts a plan’s four kinds of proof, and jumps rather than draw
   assert.ok(!band.includes('select id from'), 'and it draws no query either');
 });
 
-test('a check that inherited an area is the suite’s, and is not counted as a person’s as well', () => {
+test('a check whose plan names an area is the suite’s, and is not counted as a person’s as well', () => {
   const both = sheet({
     parts: [part({ slug: 'e2e-download', coverage: 'Snapshots' })],
-    checks: [check({ id: 'by-hand' }), check({ id: 'by-the-suite', area: 'Snapshots' })],
+    checks: [check({ id: 'by-hand' }), check({ id: 'by-the-suite', steps: [suiteStep('Snapshots')] })],
   });
   assert.ok(cell(both, 'manual').includes('0/1 settled'), 'one check has no area, so one is a person’s');
   assert.ok(
     cell(both, 'suite').includes('1 check verified against it'),
-    'and the one that inherited an area is answered by the suite',
+    'and the one whose `suite` step names an area is answered by the suite',
   );
 });
 
@@ -259,11 +259,27 @@ function check(over: Partial<ValidationCheck> & { id: string }): ValidationCheck
     revision: null,
     amendedAt: null,
     amendNote: null,
-    area: null,
-    expects: null,
     createdAt: 'then',
     updatedAt: 'then',
     ...over,
+  };
+}
+
+/**
+ * The one thing that gives a check an area: a `suite` step of its own test plan. The band reads it
+ * off the steps exactly as the server does — there is no column left holding a second answer.
+ */
+function suiteStep(area: string): ValidationStep {
+  return {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
   };
 }
 

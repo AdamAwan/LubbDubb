@@ -3,26 +3,27 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { validatePlanDocument, parsePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { testPartNote } from '../src/plans/planning.js';
 import { ValidationCheckSchema, validationCheckSetInputs } from '../src/validation/checkDocument.js';
-import { stepCapabilities } from '../src/validation/steps.js';
+import { stepArea, stepCapabilities } from '../src/validation/steps.js';
 import { runnableSelectors } from '../src/remoteValidation/briefing.js';
+import { validationPlanNote } from '../src/validation/authoring.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 
 /*
- * How a check comes to have an area. The planner picks one from the runner's own offering, a part
- * carries it as `coverage`, and the validation planner writes a `suite` step naming one — which is
- * what lands in `validation_checks.area`, what the pre-flight compares, and what the run's selectors
- * are drawn from. **A `covers` entry no longer decides any of it**: it is a bibliography, and while
- * it was the join a check became automatable by accident.
+ * How a check comes to have an area. The validation planner writes a `suite` step naming one, and
+ * that step **is** the area: there is no column holding a copy of it, nothing pre-resolves it
+ * against a listing at plan time, and what the pre-flight compares and the run's selectors are drawn
+ * from is read back off the step. **A `covers` entry decides none of it**: it is a bibliography, and
+ * while it was the join a check became automatable by accident.
  *
  * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
  */
@@ -40,11 +41,6 @@ const ACCEPTANCE: EnvironmentConfig = {
     },
   },
 };
-
-const OFFERING = JSON.stringify([
-  { selector: 'Checkout Tests', tests: 4 },
-  { selector: 'Login Tests', tests: 2 },
-]);
 
 function document(input: { coverage?: string; covers?: string[] }): string {
   return JSON.stringify({
@@ -119,7 +115,7 @@ function authored(store: Store, steps: unknown[], covers: string[] = []): void {
   });
 }
 
-test('a suite step names the area, and it is what lands on the row', () => {
+test('a suite step names the area, and reading the check back gives it and nothing else does', () => {
   const store = new Store(':memory:');
   try {
     const parsed = parsePlanDocument(document({ coverage: 'Checkout Tests' }));
@@ -129,7 +125,11 @@ test('a suite step names the area, and it is what lands on the row', () => {
     authored(store, [{ kind: 'suite', do: 'Run the checkout area', area: 'Checkout Tests' }]);
 
     const check = store.validation.listValidationChecks('issue:12')[0];
-    assert.equal(check?.area, 'Checkout Tests', 'the column the pre-flight compares is written by the step');
+    assert.equal(
+      stepArea(check?.steps ?? []),
+      'Checkout Tests',
+      'the string the run’s listing is compared against is read off the step, where its author wrote it',
+    );
     assert.equal(check?.steps[0]?.actor, 'fleet', 'and the environment declares a browser block, so the fleet has it');
   } finally {
     store.close();
@@ -148,7 +148,7 @@ test('covering a test part is a bibliography and no longer an area', () => {
     const check = store.validation.listValidationChecks('issue:12')[0];
     assert.deepEqual(check?.covers, ['checkout-coverage'], 'the entry is kept — it says what the check exercises');
     assert.equal(
-      check?.area,
+      stepArea(check?.steps ?? []),
       null,
       'and it decides nothing: a check became automatable by accident while this was the join',
     );
@@ -164,7 +164,7 @@ test('a plan document’s own legacy check set inherits nothing either', () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Checkout' });
-    assert.equal(store.validation.listValidationChecks('issue:12')[0]?.area, null);
+    assert.equal(stepArea(store.validation.listValidationChecks('issue:12')[0]?.steps ?? []), null);
   } finally {
     store.close();
   }
@@ -204,7 +204,7 @@ test('the first suite step wins, so a check is still verified against one select
       { kind: 'suite', do: 'Run login', area: 'Login Tests' },
     ]);
     assert.equal(
-      store.validation.listValidationChecks('issue:12')[0]?.area,
+      stepArea(store.validation.listValidationChecks('issue:12')[0]?.steps ?? []),
       'Checkout Tests',
       'the two-areas refusal went with the inheritance: a step names one, in an order the author chose',
     );
@@ -235,7 +235,6 @@ test('with the area written, a sheet’s check row confirms and the run has a se
       environments,
       observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
-      runner: new FakeRemoteRunner({ acceptance: { listing: OFFERING } }),
       scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
       now: () => NOW,
@@ -256,13 +255,12 @@ test('with the area written, a sheet’s check row confirms and the run has a se
   }
 });
 
-// ---------------------------------------------------------------- the cache
+// ------------------------------------------------- nothing is pre-resolved at plan time
 
-test('the desk lists what each runner offers, and keeps the answer where a planner is shown it', async () => {
+test('the harness takes no listing of its own, and keeps no offering to be shown one from', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-offering-'));
   const file = join(dir, 'harness.sqlite');
   const store = new Store(file);
-  const runner = new FakeRemoteRunner({ acceptance: { listing: OFFERING } });
   const environments = [ACCEPTANCE];
   try {
     const desk = new RemoteValidationDesk({
@@ -270,57 +268,41 @@ test('the desk lists what each runner offers, and keeps the answer where a plann
       environments,
       observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
-      runner,
       scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
       now: () => NOW,
     });
     await desk.run();
-    assert.deepEqual(
-      store.remoteValidation.listSelectorOfferings().map((o) => o.selector),
-      ['Checkout Tests', 'Login Tests'],
-    );
-    assert.equal(runner.asked.length, 1, 'one spawn, with no goal in sight — the planner needs it before an arrival');
-
     await desk.run();
-    assert.equal(runner.asked.length, 1, 'and it is paced to the suite’s rate of change rather than the pulse’s');
-  } finally {
+
     store.close();
+    const inspect = new Database(file);
+    const tables = (
+      inspect.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as { name: string }[]
+    ).map((t) => t.name);
+    inspect.close();
+    assert.ok(
+      !tables.includes('remote_selector_offerings'),
+      'the cache is gone, and gone from the schema with it: left declared there it would be dropped and ' +
+        'recreated empty on every boot, invisibly',
+    );
+  } finally {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 });
 
-test('a listing that could not say leaves the offering the last answer left standing', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-offering-fail-'));
-  const file = join(dir, 'harness.sqlite');
-  const store = new Store(file);
-  const environments = [ACCEPTANCE];
-  try {
-    store.remoteValidation.recordSelectorOffering(
-      'acceptance',
-      [{ selector: 'Checkout Tests', tests: 4 }],
-      '2020-01-01T00:00:00.000Z',
-    );
-    const runner = new FakeRemoteRunner({ acceptance: { listingFailure: 'the command exited 1' } });
-    const desk = new RemoteValidationDesk({
-      store,
-      environments,
-      observer: new FakeEnvironmentObserver(),
-      queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
-      runner,
-      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
-      probeIntervalMs: 60_000,
-      now: () => NOW,
-    });
-    await desk.run();
-    assert.equal(runner.asked.length, 1, 'the stale offering is re-asked');
-    assert.deepEqual(
-      store.remoteValidation.listSelectorOfferings().map((o) => o.selector),
-      ['Checkout Tests'],
-      'and an unanswered listing is never an offering of nothing — that would hand the planner an empty suite',
-    );
-  } finally {
-    store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-  }
+test('the planner is told what the deployment can drive, and no area to copy', () => {
+  const note = validationPlanNote([ACCEPTANCE]);
+  assert.match(note, /drives a browser/, 'the note names the step kinds this deployment can carry');
+  assert.doesNotMatch(
+    note,
+    /Checkout Tests|last offered/,
+    'and offers no area: an area picked from a listing taken in the harness’s own checkout is a guess about ' +
+      'a commit the environment is not running, answered properly by the run’s own listing',
+  );
+  assert.match(
+    note,
+    /resolved against the deployed commit/,
+    'so the planner is told where the name it writes is resolved instead',
+  );
 });

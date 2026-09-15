@@ -10,21 +10,11 @@ import { checkSetReleased } from '../validation/planApproval.js';
 import { sweptScripts } from '../validation/steps.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
-import type { RemoteRunner } from './runner.js';
 import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md
-
-/**
- * How often a browser environment's runner is asked what it offers. It is the **one** listing the
- * harness takes for itself — the one a row is read against is the run's own, in its pinned checkout
- * — and a process spawn per environment under the runner's 30-second kill, against an offering that
- * changes when a spec is added or renamed, so it is paced to the suite's own rate of change rather
- * than to the pulse's.
- */
-const SELECTOR_LISTING_INTERVAL_MS = 30 * 60 * 1000;
 
 const SWEPT =
   'the agent dispatched to run it ended without reporting — its transcript says what happened. ' +
@@ -35,7 +25,6 @@ interface RemoteValidationDeskDeps {
   environments: readonly EnvironmentConfig[];
   observer: EnvironmentObserver;
   queries: StateQueryDesk;
-  runner: RemoteRunner;
   probeIntervalMs: number;
   /**
    * `remoteValidation.scriptGraceMs` — how long a one-off script's source outlives the goal's
@@ -64,64 +53,9 @@ export class RemoteValidationDesk {
   /** @public the pass `Harness.runCycle` runs below `EnvironmentDesk` */
   async run(): Promise<void> {
     if (!this.deps.environments.some((e) => e.validate !== undefined)) return;
-    await this.refreshSelectorOfferings();
     await this.assembleAll();
     this.sweep();
     this.sweepScripts();
-  }
-
-  /**
-   * Ask each browser environment's runner what it offers, and keep the answer where a planner can be
-   * shown it — before there is anything to arrive, on a deployment where nothing has arrived yet.
-   * This is the one place the harness spawns a browser command, and the one place a listing it took
-   * itself is written.
-   *
-   * It is a **convenience and never an authority**. A planner picks an area from a listing taken on
-   * one commit and the run happens against another, so the answer a row is read against is the one
-   * the run agent takes in its pinned checkout. A stale cache costs a refusal at plan submission the
-   * run's own listing would have made anyway; the reverse — trusting it at the press — would be the
-   * harness reporting on a listing nobody took.
-   *
-   * An answered listing is recorded; one that could not say records nothing, leaving the offering the
-   * last answer left standing — an empty offering read as an answer is a planner told this deployment
-   * has no areas at all.
-   */
-  private async refreshSelectorOfferings(): Promise<void> {
-    const listed = new Map(
-      this.deps.store.remoteValidation.listSelectorOfferings().map((o) => [o.environment, o.listedAt]),
-    );
-    for (const environment of this.deps.environments) {
-      const command = environment.validate?.browser?.listSelectors;
-      if (command === undefined) continue;
-      const at = listed.get(environment.name);
-      if (at !== undefined && this.now() - Date.parse(at) < SELECTOR_LISTING_INTERVAL_MS) continue;
-      try {
-        const listing = await this.deps.runner.listSelectors({
-          environment: environment.name,
-          command,
-          profile: environment.validate?.browser?.profile ?? null,
-          tenant: resolveTenant({
-            environment,
-            stamped: this.deps.store.remoteValidation.listRemoteTenants(),
-            now: this.now(),
-            env: this.deps.env,
-          }).value,
-          selectors: [],
-          reportDir: null,
-        });
-        if (listing.offers !== null)
-          this.deps.store.remoteValidation.recordSelectorOffering(
-            environment.name,
-            listing.offers,
-            new Date(this.now()).toISOString(),
-          );
-      } catch (err) {
-        this.deps.errors?.record({
-          source: 'cycle',
-          message: `listing the selectors ${environment.name} offers failed: ${(err as Error).message}`,
-        });
-      }
-    }
   }
 
   private async assembleAll(): Promise<void> {

@@ -23,6 +23,18 @@ interface ProofCount {
  * fact rather than a synonym for clean, and a band that drew only what was
  * there would read as a fuller proof the less a planner wrote.
  */
+/**
+ * The check's area: the first `suite` step that names one, and nothing else. The server reads it the
+ * same way off the same steps — there is no column holding a second answer, and a check that names
+ * none is a person's.
+ */
+function checkArea(check: ValidationCheck): string | null {
+  for (const step of check.steps) {
+    if (step.kind === 'suite' && step.area !== null && step.area !== '') return step.area;
+  }
+  return null;
+}
+
 export function proofCounts(
   checks: readonly ValidationCheck[],
   parts: readonly PlanPartView[],
@@ -30,11 +42,11 @@ export function proofCounts(
   queries: readonly StateQuery[],
 ): ProofCount[] {
   const live = checks.filter((c) => c.supersededReason === null);
-  const manual = live.filter((c) => c.area === null);
+  const manual = live.filter((c) => checkArea(c) === null);
   const settled = manual.filter((c) => c.state === 'passed' || c.state === 'waived').length;
   const nominated = manual.filter((c) => c.fleetCandidate && c.actor === 'human').length;
   const areas = [...new Set(parts.flatMap((p) => (typeof p.coverage === 'string' ? [p.coverage] : [])))];
-  const covered = live.filter((c) => c.area !== null).length;
+  const covered = live.filter((c) => checkArea(c) !== null).length;
   const signals = watches.filter((w) => w.kind === 'signal').length;
   const measures = watches.filter((w) => w.kind === 'measure').length;
   const pending = watches.filter((w) => !w.live).length;

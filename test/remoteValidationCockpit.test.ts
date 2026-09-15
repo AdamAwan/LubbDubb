@@ -10,7 +10,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
@@ -79,7 +78,6 @@ function system(): System {
     {
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
-      remoteRunner: new FakeRemoteRunner(),
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
       environmentProber: new FakeEnvironmentProber({ acceptance: [DEPLOYED] }),
@@ -114,6 +112,7 @@ function seed(sys: System): void {
       blockedReason: null,
       awaitingApproval: false,
       matched: 4,
+      idleReason: null,
     },
     {
       rowId: 'check:history-loads',
@@ -125,6 +124,7 @@ function seed(sys: System): void {
       blockedReason: 'the runner on acceptance offers no selector `the order history`.',
       awaitingApproval: false,
       matched: 0,
+      idleReason: null,
     },
     {
       rowId: 'check:refunds-work',
@@ -136,6 +136,7 @@ function seed(sys: System): void {
       blockedReason: null,
       awaitingApproval: false,
       matched: null,
+      idleReason: null,
     },
   ]);
   const { run } = store.remoteValidation.beginRemoteRun({

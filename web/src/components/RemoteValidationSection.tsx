@@ -90,7 +90,12 @@ export function RemoteValidationSection({
  */
 function Gate({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetControls }): JSX.Element {
   const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
-  const selected = sheet.rows.filter((r) => r.selected).length;
+  // What a press will actually read or dispatch for, which is not the same as what is selected: a
+  // blocked row is skipped, and a row the server folded an `idleReason` onto names no instrument to
+  // run it with. Counting the selection instead offers to run rows nothing would touch, and the run
+  // settles on the spot reading as one that ran.
+  // → docs/spec/36-remote-validation.md#a-row-no-press-can-read
+  const pressable = sheet.rows.filter((r) => r.selected && r.blockedReason === null && r.idleReason === null).length;
   return (
     <div className="cn-sheet-gate">
       <HeadRow className="cn-sig-head">
@@ -105,7 +110,7 @@ function Gate({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetCont
             onClick={() => controls.onPress(sheet.environment)}
             title={`Re-read every selected row against the commit ${sheet.environment} stands at right now`}
           >
-            {selected === 1 ? 'Run 1 row' : `Run ${selected} rows`}
+            {pressable === 1 ? 'Run 1 row' : `Run ${pressable} rows`}
           </AsyncButton>
         )}
         {sheet.tenant.reseedable && (
@@ -258,10 +263,14 @@ function clock(ms: number): string {
 function said(row: RemoteSheetRowView): string {
   if (row.blockedReason !== null) return `Nothing was learned here — ${row.blockedReason}`;
   const reading: RemoteReadingView | null = row.reading;
-  if (reading === null)
+  if (reading === null) {
+    // The server's own sentence, drawn as it was folded. A row nothing will run reads as one nobody
+    // has got to yet unless it says why, which is the quietest way for a check to be lost.
+    if (row.idleReason !== null) return `Nothing here will be run — ${row.idleReason}`;
     return row.kind === 'check'
       ? 'Nothing has run this. A check is yours to run, and its result is recorded on the goal’s own validation row.'
       : 'Nothing has been read on this row yet.';
+  }
   if (reading.detail !== null) return reading.detail;
   if (reading.outcome === 'captured')
     return `${row.environment} handed a screen back on this row, and it is waiting for somebody to look at it.`;

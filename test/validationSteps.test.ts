@@ -13,7 +13,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { checkBriefing } from '../src/validation/fleet.js';
 import {
   fleetCanStart,
@@ -92,7 +91,6 @@ function build(environments: EnvironmentConfig[]): System {
       // `validate.browser` block drives a browser at somebody's acceptance environment.
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
-      remoteRunner: new FakeRemoteRunner({}),
     },
   );
 }
@@ -161,8 +159,6 @@ function fleetCheck(steps: ValidationCheck['steps']): ValidationCheck {
     revision: null,
     amendedAt: null,
     amendNote: null,
-    area: null,
-    expects: null,
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -368,12 +364,12 @@ test('a suite step’s expects becomes the check’s, written once through the a
   assert.equal(res.isError, false, res.text);
 
   const check = system.store.validation.listValidationChecks(GOAL)[0];
-  assert.equal(check?.area, 'Checkout Tests');
+  assert.equal(stepArea(check?.steps ?? []), 'Checkout Tests', 'the area is read off the step and off nothing else');
   assert.deepEqual(
-    check?.expects,
+    stepExpects(check?.steps ?? []),
     ['checkout/places.spec.ts'],
-    'the expectation rides on the same step the area does and is recomputed with it, so an author who ' +
-      'moves or drops the step moves both rather than leaving a name nothing offers',
+    'the expectation rides on the same step the area does, so an author who moves or drops the step moves ' +
+      'both rather than leaving a name nothing offers',
   );
   assert.equal(check?.steps[1]?.expects, null, 'and the state step carries none');
   system.store.close();
@@ -471,8 +467,6 @@ test('a check dispatched across a boundary is told to stop at it and hand back w
     revision: null,
     amendedAt: null,
     amendNote: null,
-    area: null,
-    expects: null,
     capture: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

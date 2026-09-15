@@ -39,7 +39,11 @@ import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairP
 import { dateInterruptionsFromBeforeTheStamp, LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { LocalValidationStore, LOCAL_VALIDATION_COLUMNS } from './localValidations.js';
 import { WatchStore, WATCH_COLUMNS } from './watches.js';
-import { RemoteValidationStore, REMOTE_VALIDATION_COLUMNS } from './remoteValidation.js';
+import {
+  RemoteValidationStore,
+  REMOTE_VALIDATION_COLUMNS,
+  REMOTE_VALIDATION_RETIRED_TABLES,
+} from './remoteValidation.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -122,7 +126,7 @@ export class Store {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     renameTables(this.db, ISSUE_VERDICT_RENAMES);
-    dropRetiredTables(this.db, POOL_RETIRED_TABLES);
+    dropRetiredTables(this.db, [...POOL_RETIRED_TABLES, ...REMOTE_VALIDATION_RETIRED_TABLES]);
     rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
     const addedColumns: string[] = [];
     for (const columns of [

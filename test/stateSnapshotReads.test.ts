@@ -149,6 +149,7 @@ function seeded() {
       blockedReason: null,
       awaitingApproval: false,
       matched: null,
+      idleReason: null,
     },
   ]);
   store.remoteValidation.beginRemoteRun({ goalRef, environment: 'testUk', tenant: 't1', startedSha: null });

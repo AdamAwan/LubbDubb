@@ -15,13 +15,12 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { MCP_TOOL_NAMES, TOOL_NAMING, toolsForRule } from '../src/mcp/names.js';
 import { buildTools } from '../src/mcp/tools.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { Agent, RemoteSheetRow, ValidationCheckInput } from '../src/types.js';
+import type { Agent, RemoteSheetRow, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*
  * The run's own selector listing: taken by the run agent in its pinned checkout, handed back as a
@@ -35,11 +34,11 @@ import type { Agent, RemoteSheetRow, ValidationCheckInput } from '../src/types.j
  * the row is a cause no press can overcome, so an amendable mismatch written there would leave the
  * row permanently unpressable, with an operator who reworded the area and still cannot press it.
  *
- * Every system here injects `FakeRemoteRunner`, `FakeStateReader`, `FakeTenantKeeper`,
- * `FakeEnvironmentProber` and `FakeWorktreeManager`: the defaults are the command implementations
- * and the real worktree manager, so a test that configures a `validate.browser` block and injects
- * none of them drives a browser against somebody's acceptance environment out of a lease cut in
- * your own checkout — and passes while doing it. The listing's own `read` seam is injected for the
+ * Every system here injects `FakeStateReader`, `FakeTenantKeeper`, `FakeEnvironmentProber` and
+ * `FakeWorktreeManager`: the defaults are the command implementations and the real worktree manager,
+ * so a test that configures a `validate` block and injects none of them queries somebody's environment
+ * out of a lease cut in your own checkout — and passes while doing it. There is no browser fake to
+ * inject: the harness spawns none of the three browser commands, the run agent invokes all of them. The listing's own `read` seam is injected for the
  * same reason one step in: no test lays a listing file on disk.
  */
 
@@ -64,7 +63,7 @@ const ACCEPTANCE: EnvironmentConfig = {
   },
 };
 
-function check(id: string, title: string, expects: string[] | null = null): ValidationCheckInput {
+function check(id: string, title: string): ValidationCheckInput {
   return {
     id,
     seq: 1,
@@ -75,12 +74,11 @@ function check(id: string, title: string, expects: string[] | null = null): Vali
     covers: [],
     fleetCandidate: false,
     candidateWhy: null,
-    expects,
   };
 }
 
 const CHECK = check('an-order-places', 'An order still places end to end');
-const EXPECTING = check('an-order-places', 'An order still places end to end', ['checkout/gift-cards.spec.ts']);
+const EXPECTED_SPEC = 'checkout/gift-cards.spec.ts';
 
 interface Bench {
   sys: System;
@@ -109,7 +107,6 @@ function bench(): Bench {
     {
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
-      remoteRunner: new FakeRemoteRunner(),
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
       environmentProber: new FakeEnvironmentProber({ acceptance: [DEPLOYED] }),
@@ -122,10 +119,31 @@ function bench(): Bench {
   return { sys, dir, file, close: () => sys.store.close() };
 }
 
-function setArea(file: string, checkId: string, area: string): void {
+/**
+ * An area and the spec names it is expected to run, where both of them live: one `suite` step of the
+ * check's own test plan. Neither is a column any longer — the row still holds the two it was given
+ * before this and nothing reads them — so a test writing those columns would set up a check that
+ * declares no area at all and pass on the silence.
+ */
+function setArea(file: string, checkId: string, area: string, expects: string[] | null = null): void {
   const db = new Database(file);
+  const step: ValidationStep = {
+    kind: 'suite',
+    do: `Run the ${area} area of the project’s own suite.`,
+    area,
+    expects,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
   try {
-    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, 'issue:12', checkId);
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([step]),
+      'issue:12',
+      checkId,
+    );
   } finally {
     db.close();
   }
@@ -136,7 +154,7 @@ function setArea(file: string, checkId: string, area: string): void {
  * null on the row, which now means **the listing has not been taken for this row yet** — the state
  * every run starts in rather than a theoretical one.
  */
-function seed(b: Bench, checks: { check: ValidationCheckInput; area: string }[]): string {
+function seed(b: Bench, checks: { check: ValidationCheckInput; area: string; expects?: string[] }[]): string {
   const { store } = b.sys;
   store.validation.ingestValidation('issue:12', {
     checks: checks.map((c) => c.check),
@@ -160,9 +178,10 @@ function seed(b: Bench, checks: { check: ValidationCheckInput; area: string }[])
       blockedReason: null,
       awaitingApproval: false,
       matched: null,
+      idleReason: null,
     })),
   );
-  for (const c of checks) setArea(b.file, c.check.id, c.area);
+  for (const c of checks) setArea(b.file, c.check.id, c.area, c.expects ?? null);
   const { run } = store.remoteValidation.beginRemoteRun({
     goalRef: 'issue:12',
     environment: 'acceptance',
@@ -504,14 +523,14 @@ test('a report arriving with no listing taken blocks every spec row, naming the 
 test('a row the listing blocked is never folded green by a later report that names tests under its area', async () => {
   const b = bench();
   try {
-    const runId = seed(b, [{ check: EXPECTING, area: AREA }]);
+    const runId = seed(b, [{ check: CHECK, area: AREA, expects: [EXPECTED_SPEC] }]);
     // The area is offered and holds three tests; the spec this check wrote down is not offered. That
     // is the one arm where a later report of three passes under the same area would fold to `passed`
     // on `area` alone — which is the agent's own choice of selectors reaching a verdict.
     const taken = await listings(b, offers([{ selector: AREA, tests: 3 }])).take(runId, '/srv/listing.json');
     assert.ok(taken.ok);
     assert.equal(taken.blocked, 1);
-    assert.equal(row(b, EXPECTING.id).matched, 3, 'so the counts alone would never have said so');
+    assert.equal(row(b, CHECK.id).matched, 3, 'so the counts alone would never have said so');
 
     const settled = await b.sys.remoteReadings.settle(runId, {
       reportPath: report(b, [

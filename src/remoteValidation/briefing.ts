@@ -2,8 +2,9 @@ import { issueOriginNumber } from '../issueOrigins.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRunBrief, RemoteSheetRow } from '../types.js';
-import { handsBackAScreen, stepScript } from '../validation/steps.js';
+import { handsBackAScreen, stepArea, stepScript } from '../validation/steps.js';
 import { remoteValidationKey, remoteValidationOrigin, remoteValidationRunDir } from './origin.js';
+import { SELECTOR_DELIMITER } from './runner.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
@@ -154,9 +155,14 @@ function confirmedCheckRows(rows: readonly RemoteSheetRow[], goalRef: string, en
   );
 }
 
-/** A selector names an **area**, never a file path, and it is the check's own `area` and nothing else. */
+/**
+ * A selector names an **area**, never a file path, and it is named by the check's own `suite` step
+ * and by nothing else.
+ */
 function areasOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): string[] {
-  const areas = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check.area]));
+  const areas = new Map(
+    store.validation.listValidationChecks(goalRef).map((check) => [check.id, stepArea(check.steps)]),
+  );
   const out: string[] = [];
   for (const row of rows) {
     const area = areas.get(row.sourceId) ?? null;
@@ -182,7 +188,7 @@ function scriptsOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[
   const out: RunScript[] = [];
   for (const row of rows) {
     const check = checks.get(row.sourceId);
-    if (check === undefined || check.area !== null) continue;
+    if (check === undefined || stepArea(check.steps) !== null) continue;
     const source = stepScript(check.steps);
     if (source === null) continue;
     out.push({ checkId: check.id, title: check.title, source });
@@ -314,7 +320,7 @@ function briefing(input: BriefingInput): string {
     ...(input.profile === null ? [] : [`LUBBDUBB_PROFILE=${input.profile}`]),
     ...(input.tenant === null || input.tenant === '' ? [] : [`LUBBDUBB_TENANT=${input.tenant}`]),
     input.listSelectors === null
-      ? `LUBBDUBB_SELECTORS=${input.selectors.join(',')}`
+      ? `LUBBDUBB_SELECTORS=${input.selectors.join(SELECTOR_DELIMITER)}`
       : 'LUBBDUBB_SELECTORS=<the selectors remote_validation_listing answered with, comma-joined>',
     `LUBBDUBB_REPORT_DIR=${input.reportDir}`,
     '```',

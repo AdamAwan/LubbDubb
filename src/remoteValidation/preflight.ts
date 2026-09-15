@@ -1,4 +1,5 @@
 import type { RemoteSheetRow, ValidationCheck } from '../types.js';
+import { stepArea, stepExpects } from '../validation/steps.js';
 import type { SelectorListing } from './runner.js';
 
 // → docs/spec/36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking
@@ -42,8 +43,10 @@ interface PreflightInput {
  * was never a question for it.
  */
 export function preflightRows(input: PreflightInput): PreflightVerdict[] {
-  const areas = new Map(input.checks.map((check) => [check.id, check.area]));
-  const expected = new Map(input.checks.map((check) => [check.id, check.expects]));
+  // Both come off the check's own `suite` step, here as everywhere: there is no column to consult
+  // and nothing that could hold a second answer.
+  const areas = new Map(input.checks.map((check) => [check.id, stepArea(check.steps)]));
+  const expected = new Map(input.checks.map((check) => [check.id, stepExpects(check.steps)]));
   const out: PreflightVerdict[] = [];
   for (const row of input.rows) {
     if (row.kind !== 'check' || row.blockedReason !== null) continue;

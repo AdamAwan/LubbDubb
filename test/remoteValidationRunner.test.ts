@@ -5,31 +5,24 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { loadConfig } from '../src/config/config.js';
-import { buildSystem, type System } from '../src/system.js';
-import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
-import { CommandRemoteRunner, parseSelectorListing, runnerEnv } from '../src/remoteValidation/runner.js';
+import { parseSelectorListing } from '../src/remoteValidation/runner.js';
 import { preflightRows } from '../src/remoteValidation/preflight.js';
 import { runnableSelectors } from '../src/remoteValidation/briefing.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
-import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
-import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { StateQueryInput, ValidationCheck, ValidationCheckInput } from '../src/types.js';
+import type { StateQueryInput, ValidationCheck, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*
- * The runner seam, and what assembly does *not* ask of it. Every project-supplied command in this
- * design is a live shell command against a real environment — a browser suite most of all — so what
- * these tests assert about the fake is asserted on **its own record of what it was asked for**,
- * never on an absence. The harness asks a runner for one thing only: the offering refresh on its own
- * clock. The listing a sheet is read against is taken by the **run**, in its pinned checkout
- * (`test/remoteValidationListing.test.ts`).
+ * Reading a runner's listing, and what the harness does *not* spawn to get one. Every
+ * project-supplied browser command in this design is a live shell command against a real environment,
+ * and **the harness now spawns none of them**: the run agent invokes all three in its pinned
+ * checkout, so there is no runner seam and nothing to inject a fake for. What is left here is the
+ * parser, the delimiter guard, and the proof that assembly asks a runner nothing. The listing a sheet
+ * is read against is taken by the run (`test/remoteValidationListing.test.ts`).
  *
  * → docs/spec/36-remote-validation.md#the-runner-contract
  */
@@ -83,23 +76,28 @@ function reader(): FakeStateReader {
 }
 
 /**
- * The column, written directly. An area is really named by a `suite` step
- * (`test/planCoverageArea.test.ts`); these tests are about what a sheet does with one, so they set it
- * where the step would have.
+ * A `suite` step, written straight onto the row. An area is named by such a step and by nothing else
+ * (`test/planCoverageArea.test.ts`); these tests are about what a sheet does with one.
  */
 function setArea(file: string, goalRef: string, checkId: string, area: string): void {
   const db = new Database(file);
+  const step: ValidationStep = {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
   try {
-    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, goalRef, checkId);
-  } finally {
-    db.close();
-  }
-}
-
-function columns(file: string, table: string): string[] {
-  const db = new Database(file);
-  try {
-    return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([step]),
+      goalRef,
+      checkId,
+    );
   } finally {
     db.close();
   }
@@ -110,10 +108,9 @@ interface Bench {
   file: string;
   store: Store;
   desk: RemoteValidationDesk;
-  runner: FakeRemoteRunner;
 }
 
-function bench(runner: FakeRemoteRunner, environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
+function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-preflight-'));
   const file = join(dir, 'harness.sqlite');
   const store = new Store(file);
@@ -122,12 +119,11 @@ function bench(runner: FakeRemoteRunner, environments: EnvironmentConfig[] = [AC
     environments,
     observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments, reader: reader() }),
-    runner,
     scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: PROBE_MS,
     now: () => NOW,
   });
-  return { dir, file, store, desk, runner };
+  return { dir, file, store, desk };
 }
 
 function shut(b: Bench): void {
@@ -153,38 +149,6 @@ function seed(b: Pick<Bench, 'store' | 'file'>, area: string | null = AREA, goal
     arrivedAt: new Date(NOW - 1000).toISOString(),
   });
 }
-
-function checkOf(store: Store, goalRef = 'issue:12'): ValidationCheck {
-  const check = store.validation.listValidationChecks(goalRef)[0];
-  assert.ok(check !== undefined);
-  return check;
-}
-
-test('runnerEnv carries every parameter, and the command carries none of them', () => {
-  const command = ACCEPTANCE.validate?.browser?.runner ?? '';
-  assert.deepEqual(
-    runnerEnv({
-      environment: 'acceptance',
-      command,
-      profile: 'acc-uk',
-      tenant: 'validation-customer-1',
-      selectors: [AREA, 'refunds'],
-      reportDir: '/tmp/run-7/report',
-    }),
-    {
-      LUBBDUBB_ENVIRONMENT: 'acceptance',
-      LUBBDUBB_PROFILE: 'acc-uk',
-      LUBBDUBB_TENANT: 'validation-customer-1',
-      LUBBDUBB_SELECTORS: 'checkout,refunds',
-      LUBBDUBB_REPORT_DIR: '/tmp/run-7/report',
-    },
-  );
-  // A command is never assembled from its parameters — the tenant's value most of all, which on a
-  // `tenantEnv` deployment is per-operator and reaches the spawn env and nowhere else.
-  for (const value of ['acc-uk', 'validation-customer-1', AREA, 'refunds', '/tmp/run-7/report'])
-    assert.ok(!command.includes(value), `the command names no ${value}`);
-  assert.equal(command, 'npm run e2e -- --project=validation', 'and it is the committed one, verbatim');
-});
 
 test('a listing is read as areas, and one that could not answer is never an offering of nothing', () => {
   assert.deepEqual(parseSelectorListing('[{"selector":"checkout","tests":12}]').offers, [
@@ -222,7 +186,7 @@ test('a banner ahead of the listing is not read as areas, and prose is refused r
 });
 
 test('an area holding the delimiter its own list is joined on blocks its row at assembly', async () => {
-  const b = bench(new FakeRemoteRunner({ acceptance: { listing: JSON.stringify([{ selector: AREA, tests: 12 }]) } }));
+  const b = bench();
   try {
     seed(b, 'Reports, exports');
     await b.desk.run();
@@ -241,103 +205,16 @@ test('an area holding the delimiter its own list is joined on blocks its row at 
   }
 });
 
-test('CommandRemoteRunner spawns the project’s own command with the parameters as environment only', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-runner-'));
-  try {
-    const runner = new CommandRemoteRunner(dir);
-    const report = join(dir, 'report');
-    const said = await runner.run({
-      environment: 'acceptance',
-      command:
-        'node -e "console.log([process.env.LUBBDUBB_ENVIRONMENT, process.env.LUBBDUBB_PROFILE, ' +
-        `process.env.LUBBDUBB_TENANT, process.env.LUBBDUBB_SELECTORS, process.env.LUBBDUBB_REPORT_DIR].join('|'))"`,
-      profile: 'acc-uk',
-      tenant: 'validation-customer-1',
-      selectors: [AREA],
-      reportDir: report,
-    });
-    assert.equal(said.detail, null);
-    assert.equal((said.said ?? '').trim(), `acceptance|acc-uk|validation-customer-1|checkout|${report}`);
-
-    // The exit code is never read: one invocation carries many rows and one code.
-    const failed = await runner.run({
-      environment: 'acceptance',
-      command: `node -e "console.log('the report is written'); process.exit(3)"`,
-      profile: null,
-      tenant: null,
-      selectors: [],
-      reportDir: null,
-    });
-    assert.equal(failed.detail, null, 'a non-zero exit is not a run that could not be carried out');
-    assert.match(failed.said ?? '', /the report is written/);
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-  }
-});
-
-test('runTimeoutMs is the kill for a runner invocation and for nothing else, and a kill answers nothing', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-runner-kill-'));
-  const slow = `node -e "setTimeout(() => console.log('checkout'), 3000)"`;
-  const request = { environment: 'acceptance', profile: null, tenant: null, selectors: [], reportDir: null };
-  try {
-    // A browser suite gets the long kill; the listing and the publish keep the ordinary 30-second one.
-    const short = new CommandRemoteRunner(dir, 40, 30_000);
-    const killed = await short.run({ ...request, command: slow });
-    assert.equal(killed.said, null, 'the kill answers nothing rather than answering emptily');
-    assert.match(killed.detail ?? '', /killed/);
-
-    const long = new CommandRemoteRunner(dir, 30 * 60 * 1000, 40);
-    const listing = await long.listSelectors({ ...request, command: slow });
-    assert.equal(listing.offers, null, 'a killed listing offers nothing rather than offering none');
-    assert.match(listing.detail ?? '', /killed/);
-    const published = await long.publishArtefacts({ ...request, command: slow });
-    assert.equal(published.said, null);
-    assert.match(published.detail ?? '', /killed/);
-
-    const ran = await long.run({ ...request, command: slow });
-    assert.match(ran.said ?? '', /checkout/, 'and the same command inside the run timeout answers');
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-  }
-});
-
-test('the fake drives all three methods and spawns nothing, on its own record of what it was asked', async () => {
-  const runner = new FakeRemoteRunner({
-    acceptance: {
-      listing: JSON.stringify([{ selector: AREA, tests: 4 }]),
-      run: { said: 'report.json', detail: null },
-      artefacts: { said: 'https://reports.example/run-7', detail: null },
-    },
-  });
-  const request = {
-    environment: 'acceptance',
-    command: 'npm run e2e',
-    profile: 'acc-uk',
-    tenant: 'validation-customer-1',
-    selectors: [AREA],
-    reportDir: '/tmp/run-7',
-  };
-  assert.deepEqual((await runner.listSelectors(request)).offers, [{ selector: AREA, tests: 4 }]);
-  assert.equal((await runner.run(request)).said, 'report.json');
-  assert.equal((await runner.publishArtefacts(request)).said, 'https://reports.example/run-7');
-  assert.deepEqual(
-    runner.asked.map((a) => a.call),
-    ['listSelectors', 'run', 'publishArtefacts'],
-  );
-  assert.deepEqual(runner.asked[0]?.selectors, [AREA]);
-  assert.equal(runner.asked[1]?.tenant, 'validation-customer-1');
-});
-
-test('assembly asks a runner nothing, and the sheet it writes carries no matched and no blockedReason', async () => {
-  const b = bench(new FakeRemoteRunner({ acceptance: { listing: 'refunds\nsearch\n' } }));
+test('assembly spawns nothing, and the sheet it writes carries no matched and no blockedReason', async () => {
+  const b = bench();
   try {
     for (let n = 1; n <= 7; n += 1) seed(b, AREA, `issue:${String(n)}`);
     await b.desk.run();
     await b.desk.run();
 
-    // `refunds\nsearch` offers no `checkout`, which is exactly what the assembly-time listing used to
-    // block every one of these rows for. Assembly asks nothing now, so it blocks nothing: the
-    // mismatch is the run's own listing to find, one press later.
+    // A renamed or deleted area is exactly what the assembly-time listing used to block these rows
+    // for. Assembly asks nothing now, so it blocks nothing: the mismatch is the run's own listing to
+    // find, one press later, against the commit the environment is actually running.
     const rows = b.store.remoteValidation.listRemoteSheetRows().filter((r) => r.kind === 'check');
     assert.equal(rows.length, 7, 'every sheet is assembled exactly as it always was, five to a pass');
     for (const row of rows) {
@@ -350,53 +227,9 @@ test('assembly asks a runner nothing, and the sheet it writes carries no matched
       'so the row is pressable, and the press is where its area is put to the deployed runner',
     );
 
-    assert.equal(
-      b.runner.asked.length,
-      1,
-      'the one listing is the offering refresh, which is about the environment and not about any sheet',
-    );
     await b.desk.run();
-    assert.equal(b.runner.asked.length, 1, 'and a third pass over seven sheets asks a runner nothing at all');
   } finally {
     shut(b);
-  }
-});
-
-test('an offering refresh that throws is recorded through errors.record and never fails the cycle', async () => {
-  const logged: string[] = [];
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-listing-throw-'));
-  const file = join(dir, 'harness.sqlite');
-  const store = new Store(file);
-  try {
-    const environments = [ACCEPTANCE];
-    const desk = new RemoteValidationDesk({
-      store,
-      environments,
-      observer: new FakeEnvironmentObserver(),
-      queries: new StateQueryDesk({ store, environments, reader: reader() }),
-      runner: {
-        listSelectors: () => {
-          throw new Error('the runner blew up');
-        },
-      } as never,
-      scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
-      probeIntervalMs: PROBE_MS,
-      errors: { record: (e: { message: string }) => logged.push(e.message) } as never,
-      now: () => NOW,
-    });
-    seed({ store, file });
-    await desk.run();
-
-    assert.equal(logged.length, 1, 'the offering refresh is the one thing assembly asks a runner for');
-    assert.match(logged[0] ?? '', /listing the selectors acceptance offers failed: the runner blew up/);
-    assert.equal(
-      store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${QUERY.id}`)?.outcome,
-      'passed',
-      'and the rest of the assembly still ran',
-    );
-  } finally {
-    store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 });
 
@@ -408,7 +241,7 @@ test('the listing read leaves a row another cause already blocked exactly as it 
         { rowId: 'check:a', kind: 'check', sourceId: 'a', blockedReason: 'acceptance does not permit check rows' },
         { rowId: 'state:b', kind: 'state', sourceId: 'b', blockedReason: null },
       ],
-      checks: [{ id: 'a', area: AREA } as ValidationCheck],
+      checks: [{ id: 'a', steps: [] } as unknown as ValidationCheck],
       listing: { offers: [], detail: null },
     }),
     [],
@@ -416,129 +249,43 @@ test('the listing read leaves a row another cause already blocked exactly as it 
   );
 });
 
-test('buildSystem takes remoteRunner, and defaults to the command implementation', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-runner-system-'));
-  const system = build(dir, [
-    {
-      name: 'acceptance',
-      at: 'echo unused',
-      validate: {
-        permits: ['check'],
-        browser: { runner: 'echo unused', listSelectors: `node -e "console.log('refunds')"` },
-      },
-    },
-  ]);
-  try {
-    seedSystem(system, join(dir, 'harness.sqlite'));
-    await system.harness.runCycle('manual');
-    assert.deepEqual(
-      system.store.remoteValidation.listSelectorOfferings().map((o) => o.selector),
-      ['refunds'],
-      'the default spawned the project’s own command and read what it printed',
-    );
-    assert.equal(
-      system.store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check')?.blockedReason,
-      null,
-      'and the offering is a convenience: it decides nothing about a row, which the run’s own listing does',
-    );
-  } finally {
-    system.store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-  }
-});
-
-test('an environment with no validate.browser block declares no command for a runner to run', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-runner-none-'));
-  const runner = new FakeRemoteRunner();
-  const system = build(
-    dir,
-    [{ name: 'acceptance', at: 'echo unused', validate: { permits: ['state'], state: { run: './query.sh' } } }],
-    runner,
-  );
-  try {
-    seedSystem(system, join(dir, 'harness.sqlite'));
-    await system.harness.runCycle('manual');
-    assert.equal(
-      system.store.remoteValidation.listRemoteSheetRows().length,
-      1,
-      'the sheet is assembled as it always was',
-    );
-    assert.deepEqual(runner.asked, [], 'and nothing is asked of a runner this environment does not declare');
-  } finally {
-    system.store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-  }
-});
-
-test('a database written before validation_checks.area gains it on boot, and nothing is backfilled', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-area-'));
-  const file = join(dir, 'before-the-column.sqlite');
+test('a database carrying remote_selector_offerings loses it on the boot that takes the build', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-offerings-drop-'));
+  const file = join(dir, 'with-the-cache.sqlite');
   try {
     const before = new Store(file);
-    before.validation.ingestValidation('issue:12', {
-      checks: [CHECK],
-      resources: [],
-      supersededReason: '',
-      amendNote: '',
-    });
     before.close();
+    const seedDb = new Database(file);
+    seedDb.exec(`CREATE TABLE IF NOT EXISTS remote_selector_offerings (
+      environment TEXT NOT NULL, selector TEXT NOT NULL, tests INTEGER, listed_at TEXT NOT NULL,
+      PRIMARY KEY (environment, selector))`);
+    seedDb
+      .prepare(`INSERT INTO remote_selector_offerings VALUES (?, ?, ?, ?)`)
+      .run('acceptance', AREA, 4, '2026-01-01T00:00:00.000Z');
+    seedDb.close();
+    assert.ok(tables(file).includes('remote_selector_offerings'), 'a database from before the cache was retired');
 
-    const raw = new Database(file);
-    raw.exec('ALTER TABLE validation_checks DROP COLUMN area');
-    raw.close();
-    assert.ok(!columns(file, 'validation_checks').includes('area'), 'a database from before the column');
+    new Store(file).close();
+    assert.ok(
+      !tables(file).includes('remote_selector_offerings'),
+      'the drop is one of three edits: the CREATE goes from the schema in the same change, because ' +
+        '`rebuildTables` re-runs the schema straight after the drop and would recreate it empty every boot',
+    );
 
-    const store = new Store(file);
-    try {
-      assert.ok(columns(file, 'validation_checks').includes('area'), 'gains it on the boot that takes the build');
-      assert.equal(checkOf(store).area, null, 'and null means no area declared, which nothing backfills');
-      assert.equal(checkOf(store).state, 'unrun', 'nothing else about the row moved');
-    } finally {
-      store.close();
-    }
+    new Store(file).close();
+    assert.ok(!tables(file).includes('remote_selector_offerings'), 'and a second boot is a no-op, not a second drop');
   } finally {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 });
 
-function build(dir: string, environments: EnvironmentConfig[], runner?: FakeRemoteRunner): System {
-  const config = loadConfig({
-    selfUpdate: { enabled: false } as never,
-    auth: { enabled: false } as never,
-    labelPrefix: '',
-    dbPath: join(dir, 'harness.sqlite'),
-    agentMode: 'raw',
-    repoRoot: dir,
-    deskRoot: join(dir, 'desk'),
-    worktreeRoot: join(dir, 'wt'),
-    heartbeatIntervalMs: 999_999,
-    environments,
-  });
-  return buildSystem(config, {
-    worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
-    stateReader: reader(),
-    ...(runner === undefined ? {} : { remoteRunner: runner }),
-    environmentProber: new FakeEnvironmentProber(),
-    gitObserver: new FakeGitObserver(),
-    projectConfigFile: join(dir, 'absent.json'),
-    environmentObserver: new FakeEnvironmentObserver(),
-    errorMirror: () => {},
-  });
-}
-
-function seedSystem(system: System, file: string): void {
-  system.store.validation.ingestValidation('issue:12', {
-    checks: [CHECK],
-    resources: [],
-    supersededReason: '',
-    amendNote: '',
-  });
-  setArea(file, 'issue:12', CHECK.id, AREA);
-  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  system.store.environments.recordGoalArrival({
-    goalRef: 'issue:12',
-    environment: 'acceptance',
-    arrivedAt: new Date().toISOString(),
-  });
+function tables(file: string): string[] {
+  const db = new Database(file);
+  try {
+    return (db.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as { name: string }[]).map(
+      (t) => t.name,
+    );
+  } finally {
+    db.close();
+  }
 }

@@ -8,19 +8,23 @@ import { Store } from '../src/store/store.js';
 import { SCHEMA } from '../src/store/schema.js';
 import { VALIDATION_COLUMNS } from '../src/store/validation.js';
 import { preflightRows } from '../src/remoteValidation/preflight.js';
+import { stepExpects } from '../src/validation/steps.js';
 import type { SelectorListing } from '../src/remoteValidation/runner.js';
-import type { RemoteSheetRow, ValidationCheck, ValidationCheckInput } from '../src/types.js';
+import type { RemoteSheetRow, ValidationCheck, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*
- * `validation_checks.expects`: the concrete spec names the planner wrote down against a check's
- * `suite` area, and the one thing the counts cannot reach. An area runs whatever it currently holds,
+ * The concrete spec names a check's `suite` step wrote down against its area, and the one thing the
+ * counts cannot reach. An area runs whatever it currently holds,
  * so a spec deleted or renamed since the check was written lowers what ran and the listing's own
  * denominator together — `executed < matched` never fires, and only a name somebody wrote down can
  * be missed.
  *
  * Null is *the planner named no expectation* and must never fold into *expected nothing*: the first
- * is every row written before the column and every check whose author named none, and the two
- * readings are a pass and a block apart.
+ * is every check whose author named none, and the two readings are a pass and a block apart.
+ *
+ * Both the area and the expectation are read off the step and off nothing else. The columns
+ * `validation_checks.area` and `.expects` still hold what was written on them and nothing reads
+ * them, which is the shape the last section here is about.
  *
  * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
  */
@@ -44,8 +48,23 @@ function rows(): Pick<RemoteSheetRow, 'rowId' | 'kind' | 'sourceId' | 'blockedRe
   return [{ rowId: 'check:an-order-places', kind: 'check', sourceId: 'an-order-places', blockedReason: null }];
 }
 
+/** A check with the test plan an area and an expectation actually live on: one `suite` step. */
 function check(expects: string[] | null, area: string | null = AREA): ValidationCheck {
-  return { id: 'an-order-places', area, expects } as ValidationCheck;
+  return { id: 'an-order-places', steps: area === null ? [] : [suiteStep(area, expects)] } as ValidationCheck;
+}
+
+function suiteStep(area: string, expects: string[] | null): ValidationStep {
+  return {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
 }
 
 function verdicts(check: ValidationCheck, listing: SelectorListing = LISTING): ReturnType<typeof preflightRows> {
@@ -186,7 +205,7 @@ function input(over: Partial<ValidationCheckInput>): ValidationCheckInput {
     covers: [],
     fleetCandidate: false,
     candidateWhy: null,
-    area: AREA,
+    steps: [suiteStep(AREA, null)],
     ...over,
   };
 }
@@ -196,100 +215,96 @@ test('an expectation written on a check is the list that is read back, and an em
   try {
     store.validation.ingestValidation(GOAL, {
       checks: [
-        input({ expects: ['checkout/places-an-order.spec.ts'] }),
-        input({ id: 'refunds-work', seq: 2, title: 'Refunds still work', expects: [] }),
-        input({ id: 'prose-only', seq: 3, title: 'Somebody looks', area: null }),
+        input({ steps: [suiteStep(AREA, ['checkout/places-an-order.spec.ts'])] }),
+        input({ id: 'refunds-work', seq: 2, title: 'Refunds still work', steps: [suiteStep(AREA, [])] }),
+        input({ id: 'prose-only', seq: 3, title: 'Somebody looks', steps: [] }),
       ],
       resources: [],
       supersededReason: 'no longer declared',
       amendNote: 'first write',
     });
     const back = store.validation.listValidationChecks(GOAL);
+    const expectsOf = (id: string): string[] | null => stepExpects(back.find((c) => c.id === id)?.steps ?? []);
     assert.deepEqual(
-      back.find((c) => c.id === 'an-order-places')?.expects,
+      expectsOf('an-order-places'),
       ['checkout/places-an-order.spec.ts'],
-      'the names the pre-flight compares character for character survive the round trip unchanged',
+      'the names the run\u2019s listing compares character for character survive the round trip unchanged',
     );
     assert.equal(
-      back.find((c) => c.id === 'refunds-work')?.expects,
+      expectsOf('refunds-work'),
       null,
       'an empty list normalises to null on the way back out too: an expectation of nothing is not one',
     );
     assert.equal(
-      back.find((c) => c.id === 'prose-only')?.expects,
+      expectsOf('prose-only'),
       null,
-      'and a check whose author named none is the same fact as a row from before the column',
+      'and a check that declares no plan at all names no expectation, which is the same fact',
     );
   } finally {
     store.close();
   }
 });
 
-// --------------------------------------------------------------------- the migration
+// --------------------------------------------------- the columns nothing reads any more
 
-function beforeTheColumn(): string {
+/** A database written while the area and the expectation were columns: both set, and no steps. */
+function beforeTheStep(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-expects-'));
   const path = join(dir, 'old.db');
   const db = new Database(path);
-  const stripped = SCHEMA.split('\n')
-    .filter((line) => !/^\s*expects\s+TEXT/.test(line))
-    .join('\n');
-  assert.ok(!/\n\s*expects\s+TEXT/.test(stripped), 'the fixture really is a database from before the column');
-  db.exec(stripped);
+  db.exec(SCHEMA);
   db.prepare(
     `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
-       fleet_candidate, state, area, created_at, updated_at)
+       fleet_candidate, state, area, expects, created_at, updated_at)
      VALUES (?, 'an-order-places', 'A', 1, 'An order still places', 'Place one.', 'It places.', '[]', '[]',
-       0, 'passed', ?, ?, ?)`,
-  ).run(GOAL, AREA, NOW, NOW);
+       0, 'passed', ?, ?, ?, ?)`,
+  ).run(GOAL, AREA, JSON.stringify(['checkout/places-an-order.spec.ts']), NOW, NOW);
   db.close();
   return path;
 }
 
-test('validation_checks.expects is declared in VALIDATION_COLUMNS, so a database from before it gains it on boot', () => {
+test('the area and the expectation columns stay declared, keep their data, and are read by nothing', () => {
   assert.equal(
-    VALIDATION_COLUMNS.validation_checks?.expects,
+    VALIDATION_COLUMNS.validation_checks?.area,
     'TEXT',
-    'CREATE TABLE IF NOT EXISTS never alters an existing table, so a column without an entry here is ' +
-      'invisible on every database written before it existed',
+    'a column dropped from the schema while still declared here is added straight back on the next boot, ' +
+      'and one dropped from both rebuilds the table on every boot forever — retiring them is its own change',
   );
-  const path = beforeTheColumn();
-  const store = new Store(path);
-  const checks = store.validation.listValidationChecks(GOAL);
-  assert.equal(checks.length, 1);
-  assert.equal(
-    checks[0]?.expects,
-    null,
-    'null means "the planner named no expectation", which is true of every row written before the column',
-  );
-  assert.equal(checks[0]?.area, AREA, 'and nothing else about the row moved');
-  assert.equal(checks[0]?.state, 'passed');
-  store.close();
-  const inspect = new Database(path);
-  const names = (inspect.prepare(`PRAGMA table_info(validation_checks)`).all() as { name: string }[]).map(
-    (c) => c.name,
-  );
-  inspect.close();
-  assert.ok(names.includes('expects'));
-});
+  assert.equal(VALIDATION_COLUMNS.validation_checks?.expects, 'TEXT');
 
-test('no backfill runs over the new column, and no runOnce id is introduced', () => {
-  const path = beforeTheColumn();
-  new Store(path).close();
+  const path = beforeTheStep();
+  const store = new Store(path);
+  try {
+    const checks = store.validation.listValidationChecks(GOAL);
+    assert.equal(checks.length, 1);
+    assert.deepEqual(checks[0]?.steps, [], 'the row declares no test plan, so it names no area and no expectation');
+    assert.deepEqual(
+      preflightRows({ environment: ENVIRONMENT, rows: rows(), checks, listing: LISTING }),
+      [],
+      'and the listing is asked nothing about it: an area comes off a `suite` step and off nothing else, so a ' +
+        'check written before the step falls to a person rather than being matched against a stale column',
+    );
+  } finally {
+    store.close();
+  }
+
   const inspect = new Database(path);
-  const stored = inspect.prepare(`SELECT id, expects, updated_at FROM validation_checks`).all() as {
-    id: string;
+  const stored = inspect.prepare(`SELECT area, expects, updated_at FROM validation_checks`).all() as {
+    area: string | null;
     expects: string | null;
     updated_at: string;
   }[];
   inspect.close();
   assert.deepEqual(
     stored,
-    [{ id: 'an-order-places', expects: null, updated_at: NOW }],
-    'no row was rewritten — a backfill would turn "named no expectation" into "expected nothing" on ' +
-      'every check that predates the column, and block the lot of them',
+    [{ area: AREA, expects: JSON.stringify(['checkout/places-an-order.spec.ts']), updated_at: NOW }],
+    'nothing was rewritten and nothing was cleared: no boot repair recomputes what a `suite` step named, ' +
+      'because a pass that did would overwrite the author on every boot with nothing red',
   );
+});
+
+test('no backfill and no runOnce id came with any of it', () => {
   const source = readFileSync('src/store/store.ts', 'utf8');
-  assert.ok(!/expects/.test(source), 'nothing in the boot sequence is gated on the column having been added');
+  assert.ok(!/expects/.test(source), 'nothing in the boot sequence is gated on either column');
   assert.ok(!/runOnce/.test(source), 'and no one-shot id came back with it');
 });

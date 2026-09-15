@@ -2,7 +2,7 @@ import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './d
 import type { PrRefStyle } from '../pr/prRef.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
-import type { Decision, Issue, SelectorOffering, ValidationCheck } from '../types.js';
+import type { Decision, Issue, ValidationCheck } from '../types.js';
 import { pausedIssueNumbers } from '../goalPause.js';
 import {
   effectivePickupStates,
@@ -121,7 +121,7 @@ interface RuleDispatcherOptions {
   testPartNote?: string;
   stateDeclareNote?: string;
   remoteValidationOn?: boolean;
-  validationPlanNote?: (areas: readonly SelectorOffering[]) => string;
+  validationPlanNote?: string;
 }
 
 export class RuleDispatcher implements Dispatcher {
@@ -133,7 +133,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly watchNote: string;
   private readonly watchDeclareNote: string;
   private readonly testPartNote: string;
-  private readonly validationPlanNote: (areas: readonly SelectorOffering[]) => string;
+  private readonly validationPlanNote: string;
   private readonly stateDeclareNote: string;
   private readonly planning: PlanningPolicy;
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
@@ -163,7 +163,7 @@ export class RuleDispatcher implements Dispatcher {
       testPartNote = '',
       stateDeclareNote = '',
       remoteValidationOn = false,
-      validationPlanNote = () => '',
+      validationPlanNote = '',
     } = opts;
     this.remoteValidationOn = remoteValidationOn;
     this.watchNote = watchNote;
@@ -465,7 +465,7 @@ export class RuleDispatcher implements Dispatcher {
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
       testPartNote: this.testPartNote,
-      validationPlanNote: this.validationPlanNote(ctx.selectorOfferings ?? []),
+      validationPlanNote: this.validationPlanNote,
       stateDeclareNote: this.stateDeclareNote,
       validationRoot: this.validationRoot,
       liveLocalRun: ctx.localRun ?? null,

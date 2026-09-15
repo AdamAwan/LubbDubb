@@ -8,12 +8,18 @@ import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
+import { NO_STEP_CAPABILITIES, resolveSteps } from '../src/validation/steps.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { GoalWatchInput, StateQueryInput, ValidationCheckInput } from '../src/types.js';
+import type {
+  GoalWatchInput,
+  RemoteSheetRow,
+  StateQueryInput,
+  ValidationCheckInput,
+  ValidationStep,
+} from '../src/types.js';
 import { PULSE_PIPELINE, type PulseId } from '../src/pulseDesks.js';
 
 // → docs/spec/36-remote-validation.md
@@ -95,9 +101,9 @@ interface Bench {
 function bench(
   environments: EnvironmentConfig[] = [ACCEPTANCE],
   now: () => number = () => NOW,
-  opts: { reader?: FakeStateReader; observer?: FakeEnvironmentObserver } = {},
+  opts: { reader?: FakeStateReader; observer?: FakeEnvironmentObserver; file?: string } = {},
 ): Bench {
-  const store = new Store(':memory:');
+  const store = new Store(opts.file ?? ':memory:');
   const stateReader = opts.reader ?? reader();
   const env = opts.observer ?? observer();
   const desk = new RemoteValidationDesk({
@@ -105,7 +111,6 @@ function bench(
     environments,
     observer: env,
     queries: new StateQueryDesk({ store, environments, reader: stateReader }),
-    runner: new FakeRemoteRunner(),
     scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: PROBE_MS,
     now,
@@ -428,7 +433,6 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
           throw new Error('the reader blew up');
         },
       } as unknown as StateQueryDesk,
-      runner: new FakeRemoteRunner(),
       scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: PROBE_MS,
       errors: { record: (e: { message: string }) => logged.push(e.message) } as never,
@@ -443,6 +447,157 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
     assert.match(logged[0] ?? '', /assembling the validation sheet for issue:12 on acceptance failed/);
   } finally {
     store.close();
+  }
+});
+
+/* ── a row no press can read ─────────────────────────────────────────────────────────────────── */
+
+const BROWSER: EnvironmentConfig = {
+  name: 'acceptance',
+  at: 'echo unused',
+  validate: {
+    permits: ['check'],
+    tenant: 'validation-customer-1',
+    browser: { runner: 'npm run e2e', listSelectors: 'npm run e2e -- --list' },
+  },
+};
+
+/** Permits a check row and declares no `validate.browser` block: every browser-shaped step is a person's. */
+const NO_BROWSER: EnvironmentConfig = {
+  name: 'acceptance',
+  at: 'echo unused',
+  validate: { permits: ['check'], state: { run: './query.sh acceptance' } },
+};
+
+/** The `area` column, set the way a build from before the step set it — and read by nothing now. */
+function setAreaColumn(file: string, goalRef: string, checkId: string, area: string): void {
+  const db = new Database(file);
+  try {
+    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, goalRef, checkId);
+  } finally {
+    db.close();
+  }
+}
+
+/** A bench on a file, so a test can write the column a build from before the step wrote. */
+function fileBench(environments: EnvironmentConfig[]): Bench & { file: string; dir: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-sheet-idle-'));
+  const file = join(dir, 'harness.sqlite');
+  return { ...bench(environments, () => NOW, { file }), file, dir };
+}
+
+function suiteStep(area: string): ValidationStep {
+  return {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
+}
+
+async function checkRow(store: Store, desk: RemoteValidationDesk): Promise<RemoteSheetRow> {
+  arrive(store, 'acceptance');
+  await desk.run();
+  const row = store.remoteValidation.listRemoteSheetRows().find((r) => r.kind === 'check');
+  assert.ok(row !== undefined, 'the check row is on the sheet');
+  return row;
+}
+
+test('a check with an area in the column and no steps says what is missing, and is not blocked for it', async () => {
+  const { store, desk, file, dir } = fileBench([BROWSER]);
+  try {
+    seedGoal(store);
+    setAreaColumn(file, 'issue:12', CHECK.id, 'Checkout Tests');
+    const row = await checkRow(store, desk);
+
+    assert.equal(
+      row.blockedReason,
+      null,
+      'a block is a cause no press can overcome, and this one is overcome by amending the check — and every ' +
+        'honest prose check would be caught by it, so a sheet would read "N blocked" on every goal',
+    );
+    assert.match(
+      row.idleReason ?? '',
+      /declares no test plan/,
+      'the row carries the sentence instead: the press settles `ended` on the spot and the check reads as ' +
+        'one that was never run, which is a sheet that looks like it ran and did not',
+    );
+    for (const kind of ['suite', 'browser', 'screenshot'])
+      assert.match(row.idleReason ?? '', new RegExp(kind), `and it names the ${kind} step that would carry it`);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  }
+});
+
+test('a check whose plan names a suite area carries no sentence, exactly as before', async () => {
+  const { store, desk } = bench([BROWSER]);
+  try {
+    store.validation.ingestValidation('issue:12', {
+      checks: [{ ...CHECK, steps: [suiteStep('Checkout Tests')] }],
+      resources: [],
+      supersededReason: '',
+      amendNote: '',
+    });
+    const row = await checkRow(store, desk);
+    assert.equal(row.blockedReason, null);
+    assert.equal(row.idleReason, null, 'the run has an instrument to carry, which is the whole of the question');
+  } finally {
+    store.close();
+  }
+});
+
+test('a check whose every step is a person’s names the configuration block that would carry it', async () => {
+  // No environment declares a `validate.browser` block, so a `suite` step is a person's — which is a
+  // fact about the configuration and never a nomination, and the step's own `why` says which line.
+  const { store, desk } = bench([NO_BROWSER]);
+  try {
+    store.validation.ingestValidation('issue:12', {
+      checks: [
+        {
+          ...CHECK,
+          // Resolved through the real resolver against a deployment that declares no browser block,
+          // so the actor and the `why` are the ones the ingest would have written.
+          steps: resolveSteps([{ kind: 'suite', do: 'Run the Checkout Tests area', area: 'Checkout Tests' }], {
+            ...NO_STEP_CAPABILITIES,
+          }),
+        },
+      ],
+      resources: [],
+      supersededReason: '',
+      amendNote: '',
+    });
+    const row = await checkRow(store, desk);
+    assert.equal(row.blockedReason, null, 'a check a person carries is the ordinary case, not a misconfiguration');
+    assert.match(row.idleReason ?? '', /validate\.browser/, 'and the sentence names the block that would carry it');
+    assert.match(row.idleReason ?? '', /every step of this check is a person’s/);
+  } finally {
+    store.close();
+  }
+});
+
+test('the gate counts what a press will read, and a row nothing will run is not among them', async () => {
+  const { store, desk, file, dir } = fileBench([BROWSER]);
+  try {
+    seedGoal(store);
+    setAreaColumn(file, 'issue:12', CHECK.id, 'Checkout Tests');
+    await checkRow(store, desk);
+    const rows = store.remoteValidation.listRemoteSheetRows();
+    assert.ok(rows.length > 0, 'the sheet is assembled');
+    assert.equal(
+      rows.filter((r) => r.selected && r.blockedReason === null && r.idleReason === null).length,
+      0,
+      'the count the gate draws is pressable rows, so "Run 1 row" is never offered for a row a press ' +
+        'would touch in no way at all',
+    );
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 });
 
@@ -494,7 +649,6 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
         environments: [ACCEPTANCE],
         observer: observer(),
         queries: new StateQueryDesk({ store, environments: [ACCEPTANCE], reader: reader() }),
-        runner: new FakeRemoteRunner(),
         scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
         probeIntervalMs: PROBE_MS,
         now: () => NOW + PROBE_MS * 10,

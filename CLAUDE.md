@@ -141,12 +141,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   `validate` block declares no command to run; rely on that deliberately. Use `FakeStateReader` and
   `FakeTenantKeeper`, each of which records what it was asked for.
   → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
-- **A test that configures an environment with a `validate.browser` block must inject `remoteRunner`.**
-  The default is the real `CommandRemoteRunner`, which spawns the project's own `listSelectors`,
-  `runner` and `publishArtefacts` — so a test without `FakeRemoteRunner` drives a browser against
-  somebody's acceptance environment and passes while doing it. The fake records what it was asked for;
-  assert on that record, never on an absence.
-  → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
 - **The harness never generates or infers a tenant identifier, anywhere.** Environments reap tenants
   matching a name pattern past a short age, so an invented name survives about an hour and its
   disappearance presents as mysterious mass failure. No tenant configured is a `blocked` row **naming
