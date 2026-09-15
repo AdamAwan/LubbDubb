@@ -2060,7 +2060,10 @@ export interface Obstacle {
   updatedAt: string;
   lastSeenAt: string;
   endedBy: ObstacleEnding | null;
+  ticketDecision: ObstacleTicketDecision | null;
 }
+
+export type ObstacleTicketDecision = 'approved' | 'declined';
 
 export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down' | 'retired';
 

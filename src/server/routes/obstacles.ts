@@ -27,6 +27,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       },
       dormantMs: system.config.obstacleDormantMs,
       canFileTickets: trackerCoordinates(system.config) !== null,
+      ticketApproval: system.config.obstacleTicketApproval,
     } satisfies ObstacleBoardPayload;
   });
 
@@ -45,6 +46,32 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           error: body.muted
             ? `this obstacle is ${obstacle.state}, so it is already reaching nobody — there is nothing to silence`
             : `this obstacle is ${obstacle.state} rather than muted`,
+        });
+      }
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, obstacle: store.obstacles.getObstacle(params.id) };
+    }),
+  );
+
+  const TicketBody = z.object({
+    approved: requiredBoolean(
+      'approved is required: true lets the pulse file the bug for this obstacle, false says no bug — the fleet is ' +
+        'still told about it',
+    ),
+  });
+  app.post(
+    '/api/obstacles/:id/ticket',
+    checked({ params: IdParams, body: TicketBody }, async ({ params, body, reply }) => {
+      const obstacle = store.obstacles.getObstacle(params.id);
+      if (!obstacle) return reply.code(404).send({ error: 'obstacle not found' });
+      if (!store.obstacles.decideObstacleTicket(params.id, body.approved ? 'approved' : 'declined')) {
+        return reply.code(409).send({
+          error:
+            obstacle.kind === 'note'
+              ? 'this is a note, which is written down rather than filed as a bug'
+              : obstacle.ownerRef !== null
+                ? `${obstacle.ownerRef} already owns this obstacle, so there is no bug left to decide about`
+                : `this obstacle is ${obstacle.state}, and only a standing one is proposed as a bug`,
         });
       }
       hub.broadcast({ type: 'dirty' });

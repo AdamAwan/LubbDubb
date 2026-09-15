@@ -26,6 +26,7 @@ import {
   obstacleTicketGoal,
   ownershipDoor,
   redBaseChecks,
+  ticketHeld,
 } from './ownership.js';
 import { harnessSightings } from './voice.js';
 import { buildObstacleWorld, reportedChecks } from './world.js';
@@ -90,6 +91,7 @@ interface ObstacleDeskDeps {
   fleet: NoticeFleet;
   dormantMs: number;
   watchLabel: string;
+  ticketApproval?: boolean;
   reader?: ObstacleReader;
   repoRoot?: string | null;
   filing?: TicketFiler;
@@ -370,7 +372,10 @@ export class ObstacleDesk {
   private async fileTickets(board: readonly ObstacleStanding[], red: ReadonlySet<string>): Promise<void> {
     const filing = this.deps.filing;
     if (!filing) return;
-    const row = board.find((candidate) => ownershipDoor(candidate, red) === 'ticket');
+    const approval = this.deps.ticketApproval ?? false;
+    const row = board.find(
+      (candidate) => ownershipDoor(candidate, red) === 'ticket' && !ticketHeld(candidate.obstacle, approval),
+    );
     if (!row) return;
     if (!this.deps.store.obstacles.claimObstacle(row.obstacle.id)) return;
     const sightings = this.deps.store.obstacles.listObstacleSightings(row.obstacle.id);

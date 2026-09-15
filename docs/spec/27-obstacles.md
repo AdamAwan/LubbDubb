@@ -548,6 +548,45 @@ exists on `obstacle:<id>` — a candidate the headroom cut never dispatched is n
 and a row marked `owned` on the strength of one tells every agent it reaches to stand down from
 something nobody is doing.
 
+### The ticket is proposed, never filed
+
+`obstacleTicketApproval` ([02](02-configuration.md)), **on by default**, puts the operator between the
+ticket door and the tracker. The desk still decides that a row is at that door and still composes what
+the ticket would say; what it may not do is file it. The operator answers on the board — _file the
+bug_, or _no bug_ — and the next pass files the approved one exactly as it always did.
+
+It is there because the door's precision is the thing nothing else bounds. Two independent voices are
+evidence that something is real, and not evidence that it is worth a ticket: a tracker filling with
+rows an operator would not have opened is the failure that discredits the whole board, and it is a
+quiet one, because every row in it looks like the harness working.
+
+**The gate is a column and not a state**, and that is the whole of what keeps it safe. A proposal is an
+ordinary `standing` row with `obstacles.ticket_decision` still null: it reaches agents, it is answered
+_it is not yours_, the world can still clear it, its clock can still expire it and it still decays to
+dormant. So [every state has an exit that is not you](#every-state-has-an-exit-that-is-not-you) holds
+unchanged, and `test/obstacleLifecycle.test.ts` keeps its one carve-out. A seventh state called
+`proposed` would have been the queue that killed the store this replaces, arriving with a nicer name.
+
+**Declining is an answer, not a silence.** A declined row keeps standing and keeps being delivered —
+the fleet is still told the thing is known and not theirs, which is most of what the board is for — and
+only the tracker is spared. It is weaker than [muting](#states), which is the operator saying _never
+tell the fleet this_, and the two are separate controls because they answer different questions.
+
+**A decision is spent when the row ends.** A re-report reopening a resolved or dormant row clears
+`ticket_decision` (`ObstacleStore` sets the state and the column in one statement), so a recurrence is
+proposed again. A decline is a judgement about one occurrence, and carrying it across a recurrence
+would quietly answer a question nobody asked — the fix that did not stick is precisely the case
+[reopening exists to make visible](#states).
+
+**The repair door is not gated.** A base branch red, or three voices, is the fleet stopped now, and a
+door whose whole point is _before the operator gets to it_ cannot wait for the operator. It is already
+bounded to one repair in flight, it files nothing on the tracker, and its mistake costs one dispatch
+rather than a row in somebody's backlog. `ticketHeld` (`src/obstacles/ownership.ts`) is asked only
+about the ticket door, beside `ownershipDoor` and never inside it, so which door a row is at and
+whether that door is open stay two questions.
+
+With approval **off**, the pulse files as it did before this existed, and the board draws no proposal.
+
 ### Blocked is an answer
 
 An agent whose task is genuinely stopped by an obstacle — the base will not build — is not helped by
@@ -654,10 +693,13 @@ half of [what went wrong last time](#what-went-wrong-last-time) arriving at the 
 
 **It carries no badge, and it never gains one.** Knowledge's badge was `factsNeedingYou`, a count of
 corroborated claims nobody had ruled on — the queue only a person emptied, drawn as a number so it
-could not be missed. A badge counts what is waiting on a decision; nothing here is, because
-[every state has an exit that is not you](#every-state-has-an-exit-that-is-not-you), so there is no
-honest number to draw and an invented one would be the first step back toward the state that killed
-the store this replaces.
+could not be missed. A badge counts what is waiting on a decision, and it is the shape of the counted
+thing that decides whether the number is honest: a
+[proposed bug](#the-ticket-is-proposed-never-filed) is asked of a person, but it is asked of one
+without waiting on them — unanswered, it decays with its row like everything else here. A number that
+rises on its own and falls on its own is read as a backlog, and a backlog drawn in the navbar is the
+first step back toward the state that killed the store this replaces. The proposal is drawn on the row
+it is about, where what is being asked can be read.
 
 **Every link to the surfaces it replaces lands here.** `?tab=knowledge`, `?panel=knowledge` (with or
 without the `fact` id beside it), `?panel=findings` and `?panel=lessons` are all aliased onto this tab
@@ -666,9 +708,12 @@ the rest of the place still in the URL, which is a stranded link and a silent on
 **dropped** rather than carried, because there is no longer a row it could open and a parameter kept
 for a page that cannot honour it is the same stranded link one layer down.
 
-It is **read-mostly**: _what is blocking the fleet, and what owns each one_. Not a queue, not a triage
-surface, and nothing on it is waiting on a decision. The store this replaces gated every durable claim
-on an operator's click, so its output when nobody visited the page was exactly zero.
+It is **read-mostly**: _what is blocking the fleet, and what owns each one_. Not a queue and not a
+triage surface — the one thing it asks of an operator is whether a proposed bug should be filed, and
+an unanswered proposal costs the board nothing. The store this replaces gated **every durable claim**
+on an operator's click, so its output when nobody visited the page was exactly zero; this gates one
+outward-facing act at the end, and everything the board does for the fleet happens whether or not
+anybody visits.
 
 Two sections. **Standing**, which is what reaches agents, and **Sighted once**, which reaches nobody,
 drawn dimmed and saying when it will go dormant — the instant, from `lastSeenAt` plus the deployment's
@@ -677,7 +722,8 @@ behind a fold that states its own size — a tail that names itself and its coun
 rows that went missing, which is what the retired store's own page spent nine open sections buying.
 
 A row carries the claim, its keys, how many goals it cost, its owner as a reference, its state and when
-it was last seen. A key that only ever **suggests** is drawn apart from one that binds, because an
+it was last seen — and, where a bug is proposed for it, that it is waiting on you, beside **File the
+bug** and **No bug** in the row's own controls. A key that only ever **suggests** is drawn apart from one that binds, because an
 operator reading a suggestion as an identity is the wrong-merge failure arriving through the eyes.
 Opening one shows the sightings **in their authors' own words**, each with its goal and, next to it,
 **why it matched** — the key that bound it, or `fresh` where nothing did. That last is the only place

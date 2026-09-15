@@ -4575,8 +4575,11 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   about the surface is the same either way, and `ConsoleRoot` mounts the page for the tab.
 
   **It is read-mostly, and it has no badge.** _What is blocking the fleet, and what owns each one_ —
-  not a queue, not a triage surface, and nothing on it is waiting on a decision. Four controls, none
-  of them on any path: mute, own it, retire, and write it down. → [27](27-obstacles.md#in-the-cockpit)
+  not a queue and not a triage surface. Six controls, none of them on any path: mute, own it, retire,
+  write it down, and — where the harness proposes a bug for a row rather than filing one — file the
+  bug or no bug. That last pair is the one thing the page asks of an operator, and an unanswered
+  proposal decays with its row, which is why it is drawn on the row and never as a count in the nav.
+  → [27](27-obstacles.md#the-ticket-is-proposed-never-filed)
 
   **What was here before it was the claim store's page**, and that store is gone
   ([27](27-obstacles.md#what-the-claim-store-left-behind)): with it went the queue, the nine sections,

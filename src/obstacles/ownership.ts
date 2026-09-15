@@ -1,6 +1,6 @@
 import { issueOriginNumber } from '../issueOrigins.js';
 import { basePrOf } from '../pr/prHealth.js';
-import type { ObstacleStanding, PullRequest } from '../types.js';
+import type { Obstacle, ObstacleStanding, PullRequest } from '../types.js';
 
 // → docs/spec/27-obstacles.md
 
@@ -24,6 +24,15 @@ export function ownershipDoor(row: ObstacleStanding, redBaseChecks: ReadonlySet<
 function blockingNow(row: ObstacleStanding, redBaseChecks: ReadonlySet<string>): boolean {
   if (row.voices >= REPAIR_VOICES) return true;
   return row.keys.some((key) => key.kind === 'check' && key.binds && redBaseChecks.has(key.value));
+}
+
+/**
+ * Whether the bug this row would be filed as is still waiting on the operator. Read by the desk and
+ * by the board route, so what is proposed and what is filed cannot disagree.
+ */
+export function ticketHeld(obstacle: Obstacle, approvalRequired: boolean): boolean {
+  if (!approvalRequired) return false;
+  return obstacle.ticketDecision !== 'approved';
 }
 
 export function obstacleTicketFields(

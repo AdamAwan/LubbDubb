@@ -70,6 +70,7 @@ export interface Config {
   closedPrWindowMs: number;
   closedPrCatchUpMs: number;
   obstacleDormantMs: number;
+  obstacleTicketApproval: boolean;
   environments: EnvironmentConfig[];
   environmentProbeIntervalMs: number;
   environmentHealthIntervalMs: number;
@@ -218,6 +219,7 @@ const DEFAULTS: Config = {
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   closedPrCatchUpMs: 7 * 24 * 60 * 60 * 1000,
   obstacleDormantMs: 7 * 24 * 60 * 60 * 1000,
+  obstacleTicketApproval: true,
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,
   environmentHealthIntervalMs: 5 * 60 * 1000,

@@ -80,6 +80,7 @@ export function ObstaclesPage({
         now={now}
         dormantMs={board.dormantMs}
         canFileTickets={board.canFileTickets}
+        ticketApproval={board.ticketApproval}
         actions={actions}
         act={act}
         onRefused={setRefusal}
@@ -91,8 +92,9 @@ export function ObstaclesPage({
       <header className="ob-head">
         <h2>Obstacles</h2>
         <p className="ob-blurb">
-          What the fleet has run into that is not its work, and what owns each one. Nothing here is waiting on you:
-          every row has a way out that is not a person, so this is a reading rather than a queue.
+          What the fleet has run into that is not its work, and what owns each one. Every row has a way out that is not
+          a person, so this stays a reading rather than a queue — a bug proposed for one is the single thing you are
+          asked about, and a proposal nobody answers decays with the row.
         </p>
       </header>
 
@@ -160,6 +162,18 @@ const OBSTACLE_TONE: Partial<Record<ObstacleState, TagTone>> = {
 
 const TERMINAL: ReadonlySet<ObstacleState> = new Set<ObstacleState>(['resolved', 'dormant', 'muted']);
 
+function proposed(row: ObstacleBoardRow, canFileTickets: boolean, ticketApproval: boolean): boolean {
+  const { obstacle } = row;
+  return (
+    ticketApproval &&
+    canFileTickets &&
+    obstacle.kind === 'obstacle' &&
+    obstacle.state === 'standing' &&
+    obstacle.ownerRef === null &&
+    obstacle.ticketDecision === null
+  );
+}
+
 function Counts({ counts, now }: { counts: ObstacleBoardCounts; now: number }): JSX.Element {
   const { window: rate } = counts;
   return (
@@ -204,6 +218,7 @@ function Row({
   now,
   dormantMs,
   canFileTickets,
+  ticketApproval,
   actions,
   act,
   onRefused,
@@ -214,6 +229,7 @@ function Row({
   now: number;
   dormantMs: number;
   canFileTickets: boolean;
+  ticketApproval: boolean;
   actions: CockpitActions;
   act: (run: Promise<void>) => Promise<void>;
   onRefused: (message: string) => void;
@@ -239,6 +255,10 @@ function Row({
           {obstacle.state}
         </Tag>
         {obstacle.kind === 'note' && <span className="ob-kind">note</span>}
+        {proposed(row, canFileTickets, ticketApproval) && <Tag tone="amber">bug proposed — waiting on you</Tag>}
+        {obstacle.state === 'standing' && obstacle.ticketDecision === 'declined' && (
+          <span className="ob-kind">no bug</span>
+        )}
       </HeadRow>
 
       <div className="ob-row-meta">
@@ -265,7 +285,14 @@ function Row({
       {open && (
         <div className="ob-open">
           <Sightings sightings={row.sightings} now={now} />
-          <Controls row={row} canFileTickets={canFileTickets} actions={actions} act={act} onRefused={onRefused} />
+          <Controls
+            row={row}
+            canFileTickets={canFileTickets}
+            ticketApproval={ticketApproval}
+            actions={actions}
+            act={act}
+            onRefused={onRefused}
+          />
         </div>
       )}
     </div>
@@ -334,12 +361,14 @@ function Sightings({ sightings, now }: { sightings: ObstacleSighting[]; now: num
 function Controls({
   row,
   canFileTickets,
+  ticketApproval,
   actions,
   act,
   onRefused,
 }: {
   row: ObstacleBoardRow;
   canFileTickets: boolean;
+  ticketApproval: boolean;
   actions: CockpitActions;
   act: (run: Promise<void>) => Promise<void>;
   onRefused: (message: string) => void;
@@ -364,6 +393,34 @@ function Controls({
           </AsyncButton>
         )
       )}
+
+      {obstacle.state === 'standing' &&
+        obstacle.kind === 'obstacle' &&
+        canFileTickets &&
+        ticketApproval &&
+        obstacle.ticketDecision !== 'approved' && (
+          <AsyncButton
+            onClick={() => act(actions.decideObstacleTicket(obstacle.id, true))}
+            onRefused={onRefused}
+            title="File the bug. The pulse files it on the next cycle, with the sightings behind it, and the row takes the ticket as its owner."
+          >
+            File the bug
+          </AsyncButton>
+        )}
+
+      {obstacle.state === 'standing' &&
+        obstacle.kind === 'obstacle' &&
+        canFileTickets &&
+        ticketApproval &&
+        obstacle.ticketDecision === null && (
+          <AsyncButton
+            onClick={() => act(actions.decideObstacleTicket(obstacle.id, false))}
+            onRefused={onRefused}
+            title="No bug for this. The fleet is still told about it and told not to go fixing it; nothing is filed, and the row decays as it would have."
+          >
+            No bug
+          </AsyncButton>
+        )}
 
       {obstacle.state === 'standing' && obstacle.kind === 'obstacle' && canFileTickets && (
         <span className="ob-own">

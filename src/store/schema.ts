@@ -1899,7 +1899,12 @@ CREATE TABLE IF NOT EXISTS obstacles (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL,      -- the newest sighting, which is what decay reads
-  ended_by   TEXT                  -- condition | landing | expiry | decay | written-down; null while nothing has
+  ended_by   TEXT,                 -- condition | landing | expiry | decay | written-down; null while nothing has
+  -- The operator's answer to the bug this row would be filed as: approved | declined.
+  -- Null is "not asked yet", which is where a proposal waits — and it waits as a
+  -- standing row, so every automatic exit standing has still applies to it
+  -- (docs/spec/27-obstacles.md#the-ticket-is-proposed-never-filed).
+  ticket_decision TEXT
 );
 
 -- What identifies an obstacle: a fact about the world, never a sentence about it.

@@ -118,6 +118,7 @@ test('a record that cannot say answers null, never zero', () => {
         updatedAt: iso(HOUR),
         lastSeenAt: iso(HOUR),
         endedBy: null,
+        ticketDecision: null,
       },
     ],
   });

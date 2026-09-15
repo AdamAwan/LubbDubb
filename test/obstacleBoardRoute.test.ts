@@ -177,3 +177,45 @@ test('write it down is a note’s door and refuses an obstacle', async () => {
   await app.close();
   system.store.close();
 });
+
+test('the ticket decision is a route, and it refuses what it cannot decide about', async () => {
+  const system = build();
+  const key = [{ kind: 'test' as const, value: 'test/a.test.ts > flakes' }];
+  say(system, 'a.test.ts flakes on windows', 'issue:11', key);
+  const outcome = say(system, 'a.test.ts flakes on windows', 'issue:12', key);
+  const id = outcome.obstacle.id;
+
+  const { app } = await buildApp(system);
+  const board = (await app.inject({ method: 'GET', url: '/api/obstacles' })).json() as ObstacleBoardPayload;
+  assert.equal(board.ticketApproval, true, 'the board says whether a bug waits on a person');
+
+  const approved = await app.inject({
+    method: 'POST',
+    url: `/api/obstacles/${id}/ticket`,
+    payload: { approved: true },
+  });
+  assert.equal(approved.statusCode, 200);
+  assert.equal(system.store.obstacles.getObstacle(id)!.ticketDecision, 'approved');
+
+  const missing = await app.inject({
+    method: 'POST',
+    url: '/api/obstacles/obs-nothing/ticket',
+    payload: { approved: true },
+  });
+  assert.equal(missing.statusCode, 404);
+
+  const unsaid = await app.inject({ method: 'POST', url: `/api/obstacles/${id}/ticket`, payload: {} });
+  assert.equal(unsaid.statusCode, 400, 'a decision is stated, never inferred from silence');
+
+  system.store.obstacles.claimObstacle(id);
+  system.store.obstacles.setObstacleOwner(id, 'issue:841');
+  const owned = await app.inject({
+    method: 'POST',
+    url: `/api/obstacles/${id}/ticket`,
+    payload: { approved: false },
+  });
+  assert.equal(owned.statusCode, 409, 'a row something already owns has no bug left to decide about');
+
+  await app.close();
+  system.store.close();
+});

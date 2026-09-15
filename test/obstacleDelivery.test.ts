@@ -125,6 +125,7 @@ function row(over: Partial<Obstacle>, keys: Partial<ObstacleKey>[]): { obstacle:
       updatedAt: '2026-01-01T00:00:00.000Z',
       lastSeenAt: '2026-01-01T00:00:00.000Z',
       endedBy: null,
+      ticketDecision: null,
       ...over,
     },
     keys: keys.map((key, i) => ({

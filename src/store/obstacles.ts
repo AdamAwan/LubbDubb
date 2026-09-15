@@ -14,6 +14,7 @@ import type {
   ObstacleSighting,
   ObstacleStanding,
   ObstacleState,
+  ObstacleTicketDecision,
   ObstacleWriteUp,
   ObstacleWriteUpOutcome,
 } from '../types.js';
@@ -22,7 +23,7 @@ import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
-export const OBSTACLE_COLUMNS: ColumnMigrations = { obstacles: { ended_by: 'TEXT' } };
+export const OBSTACLE_COLUMNS: ColumnMigrations = { obstacles: { ended_by: 'TEXT', ticket_decision: 'TEXT' } };
 
 interface ObstacleReport {
   what: string;
@@ -61,6 +62,7 @@ interface ObstacleRow {
   updated_at: string;
   last_seen_at: string;
   ended_by: string | null;
+  ticket_decision: string | null;
 }
 
 interface ConditionRow {
@@ -198,6 +200,16 @@ export class ObstacleStore {
     this.ctx
       .prep(`UPDATE obstacles SET owner_ref=?, updated_at=? WHERE id=? AND state='owned'`)
       .run(ownerRef, this.ctx.now(), id);
+  }
+
+  decideObstacleTicket(id: string, decision: ObstacleTicketDecision): boolean {
+    const result = this.ctx
+      .prep(
+        `UPDATE obstacles SET ticket_decision=?, updated_at=?
+           WHERE id=? AND kind='obstacle' AND state='standing' AND owner_ref IS NULL`,
+      )
+      .run(decision, this.ctx.now(), id);
+    return result.changes > 0;
   }
 
   releaseObstacle(id: string): void {
@@ -501,6 +513,7 @@ export class ObstacleStore {
       updatedAt: at,
       lastSeenAt: at,
       endedBy: null,
+      ticketDecision: null,
     };
     this.ctx
       .prep(
@@ -567,10 +580,22 @@ export class ObstacleStore {
   }
 
   private setState(obstacle: Obstacle, state: ObstacleState, at: string): Obstacle {
+    const reopened = state === 'standing' && obstacle.state !== 'standing' && obstacle.state !== 'sighted';
     this.ctx
-      .prep(`UPDATE obstacles SET state=?, ended_by=NULL, updated_at=?, last_seen_at=? WHERE id=?`)
-      .run(state, at, at, obstacle.id);
-    return { ...obstacle, state, endedBy: null, updatedAt: at, lastSeenAt: at };
+      .prep(
+        `UPDATE obstacles SET state=?, ended_by=NULL, updated_at=?, last_seen_at=?,
+           ticket_decision=CASE WHEN ? THEN NULL ELSE ticket_decision END
+           WHERE id=?`,
+      )
+      .run(state, at, at, reopened ? 1 : 0, obstacle.id);
+    return {
+      ...obstacle,
+      state,
+      endedBy: null,
+      updatedAt: at,
+      lastSeenAt: at,
+      ticketDecision: reopened ? null : obstacle.ticketDecision,
+    };
   }
 }
 
@@ -586,6 +611,7 @@ function toObstacle(row: ObstacleRow): Obstacle {
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at,
     endedBy: (row.ended_by as ObstacleEnding | null) ?? null,
+    ticketDecision: (row.ticket_decision as ObstacleTicketDecision | null) ?? null,
   };
 }
 
