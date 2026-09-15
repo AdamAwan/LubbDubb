@@ -11,7 +11,6 @@ import type {
   StateQuery,
   StateQueryApproval,
   StateQueryAuthor,
-  SelectorOffering,
   StateQueryInput,
   WatchReadingVerdict,
 } from '../types.js';
@@ -27,7 +26,12 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // What the pre-flight's listing attributes to a check row's area, written before any press is
   // spent. The count comes from the listing and never from a report: derived the other way, a
   // selector that matched nothing reads as a clean pass.
-  remote_sheet_rows: { matched: 'INTEGER' },
+  // What the run's listing attributes to a check row's area, and why a press reads nothing here.
+  // `idle_reason` is null on every row written before it, which reads as *a press reads this row* —
+  // the reading those rows already had — and nothing recomputes it at boot: it is folded where the
+  // sheet is assembled, by `sheetRows`, and a boot pass that worked it out again would be a second
+  // author for a sentence one fold already owns.
+  remote_sheet_rows: { matched: 'INTEGER', idle_reason: 'TEXT' },
   // A reading with no commit beside it is a reading of a product nobody can name, so a reading taken
   // through a run carries the commits that run straddled. Both are null on one taken at assembly.
   // What the run's own report said about a browser row, beside the commits it straddled: how many
@@ -45,10 +49,22 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // A run row a dispatched agent reports against: which task claimed it, and where the report and
   // the artefacts landed. Columns on a table that was new one release ago, which is what this entry
   // exists for — without them they are invisible on every database from before they existed.
-  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT' },
+  // Where the run agent said the runner's own selector listing landed. No backfill: null means *no
+  // listing was reported on this run*, which is true of every run written before the column and
+  // stays true — there is nothing to compute it from and nothing that would be right to invent.
+  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT' },
   remote_tenants: {},
-  remote_selector_offerings: {},
 };
+
+/**
+ * The offering cache. Nothing pre-resolves an area at plan time any more — a `suite` step's area is
+ * resolved against the deployed commit's own listing when the run happens — so the table it was kept
+ * in is dropped rather than left to be read by something later. Its `CREATE TABLE IF NOT EXISTS` is
+ * gone from the schema in the same change: `rebuildTables` re-runs the schema immediately after the
+ * drop, so a `CREATE` left standing recreates the table empty on every boot, invisibly.
+ * → docs/spec/14-persistence.md
+ */
+export const REMOTE_VALIDATION_RETIRED_TABLES: readonly string[] = ['remote_selector_offerings'];
 
 /**
  * A press opens a run here, and the dispatch flip claims it. Both are live: the `(environment,
@@ -221,9 +237,9 @@ export class RemoteValidationStore {
     const write = this.ctx.prep(
       `INSERT OR REPLACE INTO remote_sheet_rows
          (goal_ref, environment, row_id, kind, seq, title, source_id, selected, blocked_reason,
-          awaiting_approval, matched, updated_at)
+          awaiting_approval, matched, idle_reason, updated_at)
        VALUES (@goalRef, @environment, @rowId, @kind, @seq, @title, @sourceId, @selected, @blockedReason,
-          @awaitingApproval, @matched, @now)`,
+          @awaitingApproval, @matched, @idleReason, @now)`,
     );
     this.ctx.db.transaction(() => {
       for (const row of rows)
@@ -239,23 +255,28 @@ export class RemoteValidationStore {
   }
 
   /**
-   * What the pre-flight learned about a `check` row before any press was spent on it: how many tests
-   * the deployed runner's own listing attributes to the row's area, and why nothing can be learned
-   * here where it offers none. The count is written from the listing and from nowhere else.
+   * What the run's own listing attributes to a `check` row's area, and **nothing else on the row**.
+   * A reason the listing found is a `blocked` reading against the run, never a `blocked_reason`: a
+   * reason on the row is a cause no press can overcome, and a mismatch a listing found is amendable.
    */
-  recordRemotePreflight(
+  recordRemoteMatched(
     goalRef: string,
     environment: string,
-    verdicts: readonly { rowId: string; matched: number | null; blockedReason: string | null }[],
+    verdicts: readonly { rowId: string; matched: number | null }[],
   ): void {
     const now = this.ctx.now();
     const write = this.ctx.prep(
-      `UPDATE remote_sheet_rows SET matched=@matched, blocked_reason=@blockedReason, updated_at=@now
+      `UPDATE remote_sheet_rows SET matched=@matched, updated_at=@now
         WHERE goal_ref=@goalRef AND environment=@environment AND row_id=@rowId`,
     );
     this.ctx.db.transaction(() => {
       for (const verdict of verdicts) write.run({ ...verdict, goalRef, environment, now });
     })();
+  }
+
+  /** Where the run agent said the runner's own listing landed. A path, and never what is in it. */
+  recordRemoteListingPath(id: string, listingPath: string): void {
+    this.ctx.prep(`UPDATE remote_runs SET listing_path=? WHERE id=?`).run(listingPath, id);
   }
 
   blockRemoteSheetRow(goalRef: string, environment: string, rowId: string, reason: string): void {
@@ -282,6 +303,7 @@ export class RemoteValidationStore {
       blockedReason: r.blocked_reason,
       awaitingApproval: r.awaiting_approval === 1,
       matched: r.matched ?? null,
+      idleReason: r.idle_reason ?? null,
     }));
   }
 
@@ -346,6 +368,7 @@ export class RemoteValidationStore {
         note: null,
         taskId: null,
         reportPath: null,
+        listingPath: null,
         artefacts: null,
       };
       this.ctx
@@ -480,67 +503,12 @@ export class RemoteValidationStore {
     }));
   }
 
-  /**
-   * What one environment's runner last said it offers, replacing that environment's offering whole.
-   * Only an **answered** listing reaches here: a listing that could not say leaves the last one
-   * standing rather than emptying the offering, because an empty offering read as an answer is a
-   * planner told this deployment has no areas at all.
-   */
-  recordSelectorOffering(
-    environment: string,
-    offers: readonly { selector: string; tests: number | null }[],
-    listedAt?: string,
-  ): void {
-    // The desk's own clock, not the store's: the refresh throttle reads `listed_at` back against the
-    // clock it was written from, and two clocks make an interval that never elapses or always does.
-    const now = listedAt ?? this.ctx.now();
-    const insert = this.ctx.prep(
-      `INSERT OR REPLACE INTO remote_selector_offerings (environment, selector, tests, listed_at)
-       VALUES (@environment, @selector, @tests, @now)`,
-    );
-    this.ctx.db.transaction(() => {
-      this.ctx.prep(`DELETE FROM remote_selector_offerings WHERE environment=?`).run(environment);
-      for (const offer of offers) insert.run({ environment, selector: offer.selector, tests: offer.tests, now });
-    })();
-  }
-
-  listSelectorOfferings(): SelectorOffering[] {
-    const rows = this.ctx
-      .prep(`SELECT * FROM remote_selector_offerings ORDER BY environment, selector`)
-      .all() as SelectorOfferingRow[];
-    return rows.map((r) => ({
-      environment: r.environment,
-      selector: r.selector,
-      tests: r.tests ?? null,
-      listedAt: r.listed_at,
-    }));
-  }
-
-  /**
-   * Every area any browser environment's runner offers, de-duplicated. The set a `coverage` is
-   * refused against at plan submission, and the reason the refusal is a convenience rather than an
-   * authority: it is what a listing last said, and the pre-flight asks again at assembly.
-   */
-  listOfferedAreas(): string[] {
-    const rows = this.ctx.prep(`SELECT DISTINCT selector FROM remote_selector_offerings ORDER BY selector`).all() as {
-      selector: string;
-    }[];
-    return rows.map((r) => r.selector);
-  }
-
   private nextSeq(originRef: string): number {
     const { top } = this.ctx
       .prep(`SELECT MAX(seq) AS top FROM remote_state_queries WHERE goal_ref=?`)
       .get(originRef) as { top: number | null };
     return (top ?? 0) + 1;
   }
-}
-
-interface SelectorOfferingRow {
-  environment: string;
-  selector: string;
-  tests: number | null;
-  listed_at: string;
 }
 
 interface StateQueryRow {
@@ -582,6 +550,7 @@ interface SheetRowRow {
   blocked_reason: string | null;
   awaiting_approval: number;
   matched: number | null | undefined;
+  idle_reason: string | null | undefined;
   updated_at: string;
 }
 
@@ -616,6 +585,7 @@ interface RunRow {
   note: string | null;
   task_id: string | null | undefined;
   report_path: string | null | undefined;
+  listing_path: string | null | undefined;
   artefacts: string | null | undefined;
 }
 
@@ -642,6 +612,7 @@ function toRemoteRun(row: RunRow): RemoteRun {
     note: row.note,
     taskId: row.task_id ?? null,
     reportPath: row.report_path ?? null,
+    listingPath: row.listing_path ?? null,
     artefacts: row.artefacts ?? null,
   };
 }

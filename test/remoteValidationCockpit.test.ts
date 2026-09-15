@@ -10,7 +10,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
@@ -79,7 +78,6 @@ function system(): System {
     {
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
-      remoteRunner: new FakeRemoteRunner(),
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
       environmentProber: new FakeEnvironmentProber({ acceptance: [DEPLOYED] }),
@@ -114,6 +112,7 @@ function seed(sys: System): void {
       blockedReason: null,
       awaitingApproval: false,
       matched: 4,
+      idleReason: null,
     },
     {
       rowId: 'check:history-loads',
@@ -125,6 +124,7 @@ function seed(sys: System): void {
       blockedReason: 'the runner on acceptance offers no selector `the order history`.',
       awaitingApproval: false,
       matched: 0,
+      idleReason: null,
     },
     {
       rowId: 'check:refunds-work',
@@ -136,6 +136,7 @@ function seed(sys: System): void {
       blockedReason: null,
       awaitingApproval: false,
       matched: null,
+      idleReason: null,
     },
   ]);
   const { run } = store.remoteValidation.beginRemoteRun({
@@ -181,6 +182,69 @@ test('a reading reaches the sheet card on the wire, with what it cost and where 
     assert.equal(row?.reading?.outcome, 'passed');
     assert.equal(row?.reading?.startedSha, DEPLOYED, 'attributed to the commits the run straddled');
     assert.equal(row?.reading?.endedSha, DEPLOYED);
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a reading carries the way to the transcript of the agent that produced it', () => {
+  const sys = system();
+  try {
+    seed(sys);
+    // The chain the wire has to close: a reading names its run, a run names the task it was
+    // dispatched as, and the task names the agent whose transcript is the record of what it did.
+    // → docs/spec/36-remote-validation.md#the-reading-an-agent-produced
+    const run = sys.store.remoteValidation.listRemoteRuns()[0];
+    assert.ok(run);
+    const task = sys.store.tasks.createTask({
+      kind: 'code',
+      title: 'Run the sheet',
+      prompt: 'go',
+      branch: `validate-remote/issue/12/${run.id}`,
+      originRef: `issue:12:validate-remote:${run.id}`,
+    });
+    sys.store.tasks.updateTask(task.id, { agentId: 'agent-7' });
+    assert.ok(sys.store.remoteValidation.claimRemoteRun(run.id, task.id), 'the flip claimed the run');
+
+    const sheets = snapshot(sys)['remoteSheets'] as RemoteSheetView[];
+    const row = sheets[0]?.rows.find((r) => r.rowId === `check:${CHECK.id}`);
+    assert.equal(row?.reading?.taskId, task.id, 'the task the run was dispatched as');
+    assert.equal(row?.reading?.agentId, 'agent-7', 'and the agent, which is what opens a transcript');
+
+    const unread = sheets[0]?.rows.find((r) => r.rowId === 'check:refunds-work');
+    assert.equal(unread?.reading, null, 'a row nothing read has no reading to carry one');
+  } finally {
+    sys.store.close();
+  }
+});
+
+test('a reading no run took carries no agent, and says so as null rather than as an id', () => {
+  const sys = system();
+  try {
+    seed(sys);
+    // The press's own deterministic rows are read synchronously and no agent goes anywhere for them.
+    sys.store.remoteValidation.recordRemoteReading({
+      goalRef: 'issue:12',
+      environment: 'acceptance',
+      rowId: 'check:refunds-work',
+      runId: null,
+      outcome: 'passed',
+      rows: null,
+      value: null,
+      detail: 'the press read this one itself.',
+      startedSha: null,
+      endedSha: null,
+      executed: null,
+      retries: null,
+      durationMs: null,
+      artefacts: null,
+    });
+
+    const sheets = snapshot(sys)['remoteSheets'] as RemoteSheetView[];
+    const row = sheets[0]?.rows.find((r) => r.rowId === 'check:refunds-work');
+    assert.equal(row?.reading?.outcome, 'passed');
+    assert.equal(row?.reading?.taskId, null);
+    assert.equal(row?.reading?.agentId, null, 'never an id borrowed from some other run');
   } finally {
     sys.store.close();
   }

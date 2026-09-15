@@ -586,7 +586,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'localValidation.browser',
     type: 'json',
     access: 'plain',
-    why: 'The MCP server that gives a validating agent a browser — {command, args}, with {outputDir} and {profileDir} filled in per run. null runs validations without one, and steps that need a screen are reported blocked.',
+    why: 'The MCP server that gives a validating agent a browser — {command, args}, with {outputDir} and {profileDir} filled in per run. One block, read by both the local validation and a remote validation sheet’s own run. null runs validations without one, and steps that need a screen are reported blocked.',
   },
   {
     path: 'validation.desktopSocketPath',

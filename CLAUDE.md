@@ -141,12 +141,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   `validate` block declares no command to run; rely on that deliberately. Use `FakeStateReader` and
   `FakeTenantKeeper`, each of which records what it was asked for.
   → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
-- **A test that configures an environment with a `validate.browser` block must inject `remoteRunner`.**
-  The default is the real `CommandRemoteRunner`, which spawns the project's own `listSelectors`,
-  `runner` and `publishArtefacts` — so a test without `FakeRemoteRunner` drives a browser against
-  somebody's acceptance environment and passes while doing it. The fake records what it was asked for;
-  assert on that record, never on an absence.
-  → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
 - **The harness never generates or infers a tenant identifier, anywhere.** Environments reap tenants
   matching a name pattern past a short age, so an invented name survives about an hour and its
   disappearance presents as mysterious mass failure. No tenant configured is a `blocked` row **naming
@@ -347,11 +341,16 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   a sheet, a spawned query and a bench row for every goal that ever arrived.
   → [36](docs/spec/36-remote-validation.md#the-desk)
 - **Anything a sheet run owes its agent is counted at the press, or the run settles with it still
-  owed.** `runnableSelectors`, `runnableScripts` and `runnableScreens` are three halves of one
-  question, and a check that carries only the newest of them names nothing the older two count: the
-  press ends the run on the spot, the check stays `unrun` for ever, and the sheet reads as a run that
-  answered. A fourth thing a run can carry is a fourth entry there.
+  owed.** `runnableSelectors`, `runnableScripts`, `runnableScreens` and `runnableDrives` are four
+  halves of one question, and a check that carries only the newest of them names nothing the older
+  ones count: the press ends the run on the spot, the check stays `unrun` for ever, and the sheet
+  reads as a run that answered. A fifth thing a run can carry is a fifth entry there.
   → [36](docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run)
+- **Two dispatches must never share one browser profile directory.** A persistent profile is held by
+  one browser at a time, so a remote validation run pointed at `localValidationProfileDir` refuses to
+  start whenever a local validation is up — every row it was pressed for comes back `blocked`, which
+  is a right answer to the wrong question, with nothing red. `remoteValidationProfileDir` is per
+  environment. → [36](docs/spec/36-remote-validation.md#the-browser-the-run-drives)
 - **A sheet reading is never a `WorldEvent` and never a `watch_readings` row.** Same trap as an
   arrival's, one subsystem over: `deliveryHold` expires a standing delivery verdict on any world event
   matching the goal's issue ref, so a reading written as one un-parks the goal it just reported on.

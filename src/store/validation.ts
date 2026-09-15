@@ -29,9 +29,14 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     handback_note: 'TEXT',
     claimed_by: 'TEXT',
     claimed_at: 'TEXT',
-    // The selector a runner offers for this check. Null means *no area declared*, which is true of
-    // every row written before the column existed and stays true — so nothing is backfilled.
+    // Both are **read by nothing and written by nothing**: the area a check is verified against and
+    // the spec names it expects are read off its own `suite` step, which is the one place either can
+    // be authored. The columns keep their data and stay declared here, because a column dropped
+    // while still named in this map is added back by `ensureColumns` on the next boot, and one
+    // dropped from both rebuilds the table on every boot forever. Dropping them is its own change.
+    // → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
     area: 'TEXT',
+    expects: 'TEXT',
     // The check's test plan, JSON. Null means *no steps* — true of every row written before the
     // column existed and of every check whose author declared only prose, and it stays true, so
     // nothing is backfilled. A null read as `[]` and a null read as "unknown" are the same answer
@@ -208,13 +213,11 @@ export class ValidationStore {
       revision: band ? (reworded && prev !== undefined ? priorWording(prev) : null) : (prev?.revision ?? null),
       amendedAt: band ? ts : (prev?.amendedAt ?? null),
       amendNote: band ? amendNote : (prev?.amendNote ?? null),
-      // From the check's own `suite` step, recomputed on every ingest and every amendment: an
-      // author that moved the step, or dropped it, moves this with it rather than leaving a
-      // selector nothing offers. → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
-      area: input.area ?? null,
-      // Resolved from the configuration at ingestion and recomputed on every amendment, exactly as
-      // `area` is — a check's assignment is a fact about what the deployment declares, and a step
-      // whose kind nothing declares is a step the fleet cannot carry.
+      // Resolved from the configuration at ingestion and recomputed on every amendment — a check's
+      // assignment is a fact about what the deployment declares, and a step whose kind nothing
+      // declares is a step the fleet cannot carry. The area and the expected spec names ride here
+      // too: they are read off the steps wherever they are needed and are held nowhere else.
+      // → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
       steps: input.steps ?? [],
       // A reworded check loses its reading, and the capture is that reading's evidence: an image of
       // a screen the procedure no longer describes is worse than no image, because it looks like one
@@ -523,12 +526,12 @@ export class ValidationStore {
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
-           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, area, steps,
-           capture, created_at, updated_at)
+           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note,
+           steps, capture, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
-           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @area, @steps,
-           @capture, @createdAt, @updatedAt)
+           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote,
+           @steps, @capture, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
@@ -537,7 +540,7 @@ export class ValidationStore {
            claimed_at=excluded.claimed_at, state=excluded.state, result_note=excluded.result_note,
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
-           amended_at=excluded.amended_at, amend_note=excluded.amend_note, area=excluded.area,
+           amended_at=excluded.amended_at, amend_note=excluded.amend_note,
            steps=excluded.steps, capture=excluded.capture, updated_at=excluded.updated_at`,
       )
       .run({
@@ -596,7 +599,6 @@ interface ValidationCheckRow {
   revision: string | null | undefined;
   amended_at: string | null | undefined;
   amend_note: string | null | undefined;
-  area: string | null | undefined;
   steps: string | null | undefined;
   capture: string | null | undefined;
   created_at: string;
@@ -638,7 +640,6 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     revision: parseRevision(r.revision ?? null),
     amendedAt: r.amended_at ?? null,
     amendNote: r.amend_note ?? null,
-    area: r.area ?? null,
     steps: parseSteps(r.steps ?? null),
     capture: r.capture ?? null,
     createdAt: r.created_at,

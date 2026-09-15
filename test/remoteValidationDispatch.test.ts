@@ -12,27 +12,44 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_PIPELINE, DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { PromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { remoteRunBriefs } from '../src/remoteValidation/briefing.js';
-import { remoteValidationOriginParts } from '../src/remoteValidation/origin.js';
+import {
+  remoteRunBriefs,
+  runnableDrives,
+  runnableScripts,
+  runnableSelectors,
+} from '../src/remoteValidation/briefing.js';
+import { sheetRows } from '../src/remoteValidation/sheet.js';
+import { NO_STEP_CAPABILITIES, resolveSteps, stepDriven } from '../src/validation/steps.js';
+import { remoteValidationOriginParts, remoteValidationProfileDir } from '../src/remoteValidation/origin.js';
+import { DEFAULT_LOCAL_VALIDATION } from '../src/localValidation/policy.js';
+import { extraMcpGrants, ALLOWED_MCP_TOOLS } from '../src/mcp/names.js';
+import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { issueOriginRole } from '../src/issueOrigins.js';
 import { MCP_TOOL_NAMES, DESKTOP_TOOL_NAMES, RETIRED_TOOL_NAMES, TOOL_NAMING } from '../src/mcp/names.js';
 import { MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
 import { buildTools } from '../src/mcp/tools.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { Agent, Issue, IssueDelivery, RemoteRunBrief, ValidationCheckInput } from '../src/types.js';
+import type {
+  Agent,
+  ExtraMcpServer,
+  Issue,
+  IssueDelivery,
+  RemoteRunBrief,
+  ValidationCheckInput,
+  ValidationStep,
+} from '../src/types.js';
 
 /*
  * The dispatch, the origin, the prompt and the report tool.
  * → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
  *
- * Every test that builds a system here injects `FakeRemoteRunner`, `FakeStateReader`,
+ * Every test that builds a system here injects `FakeStateReader`,
  * `FakeTenantKeeper`, `FakeEnvironmentProber` and `FakeWorktreeManager`: the defaults are the
  * command implementations and the real worktree manager, so a test that configures a
  * `validate.browser` block and injects none of them drives a browser against somebody's acceptance
@@ -101,13 +118,29 @@ function delivered(): IssueDelivery {
 }
 
 /**
- * How an author *declares* an area is not built — the column is, and null means no area declared. A
- * test writes one the way whatever declares it later will: onto the column, on a check that exists.
+ * An area, where an area lives: a `suite` step of the check's own test plan. There is no column left
+ * to write — the row still carries one and nothing reads it — so a test that wrote that column
+ * instead would set up a check the run declares no area for and pass on the silence.
  */
 function setArea(file: string, area: string): void {
   const db = new Database(file);
+  const step: ValidationStep = {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
   try {
-    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, 'issue:12', CHECK.id);
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([step]),
+      'issue:12',
+      CHECK.id,
+    );
   } finally {
     db.close();
   }
@@ -135,6 +168,7 @@ function seedSheet(store: Store, environment = 'acceptance'): void {
       blockedReason: null,
       awaitingApproval: false,
       matched: 4,
+      idleReason: null,
     },
   ]);
 }
@@ -156,8 +190,50 @@ function press(store: Store, environment = 'acceptance', tenant = 'validation-cu
   return run.id;
 }
 
-function briefs(store: Store, environments: EnvironmentConfig[] = [ACCEPTANCE]): RemoteRunBrief[] {
-  return remoteRunBriefs({ store, environments, validationRoot: '/srv/validation' });
+function briefs(
+  store: Store,
+  environments: EnvironmentConfig[] = [ACCEPTANCE],
+  browser: ExtraMcpServer | null = DEFAULT_LOCAL_VALIDATION.browser,
+): RemoteRunBrief[] {
+  return remoteRunBriefs({ store, environments, validationRoot: '/srv/validation', browser });
+}
+
+/** One `browser` step the fleet carries, which is the whole of how a check becomes the agent's own. */
+function browserStep(what: string): ValidationStep {
+  return {
+    kind: 'browser',
+    do: what,
+    area: null,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
+}
+
+/** The check's plan, written the way whatever authored it writes it — onto the steps column. */
+function setSteps(file: string, steps: ValidationStep[]): void {
+  const db = new Database(file);
+  try {
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify(steps),
+      'issue:12',
+      CHECK.id,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+function dispatchOf(actions: readonly { type: string; rule?: string | null }[]): {
+  prompt: string;
+  mcpServers: ExtraMcpServer[];
+} {
+  const found = actions.find((a) => a.type === 'dispatch_code_agent' && a.rule === 'remote-validation');
+  assert.ok(found, 'one code agent, on the run row');
+  return found as unknown as { prompt: string; mcpServers: ExtraMcpServer[] };
 }
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
@@ -182,7 +258,7 @@ function dispatcher(on = true, templates?: PromptTemplates): RuleDispatcher {
     prRefStyle: '#',
     watchNote: '',
     watchDeclareNote: '',
-    testPartNote: () => '',
+    testPartNote: '',
     stateDeclareNote: '',
     remoteValidationOn: on,
   });
@@ -389,6 +465,171 @@ test('no cooldown budget and no escalation: it is re-proposed each pulse until i
   }
 });
 
+/* ── the browser the run drives ──────────────────────────────────────────────────────────────── */
+
+test('the browser rides the dispatch with this run’s own directories filled in', async () => {
+  const b = bench();
+  try {
+    seed(b);
+    const runId = press(b.store);
+    const { actions } = await dispatcher().decide(ctx({ remoteRuns: briefs(b.store) }));
+    const dispatch = dispatchOf(actions);
+
+    assert.equal(dispatch.mcpServers[0]?.key, 'browser', 'beside the harness’s own, on the task row');
+    const args = dispatch.mcpServers[0]?.args ?? [];
+    assert.ok(
+      args.includes(join('/srv/validation', 'issue-12', 'remote', runId, 'artefacts')),
+      'the output directory is this run’s own artefacts, which is where the report names a screen',
+    );
+    assert.ok(
+      args.includes(remoteValidationProfileDir('/srv/validation', 'acceptance')),
+      'and the profile is the environment’s own, persistent between runs',
+    );
+    assert.ok(
+      !args.some((a) => a.includes('{')),
+      'no token is left standing — an unsubstituted one is a directory named "{outputDir}"',
+    );
+  } finally {
+    b.close();
+  }
+});
+
+test('the profile is per environment and never the local validation’s, which one browser holds at a time', () => {
+  const mine = remoteValidationProfileDir('/srv/validation', 'acceptance');
+  assert.notEqual(mine, remoteValidationProfileDir('/srv/validation', 'staging'));
+  assert.notEqual(
+    mine,
+    join('/srv/validation', '.browser-profile'),
+    'sharing the local profile is a browser that refuses to start whenever a local validation is up',
+  );
+  assert.equal(
+    remoteValidationProfileDir('/srv/validation', 'acc uk/1'),
+    join('/srv/validation', '.browser-profile-remote', 'acc-uk-1'),
+    'an environment name is a path segment and nothing else',
+  );
+});
+
+test('the server-level grant is appended to the fleet’s rather than replacing them', () => {
+  const args = buildClaudeStreamArgs({
+    mcpConfigPath: '/tmp/launch.json',
+    extraAllowedTools: extraMcpGrants([{ key: 'browser' }]),
+  });
+  const allowed = args[args.indexOf('--allowedTools') + 1] ?? '';
+  assert.ok(allowed.startsWith(ALLOWED_MCP_TOOLS.join(',')), 'the fleet’s grants are intact');
+  assert.ok(allowed.endsWith('mcp__browser'), 'and the extra is server-level, because that tool set is not ours');
+  assert.equal(args.filter((a) => a === '--mcp-config').length, 1, 'one document, one file');
+});
+
+test('a browser that will not start is `blocked` and never `failed`', async () => {
+  const b = bench();
+  try {
+    seed(b);
+    press(b.store);
+    const { actions } = await dispatcher().decide(ctx({ remoteRuns: briefs(b.store) }));
+    const { prompt } = dispatchOf(actions);
+
+    assert.match(prompt, /\*\*should\*\* have one/, 'offered as a claim to check rather than as a fact');
+    assert.match(prompt, /Check that before you plan around it/);
+    assert.match(prompt, /not a finding about this goal/);
+    assert.match(prompt, /\*\*Do not report `failed`\*\*/, 'a failure dispatches a fix agent and there is no defect');
+  } finally {
+    b.close();
+  }
+});
+
+test('with no browser configured the prompt says so and the dispatch carries none', async () => {
+  const b = bench();
+  try {
+    seed(b);
+    press(b.store);
+    const { actions } = await dispatcher().decide(ctx({ remoteRuns: briefs(b.store, [ACCEPTANCE], null) }));
+    const dispatch = dispatchOf(actions);
+
+    assert.deepEqual(dispatch.mcpServers, []);
+    assert.match(dispatch.prompt, /There is no browser/);
+    assert.match(dispatch.prompt, /report `blocked`/);
+    assert.match(dispatch.prompt, /Do not describe a page you did not see/);
+  } finally {
+    b.close();
+  }
+});
+
+/* ── a check the agent drives itself ─────────────────────────────────────────────────────────── */
+
+test('a check whose plan is a browser step the fleet carries is counted and briefed as the agent’s own', async () => {
+  const b = bench();
+  try {
+    seedSheet(b.store);
+    setSteps(b.file, [browserStep('Place an order with a saved card, then open the receipt.')]);
+    press(b.store);
+
+    const [brief] = briefs(b.store);
+    assert.equal(brief?.confirmed, 1, 'a fourth thing a run can carry is counted at the press, or it settles owing it');
+
+    const { prompt } = dispatchOf((await dispatcher().decide(ctx({ remoteRuns: briefs(b.store) }))).actions);
+    assert.match(prompt, /## The checks you drive yourself/);
+    assert.match(prompt, /Place an order with a saved card/);
+    assert.match(prompt, /recorded as \*\*`agent`\*\*/, 'and the agent producing it is told what it is worth');
+    assert.match(prompt, /never as\s+`spec`/);
+  } finally {
+    b.close();
+  }
+});
+
+test('a run still owing a driven check is not settled by the press', async () => {
+  const b = bench();
+  try {
+    seedSheet(b.store);
+    setSteps(b.file, [browserStep('Place an order with a saved card.')]);
+    const runId = press(b.store);
+    const rows = b.store.remoteValidation.listRemoteSheetRows();
+    assert.equal(
+      runnableDrives(b.store, ACCEPTANCE, 'issue:12', rows).length,
+      1,
+      'the press reads the same rule the brief does — a second copy strands or settles the run',
+    );
+    assert.deepEqual(runnableSelectors(b.store, ACCEPTANCE, 'issue:12', rows), [], 'it names no suite area');
+    assert.deepEqual(runnableScripts(b.store, ACCEPTANCE, 'issue:12', rows), [], 'and carries no script');
+    assert.equal(b.store.remoteValidation.getRemoteRun(runId)?.status, 'pending');
+  } finally {
+    b.close();
+  }
+});
+
+test('a check the agent would drive, on an environment with no tenant, is blocked naming the declarations', () => {
+  const b = bench();
+  try {
+    seedSheet(b.store);
+    setSteps(b.file, [browserStep('Place an order with a saved card.')]);
+    const noTenant = { ...ACCEPTANCE, validate: { ...ACCEPTANCE.validate, tenant: undefined } } as EnvironmentConfig;
+
+    const rows = sheetRows({
+      environment: noTenant,
+      checks: b.store.validation.listValidationChecks('issue:12'),
+      queries: [],
+      watches: [],
+      approvals: new Set<string>(),
+      tenant: { tenant: null, blockedReason: null },
+    });
+
+    const row = rows.find((r) => r.kind === 'check');
+    assert.match(row?.blockedReason ?? '', /acts on acceptance/, 'a browser step acts, so it needs a tenant');
+    assert.match(row?.blockedReason ?? '', /"validate\.tenant"/);
+    assert.match(row?.blockedReason ?? '', /"validate\.tenantEnv"/);
+    assert.match(row?.blockedReason ?? '', /"validate\.ensureTenant"/);
+    assert.ok(!/validation-customer/.test(row?.blockedReason ?? ''), 'and the harness invents no name for it');
+  } finally {
+    b.close();
+  }
+});
+
+test('where no environment declares a browser block, a browser step is a person’s and resolveSteps says which', () => {
+  const [step] = resolveSteps([{ kind: 'browser', do: 'Place an order.' }], NO_STEP_CAPABILITIES);
+  assert.equal(step?.actor, 'human', 'it goes back to a person exactly as it does today');
+  assert.match(step?.why ?? '', /"validate.browser"/, 'naming the block that would have carried it');
+  assert.equal(stepDriven([step!]), false, 'so no run counts it, and nothing is dispatched for it');
+});
+
 /* ── the origin ──────────────────────────────────────────────────────────────────────────────── */
 
 test('validate-remote: is evidence in src/issueOrigins.ts, and never unrecognised', () => {
@@ -515,7 +756,6 @@ function system(dbPath = ':memory:'): System {
     {
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
-      remoteRunner: new FakeRemoteRunner(),
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
       environmentProber: new FakeEnvironmentProber({ acceptance: [DEPLOYED] }),

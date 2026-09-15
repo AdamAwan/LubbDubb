@@ -457,7 +457,20 @@ export interface RemoteSheetRowView extends RemoteSheetRow {
   reading: RemoteReadingView | null;
 }
 
-export type RemoteReadingView = RemoteReading;
+/**
+ * A reading, with the way to the agent that produced it. The chain is `runId` → `RemoteRun.taskId` →
+ * `tasks.agentId`, walked on the server: the cockpit is handed the agent's own id because that is
+ * what opens a transcript, and a surface that had to walk two stores to draw a link would be a second
+ * copy of the join. Both are null on a reading no run took — the press's own deterministic rows — and
+ * on one whose run never got an agent.
+ * → docs/spec/36-remote-validation.md#the-reading-an-agent-produced
+ */
+export interface RemoteReadingView extends RemoteReading {
+  /** The task the run was dispatched as. */
+  taskId: string | null;
+  /** The agent that ran it, which is the transcript's own key — `GET /api/agents/:id/transcript`. */
+  agentId: string | null;
+}
 
 export interface GoalWatchView extends WatchWindow {
   checks: GoalWatchCheckView[];

@@ -12,7 +12,6 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
 import { RemoteReadingDesk } from '../src/remoteValidation/readings.js';
@@ -23,7 +22,7 @@ import { sheetRows } from '../src/remoteValidation/sheet.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { checkBriefing } from '../src/validation/fleet.js';
-import { stepScript, sweptScripts } from '../src/validation/steps.js';
+import { stepArea, stepScript, sweptScripts } from '../src/validation/steps.js';
 import { validationVerdict } from '../src/validation/verdict.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { Agent, ValidationCheck, ValidationCheckInput, ValidationStep } from '../src/types.js';
@@ -93,7 +92,6 @@ function build(environments: EnvironmentConfig[]): { system: System; dir: string
       // provisions tenants in it; a `validate.browser` block drives a browser at it.
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
-      remoteRunner: new FakeRemoteRunner({}),
     },
   );
   const parsed = validatePlanDocument({
@@ -152,7 +150,7 @@ test('a one-off script rides a browser step, and rides nothing else', async () =
   const check = only(system);
   assert.equal(stepScript(check.steps), SCRIPT, 'the source is kept on the step, which is where it is drawn');
   assert.equal(check.steps[0]?.actor, 'fleet', 'the browser block and the tenant are both declared');
-  assert.equal(check.area, null, 'a script is not a suite area, and neither stands in for the other');
+  assert.equal(stepArea(check.steps), null, 'a script is not a suite area, and neither stands in for the other');
 
   // A `suite` step's script would be a second, unreviewed body of code wearing a reviewed step's
   // clothes; a `screenshot` step's would be an assertion on the one kind that must never assert.
@@ -233,6 +231,7 @@ const SCRIPT_STEP: ValidationStep = {
   kind: 'browser',
   do: 'Place an order',
   area: null,
+  expects: null,
   when: 'inline',
   script: SCRIPT,
   scriptSweptAt: null,
@@ -244,6 +243,7 @@ const SCREEN_STEP: ValidationStep = {
   kind: 'screenshot',
   do: 'Capture the confirmation screen',
   area: null,
+  expects: null,
   when: 'inline',
   script: null,
   scriptSweptAt: null,
@@ -251,19 +251,35 @@ const SCREEN_STEP: ValidationStep = {
   why: null,
 };
 
+function suiteStep(area: string): ValidationStep {
+  return {
+    kind: 'suite',
+    do: `Run the ${area} area`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
+}
+
 function scriptBench(over: { steps?: ValidationStep[]; area?: string | null } = {}): Bench {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vrun-'));
   const store = new Store(join(dir, 'harness.sqlite'));
   const kept: [string, string][] = [];
+  // An area comes from a `suite` step and from nowhere else, so a bench that wants one declares the
+  // step: there is no field on the check to set instead.
+  const steps = over.steps ?? [SCRIPT_STEP];
   const input: ValidationCheckInput = {
     ...BASE,
-    ...(over.area === undefined ? {} : { area: over.area }),
     seq: 1,
     uses: [],
     covers: [],
     fleetCandidate: false,
     candidateWhy: null,
-    steps: over.steps ?? [SCRIPT_STEP],
+    steps: over.area === undefined || over.area === null ? steps : [suiteStep(over.area), ...steps],
   };
   store.validation.ingestValidation(GOAL, { checks: [input], resources: [], supersededReason: '', amendNote: '' });
   store.remoteValidation.openRemoteSheet({ goalRef: GOAL, environment: 'acceptance' });
@@ -278,6 +294,7 @@ function scriptBench(over: { steps?: ValidationStep[]; area?: string | null } = 
       blockedReason: null,
       awaitingApproval: false,
       matched: null,
+      idleReason: null,
     },
   ]);
   const { run } = store.remoteValidation.beginRemoteRun({
@@ -383,6 +400,7 @@ test('the grace sweep removes a script past its window, names where it was, and 
         kind: 'browser',
         do: 'Place an order',
         area: null,
+        expects: null,
         when: 'inline',
         script: SCRIPT,
         scriptSweptAt: null,
@@ -413,7 +431,6 @@ test('the grace sweep removes a script past its window, names where it was, and 
     environments: [TENANTED],
     observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments: [TENANTED], reader: new FakeStateReader({}) }),
-    runner: new FakeRemoteRunner({}),
     scriptGraceMs: GRACE_MS,
     probeIntervalMs: 60_000,
     now: () => NOW,
@@ -443,6 +460,7 @@ test('sweptScripts writes nothing where there is nothing to remove', () => {
     kind: 'suite' as const,
     do: 'run it',
     area: 'checkout',
+    expects: null,
     when: 'inline' as const,
     script: null,
     scriptSweptAt: null,

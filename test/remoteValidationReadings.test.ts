@@ -12,23 +12,23 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
-import { FakeRemoteRunner } from '../src/remoteValidation/fakeRemoteRunner.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { Issue, IssueDelivery, RemoteReading, ValidationCheckInput } from '../src/types.js';
+import type { Issue, IssueDelivery, RemoteReading, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*
  * Folding the report into readings, and saying so.
  * → docs/spec/36-remote-validation.md#the-report-is-the-only-source-of-row-outcomes
  *
- * Every system here injects `FakeRemoteRunner`, `FakeStateReader`, `FakeTenantKeeper`,
- * `FakeEnvironmentProber` and `FakeWorktreeManager`. The defaults are the command implementations
- * and the real worktree manager, so a test that configures a `validate.browser` block and injects
- * none of them drives a browser against somebody's acceptance environment out of a lease cut in
- * your own checkout — and passes while doing it.
+ * Every system here injects `FakeStateReader`, `FakeTenantKeeper`, `FakeEnvironmentProber` and
+ * `FakeWorktreeManager`. The defaults are the command implementations and the real worktree manager,
+ * so a test that configures a `validate` block and injects none of them queries somebody's
+ * environment out of a lease cut in your own checkout — and passes while doing it. The harness
+ * spawns no browser command at all now: the run agent invokes the project's own three in its pinned
+ * checkout, so there is no runner seam left to inject.
  */
 
 const DEPLOYED = 'bbbbbbb2222222222222222222222222222222bb';
@@ -99,7 +99,6 @@ interface Bench {
   dir: string;
   file: string;
   heads: Record<string, string[]>;
-  runner: FakeRemoteRunner;
   close(): void;
 }
 
@@ -107,9 +106,6 @@ function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-remote-readings-'));
   const file = join(dir, 'harness.db');
   const heads: Record<string, string[]> = { acceptance: [DEPLOYED] };
-  const runner = new FakeRemoteRunner({
-    acceptance: { run: { said: null, detail: 'the runner exited 1' }, artefacts: { said: null, detail: null } },
-  });
   const sys = buildSystem(
     loadConfig({
       selfUpdate: { enabled: false } as never,
@@ -126,7 +122,6 @@ function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
     {
       worktrees: new FakeWorktreeManager(),
       backend: new FakePtyBackend(),
-      remoteRunner: runner,
       stateReader: new FakeStateReader({}),
       tenants: new FakeTenantKeeper(),
       environmentProber: new FakeEnvironmentProber(heads),
@@ -136,20 +131,69 @@ function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
       errorMirror: () => {},
     },
   );
-  return { sys, dir, file, heads, runner, close: () => sys.store.close() };
+  return { sys, dir, file, heads, close: () => sys.store.close() };
 }
 
 /**
- * How an author *declares* an area is not built — the column is. A test writes one the way whatever
- * declares it later will: onto the column, on a check that exists.
+ * An area, where an area lives: a `suite` step of the check's own test plan. There is no column to
+ * write — the row still holds one and nothing reads it — so a test that wrote that column instead
+ * would set up a check the run declares no area for and pass on the silence.
  */
 function setArea(file: string, checkId: string, area: string): void {
   const db = new Database(file);
   try {
-    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, 'issue:12', checkId);
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([suiteStep(area)]),
+      'issue:12',
+      checkId,
+    );
   } finally {
     db.close();
   }
+}
+
+/**
+ * One `browser` step the fleet carries, which is the whole of how a check becomes the run agent's own
+ * to drive: no area, no script, and a browser on the launch.
+ */
+function setDriven(file: string, checkId: string, what: string): void {
+  const db = new Database(file);
+  try {
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([
+        {
+          kind: 'browser',
+          do: what,
+          area: null,
+          expects: null,
+          when: 'inline',
+          script: null,
+          scriptSweptAt: null,
+          actor: 'fleet',
+          why: null,
+        } satisfies ValidationStep,
+      ]),
+      'issue:12',
+      checkId,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+/** One `suite` step the fleet carries, which is the whole of how a check comes to have an area. */
+function suiteStep(area: string): ValidationStep {
+  return {
+    kind: 'suite',
+    do: `Run the ${area} area of the project’s own suite.`,
+    area,
+    expects: null,
+    when: 'inline',
+    script: null,
+    scriptSweptAt: null,
+    actor: 'fleet',
+    why: null,
+  };
 }
 
 /** A delivered, landed and sheeted goal, with one confirmed `check` row the pre-flight matched. */
@@ -177,6 +221,7 @@ function seed(b: Bench, rows: { check: ValidationCheckInput; area: string; match
       blockedReason: null,
       awaitingApproval: false,
       matched: r.matched,
+      idleReason: null,
     })),
   );
   for (const r of rows) setArea(b.file, r.check.id, r.area);
@@ -213,6 +258,18 @@ function reading(b: Bench, checkId: string): RemoteReading {
   return found;
 }
 
+/** A second press, on the same sheet and the same tenant. */
+function run(b: Bench): string {
+  const { run: opened } = b.sys.store.remoteValidation.beginRemoteRun({
+    goalRef: 'issue:12',
+    environment: 'acceptance',
+    tenant: 'validation-customer-1',
+    startedSha: DEPLOYED,
+  });
+  assert.ok(opened, 'the press opened a run');
+  return opened.id;
+}
+
 async function settle(b: Bench, runId: string, path: string, artefacts: string | null = null): Promise<void> {
   const settled = await b.sys.remoteReadings.settle(runId, { reportPath: path, artefacts });
   assert.equal(settled.ok, true, settled.ok ? '' : settled.error);
@@ -224,17 +281,8 @@ test('a non-zero exit over a report full of passes yields passes', async () => {
   const b = bench();
   try {
     const runId = seed(b, [{ check: CHECK, area: AREA, matched: 2 }]);
-    // The runner said it failed. One invocation carries many rows and one code, so nothing here may
-    // read it — and the fake's own record is what proves the code was available and left unread.
-    const outcome = await b.runner.run({
-      environment: 'acceptance',
-      command: ACCEPTANCE.validate!.browser!.runner!,
-      profile: 'acc-uk',
-      tenant: 'validation-customer-1',
-      selectors: [AREA],
-      reportDir: b.dir,
-    });
-    assert.equal(outcome.detail, 'the runner exited 1', 'the invocation did not come back clean');
+    // The invocation exited non-zero in the agent's own checkout. One invocation carries many rows
+    // and one code, so nothing here may read it — and nothing here can: the harness never sees it.
 
     await settle(
       b,
@@ -256,16 +304,6 @@ test('a zero exit over a report full of failures yields failures', async () => {
   const b = bench();
   try {
     const runId = seed(b, [{ check: CHECK, area: AREA, matched: 2 }]);
-    const clean = await b.runner.publishArtefacts({
-      environment: 'acceptance',
-      command: './scripts/publish-report.sh',
-      profile: null,
-      tenant: null,
-      selectors: [],
-      reportDir: b.dir,
-    });
-    assert.equal(clean.detail, null, 'the invocation came back clean');
-
     await settle(
       b,
       runId,
@@ -334,7 +372,12 @@ test('a row whose matched count is zero is blocked rather than quietly clean', a
     await settle(b, runId, report(b, [{ selector: AREA, status: 'passed' }]));
 
     assert.equal(reading(b, CHECK.id).outcome, 'blocked');
-    assert.match(reading(b, CHECK.id).detail ?? '', /attributed no tests/);
+    assert.match(reading(b, CHECK.id).detail ?? '', /no listing attributes a test to/);
+    assert.match(
+      reading(b, CHECK.id).detail ?? '',
+      /the runner offers nothing under this area/,
+      'zero is the listing having been taken and having found nothing, which is the half of the reason that fits',
+    );
   } finally {
     b.close();
   }
@@ -484,6 +527,101 @@ test('a later run supersedes rather than deletes, and every reading carries the 
   }
 });
 
+/* ── the reading an agent produced ───────────────────────────────────────────────────────────── */
+
+test('a reading the run’s own agent produced is `agent`, and never `spec`', async () => {
+  const b = bench();
+  try {
+    const runId = seed(b, [{ check: CHECK, area: AREA, matched: null }]);
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card, then open the receipt.');
+
+    await settle(b, runId, report(b, [{ selector: CHECK.id, status: 'passed' }]));
+
+    const check = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(check?.state, 'passed');
+    assert.equal(check?.resultBy, 'agent', 'the fleet, unattended, at a browser');
+    assert.notEqual(check?.resultBy, 'spec', 'nothing reviewed what it did, and the sheet says which it was');
+    assert.equal(reading(b, CHECK.id).outcome, 'passed');
+  } finally {
+    b.close();
+  }
+});
+
+test('a driven row reports under the check’s own id, and one that reported nothing is blocked', async () => {
+  const b = bench();
+  try {
+    const runId = seed(b, [{ check: CHECK, area: AREA, matched: null }]);
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card.');
+
+    await settle(b, runId, report(b, [{ selector: 'some other row', status: 'passed' }]));
+
+    const read = reading(b, CHECK.id);
+    assert.equal(read.outcome, 'blocked', 'an agent that never reached the page looks identical from here');
+    assert.match(read.detail ?? '', /reported nothing under its own id/);
+    assert.equal(
+      b.sys.store.validation.listValidationChecks('issue:12')[0]?.state,
+      'unrun',
+      'and a blocked row writes nothing on the check',
+    );
+  } finally {
+    b.close();
+  }
+});
+
+test('an agent’s reading and a spec’s never overwrite each other, in either direction', async () => {
+  const b = bench();
+  try {
+    // A spec's reading stands, and a run that drove the check itself does not replace it: an operator
+    // counting green rows must never be told a reviewed spec and an agent's afternoon are one thing.
+    const first = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
+    await settle(b, first, report(b, [{ selector: AREA, status: 'passed' }], 'spec.json'));
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.resultBy, 'spec');
+
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card.');
+    const second = run(b);
+    await settle(b, second, report(b, [{ selector: CHECK.id, status: 'failed' }], 'agent.json'));
+
+    const kept = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(kept?.state, 'passed', 'the spec’s reading is kept');
+    assert.equal(kept?.resultBy, 'spec');
+    assert.match(reading(b, CHECK.id).detail ?? '', /not written onto the goal's own check/);
+
+    // And the other way: an agent's reading stands against a later spec run.
+    b.sys.store.validation.recordValidationResult('issue:12', CHECK.id, {
+      state: 'passed',
+      note: 'I drove it and it placed',
+      by: 'agent',
+    });
+    setArea(b.file, CHECK.id, AREA);
+    const third = run(b);
+    await settle(b, third, report(b, [{ selector: AREA, status: 'failed' }], 'spec-again.json'));
+
+    const still = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(still?.resultBy, 'agent', 'and a reviewed spec does not quietly take an agent’s row either');
+    assert.equal(still?.state, 'passed');
+  } finally {
+    b.close();
+  }
+});
+
+test('a second driven run replaces its own instrument’s reading, which is the one case it may', async () => {
+  const b = bench();
+  try {
+    const first = seed(b, [{ check: CHECK, area: AREA, matched: null }]);
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card.');
+    await settle(b, first, report(b, [{ selector: CHECK.id, status: 'passed' }], 'one.json'));
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.resultBy, 'agent');
+
+    await settle(b, run(b), report(b, [{ selector: CHECK.id, status: 'failed' }], 'two.json'));
+
+    const settled = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(settled?.state, 'failed');
+    assert.equal(settled?.resultBy, 'agent');
+  } finally {
+    b.close();
+  }
+});
+
 /* ── what a spec reading may write on ────────────────────────────────────────────────────────── */
 
 test('a run writes on an unrun check, and again on one whose last reading was its own', async () => {
@@ -578,6 +716,7 @@ test('a check that names no area is a person’s, and a run writes nothing on it
         blockedReason: null,
         awaitingApproval: false,
         matched: null,
+        idleReason: null,
       },
     ]);
     const { run } = store.remoteValidation.beginRemoteRun({
@@ -709,14 +848,24 @@ test('rowToCheck narrows an unrecognised result_by to attributed to nobody, rath
   }
 });
 
-test('settling a run spawns nothing — the agent already invoked the project’s own command', () => {
+test('a check whose steps name no area is read against nothing, and the run still settles', async () => {
   const b = bench();
   try {
-    seed(b, [
-      { check: CHECK, area: AREA, matched: 1 },
-      { check: SECOND, area: OTHER_AREA, matched: 1 },
-    ]);
-    assert.deepEqual(b.runner.asked, [], 'asserted on the fake’s own record of what it was asked for');
+    const runId = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
+    // The area goes, the way an amendment takes one: the `suite` step is dropped from the plan.
+    const db = new Database(b.file);
+    try {
+      db.prepare(`UPDATE validation_checks SET steps=NULL WHERE origin_ref=? AND id=?`).run('issue:12', CHECK.id);
+    } finally {
+      db.close();
+    }
+    await settle(b, runId, report(b, [{ selector: AREA, status: 'passed' }]));
+    assert.deepEqual(
+      b.sys.store.remoteValidation.listRemoteReadings(),
+      [],
+      'a report is read against the area the check’s own steps name, and this names none',
+    );
+    assert.equal(b.sys.store.remoteValidation.getRemoteRun(runId)?.status, 'ended', 'and the run is still settled');
   } finally {
     b.close();
   }

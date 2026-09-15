@@ -129,6 +129,15 @@ dispatch would be minutes stale. `local_run_read` answers those.
 
 ### The browser
 
+`localValidation.browser` is **one configuration block read by two dispatches**: this one, and a
+remote validation sheet's own run ([36](36-remote-validation.md#the-browser-the-run-drives)). What a
+browser is and how it is launched is the same question in both places, and a second key beside it
+would be a second answer to it. What stays local is everything below about _this_ run — the one dev
+environment, the window the operator is watching, and the profile; what the remote run substitutes is
+its own artefact directory and a profile of its **own**, per environment, because a persistent profile
+may be held by one browser at a time and the account that reaches an acceptance deployment is not the
+one that reaches this machine.
+
 There is no browser inside a headless `claude -p`: Claude in Chrome and computer use both require an
 interactive session and refuse print mode. So the launch carries a **second MCP server**,
 `localValidation.browser`, beside the harness's own — one `--mcp-config` document either way, with
@@ -144,7 +153,7 @@ of somebody else's API — stale the first time they add a tool, and stale in th
 directory for the deployment, not one per run: a login the operator completes once in a visible
 window is one every later validation inherits, and a persistent profile may only be used by one
 browser at a time — which is safe here, because there is one environment and therefore one
-validation.
+validation, and because the remote run's profile is its environment's own and never this one.
 
 **The prompt offers it as a claim, not a fact.** Whether the server actually
 connected is not something config can know: it is fetched and launched at the same
@@ -249,7 +258,7 @@ Two live keys, deep-merged, project-layerable ([02](02-configuration.md)):
 | Key                           | Default                                                          | What it is                                                                                                                    |
 | ----------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `localValidation.instruction` | `''`                                                             | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
-| `localValidation.browser`     | `npx -y @playwright/mcp@latest --output-dir … --user-data-dir …` | The MCP server that gives it a browser, or `null` for none.                                                                   |
+| `localValidation.browser`     | `npx -y @playwright/mcp@latest --output-dir … --user-data-dir …` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
 
 **The split with the prompt is the whole design.** The `local-validation` template says how to build
 a test plan and how to run one, which is the same job on every deployment; the instruction says how

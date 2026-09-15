@@ -44,6 +44,10 @@ export function remoteValidation(s: StageContext): void {
             title: issue.title,
             environment: run.environment,
           }) + run.briefing,
+        // The browser, already substituted with this run's own directories by the brief: the rule
+        // imports nothing from `src/remoteValidation/`, so what reaches it is a server and not a
+        // policy to apply. → docs/spec/36-remote-validation.md#the-browser-the-run-drives
+        mcpServers: run.browser === null ? [] : [run.browser],
         remoteRun: { id: run.runId },
         originRef: run.origin,
         originTitle: issue.title,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { assessIssueNumber } from '../delivery/assessment.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
-import type { SelectorOffering, ValidationCheck, ValidationPlanRecord } from '../types.js';
+import type { ValidationCheck, ValidationPlanRecord } from '../types.js';
 
 // → docs/spec/20-validation.md#when-the-check-set-is-written
 
@@ -186,12 +186,20 @@ before them, and prose in a \`do\` cannot say that to anything but a reader.
 | kind | what it does |
 | --- | --- |
 | \`browser\` | Drives the application — navigate, upload, click, wait. |
-| \`suite\` | Runs a named \`area\` of the project's own browser suite. **This is the only thing that gives a check an area**, and an area is what lets the browser half run at all. |
+| \`suite\` | Runs a named \`area\` of the project's own browser suite, named as the suite names it in the repository you are standing in. **This is the only thing that gives a check an area**, and an area is what lets the browser half run at all. |
 | \`screenshot\` | Captures the screen for somebody to look at. |
 | \`state\` | Reads the deployed store. |
 | \`signal\` | Reads logs and error records. |
 | \`measure\` | Reads a metric. |
 | \`manual\` | Something only a person can do. |
+
+**A \`suite\` step also takes \`expects\`: the concrete spec names you expect that area to run**, named as
+the suite names them in the repository you are standing in, exactly as the area is. Write them down — it is the only thing that can catch a spec
+**deleted or renamed** since you wrote the check: the area goes on running whatever it now holds, and
+the count of what it holds moves down with the deletion, so a name nobody wrote down simply goes
+missing and the row reports a pass for coverage that no longer exists. Both the area and these names
+are resolved against the deployed commit's own listing when the run happens, and a name that does not
+resolve blocks the row with both lists side by side rather than passing on what remains.
 
 **Who carries each step is not yours to say.** It is read off what the deployment declares above: a
 step whose kind nothing here can drive comes back to a person, with the configuration that would have
@@ -209,10 +217,10 @@ that is what most checks have always been.
 `;
 
 /**
- * What the deployment can drive, and the areas its runner last said it offers — fleet-wide rather
- * than per goal, so it is folded once and handed to the rule, `testPartNote`'s own arrangement.
- * The listing is the same one a planner picks `coverage` from: the two ends of `area` have to agree
- * on the string, and the pre-flight compares it character for character.
+ * What the deployment can drive, fleet-wide rather than per goal, so it is folded once and handed to
+ * the rule. It names no areas: nothing pre-resolves one at plan time any more, and a `suite` step's
+ * area is named as the suite names it in the repository the planner is standing in and resolved
+ * against the deployed commit's own listing when the run happens.
  *
  * Empty where nothing declares a `validate` block — a deployment with no configured environment
  * still authors a check set, and every check on it is a person's.
@@ -230,7 +238,6 @@ export function validationPlanNote(
       state?: { run: string };
     };
   }[],
-  offerings: readonly SelectorOffering[] = [],
 ): string {
   const configured = environments.filter((env) => env.validate !== undefined);
   if (configured.length === 0) return '';
@@ -246,23 +253,20 @@ export function validationPlanNote(
     if (validate.state !== undefined) can.push('reads the deployed store (`state` steps)');
     if ((env.watch?.observe ?? '').trim() !== '')
       can.push('reads logs, error records and metrics (`signal` and `measure` steps)');
-    const areas = [...new Set(offerings.filter((o) => o.environment === env.name).map((o) => o.selector))].sort();
     lines.push(
       `- **${env.name}** — permits ${validate.permits.map((kind) => `\`${kind}\``).join(', ')}` +
         (can.length === 0 ? '.' : `; ${can.join(', and ')}.`) +
         (validate.tenant === undefined && validate.tenantEnv === undefined && validate.ensureTenant === undefined
           ? ' No tenant is configured, so a run that writes has nowhere to write and a `browser` step is a person’s.'
-          : '') +
-        (areas.length === 0
-          ? ''
-          : ` Its suite last offered: ${areas.map((area) => `\`${area}\``).join(', ')} — copied exactly, or not at all.`),
+          : ''),
     );
   }
   lines.push(
     '',
-    'A check whose area names something the suite does not offer can never be run: the string is compared ' +
-      'character for character. Where nothing above can carry a check, the check is a person’s, which is the ' +
-      'ordinary case and not a lesser answer.\n',
+    'Name a `suite` area as the suite names it in the repository you are standing in. It is resolved against ' +
+      'the deployed commit’s own listing when the run happens, and a name that does not resolve blocks the row ' +
+      'with both lists side by side. Where nothing above can carry a check, the check is a person’s, which is ' +
+      'the ordinary case and not a lesser answer.\n',
   );
   return lines.join('\n');
 }

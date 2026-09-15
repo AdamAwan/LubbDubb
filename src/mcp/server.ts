@@ -44,6 +44,7 @@ interface McpBridgeServerOptions {
   stepCapabilities?: () => McpToolDeps['stepCapabilities'];
   localValidations?: McpToolDeps['localValidations'];
   remoteReadings?: McpToolDeps['remoteReadings'];
+  remoteListings?: McpToolDeps['remoteListings'];
   localRun?: McpToolDeps['localRun'];
   repoRoot?: string;
   argsRetentionDays?: number;
@@ -214,6 +215,7 @@ export class McpBridgeServer {
         stepCapabilities: this.opts.stepCapabilities?.(),
         localValidations: this.opts.localValidations,
         remoteReadings: this.opts.remoteReadings,
+        remoteListings: this.opts.remoteListings,
         localRun: this.opts.localRun,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,

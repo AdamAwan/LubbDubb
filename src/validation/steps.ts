@@ -104,6 +104,7 @@ interface DeclaredStep {
   kind: ValidationStepKind;
   do: string;
   area?: string | undefined;
+  expects?: string[] | undefined;
   when?: 'inline' | 'deferred' | undefined;
   script?: string | undefined;
 }
@@ -120,6 +121,7 @@ export function resolveSteps(declared: readonly DeclaredStep[], caps: StepCapabi
       kind: step.kind,
       do: step.do,
       area: step.kind === 'suite' ? (step.area ?? null) : null,
+      expects: step.kind === 'suite' ? (step.expects ?? null) : null,
       when: step.kind === 'manual' ? (step.when ?? 'inline') : 'inline',
       script: step.kind === 'browser' ? (step.script ?? null) : null,
       scriptSweptAt: null,
@@ -143,6 +145,20 @@ export function stepArea(steps: readonly ValidationStep[]): string | null {
 }
 
 /**
+ * The concrete spec names the check expects its area to run: the first `suite` step that names any.
+ * An empty list normalises to null, because an author who wrote `expects: []` named no expectation
+ * and did not say the area runs nothing — the two readings are a pass and a block apart.
+ * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+ */
+export function stepExpects(steps: readonly ValidationStep[]): string[] | null {
+  for (const step of steps) {
+    const expects = step.expects ?? null;
+    if (step.kind === 'suite' && expects !== null && expects.length > 0) return expects;
+  }
+  return null;
+}
+
+/**
  * The check's one-off script: the first `browser` step that carries one. It is the browser-shaped
  * member of the query column — unreviewed, tenant-scoped, written for this check and never in a pull
  * request — and it is the reason a check with **no** `area` can still be run by the fleet: a suite
@@ -157,6 +173,22 @@ export function stepScript(steps: readonly ValidationStep[]): string | null {
     if (step.kind === 'browser' && step.script !== null && step.script !== '') return step.script;
   }
   return null;
+}
+
+/**
+ * Whether the fleet's own agent is the instrument here: a `browser` step it carries, with no `suite`
+ * area and no one-off script. The precedence is the report fold's, exactly — an area is a `spec`
+ * reading and a script is a `script` one, and a check declaring either is that instrument's rather
+ * than this one's — because two copies of it would count one thing at the press and write another at
+ * the report.
+ *
+ * A `browser` step is only the fleet's where `resolveSteps` gave it to them; with no `validate.browser`
+ * block, or no tenant to act inside, it is already a person's and names the declaration that would
+ * have carried it. → docs/spec/20-validation.md#who-carries-a-step
+ */
+export function stepDriven(steps: readonly ValidationStep[]): boolean {
+  if (stepArea(steps) !== null || stepScript(steps) !== null) return false;
+  return steps.some((step) => step.kind === 'browser' && step.actor === 'fleet');
 }
 
 /**

@@ -889,6 +889,13 @@ export interface ValidationStep {
   do: string;
   /** `suite` only: the area of the project's own browser suite this step runs. Sets the check's `area`. */
   area: string | null;
+  /**
+   * `suite` only: the concrete spec names this step expects the area to run. Null is *the author
+   * named no expectation* and is never "expected nothing" — the difference is computed only where
+   * there is one. Sets the check's `expects`.
+   * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
+   */
+  expects: string[] | null;
   when: ValidationStepWhen;
   /**
    * `browser` only: the one-off script's source, run as it stands. It is the browser-shaped member of
@@ -950,11 +957,6 @@ export interface ValidationCheck {
   amendedAt: string | null;
   amendNote: string | null;
   /**
-   * The selector a runner offers for this check, compared against the pre-flight's own listing. Null
-   * is *no area declared* — a check a person carries out, exactly as every check is today.
-   */
-  area: string | null;
-  /**
    * The check's test plan: one ordered journey through the delivered goal. Empty is **no steps**,
    * which is every check written before the column existed and every check whose author declared
    * only prose — `fleetCandidate` keeps its meaning there and nowhere else.
@@ -991,13 +993,6 @@ export interface ValidationCheckInput {
   covers: string[];
   fleetCandidate: boolean;
   candidateWhy: string | null;
-  /**
-   * The selector this check is verified against. It comes from a `suite` step naming one, and from
-   * nothing else — a `covers` entry is a bibliography and no longer decides what runs. Null is no
-   * area declared, which is a check a person carries out.
-   * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
-   */
-  area?: string | null;
   /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
   steps?: ValidationStep[];
 }
@@ -1632,10 +1627,22 @@ export interface RemoteSheetRow {
   blockedReason: string | null;
   awaitingApproval: boolean;
   /**
-   * How many tests the pre-flight's listing attributes to this row's area. Null on a row the
-   * pre-flight had nothing to ask about, and never derived from a report.
+   * How many tests the runner's own listing attributes to this row's area, taken by the run agent in
+   * its pinned checkout. **Null means the listing has not been taken for this row yet** — never a
+   * selector that matched nothing — and it is never derived from a report: derived that way, a
+   * selector matching nothing reads as a clean pass.
    */
   matched: number | null;
+  /**
+   * Why a press reads nothing here and dispatches for nothing, in words. Null is a row the press
+   * reads or an agent is sent for. It is **not** a `blockedReason`: a block is a cause no press can
+   * overcome, and most checks on most deployments are a person's journey end to end, which is the
+   * ordinary answer rather than a misconfiguration. It is folded on the server, beside the row it
+   * describes, because a cockpit that worked out for itself which rows a press would touch would be
+   * a second opinion drawn beside the reading.
+   * → docs/spec/36-remote-validation.md#a-row-no-press-can-read
+   */
+  idleReason: string | null;
 }
 
 /**
@@ -1701,6 +1708,11 @@ export interface RemoteRun {
   taskId: string | null;
   /** Where the agent said the runner's machine-readable report landed. Parsing it is another part. */
   reportPath: string | null;
+  /**
+   * Where the agent said the runner's own selector listing landed. A path, never what is in it —
+   * the denominator is parsed out of that file and is never a thing an agent states.
+   */
+  listingPath: string | null;
   /** The URL the publish command printed, where it ran. */
   artefacts: string | null;
 }
@@ -1724,23 +1736,18 @@ export interface RemoteRunBrief {
   deployedSha: string;
   /** How many `check` rows this run is for. Zero is a run no agent is dispatched for. */
   confirmed: number;
+  /**
+   * The browser MCP server the run's agent drives, with this run's own directories substituted, or
+   * null where the deployment has configured none. It is folded here rather than in the rule because
+   * `src/remoteValidation/` is a lens as far as the dispatcher is concerned.
+   * → docs/spec/36-remote-validation.md#the-browser-the-run-drives
+   */
+  browser: ExtraMcpServer | null;
   /** Everything the agent must read, already rendered — appended to the prompt, never interpolated. */
   briefing: string;
 }
 
 /** When an environment's tenant was last provisioned and last reseeded. */
-/**
- * One area an environment's runner said it offers, as of the listing that last answered. It is a
- * convenience for the planner and never an authority: the pre-flight asks the runner again at
- * assembly, and a row blocks on that answer rather than on this one.
- */
-export interface SelectorOffering {
-  environment: string;
-  selector: string;
-  tests: number | null;
-  listedAt: string;
-}
-
 export interface RemoteTenant {
   environment: string;
   tenant: string;

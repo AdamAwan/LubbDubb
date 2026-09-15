@@ -234,9 +234,9 @@ function validateValidate(validate: EnvironmentValidate | undefined, where: stri
     );
   if (validate.browser !== undefined && validate.browser.listSelectors === undefined)
     throw new Error(
-      `${where}: "validate.browser" declares a runner and no "listSelectors". The pre-flight asks the ` +
-        'deployed runner which selectors it offers, and without it every selector is unverifiable until a ' +
-        'press has already been spent on it.',
+      `${where}: "validate.browser" declares a runner and no "listSelectors". The run's own listing step ` +
+        'asks the deployed runner which selectors it offers, from a checkout pinned to the commit that ' +
+        'environment is running, and without it no row can be read against what the runner actually holds.',
     );
 
   const shapes = TENANT_SHAPES.filter((shape) => validate[shape] !== undefined);

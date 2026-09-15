@@ -29,3 +29,18 @@ export function remoteValidationKey(issueNumber: number, runId: string): string 
 export function remoteValidationRunDir(root: string, originRef: string, runId: string): string {
   return join(validationGoalDir(root, originRef), 'remote', runId);
 }
+
+/**
+ * The persistent browser profile a run's agent drives, one per environment and never one per run: a
+ * sign-in somebody completed once — an identity provider, an MFA prompt, a consent screen — is one
+ * every later run against that environment inherits.
+ *
+ * It is **not** the local validation's profile, and that is the load-bearing half. A persistent
+ * profile may be held by one browser at a time, so a remote run sharing the local one would refuse to
+ * start whenever a local validation was up; and the account that reaches an acceptance deployment is
+ * not the one that reaches somebody's dev machine, so the two would fight over the same cookies
+ * besides. → docs/spec/36-remote-validation.md#the-browser-the-run-drives
+ */
+export function remoteValidationProfileDir(root: string, environment: string): string {
+  return join(root, '.browser-profile-remote', environment.replace(/[^A-Za-z0-9._-]+/g, '-'));
+}

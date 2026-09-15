@@ -61,8 +61,8 @@ import { StateQueryDesk } from './remoteValidation/stateQueries.js';
 import { RemoteValidationDesk } from './remoteValidation/desk.js';
 import { RemoteRunDesk } from './remoteValidation/run.js';
 import { RemoteReadingDesk } from './remoteValidation/readings.js';
+import { RemoteListingDesk } from './remoteValidation/listing.js';
 import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
-import { CommandRemoteRunner, type RemoteRunner } from './remoteValidation/runner.js';
 import { WatchDesk } from './environments/watchDesk.js';
 import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { validationPlanNote } from './validation/authoring.js';
@@ -137,6 +137,7 @@ export interface System {
   remoteValidation: RemoteValidationDesk;
   remoteRuns: RemoteRunDesk;
   remoteReadings: RemoteReadingDesk;
+  remoteListings: RemoteListingDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -175,7 +176,6 @@ interface BuildOptions {
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
   tenants?: TenantKeeper;
-  remoteRunner?: RemoteRunner;
   errorMirror?: (entry: ErrorLogEntry) => void;
   ingressSecrets?: IngressSecrets;
   configFile?: string;
@@ -322,6 +322,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
     localValidations: (): LocalValidationDesk => localValidations,
     remoteReadings: (): RemoteReadingDesk => remoteReadings,
+    remoteListings: (): RemoteListingDesk => remoteListings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
     reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
@@ -530,10 +531,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewCharters,
     watchNote: watchNote(config.environments),
     watchDeclareNote: watchDeclareNote(config.environments),
-    testPartNote: (offerings) => testPartNote(config.environments, offerings),
+    testPartNote: testPartNote(config.environments),
     stateDeclareNote: stateDeclareNote(config.environments),
     remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
-    validationPlanNote: (offerings) => validationPlanNote(config.environments, offerings),
+    validationPlanNote: validationPlanNote(config.environments),
   });
   const dispatcher: Dispatcher = rules;
 
@@ -622,7 +623,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     environments: config.environments,
     observer: environmentObserver,
     queries: stateQueries,
-    runner: opts.remoteRunner ?? new CommandRemoteRunner(config.repoRoot, config.remoteValidation.runTimeoutMs),
     scriptGraceMs: config.remoteValidation.scriptGraceMs,
     probeIntervalMs: config.environmentProbeIntervalMs,
     errors,
@@ -637,6 +637,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     tenants: opts.tenants ?? new CommandTenantKeeper(config.repoRoot, config.remoteValidation.tenantTimeoutMs),
     errors,
   });
+
+  const remoteListings = new RemoteListingDesk({ store, errors });
 
   const remoteReadings = new RemoteReadingDesk({
     store,
@@ -756,7 +758,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Computed here rather than in the rule: `src/remoteValidation/` is a lens as far as the
     // dispatcher is concerned, so what reaches it is a run row and a rendered string.
     remoteRuns: () =>
-      remoteRunBriefs({ store, environments: config.environments, validationRoot: config.validationRoot }),
+      remoteRunBriefs({
+        store,
+        environments: config.environments,
+        validationRoot: config.validationRoot,
+        // The one browser block, read by both dispatches. Off the live config each pulse, so an
+        // operator who configures one does not have to restart the harness to use it.
+        browser: config.localValidation.browser,
+      }),
     landings,
     recovery,
     ejections,
@@ -938,6 +947,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteValidation,
     remoteRuns,
     remoteReadings,
+    remoteListings,
     updates,
     runtimeControl,
     pets,

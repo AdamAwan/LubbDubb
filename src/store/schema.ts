@@ -902,7 +902,8 @@ CREATE TABLE IF NOT EXISTS remote_sheet_rows (
   selected          INTEGER NOT NULL DEFAULT 1,
   blocked_reason    TEXT,
   awaiting_approval INTEGER NOT NULL DEFAULT 0,
-  matched           INTEGER,         -- tests the pre-flight's listing attributes to this row's area
+  matched           INTEGER,         -- tests the run's listing attributes to this row's area
+  idle_reason       TEXT,            -- why a press reads nothing here; NULL is a row a press reads
   updated_at        TEXT NOT NULL,
   PRIMARY KEY (goal_ref, environment, row_id)
 );
@@ -971,20 +972,6 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
   ensured_at  TEXT,
   reseeded_at TEXT,
   PRIMARY KEY (environment, tenant)
-);
-
--- What each environment's runner last said it offers, cached so a planner can be
--- shown the areas it may name rather than asked to describe one in prose (see
--- RemoteValidationStore). It is a convenience and never an authority: the pre-flight
--- asks the runner again at assembly, and its answer is what a row blocks on. Only an
--- answered listing is written, so a listing that could not say leaves the last one
--- standing with its own listed_at saying how old it is.
-CREATE TABLE IF NOT EXISTS remote_selector_offerings (
-  environment TEXT NOT NULL,
-  selector    TEXT NOT NULL,     -- the area, exactly as the runner names it
-  tests       INTEGER,           -- how many tests it holds, where the runner counted them
-  listed_at   TEXT NOT NULL,
-  PRIMARY KEY (environment, selector)
 );
 
 -- Goals the operator has said are not waiting on an environment: a docs change, a
@@ -1357,6 +1344,13 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   area        TEXT,                   -- the selector a runner offers for this check; NULL is "no
                                       -- area declared", which is a check a person carries out.
                                       -- It comes from a "suite" step and from nothing else.
+  expects     TEXT,                   -- JSON array: the concrete spec names the planner expected the
+                                      -- area to run. NULL is "no expectation was named" — true of
+                                      -- every row from before the column and of every check whose
+                                      -- author named none — and it NEVER folds into "expected
+                                      -- nothing": the difference is computed only where there is an
+                                      -- expectation, so nothing is backfilled. It comes from the
+                                      -- same "suite" step the area does and from nothing else
   steps       TEXT,                   -- JSON: the check's test plan, one ordered journey through the
                                       -- delivered goal, each step with the actor read off the
                                       -- configuration. NULL is "no steps", which is every row from

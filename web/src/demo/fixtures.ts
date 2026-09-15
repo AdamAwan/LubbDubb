@@ -83,7 +83,6 @@ function demoCheck(
     deferUntil: null,
     supersededReason: null,
     revision: null,
-    area: null,
     amendedAt: null,
     amendNote: null,
     ...seed,
@@ -93,6 +92,7 @@ function demoCheck(
 function demoStep(seed: Partial<ValidationStep> & Pick<ValidationStep, 'kind' | 'do'>): ValidationStep {
   return {
     area: null,
+    expects: null,
     when: 'inline',
     script: null,
     scriptSweptAt: null,
@@ -1134,6 +1134,7 @@ export function buildDemoState(): DemoSeed {
           note: null,
           taskId: null,
           reportPath: null,
+          listingPath: null,
           artefacts: null,
         },
         tenant: {
@@ -1158,6 +1159,7 @@ export function buildDemoState(): DemoSeed {
             blockedReason: null,
             awaitingApproval: false,
             matched: null,
+            idleReason: null,
             reading: null,
           },
           {
@@ -1172,6 +1174,7 @@ export function buildDemoState(): DemoSeed {
             blockedReason: null,
             awaitingApproval: false,
             matched: null,
+            idleReason: null,
             reading: {
               goalRef: 'issue:390',
               environment: 'staging',
@@ -1186,6 +1189,8 @@ export function buildDemoState(): DemoSeed {
               executed: null,
               retries: null,
               durationMs: null,
+              taskId: null,
+              agentId: null,
               artefacts: null,
               readAt: '2026-08-19T09:12:07.000Z',
             },
@@ -1203,6 +1208,7 @@ export function buildDemoState(): DemoSeed {
               'this query is waiting for an operator to read it and accept it against staging. Consent to a place is not transferable, so an approval written on another environment does not carry here.',
             awaitingApproval: true,
             matched: null,
+            idleReason: null,
             reading: null,
           },
         ],
@@ -2041,7 +2047,7 @@ export function buildDemoState(): DemoSeed {
         do: 'Run the console with `AUTH_ENABLED`, open /snapshots, and middle-click a download link.',
         expect: 'The file downloads. No 401, and no bearer token anywhere in the URL bar.',
         covers: ['route', 'e2e-download'],
-        area: 'Snapshots',
+        steps: [demoStep({ kind: 'suite', do: 'Run the Snapshots area of the browser suite.', area: 'Snapshots' })],
         state: 'passed',
         resultNote: 'Opened last night’s handbook snapshot in a new tab — served straight through.',
         resultBy: 'operator',

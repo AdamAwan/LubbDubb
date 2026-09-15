@@ -22,7 +22,6 @@ import type {
   Retrospective,
   ScratchPadSummary,
   TaskSummary,
-  RemoteReading,
   WatchReading,
   WorkNode,
   WorldSnapshot,
@@ -43,6 +42,7 @@ import type {
   OpenPullRequest,
   PlanPartView,
   PullRequest,
+  RemoteReadingView,
   RemoteSheetView,
   ValidationCheckView,
   ValidationResourceView,
@@ -521,7 +521,7 @@ export function buildStateSections(
 
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
-  const remoteSheets = once(() => buildRemoteSheets(store, config.environments));
+  const remoteSheets = once(() => buildRemoteSheets(store, config.environments, tasks));
 
   const goalsSection = (): Pick<
     CockpitState,
@@ -885,21 +885,35 @@ function buildGoalWatchWindows(
  * beside the reading it describes. Absent entirely where no environment declares a `validate` block:
  * a card of question marks on a deployment that configured nothing reads as broken.
  */
-function buildRemoteSheets(store: System['store'], environments: EnvironmentConfig[]): RemoteSheetView[] {
+function buildRemoteSheets(
+  store: System['store'],
+  environments: EnvironmentConfig[],
+  tasks: readonly TaskSummary[],
+): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
   if (sheets.length === 0) return [];
-  const newest = new Map<string, RemoteReading>();
-  for (const r of store.remoteValidation.listRemoteReadings())
-    newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, r);
+  const runs = store.remoteValidation.listRemoteRuns();
+  // The way from a reading to the transcript of the agent that produced it, walked here: a reading
+  // carries the run it came through, a run carries the task it was dispatched as, and a task carries
+  // the agent. The tasks are the caller's own list rather than a lookup per reading — one statement a
+  // snapshot already ran. → docs/spec/36-remote-validation.md#the-reading-an-agent-produced
+  const taskOfRun = new Map(runs.map((run) => [run.id, run.taskId]));
+  const agentOfTask = new Map(tasks.map((task) => [task.id, task.agentId]));
+  const newest = new Map<string, RemoteReadingView>();
+  for (const r of store.remoteValidation.listRemoteReadings()) {
+    const taskId = r.runId === null ? null : (taskOfRun.get(r.runId) ?? null);
+    newest.set(`${r.goalRef} ${r.environment} ${r.rowId}`, {
+      ...r,
+      taskId,
+      agentId: taskId === null ? null : (agentOfTask.get(taskId) ?? null),
+    });
+  }
   const rowsByGoalEnvironment = groupBy(
     store.remoteValidation.listRemoteSheetRows(),
     (row) => `${row.goalRef} ${row.environment}`,
   );
-  const runsByGoalEnvironment = groupBy(
-    store.remoteValidation.listRemoteRuns(),
-    (run) => `${run.goalRef} ${run.environment}`,
-  );
+  const runsByGoalEnvironment = groupBy(runs, (run) => `${run.goalRef} ${run.environment}`);
   const tenants = store.remoteValidation.listRemoteTenants();
   const now = Date.now();
   return sheets.map((sheet) => {

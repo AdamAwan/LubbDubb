@@ -410,13 +410,14 @@ is a plan with one part`), because the deployments most likely to submit a partl
   chain walk _was_ the whole graph, but the moment a part may name several a cycle reachable only
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
 
-- `coverage` is optional, non-empty, and names the **area** of the end-to-end browser suite the part
-  adds or amends coverage for. It is the string a remote validation sheet's selectors are later
-  resolved against, and it is declared only on the deployments the bar is appended to. Where the
-  deployment's runner has said what it offers, `coverage` is **refused unless it is one of those
-  areas, exactly** — the pre-flight compares it character for character, so an area no runner offers
-  is a check that can never run, and refusing it here is that verdict taken while the planner can
-  still fix it. Where nothing has been listed it is free text and refused only for being empty.
+- `coverage` is optional, non-empty, and names in **prose** the area of the end-to-end browser suite
+  the part adds or amends coverage for — _checkout with a saved card_, not a file path and not a
+  string copied off a runner. It is declared only on the deployments the bar is appended to, and it is
+  refused only for being empty: nothing here compares it against what the deployed suite offers,
+  because a part is declared before its spec exists and the area it adds is new by definition, so a
+  refusal against today's listing would refuse exactly the declaration the bar asks for. The string a
+  sheet's selectors are resolved against is `validation_checks.area`, picked from the runner's own
+  offering by the validation planner, with the merged code in front of it.
   → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area)
 - `atoms` is optional and defaults to empty, and each part's `atoms` likewise. The refusals over them
   are in [Atoms](#atoms--the-pieces-a-part-is-made-of) above; an atom's `slug`, `title` and `intent`
@@ -454,10 +455,11 @@ transport changes shape:
 **`coverage` is a part field beside those two, and it is not a narrative one.** It says nothing about
 why the part exists; it names what the part is _for_, and the harness reads it. It is appended to the
 part's own prompt by `partDeclarationNote`, so the agent building it is shown the area it was asked to
-cover; and it is stored on `plan_parts.coverage`. It once became the `area` of every check whose
-`covers` named the part; it no longer does. A check's area comes from a `suite` step the validation
-planner writes, and a `coverage` part **informs that planner and binds nothing** — a `covers` entry is
-a bibliography and was deciding what ran
+cover; and it is stored on `plan_parts.coverage`. **It is prose, and nothing matches on it.** It once
+became the `area` of every check whose `covers` named the part, and was once refused unless it copied
+an area the deployed runner already offered; neither holds. A check's area comes from a `suite` step
+the validation planner writes, and a `coverage` part **informs that planner and binds nothing** — a
+`covers` entry is a bibliography and was deciding what ran
 ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area),
 [20](20-validation.md#the-test-plan)). A part carrying one is an ordinary `code` part in
 every other respect: `partSettled`, `liveParts`, `planProgress`, `partBase`, rule `plan-part` and the
@@ -1515,15 +1517,15 @@ Two tools on the desktop channel do the rest (→ [11](11-mcp-tools.md#the-deskt
   `currentPlanSummary` so every slug is in front of the session, the acceptance criteria, the live
   validation checks and the revision count.
   Where some environment declares a `validate.browser` block it also carries **`testPart`**: the same
-  test-part bar the planning prompts are appended, `testPartNote(environments, offerings)` computed
-  from the offering cache at the moment of the read. Without it the discussion has the capability and
-  not the invitation, which is the worst of the three states: `plan_amend` accepts `coverage` — it
-  spreads `PLAN_DOCUMENT_SHAPE` — but nothing has told the session a suite exists or which areas it
-  offers, and the field's own description then refuses a declaration made without the bar. So a
-  well-behaved session cannot add the one thing that makes a check row runnable, and a goal whose
-  coverage was missed — every goal planned before the offering cache had anything in it — could only
-  be corrected by a replan, which is a much bigger hammer than adding one part. The note is omitted
-  entirely where no environment declares a suite, for the reason it is omitted from the prompts.
+  test-part bar the planning prompts are appended, `testPartNote(environments)` computed from the
+  deployment's own environments at the moment of the read. What the bar asks for is prose, so the
+  environments are the whole of what it needs — there is no listing behind it and nothing to go stale
+  between the read and the amendment. Without it the discussion has the capability and not the
+  invitation, which is the worst of the three states: `plan_amend` accepts `coverage` — it spreads
+  `PLAN_DOCUMENT_SHAPE` — but nothing has told the session a suite exists at all, so a well-behaved
+  session leaves the field out, and a goal whose coverage was missed could only be corrected by a
+  replan, which is a much bigger hammer than adding one part. The note is omitted entirely where no
+  environment declares a suite, for the reason it is omitted from the prompts.
   → [36](36-remote-validation.md#the-prompts)
 - **`plan_amend(issue, note?, …plan document)`** — the same document as `plan_submit`, validated by
   `validatePlanDocument`. The schema is one export (`src/mcp/planDocumentSchema.ts`) shared by both

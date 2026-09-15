@@ -377,7 +377,7 @@ been authored — and reading it as one is what kept the whole authoring half of
 ever running.
 
 The rows a plan document writes are written before the code exists, so they carry no
-[`steps`](#the-test-plan) and therefore no `area`, and an area is the only thing that lets the browser
+[`steps`](#the-test-plan) and therefore no area, and an area is the only thing that lets the browser
 half run at all ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)). Counted as an
 authored set, such a goal is skipped by rule `validation-plan` for ever: it never sees a planner, no
 check on it ever gains a step, and every one of them falls to a person on a deployment configured to
@@ -473,11 +473,10 @@ one at boot, `id` and `letter` untouched
 | `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                                                                                                                                     |
 | `title`          | One line, the headline.                                                                                                                                                                                                                           |
 | `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                            |
-| `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. → [The test plan](#the-test-plan)                                                                                        |
+| `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. It is also where the **area** a remote run selects the check by lives, and the spec names that area is expected to run: both are read off a `suite` step (`stepArea`, `stepExpects`) and the check carries no field for either, because one fact with two homes drifts. → [The test plan](#the-test-plan), [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
 | `expect`         | What a pass looks like. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy.                                                                                                                              |
 | `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                    |
 | `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                            |
-| `area`           | The suite area a remote run selects this check by, set by a `suite` step naming one. Null is a check no suite area runs — which is now the ordinary case rather than a failure. → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
 | `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                               |
 | `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                      |
 | `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                  |
@@ -556,15 +555,33 @@ ordering is the point: a database or log reading whose subject is _what
 the browser steps just did_ is meaningless taken before them, and prose in a `do` cannot express that
 to anything but a reader.
 
-| Step kind    | What it does                                                                         |
-| ------------ | ------------------------------------------------------------------------------------ |
-| `browser`    | Drives the application — navigate, upload, click, wait.                              |
-| `suite`      | Runs a named area of the project's own browser suite. Sets the check's `area`.       |
-| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`. |
-| `state`      | Reads the deployed store through the environment's `state.run`.                      |
-| `signal`     | Reads logs and error records.                                                        |
-| `measure`    | Reads a metric.                                                                      |
-| `manual`     | A person does something the fleet cannot.                                            |
+| Step kind    | What it does                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `browser`    | Drives the application — navigate, upload, click, wait.                                           |
+| `suite`      | Runs a named area of the project's own browser suite. **This step is the check's area**, and carries its `expects`. |
+| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`.              |
+| `state`      | Reads the deployed store through the environment's `state.run`.                                   |
+| `signal`     | Reads logs and error records.                                                                     |
+| `measure`    | Reads a metric.                                                                                   |
+| `manual`     | A person does something the fleet cannot.                                                         |
+
+**A `suite` step's `area` is named as the suite names it in the repository the planner is standing in**,
+and is resolved against the deployed commit's own listing when the run happens: a name that does not
+resolve blocks the row with both lists side by side. Nothing pre-resolves it against a listing at plan
+time ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
+
+**A `suite` step also carries `expects`: the concrete spec names the planner expects that area to
+run**, named the same way the area is, and optional on it. It is the only
+thing that can see a spec **deleted or renamed** since the check was written — the area goes on
+running whatever it now holds, the count of what it holds moves down with the deletion, and a name
+nobody wrote down goes missing with a green row over it. A name the runner does not offer blocks the
+row rather than reporting on what remains, and a check that named none is untouched: null is _no
+expectation was named_, never _expected nothing_
+([36](36-remote-validation.md#an-expected-spec-the-runner-does-not-offer)). `expects` belongs to a
+`suite` step and is refused on every other kind, as `area` is; the step is the only home either has,
+and the tool-facing schema says all of that in the field's own description — **the same sentence the
+note carries**, so that `validation_plan` and `validation_amend` advertise one shape and an agent read
+by either is told the same thing.
 
 Everything one journey settles belongs to one check, on the rule
 [One run is one check](#one-run-is-one-check) states: the setup is the expensive part, and a journey
@@ -629,6 +646,12 @@ deployment can drive is declared: an environment's `validate.browser` block, its
 cannot carry, and that is a fact rather than a nomination. So the validation planner assigns steps
 from the configuration, and the two things that stay the operator's are unchanged: **the hand-over**
 — nothing is dispatched until they press — and the ability to take any step back by hand.
+
+**Which channel carries a fleet `browser` step is the sheet's run and not `validate-check`.** A
+`browser` step the fleet carries is the one the run's own agent drives at the browser its launch
+carries, because a browser and a tenant are what the sheet's run has and the `validate-check` dispatch
+has neither ([36](36-remote-validation.md#a-check-the-agent-drives-itself)). A reading it produces is
+`agent` — the fleet, unattended — and never `spec`.
 
 `fleetCandidate` keeps its meaning for a check with no `steps`, where there is still nothing but a
 planner's suggestion to go on. `fleetCanStart` answers **null** there for that reason, which is a
@@ -756,7 +779,7 @@ spec** in the project's own browser suite, selected by the check's `area` and ru
 environment the goal's work has arrived in ([36](36-remote-validation.md)). No model reads anything —
 the suite's machine-readable report is the only source of the outcome — so what it writes is a
 `spec` reading, which is a fourth thing again and says so wherever it is drawn. It is not an `actor`
-either: nothing dispatches it, an operator presses go, and a check with no `area` is untouched by it.
+either: nothing dispatches it, an operator presses go, and a check whose plan names no area is untouched by it.
 
 There is a **third** runner, and it is the answer to the same problem from the other side: the
 operator's own Claude Code, on the operator's own machine, which has the browser and the login the
@@ -1132,7 +1155,11 @@ re-hand-over does not rediscover the same wall and spend an attempt saying so.
 **`resultBy` is drawn wherever the reading is** — the cockpit row, and `_(recorded by an agent)_` on
 the ticket comment. All five are drawn apart, `spec` and `script` most of all: a reviewed spec is
 repository code a pull request's reviewer read and a one-off script is a throwaway nobody read, and
-an operator counting green rows must never be told they are the same evidence. "An agent says this passed" and "I ran it and it passed" are different facts, and
+an operator counting green rows must never be told they are the same evidence. **`agent` is one word
+for two channels** — the `validate-check` dispatch, and a sheet's run driving the browser itself — and
+that is right rather than lossy: both are the fleet unattended and neither was reviewed, which is the
+fact a reader is owed. Where it happened is on the reading, beside the transcript of the agent that
+produced it ([36](36-remote-validation.md#the-reading-an-agent-produced)). "An agent says this passed" and "I ran it and it passed" are different facts, and
 the whole feature exists to stop the second being assumed from evidence that only supports the first.
 The ticket says it only for the agent: a validation checklist already means a person checked it, and
 the exception is what a reader deciding how much a tick is worth is entitled to know.
@@ -1564,11 +1591,14 @@ direction here for `actor`'s reason inverted: an unreadable claim becoming live 
 from a check forever.
 
 `result_by` needed no migration when it gained `agent`, nor again when it gained `desktop`, nor a
-third time for `spec` — the column existed and only gained values it may hold. `area` is a different
-case and has a real entry: it is a column on an **existing** table, so without one it is invisible on
-every database from before it existed, every check reads as unautomatable and every remote sheet is
-all-manual, with nothing red. Its null means _no area declared_, which is true of every older row and
-stays true, so it needs no backfill ([14](14-persistence.md#when-a-null-means-something)). `steps` is the same case one change later, and its null is the same kind of fact: a check written
+third time for `spec` — the column existed and only gained values it may hold. `validation_checks.area`
+and `.expects` are a different case: they are **columns nothing reads and nothing writes**, kept
+declared in `VALIDATION_COLUMNS` and holding whatever builds before the step wrote on them. A column
+dropped while still declared is added back on the next boot, and one dropped from both rebuilds the
+table on every boot for ever, so retiring them is its own change; and **nothing repairs them**, because
+a boot pass recomputing a derived column overwrites what a `suite` step named, every boot, with nothing
+red ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
+`steps` is what both facts moved onto, and its null is the same kind of fact: a check written
 before test plans existed genuinely had none, so null reads as `[]` and stays that way. `parseSteps`
 answers `[]` for anything it cannot read back, which is the reading rule this column shares with
 `revision` — a half-written test plan the fleet acts on would be worse than none.

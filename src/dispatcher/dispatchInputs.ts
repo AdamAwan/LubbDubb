@@ -49,7 +49,6 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
       ...store.localValidations.listOpenLocalValidations(),
       ...store.localValidations.listLocalValidationsAwaitingFix(),
     ],
-    selectorOfferings: store.remoteValidation.listSelectorOfferings(),
     featureSummaryKeys:
       featureStandings.length === 0
         ? []

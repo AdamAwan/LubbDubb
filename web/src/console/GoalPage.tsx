@@ -1077,6 +1077,7 @@ function RemoteValidation({
             onPress: (environment) => actions.pressRemoteSheet(page.issue.number, environment),
             onCancel: (environment) => actions.cancelRemoteRun(page.issue.number, environment),
             onReseed: (environment) => actions.reseedRemoteTenant(page.issue.number, environment),
+            onOpenAgent: (agentId) => actions.select(agentId),
           }}
         />
       )}
