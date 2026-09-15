@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { obstacleDesk } from './support/obstacles.js';
 import { obstacleRepairOrigin, ownershipDoor, redBaseChecks } from '../src/obstacles/ownership.js';
 import { blockedGoals, releasedBlocks } from '../src/obstacles/blocked.js';
+import { reachesAgents } from '../src/obstacles/lifecycle.js';
 import { obstacleOriginId } from '../src/issueOrigins.js';
 import { phaseOf } from '../src/insights/spendInsights.js';
 import { expeditedOrigins } from '../src/dispatcher/goalPriority.js';
@@ -32,6 +33,7 @@ function standing(over: Partial<Obstacle> = {}, extra: Partial<ObstacleStanding>
       updatedAt: NOW,
       lastSeenAt: NOW,
       endedBy: null,
+      ticketDecision: null,
       ...over,
     },
     keys: [
@@ -349,5 +351,94 @@ test('conclude_work blocked parks the goal, and the desk brings it back', async 
   const desk = obstacleDesk(system.store);
   await desk.ownership(world);
   assert.equal(system.store.obstacles.listObstacleBlocks().length, 1);
+  system.store.close();
+});
+
+test('with approval on, the ticket door holds until an operator says file it', async () => {
+  const system = build();
+  const id = stand(system);
+  const filed: string[] = [];
+  const desk = obstacleDesk(system.store, {
+    ticketApproval: true,
+    filing: async (input) => {
+      filed.push(input.title);
+      return 'issue:841';
+    },
+    watchLabel: '',
+  });
+
+  await desk.ownership(EMPTY_WORLD);
+  assert.deepEqual(filed, [], 'nothing is filed while the proposal is unanswered');
+  const proposed = system.store.obstacles.getObstacle(id)!;
+  assert.equal(proposed.state, 'standing', 'it waits as a standing row, with every exit standing has');
+  assert.equal(proposed.ticketDecision, null);
+  assert.equal(reachesAgents(proposed.state), true, 'the fleet is still told it is not theirs');
+
+  assert.equal(system.store.obstacles.decideObstacleTicket(id, 'approved'), true);
+  await desk.ownership(EMPTY_WORLD);
+  assert.equal(filed.length, 1);
+  assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, 'issue:841');
+  system.store.close();
+});
+
+test('a declined proposal files nothing, ever, and still decays on its own', async () => {
+  const system = build();
+  const id = stand(system);
+  const filed: string[] = [];
+  const desk = obstacleDesk(system.store, {
+    ticketApproval: true,
+    dormantMs: 1,
+    now: () => Date.now() + 60_000,
+    filing: async (input) => {
+      filed.push(input.title);
+      return 'issue:841';
+    },
+    watchLabel: '',
+  });
+
+  assert.equal(system.store.obstacles.decideObstacleTicket(id, 'declined'), true);
+  await desk.ownership(EMPTY_WORLD);
+  await desk.ownership(EMPTY_WORLD);
+  assert.deepEqual(filed, [], 'declining is an answer, not a deferral');
+  assert.equal(system.store.obstacles.getObstacle(id)!.state, 'standing');
+
+  desk.endings(EMPTY_WORLD);
+  assert.equal(
+    system.store.obstacles.getObstacle(id)!.state,
+    'dormant',
+    'the row a person declined still leaves without one',
+  );
+  system.store.close();
+});
+
+test('a decision is spent when the row ends: a recurrence is proposed again', async () => {
+  const system = build();
+  const id = stand(system);
+  system.store.obstacles.decideObstacleTicket(id, 'declined');
+  system.store.obstacles.endObstacle(id, 'resolved', 'retired');
+
+  stand(system, ['issue:903']);
+  const back = system.store.obstacles.getObstacle(id)!;
+  assert.equal(back.state, 'standing');
+  assert.equal(back.ticketDecision, null, 'it comes back as a proposal rather than as a decision already taken');
+  system.store.close();
+});
+
+test('with approval off, the door is the one it has always been', async () => {
+  const system = build();
+  const id = stand(system);
+  const filed: string[] = [];
+  const desk = obstacleDesk(system.store, {
+    ticketApproval: false,
+    filing: async (input) => {
+      filed.push(input.title);
+      return 'issue:841';
+    },
+    watchLabel: '',
+  });
+
+  await desk.ownership(EMPTY_WORLD);
+  assert.equal(filed.length, 1);
+  assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, 'issue:841');
   system.store.close();
 });

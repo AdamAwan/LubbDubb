@@ -171,6 +171,7 @@ export interface CockpitActions {
   setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
 
   muteObstacle(id: string, muted: boolean): Promise<void>;
+  decideObstacleTicket(id: string, approved: boolean): Promise<void>;
   ownObstacle(id: string, ownerRef: string): Promise<void>;
   retireObstacle(id: string): Promise<void>;
   writeDownObstacle(id: string): Promise<void>;

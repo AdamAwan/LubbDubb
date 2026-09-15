@@ -1107,6 +1107,7 @@ export interface ObstacleBoardPayload {
   counts: ObstacleBoardCounts;
   dormantMs: number;
   canFileTickets: boolean;
+  ticketApproval: boolean;
 }
 
 /**

@@ -686,6 +686,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fleet: agents,
     dormantMs: config.obstacleDormantMs,
     watchLabel,
+    ticketApproval: config.obstacleTicketApproval,
     reader: opts.obstacleReader,
     repoRoot: config.repoRoot,
     filing: trackerCoordinates(config) ? filing : undefined,

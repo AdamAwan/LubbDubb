@@ -44,6 +44,7 @@ function obstacle(over: Partial<Obstacle> = {}): Obstacle {
     updatedAt: NOW,
     lastSeenAt: NOW,
     endedBy: null,
+    ticketDecision: null,
     ...over,
   };
 }

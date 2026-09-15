@@ -246,6 +246,7 @@ export function useCockpit(): CockpitStatus {
       openReviewIdea: (id) => go({ reviewIdea: id }),
       setObstacleQuery: (next) => go(next),
       muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
+      decideObstacleTicket: (id, approved) => then(api.decideObstacleTicket(id, approved)),
       ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
       retireObstacle: (id) => then(api.retireObstacle(id)),
       writeDownObstacle: (id) => then(api.writeDownObstacle(id)),

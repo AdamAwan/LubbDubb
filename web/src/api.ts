@@ -226,6 +226,8 @@ const realApi = {
   getObstacles: () => authFetch('/api/obstacles').then((r) => json<ObstacleBoardPayload>(r)),
   muteObstacle: (id: string, muted: boolean) =>
     post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/mute`, { muted }),
+  decideObstacleTicket: (id: string, approved: boolean) =>
+    post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/ticket`, { approved }),
   ownObstacle: (id: string, ownerRef: string) =>
     post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/own`, { ownerRef }),
   retireObstacle: (id: string) => post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/retire`, {}),
