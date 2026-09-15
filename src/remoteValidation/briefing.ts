@@ -1,9 +1,15 @@
 import { issueOriginNumber } from '../issueOrigins.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
+import { substituteBrowserArgs } from '../localValidation/policy.js';
 import type { Store } from '../store/store.js';
-import type { RemoteRunBrief, RemoteSheetRow } from '../types.js';
-import { handsBackAScreen, stepArea, stepScript } from '../validation/steps.js';
-import { remoteValidationKey, remoteValidationOrigin, remoteValidationRunDir } from './origin.js';
+import type { ExtraMcpServer, RemoteRunBrief, RemoteSheetRow } from '../types.js';
+import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../validation/steps.js';
+import {
+  remoteValidationKey,
+  remoteValidationOrigin,
+  remoteValidationProfileDir,
+  remoteValidationRunDir,
+} from './origin.js';
 import { SELECTOR_DELIMITER } from './runner.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
@@ -13,6 +19,12 @@ interface BriefInput {
   store: Store;
   environments: readonly EnvironmentConfig[];
   validationRoot: string;
+  /**
+   * The deployment's browser MCP server — `localValidation.browser`, the one block, read by both
+   * dispatches. Null is a real configuration: the brief says there is no browser, and a row that
+   * needed one comes back `blocked`.
+   */
+  browser?: ExtraMcpServer | null;
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Never folded into a brief — the *name* is. */
   env?: TenantEnvironment;
@@ -48,8 +60,19 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
     const selectors = areasOf(store, run.goalRef, confirmed);
     const scripts = scriptsOf(store, run.goalRef, confirmed);
     const screens = screensOf(store, run.goalRef, confirmed);
+    const drives = drivesOf(store, run.goalRef, confirmed);
     const origin = remoteValidationOrigin(issueNumber, run.id);
     const runDir = remoteValidationRunDir(input.validationRoot, run.goalRef, run.id);
+    // The run's own artefact directory is what the browser writes into, so a screen it took is
+    // already where the report names it by file name alone; the profile is the environment's, and
+    // persists. → docs/spec/36-remote-validation.md#the-browser-the-run-drives
+    const browserServer =
+      input.browser === undefined || input.browser === null
+        ? null
+        : substituteBrowserArgs(input.browser, {
+            outputDir: `${runDir}/artefacts`,
+            profileDir: remoteValidationProfileDir(input.validationRoot, run.environment),
+          });
     const tenant = resolveTenant({
       environment,
       stamped: store.remoteValidation.listRemoteTenants(),
@@ -66,7 +89,8 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
       origin,
       leaseKey: remoteValidationKey(issueNumber, run.id),
       deployedSha: run.startedSha,
-      confirmed: selectors.length + scripts.length + screens.length,
+      confirmed: selectors.length + scripts.length + screens.length + drives.length,
+      browser: browserServer,
       briefing: briefing({
         environment: environment.name,
         profile: browser.profile ?? null,
@@ -77,6 +101,8 @@ export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
         selectors,
         scripts,
         screens,
+        drives,
+        browserKey: browserServer?.key ?? null,
         titles: confirmed.map((row) => row.title),
         reportDir: `${runDir}/report`,
         artefactDir: `${runDir}/artefacts`,
@@ -142,6 +168,29 @@ export function runnableScreens(
 ): RunScreen[] {
   if (environment.validate?.browser?.runner === undefined) return [];
   return screensOf(store, goalRef, confirmedCheckRows(rows, goalRef, environment.name));
+}
+
+/**
+ * The checks this run's agent drives **itself**, at the browser it was launched with. They are the
+ * **fourth** reason a run owes an agent and the last one anybody would think of: such a check names no
+ * suite area, carries no script and asks for no screen, so a press counting the three instruments
+ * would end the run on the spot with the whole of what it was pressed for still owed — the check
+ * `unrun` for ever and the sheet reading as a run that answered.
+ *
+ * A reading one of these produces is attributed **`agent`**: the fleet, unattended, at a browser.
+ * Nothing reviewed it and no script was written for it.
+ * → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
+ *
+ * @public read by `RemoteRunDesk` to decide whether a press still owes an agent
+ */
+export function runnableDrives(
+  store: Store,
+  environment: EnvironmentConfig,
+  goalRef: string,
+  rows: readonly RemoteSheetRow[],
+): RunDrive[] {
+  if (environment.validate?.browser?.runner === undefined) return [];
+  return drivesOf(store, goalRef, confirmedCheckRows(rows, goalRef, environment.name));
 }
 
 function confirmedCheckRows(rows: readonly RemoteSheetRow[], goalRef: string, environment: string): RemoteSheetRow[] {
@@ -221,6 +270,123 @@ function screensOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[
   return out;
 }
 
+/** One check an agent drives at the browser, and the id it reports under — the check's own. */
+interface RunDrive {
+  checkId: string;
+  title: string;
+  /** The `browser` steps the fleet carries, in the order they were authored. */
+  steps: string[];
+}
+
+/**
+ * The checks whose test plan asks the fleet to **drive the browser** and nothing else: a `browser`
+ * step the fleet carries, with no area and no script. The three other instruments are all something
+ * else running — reviewed repository code, a program written for this check, a camera — and this is
+ * the agent itself at the application, which is why its reading is worth `agent` and not `spec`.
+ *
+ * A step is only here when `resolveSteps` gave it to the fleet. Where no environment declares a
+ * `validate.browser` block, or none names a tenant, every such step is already a person's and names
+ * the declaration that would have carried it — the harness forms no second opinion about that.
+ * → docs/spec/20-validation.md#who-carries-a-step
+ */
+function drivesOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]): RunDrive[] {
+  const checks = new Map(store.validation.listValidationChecks(goalRef).map((check) => [check.id, check]));
+  const out: RunDrive[] = [];
+  for (const row of rows) {
+    const check = checks.get(row.sourceId);
+    if (check === undefined || !stepDriven(check.steps)) continue;
+    out.push({
+      checkId: check.id,
+      title: check.title,
+      steps: check.steps.filter((step) => step.kind === 'browser' && step.actor === 'fleet').map((step) => step.do),
+    });
+  }
+  return out;
+}
+
+/**
+ * The browser, offered as a **claim to check** rather than as a fact. Whether the server connected is
+ * not something a brief can know: it is fetched and launched at the same moment the agent is, so it
+ * can be missing because the machine is offline, because the package is blocked, or because no browser
+ * is installed for it to drive — and the last of those does not surface until the first page.
+ *
+ * The answer to a browser that will not start is **`blocked`, never `failed`**: a failure dispatches
+ * rule `validation-failed` to fix a defect, and a browser that would not start is not a defect in the
+ * goal. → docs/spec/36-remote-validation.md#the-browser-the-run-drives
+ */
+function browserSection(input: BriefingInput): string[] {
+  if (input.browserKey === null)
+    return [
+      '## There is no browser',
+      '',
+      'This deployment has configured none, so you cannot open a page yourself. The project’s own runner ' +
+        'brings its own — that is a separate program and this is about **you** — so invoke what is declared ' +
+        'below as usual, and report `blocked` for anything that needed a screen of your own. Do not describe ' +
+        'a page you did not see.',
+    ];
+  return [
+    '## The browser',
+    '',
+    `You **should** have one, on the \`${input.browserKey}\` MCP server. It keeps its profile between runs ` +
+      `against ${input.environment} — so a sign-in somebody completed last time is probably still good — and ` +
+      'the profile is this environment’s own, never the dev machine’s.',
+    '',
+    '**Check that before you plan around it.** That sentence is read off this deployment’s configuration ' +
+      'and not off anything anybody looked at: the server is fetched and launched at the same moment you are, ' +
+      'so it can be missing because the machine is offline, because the package is blocked, or because there ' +
+      'is no browser installed for it to drive — and the last of those does not surface until the first page ' +
+      `you try to open. If the \`${input.browserKey}\` tools are not there, or a navigation fails in a way ` +
+      'that is about the browser rather than about the application, **that is not a finding about this goal**: ' +
+      'give `blocked` and say the browser was unavailable, naming it. **Do not report `failed`** — a failure ' +
+      'dispatches an agent to fix a defect, and there is no defect here.',
+    '',
+    '**It acts, so it stays inside this run’s tenant** — ' +
+      `${input.tenant === null || input.tenant === '' ? 'and this environment declares none, which is why any row that needed one is blocked rather than driven' : `\`${input.tenant}\``}` +
+      '. Do not sign in as anybody else, and do not invent a tenant.',
+  ];
+}
+
+/**
+ * The checks the agent carries **itself**, at the browser. Everything else this run does is a program
+ * running — reviewed suite code, a one-off script, a camera — and the difference is the whole of why
+ * this reading is worth `agent` and not `spec`, so the brief says so to the agent producing it.
+ * → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
+ */
+function drivenSection(input: BriefingInput): string[] {
+  return [
+    '',
+    '## The checks you drive yourself',
+    '',
+    'These name no suite area and carry no script: the test plan asks for a **browser step**, and you are the ' +
+      'one at the browser. Carry the steps out in the order they are written, one at a time — a reading taken ' +
+      'early answers a different question — and take them against this run’s tenant and the deployed build ' +
+      'you are pinned to.',
+    ...input.drives.flatMap((drive) => [
+      '',
+      `### \`${drive.checkId}\` — ${drive.title}`,
+      '',
+      ...drive.steps.map((step, at) => `${String(at + 1)}. ${step}`),
+    ]),
+    '',
+    '**Each one reports under the check’s own id**, in the same shape and into the same report file as every ' +
+      `other row of this run — \`{ "selector": "<the check id above>", "status": "passed" | "failed" }\`. That ` +
+      'file is the only thing the harness reads: a step you carried out and wrote up in your reply alone ' +
+      'reported nothing, and the row blocks rather than passing.',
+    '',
+    'A reading you produced this way is recorded as **`agent`** — the fleet, unattended — and never as ' +
+      '`spec`. A reviewed spec is repository code a pull request’s reviewer read; this is you, once, and the ' +
+      'sheet says which of the two an operator is counting.',
+    '',
+    'Where you cannot carry a step out at all — the browser will not start, the page never loads, the tenant ' +
+      'will not sign in — that row is `blocked` with your reason, and **not** `failed`. A failure means the ' +
+      'deployed product did the wrong thing, which is a different sentence and dispatches a different agent.',
+    '',
+    'A screen is worth taking beside anything you report: write it into the artefact directory below and name ' +
+      'the file in the report, exactly as a screen row does. A finding with a picture is one nobody has to ' +
+      'reproduce to believe.',
+  ];
+}
+
 interface BriefingInput {
   environment: string;
   profile: string | null;
@@ -233,6 +399,9 @@ interface BriefingInput {
   selectors: readonly string[];
   scripts: readonly RunScript[];
   screens: readonly RunScreen[];
+  drives: readonly RunDrive[];
+  /** The MCP server the agent's browser is on, or null where the deployment configured none. */
+  browserKey: string | null;
   titles: readonly string[];
   reportDir: string;
   artefactDir: string;
@@ -263,6 +432,8 @@ function briefing(input: BriefingInput): string {
       'mass failure.',
     '',
   ];
+
+  lines.push(...browserSection(input), '');
 
   if (input.listSelectors !== null) {
     lines.push(
@@ -333,7 +504,10 @@ function briefing(input: BriefingInput): string {
     '',
     'One row each, and the selector each one is verified against:',
     '',
-    ...(input.selectors.length === 0 && input.scripts.length === 0 && input.screens.length === 0
+    ...(input.selectors.length === 0 &&
+    input.scripts.length === 0 &&
+    input.screens.length === 0 &&
+    input.drives.length === 0
       ? ['- (nothing is confirmed on this sheet)']
       : input.selectors.map((selector, at) => `- \`${selector}\` — ${input.titles[at] ?? 'a confirmed check'}`)),
     ...(input.scripts.length === 0
@@ -342,7 +516,12 @@ function briefing(input: BriefingInput): string {
     ...(input.screens.length === 0
       ? []
       : input.screens.map((screen) => `- \`${screen.checkId}\` — ${screen.title}, a screen to hand back`)),
+    ...(input.drives.length === 0
+      ? []
+      : input.drives.map((drive) => `- \`${drive.checkId}\` — ${drive.title}, which you drive yourself`)),
   );
+
+  if (input.drives.length > 0) lines.push(...drivenSection(input));
 
   if (input.scripts.length > 0) {
     lines.push(

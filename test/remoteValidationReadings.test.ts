@@ -152,6 +152,35 @@ function setArea(file: string, checkId: string, area: string): void {
   }
 }
 
+/**
+ * One `browser` step the fleet carries, which is the whole of how a check becomes the run agent's own
+ * to drive: no area, no script, and a browser on the launch.
+ */
+function setDriven(file: string, checkId: string, what: string): void {
+  const db = new Database(file);
+  try {
+    db.prepare(`UPDATE validation_checks SET steps=? WHERE origin_ref=? AND id=?`).run(
+      JSON.stringify([
+        {
+          kind: 'browser',
+          do: what,
+          area: null,
+          expects: null,
+          when: 'inline',
+          script: null,
+          scriptSweptAt: null,
+          actor: 'fleet',
+          why: null,
+        } satisfies ValidationStep,
+      ]),
+      'issue:12',
+      checkId,
+    );
+  } finally {
+    db.close();
+  }
+}
+
 /** One `suite` step the fleet carries, which is the whole of how a check comes to have an area. */
 function suiteStep(area: string): ValidationStep {
   return {
@@ -227,6 +256,18 @@ function reading(b: Bench, checkId: string): RemoteReading {
     .at(-1);
   assert.ok(found, `a reading landed on ${checkId}`);
   return found;
+}
+
+/** A second press, on the same sheet and the same tenant. */
+function run(b: Bench): string {
+  const { run: opened } = b.sys.store.remoteValidation.beginRemoteRun({
+    goalRef: 'issue:12',
+    environment: 'acceptance',
+    tenant: 'validation-customer-1',
+    startedSha: DEPLOYED,
+  });
+  assert.ok(opened, 'the press opened a run');
+  return opened.id;
 }
 
 async function settle(b: Bench, runId: string, path: string, artefacts: string | null = null): Promise<void> {
@@ -481,6 +522,101 @@ test('a later run supersedes rather than deletes, and every reading carries the 
     }
     assert.equal(b.sys.store.remoteValidation.getRemoteRun(first)?.reportPath?.endsWith('first.json'), true);
     assert.equal(b.sys.store.remoteValidation.getRemoteRun(second.id)?.status, 'ended');
+  } finally {
+    b.close();
+  }
+});
+
+/* ── the reading an agent produced ───────────────────────────────────────────────────────────── */
+
+test('a reading the run’s own agent produced is `agent`, and never `spec`', async () => {
+  const b = bench();
+  try {
+    const runId = seed(b, [{ check: CHECK, area: AREA, matched: null }]);
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card, then open the receipt.');
+
+    await settle(b, runId, report(b, [{ selector: CHECK.id, status: 'passed' }]));
+
+    const check = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(check?.state, 'passed');
+    assert.equal(check?.resultBy, 'agent', 'the fleet, unattended, at a browser');
+    assert.notEqual(check?.resultBy, 'spec', 'nothing reviewed what it did, and the sheet says which it was');
+    assert.equal(reading(b, CHECK.id).outcome, 'passed');
+  } finally {
+    b.close();
+  }
+});
+
+test('a driven row reports under the check’s own id, and one that reported nothing is blocked', async () => {
+  const b = bench();
+  try {
+    const runId = seed(b, [{ check: CHECK, area: AREA, matched: null }]);
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card.');
+
+    await settle(b, runId, report(b, [{ selector: 'some other row', status: 'passed' }]));
+
+    const read = reading(b, CHECK.id);
+    assert.equal(read.outcome, 'blocked', 'an agent that never reached the page looks identical from here');
+    assert.match(read.detail ?? '', /reported nothing under its own id/);
+    assert.equal(
+      b.sys.store.validation.listValidationChecks('issue:12')[0]?.state,
+      'unrun',
+      'and a blocked row writes nothing on the check',
+    );
+  } finally {
+    b.close();
+  }
+});
+
+test('an agent’s reading and a spec’s never overwrite each other, in either direction', async () => {
+  const b = bench();
+  try {
+    // A spec's reading stands, and a run that drove the check itself does not replace it: an operator
+    // counting green rows must never be told a reviewed spec and an agent's afternoon are one thing.
+    const first = seed(b, [{ check: CHECK, area: AREA, matched: 1 }]);
+    await settle(b, first, report(b, [{ selector: AREA, status: 'passed' }], 'spec.json'));
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.resultBy, 'spec');
+
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card.');
+    const second = run(b);
+    await settle(b, second, report(b, [{ selector: CHECK.id, status: 'failed' }], 'agent.json'));
+
+    const kept = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(kept?.state, 'passed', 'the spec’s reading is kept');
+    assert.equal(kept?.resultBy, 'spec');
+    assert.match(reading(b, CHECK.id).detail ?? '', /not written onto the goal's own check/);
+
+    // And the other way: an agent's reading stands against a later spec run.
+    b.sys.store.validation.recordValidationResult('issue:12', CHECK.id, {
+      state: 'passed',
+      note: 'I drove it and it placed',
+      by: 'agent',
+    });
+    setArea(b.file, CHECK.id, AREA);
+    const third = run(b);
+    await settle(b, third, report(b, [{ selector: AREA, status: 'failed' }], 'spec-again.json'));
+
+    const still = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(still?.resultBy, 'agent', 'and a reviewed spec does not quietly take an agent’s row either');
+    assert.equal(still?.state, 'passed');
+  } finally {
+    b.close();
+  }
+});
+
+test('a second driven run replaces its own instrument’s reading, which is the one case it may', async () => {
+  const b = bench();
+  try {
+    const first = seed(b, [{ check: CHECK, area: AREA, matched: null }]);
+    setDriven(b.file, CHECK.id, 'Place an order with a saved card.');
+    await settle(b, first, report(b, [{ selector: CHECK.id, status: 'passed' }], 'one.json'));
+    assert.equal(b.sys.store.validation.listValidationChecks('issue:12')[0]?.resultBy, 'agent');
+
+    await settle(b, run(b), report(b, [{ selector: CHECK.id, status: 'failed' }], 'two.json'));
+
+    const settled = b.sys.store.validation.listValidationChecks('issue:12')[0];
+    assert.equal(settled?.state, 'failed');
+    assert.equal(settled?.resultBy, 'agent');
   } finally {
     b.close();
   }

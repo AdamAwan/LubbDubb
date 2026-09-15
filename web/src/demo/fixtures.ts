@@ -1189,6 +1189,8 @@ export function buildDemoState(): DemoSeed {
               executed: null,
               retries: null,
               durationMs: null,
+              taskId: null,
+              agentId: null,
               artefacts: null,
               readAt: '2026-08-19T09:12:07.000Z',
             },

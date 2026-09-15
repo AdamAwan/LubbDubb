@@ -8,7 +8,7 @@ import type {
   StateQuery,
   ValidationCheck,
 } from '../types.js';
-import { handsBackAScreen, stepArea, stepScript } from '../validation/steps.js';
+import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../validation/steps.js';
 import { liveChecks } from '../validation/verdict.js';
 import { selectorFault } from './runner.js';
 
@@ -81,7 +81,7 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
       blockedReason:
         unpermitted('check', permits, environment.name) ??
         areaFault(stepArea(check.steps)) ??
-        scriptTenantFault(check, input.tenant, environment.name),
+        actingTenantFault(check, input.tenant, environment.name),
       awaitingApproval: false,
       matched: null,
       idleReason: idleReason(check, environment),
@@ -157,19 +157,25 @@ function areaFault(area: string | null): string | null {
  * blocked" on every goal and read as a misconfiguration it is not.
  *
  * What a run carries is named by a step and by nothing else: a `suite` step's area, a `browser`
- * step's one-off script, a `screenshot` step's screen. The three arms are the three ways a check
- * names none of them, and each says what would.
+ * step's one-off script, a `screenshot` step's screen, or a `browser` step the fleet carries, which
+ * the run's own agent drives. The three arms are the three ways a check names none of them, and each
+ * says what would.
  * → docs/spec/36-remote-validation.md#a-row-no-press-can-read
  */
 function idleReason(check: ValidationCheck, environment: EnvironmentConfig): string | null {
   const runnable = environment.validate?.browser?.runner !== undefined;
-  const names = stepArea(check.steps) !== null || stepScript(check.steps) !== null || handsBackAScreen(check.steps);
+  const names =
+    stepArea(check.steps) !== null ||
+    stepScript(check.steps) !== null ||
+    handsBackAScreen(check.steps) ||
+    stepDriven(check.steps);
   if (runnable && names) return null;
   if (check.steps.length === 0)
     return (
       'this check declares no test plan, so nothing names an instrument to run it with: a `suite` step names ' +
-      'an area of the project’s own browser suite, a `browser` step carries a one-off script, and a ' +
-      '`screenshot` step hands a screen back. It is a person’s to carry out, which is what it has always ' +
+      'an area of the project’s own browser suite, a `browser` step carries a one-off script or is driven by ' +
+      'the run’s own agent, and a `screenshot` step hands a screen back. It is a person’s to carry out, ' +
+      'which is what it has always ' +
       'been — a press reads nothing here and sends nobody for it.'
     );
   // The first step's own `why`, which `stepFault` already wrote and which names the configuration
@@ -179,30 +185,33 @@ function idleReason(check: ValidationCheck, environment: EnvironmentConfig): str
     return `every step of this check is a person’s — ${why} A press reads nothing here and sends nobody for it.`;
   return (
     `nothing in this check’s test plan is an instrument a run on ${environment.name} can carry: it names no ` +
-    '`suite` area, no one-off script and no screen to hand back' +
+    '`suite` area, no one-off script, no screen to hand back and no `browser` step the fleet carries' +
     (runnable ? '' : `, and ${environment.name} declares no "validate.browser.runner" to carry one`) +
     '. A press reads nothing here and sends nobody for it.'
   );
 }
 
 /**
- * A check whose plan carries a one-off script, on an environment with no tenant. Unlike every other
- * row on a sheet a script **writes**, and the machinery that makes that safe — provisioning,
- * reseeding, the lock and the reap window — is keyed on a tenant the operator declares. So the row is
- * `blocked` **naming the command or the variable that would provide one**, never "no tenant": an
- * operator meeting this is entitled to read which line they have not written, and the harness never
- * invents a name, because an invented one is reaped within the hour and its disappearance presents
- * as mysterious mass failure.
+ * A check whose plan **acts** on the environment, on one with no tenant. Unlike every other row on a
+ * sheet a one-off script writes, and so does an agent at a browser — it navigates, uploads and clicks
+ * — and the machinery that makes that safe (provisioning, reseeding, the lock and the reap window) is
+ * keyed on a tenant the operator declares. So the row is `blocked` **naming the command or the
+ * variable that would provide one**, never "no tenant": an operator meeting this is entitled to read
+ * which line they have not written, and the harness never invents a name, because an invented one is
+ * reaped within the hour and its disappearance presents as mysterious mass failure.
  *
- * A check with no script never reaches this. → docs/spec/36-remote-validation.md#tenants
+ * A check that only runs the reviewed suite or hands a screen back never reaches this.
+ * → docs/spec/36-remote-validation.md#tenants
  */
-function scriptTenantFault(check: ValidationCheck, tenant: SheetInput['tenant'], environment: string): string | null {
-  if (stepScript(check.steps) === null) return null;
+function actingTenantFault(check: ValidationCheck, tenant: SheetInput['tenant'], environment: string): string | null {
+  const script = stepScript(check.steps) !== null;
+  if (!script && !check.steps.some((step) => step.kind === 'browser')) return null;
   if (tenant === undefined) return null;
   if (tenant.blockedReason !== null) return tenant.blockedReason;
   if (tenant.tenant !== null && tenant.tenant !== '') return null;
   return (
-    `this check carries a one-off script, and a script acts on ${environment} — it arranges the data the ` +
+    `this check ${script ? 'carries a one-off script, and a script' : 'asks for a browser step, and an agent at a browser'} ` +
+    `acts on ${environment} — it arranges the data the ` +
     'check is about. Nothing here names a tenant for it to act inside: declare a literal ' +
     '"validate.tenant", a "validate.tenantEnv" naming the variable that carries one, or a ' +
     '"validate.ensureTenant" command that provisions one. The harness will not invent a name, because an ' +

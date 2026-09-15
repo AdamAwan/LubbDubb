@@ -472,7 +472,17 @@ function CheckBlock({
                 passed" and "I ran it and it passed" are different facts, and the
                 second must never be read off the first — which is the whole of
                 what this feature is for, one level down. */}
-            {check.resultBy === 'agent' && <i className="k">recorded by an agent</i>}
+            {/* One word for two dispatches, deliberately: the fleet running the
+                check's own steps, and the fleet driving the browser on a
+                validation sheet. Both are an agent unattended and neither was
+                reviewed, which is the fact an operator counting green rows
+                needs — where it happened is on the reading, beside the
+                transcript. → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself */}
+            {check.resultBy === 'agent' && (
+              <i className="k" title="The fleet, unattended — nothing reviewed what it did">
+                recorded by an agent
+              </i>
+            )}
             {/* Not "by an agent" and not silence: a desktop session is the
                 operator's own Claude, which reached an environment the fleet
                 cannot and still did not carry the steps out by hand. Silence is

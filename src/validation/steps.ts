@@ -176,6 +176,22 @@ export function stepScript(steps: readonly ValidationStep[]): string | null {
 }
 
 /**
+ * Whether the fleet's own agent is the instrument here: a `browser` step it carries, with no `suite`
+ * area and no one-off script. The precedence is the report fold's, exactly — an area is a `spec`
+ * reading and a script is a `script` one, and a check declaring either is that instrument's rather
+ * than this one's — because two copies of it would count one thing at the press and write another at
+ * the report.
+ *
+ * A `browser` step is only the fleet's where `resolveSteps` gave it to them; with no `validate.browser`
+ * block, or no tenant to act inside, it is already a person's and names the declaration that would
+ * have carried it. → docs/spec/20-validation.md#who-carries-a-step
+ */
+export function stepDriven(steps: readonly ValidationStep[]): boolean {
+  if (stepArea(steps) !== null || stepScript(steps) !== null) return false;
+  return steps.some((step) => step.kind === 'browser' && step.actor === 'fleet');
+}
+
+/**
  * The steps with every one-off script removed, each stamped where its source was. The stamp is the
  * whole of what makes this reversible to read: a `browser` step that reads *its script was swept on
  * the 3rd* is not the same row as one a person always drove, and a sweep that simply nulled the

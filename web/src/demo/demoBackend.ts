@@ -918,6 +918,8 @@ class DemoServer {
           executed: null,
           retries: null,
           durationMs: null,
+          taskId: null,
+          agentId: null,
           artefacts: null,
           readAt: new Date().toISOString(),
         };
@@ -977,6 +979,8 @@ class DemoServer {
           executed: null,
           retries: null,
           durationMs: null,
+          taskId: null,
+          agentId: null,
           artefacts: null,
           readAt: now,
         };

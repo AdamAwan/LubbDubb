@@ -7,7 +7,7 @@ import type { EnvironmentProber } from '../environments/prober.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { validationGoalDir } from '../validation/resources.js';
-import { handsBackAScreen, stepArea, stepScript } from '../validation/steps.js';
+import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../validation/steps.js';
 import { remoteValidationRunDir } from './origin.js';
 import { foldCapture, foldRowOutcome, parseRunReport, type RowOutcome, type RunReport } from './report.js';
 
@@ -33,7 +33,7 @@ interface Settled {
   read: number;
   /** How many learned nothing, each of which writes on no check at all. */
   blocked: number;
-  /** How many checks took a `spec` or `script` reading. Which of the two is on each row. */
+  /** How many checks took a `spec`, `script` or `agent` reading. Which of the three is on each row. */
   wrote: number;
   /** How many screens the run handed back for somebody to look at. */
   captured: number;
@@ -86,8 +86,8 @@ export class RemoteReadingDesk {
   }
 
   /**
-   * The report, folded into a reading per confirmed row and a `spec` reading on the checks those
-   * rows stand for, and then the run settled. The deployed sha is read from `at` again here — the
+   * The report, folded into a reading per confirmed row and a reading on the checks those rows stand
+   * for — attributed to whichever instrument ran it — and then the run settled. The deployed sha is read from `at` again here — the
    * start of it is already on the row — because a run that finished against a different build is
    * the thing [the asymmetry](docs/spec/36-remote-validation.md#the-environment-moved-asymmetry)
    * cuts on.
@@ -134,16 +134,25 @@ export class RemoteReadingDesk {
       }
       const check = checks.get(row.sourceId);
       if (check === undefined) continue;
-      // Two instruments, and which one this row ran decides both what the report is read against and
-      // what the reading is worth. A `suite` step's area selects reviewed code and is verified
+      // Three instruments, and which one this row ran decides both what the report is read against
+      // and what the reading is worth. A `suite` step's area selects reviewed code and is verified
       // against the pre-flight's listing; a one-off script has no listing — it was written for this
-      // check — and reports under the check's own id. A check declaring both is read as a spec: the
-      // reviewed instrument is the stronger evidence, and the two are never folded into one word.
+      // check — and reports under the check's own id; and a `browser` step the fleet carries is the
+      // agent itself at the browser, which reports the same way and is worth `agent`. A check
+      // declaring more than one is read as the strongest: the reviewed instrument over the throwaway,
+      // and a program anybody can read afterwards over an agent's afternoon. They are never folded
+      // into one word. → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
       const area = stepArea(check.steps);
       const instrument =
-        area !== null ? ('spec' as const) : stepScript(check.steps) !== null ? ('script' as const) : null;
-      // A `screenshot` step is neither: it asserts nothing, so it is not a third instrument and it
-      // never decides what a reading is worth. A check that only hands a screen back still runs
+        area !== null
+          ? ('spec' as const)
+          : stepScript(check.steps) !== null
+            ? ('script' as const)
+            : stepDriven(check.steps)
+              ? ('agent' as const)
+              : null;
+      // A `screenshot` step is none of them: it asserts nothing, so it is not a fourth instrument and
+      // it never decides what a reading is worth. A check that only hands a screen back still runs
       // here — this is the only channel with a browser and a tenant — and one that also asserts
       // hands its screen back beside the assertion.
       const screen = handsBackAScreen(check.steps);
@@ -319,11 +328,13 @@ export class RemoteReadingDesk {
     run: RemoteRun,
     check: ValidationCheck,
     folded: RowOutcome,
-    by: 'spec' | 'script' | null,
+    by: 'spec' | 'script' | 'agent' | null,
     capture: string | null,
   ): { wrote: boolean; kept: string | null } {
     // A row that only handed a screen back ran no instrument: nothing asserted, so there is nothing
     // to attribute to a reviewed suite or to a throwaway, and it is the fleet that took the picture.
+    // It lands on the same word an agent's own reading does, which is the truth in both cases — the
+    // fleet, unattended — and the overwrite predicate below then treats the two as one hand.
     const took = by ?? 'agent';
     if (check.state !== 'unrun' && check.resultBy !== took)
       return {

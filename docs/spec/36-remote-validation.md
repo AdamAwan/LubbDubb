@@ -779,9 +779,9 @@ a worktree and an install.
 and the environment declares a `runner`, the press leaves the row `pending` and the cycle it runs is
 what puts the agent on it. Where none does — no browser block, no area, every `check` row blocked —
 there is nothing for an agent to carry out, so the press settles the run `ended` on the spot, which is
-exactly the behaviour the deterministic half had before the agent existed. The two arms read one
-predicate, `runnableSelectors`, for the reason
-[the dispatch](#the-dispatch--rule-remote-validation) states.
+exactly the behaviour the deterministic half had before the agent existed. The two arms read the same
+four predicates the brief does — `runnableSelectors`, `runnableScripts`, `runnableScreens` and
+`runnableDrives` — for the reason [the dispatch](#the-dispatch--rule-remote-validation) states.
 
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
 heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.
@@ -1165,8 +1165,10 @@ lock, the reap window ([Tenants](#tenants)) — and an environment with no tenan
 where a script that writes is a `blocked` row, not a script that runs somewhere it should not.
 
 Two places carry that refusal and both name the line the operator has not written, never "no
-tenant": `stepFault` gives the step back to a person, and `sheetRows`' `scriptTenantFault` blocks
-the row. It runs from the **sheet's run** and not from the `validate-check` dispatch, which has no
+tenant": `stepFault` gives the step back to a person, and `sheetRows`' `actingTenantFault` blocks
+the row — which covers **every** `browser` step and not only one carrying a script, because an agent
+at a browser navigates, uploads and clicks and so acts the same way
+([a check the agent drives itself](#a-check-the-agent-drives-itself)). It runs from the **sheet's run** and not from the `validate-check` dispatch, which has no
 tenant, no lock and no reap window — `checkBriefing` prints the source there and says so in as many
 words, because an agent that read a script it was not to run and ran it is the failure the
 machinery exists to prevent.
@@ -1325,6 +1327,12 @@ outlives the run whose artefacts are swept on the project's own schedule.
 no script, so a press counting the two instruments would settle the run with the whole point of that
 check still owed — leaving it `unrun` for ever with nothing red.
 
+**Anything a run owes its agent is counted here, and a fourth thing is a fourth entry.**
+`runnableDrives` is the fourth ([a check the agent drives itself](#a-check-the-agent-drives-itself)),
+and the shape is the point rather than the number: a check carrying only the newest of them names
+nothing the older ones count, the press ends the run on the spot, the check stays `unrun` for ever and
+the sheet reads as a run that answered.
+
 ## The dispatch — rule `remote-validation`
 
 **Built.** A run is carried out by a dispatched agent, `src/dispatcher/rules/remoteValidation.ts`, a
@@ -1365,10 +1373,11 @@ beyond running the suite, and it is why the denominator moved here.
   and nowhere else — a conditional `UPDATE` inside the transaction, never a check the rule is trusted
   to make first.
 - **Nothing is dispatched for a sheet nobody pressed.** The rule reads run rows, never sheets — and
-  nothing is dispatched for a run with no confirmed `check` row naming an area, which is a run the
-  press already finished. `runnableSelectors` (`src/remoteValidation/briefing.ts`) is the one place
-  that rule is written, read by the press and by the brief: a second copy would either strand a run
-  waiting for an agent nothing will dispatch, or settle one with the agent's half still owed.
+  nothing is dispatched for a run with no confirmed `check` row an instrument can carry, which is a run
+  the press already finished. `runnableSelectors`, `runnableScripts`, `runnableScreens` and
+  `runnableDrives` (`src/remoteValidation/briefing.ts`) are the one place that rule is written, read by
+  the press and by the brief: a second copy would either strand a run waiting for an agent nothing will
+  dispatch, or settle one with the agent's half still owed.
 - **It carries an `enabled` predicate** on a `RuleConditions` flag — true only where some environment
   declares a `validate` block — beside `review` and `sequencer`. A rule with no run rows to read
   would already produce nothing, so this buys one thing and it is worth having: the rule book draws
@@ -1388,6 +1397,84 @@ is required rather than a convenience, `validate-locally/cancel`'s reason: it is
 off **before** its agent has gone anywhere — a `pending` one the operator no longer wants, or a
 `dispatched` one whose agent is still working. The desk's sweep is the other half and covers only the
 case the operator cannot: an agent that has already gone ([The sweep](#the-sweep)).
+
+### The browser the run drives
+
+**Built.** The run's agent is launched with a **second MCP server** beside the harness's own, exactly
+as a local validation's is: `localValidation.browser`, one `--mcp-config` document either way, with the
+grant derived in `src/mcp/names.ts` and **server-level** (`mcp__browser`) because that tool set belongs
+to whoever wrote the server ([11](11-mcp-tools.md#launch-flags), [32](32-local-validation.md#the-browser)).
+There is no browser inside a headless `claude -p`, and without one the agent can invoke the project's
+runner and nothing else.
+
+It is **one configuration block read by two dispatches**, not a second key. What a browser is and how
+it is launched is the same question in both places, and an operator who has configured one has said
+what they mean; a `remoteValidation.browser` beside it would be a second answer to that question, and
+the deployment where the two disagree is the one nobody notices.
+
+What differs is the directories, and both are substituted at dispatch by `substituteBrowserArgs`:
+
+| Token          | Here                                                               | Why                                                                                        |
+| -------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `{outputDir}`  | the run's own `artefacts` directory                                | a screen the browser takes is already where the report names it, by file name alone        |
+| `{profileDir}` | `remoteValidationProfileDir` — one per **environment**, persistent | a sign-in somebody completed once is one every later run against that environment inherits |
+
+**The profile is per environment and never the local validation's.** A persistent profile may be held
+by one browser at a time, so a remote run sharing the local one would refuse to start whenever a local
+validation was up — `blocked` rows on a sheet somebody pressed, with nothing red; and the account that
+reaches an acceptance deployment is not the one that reaches somebody's dev machine, so the two would
+fight over the same cookies besides.
+
+**It is folded in `src/remoteValidation/briefing.ts`, beside the run directory it needs, and reaches
+the rule on `RemoteRunBrief.browser` already substituted.** The rule imports nothing from
+`src/remoteValidation/` ([the lens boundary](#the-lens-boundary)), so what it does with it is one line:
+put it on the action, from where the executor persists it on the task row (`tasks.mcp_servers`) and
+`AgentManager.spawn` opens it. Recorded on the row rather than re-derived at spawn for `model`'s
+reason: `AgentManager.resume` rebuilds a launch from the row, and an agent re-attached without the
+server it was launched with holds a conversation full of tool calls it can no longer make.
+
+**It acts, so it needs a tenant**, which is why a `browser` step is a person's on an environment that
+names none ([Tenants](#tenants)) — and the value of a `tenantEnv` never appears in the brief: what a
+prompt and a surface carry is the variable's own name.
+
+**The prompt offers it as a claim, not a fact**, and names the answer a browser that will not start
+gets: **`blocked`, never `failed`**. Whether the server connected is not something configuration can
+know — it is fetched and launched at the same moment the agent is, so it can be missing because the
+machine is offline, because the package is blocked, or because no browser is installed for it to
+drive, and the last of those does not surface until the first page. `failed` dispatches
+`validation-failed` to fix a defect and there is no defect here, so the brief says so in as many
+words.
+
+**`null` is a real configuration.** The project's own runner brings its own browser — that is a
+separate program — so a run still invokes what the environment declares; what the agent cannot do is
+open a page itself, and the brief says so rather than leaving it to describe a screen it never saw.
+
+### A check the agent drives itself
+
+**Built.** A `browser` step the fleet carries, on a check that names **no** `suite` area and carries
+**no** one-off script, is the run agent's own to carry out at the browser above. It is the fourth thing
+a run can be pressed for, and `runnableDrives` (`src/remoteValidation/briefing.ts`) is the one place
+that rule is written — read by the brief and by the press, which is what
+[the three halves of one question](#a-screen-from-the-sheets-own-run) means with a fourth entry in it:
+a press counting only selectors, scripts and screens ends such a run on the spot, the check stays
+`unrun` for ever, and the sheet reads as a run that answered.
+
+The precedence is the report fold's, exactly, and `stepDriven` (`src/validation/steps.ts`) holds it
+once: an area is a `spec` reading and a script is a `script` one, and a check declaring either is that
+instrument's rather than this one's. Two copies of that predicate would count one thing at the press
+and write another at the report.
+
+It reports **under the check's own id**, in the same file and the same shape as every other row — the
+one-off script's arrangement, and for the same reason: the report file is the only thing the harness
+reads, so a step an agent carried out and wrote up in its reply alone reported nothing, and the row
+blocks rather than passing. A row that reported nothing under its id is `blocked` and never a pass: an
+agent that never reached the page and one that carried every step out look identical from here.
+
+Where the deployment declares no `validate.browser` block, or no environment names a tenant, such a
+step never reaches any of this: `resolveSteps` already gives it back to a person **naming the
+declaration that would have carried it** ([20](20-validation.md#who-carries-a-step)), the row is idle
+or blocked with that sentence in front of the operator, and nothing here forms a second opinion about
+it.
 
 ### The lens boundary
 
@@ -1595,23 +1682,41 @@ that supports another:
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `operator` | A person carried the steps out. Draws no marker — that is what a checklist means.                                                                                                     |
 | `desktop`  | The operator's own Claude ran it at their keyboard, against the real environment.                                                                                                     |
-| `agent`    | The fleet ran it unattended.                                                                                                                                                          |
+| `agent`    | The fleet ran it unattended — the `validate-check` dispatch, or a sheet run driving the browser itself.                                                                                |
 | `spec`     | **A reviewed spec ran against a real environment and its report said so.** Stronger than `agent` — no model read anything — and different from `operator`, because nobody watched it. |
 
 Two rules govern what a run may write on a check row, and the second is the one a second
 implementation would get wrong quietly:
 
-- **A run writes onto the check row only where the current reading is `unrun`, or was itself a
-  `spec` reading.** A reading a person, an agent or a desktop session took is theirs; overwriting it
-  with a spec's is the harness deciding it knows better than the person who watched the thing happen.
-  Where the check is settled by somebody else, the row still runs and the reading still lands **on the
-  sheet**, and the sheet says whose reading it is not replacing.
+- **A run writes onto the check row only where the current reading is `unrun`, or was one this
+  instrument itself took.** A reading a person, an agent or a desktop session took is theirs;
+  overwriting it with a spec's is the harness deciding it knows better than the person who watched the
+  thing happen. The predicate is the instrument's **own** attribution and not "a machine took it": a
+  script does not overwrite a spec's reading, a spec does not overwrite an agent's, and a driven row
+  does not overwrite a spec's. Where the check is settled by somebody else, the row still runs and the
+  reading still lands **on the sheet**, and the sheet says whose reading it is not replacing.
 - **A `blocked` row writes nothing at all**, a `blocked` run's rule one level up: no reading was taken.
 
 This is the one place [20](20-validation.md#states)'s "a result is declared, never derived" is worth
 restating rather than assuming. A spec reading **is** declared — by a report, about a run of the
 delivered goal, in a place somebody deployed. What is still refused, here as everywhere, is a result
 inferred from a green build, a merged pull request or an absence of errors.
+
+### The reading an agent produced
+
+**Built.** A row the run's own agent drove records **`agent`** — the fleet, unattended — and never
+`spec`. `foldRowOutcome` takes the instrument three-valued and `RemoteReadingDesk` picks it off the
+check's steps; a screenshot-only row lands on the same word, which is the truth in both cases and makes
+the two one hand for the overwrite rule above.
+
+It is worth what `script` is worth and for the same reason: nothing reviewed it. What separates them is
+that a script is a program somebody can read afterwards and this is an agent's afternoon — so the
+transcript is the evidence, and the cockpit draws the way to it beside the reading.
+`RemoteReadingView` carries `taskId` and `agentId`, walked on the server off the chain the store already
+holds: a reading names its run, a run names the task it was dispatched as, and the task names the
+agent. The cockpit is handed the agent's own id, because that is what opens a transcript and a surface
+that had to walk two stores to draw the link would be a second copy of the join. Both are null on a
+reading no run took — the press's deterministic rows — and on a run that never got an agent.
 
 ## What a finding does, and what it must never do
 
@@ -1794,6 +1899,11 @@ rather than `error`.
 `environments` is already `fileOnly` in `CONFIG_FIELDS`, which is right for this too: every field here
 is a shell command the harness runs, which is a thing to write deliberately in a file rather than
 beside twenty other rows. **No agent can write it** — nothing in `src/mcp/` touches config.
+
+**The browser the run's agent drives is `localValidation.browser`, and there is no key here for it.**
+One block, two dispatches ([the browser the run drives](#the-browser-the-run-drives)); it is **live**,
+so an operator who configures one does not restart the harness to use it, and the brief reads it off
+the running config each pulse. → [02](02-configuration.md), [32](32-local-validation.md#the-browser)
 
 **Every command is declared in committed project config. Env vars carry parameters only.** A command
 sourced from per-machine config moves the mechanism out of the half the project owns and makes what a
@@ -2060,7 +2170,9 @@ Three conventions this card is held to, each of which fails silently if missed:
 - **A reference is drawn with `<Ref to={ref}/>`**, never as text, and never inside a button. As built
   the card names no goal and no pull request of its own — it is drawn on the goal's own page — so it
   draws no `<Ref/>`; its one outward door is the **artefact URL**, which is an external link rather
-  than a harness reference, drawn in a `cn-refs` group beside the row and never as a control. A
+  than a harness reference, drawn in a `cn-refs` group beside the row and never as a control. The way
+  into the agent that ran a row is not a reference either: a transcript is opened by selecting the
+  agent, which is `actions.select`, drawn the way a plan part's door is drawn. A
   later surface that does name a goal or a pull request draws it with `<Ref/>`.
   → [17](17-cockpit.md#links)
 - **Which environment's sheet am I looking at is a field on `Place`** (`web/src/cockpit/place.ts`),
@@ -2085,7 +2197,12 @@ an operator finds out the sheet holds a finding the goal's check does not, and i
 ([A row no press can read](#a-row-no-press-can-read)). The press control's count is the rows a press
 will **actually** read or dispatch for, not the rows selected. Under each browser row
 sits what the run cost and what it produced: **executed of matched**, retries where there were any,
-wall-clock, and a link to the runner's own report.
+wall-clock, a link to the runner's own report, and the way into the **agent that ran it**. That last
+one is there for the reading an agent produced most of all: a row a reviewed suite answered is backed
+by code in the repository, and a row the fleet drove at a browser is backed by nothing but what the
+agent did, so the record of what it did is the evidence
+([the reading an agent produced](#the-reading-an-agent-produced)). It is drawn beside the report link
+and at the same weight — the row's own title is what the reader came for.
 
 **Every tone on this card is one that already exists.** `passed`, `failed`, `blocked` and unread are
 the four the signals card already draws, the gate introduced no colour of its own and neither does
@@ -2229,6 +2346,21 @@ readings and leaving every sheet row and every check exactly as it was; the fiel
 `handback`, refused with a message naming `blocked` rather than as an unrecognised key; and a withdrawn
 tool name answered from `RETIRED_TOOL_NAMES` rather than as an unknown method.
 
+The browser half is asserted in the same file, `test/localValidation.test.ts`'s shape mirrored: the
+server rides the dispatch with **this run's** artefact directory and **this environment's** profile
+substituted and no token left standing; the profile is per environment and is **not** the local
+validation's, which is a browser that would refuse to start whenever a local validation was up; the
+`mcp__browser` grant is **appended** to the fleet's rather than replacing them, in one `--mcp-config`;
+the prompt offers the browser as a claim to check and says `blocked` and **not `failed`** where it will
+not start; with `localValidation.browser` null the dispatch carries **no** server and the prompt says
+there is no browser rather than leaving the agent to find out. And the driven check: one whose plan is a
+`browser` step the fleet carries is **counted at the press** — `runnableDrives` answering where
+`runnableSelectors` and `runnableScripts` answer nothing, which is what keeps the run from settling with
+it owed — and briefed under its own heading with the word its reading is worth; the same check on an
+environment with **no tenant** is `blocked` **naming the three declarations** and never an invented
+name; and with no `validate.browser` block anywhere `resolveSteps` gives the step back to a person
+naming the block, where nothing counts it at all.
+
 The reading half is built and its tests are in `test/remoteValidationReadings.test.ts` and
 `test/remoteValidationCockpit.test.ts`, with `test/remoteValidationOff.test.ts` extended a fourth
 time: **the exit code is never read**, asserted twice — a non-zero invocation over a report full of
@@ -2255,6 +2387,13 @@ to nobody rather than throwing; settling a run **spawns no process**, asserted o
 record; and on the wire the reading's `executed`, `retries`, `durationMs` and `artefacts` reach the
 sheet card while the Environments card's line is folded on the **server** off the same rows,
 asserted against `sheetFoldLine` itself rather than in a component.
+
+The reading an agent produced is asserted in the same two files: a driven row records **`agent` and not
+`spec`**; one that reported nothing under its own id is `blocked` rather than a quiet pass; an agent's
+reading and a spec's do not overwrite each other **in either direction**, while a second driven run
+replaces its own instrument's reading, which is the one case it may; and on the wire the reading carries
+the `taskId` and the `agentId` that open the transcript, **null** on a reading no run took rather than
+an id borrowed from another run.
 
 The query half is built and its tests are in `test/remoteValidationQueries.test.ts`, among them that
 an aggregating state query is refused **at ingestion**, through the shared `aggregatingTail`

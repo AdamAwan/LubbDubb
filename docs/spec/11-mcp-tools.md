@@ -1269,8 +1269,10 @@ Both verified empirically against `claude` 2.1.220 in headless `-p` mode, not as
 - **`--mcp-config` is additive.** Launched in a cwd holding its own `.mcp.json`, the init event reports
   `mcp_servers: [{theirs}, {ours}]`. `--strict-mcp-config` is therefore deliberately **not** passed: it
   would suppress the user's own servers in the user's own checkout.
-- **A dispatch may carry extra servers, and they ride the same document.** `Task.mcpServers` — one
-  kind of work today, the browser a local validation needs ([32](32-local-validation.md)) — is merged
+- **A dispatch may carry extra servers, and they ride the same document.** `Task.mcpServers` — the
+  browser a local validation needs ([32](32-local-validation.md)) and the one a remote validation run
+  drives ([36](36-remote-validation.md#the-browser-the-run-drives)), which is one configured block
+  reaching two dispatches — is merged
   into the one `--mcp-config` file, and its grant is appended to `--allowedTools` after the fleet's.
   The grant is **server-level** (`mcp__browser`) rather than an enumeration, because that tool set
   belongs to whoever wrote the server: a copy of it here would be stale in the silent direction the

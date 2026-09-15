@@ -1736,6 +1736,13 @@ export interface RemoteRunBrief {
   deployedSha: string;
   /** How many `check` rows this run is for. Zero is a run no agent is dispatched for. */
   confirmed: number;
+  /**
+   * The browser MCP server the run's agent drives, with this run's own directories substituted, or
+   * null where the deployment has configured none. It is folded here rather than in the rule because
+   * `src/remoteValidation/` is a lens as far as the dispatcher is concerned.
+   * → docs/spec/36-remote-validation.md#the-browser-the-run-drives
+   */
+  browser: ExtraMcpServer | null;
   /** Everything the agent must read, already rendered — appended to the prompt, never interpolated. */
   briefing: string;
 }

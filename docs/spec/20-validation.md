@@ -647,6 +647,12 @@ cannot carry, and that is a fact rather than a nomination. So the validation pla
 from the configuration, and the two things that stay the operator's are unchanged: **the hand-over**
 — nothing is dispatched until they press — and the ability to take any step back by hand.
 
+**Which channel carries a fleet `browser` step is the sheet's run and not `validate-check`.** A
+`browser` step the fleet carries is the one the run's own agent drives at the browser its launch
+carries, because a browser and a tenant are what the sheet's run has and the `validate-check` dispatch
+has neither ([36](36-remote-validation.md#a-check-the-agent-drives-itself)). A reading it produces is
+`agent` — the fleet, unattended — and never `spec`.
+
 `fleetCandidate` keeps its meaning for a check with no `steps`, where there is still nothing but a
 planner's suggestion to go on. `fleetCanStart` answers **null** there for that reason, which is a
 different fact from "the fleet cannot start this" and must not be folded into it: null is the
@@ -1149,7 +1155,11 @@ re-hand-over does not rediscover the same wall and spend an attempt saying so.
 **`resultBy` is drawn wherever the reading is** — the cockpit row, and `_(recorded by an agent)_` on
 the ticket comment. All five are drawn apart, `spec` and `script` most of all: a reviewed spec is
 repository code a pull request's reviewer read and a one-off script is a throwaway nobody read, and
-an operator counting green rows must never be told they are the same evidence. "An agent says this passed" and "I ran it and it passed" are different facts, and
+an operator counting green rows must never be told they are the same evidence. **`agent` is one word
+for two channels** — the `validate-check` dispatch, and a sheet's run driving the browser itself — and
+that is right rather than lossy: both are the fleet unattended and neither was reviewed, which is the
+fact a reader is owed. Where it happened is on the reading, beside the transcript of the agent that
+produced it ([36](36-remote-validation.md#the-reading-an-agent-produced)). "An agent says this passed" and "I ran it and it passed" are different facts, and
 the whole feature exists to stop the second being assumed from evidence that only supports the first.
 The ticket says it only for the agent: a validation checklist already means a person checked it, and
 the exception is what a reader deciding how much a tick is worth is entitled to know.

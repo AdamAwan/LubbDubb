@@ -130,13 +130,19 @@ interface FoldInput {
   /** `remote_sheet_rows.matched`, from the runner's listing. Null where it has not been taken yet. */
   matched: number | null;
   /**
-   * Which of the two browser instruments ran. It is not cosmetic: a `spec` row is read against the
-   * pre-flight's listing, and a **`script` row has no listing to be read against** — nobody lists a
-   * program written ten minutes ago. So the "the pre-flight attributed no tests" arm, which is what
-   * stops a selector matching zero from reading as a clean pass, cannot apply to a script and is
-   * replaced by the script's own emptiness check.
+   * Which browser instrument ran. It is not cosmetic: a `spec` row is read against the pre-flight's
+   * listing, and a **`script` or `agent` row has no listing to be read against** — nobody lists a
+   * program written ten minutes ago, and nobody lists an agent. So the "the pre-flight attributed no
+   * tests" arm, which is what stops a selector matching zero from reading as a clean pass, cannot
+   * apply to either and is replaced by the row's own emptiness check.
+   *
+   * `agent` is the fleet at the browser it was launched with, carrying the check's own `browser`
+   * steps. It reports under the check's id exactly as a script does, and what separates the two is
+   * what an operator counting green rows is owed: neither was reviewed, and only one of them is a
+   * program anybody can read afterwards.
+   * → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
    */
-  instrument: 'spec' | 'script';
+  instrument: 'spec' | 'script' | 'agent';
   report: RunReport;
 }
 
@@ -163,7 +169,12 @@ interface FoldInput {
  */
 export function foldRowOutcome(input: FoldInput): RowOutcome {
   const { environment, area, matched, report, instrument } = input;
-  const ran = instrument === 'script' ? `the one-off script for \`${area}\`` : `\`${area}\``;
+  const ran =
+    instrument === 'script'
+      ? `the one-off script for \`${area}\``
+      : instrument === 'agent'
+        ? `the browser steps of \`${area}\``
+        : `\`${area}\``;
   if (report.tests === null)
     return {
       outcome: 'blocked',
@@ -186,7 +197,7 @@ export function foldRowOutcome(input: FoldInput): RowOutcome {
   if (mine.length === 0)
     return {
       outcome: 'blocked',
-      detail: instrument === 'script' ? silentScript(area, report.tests) : unnamed(area, report.tests),
+      detail: instrument === 'spec' ? unnamed(area, report.tests) : silentRow(instrument, area, report.tests),
       ...measured,
     };
 
@@ -268,14 +279,18 @@ function unnamed(area: string, tests: readonly ReportTest[]): string {
  * nobody renames a program written for one check — so it says the thing that is actually true here:
  * the script ran, or did not, and either way it said nothing this harness can read a row from.
  */
-function silentScript(checkId: string, tests: readonly ReportTest[]): string {
+function silentRow(instrument: 'script' | 'agent', checkId: string, tests: readonly ReportTest[]): string {
   const elsewhere =
     tests.length === 0 ? '' : ` The report holds ${count(tests.length, 'other test')}, none of them its.`;
+  const who = instrument === 'script' ? `the one-off script for \`${checkId}\`` : `the browser steps of \`${checkId}\``;
+  const same =
+    instrument === 'script'
+      ? 'a script that fell over before it asserted and one that asserted and passed look identical from here'
+      : 'an agent that never reached the page and one that carried every step out look identical from here';
   return (
-    `the one-off script for \`${checkId}\` reported nothing under its own id.${elsewhere} A script emits its ` +
-    `result with \`selector\` set to the check's id, and one that emitted none learned nothing about the goal — ` +
-    'a script that fell over before it asserted and one that asserted and passed look identical from here, so ' +
-    'this is never read as a pass.'
+    `${who} reported nothing under its own id.${elsewhere} The result is emitted with \`selector\` set to the ` +
+    `check's id, and a row that emitted none learned nothing about the goal — ${same}, so this is never read as ` +
+    'a pass.'
   );
 }
 

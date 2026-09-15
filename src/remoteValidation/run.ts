@@ -4,7 +4,7 @@ import type { EnvironmentProber } from '../environments/prober.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, TenantStanding } from '../types.js';
-import { runnableScreens, runnableScripts, runnableSelectors } from './briefing.js';
+import { runnableDrives, runnableScreens, runnableScripts, runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
 import { rowRun } from './sheet.js';
 import { resolveTenant, stalenessNote, type TenantEnvironment, type TenantKeeper } from './tenants.js';
@@ -125,12 +125,14 @@ export class RemoteRunDesk {
     // where none is, which is a run nothing will ever report against.
     // Both browser instruments count, and so does a screen. A sheet whose only confirmed check
     // carries a one-off script names no selector at all, and one whose check only hands a screen back
-    // names neither — a press counting selectors alone would settle that run on the spot with its
-    // whole browser half still owed, which is a press that quietly did less than it said.
+    // names neither, and one the agent drives itself at the browser names none of the three — a press
+    // counting selectors alone would settle that run on the spot with its whole browser half still
+    // owed, which is a press that quietly did less than it said.
     const owed =
       runnableSelectors(store, environment, goalRef, rows).length +
       runnableScripts(store, environment, goalRef, rows).length +
-      runnableScreens(store, environment, goalRef, rows).length;
+      runnableScreens(store, environment, goalRef, rows).length +
+      runnableDrives(store, environment, goalRef, rows).length;
     if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
 
     const endedSha = await this.deployedSha(environment);

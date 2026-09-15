@@ -30,6 +30,8 @@ interface SheetControls {
   onPress: (environment: string) => Promise<void>;
   onCancel: (environment: string) => Promise<void>;
   onReseed: (environment: string) => Promise<void>;
+  /** Open an agent's transcript. The reading a run produced is only readable beside what it did. */
+  onOpenAgent: (agentId: string) => void;
 }
 
 /**
@@ -190,7 +192,7 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
           {!row.selected && <Tag title="Taken out of the next press">not selected</Tag>}
         </HeadRow>
         <p className="cn-sig-read">{said(row)}</p>
-        <Measured row={row} />
+        <Measured row={row} controls={controls} />
       </div>
       <div className="cn-sig-ctrls">
         {row.awaitingApproval && (
@@ -224,10 +226,16 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
  * is the shape that makes a selector matching nothing read as a clean pass. The artefact is drawn as
  * a link and never as a button: it leaves the cockpit, and the gap between a red row understood in
  * thirty seconds and one reproduced by hand is the whole reason the publish command exists.
+ *
+ * The agent's transcript is the other half of that, and it is here for the reading an **agent**
+ * produced most of all: a row a reviewed suite answered is backed by code in the repository, and a row
+ * the fleet drove at a browser is backed by nothing but what the agent did, so the record of what it
+ * did is the evidence. → docs/spec/36-remote-validation.md#the-reading-an-agent-produced
  */
-function Measured({ row }: { row: RemoteSheetRowView }): JSX.Element | null {
+function Measured({ row, controls }: { row: RemoteSheetRowView; controls: SheetControls }): JSX.Element | null {
   const reading = row.reading;
   const artefacts = reading?.artefacts ?? null;
+  const agentId = reading?.agentId ?? null;
   const parts: string[] = [];
   if (row.matched !== null)
     parts.push(
@@ -238,15 +246,27 @@ function Measured({ row }: { row: RemoteSheetRowView }): JSX.Element | null {
   if (reading?.retries !== null && reading?.retries !== undefined && reading.retries > 0)
     parts.push(`${String(reading.retries)} ${reading.retries === 1 ? 'retry' : 'retries'}`);
   if (reading?.durationMs !== null && reading?.durationMs !== undefined) parts.push(clock(reading.durationMs));
-  if (parts.length === 0 && artefacts === null) return null;
+  if (parts.length === 0 && artefacts === null && agentId === null) return null;
   return (
     <div className="cn-sig-add">
       {parts.length > 0 && <span className="cn-sub">{parts.join(' · ')}</span>}
-      {artefacts !== null && (
+      {(artefacts !== null || agentId !== null) && (
         <span className="cn-refs">
-          <ExtLink href={artefacts} title="The runner’s own report for this run — traces, screenshots and video">
-            the run’s report ↗
-          </ExtLink>
+          {artefacts !== null && (
+            <ExtLink href={artefacts} title="The runner’s own report for this run — traces, screenshots and video">
+              the run’s report ↗
+            </ExtLink>
+          )}
+          {agentId !== null && (
+            <button
+              type="button"
+              className="cn-openagent"
+              title="Open the agent that ran this row — everything it did, and what it cost"
+              onClick={() => controls.onOpenAgent(agentId)}
+            >
+              the agent that ran it ↗
+            </button>
+          )}
         </span>
       )}
     </div>

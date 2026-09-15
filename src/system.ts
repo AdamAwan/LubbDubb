@@ -758,7 +758,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Computed here rather than in the rule: `src/remoteValidation/` is a lens as far as the
     // dispatcher is concerned, so what reaches it is a run row and a rendered string.
     remoteRuns: () =>
-      remoteRunBriefs({ store, environments: config.environments, validationRoot: config.validationRoot }),
+      remoteRunBriefs({
+        store,
+        environments: config.environments,
+        validationRoot: config.validationRoot,
+        // The one browser block, read by both dispatches. Off the live config each pulse, so an
+        // operator who configures one does not have to restart the harness to use it.
+        browser: config.localValidation.browser,
+      }),
     landings,
     recovery,
     ejections,
