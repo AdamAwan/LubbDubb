@@ -530,7 +530,7 @@ test('buildUnresolvedComments: handled when the latest comment is a reply the ha
       ],
     },
   ];
-  assert.equal(buildUnresolvedComments(threads, new Set(['2']))[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(threads, new Set(['300:2']))[0]!.handled, true);
   assert.equal(buildUnresolvedComments(threads, new Set())[0]!.handled, false);
 });
 
