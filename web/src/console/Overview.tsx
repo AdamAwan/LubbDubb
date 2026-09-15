@@ -215,21 +215,24 @@ const RUNWAY_LABEL: Record<SupplyState, string> = {
   unknown: 'No history yet',
 };
 
+/**
+ * The lamp modifier an agent's status earns. Shared with the focus shape's lane,
+ * so the two surfaces cannot come to disagree about what amber means.
+ */
+export function agentLamp(agent: Agent, view: CockpitView): string {
+  if (view.escalationByAgent.has(agent.id)) return 'cn-lamp-ask';
+  if (agent.endedAt !== null) return 'cn-off';
+  return agent.status === 'waiting' ? 'cn-wait' : 'cn-run';
+}
+
 function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const task = view.taskFor(agent);
   const origin = task?.originRef ?? null;
   const done = agent.endedAt !== null;
   const limited = view.limitParked.has(agent.id);
-  const lamp = view.escalationByAgent.has(agent.id)
-    ? 'cn-lamp-ask'
-    : done
-      ? 'cn-off'
-      : agent.status === 'waiting'
-        ? 'cn-wait'
-        : 'cn-run';
   return {
     key: agent.id,
-    lamp: <i className={`cn-lamp ${lamp}`} />,
+    lamp: <i className={`cn-lamp ${agentLamp(agent, view)}`} />,
     title: task?.title ?? agent.id,
     open: () => actions.select(agent.id),
     openTitle: "Open this agent's drawer",

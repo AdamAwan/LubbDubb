@@ -3490,6 +3490,50 @@ is cheaper than width.
 **Every region wears its name.** An unlabelled band over an unlabelled track is a row of boxes whose
 meaning the reader infers differently for each one, which is the cost this shape was meant to remove.
 
+#### What the fleet is doing, above the ask
+
+`FleetLane` in `web/src/console/overviews/FleetLane.tsx`, drawn above the ask card on both states of
+the shape — the ask, and [Clear](#when-nothing-needs-you).
+
+**The shape's own cost was the flick-back.** Absorbing the rail took the fleet off the screen along
+with it, so an operator sat on an ask they were answering and left it anyway, to check the fleet was
+still moving — which is the trip this shape exists to remove. The answer is not to give the fleet band
+back: it is a reading nobody is being asked to act on, and the shape's argument is that the thing to do
+is the only thing at full weight. So the reading comes to the shape at the weight it deserves — one
+row, its own card, on the ground one step off the panel's.
+
+**Above the ask, never below it.** An ask's height is whatever its body happens to be, so a lane under
+it scrolls off exactly when it is reached for. Above, it shares the switch's band and the glance costs
+nothing, which is the whole point — it is the glance that has to be cheap, not the card.
+
+**It names agents rather than counting them.** A count answers whether the fleet is alive, and "is it
+alive" was never the question that sent anybody to Cards. Past the three it names the rest **are** a
+count, on the control that hands over the Cards shape — the shape that owns the fleet band, rather
+than a second copy of it here, which is the answer `buildLeads` already gives for a reading the cards
+draw.
+
+**The lane never grows.** A lane that got taller with the fleet would be Cards arriving one row at a
+time on the shape that exists not to be it.
+
+**The label is `Out 4`, never `4 of 3`.** An agent parked on a limit or taken off the fleet still holds
+its slot while the cap is lowered under it, so a denominator here draws a fleet over its own cap and
+reads as a broken reading. The cap is a number on the top bar's `CAP` control, where it can be changed.
+
+**Four fields across three agents do not fit a row**, so the agent's own note is on the hover and the
+line carries the lamp, the task, its ref and the elapsed. Every one of them ellipsed when the note was
+on the line, and the field that lost was the task title — the one saying which work this is. Narrower
+than 1100px the refs go too, because a clipped name is the one thing here that looking harder cannot
+recover, while a ref is a click away in the drawer the name opens. **Nothing responsive may hide an
+item**: the count on the control is the agents the lane did not name, and CSS cannot tell it that it
+hid one more.
+
+**The lamp modifiers are `agentLamp`, shared with the fleet band.** Two surfaces drawing agent status
+from two copies of the same three-way cut is how one of them comes to mean something different by
+amber.
+
+**It draws on an empty fleet too**, saying nobody is out. A band that vanishes with its reading reads
+as one that failed to load — the same argument the ask's own aside makes for a goal-less ask.
+
 #### Moving along the queue
 
 **The cursor is held by id, never by index.** The queue re-sorts under the operator — answering an ask

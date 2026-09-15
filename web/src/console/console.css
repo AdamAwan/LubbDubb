@@ -5128,6 +5128,145 @@ button.cn-grow {
   max-width: 620px;
 }
 
+/* ── What the fleet is doing, above the ask ──────────────────────────────────
+   One row, its own card, and everything about it is the smallest version of the
+   fleet band that still names names. It is the only reading on this shape that
+   nobody is being asked to act on, so it gets a ground one step off the panel
+   rather than the panel's own, and none of the card's padding.
+
+   It never grows: past the agents that fit, the rest are a count on the control.
+   A lane that got taller with the fleet would be the Cards shape arriving one
+   row at a time on the shape that exists to not be it.
+   → docs/spec/17-cockpit.md#the-overview */
+.cn-ov-lane {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 38px;
+  padding: 0 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel-2);
+  overflow: hidden;
+}
+.cn-ov-lane-label {
+  font-size: var(--label-size);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.cn-ov-lane-none {
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-ov-lane-items {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+/* The divider is a border on the item rather than a gap, so an item clipped by
+   the overflow takes its separator with it instead of leaving a rule hanging at
+   the lane's edge. */
+.cn-ov-lane-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  /* Equal shares rather than content-driven widths: one agent with a long task
+     title otherwise takes the row and clips the two beside it to nothing. */
+  flex: 1 1 0;
+  padding: 0 14px;
+  border-left: 1px solid var(--cn-line);
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+}
+.cn-ov-lane-item:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+/* The name gets the item's width before the note does, and a floor of about ten
+   characters: a lane that clips "Fix failing…" to "Fix fai…" while spending
+   thirty characters on what the agent is *doing* has answered the second
+   question and dropped the first. */
+.cn-ov-lane-name {
+  font: inherit;
+  font-weight: 500;
+  color: var(--cn-fg);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  flex: 0 1 auto;
+  min-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.cn-ov-lane-name:hover {
+  color: var(--cn-blue-ink);
+}
+.cn-ov-lane-name:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+/* The refs slot here is a group beside a name, not the panel row's reading
+   column, so it sheds that column's rule and its reserved width. */
+.cn-ov-lane-refs {
+  min-width: 0;
+  padding-left: 0;
+  border-left: 0;
+  justify-content: flex-start;
+}
+/* The slack in an item goes between the ref and the clock, not between the name
+   and its ref: a reference floated away from the thing it references is a ref
+   belonging to whichever neighbour it drifted towards. */
+.cn-ov-lane-for {
+  font-family: var(--cn-mono);
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  margin-left: auto;
+}
+.cn-ov-lane-more {
+  font: inherit;
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--cn-line-hi);
+  padding: 0;
+  margin-left: auto;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+}
+.cn-ov-lane-more:hover {
+  color: var(--cn-fg);
+}
+.cn-ov-lane-more:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: 2px;
+}
+/* Narrow, the refs go and the names stay whole. A clipped name is the one thing
+   on this lane that cannot be recovered by looking harder — the ref is still a
+   click away in the drawer the name opens, and the task titles the fleet gives
+   itself name their pull request in prose anyway. The count on the control is
+   the agents the lane did not name, so nothing here may hide an item. */
+@media (max-width: 1100px) {
+  .cn-ov-lane-refs {
+    display: none;
+  }
+}
+
 /* ── Worth a look: the clear state's leads ───────────────────────────────────
    Tiles in a grid, the first of them spanning it. The list was bands, and the
    grid is what it is because these are five *different* readings rather than

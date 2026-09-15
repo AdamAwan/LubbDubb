@@ -12,6 +12,7 @@ import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
 import { waitedFor } from '../GoalPage.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
+import { FleetLane } from './FleetLane.js';
 import { byWeight, partsHeld } from './asks.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
@@ -77,6 +78,9 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
   return (
     <div className="cn-ov-focus">
       <OverviewSwitch shape="focus" actions={actions} />
+      {/* Above the card rather than under it: a long ask body scrolls a lane
+          below it off exactly when the operator reaches for it. → {@link FleetLane} */}
+      <FleetLane view={view} actions={actions} />
 
       <div className={`cn-ov-focus-card cn-t-${KIND_TONE[row.kind]}`}>
         {/* The pips are the whole queue and each is a way into it: a bar that only
@@ -308,6 +312,7 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
   return (
     <div className="cn-ov-focus">
       <OverviewSwitch shape="focus" actions={actions} />
+      <FleetLane view={view} actions={actions} />
       <div className="cn-ov-focus-clear">
         <h2>Nothing needs you.</h2>
         <p>
