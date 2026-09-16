@@ -1622,7 +1622,8 @@ along with the task row it settles.
 
 `src/git/` is the whole git-shell-out corner.
 
-- **`runGit(repoRoot, args)`** — the one place `cwd: repoRoot` lives.
+- **`runGit(repoRoot, args, opts?)`** — the one place `cwd: repoRoot` lives, and the one place a git
+  subprocess is given a deadline. See [below](#a-git-that-never-exits).
 - **`fetchRemote(repoRoot)`** — `git fetch --prune origin`. `--prune` so a deleted remote branch stops
   reading as present. **Serialised per `repoRoot`** through `runSerial` (`serialQueue.ts`): several
   components share the one clone and each refreshes on its own schedule, and git updates a
@@ -1643,3 +1644,36 @@ but expected Y` — on a ref the first has already moved to the right place. The
   `FakeGitObserver` is the test implementation.
 
 New observer methods must stay read-only and fetch-free.
+
+### A git that never exits
+
+**Every `runGit` call carries a timeout, and none may be given `timeout: 0`.** `promisify(execFile)`
+with no `timeout` turns a git process that never exits into a promise that never settles, and every
+caller in this repo is awaited from somewhere that cannot survive that: the `updates` pass of the
+[reconcile phase](04-harness-cycle.md#the-pulse-registry) awaits `readBuildStanding`, which awaits a
+`cat-file` — so a single spinning git holds `cycleInFlight` true for good and the fleet stops
+dispatching with [nothing red](04-harness-cycle.md#when-a-cycle-does-not-come-back). That is not
+hypothetical: a `git cat-file -e <sha>^{commit}` against a partial clone (promisor remote,
+`blob:none`) was seen live-locking for hours on a full core, while `cat-file -t` on the same object in
+the same repository answered instantly.
+
+`gitOrNull` and the `try`/`catch` around every other call already handle a git that _fails_. The
+timeout is what turns a git that neither fails nor finishes into one that fails.
+
+Two deadlines, picked off the subcommand:
+
+- **`GIT_TIMEOUT_MS`, two minutes** — the default, for the plumbing reads: `rev-parse`, `rev-list`,
+  `cat-file`, `log`, `status`, `config`, `symbolic-ref`, `diff`, `add`, `commit`.
+- **`GIT_SLOW_TIMEOUT_MS`, fifteen minutes** — for the ones that legitimately take their time:
+  anything touching a remote (`fetch`, `clone`, `pull`, `push`, `ls-remote`, `submodule`) and the
+  worktree-sized local writes (`checkout`, `clean`, `gc`, `reset`, `stash`, `switch`, `worktree`).
+
+The subcommand is the first argument that is not a flag and is not a flag's value, so `-c` and `-C`
+prefixes do not shadow it. A caller that knows better passes `timeoutMs`; a caller that wants to
+cancel passes `signal`.
+
+The kill is **`SIGKILL`**, because the failure this exists for is a git that is not answering. A
+process killed that way is re-thrown as an error naming the command and the deadline — `git cat-file
+-e … did not exit within 120000ms in /path` — rather than execFile's bare `null` signal report, so
+the error log says what wedged. An `AbortSignal` abort is left alone: it rejects as itself, not as a
+timeout.

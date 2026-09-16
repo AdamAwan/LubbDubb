@@ -61,6 +61,20 @@ they work through cannot — an ask that appears an hour after the thing it is a
 after somebody else took the update, is one they learn to distrust and then to skim past. Four ref
 advertisements an hour is not traffic worth saving to buy that.
 
+### The check is on the cycle's critical path
+
+The `updates` pass sits in the [reconcile phase](04-harness-cycle.md#the-pulse-registry), which is the
+first `runPulse` of every cycle, well before `dispatcher.decide` — and `UpdateDesk.check` queues
+behind its own in-flight promise, so a check that never settles takes every later one with it. It is
+there because a fifteen-minute floor makes it nearly free and because the standing it writes is read
+by the same cycle's asks.
+
+What makes that safe is that nothing it awaits is unbounded: every `runGit` call carries a deadline
+([09](09-execution.md#a-git-that-never-exits)), and `readBuildStanding` funnels a rejection into
+`gitOrNull`'s null or an `unavailable` reading. A git that hangs used to be the exception — it did not
+fail, so it was never caught, and the cycle awaiting it never returned
+([04](04-harness-cycle.md#when-a-cycle-does-not-come-back)).
+
 ### Why this is not on `GitObserver`
 
 [09](09-execution.md#worktrees) documents that seam as read-only and **fetch-free**, so its callers

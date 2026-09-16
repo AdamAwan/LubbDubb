@@ -184,6 +184,8 @@ interface BuildOptions {
   poolTransport?: PoolTransport;
   obstacleReader?: ObstacleReader;
   bootedAt?: string;
+  /** Overrides the harness's stuck-cycle threshold. Injected by tests; nothing else sets it. */
+  stuckCycleAfterMs?: number;
 }
 
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
@@ -779,6 +781,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
+    stuckCycleAfterMs: opts.stuckCycleAfterMs,
     readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
     errors,
     runtime: runtimeControl,

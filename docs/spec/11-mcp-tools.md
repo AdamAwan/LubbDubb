@@ -911,7 +911,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `sequence_read`     | Read the order the stories under a Feature are worked in: the edges, why the sequencer said so, and whether anybody accepted it. A story number resolves to its parent. Records nothing.                  |
 | `sequence_amend`    | Rewrite that order, as the whole order rather than a patch — what is sent replaces what stands. Lands `accepted`, so it holds work immediately; an empty order releases everything the last one held.     |
 | `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment.                         |
-| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, recent failures.                  |
+| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the cycle in flight, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, failures.    |
 | `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing.                                       |
 | `agent_read`        | One agent close up: its row, the files it wrote, the tail of its transcript, and any question it is parked on. Records nothing.                                                                           |
 | `ejection_*`        | Three tools: `ejection_read` an ejected run, `ejection_note` a line about what you are doing with it, `ejection_settle` it. The channel's other half of [35](35-ejection.md#what-the-session-gets).       |
@@ -1002,7 +1002,11 @@ Four reads and twelve verbs. The reads:
   **`headroom` is shipped rather than left to be derived**: a paused fleet with four free slots
   dispatches nothing, and `cap` minus `running` is a reading that says there is room. **The account
   window is three-valued in effect** — `null` means nothing has reported one since this harness
-  started, which is not the same as room to spare, and the hand-back note says so.
+  started, which is not the same as room to spare, and the hand-back note says so. **The cycle in
+  flight is shipped for the same reason the other two are**: an empty queue and idle agents are the
+  reading a wedged harness gives, and `cycle.overdue` is the one field that tells the two apart
+  ([04](04-harness-cycle.md#when-a-cycle-does-not-come-back)). `cycle` is null between cycles, which is
+  the ordinary case.
 - **`attention_read`** is the inbox, and every row names its own `kind` and its own `settledBy`. The
   four kinds share a panel in the cockpit and are four different objects: a question an agent parked
   on, a permission request it is blocked _inside_, an act proposed for approval, and a run orphaned

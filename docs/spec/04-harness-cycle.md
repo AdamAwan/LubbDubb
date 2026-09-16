@@ -577,8 +577,8 @@ flowchart TD
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
 16. **`executor.execute(cycleId, plan)`**.
 17. **Emit `cycle:end`** with the report.
-18. **Clear `cycleInFlight`**, and fire the [trailing `manual` cycle](#the-trailing-edge) if one was
-    refused while this one ran.
+18. **Clear `cycleInFlight`** and the [watchdog](#when-a-cycle-does-not-come-back), and fire the
+    [trailing `manual` cycle](#the-trailing-edge) if one was refused while this one ran.
 
 ### The pulse registry
 
@@ -659,6 +659,46 @@ with the message and stack, `cycle:end` is emitted with a `cycle failed: <messag
 zeroed summary, and the next pulse tries again. Timer cycles run via `void fire('timer')`, so an
 uncaught throw would otherwise vanish as an unhandled rejection. `cycleInFlight` is cleared in a
 `finally`.
+
+## When a cycle does not come back
+
+The coalescing guard assumes a cycle ends. A cycle that never returns — one `await` on a promise that
+never settles — leaves `cycleInFlight` true for good, and the harness stops dispatching **with nothing
+red**: no throw, so the failure handling above never runs and `error_events` gets nothing;
+`this.lastPlan` is only assigned after `decide` returns, so `upcoming` stays `null` and reads exactly
+like a harness that has only just started; `fleet_status` goes on reporting the right cap, `paused:
+false` and real headroom. An operator reading the fleet honestly concludes there is nothing wrong.
+
+**Nothing else is left to notice it.** `Heartbeat.arm` re-arms its timer in the `finally` of
+`fire('timer')`, so a hung cycle stops the clock as well: no later pulse arrives to take the coalesce
+branch and see how long this one has been going. The one thing that still fires is a timer armed
+_before_ the cycle's first `await`.
+
+So `runCycle` records the cycle in flight — its id, source, start and **where it is sitting** — and
+arms a watchdog for it:
+
+- **`inFlight.where`** is set on the way past: `reading the world`, `pass "<id>" of the <phase> phase`
+  (`runPulse` takes an optional `mark` callback and calls it with each entry's id, and `null` when the
+  phase is through), `the dispatch decision`, `executing the plan`. It is the whole of the diagnosis:
+  "stuck at pass `updates` of the reconcile phase" names the desk, and from there the subprocess.
+- **The watchdog** fires once, at `max(heartbeatIntervalMs × 10, 5 minutes)`, and records
+  `errors.record({ source: 'cycle' })` naming the cycle, how long it has been going, where it is stuck,
+  and that nothing is being dispatched behind it. Once, not repeatedly: the live standing is the other
+  half, and a log that repeats is a log that is scrolled past. It is `unref`'d, so it never holds the
+  process open.
+- **`harness.inFlightCycle`** is the live standing — `{cycleId, source, startedAt, elapsedMs, where,
+  overdue}`, null between cycles. `overdue` is the same threshold. `fleet_status` ships it as `cycle`,
+  and when the queue is empty _because_ of it the queue's note says so rather than repeating "no cycle
+  has run since the harness started".
+- **A coalesced report's rationale** carries it too, so a route that asked for a cycle and got
+  `coalesced` is told what it is waiting behind.
+
+`HarnessDeps.stuckCycleAfterMs` overrides the threshold and is injected by tests through
+`BuildOptions`; nothing else sets it.
+
+None of this unwedges anything — it makes the wedge legible. What stops the commonest cause of one is
+the deadline on every git subprocess ([09](09-execution.md#a-git-that-never-exits)): a hung git now
+rejects, `gitOrNull` catches it, the pass completes and the cycle ends.
 
 ## The world baseline
 

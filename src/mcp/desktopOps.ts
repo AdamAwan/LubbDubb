@@ -62,6 +62,7 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
     const control = deps.runtimeControl.snapshot();
     const live = deps.store.agents.listAgentsByStatus('running', 'waiting');
     const upcoming = deps.harness().upcoming;
+    const inFlight = deps.harness().inFlightCycle;
     const limits = deps.store.rateLimits.readRateLimits();
     const errors = deps.store.errors.listErrors(10);
     return toolJson({
@@ -72,9 +73,29 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
         headroom: control.paused ? 0 : Math.max(control.cap - live.length, 0),
       },
       agents: live.map((a) => describeAgent(deps, a)),
+      cycle:
+        inFlight === null
+          ? null
+          : {
+              cycleId: inFlight.cycleId,
+              source: inFlight.source,
+              startedAt: inFlight.startedAt,
+              elapsedMs: inFlight.elapsedMs,
+              where: inFlight.where,
+              overdue: inFlight.overdue,
+            },
       queue:
         upcoming === null
-          ? { at: null, items: [], note: 'No cycle has run since the harness started, so there is no queue yet.' }
+          ? {
+              at: null,
+              items: [],
+              note:
+                inFlight?.overdue === true
+                  ? `Cycle ${inFlight.cycleId} has been running for ${Math.round(inFlight.elapsedMs / 1000)}s at ` +
+                    `${inFlight.where} and no cycle can start behind it, so there is no queue — this is a wedged ` +
+                    'harness, not an idle one.'
+                  : 'No cycle has run since the harness started, so there is no queue yet.',
+            }
           : {
               at: upcoming.at,
               items: upcoming.items.map((i) => ({
@@ -107,7 +128,8 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
         'Report what is here, not what it implies. A held row names its own reason and that reason is the ' +
         'answer — "capped", "cooldown", "unapproved" and "ignored" are four different problems and only one of ' +
         'them is fixed by raising the cap. `accountUsage: null` means nothing has reported a window since this ' +
-        'harness started; it is not room to spare.',
+        'harness started; it is not room to spare. A `cycle` with `overdue: true` is the fleet stopped: no cycle ' +
+        'can start behind it, so an empty queue and idle agents mean nothing until it settles.',
     });
   },
 });
