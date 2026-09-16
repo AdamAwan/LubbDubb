@@ -328,8 +328,10 @@ That makes the **declaration** the decision, which is where it belongs:
   select and no area in the suite that could honestly claim it. A planner handed eight areas and told
   to pick the one that fits has an obvious wrong move — pick the nearest — and it produces a green row
   that verified something the check does not talk about, which is worse than the manual row it
-  replaced. The honest answer there is no test part: the check stays a person's, or the snapshot
-  suite's.
+  replaced. The honest answer there is no test part: it belongs to the snapshot suite, or to a
+  validation check whose `screenshot` step the fleet captures and a person judges
+  ([20](20-validation.md#who-carries-a-step)) — _not an area_ is a statement about the permanent
+  suite, and never a nomination of somebody to go and look.
 - **Most goals do not get one.** The bar is strict and it is the same bar
   [20](20-validation.md#the-bar) states one layer over: automate when the failure would be **silent
   and consequential**, which is usually a common path. A refactor whose claim is that behaviour did

@@ -119,6 +119,7 @@ interface RuleDispatcherOptions {
   watchDeclareNote?: string;
   localValidation?: () => LocalValidationPolicy;
   testPartNote?: string;
+  screenCheckNote?: string;
   stateDeclareNote?: string;
   remoteValidationOn?: boolean;
   checkSets?: boolean;
@@ -134,6 +135,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly watchNote: string;
   private readonly watchDeclareNote: string;
   private readonly testPartNote: string;
+  private readonly screenCheckNote: string;
   private readonly validationPlanNote: string;
   private readonly stateDeclareNote: string;
   private readonly planning: PlanningPolicy;
@@ -163,6 +165,7 @@ export class RuleDispatcher implements Dispatcher {
       watchDeclareNote = '',
       localValidation = () => DEFAULT_LOCAL_VALIDATION,
       testPartNote = '',
+      screenCheckNote = '',
       stateDeclareNote = '',
       remoteValidationOn = false,
       checkSets = false,
@@ -173,6 +176,7 @@ export class RuleDispatcher implements Dispatcher {
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
     this.testPartNote = testPartNote;
+    this.screenCheckNote = screenCheckNote;
     this.validationPlanNote = validationPlanNote;
     this.stateDeclareNote = stateDeclareNote;
     this.review = { ...DEFAULT_PR_REVIEW, ...review };
@@ -470,6 +474,7 @@ export class RuleDispatcher implements Dispatcher {
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
       testPartNote: this.testPartNote,
+      screenCheckNote: this.screenCheckNote,
       validationPlanNote: this.validationPlanNote,
       checkSets: this.checkSets,
       stateDeclareNote: this.stateDeclareNote,

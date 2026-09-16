@@ -649,7 +649,12 @@ the plan.
 
 `expectedKind` has a fourth value, `human`, and it is the only one no agent ever produces: the part is
 work a person does by hand — flipping a setting in a console nobody gave the fleet an account for,
-plugging something in, looking at a rendered screen. Ingestion backs each declared human part with a
+plugging something in, a decision that is somebody else's to make. What it is **not** for is a
+rendered screen somebody has to look at: on a deployment whose fleet drives a browser that is a
+`screenshot` step on a validation check, which costs a person the judgement and not the trip
+([20](20-validation.md#who-carries-a-step)). Declared as a part instead it is never dispatched and
+everything naming it in `dependsOn` waits on somebody's day, which is a hold the plan did not need.
+Ingestion backs each declared human part with a
 `human_tasks` row keyed on `part_id`; the part is the scheduling node and the row is the work item.
 → [13](13-jobs-and-tickets.md#human-tasks)
 

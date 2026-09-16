@@ -64,7 +64,7 @@ import { RemoteReadingDesk } from './remoteValidation/readings.js';
 import { RemoteListingDesk } from './remoteValidation/listing.js';
 import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
 import { WatchDesk } from './environments/watchDesk.js';
-import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
+import { screenCheckNote, stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { validationPlanNote } from './validation/authoring.js';
 import { stepCapabilities } from './validation/steps.js';
 import { remoteRunBriefs } from './remoteValidation/briefing.js';
@@ -533,6 +533,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watchNote: watchNote(config.environments),
     watchDeclareNote: watchDeclareNote(config.environments),
     testPartNote: testPartNote(config.environments),
+    screenCheckNote: screenCheckNote(config.environments),
     stateDeclareNote: stateDeclareNote(config.environments),
     remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
     checkSets: config.validation.checkSets,
