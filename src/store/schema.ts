@@ -2123,6 +2123,16 @@ CREATE TABLE IF NOT EXISTS goal_predictions (
   cause      TEXT,
   hard       TEXT,
   surprise   TEXT,
+  -- Moment one: how each filled slot stood against the plan it was predicting.
+  -- 'matched' | 'missed' | 'not-applicable', and null is not marked yet — a fourth
+  -- value that the aggregate counts as nothing, never as a miss. A skipped slot has
+  -- nothing to mark and stays null. Named for moment one because delivery asks a
+  -- second question of the same slots.
+  plan_mark_locus    TEXT,
+  plan_mark_cause    TEXT,
+  plan_mark_hard     TEXT,
+  plan_mark_surprise TEXT,
+  plan_marked_at     TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

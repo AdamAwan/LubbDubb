@@ -1,12 +1,37 @@
 import { nanoid } from 'nanoid';
-import type { GoalPrediction, GoalReveal, PredictionSlot } from '../types.js';
+import type { GoalPrediction, GoalReveal, PredictionMark, PredictionPlanMarks, PredictionSlot } from '../types.js';
 import type { StoreContext } from './context.js';
+import type { ColumnMigrations } from './migrate.js';
 
 // → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
 
 export const PREDICTION_SLOTS = ['locus', 'cause', 'hard', 'surprise'] as const satisfies readonly PredictionSlot[];
 
+/**
+ * `goal_predictions` predates moment one, so the marks arrive by `ALTER TABLE` as
+ * well as in the schema: a database from before today has the table already, and
+ * `CREATE TABLE IF NOT EXISTS` would never touch it. No backfill belongs here — a
+ * null mark means not marked, which is the truth for every row that already exists.
+ */
+export const PREDICTION_COLUMNS: ColumnMigrations = {
+  goal_predictions: {
+    plan_mark_locus: 'TEXT',
+    plan_mark_cause: 'TEXT',
+    plan_mark_hard: 'TEXT',
+    plan_mark_surprise: 'TEXT',
+    plan_marked_at: 'TEXT',
+  },
+};
+
 type PredictionSlots = Readonly<Record<PredictionSlot, string | null>>;
+
+const UNMARKED: PredictionPlanMarks = { locus: null, cause: null, hard: null, surprise: null };
+
+/** What `recordPlanMarks` answers: the written prediction, or which refusal and over which slot. */
+type PlanMarkOutcome =
+  | { ok: true; prediction: GoalPrediction }
+  | { ok: false; reason: 'no-prediction' | 'not-revealed' }
+  | { ok: false; reason: 'slot-skipped'; slot: PredictionSlot };
 
 /**
  * `goal_predictions` and `goal_reveals`.
@@ -43,6 +68,8 @@ export class PredictionStore {
         originRef: input.originRef,
         author: input.author,
         slots,
+        planMarks: UNMARKED,
+        planMarkedAt: null,
         createdAt: ts,
         updatedAt: ts,
       };
@@ -60,6 +87,49 @@ export class PredictionStore {
           updatedAt: ts,
         });
       return prediction;
+    });
+    return write();
+  }
+
+  /**
+   * Records moment one's marks — "did I predict the plan?" — for the slots named,
+   * leaving the rest as they stand. A slot given null is un-marked again.
+   *
+   * Re-marking is allowed, and deliberately: unlike the prediction itself, which is
+   * sealed by the reveal because a prediction written after the plan is not one, a
+   * mark is a judgement about a record that is already fixed. Nothing is
+   * contaminated by the operator correcting one.
+   *
+   * Refused when the goal has no reveal row: marking a prediction against a plan the
+   * operator has not been shown is not a mark, and the refusal lives here rather
+   * than at the route so that it is an invariant of the record. Refused too for a
+   * slot the prediction left empty — a skipped slot has nothing to mark.
+   */
+  recordPlanMarks(input: {
+    originRef: string;
+    marks: Partial<Readonly<Record<PredictionSlot, PredictionMark | null>>>;
+  }): PlanMarkOutcome {
+    const write = this.ctx.db.transaction((): PlanMarkOutcome => {
+      const standing = this.getPrediction(input.originRef);
+      if (standing === null) return { ok: false, reason: 'no-prediction' };
+      if (this.getReveal(input.originRef) === null) return { ok: false, reason: 'not-revealed' };
+      const marks: Record<PredictionSlot, PredictionMark | null> = { ...standing.planMarks };
+      for (const slot of PREDICTION_SLOTS) {
+        const mark = input.marks[slot];
+        if (mark === undefined) continue;
+        if (mark !== null && standing.slots[slot] === null) return { ok: false, reason: 'slot-skipped', slot };
+        marks[slot] = mark;
+      }
+      const ts = this.ctx.now();
+      this.ctx
+        .prep(
+          `UPDATE goal_predictions
+              SET plan_mark_locus=@locus, plan_mark_cause=@cause, plan_mark_hard=@hard,
+                  plan_mark_surprise=@surprise, plan_marked_at=@markedAt, updated_at=@updatedAt
+            WHERE origin_ref=@originRef`,
+        )
+        .run({ ...marks, markedAt: ts, updatedAt: ts, originRef: input.originRef });
+      return { ok: true, prediction: { ...standing, planMarks: marks, planMarkedAt: ts, updatedAt: ts } };
     });
     return write();
   }
@@ -114,6 +184,11 @@ interface PredictionRow {
   cause: string | null;
   hard: string | null;
   surprise: string | null;
+  plan_mark_locus: string | null;
+  plan_mark_cause: string | null;
+  plan_mark_hard: string | null;
+  plan_mark_surprise: string | null;
+  plan_marked_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -130,7 +205,21 @@ function rowToPrediction(r: PredictionRow): GoalPrediction {
     originRef: r.origin_ref,
     author: r.author,
     slots: { locus: r.locus, cause: r.cause, hard: r.hard, surprise: r.surprise },
+    planMarks: {
+      locus: readMark(r.plan_mark_locus),
+      cause: readMark(r.plan_mark_cause),
+      hard: readMark(r.plan_mark_hard),
+      surprise: readMark(r.plan_mark_surprise),
+    },
+    planMarkedAt: r.plan_marked_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+const PREDICTION_MARKS = ['matched', 'missed', 'not-applicable'] as const satisfies readonly PredictionMark[];
+
+/** Anything the column does not spell is not marked; it is never folded into a miss. */
+function readMark(raw: string | null): PredictionMark | null {
+  return PREDICTION_MARKS.find((mark) => mark === raw) ?? null;
 }

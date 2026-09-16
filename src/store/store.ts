@@ -64,7 +64,7 @@ import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
 import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { GoalCriteriaStore } from './goalCriteria.js';
-import { PredictionStore } from './predictions.js';
+import { PredictionStore, PREDICTION_COLUMNS } from './predictions.js';
 import type { Job, CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
@@ -158,6 +158,7 @@ export class Store {
       OBSTACLE_COLUMNS,
       SEQUENCE_COLUMNS,
       EJECTION_COLUMNS,
+      PREDICTION_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }

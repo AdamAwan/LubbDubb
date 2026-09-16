@@ -2110,11 +2110,29 @@ export interface GoalPrediction {
   originRef: string;
   author: string | null;
   slots: Readonly<Record<PredictionSlot, string | null>>;
+  planMarks: PredictionPlanMarks;
+  planMarkedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export type PredictionSlot = 'locus' | 'cause' | 'hard' | 'surprise';
+
+/**
+ * How one filled slot stood against what it was predicting. Named for the moment it
+ * answers rather than for marking in general, because there are two: this one is
+ * moment one, "did I predict the plan?", and delivery asks a second question of the
+ * same slots.
+ */
+export type PredictionMark = 'matched' | 'missed' | 'not-applicable';
+
+/**
+ * Moment one's marks. A slot's mark is null when it has not been marked, which is a
+ * fourth value and never a miss: the aggregate counts marks, and folding an unmarked
+ * slot into `missed` files an unanswered question as a wrong prediction. A skipped
+ * slot has no text to mark and stays null for good.
+ */
+export type PredictionPlanMarks = Readonly<Record<PredictionSlot, PredictionMark | null>>;
 
 /**
  * The reveal gate's record: the goal was offered, and the operator answered. A goal
