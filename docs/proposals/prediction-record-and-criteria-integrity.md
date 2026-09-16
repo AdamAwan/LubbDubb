@@ -95,41 +95,94 @@ aggregate must draw it that way (§2.5).
 
 ### 2.3 Required or optional? Is there a third option?
 
-**A third option: time-boxed, and its decay is itself measured.**
+**A third option: neither. The plan arrives obscured, and the offer to predict is what stands in
+front of it.**
 
-A prediction can be recorded only in the window between the goal becoming pickup-eligible and the
-planning agent being dispatched. Before that there is nothing to predict about; after it the plan
-exists and the prediction is contaminated. The cockpit draws the prediction card **only inside that
-window**, and the card disappears when planning starts.
+An earlier draft of this proposal put the prediction in a window between pickup and the planning
+agent's dispatch, and it was wrong in a way worth recording, because the mistake is instructive. It
+treated contamination as a property of the **clock** — predict before the planner runs — when
+contamination is a property of **what the operator has read**. A prediction typed while the planning
+agent is still working is exactly as clean as one typed before it was dispatched; the operator has
+seen no plan in either case. Anchoring on the planner's dispatch bought no integrity and cost the
+whole thing its usability: on a fleet that picks up and plans inside one pulse, the window was
+effectively zero, and the feature would have been a card almost nobody ever saw.
 
-Nothing blocks on it. No gate reads it, no rule holds a goal for want of one, and a goal with no
-prediction behaves in every respect as goals behave today. So it is not required, and cannot be
-resented as a toll.
+So the anchor moves from the planner's dispatch to **the operator's first sight of the plan**, and
+the offer moves to the moment that sight is about to happen:
 
-But it is not the ordinary optional-feature-that-decays either, for two reasons. The window means
-it is never a deferred nag — a prediction not written in that window is not written, and does not
-accumulate as a backlog of things the operator owes. And the aggregate reports **coverage** as a
-first-class figure: how many goals passed through the window and how many took it. Decay is the
-failure this design expects, so decay is the number on the panel rather than an absence nobody
-notices. An operator who stops predicting finds out that they stopped.
+> The plan lands `awaiting_approval`. The operator opens the goal. The plan is **drawn obscured**,
+> and over it: _"A plan is ready. Predict first?"_ — with **Predict** and **Show me the plan** beside
+> each other, one press each.
 
-There is a real cost to the window: it is short on a fast fleet, and on a goal that is picked up and
-planned inside one pulse it may be effectively zero. Two mitigations are possible and neither is
-proposed for stage one — a configurable hold that delays `issue-plan` on goals whose prediction
-window has not been open for some minimum, and an operator press that opens the window explicitly on
-a goal they want to predict on. Both add a gate that withholds work, which is the category
-[33](../spec/33-story-sequencing.md#fail-open) exists to warn about, so neither should be added until
-the coverage figure says the window is actually the thing limiting it.
+This is better than a window on four counts, and each is worth stating because each was a problem
+with the window version.
+
+- **It is offered at the moment of maximum attention.** The operator is already on that page, for the
+  exact reason the prediction matters. There is no separate surface to visit, no notification to
+  clear, nothing competing for a moment of its own. The feature's whole interaction budget is two
+  presses spent at a moment the operator was going to spend anyway.
+- **It cannot expire unfairly.** The offer is available for as long as the plan is unread — a minute
+  on a fast fleet, a day if the operator is away. The fleet's speed no longer decides whether the
+  operator gets to predict.
+- **It is self-sealing.** The window version needed a rule saying predictions cannot be back-filled.
+  This version does not need the rule, because the act that ends the opportunity is the act that
+  would have contaminated it. Reveal is the seal. There is nothing to enforce.
+- **Declining is a recorded act rather than an absence.** A window silently expires; a gate is
+  answered. "I looked without predicting" is a fact with a timestamp, and it is the fact the coverage
+  figure is actually made of.
+
+**It still blocks no work, and this is the precise sense in which that is true.** Nothing is
+withheld from the fleet: parts are not held, the plan is not un-approved, no rule waits on it, and a
+goal with no prediction proceeds exactly as goals proceed today. What is briefly withheld is **the
+operator's own view of the plan, from the operator, at their own request**. That is the one thing
+this feature is allowed to interrupt, and it is worth being plain that it is an interruption rather
+than pretending the cost is zero.
+
+**The interstitial's own failure mode is reflexive dismissal**, and it should be designed against
+rather than hoped away. Three measures: **Show me the plan** is always the equal-weight press and
+never a small grey link, because a gate that is awkward to decline is a gate that gets resented and
+then disabled outright; the gate never re-prompts for a goal it has been declined on; and the
+**decline rate is on the aggregate** beside coverage, so an operator dismissing every gate can see
+that they are. A sampling rate — offer the gate on one goal in N — is the obvious relief valve if the
+decline rate says the gate is being tuned out, and it costs the aggregate nothing as long as the
+sample is unbiased. It should not ship in stage one: ship the gate on every plan, read the decline
+rate, and turn it down only if the number says to.
+
+#### The reveal must be a server fact, not a client one
+
+Requirement 4 asks that "written before" be a fact rather than a claim, and a blur is a decoration —
+the plan body would be sitting in the payload behind it, readable from the network tab, and
+`revealedAt` would be a timestamp the page reports about itself.
+
+So **the plan body is withheld from the goal's payload until it is revealed**, and revealing it is a
+route call that stamps `revealed_at` server-side and returns the document. One extra fetch, and the
+ordering becomes a fact of the same kind as every other timestamp here rather than a courtesy the
+client extends.
+
+This is honest about the cockpit and only about the cockpit, so it is worth confirming what else can
+show the operator a plan at that moment — and the answer is nothing. `PlanReconciler` writes the plan
+status comment only when `current.status !== 'awaiting_approval'`, so while a plan is awaiting
+approval **no plan content has reached the tracker at all**. Approval is downstream of reveal, parts
+are not dispatched and no pull request exists. The obscured plan really is the only copy the operator
+can reach, which is what makes the gate meaningful rather than theatrical.
+
+What it is not, and should not be sold as, is access control. The operator can read the database.
+This is a **self-measurement instrument**, and a determined self-deceiver defeats every possible
+version of it; what the design owes them is that the honest path is also the easy one, and that the
+record says plainly when they looked.
 
 ### 2.4 Is it two scoring moments? What closes the second?
 
 **Yes, two, and conflating them is the main way this feature would produce numbers that mean
 nothing.**
 
-- **Moment one — "did I predict the plan?"** Fires when the plan arrives (`awaiting_approval`). The
-  prediction and the plan are drawn side by side; each filled slot is marked `matched` / `missed` /
-  `not-applicable`. This is a claim about the operator's model of the _system_, and it is answerable
-  immediately.
+- **Moment one — "did I predict the plan?"** Is what the reveal opens onto. Submitting a prediction
+  at the gate lifts the obscured plan and draws it beside what was just written; each filled slot is
+  marked `matched` / `missed` / `not-applicable`. This is a claim about the operator's model of the
+  _system_, and it is answerable on the spot — which is why it is one continuous interaction rather
+  than a second visit: predict, reveal, mark, in the sitting the operator was already having. An
+  operator who reveals without predicting has no moment one, and that is the same fact as their
+  decline.
 
 - **Moment two — "was the plan right?"** Fires at delivery. The operator marks whether the plan the
   fleet produced turned out to be correct, per slot, on the same three-valued mark. This is a claim
@@ -266,16 +319,23 @@ it is a plan defect rather than a criteria change.
 
 ### 4.2 "Written before" as a fact
 
-The plan row's transition into `status === 'planning'` is the start of planning and is already
-recorded. Each criteria version carries `authoredAt`, and the standing is **derived, never stored as
-a claim**:
+Criteria take the same anchor predictions take, and for the same reason §2.3 gives: what makes a
+criterion independent is not that it predates the planner's dispatch but that it predates the
+author's sight of the plan. So the standing is derived against **`revealed_at`** and the first part
+dispatch:
 
-- `pre-plan` — authored before the goal's plan row entered `planning`.
-- `post-plan` — authored after planning began but before any part task was dispatched.
+- `pre-reveal` — authored before the plan was revealed to a human. **This is the independent one.**
+- `post-reveal` — authored after the plan was read but before any part task was dispatched.
 - `post-work` — authored after the first part task was dispatched. **This is drift.**
 
-Derived rather than stored because a stored flag is a claim that can be written wrongly once and is
-then true forever; a derivation against two timestamps the harness already keeps cannot be.
+Derived, never stored as a claim: a stored flag is a claim that can be written wrongly once and is
+then true forever, whereas a derivation against two timestamps the harness already keeps cannot be.
+
+One consequence is worth drawing out, because it is the quiet half of the gate. The reveal
+interstitial is the natural place to ask for criteria as well as a prediction — it is the last moment
+at which either can be authored independently, and it is a moment the operator is already stopped at.
+A goal whose criteria were written at that gate is a goal whose oracle provably predates its plan,
+which is the whole of requirement 4 discharged by an interaction that was happening anyway.
 
 ### 4.3 The version chain
 
@@ -296,7 +356,7 @@ list, and the cockpit merges it at the feed's door, exactly as arrivals are merg
 
 It buys: criteria that predate the plan, and a record when they do not. It does **not** buy criteria
 the fleet cannot influence — an operator can still write criteria after reading a plan, and the
-record will say `post-plan` rather than refusing them. Refusing them would mean a goal whose criteria
+record will say `post-reveal` rather than refusing them. Refusing them would mean a goal whose criteria
 were not written in time can never have any, which is worse. The design's position is that the
 _standing is the product_: a `post-work` criterion is not forbidden, it is labelled, counted, and
 visible in the aggregate as drift.
@@ -334,10 +394,12 @@ Each stage is independently landable and leaves the tree working.
    and _test/predictionContainment.test.ts_ with both arms. **No surface.** This stage is the
    invariant, and it lands first so that everything after it is written against a guarantee that
    already holds and is already asserted.
-2. **The prediction record.** The window, the four slots, the routes, the goal-page card, the wire
-   types. Recording only — no marking, no aggregate.
-3. **Moment one.** The side-by-side view against the arriving plan, and the three-valued mark per
-   slot.
+2. **The reveal gate and the prediction record.** Withholding the plan body from the payload until
+   reveal, the `revealed_at` stamp and its route, the obscured plan with its two presses, the four
+   slots, the goal-page card and the wire types. Recording and declining only — no marking, no
+   aggregate. The gate ships in the same stage as the record because a record with no gate in front
+   of it is the optional feature §2.3 exists to avoid.
+3. **Moment one.** The side-by-side view the reveal opens onto, and the three-valued mark per slot.
 4. **Goal criteria.** The versioned set, the derived standing, the drift record and its own wire
    list, merged at the feed's door. Part acceptance untouched.
 5. **Moment two.** The close-out bench row and the second mark.
