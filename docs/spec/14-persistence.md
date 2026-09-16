@@ -1397,6 +1397,36 @@ reaches the part prompt. `GoalCriteriaStore` is an ordinary member of `Store`. T
 a moment and a table neighbourhood; they do not share a containment rule, and a reader who conflates
 them will either leak predictions or hide criteria.
 
+### Moment one, and why a mark is four-valued
+
+`goal_predictions` carries the mark per slot for **moment one** — _"did I predict the plan?"_ — in
+`plan_mark_locus|cause|hard|surprise`, with `plan_marked_at` for when it was answered.
+
+The mark is `matched`, `missed`, `not-applicable`, **or null meaning not yet marked**, and null must
+never fold into `missed`. It is the same shape as `fleetCanStart`'s three-valued answer and the same
+trap one subsystem over: fold them and every slot the operator has not got to silently becomes a wrong
+prediction, in an aggregate whose whole claim is that it is honest about what it does not know. It is
+typed as a nullable union rather than a boolean, and `readMark` maps any column value that is not one
+of the three to null — so a value written by a future version, or by hand, reads as _unmarked_ rather
+than as a miss.
+
+They are named `plan_mark_*` rather than `mark_*` because there are **two** scoring moments and
+conflating them is the main way this record would produce numbers that mean nothing. Moment two, at
+delivery, asks _"was the plan right?"_ — a claim about the plan rather than about the operator. A
+prediction that missed the plan and a plan that then turned out wrong is the operator having been
+**right**, which is the most valuable row in the whole record and the one moment one alone files as a
+miss.
+
+The columns arrived after the table existed, so they are declared in `PREDICTION_COLUMNS` as well as
+in the schema — see [Migrations](#migrations). **No backfill**: null is the truth for every row that
+predates them, and a backfill here would be inventing marks.
+
+**Marking is refused before the reveal, in the store.** A mark against a plan the operator has not
+been shown is not a mark. Re-marking, by contrast, is allowed and deliberately so: the prediction
+itself is sealed by the reveal because one written after the plan is not a prediction, but a mark is a
+judgement about a record that is already fixed, and nothing is contaminated by the operator correcting
+it.
+
 ### Goal criteria are append-only
 
 `goal_criteria` is a version chain and **no method writes an `UPDATE`**. An edit appends a row with an

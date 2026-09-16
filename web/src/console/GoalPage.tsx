@@ -38,6 +38,7 @@ import type {
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { PlanRevealGate } from '../components/PlanRevealGate.js';
+import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
@@ -1157,6 +1158,15 @@ function PlanWaves({
               setLifted(true);
             }
           }}
+        />
+      )}
+      {!gated && (
+        <PredictionReview
+          issueNumber={page.issue.number}
+          revealed={plan !== null && (plan.revealed || lifted)}
+          plan={plan}
+          parts={page.parts.map((p) => p.part)}
+          now={view.now}
         />
       )}
       <div className="cn-waves" hidden={gated}>

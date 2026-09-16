@@ -124,6 +124,12 @@
      read a shape through and not enough to read a word. */
   --cn-gate-veil: color-mix(in srgb, var(--cn-bg) 82%, transparent);
 
+  /* The edge on a prediction slot nobody has answered yet. Unmarked is a fourth
+     state and not a miss, so it is drawn in its own colour rather than borrowed
+     from red or from the plain line — mixed off the faint ink so it follows the
+     theme and still reads as an open question rather than as a verdict. */
+  --cn-unmarked-line: color-mix(in srgb, var(--cn-fg-faint) 55%, transparent);
+
   --cn-r: 8px;
   --cn-r-sm: 4px;
   --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -2089,6 +2095,175 @@ a.cn-qbody {
 .cn-gate-slot:focus {
   outline: none;
   border-color: var(--cn-blue-line-hi);
+}
+
+/* Moment one: the prediction drawn beside the plan it was predicting, with a mark
+   per filled slot. → docs/spec/17-cockpit.md */
+.cn-pmark {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 13px;
+  padding: 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+.cn-pmark h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.cn-pmark-why {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-pmark-said {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* The plan is a column of its own so that both are in front of the operator at
+   once: the mark is unanswerable from memory of a plan scrolled off the screen. */
+.cn-pmark-plan {
+  min-width: 0;
+  max-height: 460px;
+  overflow: auto;
+  padding: 11px 13px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel-2);
+}
+.cn-pmark-title {
+  font-weight: 600;
+  color: var(--cn-fg);
+  margin-bottom: 8px;
+}
+.cn-pmark-pane {
+  margin-top: 10px;
+}
+.cn-pmark-pane-label {
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--label-track);
+  color: var(--cn-fg-faint);
+}
+.cn-pmark-prose {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--cn-fg-dim);
+}
+.cn-pmark-prose p {
+  margin: 4px 0;
+}
+.cn-pmark-parts {
+  margin: 4px 0 0;
+  padding-left: 17px;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-pmark-touches {
+  display: block;
+  font-style: normal;
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+.cn-pmark-row {
+  border-left: 3px solid var(--cn-line);
+  padding: 0 0 0 10px;
+  margin-bottom: 13px;
+}
+/* The four states of a slot, and the reason they are four. An unmarked slot is an
+   open question — a dashed edge and its own word — and a missed one is a verdict.
+   Drawing them alike is what would let the aggregate read every unanswered slot as
+   a wrong prediction. */
+.cn-pmark-row.is-unmarked {
+  border-left-style: dashed;
+  border-left-color: var(--cn-unmarked-line);
+}
+.cn-pmark-row.is-matched {
+  border-left-color: var(--cn-green-line);
+}
+.cn-pmark-row.is-missed {
+  border-left-color: var(--cn-red-line);
+}
+.cn-pmark-row.is-not-applicable {
+  border-left-color: var(--cn-line-hi);
+}
+.cn-pmark-row.is-skipped {
+  border-left-style: dotted;
+  border-left-color: var(--cn-line-soft);
+}
+.cn-pmark-q {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-pmark-state {
+  font-style: normal;
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  color: var(--cn-fg);
+}
+.cn-pmark-row.is-matched .cn-pmark-state {
+  color: var(--cn-green-ink);
+}
+.cn-pmark-row.is-missed .cn-pmark-state {
+  color: var(--cn-red-ink);
+}
+.cn-pmark-state.is-open {
+  color: var(--cn-fg-faint);
+  border: 1px dashed var(--cn-unmarked-line);
+  border-radius: var(--cn-r-sm);
+  padding: 0 5px;
+}
+.cn-pmark-said-text {
+  margin: 5px 0 7px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cn-fg);
+  white-space: pre-wrap;
+}
+.cn-pmark-skipped {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-pmark-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cn-pmark-mark.is-on {
+  border-color: var(--cn-line-hi);
+  color: var(--cn-fg);
+  background: var(--cn-hover);
+}
+.cn-pmark-row.is-matched .cn-pmark-mark.is-on {
+  border-color: var(--cn-green-line);
+  color: var(--cn-green-ink);
+  background: var(--cn-green-fill);
+}
+.cn-pmark-row.is-missed .cn-pmark-mark.is-on {
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+  background: var(--cn-red-fill);
+}
+/* Stacked rather than squeezed: two columns of prose at phone width is neither.
+   The plan comes first so that it is read before it is marked against. */
+@media (max-width: 880px) {
+  .cn-pmark {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cn-pmark-plan {
+    order: -1;
+    max-height: 340px;
+  }
 }
 
 /* plan approval */

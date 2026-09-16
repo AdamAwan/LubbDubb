@@ -29,6 +29,8 @@ import type {
   FeatureReportRow,
   FeatureRollup,
   FeatureSummary,
+  GoalPrediction,
+  GoalReveal,
   GoalWatch,
   GoalWatchDeclaration,
   FilingTargetProbe,
@@ -4589,6 +4591,10 @@ export const demoApi = {
     Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to write one into')),
   revealGoalPlan: (): Promise<never> =>
     Promise.reject(new Error('every plan in the demo is already revealed, so there is no gate to open')),
+  getGoalPrediction: (): Promise<{ prediction: GoalPrediction | null; reveal: GoalReveal | null }> =>
+    Promise.resolve({ prediction: null, reveal: null }),
+  markGoalPrediction: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to mark against a plan')),
   getTickets: (query: {
     watch: string;
     tracking: string;

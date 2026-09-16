@@ -2329,6 +2329,28 @@ not "where am I": the gate is a one-shot that ends the moment the server stamps 
 link to a half-typed composer would be a link to something that no longer exists, and a reload
 correctly re-reads the server's fact rather than the page's memory of it.
 
+### Moment one — the prediction beside the plan
+
+Where the plan has been revealed on a goal that **has** a prediction, the plan card draws the two side
+by side: the four slots on one side with a three-way mark each, the plan's narrative and its parts on
+the other. Reading one against the other is the whole of the interaction, so at narrow widths they
+stack with the plan **first** — it is what the marks are made against.
+
+It sits where the gate stood, so predict → reveal → mark reads as one sitting rather than a second
+visit to a different surface. But it is drawn off the record — a prediction exists and the goal is
+revealed — not off the moments after the press, so an operator who closed the tab comes back to it.
+
+**Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a
+dashed edge and the words "Not marked yet" in faint ink — visibly not the solid red edge and filled
+button of a `missed`. The two must not look alike anywhere, because the aggregate reads them as
+different things and drawing them the same is how an operator comes to believe the record says
+something it does not. Pressing the selected mark again takes it off.
+
+A **skipped** slot draws no buttons at all, and says why: nothing was written there, so there is
+nothing to mark. The third option is labelled **"Plan is silent"** rather than anything that reads as
+_I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
+a real answer, not a way of declining to give one.
+
 ### The pull requests and the tail
 
 **Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part

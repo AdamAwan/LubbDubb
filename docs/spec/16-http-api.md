@@ -1920,6 +1920,20 @@ Prediction text is served **here and nowhere else**. It reaches no prompt, no to
 transcript, no retro dossier, no scratchpad and above all no tracker.
 → [14](14-persistence.md#the-prediction-store-is-not-on-store)
 
+### `POST /api/goals/:number/prediction/marks`
+
+`{ locus?, cause?, hard?, surprise? }`, each `matched`, `missed`, `not-applicable` or `null`. A slot
+left out is left as it stands; a slot given `null` is un-marked again, because unmarked is a real
+state and there has to be a way back to it.
+
+**404** when the goal has no prediction. **409** when it has not been revealed — marking a prediction
+against a plan the operator has not been shown is not a mark, and that refusal lives in the store
+rather than here. **409, naming the slot**, when a mark names a slot the prediction left empty: a
+skipped slot has nothing to mark.
+
+Re-marking is allowed. The prediction is sealed by the reveal; a mark is a judgement about a record
+that is already fixed. → [14](14-persistence.md#moment-one-and-why-a-mark-is-four-valued)
+
 ### `GET /api/goals/:number/prediction`
 
 `{ prediction, reveal }`, both nullable. A goal that was never offered the gate answers null for both,

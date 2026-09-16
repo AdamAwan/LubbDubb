@@ -609,6 +609,13 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: 'The wash over a plan you have not read yet',
   },
   {
+    name: '--cn-unmarked-line',
+    label: 'Unmarked edge',
+    group: 'tints',
+    kind: 'colour',
+    why: 'A prediction slot you have not marked yet — an open question, never a miss',
+  },
+  {
     name: '--cn-hatch-flash',
     label: 'Hatch flash',
     group: 'overlays',

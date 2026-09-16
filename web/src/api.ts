@@ -17,6 +17,10 @@ import type {
   CaveatAnswerInput,
   CheckDecline,
   Plan,
+  GoalPrediction,
+  GoalReveal,
+  PredictionMark,
+  PredictionSlot,
 } from './types.js';
 import type {
   AgentFilesPayload,
@@ -73,6 +77,18 @@ export interface PredictionDraft {
   cause?: string;
   hard?: string;
   surprise?: string;
+}
+
+/**
+ * What the goal page reads to draw moment one: the operator's prediction and the
+ * reveal that opened onto it. Either may be null — a goal that was never predicted
+ * on, or one whose gate has not been answered — and the card is drawn only when
+ * both are present. The route answers with an anonymous pair, so the shape is named
+ * here rather than in `src/wire.ts`, as `ReviewPackReading` is.
+ */
+export interface GoalPredictionReading {
+  prediction: GoalPrediction | null;
+  reveal: GoalReveal | null;
 }
 
 export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
@@ -188,6 +204,14 @@ const realApi = {
   // → docs/spec/16-http-api.md
   predictGoal: (number: number, slots: PredictionDraft) => post<{ ok: true }>(`/api/goals/${number}/prediction`, slots),
   revealGoalPlan: (number: number) => post<{ ok: true; plan: Plan | null }>(`/api/goals/${number}/reveal`),
+  // Moment one: the record behind the goal page's marking card, and the press that
+  // writes one mark. The marks route merges what it is given, so a press names its
+  // own slot and leaves the other three as they stand — and a mark of null takes a
+  // slot back to unmarked, which is a state and not a miss.
+  getGoalPrediction: (number: number) =>
+    authFetch(`/api/goals/${number}/prediction`).then((r) => json<GoalPredictionReading>(r)),
+  markGoalPrediction: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
+    post<{ ok: true; prediction: GoalPrediction }>(`/api/goals/${number}/prediction/marks`, marks),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>
