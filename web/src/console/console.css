@@ -5113,6 +5113,18 @@ button.cn-grow {
   height: 5px;
   opacity: 1;
 }
+/* The queue's last stop is not an ask, so its pip is not one either: a short
+   inert mark reads as an end-stop rather than as one more row waiting on an
+   answer. → docs/spec/17-cockpit.md#moving-along-the-queue */
+.cn-ov-pip-look {
+  width: 12px;
+}
+.cn-ov-pip-look::after {
+  background: none;
+  height: 0;
+  border-radius: 0;
+  border-top: 3px dotted var(--cn-inert);
+}
 .cn-ov-focus-title {
   font-size: 19px;
   line-height: 1.3;
@@ -5151,6 +5163,18 @@ button.cn-grow {
   font-size: 11.5px;
   color: var(--cn-fg-faint);
   font-variant-numeric: tabular-nums;
+}
+/* The last stop's own body. It sits inside the ask card, where the split's two
+   columns would be, so it takes the measure a reading wants rather than the
+   card's full width. */
+.cn-ov-focus-look {
+  max-width: 980px;
+  padding: 10px 0 0;
+}
+.cn-ov-focus-look-say {
+  color: var(--cn-fg-dim);
+  margin: 10px 0 18px;
+  max-width: 620px;
 }
 .cn-ov-focus-clear {
   max-width: 980px;
