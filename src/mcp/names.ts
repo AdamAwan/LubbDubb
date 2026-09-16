@@ -186,6 +186,7 @@ export const DESKTOP_TOOL_NAMES = [
   'proposal_decide',
   'recovery_decide',
   'job_create',
+  'ticket_target',
   'agent_control',
   'ejection_read',
   'ejection_note',

@@ -1384,13 +1384,23 @@ watched the thing happen. → [36](36-remote-validation.md#what-a-spec-reading-i
 ### The skill
 
 `/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …`,
-`/lubbdubb fleet`, `/lubbdubb order 500`, `/lubbdubb clarify 284` — seven jobs told apart by the
-argument, one file. The fifth is about the harness rather than about a goal and is
+`/lubbdubb fleet`, `/lubbdubb order 500`, `/lubbdubb file`, `/lubbdubb clarify 284`,
+`/lubbdubb eject 412` — nine jobs told apart by the argument, one file. The fifth is about the harness rather than about a goal and is
 [owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); its section here is only that a
-question with no goal number in it is that job. The seventh is where the ticket comment a refused
+question with no goal number in it is that job. **Filing is the one job that starts from nothing**, and it is the reason a wish with no number in it
+— "we should fix the export" — is a job here at all rather than a conversation: nothing in LubbDubb
+works from a sentence said at this keyboard, and the ticket is what starts it. The section reads
+`ticket_target` before it drafts, states the rubric in the skill's own words, drafts the whole
+ticket and waits, and files through `job_create` — never a `gh` or `az` command, which is the one
+mistake a session with a shell and a repository open is most likely to make and the one that cannot
+be seen afterwards ([13](13-jobs-and-tickets.md#filing-one-from-the-desktop-channel)). The rubric
+lives there rather than in the clarify section, and clarify links to it: what a ticket has to say is
+one bar, written once, whether it is being drafted or rewritten.
+
+The clarify job is where the ticket comment a refused
 goal carries sends its author ([06](06-issue-pickup.md#the-comment-on-the-ticket)): the skill reads
-the verdict and its `missing` list through `goal_read`, states the story rubric in the skill's own
-words, works through the list with the author against the open repository, drafts the whole rewrite
+the verdict and its `missing` list through `goal_read`, measures the ticket against that same rubric,
+works through the list with the author against the open repository, drafts the whole rewrite
 — title and body, because the hold ends on the description changing and the next agent reads the
 description — and gets it onto the ticket through the tracker's CLI where one is signed in, or hands
 it over to paste. It says plainly that a reply does not restart the goal, and it treats `goal_gate`'s
