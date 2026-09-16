@@ -369,6 +369,36 @@ in the template book rather than deleted, which is the rule for every `PromptId`
 ([05](05-dispatcher.md#prompt-templates)): removing an id turns every deployment that overrode it into
 a harness that will not boot.
 
+### Filing one from the desktop channel
+
+The operator's own Claude Code files through the **brief** arm — `job_create` with `kind: "code"`,
+which is `POST /api/jobs`'s code arm reached over the socket ([11](11-mcp-tools.md#the-desktop-channel)).
+Nothing about the filing differs, and that is the point: the session at the operator's keyboard has a
+shell, a `gh` on the path and a repository open, which is three ways to file a ticket the harness
+will never read. `ticket_target` is the answer to all three at once — one read-only call, pure over
+the same config block, naming the tracker, the watch tag, the assignee, the type, the container types
+and the pickup states, plus **`blockers`** (nothing can be filed from this deployment) and
+**`cautions`** (it can be filed and still never worked).
+
+- **The session cannot see which tracker it is.** It is open on `repoRoot`, and a deployment whose
+  code is in git and whose work items are in Azure DevOps is ordinary. "The repo I can see" is the
+  confident wrong answer, and `trackerCoordinates(config)` is the only right one.
+- **`cautions` exist because the silent failures are not refusals.** A watch label under
+  `ownWorkOnly` counts only where the harness's own `userId` added it
+  ([06](06-issue-pickup.md)) — an operator hand-labelling the ticket they were shown leaves it
+  unwatched, created, and dispatched for never. Pickup states do the same one layer over. Both are
+  states a filed ticket can sit in for good with nothing red, so they are read **before** the draft
+  rather than diagnosed after the silence.
+- **`job_create`'s answer names what the item actually carried** — the tracker, the tag, the assignee,
+  the type — rather than asserting a watch tag it may not have written. On `labelPrefix: ''` there is
+  no tag and the gate is off, and a fixed sentence saying "carrying the watch tag" was a claim the
+  call could not make good.
+
+The skill's own filing section ([20](20-validation.md#the-skill)) carries the rubric a ticket has to
+meet, which is the goal check's bar ([06](06-issue-pickup.md#the-comment-on-the-ticket)) and the same
+one `clarify` rewrites against — stated once there, in the skill, because that is where a ticket is
+drafted.
+
 ### The other filing kind — a bug the operator raised
 
 `POST /api/issues/:number/bug` ([16](16-http-api.md#post-apiissuesnumberbug)) is the same machinery

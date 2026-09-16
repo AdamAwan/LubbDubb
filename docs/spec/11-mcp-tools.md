@@ -926,7 +926,8 @@ and [the run](20-validation.md#getting-the-application-up);
 | `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing.                                                                                   |
 | `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**.                                                                      |
 | `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned.                                                                                                                                                  |
-| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise.                                                                                             |
+| `ticket_target`     | Where a ticket filed from here lands and what it will carry: tracker, watch tag, assignee, type, container types, pickup states, and what would stop a filed item being picked up. Records nothing.        |
+| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise. Answers with the tracker and the tag the item actually carried.                             |
 | `agent_control`     | The six verbs on a live agent: respond, interrupt, complete, kill, extend a stall park, resume a usage-limit park.                                                                                        |
 
 ### Answering a question about a goal

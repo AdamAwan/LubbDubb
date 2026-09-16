@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { submitBrief } from '../jobs/brief.js';
+import { ticketFilingTarget } from '../tickets/target.js';
 import { enumOf, toolSchema } from './schema.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
@@ -57,10 +58,11 @@ export const jobCreate: DesktopToolFactory = (deps) => ({
     const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim() : null;
     const branch = typeof args.branch === 'string' && args.branch.trim() ? args.branch.trim() : null;
 
+    const config = deps.briefConfig();
     const outcome = await submitBrief(
       {
         store: deps.store,
-        config: deps.briefConfig(),
+        config,
         filing: deps.filing(),
         errors: deps.errors ?? { record: () => ({}) as never },
         renderTicketBody: (vars) => deps.renderTicketBody(vars),
@@ -69,14 +71,22 @@ export const jobCreate: DesktopToolFactory = (deps) => ({
     );
     if (!outcome.ok) return toolError(outcome.error);
     await deps.runCycle();
-    if (outcome.kind === 'ticket')
+    if (outcome.kind === 'ticket') {
+      const target = ticketFilingTarget(config);
       return toolJson({
         filed: outcome.ticketRef,
+        tracker: target.tracker,
+        watchLabel: target.watchLabel,
+        assignee: target.assignee,
+        type: target.storyType,
+        cautions: target.cautions,
         means:
-          'a ticket was filed carrying the watch tag, so the harness will appraise it, plan it and work its ' +
-          'parts in its own order. Nothing has been dispatched by this call. Read fleet_status to see where it ' +
-          'sits in the queue.',
+          'a ticket was filed on that tracker carrying the watch tag, the type and the assignee the config ' +
+          'names, so the harness will appraise it, plan it and work its parts in its own order. Nothing has ' +
+          'been dispatched by this call. Read fleet_status to see where it sits in the queue, and say the ' +
+          'cautions out loud rather than promising a pickup they rule out.',
       });
+    }
     return toolJson({
       job: { id: outcome.job.id, title: outcome.job.title, kind: outcome.job.kind, status: outcome.job.status },
       means:
