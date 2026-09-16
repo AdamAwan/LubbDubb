@@ -3463,8 +3463,23 @@ narrow enough that its reason has to be a tooltip. The rail already computes the
 behind it, which is the number that should decide what is opened first. This shape is that list, one
 row at a time, at full width.
 
-**The order is `byWeight` — tier first, then `holding`.** Both halves are the rail's own; nothing here
-re-decides what the server decided.
+**The order is `byWeight` — tier first, then `holding`, then the ask's _stage_.** The first two halves
+are the rail's own; nothing here re-decides what the server decided.
+
+The stage is this shape's own cut and it decides only the ties. `holding` is zero on most asks, so what
+was left to order them was `raisedAt` — oldest first — and the oldest ask on a deployment is almost
+always the one about work that never started: a page of **intake holds** in front of every review
+thread, bench row and merge on work the fleet is out on right now. That is the queue reading backwards.
+`STAGE_RANK` in `web/src/console/overviews/asks.ts` is a part's own life run backwards, lowest first: a
+**merge** is one press from landing; a **reply** or an assigned review is on a pull request that
+exists; a **bench row**, a validation or a close-out is checking something already delivered; an
+**escalation**, permission or park is an agent out this minute; an **intake** hold, a profile proposal
+or a placement question is work that has not begun; and the **deployment's own** asks — a config gap,
+an upgrade — come last. Total over `NeedKind`, like the rail's own tables, so a new kind is placed
+deliberately rather than inheriting the last one's.
+
+**It sorts under `holding`, never over it.** An ask stalling four parts is stopping more work than one
+stalling none whatever either is about, and a stage that outranked it would quietly re-decide that.
 
 **It absorbs the rail.** Drawing the queue beside a surface that _is_ the queue is the same list twice,
 and the copy on the rail is the one with no room for the reason — so `.cn-body` loses its first track
@@ -3599,12 +3614,23 @@ most-pressed control somewhere different on every one of them. The arrow keys mo
 except where the operator is writing: every ask that takes a note puts a field on the page, and an
 arrow inside one is a caret move.
 
+**What is worth a look is the queue's last stop.** The [leads](#when-nothing-needs-you) used to be
+drawn only when the queue emptied, which made the one reading here that says _what could be done_
+reachable by having nothing to do — a panel an operator on a busy deployment never sees. It is a stop
+after the asks now, arrived at the way everything else here is: keep pressing Next. It is a `null` stop
+in the shape's own list rather than a `NeedRow` of a new kind, because it answers nothing and carries
+no tone, `holding` or goal, which is everything a row is; its pip is a short inert mark rather than a
+tone, and the card wears no tone on it. It stays the **end** rather than a position among the asks —
+nothing on it is anybody's move, and an ask that is would then sort behind it.
+
 **There is no set-aside.** Skip was a one-way door with no way back short of a reload, which made every
 press a small decision rather than navigation. Passing an ask leaves it where the server put it.
 
 #### When nothing needs you
 
-`buildLeads` in `web/src/console/overviews/leads.ts`, drawn by the shape's `Clear` panel.
+`buildLeads` in `web/src/console/overviews/leads.ts`, drawn by the shape's `Leads` component — on the
+`Clear` panel when the queue is empty, and on the queue's [last stop](#moving-along-the-queue) when it
+is not. One component for both, because two would drift and the reading is the same reading.
 
 **An empty ask queue is not an empty deployment.** It says one thing only: nothing is blocked on a
 person — which is the state a fleet spends most of its hours in. What was drawn for it was a green

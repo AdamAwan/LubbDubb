@@ -13,7 +13,7 @@ import { repoText } from './support/paths.js';
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
-const { FocusOverview } = await import('../web/src/console/overviews/FocusOverview.js');
+const { FocusOverview, Look } = await import('../web/src/console/overviews/FocusOverview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
@@ -57,7 +57,9 @@ function needs(): CockpitView['needsYou'] {
   return built().needsYou;
 }
 
-function markup(v: CockpitView): string {
+type Panel = React.FC<{ view: CockpitView; actions: CockpitActions }>;
+
+function markup(v: CockpitView, what: Panel = FocusOverview): string {
   return renderToStaticMarkup(
     createElement(RefLinks, {
       refUrls: v.state.refUrls,
@@ -65,7 +67,7 @@ function markup(v: CockpitView): string {
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
       openPr: () => undefined,
       hasPr: (n: number) => hasPrPage(v.state, n),
-      children: createElement(FocusOverview, { view: v, actions }),
+      children: createElement(what, { view: v, actions }),
     }),
   );
 }
@@ -265,4 +267,36 @@ test('no vivarium in the snapshot draws no floor on the card', () => {
   const html = markup(v);
   assert.ok(!html.includes('cn-ov-focus-pets'), 'an empty floor is drawn where there is no vivarium');
   assert.ok(html.includes('cn-ov-focus-card'), 'the ask itself still draws');
+});
+
+/* The leads were reachable only by emptying the queue, which made the one reading
+   on this surface that says what *could* be done a panel a busy deployment never
+   sees. They are the queue's last stop now.
+   → docs/spec/17-cockpit.md#moving-along-the-queue */
+test('the leads are a stop on the queue, after the asks', () => {
+  const rows = needs();
+  assert.ok(rows.length > 0, 'the demo deployment has asks');
+  const html = markup(view({ needsYou: rows }));
+
+  const pips = (html.match(/class="cn-ov-pip /g) ?? []).length;
+  assert.equal(pips, rows.length + 1, 'the queue draws a pip per ask and one for the last stop');
+  assert.match(html, /cn-ov-pip-look/, 'the last stop has no pip of its own');
+  assert.match(html, new RegExp(`1 of ${rows.length + 1}`), 'the counter counts the last stop');
+  assert.match(html, /what is worth a look is next|after this/, 'the ask says what follows it');
+});
+
+/* It is the end of the queue rather than a position among the asks: nothing on it
+   is anybody's move, and an ask that is would sort behind it. */
+test('the last stop draws the leads, and only from the last position', () => {
+  const rows = needs();
+  const html = markup(view({ needsYou: rows }));
+  assert.doesNotMatch(html, /cn-ov-focus-look/, 'the last stop is drawn while an ask is under the cursor');
+
+  const leads = buildLeads(view({ needsYou: rows }));
+  assert.ok(leads.length > 0, 'the demo deployment has something worth a look');
+
+  /* The cursor is local state, so the stop itself is rendered directly. */
+  const stop = markup(view({ needsYou: rows }), Look);
+  for (const lead of leads) assert.ok(stop.includes(lead.title), `${lead.key} is drawn on the last stop`);
+  assert.match(stop, /Worth a look/);
 });
