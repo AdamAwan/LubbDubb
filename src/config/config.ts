@@ -334,6 +334,18 @@ export function defaultConfig(): Config {
   return mergeConfig();
 }
 
+/**
+ * Whether the reveal stamp exists on this deployment — the one fact `prediction` and
+ * `goalCriteria` share, so it is one derived predicate rather than a pair of reads.
+ * It is read in exactly two places: the prediction route module, which mounts no
+ * route at all when it is false, and the wire payload, which then ships the plan body
+ * as it always did. Everything downstream reads the presence of data, never the flag.
+ * → docs/spec/02-configuration.md#the-reveal-gate
+ */
+export function revealGateOn(config: Config): boolean {
+  return config.prediction.enabled || config.goalCriteria.enabled;
+}
+
 const REMOVED_KEYS: Readonly<Record<string, string>> = {
   dispatcher:
     'the "claude" dispatcher was removed and the rule dispatcher is the only one, so there is nothing left to select',

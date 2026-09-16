@@ -30,31 +30,38 @@ export class PredictionStore {
     author: string | null;
     slots: Partial<PredictionSlots>;
   }): GoalPrediction | null {
-    if (this.getPrediction(input.originRef) !== null) return null;
-    const ts = this.ctx.now();
-    const slots = fillSlots(input.slots);
-    const prediction: GoalPrediction = {
-      id: `pred_${nanoid(10)}`,
-      originRef: input.originRef,
-      author: input.author,
-      slots,
-      createdAt: ts,
-      updatedAt: ts,
-    };
-    this.ctx
-      .prep(
-        `INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, hard, surprise, created_at, updated_at)
-         VALUES (@id, @originRef, @author, @locus, @cause, @hard, @surprise, @createdAt, @updatedAt)`,
-      )
-      .run({
-        id: prediction.id,
-        originRef: prediction.originRef,
-        author: prediction.author,
-        ...slots,
+    const write = this.ctx.db.transaction((): GoalPrediction | null => {
+      if (this.getPrediction(input.originRef) !== null) return null;
+      // The reveal is the seal, and it is enforced here rather than at the route so
+      // that it is an invariant of the record instead of a check somebody remembered
+      // to write. A prediction typed after the plan was read is not a prediction.
+      if (this.getReveal(input.originRef) !== null) return null;
+      const ts = this.ctx.now();
+      const slots = fillSlots(input.slots);
+      const prediction: GoalPrediction = {
+        id: `pred_${nanoid(10)}`,
+        originRef: input.originRef,
+        author: input.author,
+        slots,
         createdAt: ts,
         updatedAt: ts,
-      });
-    return prediction;
+      };
+      this.ctx
+        .prep(
+          `INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, hard, surprise, created_at, updated_at)
+           VALUES (@id, @originRef, @author, @locus, @cause, @hard, @surprise, @createdAt, @updatedAt)`,
+        )
+        .run({
+          id: prediction.id,
+          originRef: prediction.originRef,
+          author: prediction.author,
+          ...slots,
+          createdAt: ts,
+          updatedAt: ts,
+        });
+      return prediction;
+    });
+    return write();
   }
 
   getPrediction(originRef: string): GoalPrediction | null {
