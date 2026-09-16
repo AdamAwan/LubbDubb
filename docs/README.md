@@ -31,6 +31,7 @@ it on does.
 | Path                  | What it holds                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------- |
 | `spec/`               | The specification, one document per subsystem. Numbered by the order they build on each other. |
+| `mission.md`          | Why the harness exists: what moves off the engineer's desk, and what deliberately does not.    |
 | `workflow.md`         | The end-to-end workflow the harness is built to run, and where a different one slots in.       |
 | `operating.md`        | The operator's guide: what changes about the job, and the five decisions that stay yours.      |
 | `operating.html`      | The same guide as a page to skim — open it in a browser. Kept in step with `operating.md`.     |

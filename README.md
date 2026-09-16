@@ -7,7 +7,8 @@ judgment.
 
 The name is the heartbeat: the server's core is a periodic pulse that drives everything.
 
-> **Where to read what.** This file is the overview: what the harness does, how work flows through
+> **Where to read what.** [`docs/mission.md`](docs/mission.md) is why it exists and what it changes
+> about the job. This file is the overview: what the harness does, how work flows through
 > it, and the configuration that matters on day one. [`docs/workflow.md`](docs/workflow.md) is the
 > workflow in full, including where a different one slots in. [`docs/spec/`](docs/README.md) is the
 > specification of how every part of the application behaves today, written as fact — every config
