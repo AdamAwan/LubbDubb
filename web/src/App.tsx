@@ -112,6 +112,8 @@ export function App() {
           onComplete={() => status.actions.completeAgent(openAgent.id)}
           onInterrupt={() => status.actions.interruptAgent(openAgent.id)}
           onResume={() => status.actions.resumeAgent(openAgent.id)}
+          profiles={state.config.profiles}
+          onLift={(profile) => status.actions.liftAgentProfile(openAgent.id, profile)}
         />
       )}
       {status.view.viewingRetro && (

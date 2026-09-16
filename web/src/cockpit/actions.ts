@@ -66,6 +66,7 @@ export interface CockpitActions {
   killAgent(agentId: string): Promise<void>;
   completeAgent(agentId: string): Promise<void>;
   interruptAgent(agentId: string): Promise<void>;
+  liftAgentProfile(agentId: string, profile: string): Promise<void>;
   respondAgent(agentId: string, text: string): Promise<void>;
   resumeAgent(agentId: string): Promise<void>;
   extendStall(agentId: string): Promise<void>;

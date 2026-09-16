@@ -58,6 +58,7 @@ import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
 import { STALL_NUDGE, silenceReason, stallReason } from './agentProtocol.js';
 import { HUMAN_BLOCK, renderBlocks } from './streamTranscript.js';
+import { liftNote, type LiftProfile } from './profileLift.js';
 import type { RateLimitPark } from './streamJsonSession.js';
 import { debugEnabled, debugLog } from '../debug.js';
 
@@ -881,6 +882,65 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.maybeReap(agentId, agent.taskId);
     }
     return true;
+  }
+
+  lift(
+    agentId: string,
+    profile: LiftProfile,
+  ): { ok: true; agentId: string; taskId: string } | { ok: false; error: string } {
+    if (!this.sessions.has(agentId)) return { ok: false, error: 'agent is no longer live' };
+    return this.withCaller(agentId, ({ agent, task }) => {
+      if (!this.opts.resumable || !agent.sessionId)
+        return {
+          ok: false,
+          error:
+            'this agent runtime keeps no session id, so its conversation cannot be carried on to another ' +
+            'profile — lifting it would start the work cold',
+        };
+      if (task.profile === profile.name)
+        return { ok: false, error: `this agent is already running on "${profile.name}"` };
+      const { cwd, sessionId } = agent;
+      // The successor task is written before the kill, not after: `reaped` releases the
+      // worktree slot for a branch no active task holds, and this row is what holds it.
+      const successor = this.store.tasks.createTask({
+        kind: task.kind,
+        title: task.title,
+        prompt: `${liftNote(task.profile ?? null, profile.name)}\n\n${task.prompt}`,
+        branch: task.branch,
+        originRef: task.originRef,
+        originTitle: task.originTitle,
+        originSummary: task.originSummary,
+        dispatchReason: task.dispatchReason,
+        rule: task.rule ?? null,
+        ciChecks: task.ciChecks ?? null,
+        mcpServers: task.mcpServers ?? null,
+        model: profile.model,
+        effort: profile.effort,
+        permissionMode: profile.permissionMode ?? task.permissionMode ?? null,
+        permissionAutoApprove: profile.autoApprove,
+        profile: profile.name,
+        profileSource: 'pin',
+      });
+      this.kill(agentId);
+      let next;
+      try {
+        next = this.spawn(successor, cwd, sessionId);
+      } catch (err) {
+        this.store.tasks.updateTask(successor.id, { status: 'failed' });
+        return { ok: false, error: `could not re-open the session on "${profile.name}": ${(err as Error).message}` };
+      }
+      debugLog('agent', `lifted agent=${agentId} to=${next.id} profile=${profile.name} session=${sessionId}`);
+      this.store.decisions.recordDecision({
+        cycleId: `human:${agentId}`,
+        action: { type: 'no_op', reason: `operator lifted the run to the "${profile.name}" profile` },
+        outcome: 'executed',
+        detail:
+          `Stopped agent ${agentId} (task ${task.id}${task.originRef ? `, ${task.originRef}` : ''}) on ` +
+          `"${task.profile ?? 'no profile'}" and re-opened its conversation as agent ${next.id} ` +
+          `(task ${successor.id}) on "${profile.name}" in ${cwd}`,
+      });
+      return { ok: true, agentId: next.id, taskId: successor.id };
+    });
   }
 
   complete(agentId: string, by: 'operator' | 'expiry' = 'operator'): boolean {

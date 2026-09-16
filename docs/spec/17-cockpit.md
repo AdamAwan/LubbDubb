@@ -6372,6 +6372,22 @@ because it is context rather than the thing the drawer was opened to read, and t
 entirely on a deployment that assigns no models. The policy itself is visible in the running-config
 panel, under **Agents** — [02](02-configuration.md#model-assignment-by-rule).
 
+**On a live run the row ends in a `ProfilePicker`, and picking from it lifts the agent onto that
+profile** ([16](16-http-api.md#post-apiagentsidprofile),
+[10](10-agent-runtimes.md#lifting-a-live-run-to-another-profile)). It is the same control the queue
+ends its rows with and the same choice, made at the other moment: Up next prices work nobody has
+started, and this prices work an operator is **watching go wrong** — which is when a mis-priced job
+actually announces itself, an hour into a conflict that read as mechanical. It sits beside the model
+and profile facts and not with respond/interrupt/kill below, because the reading that makes an operator
+reach for it is right there: this run is on `fast`, and it is not going to get there.
+
+The empty option reads "Lift to…" rather than naming a fallback — there is nothing to fall back to
+once a run is going, and clearing it would mean nothing. Picking the profile the run is already on is
+not sent. The press replaces the agent, so the drawer follows the snapshot onto the successor row
+rather than holding an id that no longer names anything live, and the picker then reads the new
+profile with its `· pinned` source beside it. Like every other `ProfilePicker`, it draws nothing on a
+deployment with no `agentModels`.
+
 The drawer also shows the artifact chips, the **files changed** list, and offers respond, interrupt
 and kill.
 

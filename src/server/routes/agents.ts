@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { checked, IdParams } from '../validation.js';
+import { checked, IdParams, optionalText } from '../validation.js';
+import { orderedProfiles, resolveAgentProfile } from '../../agents/modelPolicy.js';
 import type { AgentFilesPayload, AgentTranscript } from '../../wire.js';
 import type { RouteContext } from './context.js';
 
@@ -15,7 +16,7 @@ const TranscriptQuery = z.object({
 });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, agents } = system;
+  const { store, agents, config } = system;
 
   app.get(
     '/api/agents/:id/transcript',
@@ -55,6 +56,31 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IdParams }, async ({ params, reply }) => {
       const ok = agents.kill(params.id);
       return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
+    }),
+  );
+
+  const LiftBody = z.object({ profile: optionalText('profile') });
+  app.post(
+    '/api/agents/:id/profile',
+    checked({ params: IdParams, body: LiftBody }, async ({ params, body, reply }) => {
+      const wanted = body.profile ?? null;
+      const known = orderedProfiles(config.agentModels).map((p) => p.name);
+      if (wanted === null || !known.includes(wanted))
+        return reply.code(400).send({
+          error:
+            known.length === 0
+              ? 'This deployment configures no agentModels.profiles, so there is nothing to lift to.'
+              : `"${wanted ?? ''}" is not one of this deployment's profiles: ${known.join(', ')}.`,
+        });
+      const agent = store.agents.getAgent(params.id);
+      if (!agent) return reply.code(404).send({ error: 'agent not found' });
+      const task = store.tasks.getTask(agent.taskId);
+      const resolved = resolveAgentProfile(config.agentModels, task?.rule, wanted);
+      if (!resolved) return reply.code(400).send({ error: `"${wanted}" could not be resolved to a model.` });
+      const result = agents.lift(params.id, resolved);
+      if (!result.ok) return reply.code(409).send({ error: result.error });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, profile: wanted, agentId: result.agentId, taskId: result.taskId };
     }),
   );
 
