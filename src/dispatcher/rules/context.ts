@@ -94,6 +94,8 @@ export interface StageContext {
   watchNote: string;
   watchDeclareNote: string;
   testPartNote: string;
+  /** Why a screen the fleet can capture is not a person's by default. → 20-validation.md#who-carries-a-step */
+  screenCheckNote: string;
   stateDeclareNote: string;
   /** What each configured environment can drive, and the areas its runner last offered. */
   validationPlanNote: string;

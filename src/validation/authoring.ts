@@ -112,9 +112,17 @@ export function authoringBriefing(input: {
   } else {
     lines.push(
       `> ${input.hint.replace(/\n/g, '\n> ')}\n`,
-      'It is prose, it binds nothing, and it was written against code that did not exist yet. Where you go ' +
-        'a different way, **say so in your note** — an operator approved this goal on the strength of that ' +
-        'intent and is entitled to see what became of it.\n',
+      '**It is a hint and not an order.** It is prose, it binds nothing, and it was written by an agent ' +
+        'reading the repository *before* any of this existed — it could not see what shipped, what the parts ' +
+        'turned into, or what the code in front of you now makes worth running. You can. So read it as the ' +
+        'best guess somebody made early, and then apply your own: check what it names where the delivered ' +
+        'code says that still matters, drop what the code no longer does or the suite now settles, and add ' +
+        'what it could not have known to ask for. A set that is the hint transcribed into checks is a set ' +
+        'authored by the agent that could see least.\n',
+      'What you may not do is depart from it **silently**. Where you went a different way — a check it asked ' +
+        'for that you did not write, a check you wrote that it never mentioned — **say so in your note**, and ' +
+        'say why. An operator approved this goal on the strength of that intent and is entitled to see what ' +
+        'became of it.\n',
     );
   }
 
@@ -230,6 +238,15 @@ the count of what it holds moves down with the deletion, so a name nobody wrote 
 missing and the row reports a pass for coverage that no longer exists. Both the area and these names
 are resolved against the deployed commit's own listing when the run happens, and a name that does not
 resolve blocks the row with both lists side by side rather than passing on what remains.
+
+**“Somebody needs to look at this” is a \`screenshot\` step, not a \`manual\` one.** Where the deployment
+drives a browser, the fleet goes to the screen and captures it, and a person judges the image at their
+leisure — so the going and the looking cost nobody a trip, and what is left on the bench is the
+judgement, which is the part that actually needed a person. Reach for \`manual\` for what no agent can
+reach at all: a console nobody gave the fleet an account for, something physically plugged in, a
+decision that is somebody else's to make. A screen described as \`manual\` on a deployment that could
+have captured it is a bench row that did not have to exist, and the row above it is where the operator
+stops reading.
 
 **Who carries each step is not yours to say.** It is read off what the deployment declares above: a
 step whose kind nothing here can drive comes back to a person, with the configuration that would have

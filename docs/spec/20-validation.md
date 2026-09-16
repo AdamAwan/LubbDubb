@@ -48,8 +48,10 @@ finds the first three trivial does not read the fourth. That is the same silence
 document is built against: the rows render, the counts are right, and the goal closes on a reading
 nobody took.
 
-What clears the bar is what a running system, a real environment or a person's eyes answers and
-nothing else does:
+What clears the bar is what a running system, a real environment or somebody's eyes answers and
+nothing else does — _somebody's_, not necessarily a person's trip: where the deployment drives a
+browser, the fleet makes the trip and a person judges what came back
+([Who carries a step](#who-carries-a-step)):
 
 - the built thing driven end to end somewhere real, and watched;
 - the state it left behind — database rows, what a migration did to a database that existed _before_
@@ -210,6 +212,17 @@ an arrival that entered fresh waits — for as long as the planner takes.
 makes it theatre, and the operator who read it at the approval gate learned nothing. So it is appended
 to the validation-planning prompt, and the planner says where it went a different way and why. An
 operator who approved a goal on the strength of an intent is entitled to see what became of it.
+
+**An input is not an instruction, and the briefing says so in as many words.** The failure in the
+other direction is quieter and costs more: a planner that reads the hint as the set it is to write
+transcribes it into checks, and the set is then authored by the one agent in the sequence that could
+see least — the hint was written against a repository from before any of this existed, by an agent
+that could not know what shipped, what the parts turned into, or what the merged code now makes worth
+running. The authoring agent is standing in that code. So `authoringBriefing` asks it to check what
+the hint names where the delivered code says it still matters, to drop what the code no longer does or
+the permanent suite now settles, and to add what the hint could not have known to ask for — and to
+put every one of those departures in its `note`. What is refused is departing **silently**, never
+departing.
 
 **Declaring no checks stays a legitimate answer, and now it carries a reason.** A goal whose permanent
 suite coverage already settles the question gets an empty check set — which is correct, and
@@ -705,6 +718,28 @@ Nothing declared at all is the fail-open arm and it fails **towards the person**
 That is the only safe direction here, because the two mistakes are not symmetrical — a step wrongly
 given to a person sits on the sheet where somebody sees it, and a step wrongly given to a fleet that
 cannot carry it is dispatched, held, and blocking nothing.
+
+**A screen is a `screenshot` step, and a `manual` one only where nothing can reach it.** The two kinds
+look interchangeable for a check that ends in _and look at whether that is right_, and they are not: a
+`screenshot` step the fleet carries makes the trip — navigate, wait, capture — and leaves the operator
+the judgement on the image, which is the half that genuinely needed a person. A `manual` step leaves
+them the whole journey. On a deployment whose runner captures screens for a living, the difference is
+a bench row that did not have to exist, and the cost is the one [the bar](#the-bar) names: filler
+crowds out the check that really had to be done by hand, and the operator who finds the first three
+trivial does not reach the fourth. So `TEST_PLAN_NOTE` names the distinction, and `manual` is
+described by what it is for — a console nobody gave the fleet an account for, something physically
+plugged in, a decision that is somebody else's to make.
+
+**The same correction is made one layer earlier, at plan time.** The planning templates are rendered
+on every deployment, so they cannot themselves claim a screen is reachable; left at that, they named a
+person's eyes as the thing only running the finished work answers, and the planner wrote _somebody
+will have to look at this by hand_ into the hint an operator then approved. `screenCheckNote`
+(`src/plans/planning.ts`) is **appended** to both planning prompts where an environment declares a
+browser runner, and asks for a hint that names the screen and what would be wrong with it rather than
+who looks — because who carries a step is read off the configuration by the authoring agent, and a
+hint that nominates a person pre-empts that read with the one fact the planner does not have.
+It carries the corresponding correction for `expectedKind: "human"`
+([08](08-planning.md#a-step-for-a-person)), which is the same mistake with a plan part's cost.
 
 **Reading it off the configuration is not a guess.** By the time the validation planner runs, what the
 deployment can drive is declared: an environment's `validate.browser` block, its `state.run`, its
