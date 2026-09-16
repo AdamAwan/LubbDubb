@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws';
 import type { System } from '../system.js';
 import { stripAnsi } from '../agents/streamTranscript.js';
 import type { StateSection } from '../wire.js';
+import { withheldEscalation } from './planReveal.js';
 import type { AgentFlag, WorldEvent } from '../types.js';
 
 // → docs/spec/16-http-api.md
@@ -85,15 +86,15 @@ export class Hub {
     });
 
     escalations.on('created', (escalation) => {
-      this.broadcast({ type: 'escalation:created', escalation });
+      this.broadcast({ type: 'escalation:created', escalation: withheldEscalation(system, escalation) });
       this.broadcast({ type: 'dirty', sections: ['inbox'] });
     });
     escalations.on('answered', ({ escalation, routing }: { escalation: unknown; routing: string }) => {
-      this.broadcast({ type: 'escalation:answered', escalation, routing });
+      this.broadcast({ type: 'escalation:answered', escalation: withheldEscalation(system, escalation), routing });
       this.broadcast({ type: 'dirty', sections: ['inbox'] });
     });
     escalations.on('dismissed', (escalation) => {
-      this.broadcast({ type: 'escalation:dismissed', escalation });
+      this.broadcast({ type: 'escalation:dismissed', escalation: withheldEscalation(system, escalation) });
       this.broadcast({ type: 'dirty', sections: ['inbox'] });
     });
 

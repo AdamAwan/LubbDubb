@@ -3,7 +3,7 @@ import { issueOriginRef } from '../issueOrigins.js';
 import type { System } from '../system.js';
 import type { Config } from '../config/config.js';
 import { revealGateOn } from '../config/config.js';
-import { planIsWithheld, WITHHELD_PLAN } from './planReveal.js';
+import { planIsWithheld, withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import { sheetFoldLine } from '../remoteValidation/sheet.js';
 import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
@@ -367,9 +367,17 @@ export function buildStateSections(
     };
   });
   const worldEvents = store.world.listWorldEvents(100);
+  // The Decision log persists the whole action, and a `propose_plan` action carries
+  // the plan's narrative in its prompt and its diagnosis and approach in its detail.
+  // The inbox redacts the escalation and the proposal built from that same action, so
+  // an unredacted shift log would be the body arriving by the one door left open.
   const shiftLog = recentDecisions()
     .slice(0, 100)
-    .map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
+    .map((d) => {
+      const row = { ...d, subjectRef: decisionSubjectRef(d.action) };
+      if (!withheld((d.action as { planId?: unknown }).planId)) return row;
+      return { ...row, detail: WITHHELD_PLAN, action: withheldAction(d.action) };
+    });
   const refUrls = buildRefUrls({
     pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...archivedPullRequests],
     issues: world.issues,
@@ -724,7 +732,7 @@ export function buildStateSections(
     }),
     proposals: proposals.map((p) => {
       if (!withheld(p.action.planId)) return p;
-      return { ...p, action: { ...p.action, prompt: WITHHELD_PLAN, detail: WITHHELD_PLAN, caveats: [] } };
+      return { ...p, action: withheldAction(p.action) };
     }),
   });
 

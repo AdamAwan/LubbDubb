@@ -47,3 +47,33 @@ export function withheldPlanRefusal(system: System, planId: unknown): string | n
   if (!planIsWithheld(system, system.store.plans.getPlan(planId))) return null;
   return 'this goal’s plan has not been revealed yet — POST /api/goals/:number/reveal first, which hands you the plan';
 }
+
+/**
+ * The same action with every field that can carry plan prose replaced. One helper,
+ * because the proposal, the escalation behind it and the Decision row that recorded
+ * it are three copies of one action — and redacting two of the three is redacting
+ * none of them.
+ */
+export function withheldAction<T extends object>(action: T): T {
+  return { ...action, prompt: WITHHELD_PLAN, detail: WITHHELD_PLAN, caveats: [] };
+}
+
+/**
+ * An escalation as it may be broadcast, with the plan prose taken out when its plan
+ * is withheld. The socket reaches every open cockpit the moment a plan is proposed,
+ * which is before any reveal can have happened — so an unredacted relay would put
+ * the body in the browser ahead of the gate that exists to keep it out.
+ */
+export function withheldEscalation(system: System, escalation: unknown): unknown {
+  if (typeof escalation !== 'object' || escalation === null) return escalation;
+  const context: unknown = (escalation as { context?: unknown }).context;
+  const planId: unknown =
+    typeof context === 'object' && context !== null ? (context as { planId?: unknown }).planId : undefined;
+  if (typeof planId !== 'string') return escalation;
+  if (!planIsWithheld(system, system.store.plans.getPlan(planId))) return escalation;
+  return {
+    ...escalation,
+    prompt: WITHHELD_PLAN,
+    context: { ...(context as object), detail: WITHHELD_PLAN, detailFrom: 'Withheld until the plan is revealed' },
+  };
+}

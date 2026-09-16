@@ -2291,6 +2291,44 @@ The overview's segment track is folded by `buildGoalTrack` off **the page's own 
 `status` a second time, so a row and the page it opens cannot disagree about whether a part is held or
 merely not started.
 
+### The reveal gate
+
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan has arrived
+`awaiting_approval` on a goal nobody has revealed it on, the plan card draws the gate in place of the
+waves: a blurred stand-in for the document, and over it _"A plan is ready. Predict first?"_ with
+**Predict** and **Show me the plan** beside each other.
+
+**The two presses are of equal weight, and this is load-bearing rather than taste.** A gate that is
+awkward to decline is a gate that gets resented and then disabled outright, so **Show me the plan** is
+never a small grey link — both are primary buttons, in one row, at the same size. The gate never
+re-prompts on a goal it has been declined on: the stamp ends the offer for good.
+
+**There is nothing to blur, and that is the point.** The plan's body is not on the wire at all while
+it is withheld — no narrative, no parts, no atoms
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)) — so the card draws a stand-in
+rather than blurring an empty body, which would read as _no plan_ instead of _withheld_. The blur is a
+picture of a withheld thing, not a cover over a thing that is present.
+
+The card's other door to the document, "open the full plan", is suppressed while the gate stands. A
+second ungated way into the sheet would make the gate a suggestion.
+
+**Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `hard`,
+`surprise` — each a free-text field labelled with the question it asks, each individually skippable,
+and one press that records the prediction and reveals the plan in the same breath. That is deliberate:
+moment one is one continuous interaction rather than a second visit, because predict → reveal → look
+is the sitting the operator was already having. A draft with nothing in it is caught before it is sent;
+every refusal the routes can give is drawn inline in the operator's own words rather than thrown.
+
+Under the slots, once, a sentence saying what containment does and does not cover: what is written
+here reaches no agent, but pasting it into the goal's standing instructions would leak it, because
+standing instructions are delivered to agents by design. That is the one hole nothing can close, and
+the operator is told about it at the moment they could fall into it.
+
+**No `Place` state.** Whether the composer is open, and whether the gate has lifted on this render, are
+not "where am I": the gate is a one-shot that ends the moment the server stamps the reveal, so a deep
+link to a half-typed composer would be a link to something that no longer exists, and a reload
+correctly re-reads the server's fact rather than the page's memory of it.
+
 ### The pull requests and the tail
 
 **Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part

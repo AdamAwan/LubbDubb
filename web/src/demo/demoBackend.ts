@@ -4585,6 +4585,10 @@ export const demoApi = {
   getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
   answerFeatureSequence: (): Promise<never> =>
     Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
+  predictGoal: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to write one into')),
+  revealGoalPlan: (): Promise<never> =>
+    Promise.reject(new Error('every plan in the demo is already revealed, so there is no gate to open')),
   getTickets: (query: {
     watch: string;
     tracking: string;

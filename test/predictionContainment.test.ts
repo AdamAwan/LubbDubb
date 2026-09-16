@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
@@ -29,12 +29,32 @@ const CONTAINED_DIRS = [
   'src/sink',
   // The outbound tracker path: `ticketFiler` builds every IssueCreateInput.
   'src/tickets',
+  // Everything that composes prose an agent is handed, or prose that reaches the
+  // tracker. `src/executor` is the sharpest: it renders the dispatch prompt and
+  // persists it.
+  'src/executor',
+  'src/plans',
+  'src/escalation',
+  'src/knowledge',
+  'src/summaries',
+  'src/reviewPacks',
 ];
+
+/**
+ * Top-level modules are scanned too: `goalInstructions.ts` is the one thing an
+ * operator writes that IS delivered to agents by design, which makes it the most
+ * inviting place to "just put the prediction as well".
+ */
+const CONTAINED_FILES = ['src/goalInstructions.ts', 'src/issueWatch.ts', 'src/briefTicket.ts'];
 
 const FORBIDDEN: { pattern: RegExp; what: string }[] = [
   { pattern: /(?:\.\.?\/)+store\/predictions\.js/, what: 'imports the prediction store' },
   { pattern: /\bopenPredictions\b/, what: 'names openPredictions()' },
   { pattern: /\bstore\.predictions\b/, what: 'reaches for store.predictions' },
+  // The way the store is actually reached today. Without this the scan would pass a
+  // module that simply held a `System` and asked it.
+  { pattern: /\.predictions\b/, what: 'reaches a predictions member' },
+  { pattern: /\bgoal_predictions\b/, what: 'names the goal_predictions table' },
   { pattern: /\bPredictionStore\b/, what: 'names PredictionStore' },
 ];
 
@@ -55,6 +75,10 @@ test('nothing the fleet is handed can name the prediction store', () => {
     assert.ok(files.length > 0, `${dir} holds no modules; the scan moved or this assertion proves nothing`);
     scanned.push(...files);
   }
+  for (const file of CONTAINED_FILES) {
+    assert.ok(existsSync(file), `${file} moved; the scan names a file that is not there`);
+    scanned.push(file);
+  }
   assert.ok(scanned.length >= 50, 'the containment scan read the fleet, or it proves nothing');
 
   for (const file of scanned) {
@@ -68,6 +92,32 @@ test('nothing the fleet is handed can name the prediction store', () => {
       );
     }
   }
+});
+
+/**
+ * `src/server/` is where predictions legitimately live, so it cannot be scanned
+ * wholesale. But a route module is the one place in the codebase where a rendered
+ * agent prompt and `system.predictions` are both in scope at once, and that
+ * combination is one line from a leak that no other assertion here would catch.
+ */
+test('no module that renders an agent prompt also reaches the prediction store', () => {
+  const server = tsFiles('src/server');
+  assert.ok(server.length > 10, 'the server was read, or this assertion proves nothing');
+
+  const renders: string[] = [];
+  for (const file of server) {
+    const source = readFileSync(file, 'utf8');
+    const buildsAPrompt = /\bprompts\.render\b/.test(source);
+    if (!buildsAPrompt) continue;
+    renders.push(file);
+    assert.ok(
+      !/\.predictions\b|\bPredictionStore\b|\bopenPredictions\b/.test(source),
+      `${file} both renders an agent prompt and reaches the prediction store. Those two must not meet ` +
+        `in one module — split the prompt out, or move the prediction read. Fix ${file}, not this ` +
+        'assertion. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store',
+    );
+  }
+  assert.ok(renders.length > 0, 'no server module renders a prompt; the pattern moved and this proves nothing');
 });
 
 const SENTINELS = {

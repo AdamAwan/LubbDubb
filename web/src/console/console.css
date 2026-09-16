@@ -118,6 +118,12 @@
      one swatch. */
   --cn-hatch-flash: color-mix(in srgb, var(--cn-accent) 45%, #fff);
 
+  /* The wash the reveal gate lays over the plan it is standing in front of. A
+     mix rather than a literal so every preset answers it by answering the ground,
+     and it carries its own alpha because the alpha is the decision: enough to
+     read a shape through and not enough to read a word. */
+  --cn-gate-veil: color-mix(in srgb, var(--cn-bg) 82%, transparent);
+
   --cn-r: 8px;
   --cn-r-sm: 4px;
   --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1975,6 +1981,114 @@ a.cn-qbody {
 }
 .cn-part .cn-why {
   color: var(--cn-red-ink);
+}
+
+/* The reveal gate: what stands in front of a plan the operator has not read yet.
+   → docs/spec/17-cockpit.md */
+.cn-waves[hidden] {
+  display: none;
+}
+/* Both layers in one grid cell rather than an absolute overlay: the gate grows
+   with the composer, and the stand-in behind it stretches to match. */
+.cn-gate {
+  display: grid;
+  padding: 13px;
+}
+.cn-gate > * {
+  grid-area: 1 / 1;
+}
+/* Nothing of the plan is on the wire while it is withheld, so this is a stand-in
+   for a document rather than the document under a blur — bars in the shape a plan
+   has, obscured so that they read as withheld rather than as missing. */
+.cn-gate-under {
+  display: grid;
+  gap: 10px;
+  filter: blur(6px);
+  opacity: 0.5;
+  pointer-events: none;
+  min-height: 150px;
+}
+.cn-gate-under span {
+  display: block;
+  height: 26px;
+  border-radius: var(--cn-r);
+  background: var(--cn-inert);
+}
+.cn-gate-under span:nth-child(2) {
+  width: 72%;
+}
+.cn-gate-under span:nth-child(3) {
+  width: 88%;
+}
+.cn-gate-under span:nth-child(4) {
+  width: 55%;
+}
+.cn-gate-over {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--cn-violet-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-gate-veil);
+  backdrop-filter: blur(3px);
+}
+.cn-gate-over h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.cn-gate-why,
+.cn-gate-kept {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-gate-refusal {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--cn-red-ink);
+}
+/* Equal weight, side by side. A decline drawn as a small grey link is a gate the
+   operator comes to resent and then turns off. */
+.cn-gate-presses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cn-gate-presses .btn {
+  flex: 1 1 auto;
+  min-width: 170px;
+  justify-content: center;
+}
+.cn-gate-slots {
+  display: grid;
+  gap: 10px;
+}
+.cn-gate-slots label {
+  display: grid;
+  gap: 4px;
+}
+.cn-gate-slots label span {
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-gate-slot {
+  width: 100%;
+  resize: vertical;
+  font: 12.5px var(--cn-ui);
+  color: var(--cn-fg);
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  padding: 7px 9px;
+}
+.cn-gate-slot:focus {
+  outline: none;
+  border-color: var(--cn-blue-line-hi);
 }
 
 /* plan approval */

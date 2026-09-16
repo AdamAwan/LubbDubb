@@ -602,6 +602,13 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: "The console's own modal dimming",
   },
   {
+    name: '--cn-gate-veil',
+    label: 'Reveal-gate veil',
+    group: 'overlays',
+    kind: 'colour',
+    why: 'The wash over a plan you have not read yet',
+  },
+  {
     name: '--cn-hatch-flash',
     label: 'Hatch flash',
     group: 'overlays',

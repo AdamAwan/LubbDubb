@@ -16,6 +16,7 @@ import type {
   SnoozeTarget,
   CaveatAnswerInput,
   CheckDecline,
+  Plan,
 } from './types.js';
 import type {
   AgentFilesPayload,
@@ -61,6 +62,18 @@ import type {
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 // → docs/spec/16-http-api.md
+
+/**
+ * What the gate's composer holds: the four slots, each free text and each
+ * skippable. A slot the operator left alone is absent rather than empty, because
+ * the route counts filled slots to refuse a prediction that says nothing.
+ */
+export interface PredictionDraft {
+  locus?: string;
+  cause?: string;
+  hard?: string;
+  surprise?: string;
+}
 
 export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
 
@@ -169,6 +182,12 @@ const realApi = {
   getFeatures: () => authFetch('/api/features').then((r) => json<FeatureBoardPayload>(r)),
   answerFeatureSequence: (number: number, answer: 'accepted' | 'declined', by: string) =>
     post<FeatureSequence>(`/api/features/${number}/sequence`, { answer, by }),
+  // The gate's two presses. The reveal's response is the only copy of the plan
+  // the page has until the next payload lands, so it is read rather than thrown
+  // away — which is why neither of these goes through the action layer.
+  // → docs/spec/16-http-api.md
+  predictGoal: (number: number, slots: PredictionDraft) => post<{ ok: true }>(`/api/goals/${number}/prediction`, slots),
+  revealGoalPlan: (number: number) => post<{ ok: true; plan: Plan | null }>(`/api/goals/${number}/reveal`),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>

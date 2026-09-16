@@ -6,8 +6,8 @@ import type {
   CockpitDecision,
   Issue,
   OpenPullRequest,
-  Plan,
   PlanPart,
+  PlanView,
   PullRequest,
   EnvironmentGateRelease,
   FeatureSequence,
@@ -49,7 +49,7 @@ export interface GoalTrack {
 export interface GoalPageView {
   issue: Issue;
   needs: NeedRow[];
-  plan: Plan | null;
+  plan: PlanView | null;
   parts: GoalPartView[];
   retiredParts: PlanPart[];
   openPullRequests: OpenPullRequest[];

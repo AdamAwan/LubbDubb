@@ -807,6 +807,38 @@ released status with the gate closed. Rule `plan-part`'s question — "is this p
 therefore the status check it already had, and a superseded plan structurally cannot release a new
 one, because a replan resets the row.
 
+### The reveal gate stands in front of the approval gate
+
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a plan that is `awaiting_approval`
+and has not been revealed is served to the cockpit **without its body** — no narrative, no parts, no
+atoms, and the approval escalation and its proposal carry a placeholder instead of the prose. The
+operator is drawn the plan obscured, with _"A plan is ready. Predict first?"_ over it and two presses
+of equal weight: **Predict** and **Show me the plan**.
+→ [16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)
+
+This changes nothing about the approval gate itself and holds no work. Nothing is withheld from the
+fleet: parts are not held, the plan is not un-approved, no rule waits on it, and a goal with no
+prediction proceeds exactly as goals proceed today. What is briefly withheld is **the operator's own
+view of the plan, from the operator, at their own request** — which is worth naming as an interruption
+rather than pretending the cost is zero. It is also the only thing this feature is allowed to
+interrupt.
+
+**Approving is refused while the plan is withheld**, and that refusal is not about secrecy. Approving
+or refusing a plan sight-unseen would settle the goal with the reveal never stamped, so the record
+would read *never offered* when the operator had in fact acted on the plan. One press reveals it; an
+operator who then wants nothing to do with the plan gets an honest row.
+
+It is worth confirming what else can show an operator a plan at that moment, because if anything could,
+the gate would be theatre. `PlanReconciler` writes the plan status comment only when
+`current.status !== 'awaiting_approval'`, so while a plan awaits approval **no plan content has reached
+the tracker at all**. Approval is downstream of the reveal, parts are not dispatched, and no pull
+request exists. The obscured plan really is the only copy the operator can reach.
+
+What it is not, and should not be sold as, is access control. The operator can read the database. This
+is a **self-measurement instrument**, and a determined self-deceiver defeats every possible version of
+one; what the design owes them is that the honest path is also the easy one, and that the record says
+plainly when they looked.
+
 ### The status is the plan's life, and only that
 
 `PlanStatus` carries `planning`, `awaiting_approval`, `active`, `complete` and `abandoned` — where the

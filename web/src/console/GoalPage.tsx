@@ -37,6 +37,7 @@ import type {
   WatchCheckVerdict,
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { PlanRevealGate } from '../components/PlanRevealGate.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
@@ -1110,6 +1111,13 @@ function PlanWaves({
   })).filter((g) => g.parts.length > 0);
   const retired = page.retiredParts;
   const plan = page.plan;
+  // The gate lifts here the moment the reveal returns, rather than waiting on the
+  // payload the refresh behind it brings. `revealed` is the server's fact and this
+  // is only the page catching up to it, so the flag is never read the other way:
+  // once the payload says revealed, this is dead weight and the gate is gone for
+  // good. → docs/proposals/prediction-record-and-criteria-integrity.md
+  const [lifted, setLifted] = useState(false);
+  const gated = plan !== null && !plan.revealed && !lifted;
   const prs = new Map<number, PartPr>();
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
@@ -1127,7 +1135,7 @@ function PlanWaves({
               acceptance and what was decided are the sheet's, and it was reachable
               from here only through the validation card's aside about amending the
               checks — a door nobody looking for the plan would think to try. */}
-          {plan !== null && (
+          {plan !== null && !gated && (
             <button
               type="button"
               className="cn-linkish"
@@ -1139,7 +1147,19 @@ function PlanWaves({
           )}
         </span>
       </h3>
-      <div className="cn-waves">
+      {gated && (
+        <PlanRevealGate
+          issueNumber={page.issue.number}
+          onRevealed={async () => {
+            try {
+              await actions.refresh();
+            } finally {
+              setLifted(true);
+            }
+          }}
+        />
+      )}
+      <div className="cn-waves" hidden={gated}>
         {groups.length === 0 && (
           <p className="cn-empty">
             {page.plan === null

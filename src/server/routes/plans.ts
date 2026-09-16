@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { orderedProfiles } from '../../agents/modelPolicy.js';
-import { revealGateOn } from '../../config/config.js';
 import { planAmendmentProposalRef, planProposalRef } from '../../proposals/proposals.js';
 import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
 import { partRestartRefusal, restartPlanPart } from '../../plans/partRestart.js';
@@ -13,6 +12,7 @@ import type { PendingPlanAmendment, PlanHistory } from '../../wire.js';
 import type { Plan, PlanAmendment, PlanNarrative, PlanPartInput } from '../../types.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { Store } from '../../store/store.js';
+import { planIsWithheld } from '../planReveal.js';
 import { AcceptanceBody, checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -21,10 +21,7 @@ import type { RouteContext } from './context.js';
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, harness, proposals, config } = system;
 
-  const withheld = (plan: Plan): boolean =>
-    revealGateOn(config) &&
-    plan.status === 'awaiting_approval' &&
-    system.predictions.getReveal(plan.originRef) === null;
+  const withheld = (plan: Plan): boolean => planIsWithheld(system, plan);
   const WITHHELD =
     'this plan has not been revealed yet, so its contents are withheld — ' +
     'reveal it first (POST /api/goals/:number/reveal)';
@@ -143,6 +140,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IdParams, body: RegroupBody }, async ({ params, body, reply }) => {
       const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
+      // Regrouping supersedes the plan, and its refusals quote atom text back.
+      if (withheld(plan)) return reply.code(409).send({ error: WITHHELD });
       const regrouped = regroupedDocument({
         plan,
         parts: store.plans.listPlanParts(plan.id),
