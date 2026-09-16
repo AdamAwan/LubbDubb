@@ -6,6 +6,7 @@ import type { EjectionDesk } from '../ejection/desk.js';
 import type { Config } from '../config/config.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { ErrorRecorder } from '../errorLog.js';
+import type { CycleStanding } from '../harness.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import type { LocalRunWatch } from '../localRun/watch.js';
@@ -33,7 +34,7 @@ export interface DesktopToolDeps {
   runCycle(): Promise<void>;
 
   runtimeControl: RuntimeControl;
-  harness(): { upcoming: UpcomingPlan | null };
+  harness(): { upcoming: UpcomingPlan | null; inFlightCycle: CycleStanding | null };
   escalations(): EscalationInbox;
   agents(): AgentManager;
   filing(): TicketFiler;

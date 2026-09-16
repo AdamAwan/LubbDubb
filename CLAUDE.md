@@ -314,6 +314,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   worktree under that root, so a preview checkout in there is a pool slot: handed to an agent and
   wiped. `localRunRoot` is separate, and only `ensurePreview` touches it.
   → [23](docs/spec/23-local-runs.md#the-checkout)
+- **Every `runGit` call carries a deadline.** A git that never exits is a promise that never settles, and the cycle's `updates` pass awaits one — so it holds `cycleInFlight` true, coalesces every later pulse and stops the fleet, with nothing thrown and nothing logged. A subcommand that legitimately runs long goes in `SLOW_SUBCOMMANDS`, never on `timeoutMs: 0`. → [09](docs/spec/09-execution.md#a-git-that-never-exits)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. `GitObserver` methods stay read-only and
   fetch-free.

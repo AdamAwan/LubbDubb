@@ -62,7 +62,7 @@ export interface PulseDeps {
   tickets?: { run(): Promise<void> };
 }
 
-type PulsePhase =
+export type PulsePhase =
   | 'reconcile'
   | 'open'
   | 'afterTasks'
@@ -169,12 +169,15 @@ export async function runPulse<P extends PulsePhase>(
   deps: PulseDeps,
   at: PulseReadings[P],
   readWorld: boolean,
+  mark?: (pass: string | null) => void,
 ): Promise<void> {
   for (const entry of PULSE_PIPELINE) {
     if (entry.phase !== phase) continue;
     if (entry.readWorld && !readWorld) continue;
+    mark?.(entry.id);
     await entry.run(deps, at);
   }
+  mark?.(null);
 }
 
 function resumeExpiredParks(deps: PulseDeps): void {
