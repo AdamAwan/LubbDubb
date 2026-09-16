@@ -3,6 +3,7 @@ import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import { prTitleFields, renderPrTitle } from '../../pr/prTitle.js';
+import { PR_BODY, prBodyRefusal } from '../../pr/prBody.js';
 import { openPrFailure, resolveOpenPr } from '../openPr.js';
 import { linkPrWorkItem } from '../../pr/prWorkItemDesk.js';
 import { seedPrWatch } from '../../pr/prWatchDesk.js';
@@ -49,9 +50,12 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         .string()
         .describe(
           'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
-            'which ticket it belongs to. Write it as a bullet list: at most five bullets, why the change ' +
-            'is needed first and what it does after, one line each. No headings, no prose paragraphs — a ' +
-            'reviewer reads this before the diff, not instead of it. ' +
+            `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
+            'the change is needed first and what it does after, one line each. No headings, no prose ' +
+            'paragraphs — a reviewer reads this before the diff, not instead of it. These are checked and ' +
+            `a body that breaks them is refused: every line starts with \`- \`, no bullet runs past ` +
+            `${PR_BODY.bulletChars} characters, no semicolons, no clauses hung off a dash, and the plainest ` +
+            'word that is still true. ' +
             prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
         )
         .optional(),
@@ -67,6 +71,9 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     }
     const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
+    const given = typeof args.body === 'string' ? args.body.trim() : '';
+    const bodyRefusal = prBodyRefusal(given);
+    if (bodyRefusal !== null) return toolError(`open_pr rejected: ${bodyRefusal}`);
 
     const issueNumber = issueSubtreeNumber(task.originRef);
     const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
@@ -95,7 +102,6 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       target.total > 1
         ? `Part ${target.position}/${target.total} of #${target.issueNumber}.`
         : `Relates to #${target.issueNumber}.`;
-    const given = typeof args.body === 'string' ? args.body.trim() : '';
     const body = given ? `${given}\n\n${reference}` : reference;
 
     try {

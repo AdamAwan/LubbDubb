@@ -659,6 +659,14 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   why first, one line each, no headings and no prose paragraphs. Unlike the title, the body ships as
   the agent wrote it (the reference is appended and nothing is rewritten), so the schema is the only
   place a form is expressible at all. Left unsaid, agents write thirty lines under `##` headings.
+- **And the shape is checked, because a description is a request.** `prBodyRefusal`
+  (`src/pr/prBody.ts`) runs before anything resolves, and a body that breaks the form is a
+  `toolError` rather than a pull request: every line a bullet, at most `PR_BODY.bullets` of them,
+  none past `PR_BODY.bulletChars` characters, and the review packs' plainness rules and reading-ease
+  floor over the bullets. Asked politely for five bullets, agents wrote five paragraphs with a dash
+  in front of each. Refused rather than trimmed — a cut bullet reads as a finished thought that is
+  wrong — and the refusal quotes the line it caught, so the agent fixes that line.
+  → [07](07-pull-requests.md#the-body-is-not-templated)
   It states the **sigil a pull request takes** on the configured provider too (`!12` on Azure DevOps,
   where `#12` is work item 12). The harness writes the issue reference itself, but a stacked part
   naming the rung beneath it is the agent's own prose, and this description is the last thing it reads
