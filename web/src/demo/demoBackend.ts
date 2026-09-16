@@ -1862,6 +1862,7 @@ class DemoServer {
         cacheReadTokens: null,
         cacheCreationTokens: null,
         numTurns: null,
+        steps: null,
         note: null,
         notedAt: null,
         resumedAt: null,
@@ -4159,6 +4160,7 @@ function buildDemoSpend(): SpendInsights {
     costUsd: r.costUsd,
     ...demoTokens(r.costUsd),
     numTurns: r.turns,
+    steps: null,
     startedAt: iso(r.hoursAgo + 1),
     endedAt: iso(r.hoursAgo),
   }));

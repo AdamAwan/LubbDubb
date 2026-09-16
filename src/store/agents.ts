@@ -28,6 +28,7 @@ export const AGENT_COLUMNS: ColumnMigrations = {
     noted_at: 'TEXT',
     resumed_at: 'TEXT',
     resume_attempts: 'INTEGER',
+    steps: 'INTEGER',
   },
 };
 
@@ -61,6 +62,7 @@ export class AgentStore {
       cacheReadTokens: null,
       cacheCreationTokens: null,
       numTurns: null,
+      steps: null,
       note: null,
       notedAt: null,
       resumedAt: null,
@@ -104,6 +106,15 @@ export class AgentStore {
   listAgents(): Agent[] {
     const rows = this.ctx.prep(`SELECT * FROM agents ORDER BY started_at DESC, rowid ASC`).all() as AgentRow[];
     return rows.map(rowToAgent);
+  }
+
+  /**
+   * One tool-using step, counted as it happens rather than when the turn ends.
+   * `recordAgentUsage` only lands on a `result` event, so a run that never
+   * finishes a turn reports nothing at all while it is the one worth watching.
+   */
+  countAgentStep(id: string): void {
+    this.ctx.prep(`UPDATE agents SET steps = COALESCE(steps, 0) + 1 WHERE id=?`).run(id);
   }
 
   recordAgentUsage(id: string, usage: AgentUsage): void {
@@ -326,6 +337,7 @@ interface AgentRow {
   cache_read_tokens: number | null;
   cache_creation_tokens: number | null;
   num_turns: number | null;
+  steps: number | null;
   note: string | null;
   noted_at: string | null;
   resumed_at: string | null;
@@ -365,6 +377,7 @@ function rowToAgent(r: AgentRow): Agent {
     cacheReadTokens: r.cache_read_tokens,
     cacheCreationTokens: r.cache_creation_tokens,
     numTurns: r.num_turns,
+    steps: r.steps,
     note: r.note,
     notedAt: r.noted_at,
     resumedAt: r.resumed_at,

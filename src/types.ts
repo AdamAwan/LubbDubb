@@ -378,6 +378,7 @@ export interface Agent {
   cacheReadTokens: number | null;
   cacheCreationTokens: number | null;
   numTurns: number | null;
+  steps: number | null;
   note: string | null;
   notedAt: string | null;
   resumedAt: string | null;

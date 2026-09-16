@@ -407,6 +407,7 @@ const agentRow = (patch: Partial<Agent> = {}): Agent => ({
   cacheReadTokens: null,
   cacheCreationTokens: null,
   numTurns: null,
+  steps: null,
   note: null,
   notedAt: null,
   resumedAt: null,

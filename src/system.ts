@@ -660,7 +660,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   const validationReady = new ValidationReadyDesk(store, config.environments);
 
-  const burn = new SpendBurnDesk(store, config.spendBurn);
+  const burn = new SpendBurnDesk(store, config.spendBurn, config.agentModels);
 
   const runway = new RunwayDesk(store, config.runway);
 

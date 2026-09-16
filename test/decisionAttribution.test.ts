@@ -140,6 +140,7 @@ test('a branch note records no proposer at all, and says so through the admissio
     cacheReadTokens: null,
     cacheCreationTokens: null,
     numTurns: null,
+    steps: null,
     note: null,
     notedAt: null,
     resumedAt: null,
