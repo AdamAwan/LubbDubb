@@ -14,6 +14,7 @@ interface AgentProfile {
   model: string;
   effort?: AgentEffort;
   permissionMode?: string;
+  autoApprove?: boolean;
 }
 
 type AgentEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -25,6 +26,7 @@ interface ResolvedProfile {
   model: string;
   effort: string | null;
   permissionMode: string | null;
+  autoApprove: boolean;
   source: ProfileSource;
 }
 
@@ -57,6 +59,11 @@ export function validateAgentModels(models: AgentModels | undefined): void {
       throw new Error(
         `Refusing to start: agentModels.profiles."${name}".permissionMode must be a non-empty mode string — ` +
           `it is handed to \`claude --permission-mode\` in place of agentPermissionMode for this profile.`,
+      );
+    if (profile.autoApprove !== undefined && typeof profile.autoApprove !== 'boolean')
+      throw new Error(
+        `Refusing to start: agentModels.profiles."${name}".autoApprove must be true or false — it decides whether ` +
+          `the permission backstop allows this profile's requests itself instead of asking the operator.`,
       );
     if (typeof profile.rank !== 'number' || !Number.isFinite(profile.rank))
       throw new Error(
@@ -116,6 +123,7 @@ export function resolveAgentProfile(
     model: profile.model,
     effort: profile.effort ?? null,
     permissionMode: profile.permissionMode ?? null,
+    autoApprove: profile.autoApprove === true,
     source,
   };
 }
