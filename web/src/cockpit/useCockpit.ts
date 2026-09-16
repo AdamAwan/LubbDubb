@@ -203,6 +203,7 @@ export function useCockpit(): CockpitStatus {
       killAgent: (id) => then(api.killAgent(id)),
       completeAgent: (id) => then(api.completeAgent(id)),
       interruptAgent: (id) => api.interruptAgent(id).then(() => undefined),
+      liftAgentProfile: (id, profile) => then(api.liftAgentProfile(id, profile)),
       respondAgent: (id, text) => api.respondAgent(id, text).then(() => undefined),
       resumeAgent: (id) => then(api.resumeAgent(id)),
       ejectAgent: (id, reason) => then(api.ejectAgent(id, reason)),

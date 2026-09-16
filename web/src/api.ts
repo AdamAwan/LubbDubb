@@ -434,6 +434,7 @@ const realApi = {
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),
+  liftAgentProfile: (id: string, profile: string) => post(`/api/agents/${id}/profile`, { profile }),
   resumeAgent: (id: string) => post(`/api/agents/${id}/resume`),
   extendStall: (id: string) => post<{ ok: true; expiresAt: string }>(`/api/agents/${id}/extend-stall`),
   ejectAgent: (id: string, reason: string) =>

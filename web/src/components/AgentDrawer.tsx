@@ -12,6 +12,7 @@ import { FilesList } from './FilesList.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { ProfilePicker } from './ProfilePicker.js';
 import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
@@ -34,6 +35,8 @@ export function AgentDrawer({
   onComplete,
   onInterrupt,
   onResume,
+  profiles,
+  onLift,
 }: {
   agent: Agent;
   task: TaskSummary | null;
@@ -50,6 +53,8 @@ export function AgentDrawer({
   onComplete: () => Promise<unknown> | unknown;
   onInterrupt: () => Promise<unknown> | unknown;
   onResume: () => Promise<unknown> | unknown;
+  profiles: { name: string; description: string }[];
+  onLift: (profile: string) => Promise<unknown>;
 }) {
   const [seed, setSeed] = useState('');
   const [ejecting, setEjecting] = useState(false);
@@ -231,6 +236,23 @@ export function AgentDrawer({
                   {task.profile}
                   {task.profileSource === 'pin' ? ' · pinned' : ''}
                 </Tag>
+              )}
+              {/* Lifting a live run to a deeper profile (#356). The picker is here,
+                    beside what the run is costing, because that reading is what makes
+                    an operator reach for it — the job turned out harder than the
+                    profile its rule priced it at. It stops this agent and re-opens its
+                    conversation on the chosen profile, so it is drawn only while there
+                    is a conversation to carry. */}
+              {isLive && (
+                <ProfilePicker
+                  profiles={profiles}
+                  value={task.profile ?? null}
+                  defaultProfile={null}
+                  inheritLabel="Lift to…"
+                  onPick={(profile) => {
+                    if (profile !== null && profile !== task.profile) void onLift(profile);
+                  }}
+                />
               )}
             </div>
           )}

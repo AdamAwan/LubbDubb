@@ -1707,6 +1707,19 @@ class DemoServer {
     return { ok: true };
   }
 
+  async liftAgentProfile(id: string, profile: string): Promise<{ ok: true }> {
+    const agent = this.state.agents.find((a) => a.id === id);
+    const task = agent ? this.state.tasks.find((t) => t.id === agent.taskId) : undefined;
+    if (task) {
+      task.profile = profile;
+      task.profileSource = 'pin';
+      this.addDecision('no_op', 'executed', `lifted ${id} to the "${profile}" profile`);
+    }
+    this.append(id, `\nLifted to the "${profile}" profile; the conversation carries on there.`);
+    this.dirty();
+    return { ok: true };
+  }
+
   async resumeAgent(id: string): Promise<{ ok: true }> {
     if (!this.state.parkedOnLimit.includes(id)) return { ok: true };
     this.state.parkedOnLimit = this.state.parkedOnLimit.filter((a) => a !== id);
@@ -4843,6 +4856,7 @@ export const demoApi = {
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
+  liftAgentProfile: (id: string, profile: string) => getServer().liftAgentProfile(id, profile),
   resumeAgent: (id: string) => getServer().resumeAgent(id),
   extendStall: (id: string) => getServer().extendStall(id),
   ejectAgent: (id: string, reason: string) => getServer().ejectAgent(id, reason),

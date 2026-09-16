@@ -2140,6 +2140,21 @@ finished piece of work rather than of an interrupted one. A decision row is writ
 `human:<agent id>` naming the operator, which is what separates it in the audit from the same ending
 reached by a stall park expiring (`stall:<agent id>`, [10](10-agent-runtimes.md#when-nobody-answers-the-stop)).
 
+### `POST /api/agents/:id/profile`
+
+Body `{profile}` — lift a run that is **already going** onto another `agentModels` profile, usually a
+deeper one, because the job turned out to be harder than the profile its rule priced it at
+([10](10-agent-runtimes.md#lifting-a-live-run-to-another-profile)). 400 when the name is not one this
+deployment configures, and the error lists the ones that are, the way
+[`POST /api/upnext/profile`](#post-apiupnextprofile) does — the two are the same choice made at
+different moments, one before the work is dispatched and one after. 404 when there is no such agent.
+409 when it is no longer live, or is already on the profile named.
+
+The profile is resolved against the **task's own rule**, so `permissionMode` and `autoApprove` come
+from the new profile exactly as they would have at dispatch. On success the named agent is gone and a
+new one is running in its place: `{ok: true, profile, agentId, taskId}` carries the successor's ids,
+because the id the operator pressed on no longer names anything live. Broadcasts `dirty`.
+
 ### `POST /api/agents/:id/interrupt`
 
 409 when the agent is not live. Sends raw `\x03`. Mutates no status.

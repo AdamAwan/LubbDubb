@@ -782,6 +782,58 @@ in its conversation is its own earlier work is being lied to about an empty tran
 the executor resolves the slot ahead of writing the task row, and why a dispatch that fails to get one
 still writes the row it was going to run before abandoning it.
 
+### Lifting a live run to another profile
+
+A profile is chosen when work is dispatched, from the rule that raised it and whatever pin stands over
+it ([05](05-dispatcher.md#prompt-templates), [02](02-configuration.md)) — and the thing that most
+reliably says a job was priced wrong is **watching it being worked**. A CI conflict that reads as a
+mechanical rebase and turns out to be two features disagreeing is the standing case: by the time an
+operator can see it, a `fast` agent is an hour into it. `AgentManager.lift(agentId, profile)`, reached
+through [`POST /api/agents/:id/profile`](16-http-api.md#post-apiagentsidprofile), moves that run onto
+another profile without giving up what it has learnt.
+
+It is a **re-dispatch the operator asks for by hand**, and every rule of
+[the section above](#inheriting-a-conversation-on-re-dispatch) holds unchanged: a new task row, a new
+agent row, one `sessionId` across both, `--resume` and never `--session-id`, the same `cwd` because
+`claude --resume` resolves the transcript inside the launch directory's project dir. The successor row
+copies the task it succeeds — kind, title, branch, origin, rule, CI checks, extra MCP servers — and
+takes its `model`, `effort`, `permissionMode` and `autoApprove` from the new profile, resolved against
+that same rule so the lift is priced exactly as a dispatch on that profile would have been. Its
+`profileSource` is `pin`, because that is what it is: a person naming this profile over the rule's.
+
+Three things are this case's own.
+
+**The successor task row is written _before_ the old agent is killed.** Worktree release hangs off
+`reaped` and skips a branch that an active task still holds
+([above](#terminal-exit-and-reap), `src/system.ts`); the successor row, `queued`, is what holds it. In
+the other order the slot is released between the two halves of one operation and the worktree the lift
+exists to carry on in is wiped from under the agent resuming into it — `--resume` into a directory
+holding no transcript, which is the silent death this page keeps returning to.
+
+**A run with no session id is refused, not lifted cold.** The `raw` runtime keeps none, and without one
+the "lift" would be a fresh agent starting the concern from nothing while the cockpit reported a
+carried-on conversation. So is a lift to the profile the run is already on: both refusals are the
+manager's own sentence, surfaced as a 409.
+
+**The note is adversarial, and that is the point.** A model handed a transcript treats it as its own
+memory and carries on from where it stops — which is precisely the reasoning that had to be replaced.
+`liftNote` (`src/agents/profileLift.ts`) is prepended to the concern and says, in these terms: the
+conversation above is somebody else's and it did not work; an operator judged the concern beyond that
+profile rather than merely unlucky; every conclusion in it is unverified; its **observations** (a
+command run, the output it got) are worth keeping and its **conclusions** are not; the approach in
+flight is the approach that was not working, so do not resume it by default, and if you land on it
+anyway say what you now know that makes it right. It closes by asking for a line on what is actually
+going on and where the earlier run went wrong, before any work — a cheap forcing function that is hard
+to answer while merely continuing. The worktree is described as it is: commits on the branch,
+uncommitted work still in the tree, sound or not, read it back before building on it.
+
+The old agent is killed the way `kill` kills any agent — process subtree first
+([below](#reaping-the-process-subtree)) — so its shells do not keep the worktree as cwd while the
+successor is launched into it. Its task settles `interrupted`, its escalations are dismissed, and the
+lift is audited under `human:<agent id>` naming both profiles, both agent ids and both task ids, since
+a run that changed models mid-flight is one an operator reading the spend later needs to be able to
+see.
+
 ### Events emitted
 
 `output`, `waiting`, `autoAnswered`, `done`, `reaped`, `status`, `usage`, `flag`, `finding`,
