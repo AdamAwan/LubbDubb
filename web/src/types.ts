@@ -108,6 +108,7 @@ export type {
   PlanNarrative,
   PlanPart,
   PlanPartView,
+  PlanView,
   PlanRevision,
   Pet,
   PetActionKind,

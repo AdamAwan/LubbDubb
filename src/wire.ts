@@ -259,6 +259,19 @@ export interface PlanPartView extends PlanPart {
   outsideScope: string[];
 }
 
+/**
+ * A plan, plus whether its body is in the payload at all. While the reveal gate is on, a plan
+ * `awaiting_approval` that has no reveal stamp ships with every narrative field null, no evidence,
+ * no parts and no atoms — the ordering the record rests on is a server fact, not a blur the page
+ * draws over a body that is already on the wire. `revealed` false is the cockpit's cue to draw the
+ * gate rather than an empty plan; with the gate off it is true on every plan and nothing branches.
+ * → docs/spec/16-http-api.md
+ */
+export interface PlanView extends Plan {
+  revealed: boolean;
+  revealedAt: string | null;
+}
+
 export interface ValidationResourceView extends ValidationResource {
   path: string;
   present: boolean;
@@ -349,7 +362,7 @@ export interface CockpitState {
   build: BuildReading;
   retainedRuns: Issue[];
   archivedPullRequests: PullRequest[];
-  plans: Plan[];
+  plans: PlanView[];
   pets: PetState | null;
   localRun: LocalRunView | null;
   localRunTargets: LocalRunTargetView[];

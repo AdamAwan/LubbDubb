@@ -4,7 +4,7 @@ import type {
   Agent,
   CockpitDecision,
   OpenPullRequest,
-  Plan,
+  PlanView,
   PlanPart,
   PlanPartView,
   PullRequest,
@@ -55,7 +55,7 @@ function part(over: Partial<PlanPart>): PlanPartView {
   };
 }
 
-function plan(originRef: string): Plan {
+function plan(originRef: string): PlanView {
   return {
     id: 'p',
     originRef,
@@ -72,6 +72,8 @@ function plan(originRef: string): Plan {
     evidence: [],
     document: null,
     statusCommentRef: null,
+    revealed: true,
+    revealedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };

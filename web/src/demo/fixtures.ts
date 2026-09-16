@@ -1536,6 +1536,8 @@ export function buildDemoState(): DemoSeed {
           'Each part is independently reviewable and each one leaves the queue working — the schema move alone ' +
           'is a no-op re-export; the enqueue part alone tightens what may be written without changing what is read.',
         statusCommentRef: 'issue:390:comment:8391',
+        revealed: true,
+        revealedAt: null,
         createdAt: ago(300),
         updatedAt: ago(6),
       },
@@ -1597,6 +1599,8 @@ export function buildDemoState(): DemoSeed {
           'A claim about code that no longer exists anywhere cannot be corrected. I leave the document ' +
           'untouched with the finding on the record; filing a ticket is the other reading.',
         statusCommentRef: 'issue:333:comment:8471',
+        revealed: true,
+        revealedAt: null,
         createdAt: ago(14),
         updatedAt: ago(14),
       },
@@ -1658,6 +1662,8 @@ export function buildDemoState(): DemoSeed {
           'With `AUTH_ENABLED` off there is no signing key, so the route must serve with no capability at all. ' +
           'That means two modes and only one of them is covered by the tests.',
         statusCommentRef: 'issue:395:comment:8455',
+        revealed: true,
+        revealedAt: null,
         createdAt: ago(4320),
         updatedAt: ago(200),
       },
