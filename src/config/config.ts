@@ -61,6 +61,8 @@ export interface Config {
   spendBurn: BurnPolicy;
   runway: RunwayPolicy;
   pets: PetPolicy;
+  prediction: PredictionConfig;
+  goalCriteria: GoalCriteriaConfig;
   selfUpdate: SelfUpdatePolicy;
   validation: ValidationPolicy;
   ejection: EjectionPolicy;
@@ -161,6 +163,21 @@ export interface AzureDevOpsConfig {
   policyChecks?: PolicyCheckModes;
 }
 
+/**
+ * The reveal gate's prediction record. Off by default, and off means *nothing is
+ * stamped* — no reveal, no decline, no offer — so that turning it on later does not
+ * present a backlog of never-offered goals as declines.
+ * → docs/spec/02-configuration.md#the-reveal-gate
+ */
+interface PredictionConfig {
+  enabled: boolean;
+}
+
+/** Goal-level, human-authored acceptance criteria. Off by default, on the same terms. */
+interface GoalCriteriaConfig {
+  enabled: boolean;
+}
+
 interface PoolConfig {
   project?: string;
   remote?: string;
@@ -201,6 +218,8 @@ const DEFAULTS: Config = {
   spendBurn: DEFAULT_BURN,
   runway: DEFAULT_RUNWAY,
   pets: { enabled: true, visible: true },
+  prediction: { enabled: false },
+  goalCriteria: { enabled: false },
   selfUpdate: {
     enabled: true,
     remote: 'origin',
@@ -290,6 +309,8 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.pool = { ...DEFAULTS.pool, ...overrides.pool };
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
   merged.pets = { ...DEFAULTS.pets, ...overrides.pets };
+  merged.prediction = { ...DEFAULTS.prediction, ...overrides.prediction };
+  merged.goalCriteria = { ...DEFAULTS.goalCriteria, ...overrides.goalCriteria };
   merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
   merged.runway = { ...DEFAULTS.runway, ...overrides.runway };
   merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
@@ -471,6 +492,8 @@ export const DEEP_MERGED_BLOCKS = [
   'integrations',
   'planning',
   'pets',
+  'prediction',
+  'goalCriteria',
   'spendBurn',
   'runway',
   'selfUpdate',

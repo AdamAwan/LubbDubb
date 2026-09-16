@@ -4,6 +4,7 @@ import { prRefStyle } from './pr/prRef.js';
 import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config/config.js';
 import { Store } from './store/store.js';
+import type { PredictionStore } from './store/predictions.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations, buildPoolTransport, worldScope } from './integrations/registry.js';
 import { PoolDesk } from './pool/poolDesk.js';
@@ -143,6 +144,12 @@ export interface System {
   updates: UpdateDesk;
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
+  /**
+   * Deliberately NOT `store.predictions`. Opened here and handed to the prediction
+   * routes and nothing else, so that nothing holding a `Store` can reach an operator's
+   * prediction. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
+   */
+  predictions: PredictionStore;
   localRun: LocalRunner;
   localValidations: LocalValidationDesk;
   localRunWatch: LocalRunWatch;
@@ -958,6 +965,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates,
     runtimeControl,
     pets,
+    predictions: store.openPredictions(),
     localRun,
     localRunWatch,
     localValidations,

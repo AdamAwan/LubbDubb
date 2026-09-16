@@ -2100,3 +2100,40 @@ export interface ObstacleDeskReading {
 }
 
 export type ObstaclePurpose = 'ticket' | 'docs';
+
+/**
+ * An operator's prediction about a goal, recorded before they first saw its plan.
+ * Contained from the fleet by construction — → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
+ */
+export interface GoalPrediction {
+  id: string;
+  originRef: string;
+  author: string | null;
+  slots: Readonly<Record<PredictionSlot, string | null>>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PredictionSlot = 'locus' | 'cause' | 'hard' | 'surprise';
+
+/**
+ * The reveal gate's record: the goal was offered, and the operator answered. A goal
+ * with no row was never offered, which is a third outcome and not a decline.
+ */
+export interface GoalReveal {
+  originRef: string;
+  revealedAt: string;
+  predicted: boolean;
+}
+
+/** One version in a goal's append-only acceptance-criteria chain. */
+export interface GoalCriteriaVersion {
+  id: string;
+  originRef: string;
+  version: number;
+  supersedes: string | null;
+  text: string;
+  author: string | null;
+  reason: string | null;
+  authoredAt: string;
+}

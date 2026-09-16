@@ -460,6 +460,9 @@ before it.
 | `world_events`              | Observed world transitions — the activity feed's backing store.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                                                                                                                                                                                                                                                                                                                |
 | `world_baseline`            | The last snapshot the harness diffed against.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Single row: `CHECK (id = 1)`                                                                                                                                                                                                                                                                                                                     |
 | `error_events`              | Recorded failures — the Errors panel's backing store.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | —                                                                                                                                                                                                                                                                                                                                                |
+| `goal_predictions`          | What an operator predicted about a goal before they first read its plan — four slots (`locus`, `cause`, `hard`, `surprise`), free text, each individually skippable. Never sent anywhere: [the prediction store is not on `Store`](#the-prediction-store-is-not-on-store). | `origin_ref` is `UNIQUE`; one per goal, and not re-openable |
+| `goal_reveals`              | The reveal gate's answer: the plan was drawn obscured, the operator pressed one of the two, and the plan was handed over. **The absence of a row is not a decline** — it is a goal that was never offered the gate. | `origin_ref` is `PRIMARY KEY`; first press wins |
+| `goal_criteria`             | A goal's human-authored acceptance criteria, one row per version. [Append-only](#goal-criteria-are-append-only); the standing is derived, never stored. | `UNIQUE (origin_ref, version)` |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `job_schedules(enabled, next_run_at)`, `plans(origin_ref)`, `plan_parts(plan_id)`, `plan_atoms(plan_id)`, `plan_caveat_answers(plan_id)`, `validation_checks(origin_ref)`,
@@ -1344,6 +1347,71 @@ account, so the key conflict is ignored rather than replaced: there is nothing t
 The history is kept unpruned. A row is five columns per agent turn, which is a few thousand a day on
 a busy fleet and nothing SQLite notices — and a retention sweep would be a boot-time behaviour whose
 failure mode is deleting the readings an operator went looking for.
+
+### The prediction store is not on `Store`
+
+`PredictionStore` (`src/store/predictions.ts`) takes a `StoreContext` like every other domain module
+and is then **deliberately not forwarded**. There is no `store.predictions`. This breaks the
+named-member convention this document opens with, on purpose, and a tidy-up that folds it back on
+silently removes the only guarantee the prediction record has.
+
+A prediction is a measurement of the fleet's work, made by a human before that work's account of
+itself exists. It is worth exactly nothing the moment the thing being measured can read it, and the
+harness ships operator text to agents wholesale along several paths at once — the rendered prompt,
+the MCP tool channel, the retro dossier, the scratchpad, and above all the tracker, where `worldRead`
+serves an issue's body and comments **verbatim** to every agent on the goal.
+
+So the containment is made a property of the composition root rather than a rule somebody has to
+remember. `buildTools` is handed `deps.store`; the dispatcher is handed the store; `goalRecord` is
+handed the store. None of them can name a prediction, because the member does not exist. The store is
+opened once, by `Store.openPredictions()`, in `src/system.ts`, and handed to the prediction routes and
+to nothing else — so leaking a prediction into a prompt costs somebody a new dependency threaded
+through the composition root, which is a diff a reviewer sees.
+
+`Store.openPredictions()` is the one escape hatch, and it is named so it can be grepped for.
+`test/predictionContainment.test.ts` is what makes reaching for it a failing build rather than a
+review comment, in two arms:
+
+- **Structurally**, no module under `src/dispatcher/`, `src/agents/`, `src/mcp/`, `src/retro/`,
+  `src/briefing/`, `src/scratch/`, `src/sink/` or `src/tickets/` imports `src/store/predictions.ts`
+  or names the store at all. `src/tickets/` is on that list because `ticketFiler` builds every
+  `IssueCreateInput` the harness files, which is the outbound tracker path by another name.
+- **Live**, a prediction whose text is a distinctive sentinel is recorded, a mock agent is dispatched
+  on the goal, and the sentinel is asserted to appear in no rendered prompt, no tool response, no
+  transcript row and **no outbound sink call**. The sink arm is the one that catches the tracker
+  path, which no type system can, and it is the arm that would have caught the obvious mistake this
+  whole shape exists to prevent: writing the prediction as an issue comment, because that is where
+  operator text usually goes.
+
+If one of those two tests fails, fix the file it names, not the assertion.
+
+What is **not** guaranteed, stated plainly: an operator who pastes their own prediction into
+`goalInstructions` has leaked it, and nothing here can stop that — standing instructions are
+delivered to agents by design. And a prediction is never read by a model, including for analysing the
+aggregate; a request to classify prediction text automatically is a request to break this invariant
+and is refused at that level rather than sandboxed.
+
+**Acceptance criteria are the opposite case and must not inherit this posture.** Criteria are an
+oracle the implementer is *meant* to be judged against, and today's `plan_parts.acceptance` already
+reaches the part prompt. `GoalCriteriaStore` is an ordinary member of `Store`. The two features share
+a moment and a table neighbourhood; they do not share a containment rule, and a reader who conflates
+them will either leak predictions or hide criteria.
+
+### Goal criteria are append-only
+
+`goal_criteria` is a version chain and **no method writes an `UPDATE`**. An edit appends a row with an
+incremented `version`, a `supersedes` pointer at the row it replaces, an `author`, an `authoredAt`
+and a `reason`. The goal page draws the current version with the chain behind it.
+
+The version number is taken inside the write, so two presses cannot mint the same one; the
+`UNIQUE (origin_ref, version)` index refuses the second if they somehow do.
+
+**The standing of a version is derived, never stored.** Whether a criterion is `pre-reveal`,
+`post-reveal` or `post-work` falls out of comparing its `authored_at` against `goal_reveals` and the
+first part dispatch. A stored flag would be a claim that can be written wrongly once and is then true
+forever; a derivation against two timestamps the harness already keeps cannot be. `post-work` is
+drift, and drift is surfaced rather than refused — refusing it would mean a goal whose criteria were
+not written in time can never have any, which is worse.
 
 ## Durability rules
 
