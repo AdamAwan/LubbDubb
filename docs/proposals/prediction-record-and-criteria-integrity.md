@@ -385,15 +385,100 @@ protects nothing and reads as though it does.
 
 ---
 
-## 6. Staging
+## 6. The switch, and how it comes off again
+
+**Both halves ship behind a config key, and both default to `false`.** Nothing about this reaches a
+deployment that has not asked for it.
+
+| Key                    | Default | On                                                                                                            |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `prediction.enabled`   | `false` | The reveal gate offers a prediction; the record, the marks and the prediction columns of the aggregate exist. |
+| `goalCriteria.enabled` | `false` | Goal-level criteria can be authored and versioned; drift is derived, recorded and surfaced.                   |
+
+Two keys rather than one because the two halves land in different stages and are independently worth
+being unhappy with — the point of a switch is that it can be thrown for one thing at a time. They are
+genuinely independent: neither reads the other's rows. They share exactly one fact, the reveal stamp,
+and it is handled by a single derived predicate — `revealGateOn` is true when **either** key is on —
+read in the two places named below and nowhere else.
+
+### 6.1 What "off" has to mean, and why "invisible" is not enough
+
+This repo has already paid for the difference one subsystem over, and `CLAUDE.md` carries the scar: a
+`RemoteValidationDesk` pass that stamps an arrival it did not assemble "burns the guard that makes
+turning remote validation on next month safe". The same trap is available here, and it is worth
+naming before the code exists.
+
+**With both keys off, nothing is stamped.** Not `revealed_at`, not a decline, not an offer. If the
+harness stamped reveals while the feature was off, then the day the operator turned it on they would
+inherit a backlog of goals that had been revealed and not predicted on — which is the database's way
+of spelling _declined_ — when the truth is that those goals were **never offered**. The aggregate
+would open on a fabricated decline rate, in its first week, which is the one week it has to earn any
+trust at all.
+
+So the aggregate distinguishes three outcomes and not two: **predicted**, **declined**, and **not
+offered**. The third is what every goal from before the switch reads as, permanently, and it is what
+makes turning the key on safe.
+
+### 6.2 One cut point per half, not a branch per reader
+
+The other half of the cost is the one [08](../spec/08-planning.md) records against the funnel's own
+retired switch: keeping `planning.enabled` "meant every gate that read it was a branch to reason
+about and test". A boolean scattered through a dozen call sites is a dozen half-tested arms.
+
+So each key is read in exactly two places:
+
+- **`src/system.ts`**, which decides whether the desk and its routes are constructed at all. Off, the
+  routes are not mounted and the desk does not exist, so there is no arm inside it to get wrong.
+- **The wire payload**, which omits the prediction block, the criteria block and the aggregate
+  section entirely. Off, the plan body ships in the payload exactly as it does today, because there is
+  no gate to withhold it for.
+
+Everything downstream reads **the presence of data**, not the flag. A goal page draws a prediction
+card when the payload carries a prediction block, and draws today's plan when it does not. That is
+one branch, in one place, testable by building a `System` twice.
+
+### 6.3 The schema is not behind the flag
+
+The tables and their `ColumnMigrations` run at boot whichever way the keys are set. Gating schema on
+a flag would mean the operator's first flip performs a migration on a live boot — the flip becoming a
+schema event rather than a behaviour change, which is a far worse thing to do on a Tuesday than to
+carry two empty tables. Empty tables cost nothing and are the ordinary shape here.
+
+### 6.4 Flipping it, and flipping it back
+
+**On**, mid-flight: goals already past their reveal are never offered — the no-back-fill invariant
+already says so, and they read as `not offered` for good. Goals sitting at `awaiting_approval` and
+not yet revealed **do** get the gate, which is the correct behaviour and the pleasant one.
+
+**Off again**: nothing is deleted. Recorded predictions and every criteria version survive untouched
+— the criteria half is append-only, so this is guaranteed rather than promised — and the surfaces
+simply stop. Turning it back on resumes against the same rows, with the goals in between reading as
+`not offered`, because they were.
+
+### 6.5 The key is scaffolding, and the exit is part of the design
+
+Worth stating plainly, because this repo's own history is that feature switches are an on-ramp and
+not a fixture: `planning.enabled`, `validation.enabled`, `assessment.enabled`, `appraisal.enabled`
+and `retrospective.enabled` are all in `RETIRED_KEYS` now, each with a sentence saying why the
+behaviour is unconditional. A key that is never retired is a branch the deployment carries for ever,
+and a second configuration nobody tests.
+
+The retirement condition here should be the one the feature is actually for: **the key comes off when
+the aggregate has said something the operator acted on at least once.** That is a higher bar than "it
+works", and deliberately so — what is being validated is not whether the gate renders but whether the
+record is worth keeping. Until then the key stays, and `false` stays the default.
+
+## 7. Staging
 
 Each stage is independently landable and leaves the tree working.
 
-1. **Storage and containment.** _src/store/predictions.ts_ and _src/store/goalCriteria.ts_, their
-   tables and `ColumnMigrations`, `PredictionStore` off `Store` and threaded through `src/system.ts`,
-   and _test/predictionContainment.test.ts_ with both arms. **No surface.** This stage is the
-   invariant, and it lands first so that everything after it is written against a guarantee that
-   already holds and is already asserted.
+1. **Storage, containment and the two keys.** _src/store/predictions.ts_ and
+   _src/store/goalCriteria.ts_, their tables and `ColumnMigrations`, `PredictionStore` off `Store` and
+   threaded through `src/system.ts`, `prediction.enabled` and `goalCriteria.enabled` in
+   `src/config/configFields.ts` defaulting to `false`, and _test/predictionContainment.test.ts_ with
+   both arms. **No surface.** This stage is the invariant and the switch, and it lands first so that
+   everything after it is written against a guarantee that already holds, is already asserted, and is
+   already off.
 2. **The reveal gate and the prediction record.** Withholding the plan body from the payload until
    reveal, the `revealed_at` stamp and its route, the obscured plan with its two presses, the four
    slots, the goal-page card and the wire types. Recording and declining only — no marking, no
@@ -410,12 +495,17 @@ Stages 1–3 alone satisfy "I can record a prediction on a goal and see it again
 alone satisfies "at least one instance of criteria drift has surfaced". Stage 6 is the one that needs
 a month of data before it says anything, which is why it is last and why §2.5 matters.
 
-## 7. Specs this touches when it lands
+Every stage from 2 onwards lands **behind its key, off**. So the whole of this can be built, reviewed
+and merged without any deployment behaving differently, and the first time anything changes is the
+day the operator sets a key to `true` on their own harness. There is no stage at which merging is the
+same act as rolling out.
+
+## 8. Specs this touches when it lands
 
 [08](../spec/08-planning.md) (criteria authorship and what the planner's acceptance now is),
 [14](../spec/14-persistence.md) (both tables, the append-only rule, and the deliberate `Store`-shape
 deviation), [16](../spec/16-http-api.md) (the routes), [17](../spec/17-cockpit.md) (the card, the
 side-by-side, the aggregate panel, the feed merge), [18](../spec/18-observability.md) (the withheld
 rate and its threshold), [24](../spec/24-environments.md) (the extra close-out bench row), and
-[02](../spec/02-configuration.md) (the threshold key). `CLAUDE.md` gains at most two lines: the
+[02](../spec/02-configuration.md) (the two feature keys, the threshold key, and the retirement entry when the switch eventually comes off). `CLAUDE.md` gains at most two lines: the
 prediction store is deliberately off `Store`, and a drift record is never a `WorldEvent`.
