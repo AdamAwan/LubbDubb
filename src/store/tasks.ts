@@ -17,6 +17,7 @@ export const TASK_COLUMNS: ColumnMigrations = {
     model: 'TEXT',
     effort: 'TEXT',
     permission_mode: 'TEXT',
+    permission_auto_approve: 'INTEGER',
     profile: 'TEXT',
     profile_source: 'TEXT',
     mcp_servers: 'TEXT',
@@ -43,6 +44,7 @@ export class TaskStore {
       | 'model'
       | 'effort'
       | 'permissionMode'
+      | 'permissionAutoApprove'
       | 'profile'
       | 'profileSource'
     > & {
@@ -56,6 +58,7 @@ export class TaskStore {
       model?: string | null;
       effort?: string | null;
       permissionMode?: string | null;
+      permissionAutoApprove?: boolean | null;
       profile?: string | null;
       profileSource?: string | null;
     },
@@ -81,17 +84,19 @@ export class TaskStore {
       model: input.model ?? null,
       effort: input.effort ?? null,
       permissionMode: input.permissionMode ?? null,
+      permissionAutoApprove: input.permissionAutoApprove ?? null,
       profile: input.profile ?? null,
       profileSource: input.profileSource ?? null,
     };
     this.ctx
       .prep(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, permission_mode, profile, profile_source, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @permissionMode, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, permission_mode, permission_auto_approve, profile, profile_source, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @permissionMode, @permissionAutoApprove, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
       .run({
         ...task,
         ciChecks: task.ciChecks === null ? null : JSON.stringify(task.ciChecks),
+        permissionAutoApprove: task.permissionAutoApprove === null ? null : task.permissionAutoApprove ? 1 : 0,
         mcpServers: task.mcpServers === null ? null : JSON.stringify(task.mcpServers),
       });
     return task;
@@ -184,6 +189,7 @@ const SUMMARY_COLUMNS = [
   'model',
   'effort',
   'permission_mode',
+  'permission_auto_approve',
   'profile',
   'profile_source',
   'status',
@@ -207,6 +213,7 @@ interface TaskSummaryRow {
   model: string | null;
   effort: string | null;
   permission_mode: string | null;
+  permission_auto_approve: number | null;
   profile: string | null;
   profile_source: string | null;
   status: string;
@@ -302,6 +309,7 @@ function rowToSummary(r: TaskSummaryRow): TaskSummary {
     model: r.model,
     effort: r.effort,
     permissionMode: r.permission_mode ?? null,
+    permissionAutoApprove: r.permission_auto_approve === null ? null : r.permission_auto_approve === 1,
     profile: r.profile ?? null,
     profileSource: r.profile_source ?? null,
     status: r.status as Task['status'],

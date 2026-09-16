@@ -231,6 +231,22 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
   [11](11-mcp-tools.md#request_permission) for the `request_permission` tool, the blocking
   `PermissionDesk`, and how the operator's Allow/Deny reaches the same live agent.
 
+A third mechanism sits above both, off by default: **a profile may mark itself `autoApprove`**, and
+`PermissionDesk.request` then answers `allow` for that profile's agents without raising an escalation
+at all. It exists for the profiles that cannot take `auto`: they fall back to `acceptEdits`, which
+auto-accepts file edits and nothing else, so everything the allow-list misses reaches the backstop and
+parks on a person — on a mechanical profile, most of a run. The flag is resolved at dispatch beside the
+model and the mode and stored on the task row (`tasks.permission_auto_approve`), so a boot-`resume`
+keeps the posture the conversation started on, a live agent's grant cannot change under it, and the
+row says afterwards which dispatches were never gated. Null on that column is off, which is what every
+task written before the column is and what the behaviour was — so it needs no backfill.
+
+**It is `bypassPermissions` scoped to one profile, and reads no allow-list.** The allow-list names
+commands; this names an agent and allows it whatever it asks for, in a worktree of the real repo with
+the operator's shell environment inherited. Being per profile is the whole of the containment: the
+cheap, mechanical profiles run unattended, and the deep ones — the ones writing the code that
+matters — keep the person at the desk. → [02](02-configuration.md#model-assignment-by-rule)
+
 `agentPermissionMode` stays available, root-refusal caveat included. Its **default is now `auto`**,
 which leaves both mechanisms above exactly as they are: the allow-list is evaluated first either way,
 and what `auto` declines to take on itself still reaches the backstop rather than a prompt nobody is

@@ -29,6 +29,7 @@ test('a pin beats the rule, the rule beats the default, and each says which answ
     model: 'opus',
     effort: 'medium',
     permissionMode: null,
+    autoApprove: false,
     source: 'pin',
   });
   assert.deepEqual(resolveAgentProfile(MODELS, 'issue-pickup', null), {
@@ -36,6 +37,7 @@ test('a pin beats the rule, the rule beats the default, and each says which answ
     model: 'haiku',
     effort: null,
     permissionMode: null,
+    autoApprove: false,
     source: 'rule',
   });
   assert.deepEqual(resolveAgentProfile(MODELS, 'issue-plan', null), {
@@ -43,6 +45,7 @@ test('a pin beats the rule, the rule beats the default, and each says which answ
     model: 'sonnet',
     effort: 'medium',
     permissionMode: null,
+    autoApprove: false,
     source: 'default',
   });
 });
@@ -266,7 +269,14 @@ test('a pin survives a retry, because nothing about it is a function of run hist
   );
 
   const again = resolveAgentProfile(MODELS, task.rule, 'deep');
-  assert.deepEqual(again, { name: 'deep', model: 'opus', effort: 'medium', permissionMode: null, source: 'pin' });
+  assert.deepEqual(again, {
+    name: 'deep',
+    model: 'opus',
+    effort: 'medium',
+    permissionMode: null,
+    autoApprove: false,
+    source: 'pin',
+  });
 
   const issue = system.store.world.getWorldBaseline()?.issues.find((i) => i.number === 943);
   assert.equal(resolveModelTag(issue?.labels, 'lubbdubb', MODELS).profile, 'deep');

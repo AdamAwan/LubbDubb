@@ -216,6 +216,7 @@ export interface TaskSummary {
   model?: string | null;
   effort?: string | null;
   permissionMode?: string | null;
+  permissionAutoApprove?: boolean | null;
   profile?: string | null;
   profileSource?: string | null;
   status: TaskStatus;

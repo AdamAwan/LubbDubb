@@ -888,6 +888,7 @@ export class ActionExecutor {
         model: profile?.model ?? null,
         effort: profile?.effort ?? null,
         permissionMode: profile?.permissionMode ?? this.deps.agentPermissionMode ?? null,
+        permissionAutoApprove: profile?.autoApprove ?? false,
         profile: profile?.name ?? null,
         profileSource: profile?.source ?? null,
       });
@@ -904,6 +905,7 @@ export class ActionExecutor {
       model: profile?.model ?? null,
       effort: profile?.effort ?? null,
       permissionMode: profile?.permissionMode ?? this.deps.agentPermissionMode ?? null,
+      permissionAutoApprove: profile?.autoApprove ?? false,
       profile: profile?.name ?? null,
       profileSource: profile?.source ?? null,
     });
