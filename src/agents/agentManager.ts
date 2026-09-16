@@ -1126,7 +1126,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.emit('flag', { agentId, taskId: task.id, flag: saved });
     });
 
-    session.on('activity', () => this.noteResumed(agentId, task.id));
+    session.on('activity', () => {
+      this.store.agents.countAgentStep(agentId);
+      this.noteResumed(agentId, task.id);
+    });
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
     session.on('stalled', (lastWords: string) => this.handleStalled(session, agentId, task, lastWords));

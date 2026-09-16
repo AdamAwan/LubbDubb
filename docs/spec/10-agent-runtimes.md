@@ -33,6 +33,15 @@ Two properties are load-bearing:
 - **It is narrowed to tool calls, not any block.** Prose after an escalation is usually the agent
   explaining that it is waiting, and reading that as work would mark alerts stale that need answering.
 
+**Each `activity` is also counted onto the agent row, as `Agent.steps`.** `recordAgentUsage` lands only
+on a `result` event, which closes a turn — so `costUsd` and `numTurns` say nothing at all about a run
+still inside its first long turn, which is the run most worth watching. A step count ticked as the
+steps happen is the one measure of what an agent is doing that does not wait for it to stop doing it,
+and it is what lets the burn watch see a runaway mid-turn
+([18](18-observability.md#three-axes-because-money-alone-cannot-see-a-cheap-runaway)). The terminal
+runtime emits no `activity`, so its runs count **null** steps rather than zero — unmeasured, and read
+as such.
+
 `SessionFactory` builds one from an `AgentSessionSpec` (`command`, `args`, `cwd`, `env`,
 `waitingPatterns`, `sessionId`, `resume`). The composition root picks the factory from `agentMode`.
 
@@ -788,7 +797,10 @@ A profile is chosen when work is dispatched, from the rule that raised it and wh
 it ([05](05-dispatcher.md#prompt-templates), [02](02-configuration.md)) — and the thing that most
 reliably says a job was priced wrong is **watching it being worked**. A CI conflict that reads as a
 mechanical rebase and turns out to be two features disagreeing is the standing case: by the time an
-operator can see it, a `fast` agent is an hour into it. `AgentManager.lift(agentId, profile)`, reached
+operator can see it, a `fast` agent is an hour into it. The **burn watch** is what shortens that "by
+the time": it flags the run on spend, steps or runtime and names the rung above its profile in the
+notice ([18](18-observability.md#the-burn-watch)). It never lifts anything itself — a lift throws away
+the work in flight and spends more to redo it, which is not a call a threshold can make. `AgentManager.lift(agentId, profile)`, reached
 through [`POST /api/agents/:id/profile`](16-http-api.md#post-apiagentsidprofile), moves that run onto
 another profile without giving up what it has learnt.
 

@@ -28,7 +28,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   validate: 'Validate',
   validation_plan: 'Check set',
   watch: 'Watch',
-  burn: 'Spend',
+  burn: 'Runaway',
   limit: 'Usage limit',
   supply: 'Runway',
   dispatch: 'Refused',

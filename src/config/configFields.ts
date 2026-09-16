@@ -616,7 +616,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'spendBurn.enabled',
     type: 'boolean',
     access: 'plain',
-    why: 'Watch a run spending past what its kind costs.',
+    why: 'Watch a run going past what its kind of work usually costs, steps or takes.',
   },
   {
     path: 'spendBurn.multiple',
@@ -636,6 +636,30 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'number',
     access: 'plain',
     why: 'Spend above which a run is flagged whatever its comparables say.',
+  },
+  {
+    path: 'spendBurn.floorSteps',
+    type: 'number',
+    access: 'plain',
+    why: 'Tool-using steps below which nothing is ever flagged.',
+  },
+  {
+    path: 'spendBurn.ceilingSteps',
+    type: 'number',
+    access: 'plain',
+    why: 'Steps above which a run is flagged whatever its comparables say.',
+  },
+  {
+    path: 'spendBurn.floorMinutes',
+    type: 'number',
+    access: 'plain',
+    why: 'Minutes below which nothing is ever flagged.',
+  },
+  {
+    path: 'spendBurn.ceilingMinutes',
+    type: 'number',
+    access: 'plain',
+    why: 'Minutes a run may go before it is flagged whatever its comparables say.',
   },
   {
     path: 'runway.enabled',

@@ -818,7 +818,7 @@ within it.
 | `escalation`   | Escalation    | red   | `?`   | An agent hit a question it cannot get past.                   |
 | `permission`   | Permission    | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.          |
 | `limit`        | Usage limit   | amber | `‖`   | Nothing broke; an allowance window has to turn over.          |
-| `burn`         | Spend         | amber | `▲`   | A heads-up on a run that carries on either way.               |
+| `burn`         | Runaway       | amber | `▲`   | A heads-up on a run that carries on either way.               |
 | `plan`         | Plan          | blue  | `◇`   | A plan to read and decide on.                                 |
 | `reply`        | Reply         | amber | `↵`   | A drafted reply, held until you send it.                      |
 | `merge`        | Merge         | amber | `⊕`   | A merge waiting on your verdict.                              |
