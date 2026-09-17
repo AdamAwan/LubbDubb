@@ -862,8 +862,18 @@ well: it is the last moment at which either can be authored independently, and o
 already stopped at. A goal whose criteria were written there has an oracle that provably predates its
 plan. → [14](14-persistence.md#goal-criteria-are-append-only)
 
-Criteria **reach agents by design** — that is what an oracle is for — which is the opposite posture to
-the prediction record they share a moment with. Conflating the two leaks predictions or hides criteria.
+Criteria are **not contained the way a prediction is** — that is the opposite posture to the record
+they share a moment with, and conflating the two leaks predictions or hides criteria.
+`GoalCriteriaStore` is an ordinary member of `Store` precisely so that an agent can be given them,
+where a prediction structurally cannot be.
+
+**Delivering them to an agent is not built.** Today the set is authored, versioned, drawn on the goal
+page and counted in the aggregate, and it is read by people. Nothing appends it to a prompt. The place
+for that is the part dispatch, beside the `plan_parts.acceptance` that already arrives there, and it
+is an **append** rather than a `{token}` — an operator-overridable template that never learned a new
+placeholder drops it silently, on exactly the deployments that customised most
+([05](05-dispatcher.md#prompt-templates)). Until that lands, the goal set is an oracle for the human
+reviewing the work and not one the implementer is handed.
 
 ### The status is the plan's life, and only that
 
