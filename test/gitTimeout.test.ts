@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { runGit } from '../src/git/gitCli.js';
 import { gitRepo } from './support/gitRepo.js';
 
@@ -46,4 +49,39 @@ test('an aborted call reports the abort rather than reading as a timeout', async
   const failure = await pending;
   assert.ok(failure);
   assert.doesNotMatch(failure.message, /did not exit within/);
+});
+
+// A promisor clone turns a read-only question into a `git fetch` grandchild, which inherits the
+// stdio pipes: killing the direct child leaves the fetch running and the promise unsettled.
+// → docs/spec/09-execution.md#a-git-that-never-exits
+test(
+  'the deadline reaps the whole subtree, not just the git it started',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const root = gitRepo();
+    const marker = join(root, 'grandchild-lived');
+    const failure = await runGit(root, ['-c', `alias.spawn=!sh -c "sleep 3 && touch ${marker}" &`, 'spawn'], {
+      timeoutMs: 250,
+    }).then(
+      () => null,
+      (err: Error) => err,
+    );
+
+    assert.ok(failure, 'the call rejects at its deadline even though git itself exited at once');
+    assert.match(failure.message, /did not exit within 250ms/);
+
+    await delay(4000);
+    assert.equal(existsSync(marker), false, 'the grandchild holding the pipes was reaped with it');
+  },
+);
+
+test('a read-only call runs with lazy fetching off', async () => {
+  const root = gitRepo();
+  const { stdout } = await runGit(root, ['-c', 'alias.saw=!printf %s "$GIT_NO_LAZY_FETCH"', 'saw'], {
+    noLazyFetch: true,
+  });
+  assert.equal(stdout.trim(), '1');
+
+  const plain = await runGit(root, ['-c', 'alias.saw=!printf %s "$GIT_NO_LAZY_FETCH"', 'saw']);
+  assert.equal(plain.stdout.trim(), '', 'a call that may legitimately fetch is left alone');
 });
