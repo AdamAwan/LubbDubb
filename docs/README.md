@@ -46,10 +46,7 @@ discussed**. It is not a description of the application and must not be read as 
 work it argues for lands, the reasoning that is still load-bearing moves into the spec document that
 owns the behaviour and the proposal is **deleted by that change**, for the reason build plans are —
 two documents describing the application, and a reader cannot tell by looking which is true. A
-proposal that is declined is deleted too; the rest is in the git history. One is open at present:
-[`docs/proposals/prediction-record-and-criteria-integrity.md`](proposals/prediction-record-and-criteria-integrity.md),
-which argues for a human prediction record scored against the arriving plan, and for acceptance
-criteria authored before planning and versioned rather than overwritten.
+proposal that is declined is deleted too; the rest is in the git history. None is open at present.
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same

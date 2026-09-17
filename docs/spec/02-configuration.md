@@ -826,10 +826,11 @@ is never read as a zero. → [18](18-observability.md#the-burn-watch)
 
 ### The reveal gate
 
-| Key                    | Type      | Default | Behaviour                                                                                                         |
-| ---------------------- | --------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `prediction.enabled`   | `boolean` | `false` | The reveal gate offers a prediction; the record, the marks and the prediction columns of the aggregate exist.        |
-| `goalCriteria.enabled` | `boolean` | `false` | Goal-level acceptance criteria can be authored and versioned; drift is derived, recorded and surfaced.               |
+| Key                           | Type      | Default | Behaviour                                                                                                                                                                              |
+| ----------------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prediction.enabled`          | `boolean` | `false` | The reveal gate offers a prediction; the record, the marks and the prediction columns of the aggregate exist.                                                                          |
+| `goalCriteria.enabled`        | `boolean` | `false` | Goal-level acceptance criteria can be authored and versioned; drift is derived, recorded and surfaced.                                                                                 |
+| `predictionAggregateMinGoals` | `number`  | `10`    | How many marked goals a rate needs before the aggregate will report it. Below it the **rate is withheld from the payload** and the count toward the threshold is shipped in its place. |
 
 Two keys rather than one because the two halves are independently worth being unhappy with, and the
 point of a switch is that it can be thrown for one thing at a time. They are genuinely independent:
@@ -841,7 +842,7 @@ the harness has already paid for one subsystem over, where a
 burns the guard that makes turning that feature on next month safe. The trap here is the same shape.
 If the harness stamped reveals while the gate was off, the day an operator turned it on they would
 inherit a backlog of goals that had been revealed and not predicted on — which is the database's way
-of spelling *declined* — when the truth is that those goals were **never offered**. The aggregate
+of spelling _declined_ — when the truth is that those goals were **never offered**. The aggregate
 would open on a fabricated decline rate in the one week it has to earn any trust at all.
 
 So the record distinguishes **three** outcomes and not two: predicted, declined, and **not offered**.

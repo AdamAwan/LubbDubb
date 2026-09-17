@@ -46,7 +46,17 @@ const CONTAINED_DIRS = [
  * operator writes that IS delivered to agents by design, which makes it the most
  * inviting place to "just put the prediction as well".
  */
-const CONTAINED_FILES = ['src/goalInstructions.ts', 'src/issueWatch.ts', 'src/briefTicket.ts'];
+const CONTAINED_FILES = [
+  'src/goalInstructions.ts',
+  'src/issueWatch.ts',
+  'src/briefTicket.ts',
+  // The one module that composes *persisted* prose off the prediction record's
+  // shadow. `attention_read` serves an open human task's title and detail to the
+  // operator's own Claude Code, so a close-out row that ever carried prediction text
+  // would put a prediction in front of a model. It carries the goal and nothing else,
+  // and this is what holds it there.
+  'src/delivery/closeOut.ts',
+];
 
 const FORBIDDEN: { pattern: RegExp; what: string }[] = [
   { pattern: /(?:\.\.?\/)+store\/predictions\.js/, what: 'imports the prediction store' },
@@ -64,6 +74,25 @@ const FORBIDDEN: { pattern: RegExp; what: string }[] = [
   { pattern: /\bplanMarks\b/, what: 'reads a prediction’s marks' },
   { pattern: /\bplan_mark_/, what: 'names a prediction mark column' },
   { pattern: /\brecordPlanMarks\b/, what: 'writes a prediction mark' },
+  // Moment two's twins. The asymmetry was the gap: a scan that forbids moment one's
+  // vocabulary and not moment two's forbids half a record.
+  { pattern: /\boutcomeMarks\b/, what: "reads a prediction's outcome marks" },
+  { pattern: /\boutcome_mark_/, what: 'names an outcome mark column' },
+  { pattern: /\brecordOutcomeMarks\b/, what: 'writes an outcome mark' },
+  { pattern: /\bPredictionOutcomeMarks\b/, what: 'names the PredictionOutcomeMarks type' },
+  // Stage 6, and the readers that return whole rows.
+  { pattern: /\blistPredictions\b/, what: 'lists predictions, which carry their slot text' },
+  { pattern: /\blistReveals\b/, what: 'lists reveal stamps' },
+  { pattern: /\blistOutcomeOwed\b/, what: 'asks which goals owe moment two' },
+  { pattern: /\bgetPrediction\b/, what: 'reads a prediction' },
+  { pattern: /\bgetReveal\b/, what: 'reads a reveal stamp' },
+  { pattern: /\bpredictionFacts\b/, what: 'names the aggregate’s intake' },
+  { pattern: /\bPredictionAggregate\b/, what: 'names the aggregate' },
+  { pattern: /\bGoalReveal\b/, what: 'names the GoalReveal type' },
+  // `.predictions` is defeated by `const { predictions } = system`, after which the
+  // store is reached under a bare name and the row type is inferred rather than
+  // written. The bare word is the pattern that survives that.
+  { pattern: /\bpredictions\b/, what: 'names predictions at all' },
   { pattern: /\bPredictionStore\b/, what: 'names PredictionStore' },
 ];
 

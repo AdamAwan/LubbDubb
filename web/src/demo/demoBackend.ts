@@ -4597,6 +4597,8 @@ export const demoApi = {
     Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to mark against a plan')),
   markGoalPredictionOutcome: (): Promise<never> =>
     Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to say the plan turned out')),
+  getPredictionAggregate: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to fold')),
   getGoalCriteria: (): Promise<never> =>
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
   writeGoalCriteria: (): Promise<never> =>

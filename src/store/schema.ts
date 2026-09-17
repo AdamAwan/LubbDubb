@@ -2167,7 +2167,8 @@ CREATE TABLE IF NOT EXISTS goal_reveals (
 -- is a claim that can be written wrongly once and is then true forever.
 --
 -- Unlike a prediction, criteria are an oracle the implementer is meant to be judged
--- against, and they reach agents by design. The two share a moment and a table
+-- against, so they are not contained the way a prediction is (handing them to an
+-- agent is not built yet). The two share a moment and a table
 -- neighbourhood; they do not share a containment rule.
 CREATE TABLE IF NOT EXISTS goal_criteria (
   id          TEXT PRIMARY KEY,

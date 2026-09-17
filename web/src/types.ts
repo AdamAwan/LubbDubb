@@ -115,6 +115,7 @@ export type {
   PredictionPlanMarks,
   PredictionOutcomeMarks,
   PredictionSlot,
+  PredictionAggregate,
   GoalPrediction,
   GoalReveal,
   PlanView,

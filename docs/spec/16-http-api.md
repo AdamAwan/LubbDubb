@@ -1930,6 +1930,22 @@ licence to re-mark.
 It does **not** require the goal to have been delivered.
 → [14](14-persistence.md#moment-two--was-the-plan-right)
 
+### `GET /api/predictions/aggregate`
+
+The prediction record folded: three goal outcomes, coverage, the decline rate, per-slot marks for both
+moments, and the criteria-drift count. Mounted only while the reveal gate is on.
+
+**A route of its own rather than a section on `/api/state`**, for the reason `/api/spend` and
+`/api/throughput` have theirs: it is a whole-history fold that nothing needs on every pulse, and the
+state payload is broadcast per pulse.
+
+Every rate is `{rate, n} | null`, so a rate is never served without the n it is over, and **`null` is
+the withheld case** — see [18](18-observability.md#a-rate-nobody-should-read-is-not-shipped).
+
+It reads **marks and counts only**. No slot text crosses this boundary and neither does the `author`
+column: the aggregate is keyed by slot and by goal, and there is nothing in its input to group a
+person by. → [18](18-observability.md#a-rate-nobody-should-read-is-not-shipped)
+
 ### `POST /api/goals/:number/criteria`
 
 `{ text, reason? }` — appends a version to the goal's append-only criteria chain, answering

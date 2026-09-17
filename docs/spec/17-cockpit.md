@@ -2635,6 +2635,39 @@ design's stated arm was that this becomes its own route, and this takes that arm
 half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
 from.
 
+## The prediction reading
+
+An Insights tab of its own — _"Did you see the plan coming, and was the plan right?"_ — drawn only
+where the reveal gate is on, and read off `GET /api/predictions/aggregate` rather than the state
+payload, because it is a whole-history fold nothing needs per pulse.
+
+**Counts lead; rates follow underneath, smaller.** How many goals were offered the gate, how many
+carried a prediction, how many were marked at each moment, how many goals drifted: those are facts at
+any n and they are the figures that matter first.
+
+**A withheld rate is drawn as the count toward the threshold, and never as a number.** Where the
+payload carries null the panel says _"21 goals offered the gate; rates appear at 10"_ — its own
+denominator, and the threshold it is short of. There is **no branch anywhere that renders a null as
+0%, as a dash, or as anything a reader could mistake for a measurement**; the rate is absent from the
+payload precisely so the panel cannot draw it
+([18](18-observability.md#a-rate-nobody-should-read-is-not-shipped)). A rate that does exist is never
+drawn bare — always beside the n it is over.
+
+**_Not offered_ is drawn apart from _declined_**, in its own line rather than as a third figure in the
+row, saying what it is: the goals from before the switch, permanently, in neither rate below. Drawn
+beside the other two it would read as a kind of decline, which is the one misreading the three-outcome
+split exists to prevent.
+
+**An absent slot says it is absent.** The per-slot list is sparse, so the panel looks up each of the
+four and, finding nothing, says no prediction has ever filled it — absent, not nought. Same for a
+filled slot nobody has marked at one of the two moments.
+
+The two moments are labelled as the goal card labels them, side by side per slot: moment one about
+the operator's reading of the system, moment two about the plan.
+
+**Nothing is keyed on a person** — no filter, no legend, no column — and the panel's lede says so.
+→ [18](18-observability.md#nothing-is-grouped-by-author-and-nothing-could-be)
+
 ## The pull request page
 
 One rung further in than the goal page: **a selected pull request outranks a selected goal, which

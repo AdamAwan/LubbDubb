@@ -235,6 +235,20 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     kind: 'colour',
     why: 'The ground of an amber-tinted box',
   },
+  {
+    name: '--withheld-fill',
+    label: 'Withheld ground',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The ground of the note that stands where a rate is still below its threshold',
+  },
+  {
+    name: '--withheld-line',
+    label: 'Withheld border',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The edge of that note — neutral, because a count toward a threshold is neither a reading nor a warning',
+  },
   { name: '--red-line', label: 'Red border', group: 'tints', kind: 'colour', why: 'The edge of a red-tinted box' },
   { name: '--red-fill', label: 'Red fill', group: 'tints', kind: 'colour', why: 'The ground of a red-tinted box' },
   {
