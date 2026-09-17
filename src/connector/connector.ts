@@ -1,4 +1,4 @@
-import type { MergeableState, WorldSnapshot } from '../types.js';
+import type { MergeableState, ViewerAssignment, WorldSnapshot } from '../types.js';
 import type { ReadPlan } from '../world/readPlan.js';
 
 // → docs/spec/03-world-model.md
@@ -21,6 +21,8 @@ export type InjectableEvent =
       headSha?: string;
       author?: string;
       viewerAuthored?: boolean;
+      viewerAssignment?: ViewerAssignment;
+      viewerApproved?: boolean;
     }
   | { kind: 'pr_pushed'; prNumber: number; headSha: string }
   | { kind: 'pr_approved'; prNumber: number }

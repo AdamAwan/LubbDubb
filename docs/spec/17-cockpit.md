@@ -3348,17 +3348,30 @@ pending merge proposal and a conflict put on a row — so "yours" and "your cour
 and the two are different obligations.
 
 So the rack **orders and bands** instead. The pull requests somebody handed you are drawn first, under
-an `Assigned to review` heading in the `ask` red the row grammar already speaks, and the rest under
+an `Assigned to review` heading in the `ask` red the row grammar already speaks, then the ones they
+handed you that are no longer waiting on you under `Assigned, not waiting on you`, and the rest under
 `The fleet's`; each heading carries its own count, so how much is yours is read without counting rows.
 
 **The heading names the obligation, not the possession.** It read `Yours` first, which is a claim of
 ownership over pull requests the fleet wrote and the fleet will land — the one thing they are not —
 and it was a second word for what the band beneath it already says by being called `The fleet's`. What
 is true of every row in the band is that somebody put the operator on the reviewer list, so that is
-what it says. The predicate is **`attention.assignedToYou`**, never `attention.status === 'you'`: that field is set on exactly the
-arm where an assignment _is_ the court ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)),
-and it is what the queue rail keys on — one field, so the two surfaces cannot come to disagree about
-whose a pull request is.
+what it says.
+
+**Membership is `viewerAssignment`; the red is `attention.assignedToYou`.** The two answer different
+questions and only the second is answered by a vote. A request the operator has approved is still a
+request a colleague put on them and still not the fleet's work, so it keeps its band — in the quiet
+tone, because the `ask` red is the claim _this is waiting on you_, which the approval is precisely the
+end of ([07](07-pull-requests.md#when-the-assignment-ends)). Banded on `assignedToYou` alone, the
+operator's own approve took the whole card back to one undifferentiated list: no band at all where the
+answered request was the only one, and a colleague's pull request drawn identically to the fleet's.
+The queue rail still keys on `assignedToYou` and is right to — it is a queue of what is waiting, and
+an answered question leaves it. The two surfaces are not saying the same thing, so they do not read
+the same field; what would make them disagree is reading one field for two questions.
+
+The second band covers one more case than an approval: an assignment whose court is something else —
+an agent on the branch, a merge proposal pending — is not waiting on the operator either, and the
+heading says only that.
 
 Beside each row, in a slot of its own, is **who asked**: the person's initials on a filled disc, the
 harness's rows a hollow dashed one. The name is the tracker's — `PullRequest.author`, as the provider
@@ -3370,9 +3383,15 @@ the fleet's rows wear, because _we were not told who_ and _nobody asked_ are bot
 here". The mark's accessible label is the whole name, never the initials, which are two letters that
 mean nothing said out loud.
 
-**Both appear exactly when they have something to say.** With nothing assigned, there is no band and
-no column of marks: one heading over every row separates nothing, and a column of identical hollow
-diamonds is furniture announcing there is no news. The card takes back precisely the shape it had.
+**Each appears exactly when it has something to say, and they are asked separately.** With nothing
+assigned there is no band — one heading over every row separates nothing — and with no row anybody
+else raised there is no column of marks, since a column of identical hollow diamonds is furniture
+announcing there is no news. Either one alone is drawn: the marks are read off
+`viewerAuthored === false` and the person's own `author`, not off the banding, because _whose pull
+request is this_ is a question the tracker answers on every row whether or not any of them are the
+operator's to review. Tying the column to the band dropped the name from a colleague's pull request
+the moment the operator voted on some other one. With neither, the card takes back precisely the
+shape it had.
 `RowGroup` is a general field on the row model rather than a rack-only rule — a heading is drawn where
 `group.key` changes, so a card that interleaves two bands draws the heading twice, which is the honest
 rendering of rows ordered against their bands rather than a silent regrouping.

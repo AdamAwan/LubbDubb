@@ -64,12 +64,12 @@ test('the rack puts the pull requests a person handed you above the fleet’s', 
 
   const card = rack(render(view()));
   const mine = card.indexOf('cn-group cn-group-ask');
-  const fleet = card.indexOf('class="cn-group"');
-  assert.ok(mine > 0, 'no band for the pull requests that are yours');
-  assert.ok(fleet > mine, 'the fleet’s band is drawn above yours');
+  const rest = card.indexOf('Assigned, not waiting on you');
+  assert.ok(mine > 0, 'no band for the pull requests that are waiting on you');
+  assert.ok(rest > mine, 'a band the operator has answered is drawn above one they have not');
   for (const pr of yours) {
     const at = card.indexOf(pr.title);
-    assert.ok(at > mine && at < fleet, `#${pr.number} is not drawn under the "Assigned to review" band`);
+    assert.ok(at > mine && at < rest, `#${pr.number} is not drawn under the "Assigned to review" band`);
   }
 });
 
@@ -86,12 +86,43 @@ test('the mark on an assigned row carries the tracker’s own name for the perso
   assert.ok(card.includes('cn-who-none'), 'the fleet’s rows draw no mark at all');
 });
 
-test('the rack draws no band and no marks when nothing is yours', () => {
+test('an assignment the operator has answered keeps its band and its mark', () => {
+  const state = buildDemoState().state;
+  // What the provider reports once the operator votes: the assignment stands, the court does not.
+  const world = {
+    ...state.world,
+    pullRequests: state.world.pullRequests.map((pr) =>
+      pr.viewerAssignment === undefined
+        ? pr
+        : { ...pr, viewerApproved: true, attention: { ...pr.attention, assignedToYou: undefined } },
+    ),
+  };
+  const answered = world.pullRequests.filter((pr) => pr.viewerAssignment !== undefined);
+  assert.ok(answered.length > 0, 'the fixtures must carry an assigned pull request');
+
+  const card = rack(render(view({ world })));
+  assert.ok(!card.includes('cn-group-ask'), 'an answered request still wears the ask red');
+  const band = card.indexOf('Assigned, not waiting on you');
+  const fleet = card.indexOf('The fleet');
+  assert.ok(band > 0, 'the band went with the court');
+  assert.ok(fleet > band, 'the fleet’s band is drawn above the assigned one');
+  for (const pr of answered) {
+    const author = pr.author;
+    assert.ok(author !== undefined && author !== '', 'and the provider must have reported who asked');
+    assert.ok(card.includes(`aria-label="${author}"`), `#${pr.number} lost the name of the person who asked`);
+    const at = card.indexOf(pr.title);
+    assert.ok(at > band && at < fleet, `#${pr.number} is not drawn under the assigned band`);
+  }
+});
+
+test('the rack draws no band and no marks when nothing is anybody else’s', () => {
   const state = buildDemoState().state;
   const world = {
     ...state.world,
     pullRequests: state.world.pullRequests.map((pr) => ({
       ...pr,
+      viewerAssignment: undefined,
+      viewerAuthored: undefined,
       attention: { ...pr.attention, assignedToYou: undefined },
     })),
   };

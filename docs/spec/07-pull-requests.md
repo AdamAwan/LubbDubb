@@ -817,6 +817,14 @@ to be theirs, and `assignedToYou` stays unset, which is what takes it off the ra
 Without it the row a colleague raised stands until the pull request merges, which teaches an operator
 that answering the rail changes nothing on it — the one lesson a queue must never teach.
 
+**What it clears is the court, and nothing else.** `assignedToYou` answers _is this waiting on me_;
+it is not a record of who asked, whose pull request it is, or that an assignment was ever made —
+`viewerAssignment`, `author` and `viewerAuthored` are, and an approval touches none of them. A surface
+that wants any of those three reads the field that holds it. Read `assignedToYou` for attribution
+instead and the operator's own vote silently deletes a colleague's name from the page: the overview
+rack banded and drew its who-asked column off this field, and one approve took the band and every
+name on the card with it ([17](17-cockpit.md#yours-then-the-fleets)).
+
 **Absent is never a verdict.** A provider that does not resolve a vote leaves the row exactly where it
 was; it costs the operator the clearing and nothing else. Both providers resolve it from the reviewer
 list the assignment itself came from ([15](15-integrations.md)), so neither pays a request for it.
