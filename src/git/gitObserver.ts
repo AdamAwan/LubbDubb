@@ -1,6 +1,12 @@
+import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from './gitCli.js';
 
 // → docs/spec/09-execution.md
+
+// A read-only probe must never open a socket: on a partial clone every one of these
+// arguments can be an object this checkout has never fetched, and git would silently
+// turn the question into a promisor fetch. → docs/spec/09-execution.md#a-git-that-never-exits
+const READ_ONLY = { noLazyFetch: true } as const;
 
 export interface BranchPresence {
   local: boolean;
@@ -21,7 +27,10 @@ export interface GitObserver {
 }
 
 export class GitCliObserver implements GitObserver {
-  constructor(private readonly repoRoot: string) {}
+  constructor(
+    private readonly repoRoot: string,
+    private readonly errors?: ErrorRecorder,
+  ) {}
 
   async presence(branch: string): Promise<BranchPresence> {
     const [local, remote] = await Promise.all([
@@ -33,16 +42,15 @@ export class GitCliObserver implements GitObserver {
 
   async divergence(branch: string, base: string): Promise<BranchDivergence | null> {
     const [branchSha, baseSha] = await Promise.all([
-      resolveCommit(this.repoRoot, branch),
-      resolveCommit(this.repoRoot, base),
+      resolveCommit(this.repoRoot, branch, READ_ONLY),
+      resolveCommit(this.repoRoot, base, READ_ONLY),
     ]);
     if (!branchSha || !baseSha) return null;
-    const { stdout } = await runGit(this.repoRoot, [
-      'rev-list',
-      '--left-right',
-      '--count',
-      `${baseSha}...${branchSha}`,
-    ]);
+    const { stdout } = await runGit(
+      this.repoRoot,
+      ['rev-list', '--left-right', '--count', `${baseSha}...${branchSha}`],
+      READ_ONLY,
+    );
     const [behind, ahead] = stdout.trim().split(/\s+/).map(Number);
     if (!Number.isFinite(behind) || !Number.isFinite(ahead)) return null;
     return { ahead: ahead!, behind: behind! };
@@ -55,20 +63,19 @@ export class GitCliObserver implements GitObserver {
 
   async diff(base: string, head: string): Promise<string | null> {
     const [baseSha, headSha] = await Promise.all([
-      resolveCommit(this.repoRoot, base),
-      resolveCommit(this.repoRoot, head),
+      resolveCommit(this.repoRoot, base, READ_ONLY),
+      resolveCommit(this.repoRoot, head, READ_ONLY),
     ]);
     if (!baseSha || !headSha) return null;
     try {
-      const { stdout } = await runGit(this.repoRoot, [
-        'diff',
-        '--no-color',
-        '--no-ext-diff',
-        '-M',
-        `${baseSha}...${headSha}`,
-      ]);
+      const { stdout } = await runGit(
+        this.repoRoot,
+        ['diff', '--no-color', '--no-ext-diff', '-M', `${baseSha}...${headSha}`],
+        READ_ONLY,
+      );
       return stdout;
-    } catch {
+    } catch (err) {
+      this.note(`diff ${base}...${head}`, err);
       return null;
     }
   }
@@ -93,7 +100,11 @@ export class GitCliObserver implements GitObserver {
   private async presentCommits(commits: string[]): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     try {
-      const { stdout } = await runGit(this.repoRoot, ['rev-list', '--ignore-missing', '--no-walk', ...commits]);
+      const { stdout } = await runGit(
+        this.repoRoot,
+        ['rev-list', '--ignore-missing', '--no-walk', ...commits],
+        READ_ONLY,
+      );
       const held = new Set(
         stdout
           .split('\n')
@@ -101,31 +112,44 @@ export class GitCliObserver implements GitObserver {
           .filter((l) => l !== ''),
       );
       for (const commit of commits) if (held.has(commit.toLowerCase())) out.set(commit, commit.toLowerCase());
-    } catch {
-      /* a git that would not run answers about nothing — every commit stays unknown */
+    } catch (err) {
+      this.note(`asking which of ${commits.length} commit(s) this checkout holds`, err);
     }
     return out;
   }
 
   private async notReachableFrom(commits: string[], head: string): Promise<Set<string> | null> {
-    const sha = await resolveCommit(this.repoRoot, head);
+    const sha = await resolveCommit(this.repoRoot, head, READ_ONLY);
     if (sha === null) return null;
     try {
-      const { stdout } = await runGit(this.repoRoot, ['rev-list', '--ignore-missing', ...commits, '--not', sha]);
+      const { stdout } = await runGit(
+        this.repoRoot,
+        ['rev-list', '--ignore-missing', ...commits, '--not', sha],
+        READ_ONLY,
+      );
       return new Set(
         stdout
           .split('\n')
           .map((l) => l.trim().toLowerCase())
           .filter((l) => l !== ''),
       );
-    } catch {
+    } catch (err) {
+      this.note(`asking what ${head} reaches`, err);
       return null;
     }
   }
 
+  private note(asking: string, err: unknown): void {
+    this.errors?.record({
+      source: 'cycle',
+      message: `the clone at ${this.repoRoot} could not answer: ${asking}`,
+      detail: (err as Error).message,
+    });
+  }
+
   private async refExists(ref: string): Promise<boolean> {
     try {
-      const { stdout } = await runGit(this.repoRoot, ['rev-parse', '--verify', '--quiet', ref]);
+      const { stdout } = await runGit(this.repoRoot, ['rev-parse', '--verify', '--quiet', ref], READ_ONLY);
       return stdout.trim().length > 0;
     } catch {
       return false;

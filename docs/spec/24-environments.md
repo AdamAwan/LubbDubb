@@ -132,7 +132,11 @@ Local, and batched. Two `git` invocations answer the whole pending set:
   only for how far ahead of the environment the branch has run.
 
 The objects are as fresh as the plan reconciler's `git fetch`, floored by `planning.gitFetchIntervalMs`
-([08](08-planning.md)). The seam itself stays read-only and fetch-free.
+([08](08-planning.md)). The seam itself stays read-only and fetch-free — and on a partial clone that
+takes saying so to git, because otherwise asking about a commit it does not hold *is* a fetch:
+every call the observer makes runs with `GIT_NO_LAZY_FETCH=1`
+([09](09-execution.md#a-read-only-call-never-opens-a-socket)). A probe that could not answer is
+recorded in the error log rather than swallowed, so the reading below is never mute.
 
 ### The three verdicts
 
@@ -147,6 +151,13 @@ credential, a missing binary, a commit nobody fetched and a genuine not-yet-depl
 same way, and only one of them is about deployment. Read as `absent` they are indistinguishable on
 the glass, and the cockpit states in the operator's own words that the work has not shipped — for a
 reason that has nothing to do with shipping.
+
+**A commit this checkout does not hold is the third row, not the second.** `absent` is a commit the
+clone *has* and the head does not reach — a positive statement about deployment. An object never
+fetched says nothing about deployment at all, and on a partial clone it is the ordinary case rather
+than the exotic one: the probe declines to fetch it, reads it as not held, and the landing stays
+`unknown` to be asked again next pulse. The two must not be run together, because `absent` is
+counted and acted on and `unknown` is only waited on.
 
 What the `at` shape retired is the old contract's hardest clause. When the probe answered with an
 exit code, `1` had to mean "not there" — and `cmd.exe` exits `1` for a command it cannot find, so on

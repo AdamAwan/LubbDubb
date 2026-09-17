@@ -1643,7 +1643,9 @@ but expected Y` — on a ref the first has already moved to the right place. The
   to refresh is the caller's decision. Its one consumer is plan reconciliation.
   `FakeGitObserver` is the test implementation.
 
-New observer methods must stay read-only and fetch-free.
+New observer methods must stay read-only and fetch-free — which means passing `noLazyFetch` on
+every `runGit` they make, not merely declining to run `git fetch`
+([below](#a-read-only-call-never-opens-a-socket)).
 
 ### A git that never exits
 
@@ -1674,6 +1676,45 @@ cancel passes `signal`.
 
 The kill is **`SIGKILL`**, because the failure this exists for is a git that is not answering. A
 process killed that way is re-thrown as an error naming the command and the deadline — `git cat-file
--e … did not exit within 120000ms in /path` — rather than execFile's bare `null` signal report, so
-the error log says what wedged. An `AbortSignal` abort is left alone: it rejects as itself, not as a
-timeout.
+-e … did not exit within 120000ms in /path` — rather than a bare signal report, so the error log says
+what wedged. An `AbortSignal` abort is left alone: it rejects as itself, not as a timeout.
+
+#### The deadline reaps the subtree, and settles its own promise
+
+**A deadline that signals only the process it started is not a deadline.** `runGit` is `spawn`
+rather than `execFile` for two reasons, and both of them are this:
+
+- **The child is its own process group** (`detached`, off Windows), so the deadline can signal the
+  whole subtree through `killProcessTree` (`src/agents/processTree.ts`) — the same reaper the agent
+  runtimes use, for the same reason ([10](10-agent-runtimes.md#reaping-the-process-subtree)).
+  `execFile` drops the `detached` option, which is why the timeout it offers could not do this.
+- **The promise settles at the deadline itself**, not when the pipes close. A git that hands its
+  stdio to something it spawned keeps those pipes open after it has exited, so a settle keyed on the
+  stdio closing waits for the grandchild — the deadline passes, the child is killed, and the caller
+  still waits. The timer resolves the promise on its own and reaps behind it.
+
+A git in this repo is never a leaf. The failure this was written for is a **promisor clone**: a
+`blob:none` partial clone answers a question about an object it does not hold by fetching it, so a
+plumbing read spawns `git fetch` → `git-remote-https` → `index-pack` → `git pack-objects`
+underneath itself. Killing the `rev-list` alone left a 400,000-object fetch running on the pipes, the
+`environments` pass holding `cycleInFlight` for minutes at a time, and — because a lazy fetch is
+spawned inside another git — `runSerial('fetch:<repoRoot>')` bypassed, so concurrent fetches raced
+each other's ref updates.
+
+#### A read-only call never opens a socket
+
+The reap bounds that failure; `noLazyFetch` removes it. **`runGit` called with `noLazyFetch` puts
+`GIT_NO_LAZY_FETCH=1` in the spawn environment**, and every call `GitObserver` makes carries it —
+`presence`, `divergence`, `diff`, `contains`, and the `resolveCommit` behind them. A commit the
+checkout does not hold is then simply an object git declines to look for, answered locally and at
+once, which is the case the observer's three-valued contract already covers
+([24](24-environments.md#the-three-verdicts)).
+
+It is deliberately not the default. `fetchRemote`, the worktree writes and the pool's clones may
+legitimately talk to a remote; what may not is the read-only seam. That is the same rule as
+"`GitObserver` is fetch-free", one layer down: fetch-free has to mean *git does not fetch*, not
+merely *the harness did not ask it to*.
+
+A probe that genuinely could not answer is routed through `errors.record` rather than swallowed, so
+a deployment reading `unknown` everywhere has something red to read
+([18](18-observability.md)).

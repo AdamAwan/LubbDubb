@@ -230,7 +230,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       config.localRunRoot,
       errors,
     );
-  const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
+  const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot, errors);
 
   const realTransport = opts.backend === undefined && opts.streamSpawner === undefined;
   const reapTree: ProcessReaper =
