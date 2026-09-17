@@ -58,7 +58,7 @@ test('a part agent that gives the reviewer coordinates opens a pull request carr
   assert.match(body, /\*\*How far it reaches\*\*/);
   assert.match(body, /\*\*Decided, where the ask did not say\*\*/);
   assert.match(body, /Touches the database schema and its migrations: `src\/store\/sync\.ts`/);
-  assert.match(body, /Tests changed: no/);
+  assert.doesNotMatch(body, /Tests changed/, 'the file list and the test flag are on the pull request already');
   assert.match(body, /Relates to #12\.$/, 'the reference is still last, and still not a closing keyword');
 });
 

@@ -692,10 +692,15 @@ worth naming as such: how far a change carries if it is wrong is live on all of 
 
 An agent-free fact beats an agent-written one, so anything the clone can read off the diff is read off
 the diff. `diffFacts` (`src/pr/prDiff.ts`) parses `GitObserver.diff(base, branch)` into the files
-changed, whether any test changed with them, and which one-way surfaces the change touches; the block
-renders that under **The diff**, said by the clone rather than by the author. It also backstops the
-fields: a computed line naming `src/store/` beside a `one_way` section reading `_none named_` is a
-contradiction a reviewer sees without being told about it.
+changed, whether any test changed with them, and which one-way surfaces the change touches.
+
+**Only the one-way surfaces are rendered**, under **One-way surfaces in the diff**, and only when the
+clone found one. The other two are what the triggers are decided from and nothing else: the file list
+and whether a test changed with the code are both on the pull request already, a tab away and more
+accurate there, so printing them spends the space above the diff on what the reviewer can already see.
+What the clone can say that the page cannot is which of _this repo's_ one-way doors the change went
+through — and that line backstops the fields, because a computed line naming `src/store/` beside a
+`one_way` section reading `_none named_` is a contradiction a reviewer sees without being told about it.
 
 **The one-way table is a trigger and never a verdict.** `ONE_WAY` in `src/pr/prDiff.ts` is a list of
 _this repo's own_ one-way doors — `src/store/`, an `ALTER TABLE` or `DROP` in the added lines, a
@@ -706,7 +711,8 @@ owed**; what a revert would not take back is the agent's to say, and nothing her
 **A clone that cannot diff owes nothing.** `GitObserver.diff` answers `null` for a ref it cannot
 resolve — the harness's clone never checks the branch out and may not have fetched it — and `null` is
 _could not look_, never _nothing found_. Every trigger resting on it fails open, so the pull request
-opens with the block saying the clone could not read the diff. The direction matters: a pull request
+opens with the block saying the clone could not read the diff — the one case where it renders with no
+one-way surface in it, because _nothing was looked at_ is a different answer from _nothing was found_. The direction matters: a pull request
 refused because git would not run is a branch that never gets reviewed, and the fields the agent did
 fill still ship.
 

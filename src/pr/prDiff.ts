@@ -87,21 +87,10 @@ export function diffFacts(diff: string | null): DiffFacts | null {
   };
 }
 
-const FILES_SHOWN = 12;
-
-/** The computed block: what the diff touches, said by the clone rather than the author. */
+/** The computed block: the one-way surfaces in the diff, found by the clone rather than named by the author. */
 export function renderDiffFacts(facts: DiffFacts): string[] {
-  const shown = facts.files.slice(0, FILES_SHOWN).map((f) => `\`${f}\``);
-  const rest = facts.files.length - shown.length;
-  const lines = [
-    `- ${facts.files.length} file${facts.files.length === 1 ? '' : 's'}: ` +
-      shown.join(', ') +
-      (rest > 0 ? `, and ${rest} more` : ''),
-    `- Tests changed: ${facts.testsChanged ? 'yes' : 'no'}`,
-  ];
-  for (const touch of facts.oneWay) {
+  return facts.oneWay.map((touch) => {
     const where = touch.where.length > 0 ? `: ${touch.where.map((f) => `\`${f}\``).join(', ')}` : '';
-    lines.push(`- Touches ${touch.label}${where}`);
-  }
-  return lines;
+    return `- Touches ${touch.label}${where}`;
+  });
 }
