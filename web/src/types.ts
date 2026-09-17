@@ -109,6 +109,7 @@ export type {
   PlanPart,
   PlanPartView,
   CriteriaStanding,
+  GoalCriteriaDrift,
   GoalCriteriaVersion,
   PredictionMark,
   PredictionPlanMarks,

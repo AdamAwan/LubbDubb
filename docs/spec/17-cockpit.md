@@ -2351,6 +2351,43 @@ nothing to mark. The third option is labelled **"Plan is silent"** rather than a
 _I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
 a real answer, not a way of declining to give one.
 
+### Goal criteria, and drift
+
+Below the plan — criteria are read against the shape that was proposed — the goal page draws the
+current criteria version prominently, with the chain behind it collapsed, newest first. Each version
+carries its derived standing, its author, when it was written, and for a `post-work` version the
+**reason**, which is the whole point of having required one.
+
+**A goal whose criteria changed after work started is marked on the card itself**, beside the version
+count, not buried in the chain. Drift that is only discoverable by expanding a history is drift nobody
+finds.
+
+**The reason is asked for before the press, not after the refusal.** Where the next version would be
+`post-work` the form puts the reason field above the text box and says why. The route refuses a
+post-work append without one, and an append-only chain cannot take a row back — so being told after
+writing the text would cost the operator the draft for a requirement that was knowable beforehand. If
+the standing moves underneath anyway, the draft is kept and the field appears.
+
+A version is the **whole text restated**, not a patch, and the form says so and names the version it
+will append. The page also states plainly that where both exist the goal set is the authority and a
+part acceptance that contradicts it is a plan defect — because the page draws both, and a reader with
+two lists and no rule between them will pick whichever suits.
+
+**None of the prediction card's containment language appears here, and that is deliberate.** Criteria
+are an oracle the work is judged against; they are written **for** the fleet to read. A sentence
+promising they are kept from every agent would be false, and a reader who conflates the two features
+will either leak predictions or hide criteria.
+
+#### Drift in the feed
+
+`criteriaDrift` is its own wire list and the cockpit merges it **at the feed's door**, exactly as
+environment arrivals are merged — same signal shape, same window, sorted together.
+
+The merge is what keeps the feed complete without the record being a `WorldEvent`, and it must stay
+that way: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's
+issue ref, so drift written as one would un-park the goal it has just reported on.
+→ [14](14-persistence.md#drift-has-its-own-table)
+
 ### The pull requests and the tail
 
 **Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part

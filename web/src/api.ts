@@ -17,6 +17,8 @@ import type {
   CaveatAnswerInput,
   CheckDecline,
   Plan,
+  CriteriaStanding,
+  GoalCriteriaVersion,
   GoalPrediction,
   GoalReveal,
   PredictionMark,
@@ -89,6 +91,19 @@ export interface PredictionDraft {
 export interface GoalPredictionReading {
   prediction: GoalPrediction | null;
   reveal: GoalReveal | null;
+}
+
+/**
+ * One version of a goal's acceptance criteria as the route hands it over: the row
+ * plus the standing derived against the reveal stamp and the first part dispatch.
+ * The standing is never stored, so it rides the reading rather than the row.
+ */
+export type CriteriaVersionReading = GoalCriteriaVersion & { standing: CriteriaStanding };
+
+/** A goal's whole criteria chain, oldest first, and the version that stands now. */
+export interface GoalCriteriaReading {
+  current: CriteriaVersionReading | null;
+  versions: CriteriaVersionReading[];
 }
 
 export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
@@ -212,6 +227,13 @@ const realApi = {
     authFetch(`/api/goals/${number}/prediction`).then((r) => json<GoalPredictionReading>(r)),
   markGoalPrediction: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
     post<{ ok: true; prediction: GoalPrediction }>(`/api/goals/${number}/prediction/marks`, marks),
+  // The goal's acceptance criteria. Both routes are mounted only where the key is
+  // on, so a rejected read is how the card learns there is nothing to draw — the
+  // presence of the data decides, never a flag on the payload.
+  getGoalCriteria: (number: number) =>
+    authFetch(`/api/goals/${number}/criteria`).then((r) => json<GoalCriteriaReading>(r)),
+  writeGoalCriteria: (number: number, body: { text: string; reason?: string }) =>
+    post<{ ok: true; version: GoalCriteriaVersion; standing: CriteriaStanding }>(`/api/goals/${number}/criteria`, body),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>

@@ -4595,6 +4595,10 @@ export const demoApi = {
     Promise.resolve({ prediction: null, reveal: null }),
   markGoalPrediction: (): Promise<never> =>
     Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to mark against a plan')),
+  getGoalCriteria: (): Promise<never> =>
+    Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
+  writeGoalCriteria: (): Promise<never> =>
+    Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
   getTickets: (query: {
     watch: string;
     tracking: string;

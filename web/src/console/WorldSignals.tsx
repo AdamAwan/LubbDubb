@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
-import type { GoalArrival, WorldEvent } from '../types.js';
+import type { GoalArrival, GoalCriteriaDrift, WorldEvent } from '../types.js';
 import { goalOfPr } from '../view/goalPage.js';
 import { relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
@@ -31,6 +31,7 @@ export function signalRows(view: CockpitView): Signal[] {
   return [
     ...groupSignals(view.state.worldEvents),
     ...arrivalSignals(view.state.environmentArrivals ?? [], view.now),
+    ...driftSignals(view.state.criteriaDrift ?? [], view.now),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -79,6 +80,28 @@ function arrivalSignals(arrivals: readonly GoalArrival[], now: number): Signal[]
       ref: a.goalRef,
       summary: `${refLabel(a.goalRef)} reached ${a.environment}`,
       createdAt: a.arrivedAt,
+      count: 1,
+    }));
+}
+
+/**
+ * Criteria drift, merged at the feed's door exactly as an arrival is. It is its own
+ * wire list and not a `WorldEvent` for a reason worth keeping in view here: a world
+ * event matching the goal's issue ref expires that goal's standing delivery verdict
+ * through `deliveryHold`, so drift written as one would un-park the goal it has just
+ * reported on. Merging at the door is what keeps the feed complete without that.
+ * → docs/spec/24-environments.md#in-the-cockpit
+ */
+function driftSignals(drifts: readonly GoalCriteriaDrift[], now: number): Signal[] {
+  const cutoff = now - SIGNAL_WINDOW_MS;
+  return drifts
+    .filter((d) => Date.parse(d.recordedAt) >= cutoff)
+    .map((d) => ({
+      key: `criteria|${d.id}`,
+      kind: 'criteria',
+      ref: d.originRef,
+      summary: `${refLabel(d.originRef)} had its criteria changed after work started (v${d.version})`,
+      createdAt: d.recordedAt,
       count: 1,
     }));
 }

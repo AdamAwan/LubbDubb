@@ -37,6 +37,7 @@ import type {
   WatchCheckVerdict,
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { GoalCriteria } from '../components/GoalCriteria.js';
 import { PlanRevealGate } from '../components/PlanRevealGate.js';
 import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -251,6 +252,16 @@ function WorkPane({
   return (
     <>
       <PlanWaves page={page} view={view} actions={actions} />
+      {/* Below the plan rather than above it: what "done" means is read against the
+          shape the fleet proposed, and the card draws nothing at all where the
+          criteria routes are not mounted. A part with a task behind it is what
+          makes the next version drift, which is the one thing the form has to know
+          before the operator starts typing. */}
+      <GoalCriteria
+        issueNumber={page.issue.number}
+        workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
+        now={view.now}
+      />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
