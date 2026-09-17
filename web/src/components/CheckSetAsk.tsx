@@ -3,6 +3,7 @@ import type { CheckDecline, ProposedCheck } from '../types.js';
 import type { ProposedCheckSet } from '../checkSet.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { CheckDetail } from './checkDetail.js';
 import { renderMarkdown } from './markdown.js';
 
 // → docs/spec/17-cockpit.md
@@ -14,7 +15,7 @@ import { renderMarkdown } from './markdown.js';
  * **Drawn as structure rather than prose**, which is the whole of why it exists. The set reached this
  * card as markdown first — the planner's note, then every check as a heading and two paragraphs — and
  * a set of any size read as one column of text with no way to compare two checks, find the one a
- * person has to carry, or see which reads the store. A verdict is being asked for on the *set*, so the
+ * person has to carry, or see which reads live data. A verdict is being asked for on the *set*, so the
  * set has to be scannable.
  *
  * **The two fields that stay the planner's own words — its `note` and each check's `expect` — draw
@@ -42,7 +43,7 @@ export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines
       )}
       {set.checks.length === 0 ? (
         <p className="vp-empty">
-          The planner declared no checks. Accepting agrees that nothing here needs running; rejecting asks for the set
+          The planner declared no checks. Accepting agrees that nothing here needs running; rejecting asks for them
           again.
         </p>
       ) : (
@@ -54,18 +55,26 @@ export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines
       )}
       {declines !== undefined && declines.whole && (
         <p className="vp-whole">
-          Every check is declined, so this is a rejection: the set goes back to be written again, and your reasons go
-          with it.
+          You have struck out every check, so this is a rejection: they go back to be written again, and your reasons go
+          with them.
         </p>
       )}
       {queries.length > 0 && (
         <p className="vp-queries">
-          <b>{queries.join(', ')}</b> read the deployed store. Accepting does not approve the query each reads it with —
-          you read that beside what it returns, on its own dry run, per environment.
+          <b>{queries.join(', ')}</b> read live data from the deployment. Accepting does not approve the query each
+          reads it with — you read that beside what it returns, on its own dry run, per environment.
         </p>
       )}
     </div>
   );
+}
+
+/** Who carries the steps, in the same words the step list uses. */
+function carriedBy(check: ProposedCheck): string {
+  const fleet = check.steps.filter((s) => s.actor === 'fleet').length;
+  if (fleet === check.steps.length) return 'the fleet';
+  if (fleet === 0) return 'yours';
+  return 'part yours';
 }
 
 function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclines }): JSX.Element {
@@ -75,25 +84,30 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
       <span className="vp-letter">{check.letter}</span>
       <div className="vp-body">
         <div className="vp-title">{check.title}</div>
-        {check.steps.length > 0 && (
-          <ol className="vp-steps">
-            {check.steps.map((step, at) => (
-              <li key={`${check.letter}-${at}`}>
-                <span className={`vp-kind${step.kind === 'state' ? ' vp-kind-state' : ''}`}>{step.kind}</span>
-                <span className="vp-do">{step.do}</span>
-                <span className={`vp-who${step.actor === 'fleet' ? ' vp-fleet' : ''}`}>
-                  {step.actor === 'fleet' ? 'fleet' : 'you'}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-        {check.expect !== '' && (
-          <div className="vp-expect vp-prose">
-            <span className="lb lb-sm">Passes when</span>
-            {renderMarkdown(check.expect)}
-          </div>
-        )}
+        {/* The same body the sheet draws, from the same component. A check is proposed here and run
+            there, days apart, and the two had grown separate vocabularies for one record — which
+            reads as two different things to the one person who meets both.
+            → docs/spec/20-validation.md#the-check */}
+        <details className="vp-open">
+          <summary>
+            {/* What the row is judged on, in one line: how long it is, who would carry it, and
+                whether it reads live data. A set is accepted or sent back whole, so what the
+                card owes a reader first is all of it at once — and every check drawn open is four
+                lines each before the first comparison can be made.
+                → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */}
+            <span className="vp-gist">
+              {check.steps.length === 0
+                ? 'no steps'
+                : `${check.steps.length} ${check.steps.length === 1 ? 'step' : 'steps'}`}
+              {check.steps.length > 0 && ` · ${check.fleetBlocked ? 'yours to start' : carriedBy(check)}`}
+            </span>
+          </summary>
+          <CheckDetail
+            doing={null}
+            steps={check.steps}
+            passesWhen={check.expect === '' ? null : renderMarkdown(check.expect)}
+          />
+        </details>
         {/* The planner's nomination and the fact that stops it are the two things an operator needs
             before they hand anything over, and neither is a step. */}
         {check.fleetBlocked ? (
@@ -101,7 +115,7 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
         ) : (
           check.fleetCandidate && (
             <div className="vp-said">
-              The planner nominates the fleet{check.candidateWhy === null ? '' : `: ${check.candidateWhy}`}
+              The planner says the fleet could run this{check.candidateWhy === null ? '' : `: ${check.candidateWhy}`}
             </div>
           )
         )}
@@ -115,7 +129,7 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
             <Button
               size="small"
               ghost
-              title="Strike this one check out of the set — the rest release, and no planner is asked again"
+              title="Drop this one check — the rest go ahead, and no planner is asked again"
               onClick={() => declines.decline(check.letter)}
             >
               Decline
@@ -129,12 +143,7 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
                 value={struck}
                 onChange={(e) => declines.say(check.letter, e.target.value)}
               />
-              <Button
-                size="small"
-                ghost
-                title="Put this check back into the set"
-                onClick={() => declines.keep(check.letter)}
-              >
+              <Button size="small" ghost title="Put this check back" onClick={() => declines.keep(check.letter)}>
                 Keep it
               </Button>
             </>
@@ -146,12 +155,15 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
           far edge of a wide card; the nomination has its own line under the steps. */}
       <div className="vp-flags">
         {check.carriesQuery && (
-          <Tag tone="amber" title="This check reads the deployed store; its query is approved on its own dry run">
-            query
+          <Tag
+            tone="amber"
+            title="This check reads live data from the deployment; the query it uses is approved separately, on its own dry run"
+          >
+            reads live data
           </Tag>
         )}
         {check.fleetBlocked && (
-          <Tag title="A person carries the first step, so this one can never be dispatched">yours</Tag>
+          <Tag title="A person carries the first step, so the fleet can never start this one">yours to start</Tag>
         )}
       </div>
     </li>

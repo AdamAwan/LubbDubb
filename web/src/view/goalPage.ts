@@ -333,13 +333,13 @@ function planStage(page: GoalPageView): GoalStage {
 }
 
 function validationStage(page: GoalPageView): GoalStage {
-  const base = { at: 'validation', label: 'Validation' } as const;
+  const base = { at: 'validation', label: 'Checks' } as const;
   const v = page.issue.validation;
   if (v === null || v.total === 0) return { ...base, reading: 'no checks', tone: 'grey', done: null };
   const settled = v.passed + v.waived;
   return {
     ...base,
-    reading: `${settled}/${v.total} settled`,
+    reading: `${settled} of ${v.total} done`,
     tone: v.state === 'clear' ? 'green' : v.failed > 0 ? 'amber' : 'blue',
     done: (settled / v.total) * 100,
   };
@@ -445,7 +445,7 @@ export type GoalTab = (typeof GOAL_TABS)[number];
 export const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ticket: 'Ticket',
   work: 'Work',
-  validation: 'Validation',
+  validation: 'Checks',
   shipping: 'Shipping',
   record: 'Record',
 };

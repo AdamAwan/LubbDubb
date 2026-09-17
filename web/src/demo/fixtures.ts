@@ -2667,18 +2667,12 @@ export function buildDemoState(): DemoSeed {
       // ones still owed already open. → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
       {
         id: 'hum-5',
-        title: 'Run the validation checks for issue #395',
+        title: 'Run the checks for issue #395',
         detail:
-          '**Snapshot downloads 401 in the review console** is delivered, and its validation plan has 5 checks ' +
-          'for you to run — of 9 checks in all.\n\n' +
-          'B. **With auth off, snapshot downloads still serve** — unrun\n' +
-          'C. **A tampered capability is refused** — unrun\n' +
-          'E. **The download link is reachable on a narrow viewport** — unrun (handed back — An agent could not ' +
-          'run this check: it needs a browser at a set viewport, and I have none.)\n' +
-          'G. **A pruned snapshot mints no capability** — failed\n' +
-          'H. **A download survives a signer key rotation** — deferred\n\n' +
-          'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates ' +
-          'no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+          '**Snapshot downloads 401 in the review console** is delivered. Five of its nine checks are still to ' +
+          'run — they are below. Record what you saw on each, with a note.\n\n' +
+          'Nothing is blocked by this: checks gate no dispatch, no merge and no close — what they change is ' +
+          'what closing this goal looks like.',
         originRef: 'issue:395',
         partId: null,
         kind: 'validate',
@@ -2910,7 +2904,7 @@ export function buildDemoState(): DemoSeed {
         action: {
           type: 'propose_validation_plan',
           reason:
-            'Issue #364 has a validation check set of 3 check(s) and nothing reads it as work until you accept it.',
+            'Issue #364 has 3 checks written against the delivered code, and nothing reads them as work until you accept them.',
           originRef: 'issue:364',
           issueNumber: 364,
           checks: 3,
@@ -2949,7 +2943,7 @@ export function buildDemoState(): DemoSeed {
               expect: 'One row per starved job, with the watcher count on it.',
               steps: [{ kind: 'state', do: 'Count job_audit rows for the starved job', actor: 'fleet', why: null }],
               fleetCandidate: true,
-              candidateWhy: 'reads the store and nothing else',
+              candidateWhy: 'reads live data and nothing else',
               fleetBlocked: false,
               carriesQuery: true,
             },
@@ -2982,7 +2976,7 @@ export function buildDemoState(): DemoSeed {
         prompt:
           '3 check(s) written against the delivered code for issue #364 ("Document the two-watcher requirement for ' +
           'maintenance jobs"), and nothing runs them until you accept.\n\n' +
-          'Accepting releases the set — the bench draws it and a check you hand to the fleet can be dispatched. ' +
+          'Accepting releases them — the bench draws them and a check you hand to the fleet can be dispatched. ' +
           'Rejecting sends it back to be written again; say what is wrong and the next planner is given your ' +
           'words.',
         context: {

@@ -452,9 +452,7 @@ function GoalChecks({
         refUrls={view.state.refUrls}
         desktopFolder={view.state.config.desktopFolder}
         look={{ tone: 'secondary' }}
-        openOutstanding
         onResult={(checkId, result, note) => actions.setValidation(number, checkId, { kind: 'result', result, note })}
-        onDefer={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'defer', reason })}
         onWaive={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'waive', reason })}
         onReset={(checkId) => actions.setValidation(number, checkId, { kind: 'reset' })}
         onHandover={(checkId, to) => actions.setValidation(number, checkId, { kind: 'handover', to })}

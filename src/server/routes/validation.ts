@@ -32,20 +32,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     return next;
   };
 
-  const ResultBody = z
-    .object({
-      result: z.enum(['passed', 'failed'], { errorMap: () => ({ message: 'result must be "passed" or "failed"' }) }),
-      note: optionalText('note'),
-    })
-    .superRefine((data, ctx) => {
-      if (data.result === 'failed' && (data.note === undefined || data.note.length === 0)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'note is required — say what you saw, so the result means something in a month',
-          path: ['note'],
-        });
-      }
-    });
+  /* A reading is one press. The note was compulsory on a `failed` and offered on a `passed`, on the
+     argument that a bare result means nothing in a month — but a field nobody fills is not a record,
+     it is a toll, and in practice the reasons went untyped or unread. What makes a reading safe is
+     that it is *reversible*: the row says who recorded it and `Undo` puts it back. A note stays
+     accepted, because an agent and the desktop channel both still write one worth having. */
+  const ResultBody = z.object({
+    result: z.enum(['passed', 'failed'], { errorMap: () => ({ message: 'result must be "passed" or "failed"' }) }),
+    note: optionalText('note'),
+  });
   app.post(
     '/api/issues/:number/validation/:checkId/result',
     checked({ params: CheckParams, body: ResultBody }, async ({ params, body, reply }) => {
@@ -78,13 +73,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const WaiveBody = z.object({ reason: requiredNote('reason', 'say why this one is not being checked') });
+  const WaiveBody = z.object({ reason: optionalText('reason') });
   app.post(
     '/api/issues/:number/validation/:checkId/waive',
     checked({ params: CheckParams, body: WaiveBody }, async ({ params, body, reply }) => {
       const next = write(issueOrigin(params.number), params.checkId, {
         state: 'waived',
-        note: body.reason,
+        note: body.reason !== undefined && body.reason.length > 0 ? body.reason : null,
         by: 'operator',
       });
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
