@@ -310,7 +310,7 @@ export function EscalationCard({
                 declines.unsaid.length > 0
                   ? unsaidTitle(declines.unsaid)
                   : declines.whole
-                    ? 'Every check is declined, so this sends the set back to be written again'
+                    ? 'You have struck out every check, so this sends them back to be written again'
                     : held
                       ? heldTitle(ack.outstanding)
                       : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')
@@ -326,7 +326,7 @@ export function EscalationCard({
                 )
               }
             >
-              {declines.whole ? 'Send the set back' : (ACCEPT_LABEL[decidable.kind] ?? 'Approve')}
+              {declines.whole ? 'Send them back' : (ACCEPT_LABEL[decidable.kind] ?? 'Approve')}
             </AsyncButton>
             <AsyncButton
               ghost
@@ -438,7 +438,7 @@ const ACCEPT_LABEL: Record<string, string> = {
   merge: 'Approve merge',
   reply_draft: 'Approve & send',
   plan: 'Approve plan',
-  validation_plan: 'Release the set',
+  validation_plan: 'Use these checks',
 };
 const ACCEPT_HINT: Record<string, string> = {
   validation_plan: 'Release these checks — the bench draws them and a check you hand to the fleet can be dispatched',
@@ -450,7 +450,7 @@ const REJECT_HINT: Record<string, string> = {
   merge: "Nothing goes out, and the harness won't ask again",
   reply_draft: "Nothing goes out, and the harness won't ask again",
   plan: 'Sends the plan back to a planner with your note; parts nothing has started for are retired',
-  validation_plan: 'Sends the set back to be written again with your note; the rows stay, to be amended',
+  validation_plan: 'Sends these back to be written again with your note; the checks stay, to be reworded',
 };
 
 function describeSignal(originRef?: string | null, prNumber?: number): string | null {

@@ -78,7 +78,12 @@ test('a passed result posts with no note, settles passed, and keeps operator att
   system.store.close?.();
 });
 
-test('a failed result still refuses with no note', async () => {
+/* The note was compulsory here, on the argument that a bare failure means nothing in a month. In
+   practice the field went untyped or unread, so what it bought was a toll on the commonest act in
+   the cockpit rather than a record — and it made recording a reading two presses. What keeps a bare
+   reading honest is that it is attributed and reversible: `resultBy` says who took it and the reset
+   route puts it back. → docs/spec/20-validation.md */
+test('a failed result posts with no note, and still reads as the operator’s', async () => {
   const system = build();
   seedCheck(system);
   const { app } = await buildApp(system);
@@ -88,8 +93,41 @@ test('a failed result still refuses with no note', async () => {
     url: '/api/issues/12/validation/csv-opens-in-excel/result',
     payload: { result: 'failed' },
   });
-  assert.equal(res.statusCode, 400);
-  assert.match((res.json() as { error: string }).error, /note is required/);
+  assert.equal(res.statusCode, 200);
+  const body = res.json() as { check: { state: string; resultNote: string | null; resultBy: string | null } };
+  assert.equal(body.check.state, 'failed');
+  assert.equal(body.check.resultNote, null);
+  assert.equal(body.check.resultBy, 'operator', 'a noteless failure must not read as an unattributed reset');
+
+  await app.close();
+  system.store.close?.();
+});
+
+/* The waiver's reason went the same way, and for the same reason — it is the other half of the same
+   press. A reason is still recorded where one is sent. */
+test('a waiver settles with no reason, and records one where it is given', async () => {
+  const system = build();
+  seedCheck(system);
+  const { app } = await buildApp(system);
+
+  const bare = await app.inject({
+    method: 'POST',
+    url: '/api/issues/12/validation/csv-opens-in-excel/waive',
+    payload: {},
+  });
+  assert.equal(bare.statusCode, 200);
+  const first = bare.json() as { check: { state: string; resultNote: string | null } };
+  assert.equal(first.check.state, 'waived');
+  assert.equal(first.check.resultNote, null);
+
+  const said = await app.inject({
+    method: 'POST',
+    url: '/api/issues/12/validation/csv-opens-in-excel/waive',
+    payload: { reason: 'the export path is going away next sprint' },
+  });
+  assert.equal(said.statusCode, 200);
+  const second = said.json() as { check: { resultNote: string | null } };
+  assert.equal(second.check.resultNote, 'the export path is going away next sprint');
 
   await app.close();
   system.store.close?.();

@@ -568,12 +568,12 @@ function Header({
             onClick={() => jump(GOAL_TAB_OF.validation, 'validation', ANCHOR.validation)}
             title={
               issue.validation.state === 'clear'
-                ? `All ${issue.validation.total} validation checks are settled — go to them`
-                : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred — go to them`
+                ? `All ${issue.validation.total} checks are done — go to them`
+                : `${issue.validation.failed} failed, ${issue.validation.unrun} not run, ${issue.validation.deferred} left for later — go to them`
             }
           >
             <Icon name="flask" size={12} />
-            Validation · {issue.validation.passed + issue.validation.waived} of {issue.validation.total} settled
+            Checks · {issue.validation.passed + issue.validation.waived} of {issue.validation.total} done
           </button>
         )}
         {/* What the fleet found driving this goal on the operator's own machine,
@@ -863,7 +863,7 @@ function Header({
 }
 
 function outstanding(verdict: ValidationVerdict): string {
-  return `Its validation plan is not clear — ${verdict.failed} failed, ${verdict.unrun} never run, ${verdict.deferred} deferred, of ${verdict.total}.`;
+  return `Its checks are not clear — ${verdict.failed} failed, ${verdict.unrun} not run, ${verdict.deferred} left for later, of ${verdict.total}.`;
 }
 
 function StateChip({ state, colours }: { state: string; colours: Readonly<Record<string, string>> }): JSX.Element {
@@ -946,10 +946,10 @@ function Validation({
   return (
     <section className="cn-card" id={ANCHOR.validation}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Validation" />
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Checks" />
         {live.length > 0 && (
           <i className="cn-n">
-            {settled}/{live.length} settled
+            {settled} of {live.length} done
           </i>
         )}
         {live.length === 0 && <i className="cn-n">no checks</i>}
@@ -991,7 +991,6 @@ function Validation({
             onResult={(checkId, result, note) =>
               actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
             }
-            onDefer={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'defer', reason })}
             onWaive={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'waive', reason })}
             onReset={(checkId) => actions.setValidation(issue.number, checkId, { kind: 'reset' })}
             onHandover={(checkId, to) => actions.setValidation(issue.number, checkId, { kind: 'handover', to })}

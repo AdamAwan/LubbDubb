@@ -1180,7 +1180,7 @@ test('validation and signals are folded on a goal that has not shipped', () => {
     },
   };
   const html = render({ ...nowhere, goalTab: 'validation' });
-  assert.ok(html.includes('Validation'), 'the card is named — a surface that vanishes when quiet looks broken');
+  assert.ok(html.includes('Checks'), 'the card is named — a surface that vanishes when quiet looks broken');
   assert.ok(!html.includes('cn-vin'), 'and its body is not drawn while there is nothing in it');
   assert.ok(
     render({ ...nowhere, goalTab: 'shipping' }).includes('0/1 reached'),

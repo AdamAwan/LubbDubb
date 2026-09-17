@@ -93,7 +93,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   close_out: 'A delivered goal needs closing',
   outcome: 'A delivered goal is waiting on your read of its plan',
   validate: 'A delivered goal is ready to be validated',
-  validation_plan: 'A validation check set is waiting on your acceptance',
+  validation_plan: 'Some checks need your OK',
   watch: 'A post-deploy watch is reporting a regression',
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',

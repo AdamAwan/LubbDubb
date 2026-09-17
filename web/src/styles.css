@@ -11587,3 +11587,305 @@ button.pk.pk {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+
+/* ── The check body, on both surfaces ─────────────────────────────────────────
+   One label gutter rather than three blocks in three shapes. The three facts a
+   check holds — what to do, the steps that do it, what makes it a pass — used to
+   be a two-up grid and a separately-headed list below it, which on a sheet of
+   nine checks is twenty-seven headings for three fields. Down one gutter the eye
+   finds the same field in the same place on every row. */
+.cd {
+  display: grid;
+  grid-template-columns: 12ch minmax(0, 78ch);
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+.cd > dt {
+  color: var(--muted);
+  text-align: right;
+}
+.cd > dd {
+  margin: 0;
+  min-width: 0;
+}
+.cd > dd > p:first-child {
+  margin-top: 0;
+}
+.cd > dd > p:last-child {
+  margin-bottom: 0;
+}
+.cd-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cd-steps li {
+  display: grid;
+  grid-template-columns: 1.5ch 10ch minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+}
+.cd-n {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+/* The step's kind, as one mono word rather than a chip. A chip is a thing you
+   press or a state you weigh; this is a category, and eight of them stacked read
+   as eight controls. */
+.cd-kind {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--blue);
+}
+/* A `state` step reads the deployed store, which is the one kind whose query this
+   card does not carry the consent for.
+   → docs/spec/36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run */
+.cd-kind-query {
+  color: var(--amber);
+}
+.cd-do {
+  min-width: 0;
+}
+.cd-area {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+  margin-left: 7px;
+}
+.cd-script {
+  display: block;
+}
+.cd-script i {
+  color: var(--amber);
+  font-style: normal;
+  font-size: 11px;
+}
+.cd-script pre {
+  margin: 3px 0 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre;
+}
+.cd-who {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+/* Said once under the list where every step has the same carrier, and on the row
+   only where they differ. A column of identical "the fleet" chips was the loudest
+   thing on an unopened sheet and carried one bit of news. */
+.cd-uniform {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cd-yours {
+  color: var(--amber);
+}
+/* What identifies the check rather than ranks it: its own handle, the parts it
+   covers, the fixtures it needs. Off the head, where they took the same weight as
+   its state, and onto one quiet line at the foot of the body. */
+.cd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cd-id {
+  font-family: var(--font-mono);
+}
+.cd-missing {
+  color: var(--amber);
+}
+@media (max-width: 620px) {
+  .cd {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px 0;
+  }
+  .cd > dt {
+    text-align: left;
+    margin-top: 5px;
+  }
+  .cd-steps li {
+    grid-template-columns: 1.5ch minmax(0, 1fr);
+  }
+  .cd-kind,
+  .cd-who {
+    grid-column: 2;
+    text-align: left;
+  }
+}
+/* ── The sheet as a queue ─────────────────────────────────────────────────────
+   A count and a meter where three paragraphs and two amber bands used to be.
+   How much is left is the one thing every reader of this surface wants, and it
+   was the thing they had to read most prose to find. */
+.vq-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0 8px;
+  font-size: 12px;
+}
+.vq-meter {
+  display: flex;
+  gap: 3px;
+}
+.vq-pip {
+  width: 14px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.vq-pip.passed {
+  background: color-mix(in srgb, var(--green) 70%, transparent);
+}
+.vq-pip.waived {
+  background: var(--grey);
+}
+.vq-pip.failed {
+  background: var(--red);
+}
+.vq-pip.unrun {
+  background: var(--amber);
+}
+.vq-pip.deferred {
+  background: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.vq-pip.captured {
+  background: var(--cn-captured);
+}
+.vq-pip.declined {
+  background: var(--violet);
+}
+.vq-all {
+  margin-left: auto;
+}
+.vq-about {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.vq-about summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+/* Every check the sheet is not answering: a line each. The set stays countable
+   and skimmable, and none of it competes with the one check that is asking a
+   question. */
+.vq-rest {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.vq-rest > .lb,
+.vq-rest > summary {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.vq-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vq-line:hover {
+  background: var(--panel-2);
+}
+.vq-line.unrun {
+  border-left-color: var(--amber);
+}
+.vq-line.captured {
+  border-left-color: var(--cn-captured);
+}
+.vq-line.failed {
+  border-left-color: var(--red);
+}
+.vq-line.deferred {
+  border-left-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.vq-line.passed {
+  border-left-color: color-mix(in srgb, var(--green) 45%, transparent);
+}
+.vq-line.waived {
+  border-left-color: var(--grey);
+}
+.vq-line-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vq-done .vq-line-title,
+.vq-done .pm-vletter {
+  color: var(--muted);
+}
+/* What to do when you cannot run it, behind a door. Four rarely-wanted controls
+   at the weight of the two that answer the check made the row read as six equal
+   options for a question that has two answers. */
+.pm-velse {
+  margin-left: 6px;
+}
+.pm-velse summary {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pm-velse-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+/* The steps, folded on the sheet: they are the journey the fleet would carry,
+   and the person reading this row is the one least likely to want them. */
+.cd-fold > summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.cd-fold[open] > summary {
+  margin-bottom: 4px;
+}
+/* A proposal row, folded to its gist. */
+.vp-open > summary {
+  cursor: pointer;
+  list-style-position: outside;
+}
+.vp-gist {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pm-vacts {
+  flex-wrap: wrap;
+}
+/* The secondary band. Amber says *read this before you act*; a count of what is
+   left is a fact about the sheet, not news, and two full-strength amber bands
+   stacked only invite a reader to rank them. */
+.pm-vflag.quiet {
+  border-color: var(--border);
+  color: var(--muted);
+}
+.pm-vflag.quiet b {
+  color: var(--text);
+}
