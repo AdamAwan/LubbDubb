@@ -10,14 +10,55 @@ import type {
   PetStage,
   PetState,
 } from '../types.js';
+import type { CockpitActions } from '../cockpit/actions.js';
 import { PET_STAGES, speciesSeen } from '../pets/reveal.js';
+import { PetsCollection } from './PetsCollection.js';
 import { SpeciesSprite } from './SpeciesSprite.js';
 import { absDate } from './util.js';
 import { Panel } from './panel.js';
 
 // → docs/spec/17-cockpit.md
 
-export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
+/**
+ * The one pets surface: the collection you keep, then the catalogue it is drawn
+ * from.
+ *
+ * The collection used to be a panel over whatever was in front, reached by
+ * clicking an animal, while the page answered what exists — two surfaces for one
+ * subsystem, and an operator who wanted both had one of them covering the other.
+ * → docs/spec/22-pets.md#the-pets-page
+ */
+export function PetsPage({
+  pets,
+  now,
+  blended,
+  actions,
+}: {
+  pets: PetState;
+  now: number;
+  blended: boolean;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <div className="pets-page">
+      <h3 className="species-h">Your pets</h3>
+      <PetsCollection
+        pets={pets}
+        now={now}
+        blended={blended}
+        onShowBlended={(show) => actions.showBlendedPets(show)}
+        onFeed={(id, beats) => actions.feedPet(id, beats)}
+        onRename={(id, name) => actions.renamePet(id, name)}
+        onPlace={(id, placed) => actions.placePet(id, placed)}
+        onBlend={(id) => actions.blendPet(id)}
+        onHatch={(id) => actions.hatchEgg(id)}
+      />
+      <Catalogue pets={pets} />
+    </div>
+  );
+}
+
+function Catalogue({ pets }: { pets: PetState }): JSX.Element {
   const [catalogue, setCatalogue] = useState<PetCatalogue | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -59,6 +100,7 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
 
   return (
     <div className="species">
+      <h3 className="species-h">The catalogue</h3>
       <div className="species-intro">
         <p>
           Every pet you can get, how often it drops, and what each one looks like as it grows. Rates are set in the code

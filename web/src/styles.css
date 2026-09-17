@@ -7665,10 +7665,26 @@ select:disabled {
   }
 }
 
+/* The collection and the catalogue are sections of one page now, stacked rather
+   than one drawn over the other. → docs/spec/22-pets.md#the-pets-page */
+.pets-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .pets {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+/* The way back to the pets already blended. Beside the count rather than over the
+   grid, because it is the answer to a question about the shelf rather than a
+   filter over the work. */
+.pets-gone {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .pets-wallet {
   border: 1px solid var(--border);

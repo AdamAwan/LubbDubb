@@ -47,7 +47,8 @@ test('every place round-trips through the query string', () => {
     at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'idea_V1StGXR8-Z5jdHi6' }),
     at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'all' }),
     at({ hatch: 'pet_7f2a1c' }),
-    at({ panel: 'pets', hatch: 'pet_7f2a1c' }),
+    at({ tab: 'pets', hatch: 'pet_7f2a1c' }),
+    at({ tab: 'pets', petsBlended: true }),
     at({ tab: 'config' }),
     at({ tab: 'config', configTab: 'prompts', configGroup: 'Agents' }),
     at({ tab: 'insights' }),
@@ -157,6 +158,13 @@ test('a link to the deleted backlog tab lands on the tickets tab', () => {
 test('a link to the retired work tab lands where its triage went', () => {
   assert.equal(readPlace('?tab=work').tab, 'tickets');
   assert.equal(readPlace('?tab=work&goal=issue:142').goal, 'issue:142', 'and keeps the rest of the place');
+});
+
+/* The vivarium panel is the Pets page now. → docs/spec/22-pets.md#the-pets-page */
+test('a link to the retired vivarium panel lands on the Pets page', () => {
+  assert.equal(readPlace('?panel=pets').tab, 'pets');
+  assert.equal(readPlace('?panel=pets').panel, null, 'and opens no panel over it');
+  assert.equal(readPlace('?panel=pets&hatch=pet_7f2a1c').hatch, 'pet_7f2a1c', 'and keeps the egg it was opening');
 });
 
 test('links to the retired knowledge, findings and lessons surfaces land on the obstacle board', () => {

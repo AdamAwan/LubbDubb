@@ -92,7 +92,6 @@ const PANEL_REACH: Record<
   faults: { key: 'faults', view: null },
   launch: { key: 'launch', view: 'job.view' },
   build: { key: 'build', view: 'upgrade.view' },
-  pets: { key: 'pets', view: 'pet.view' },
   localRun: { key: 'local-run', view: 'local-run.view' },
   setup: { key: 'setup', view: 'config.view' },
   record: { key: 'record', view: null },

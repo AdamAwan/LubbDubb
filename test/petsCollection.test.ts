@@ -7,7 +7,7 @@ import type { PetActionKind, PetState, PetView } from '../web/src/types.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { PetsPanel } = await import('../web/src/components/PetsPanel.js');
+const { PetsCollection } = await import('../web/src/components/PetsCollection.js');
 
 const KINDS: readonly PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'finding', 'upgrade'];
 
@@ -38,7 +38,7 @@ function pet(over: Partial<PetView> = {}): PetView {
   };
 }
 
-function draw(pets: PetView[]): string {
+function draw(pets: PetView[], blended = false): string {
   const state: PetState = {
     pets,
     wallet: { earned: 0, spent: 0, balance: 0 },
@@ -46,9 +46,11 @@ function draw(pets: PetView[]): string {
     startedAt: null,
   };
   return renderToStaticMarkup(
-    createElement(PetsPanel, {
+    createElement(PetsCollection, {
       pets: state,
       now: 1_700_000_000_000,
+      blended,
+      onShowBlended: () => undefined,
       onFeed: async () => undefined,
       onRename: async () => undefined,
       onPlace: async () => undefined,
@@ -86,4 +88,34 @@ test('the whole sentence is reachable from the card however long the label is', 
   const label = 'x'.repeat(90);
   const html = draw([pet({ originLabel: label })]);
   assert.match(html, new RegExp(`title="Found when you answered “${label}”"`));
+});
+
+/* The shelf is the collection, and a blended pet is a record of one. Drawing them
+   together by default reads as a collection that shrank — and the record is never
+   deleted, so the way back to it is a control.
+   → docs/spec/22-pets.md#blending-a-duplicate */
+test('a blended pet is off the shelf until it is asked for', () => {
+  const pets = [pet(), pet({ id: 'pet_2', dissolvedAt: new Date(1_700_000_000_000).toISOString() })];
+
+  const hidden = draw(pets);
+  assert.equal((hidden.match(/class="[^"]*pet-card/g) ?? []).length, 1, 'the blended pet is drawn by default');
+  assert.ok(!hidden.includes('is-dissolved'), 'a blended card is on the shelf unasked');
+  assert.match(hidden, /aria-pressed="false"[^>]*>Show blended/, 'nothing says the record is still there');
+
+  const shown = draw(pets, true);
+  assert.equal((shown.match(/class="[^"]*pet-card/g) ?? []).length, 2, 'asking for them drew no more cards');
+  assert.ok(shown.includes('is-dissolved'), 'the blended card is missing from the fuller shelf');
+  assert.match(shown, /aria-pressed="true"[^>]*>Hide blended/);
+});
+
+test('a collection with nothing blended in it offers no control', () => {
+  assert.ok(!draw([pet()]).includes('pets-gone'), 'a control for a state nothing is in');
+});
+
+/* Every pet blended is still a collection, and the sentence for it is not the one
+   for a vivarium nobody has found anything in yet. */
+test('a shelf hidden down to nothing says which nothing it is', () => {
+  const html = draw([pet({ dissolvedAt: new Date(1_700_000_000_000).toISOString() })]);
+  assert.ok(html.includes('has been blended back into beats'), 'it reads as a vivarium that never filled');
+  assert.ok(html.includes('pets-gone'), 'and offers no way to the record');
 });

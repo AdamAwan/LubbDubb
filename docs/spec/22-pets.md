@@ -229,7 +229,7 @@ helper rather than a rule, because a rule is a thing a surface written later doe
 the field is right there on the view.
 
 **The withholding runs to the juvenile, not to the shell.** A hatchling shares one grid per tier, so
-its species is exactly as unknown as an egg's — and the panel named it anyway, in the name field's
+its species is exactly as unknown as an egg's — and the card named it anyway, in the name field's
 placeholder, from the day it shipped. That quietly cost the juvenile stage its entire point, and
 nothing was red: the card was correct, the sprite was correct, and the only symptom was that the
 wait the sprites were built around had already been answered on the surface beside them. The hatch
@@ -481,7 +481,7 @@ now five minutes whenever the fleet is idle, which is a still image that redraws
 
 `web/src/console/Vivarium.tsx`, rendered as the **last child of `.cn-body`** — after the rail and
 after the situation area. It draws through `web/src/components/PetSprite.tsx`, which is shared with
-the panel and so styles itself through the token layer rather than a `cn-` class.
+the collection and so styles itself through the token layer rather than a `cn-` class.
 
 **Last in the document, because that is what decides where it lands in one column.** Below 1100px the
 shell has no rail beside anything: it is one column scrolling as a single page, and document order is
@@ -523,7 +523,7 @@ whose whole argument is that one thing is at full voice is a second surface. The
 cut because they were never a reading: they are decoration, which is [what this subsystem
 is](#what-it-is-not), and decoration is the one thing that costs a focused operator nothing. Every count
 the banner carried is on [the Pets page](#the-pets-page) and on every other shape, and any animal is
-still one click from the panel.
+still one click from it.
 
 **Both at once would be the vivarium twice** — the strip at the foot of the page and the same four
 creatures inside the card — which is why the suppression is a condition in `ConsoleRoot` rather than
@@ -531,15 +531,22 @@ something the focus shape tries to draw around.
 
 **One button per creature, rather than one over the floor.** The floor was a single button while it
 had a single destination; an egg gives it two — a shell opens its own ceremony, anything else opens
-the panel — and one click cannot have two destinations. Nested buttons are the other way to spell
+[the page](#the-pets-page) — and one click cannot have two destinations. Nested buttons are the other way to spell
 that and are not a thing HTML has, so each animal is its own control and the strip underneath carries
 the way in for an empty enclosure. → [17](17-cockpit.md#links)
 
 **The strip is the Pets destination, and it took the nav slot Pets had.** A nav slot is the most
 expensive space in the cockpit, and that one was buying a second way to a subsystem already drawn at
-full size in this corner, beside a strip that was _already_ a button. So the two clicks split by what
-they are for: an **animal** is the collection — where you feed, rename, place and blend one — and the
-**strip** is [the page](#the-pets-page), which is what the subsystem is.
+full size in this corner, beside a strip that was _already_ a button.
+
+**Every click in this corner has the same destination**, through `openPets` in `Vivarium.tsx` — an
+animal, the empty enclosure's own button and the strip around them all open [the page](#the-pets-page),
+and an egg alone keeps its ceremony. They split once: an animal opened a **panel** over whatever was in
+front, where you fed, renamed, placed and blended one, and the strip opened the page, which said what
+exists. Two surfaces for one subsystem is a split an operator has to have learnt — the collection is
+where you act and the catalogue is where you read, and the two questions are asked in the same breath —
+and the panel arrived _over_ the page, so an operator who followed a name from one to the other had to
+close the thing they came from. One destination holds both, in the order the questions come.
 
 It has to _read_ as a destination, which is the half that is easy to lose: a caption naming the
 enclosure and a way into it look identical without a word and a mark. So the strip says **`Pets`** —
@@ -557,11 +564,11 @@ reveal rather than a second roll, because there is nothing left to decide by the
 Four pets stand in it, chosen by the operator — and the first four to hatch stand there without
 being asked for, because an empty enclosure under a full queue is exactly what teaches somebody the
 corner is decoration. Putting out a fifth is refused rather than silently swapping one out: evicting
-whoever was there is the cockpit deciding something the operator did not. Clicking it opens the panel.
+whoever was there is the cockpit deciding something the operator did not. Clicking it opens the page.
 
 Four rather than all of them because the rail is a single narrow column and a vivarium that scrolled would
 be a second queue in the one place on the screen reserved for the first. The bound holds at the
-narrow width too, where the enclosure is as wide as the page: four is what the panel behind it is for,
+narrow width too, where the enclosure is as wide as the page: four is what the page behind it is for,
 and a floor that filled itself because there was room would make the strip at the foot of a phone
 screen the tallest thing on it.
 
@@ -573,18 +580,39 @@ sorts before [the vivarium's start](#the-vivariums-start), and the date is the o
 them apart. Nothing is drawn while `startedAt` is null — one boot, before the first scan settles it —
 since a sentence about a boundary nothing has decided yet is worse than the silence.
 
-## The panel
+## Your pets
 
-`ConsolePanel` gains `'pets'`, so the panel is a place — it survives a reload and the back button
-steps out of it, which is what `Place` (`web/src/cockpit/place.ts`) exists to guarantee and what a
-`useState` in `useCockpit` would silently not.
+`web/src/components/PetsCollection.tsx` draws every pet as a card: sprite, name, rarity, the action it
+hatched from with its timestamp, a fed meter, and controls to feed, rename and place it. It is the
+first section of [the Pets page](#the-pets-page) and is drawn nowhere else.
 
-`web/src/components/PetsPanel.tsx` draws every pet as a card: sprite, name, rarity, the action it
-hatched from with its timestamp, a fed meter, and controls to feed, rename and place it.
+It was a `ConsolePanel` — `'pets'`, a place of its own — until the page absorbed it. The member is gone
+from the type, and `?panel=pets` is a `PANEL_ALIASES` entry pointing at the `pets` **tab**, so a link
+somebody saved lands on the surface that took the panel's job rather than on the overview with nothing
+saying why. Nothing else about the place changed: the page is a `ConsoleTab`, which is what makes it
+survive a reload and the back button.
 
-The origin line is the point of the panel. A grid of creatures is a toy; a grid of creatures each
+The origin line is the point of the collection. A grid of creatures is a toy; a grid of creatures each
 labelled with the night you answered the thing that produced it is a record, and it is the only part
 of this subsystem that gets better the longer a deployment runs.
+
+### The blended are off the shelf until asked for
+
+**A pet that has been blended is not drawn**, unless `Place.petsBlended` says to draw it — `?blended=1`,
+set by the one control beside the count, which is absent entirely on a collection with nothing blended
+in it. The default is the collection as it stands: a shelf that leads with the animals already spent
+reads as one that shrank, and the spent ones can be neither fed, put out nor blended again, so every
+control on their cards is dead.
+
+**Hidden, never gone.** [Blending](#blending-a-duplicate) marks and never deletes precisely because the
+origin line outlives the animal, so the record has to stay one click away rather than one migration
+away — the control is the way back, and it is on `Place` so that a link to the fuller shelf is a link.
+A card that comes back comes back as it always was, `.pet-card.is-dissolved`, spent rather than absent.
+
+**A shelf hidden down to nothing says which nothing it is.** An empty vivarium and a vivarium whose
+every pet has been blended are different facts, and the sentence for the first — _nothing has been found
+yet, eggs come from things you do_ — is wrong about the second in the way that reads as the feature
+being broken.
 
 ### What the origin line says
 
@@ -595,7 +623,7 @@ triaged, and, for an `upgrade`, _updated itself to_ its short sha. The label is 
 something a person wrote and bare where it is a ref the harness minted, since quoting a ref reads as
 a title it is not.
 
-**A null [label](#the-label) draws the line the panel drew before there was one** — the phrase and
+**A null [label](#the-label) draws the line the card drew before there was one** — the phrase and
 the raw `originRef`. That is the case a pruned or restored source row lands in, and a pet outlives
 what it came from by design, so the fallback is a shorter sentence rather than a blank line, an
 apology or a [flaw](#what-is-not-checked).
@@ -617,12 +645,15 @@ card names them rather than pretending to a destination it has not got.
 
 ## The Pets page
 
-`ConsoleTab` gains `'pets'`, so the catalogue is a **place** rather than a panel over whatever was in
-front — a destination has to round-trip through the URL whatever draws the way in. It is the second pets
-surface and the two answer different questions: the panel is **your collection**, reached by clicking an
-animal; the page is **what exists**, reached from [the vivarium's strip](#the-vivarium).
+`ConsoleTab` gains `'pets'`, so the page is a **place** rather than a panel over whatever was in
+front — a destination has to round-trip through the URL whatever draws the way in. It is the **only**
+pets surface, and it answers the subsystem's two questions in the order they are asked: **what you have**
+([your pets](#your-pets), the collection and every control over it) and then **what exists** (the
+catalogue). `PetsPage` is the composition of those two and holds no state of its own; the fetch and the
+early returns belong to the catalogue half, so a catalogue that will not load leaves the collection
+standing rather than taking the page with it.
 
-`web/src/components/PetsPage.tsx` draws four things — the two constants and the **rate per action**,
+`web/src/components/PetsPage.tsx` draws four things below the collection — the two constants and the **rate per action**,
 the tier weights as a bar, every species banded by rarity, and the matrix of every action against
 every tier it can roll. There is no way in at all whenever the snapshot ships no vivarium —
 `pets.enabled` off, or `pets.visible` off — since the strip that carries it is the enclosure's own, and
@@ -668,7 +699,7 @@ you have not met.
 **The name is the juvenile's to give**, exactly as [`speciesKnown`](#what-the-shell-gives-away) has it
 for a single pet: the hatchling is the tier's own form and says nothing about which animal is inside
 it. That the two agree is not a coincidence to be maintained by care — the page derives `found` from
-the same map, so a surface cannot come to disagree with the panel about whether an animal has been
+the same map, so the catalogue cannot come to disagree with the collection above it about whether an animal has been
 identified.
 
 **Each age is drawn once a pet of yours has reached it**, with every rung below it — a pet at adult
@@ -845,7 +876,7 @@ reason and by the same filter.
 
 `origin_ref` is a row id by construction — `esc_Jdt9l826iQ` — so `PetView` carries an `originLabel`
 beside it: the **Label** column above, resolved from the source row and clamped to one line of ninety
-characters. Free text an operator or an agent typed reaches the wire clamped rather than the panel,
+characters. Free text an operator or an agent typed reaches the wire clamped rather than the card,
 because a paragraph with newlines in it reflows a grid and nothing in `npm run check` draws a card.
 
 Three things about where it is resolved, each of them the reason for the next.
@@ -868,7 +899,7 @@ this subsystem already refused back on every pulse.
 
 `origin_kind` and `origin_ref` do not move for any of this. They are the seed, the input to the
 re-roll in `src/pets/attest.ts` and part of the chain hash — the label sits beside them and is read by
-nothing but the panel.
+nothing but the collection.
 
 ## Blending a duplicate
 
@@ -880,7 +911,9 @@ blending is a use for surplus rather than a currency press.
 **It marks, it never deletes.** A blended pet keeps its row, its species, its seed and its origin
 line, gains a `dissolvedAt` stamp, leaves the vivarium and stops being feedable or placeable. The
 origin line — the night you answered the thing that produced it — is the one part of this subsystem
-that gets better the longer a deployment runs, and a `DELETE` takes it with the animal.
+that gets better the longer a deployment runs, and a `DELETE` takes it with the animal. It is
+[off the shelf by default](#the-blended-are-off-the-shelf-until-asked-for) and one control from being
+back on it, which is the whole difference between a record and a deletion.
 
 **Only a duplicate goes.** `blend` refuses the last live pet of a species, which is what keeps the
 row above in the "not" table honest: nothing is taken from you that you did not have twice.
@@ -998,7 +1031,7 @@ Nothing advances it, so it is not a cursor and cannot fall behind one — see
 [The vivarium's start](#the-vivariums-start).
 
 `pets.fed` is a cached sum of that pet's purchases, kept because the vivarium reads it on every
-snapshot and the panel reads it per card. The purchase and the increment are written in one
+snapshot and the collection reads it per card. The purchase and the increment are written in one
 transaction, so there is no window in which a pet has been paid for and not grown.
 
 ## Configuration

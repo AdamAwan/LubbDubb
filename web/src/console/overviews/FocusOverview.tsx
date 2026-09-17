@@ -11,7 +11,7 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
 import { waitedFor } from '../GoalPage.js';
-import { PetFloor } from '../Vivarium.js';
+import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';
 import { byWeight, partsHeld } from './asks.js';
@@ -238,7 +238,7 @@ function Pets({ view, actions }: { view: CockpitView; actions: CockpitActions })
         pets={view.state.pets}
         runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
         paused={view.state.control.paused}
-        onOpen={() => actions.openPanel('pets')}
+        onOpen={() => openPets(actions)}
         onHatch={(id) => actions.hatchEgg(id)}
       />
     </div>

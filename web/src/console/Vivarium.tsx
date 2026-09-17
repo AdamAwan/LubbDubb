@@ -1,22 +1,35 @@
 import type { PetState } from '../types.js';
+import type { CockpitActions } from '../cockpit/actions.js';
 import { PetSprite } from '../components/PetSprite.js';
 import { absDate } from '../components/util.js';
 
 // → docs/spec/17-cockpit.md
+
+/**
+ * The way to the pets surface, from wherever an operator reaches for one.
+ *
+ * One destination rather than two. An animal used to open a panel over whatever
+ * was in front and the strip around it opened the page, so the collection and
+ * the catalogue were two surfaces for one subsystem — and reading both meant
+ * closing one. Both go to the page now, which holds each.
+ * → docs/spec/22-pets.md#the-pets-page
+ */
+export function openPets(actions: CockpitActions): void {
+  actions.selectGoal(null);
+  actions.openTab('pets');
+}
 
 export function Vivarium({
   pets,
   runningAgents,
   paused,
   onOpen,
-  onOpenPage,
   onHatch,
 }: {
   pets: PetState;
   runningAgents: number;
   paused: boolean;
   onOpen: () => void;
-  onOpenPage: () => void;
   onHatch: (id: string) => void;
 }) {
   const placed = pets.pets.filter((pet) => pet.placed);
@@ -27,8 +40,8 @@ export function Vivarium({
       <button
         type="button"
         className="cn-viv-bar"
-        onClick={onOpenPage}
-        title="Pets — what the vivarium is and how it fills"
+        onClick={onOpen}
+        title="Pets — your collection, and what the vivarium is and how it fills"
       >
         {/* **"Pets", not "Vivarium".** The strip is the nav's old tab now, and it
             has to answer the question the tab answered — a caption naming the
@@ -109,7 +122,7 @@ export function PetFloor({
               <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
             </button>
           ) : (
-            <button key={pet.id} type="button" className="cn-viv-pet" title="Open the vivarium" onClick={onOpen}>
+            <button key={pet.id} type="button" className="cn-viv-pet" title="Open the Pets page" onClick={onOpen}>
               <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
             </button>
           ),

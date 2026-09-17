@@ -69,6 +69,7 @@ export interface CockpitView {
   ticketColumns: string[];
   featureCard: number | null;
   featureSort: FeatureSort;
+  petsBlended: boolean;
   overviewShape: OverviewShape;
   featureMode: FeatureMode;
   featurePrs: FeaturePrFilter;
@@ -180,6 +181,7 @@ interface ViewInputs {
   ticketColumns?: string[];
   featureCard?: number | null;
   featureSort?: FeatureSort;
+  petsBlended?: boolean;
   overviewShape?: OverviewShape;
   featureMode?: FeatureMode;
   featurePrs?: FeaturePrFilter;
@@ -272,6 +274,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketColumns: input.ticketColumns ?? [],
     featureCard: input.featureCard ?? null,
     featureSort: input.featureSort ?? 'wants-you',
+    petsBlended: input.petsBlended ?? false,
     overviewShape: input.overviewShape ?? 'cards',
     featureMode: input.featureMode ?? 'board',
     featurePrs: input.featurePrs ?? 'open',
