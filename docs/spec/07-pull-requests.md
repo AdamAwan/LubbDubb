@@ -602,7 +602,113 @@ shape satisfied and the reading lost. `prBodyRefusal` (`src/pr/prBody.ts`) asser
 ships that way: the body is the one thing about a pull request the harness does not rewrite. A
 refusal costs the agent one turn and names the exact line that broke it, which is a fix rather than
 a re-read of the description. An absent body is not refused — the appended reference stands on its
-own, and an agent with nothing to add should add nothing.
+own, and an agent with nothing to add should add nothing. What _is_ refused, with a body or without
+one, is a change that owes the reviewer an answer and gives none: that is the next section.
+
+### The four questions a reviewer has
+
+A reviewer looking at a pull request has to be able to answer four things, and the bullets above
+answer none of them:
+
+1. Is this what we asked for?
+2. What cannot be undone if it is wrong?
+3. What is missing?
+4. How far does it reach if it is wrong?
+
+**The harness must not answer them.** Whatever an agent writes about its own change is written by the
+thing with the most reason to be wrong about it, and a reviewer reading "this is low-risk and fully
+tested" has spent their attention being told the conclusion they came to reach. The point of a review
+is the reviewer's judgement, and a body that supplies judgement has replaced it rather than served it.
+
+So the rule the whole of this rests on is: **coordinates, not conclusions.** Every entry the agent
+writes for these questions carries a pointer — `src/store/sync.ts:41` — into a file this pull request
+changes. A pointer is falsifiable in one click; a judgement is not falsifiable at all. It is also the
+only form in which reassurance is unwritable: "this is a safe change" cannot be said with a
+coordinate in it, and "`src/sync/resume.ts:88` runs on every boot with no flag on it" is the same
+sentence with the verdict taken out and the evidence left in.
+
+#### They are arguments, not a sentence in a prompt
+
+`open_pr` takes five lists — `satisfies`, `one_way`, `unverified`, `reach`, `decided` — and the
+harness renders them into a fixed block between the agent's bullets and the reference. The same
+reasoning as `IssueCreateInput` ([13](13-jobs-and-tickets.md#filing-a-ticket)): a thing a record must
+carry is an argument, because a sentence in a prompt fails silently and an argument does not. It also
+keeps the block's shape the harness's, so a reviewer learns where to look once and a field nobody
+filled reads `_none named_` rather than closing up — an absent heading is not an answer, and
+`_none named_` is one, on the record, attributable to the agent that wrote it.
+
+The bullets are untouched by all of this and stay five plain lines. Folding four more dimensions into
+them would rebuild the `## Summary` / `## Changes` / `## Testing` restatement the bullet rules exist
+to refuse.
+
+#### What each question turns into
+
+- **Is this what we asked for? — `satisfies`, and the criteria themselves.** The first half is free
+  and has no agent in it: `resolveOpenPr` carries the part's `acceptanceCriteria` on its target
+  ([08](08-planning.md)), and the block renders them **verbatim, as the plan recorded them**, which is
+  the one line on the page nothing the agent writes can shade. The agent's half is only the mapping —
+  one entry per criterion, in the plan's order, each naming where it is met. A criterion that is not
+  met is written `not met: <why>`, which is a real answer and not a failure to have one.
+- **What cannot be undone? — `one_way`.** A migration that has run, rows that are gone, something
+  written into the world under the operator's account, a name a deployment may already be overriding.
+- **What is missing? — `unverified` and `decided`.** It cannot be answered, by anybody: if the agent
+  knew what was missing it would not be missing. What can be answered is the **boundary** — what no
+  test pins, and what was in scope and deliberately left out. A reviewer who can see the edge of what
+  was checked is the only one who can tell what fell outside it, and that is their own knowledge
+  doing the work, which is the point.
+- **How far does it reach? — `reach`.** What runs the changed code — the pulse, boot, a route, an
+  agent tool, the cockpit alone — and whether a config flag gates it or it is unconditional. This
+  codebase's own quiet failures are all instances of this question, so it is the one field owed by
+  every change that touches code that runs.
+- **`decided`** carries a fork the ask did not settle, written as **"X, not Y"**. The road not taken
+  is the information: an agent that chose is the only one who knows there was a choice, and "not what
+  we asked for" lives in a gap silently filled far more often than in a criterion visibly unmet. It
+  is the one field that is never required, because it is honest only when volunteered.
+
+#### What is owed comes from the diff, not from asking
+
+`evidenceRefusal` (`src/pr/prEvidence.ts`) asserts the shape, for the reason `prBodyRefusal` exists:
+a description is a request. Its arms read the shape and never the claim — length, an entry cap, a
+coordinate that names a file in the diff, the plainness rules and reading-ease floor
+([31](31-review-packs.md#say-it-in-plainer-words)), the `"X, not Y"` form, and a list of words that
+answer the reviewer's question for them (`safe`, `simple`, `minimal`, `no risk`, `fully tested` and
+the rest), each refused by naming the word it caught.
+
+**Which fields are owed is decided by the diff**, so a change that touches nothing one-way is never
+asked to invent a one-way door. That is what keeps this from becoming a form to fill in:
+
+| Owed         | When                                                                         |
+| ------------ | ---------------------------------------------------------------------------- |
+| `satisfies`  | the part declares acceptance criteria — and the refusal lists them, numbered |
+| `one_way`    | the diff touches a one-way surface (below)                                   |
+| `unverified` | the diff changes code and no test under `test/` changed with it              |
+| `reach`      | the diff changes code that runs — deliberately, every time                   |
+| `decided`    | never                                                                        |
+
+`reach` firing on every code change is the one deliberate exception to trigger-gating, and it is
+worth naming as such: how far a change carries if it is wrong is live on all of them.
+
+### What the harness can see for itself
+
+An agent-free fact beats an agent-written one, so anything the clone can read off the diff is read off
+the diff. `diffFacts` (`src/pr/prDiff.ts`) parses `GitObserver.diff(base, branch)` into the files
+changed, whether any test changed with them, and which one-way surfaces the change touches; the block
+renders that under **The diff**, said by the clone rather than by the author. It also backstops the
+fields: a computed line naming `src/store/` beside a `one_way` section reading `_none named_` is a
+contradiction a reviewer sees without being told about it.
+
+**The one-way table is a trigger and never a verdict.** `ONE_WAY` in `src/pr/prDiff.ts` is a list of
+_this repo's own_ one-way doors — `src/store/`, an `ALTER TABLE` or `DROP` in the added lines, a
+`DELETE FROM`, a `runOnce(` id, `src/sink/` and `src/tickets/`, `src/mcp/names.ts` and the prompt
+book, `src/selfUpdate/`, a `git clean` or a `switch -C`. Every row decides only that the **question is
+owed**; what a revert would not take back is the agent's to say, and nothing here reads the answer.
+
+**A clone that cannot diff owes nothing.** `GitObserver.diff` answers `null` for a ref it cannot
+resolve — the harness's clone never checks the branch out and may not have fetched it — and `null` is
+_could not look_, never _nothing found_. Every trigger resting on it fails open, so the pull request
+opens with the block saying the clone could not read the diff. The direction matters: a pull request
+refused because git would not run is a branch that never gets reviewed, and the fields the agent did
+fill still ship.
 
 ### Naming a pull request
 

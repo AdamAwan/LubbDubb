@@ -1,5 +1,5 @@
 import { issueOriginId, issueOriginNumber } from '../issueOrigins.js';
-import { bySlug, liveParts, partBase, partBranch } from '../plans/parts.js';
+import { acceptanceCriteria, bySlug, liveParts, partBase, partBranch } from '../plans/parts.js';
 import type { Issue, Plan, PlanPart } from '../types.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -11,6 +11,13 @@ interface OpenPrTarget {
   base: string;
   position: number;
   total: number;
+  /**
+   * The ask, as the plan recorded it before the work started. Carried here so the
+   * body renders it from the plan rather than from the agent's account of it — the
+   * one line on the page nothing the agent writes can shade.
+   * → docs/spec/07-pull-requests.md#the-four-questions-a-reviewer-has
+   */
+  criteria: string[];
 }
 
 export interface OpenPrContext {
@@ -47,6 +54,7 @@ function pickupTarget(issueNumber: number, ctx: OpenPrContext): OpenPrTarget | {
     base: ctx.defaultBranch,
     position: 1,
     total: 1,
+    criteria: [],
   };
 }
 
@@ -65,6 +73,7 @@ function partTarget(issueNumber: number, slug: string, ctx: OpenPrContext): Open
     base: partBase(part, bySlug(live), issueNumber, ctx.defaultBranch),
     position: ordered.findIndex((p) => p.slug === slug) + 1,
     total: ordered.length,
+    criteria: acceptanceCriteria(part).map((c) => c.text),
   };
 }
 
