@@ -67,29 +67,38 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  app.post(
-    '/api/goals/:number/prediction/marks',
-    checked({ params: IssueNumberParams, body: MarkBody }, async ({ params, body, reply }) => {
-      const originRef = issueOriginRef('root', params.number);
-      const outcome = predictions.recordPlanMarks({
-        originRef,
-        marks: { locus: body.locus, cause: body.cause, hard: body.hard, surprise: body.surprise },
-      });
-      if (!outcome.ok) {
-        if (outcome.reason === 'slot-skipped')
+  // The two moments are two routes over the same slots, because they are two
+  // records: moment one is a claim about the operator's model of the system and
+  // moment two is a claim about the plan. Answering one says nothing about the
+  // other, and either arriving alone must read as the other being unanswered.
+  for (const [path, write] of [
+    ['/api/goals/:number/prediction/marks', predictions.recordPlanMarks.bind(predictions)],
+    ['/api/goals/:number/prediction/outcome', predictions.recordOutcomeMarks.bind(predictions)],
+  ] as const) {
+    app.post(
+      path,
+      checked({ params: IssueNumberParams, body: MarkBody }, async ({ params, body, reply }) => {
+        const originRef = issueOriginRef('root', params.number);
+        const outcome = write({
+          originRef,
+          marks: { locus: body.locus, cause: body.cause, hard: body.hard, surprise: body.surprise },
+        });
+        if (!outcome.ok) {
+          if (outcome.reason === 'slot-skipped')
+            return reply
+              .code(409)
+              .send({ error: `the ${outcome.slot} slot was skipped, so there is nothing there to mark` });
+          if (outcome.reason === 'no-prediction')
+            return reply.code(404).send({ error: 'there is no prediction on this goal to mark' });
           return reply
             .code(409)
-            .send({ error: `the ${outcome.slot} slot was skipped, so there is nothing there to mark` });
-        if (outcome.reason === 'no-prediction')
-          return reply.code(404).send({ error: 'there is no prediction on this goal to mark' });
-        return reply
-          .code(409)
-          .send({ error: 'this goal has not been revealed, and a mark against an unseen plan is not a mark' });
-      }
-      hub.broadcast({ type: 'dirty', sections: ['plans'] });
-      return { ok: true, prediction: outcome.prediction };
-    }),
-  );
+            .send({ error: 'this goal has not been revealed, and a mark against an unseen plan is not a mark' });
+        }
+        hub.broadcast({ type: 'dirty', sections: ['plans'] });
+        return { ok: true, prediction: outcome.prediction };
+      }),
+    );
+  }
 
   app.get(
     '/api/goals/:number/prediction',

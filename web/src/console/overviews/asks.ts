@@ -36,6 +36,9 @@ const STAGE_RANK: Record<NeedKind, number> = {
   validation_plan: 2,
   bench: 2,
   close_out: 2,
+  // Moment two is asked after the goal is closed out, so it sits at the same stage
+  // rather than ahead of the close it follows.
+  outcome: 2,
   shortfall: 2,
   escalation: 3,
   permission: 3,

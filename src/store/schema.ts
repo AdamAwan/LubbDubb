@@ -2133,6 +2133,15 @@ CREATE TABLE IF NOT EXISTS goal_predictions (
   plan_mark_hard     TEXT,
   plan_mark_surprise TEXT,
   plan_marked_at     TEXT,
+  -- Moment two: whether the plan the fleet produced turned out to be right, per
+  -- slot, asked at delivery. Same three values and the same null, which is skipped
+  -- or not asked yet and is never a miss. A separate record from moment one's
+  -- because the interesting rows are the ones where the two disagree.
+  outcome_mark_locus    TEXT,
+  outcome_mark_cause    TEXT,
+  outcome_mark_hard     TEXT,
+  outcome_mark_surprise TEXT,
+  outcome_marked_at     TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

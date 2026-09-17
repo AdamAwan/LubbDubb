@@ -869,6 +869,7 @@ export type {
   JobAttachmentInput,
   JobSchedule,
   PredictionMark,
+  PredictionOutcomeMarks,
   PredictionPlanMarks,
   PredictionSlot,
   Obstacle,

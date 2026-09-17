@@ -32,6 +32,7 @@ export type NeedKind =
   | 'placement'
   | 'bench'
   | 'close_out'
+  | 'outcome'
   | 'validate'
   | 'validation_plan'
   | 'watch'
@@ -70,6 +71,9 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   intake: 'next',
   profile: 'next',
   close_out: 'next',
+  // Moment two is skippable by design and holds nothing: it belongs behind
+  // everything the fleet is actually waiting on.
+  outcome: 'later',
   validate: 'next',
   validation_plan: 'next',
   bench: 'next',
@@ -285,6 +289,7 @@ function kindOf(e: Escalation, proposal: Proposal | undefined, originRef: string
 const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
   ask: 'bench',
   close_out: 'close_out',
+  outcome: 'outcome',
   validate: 'validate',
   watch: 'watch',
   burn: 'burn',

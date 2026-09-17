@@ -459,7 +459,7 @@ export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch' | 'outcome';
 
 export interface HumanTask {
   id: string;
@@ -2112,6 +2112,8 @@ export interface GoalPrediction {
   slots: Readonly<Record<PredictionSlot, string | null>>;
   planMarks: PredictionPlanMarks;
   planMarkedAt: string | null;
+  outcomeMarks: PredictionOutcomeMarks;
+  outcomeMarkedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2133,6 +2135,21 @@ export type PredictionMark = 'matched' | 'missed' | 'not-applicable';
  * slot has no text to mark and stays null for good.
  */
 export type PredictionPlanMarks = Readonly<Record<PredictionSlot, PredictionMark | null>>;
+
+/**
+ * Moment two's marks — "was the plan right?", asked at delivery. The same
+ * three-valued mark over the same slots, and null carries the same weight it does
+ * at moment one and for the same reason: a goal whose moment one was marked and
+ * whose moment two was skipped belongs in moment one's aggregate column and in
+ * neither of moment two's. Folding a skip into `missed` files a question nobody
+ * answered as a plan that turned out wrong.
+ *
+ * The two are separate records because either alone misleads. A prediction that
+ * missed the plan and a plan that then turned out wrong is the operator having been
+ * right; a prediction that matched a plan that turned out wrong is the operator and
+ * the fleet wrong together.
+ */
+export type PredictionOutcomeMarks = Readonly<Record<PredictionSlot, PredictionMark | null>>;
 
 /**
  * The reveal gate's record: the goal was offered, and the operator answered. A goal

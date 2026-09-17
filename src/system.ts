@@ -2,7 +2,7 @@ import { tmpdir } from 'node:os';
 import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
 import { prRefStyle } from './pr/prRef.js';
 import { join } from 'node:path';
-import { configFilePath, projectConfigFilePath, type Config } from './config/config.js';
+import { configFilePath, projectConfigFilePath, revealGateOn, type Config } from './config/config.js';
 import { Store } from './store/store.js';
 import type { PredictionStore } from './store/predictions.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
@@ -667,7 +667,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const closeOutSink = opts.sink ?? connector;
-  const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
+  const closeOuts = new DeliveryCloseOutDesk(
+    store,
+    config.environments,
+    () => closeOutSink.canCloseIssue(),
+    // The one place the close-out bench and the prediction record meet, and it
+    // hands over origin refs alone. With the gate off the set is empty, which is
+    // also what settles any row that was standing when it was turned off.
+    () => (revealGateOn(config) ? new Set(predictions.listOutcomeOwed()) : new Set()),
+  );
 
   const validationAsks = new ValidationAskDesk(store);
 

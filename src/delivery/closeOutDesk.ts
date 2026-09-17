@@ -17,13 +17,22 @@ export class DeliveryCloseOutDesk {
     private readonly store: Store,
     private readonly environments: EnvironmentConfig[] = [],
     private readonly canClose: () => boolean = () => false,
+    /**
+     * The goals owing the second scoring moment, as origin refs. A closure rather
+     * than a store member because the record it reads is not on `Store` and must not
+     * become reachable from one; refs rather than rows because nothing this desk
+     * writes may carry what the operator wrote. Empty when the gate is off, which is
+     * also what settles any row left standing when it is turned off.
+     */
+    private readonly outcomeOwed: () => ReadonlySet<string> = () => new Set(),
   ) {}
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(world: CloseOutWorld): void {
     const deliveries = this.store.verdicts.listDeliveries();
     const existing = this.store.humanTasks.listHumanTasksOfKind('close_out');
-    if (deliveries.length === 0 && existing.length === 0) return;
+    const existingOutcome = this.store.humanTasks.listHumanTasksOfKind('outcome');
+    if (deliveries.length === 0 && existing.length === 0 && existingOutcome.length === 0) return;
     const readings = watchWindowReadings({
       windows: this.store.watches.listWatchWindows(),
       checks: this.store.watches.listGoalWatches(),
@@ -54,6 +63,8 @@ export class DeliveryCloseOutDesk {
         this.store.environments.listEnvironmentGateReleases(),
       ),
       canClose: this.canClose(),
+      outcomeOwed: this.outcomeOwed(),
+      existingOutcome,
       opened: openedGoals(
         'close_out',
         this.environments,
@@ -62,12 +73,12 @@ export class DeliveryCloseOutDesk {
       ),
     });
     for (const step of steps) {
-      if (step.kind === 'file')
+      if (step.kind === 'file' || step.kind === 'file-outcome')
         this.store.humanTasks.recordHumanTask({
           title: step.title,
           detail: step.detail,
           originRef: step.originRef,
-          kind: 'close_out',
+          kind: step.kind === 'file' ? 'close_out' : 'outcome',
           agentId: null,
           taskId: null,
         });
