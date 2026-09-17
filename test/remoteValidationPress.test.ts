@@ -539,8 +539,11 @@ test('waiving is not a route here: the sheet’s retire path is validation’s o
     seed(system.store);
     const url = `/api/issues/12/validation/${CHECK.id}`;
 
+    /* Retiring a check is validation's own route and settles on one press — the reason it used to
+       demand went the way of the result note, for the same reason. What this test is about is that
+       the *sheet* has no retire path of its own. → docs/spec/20-validation.md */
     const nothingSaid = await app.inject({ method: 'POST', url: `${url}/waive`, payload: {} });
-    assert.equal(nothingSaid.statusCode, 400, 'a waive requires a reason — retiring a check is an act somebody signs');
+    assert.equal(nothingSaid.statusCode, 200, 'a waive settles through validation’s own route');
 
     const deferred = await app.inject({
       method: 'POST',

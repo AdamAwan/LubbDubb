@@ -68,22 +68,31 @@ test('a validate ask draws the goal’s own check rows, not only the sentence na
   const html = askBody(v, validateRow(v));
   const checks = v.state.validationChecks?.filter((c) => c.originRef === 'issue:395' && c.supersededReason === null);
   assert.ok(checks !== undefined && checks.length > 0, 'the goal the row is about has no checks');
+  /* Matched on the title rather than the id: the sheet draws one check in full and the rest as a
+     line each, and the title is what every check carries either way. The id is on the open row's
+     own meta line, so asserting it would only ever find the one check being answered. */
   for (const check of checks) {
-    assert.ok(html.includes(check.id), `check ${check.letter} is not drawn on the ask at all`);
+    assert.ok(html.includes(check.title), `check ${check.letter} is not drawn on the ask at all`);
   }
 });
 
-test('a validate ask opens every check still owed, and leaves the settled ones closed', () => {
+test('a validate ask draws one check in full — the first still owed — and the rest as a line each', () => {
   const v = view();
   const html = askBody(v, validateRow(v));
   const live = v.state.validationChecks!.filter((c) => c.originRef === 'issue:395' && c.supersededReason === null);
   const owed = live.filter((c) => c.state !== 'passed' && c.state !== 'waived');
-  assert.ok(owed.length > 0 && owed.length < live.length, 'the goal must owe some checks and not all of them');
-  /* Counted off the row's own disclosure rather than matched on its prose: what an
-     open row draws is its `do`, its `expect` and its steps, and every one of those
-     is markdown by the time it reaches the page. */
-  const open = html.split('aria-expanded="true"').length - 1;
-  assert.equal(open, owed.length, 'the rows drawn open are not the rows still owed');
+  assert.ok(owed.length > 1 && owed.length < live.length, 'the goal must owe several checks and not all of them');
+  /* The sheet is a queue, not a table: nine checks drawn open together is nine checks' worth of
+     prose and controls competing for a decision that is always about one of them. So exactly one
+     row is full, and it is the head of the queue rather than whichever the operator last touched.
+     → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue */
+  const full = html.split('pm-vrow open').length - 1;
+  assert.equal(full, 1, 'the ask draws more than one check in full');
+  const lines = html.split('class="vq-line ').length - 1;
+  assert.equal(lines, live.length - 1, 'every check the sheet is not answering should be drawn as a line');
+  /* Only the check being answered draws its own detail, so its id is the one that reaches the page. */
+  assert.ok(html.includes(owed[0]!.id), `the open row should be ${owed[0]!.letter}, the first still owed`);
+  assert.ok(!html.includes(owed[1]!.id), `${owed[1]!.letter} should be a line, not a second open row`);
 });
 
 test('a validate ask still carries the row’s own verbs', () => {
@@ -102,7 +111,7 @@ test('the close-out ask draws the checks its own note is about', () => {
   );
   assert.ok(live.length > 0, 'the goal being closed out has no checks, so there is nothing to assert');
   for (const check of live) {
-    assert.ok(html.includes(check.id), `check ${check.letter} is not drawn on the close-out ask`);
+    assert.ok(html.includes(check.title), `check ${check.letter} is not drawn on the close-out ask`);
   }
   /* The note on `Done` says the outstanding checks are listed above it. It is the
      sentence this body has to keep honest, so the rows it names are drawn before

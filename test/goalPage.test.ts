@@ -604,7 +604,7 @@ test('the strip quotes the parts and the checks rather than re-reading them', ()
   assert.equal(planStage.tone, 'blue', 'something is moving and nothing is held');
 
   const validation = strip.find((s) => s.at === 'validation')!;
-  assert.equal(validation.reading, '1/4 settled', 'passed plus waived, as the header chip counts them');
+  assert.equal(validation.reading, '1 of 4 done', 'passed plus waived, as the header chip counts them');
   assert.equal(validation.tone, 'amber', 'a check actually failed');
 });
 

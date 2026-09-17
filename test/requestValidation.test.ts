@@ -290,15 +290,16 @@ function routeSources(): [string, string][] {
   return files.map((file) => [file, readFileSync(join(server, file), 'utf8')]);
 }
 
-test('the validation routes refuse a missing account by naming the field each one takes', async () => {
+/* `result` and `waive` were on this list and are not any more: a reading and a waiver each settle on
+   one press, and what they do instead of demanding an account is record who took them and stay
+   reversible. `defer` keeps its reason because a deferral is the one act that names something the
+   check is waiting *for*, which nothing else on the row carries.
+   → docs/spec/20-validation.md, test/validationResultNote.test.ts for the two that were relaxed */
+test('the deferral route refuses a missing account by naming the field it takes', async () => {
   const system = build();
   const { app } = await buildApp(system);
 
-  const routes = [
-    { verb: 'result', field: 'note', payload: { result: 'failed' } },
-    { verb: 'defer', field: 'reason', payload: {} },
-    { verb: 'waive', field: 'reason', payload: {} },
-  ];
+  const routes = [{ verb: 'defer', field: 'reason', payload: {} }];
   for (const route of routes) {
     const url = `/api/issues/12/validation/a-check/${route.verb}`;
     for (const payload of [route.payload, { ...route.payload, [route.field]: '   ' }]) {
