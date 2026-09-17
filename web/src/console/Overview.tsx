@@ -586,10 +586,12 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
   const { watchLabel } = config;
-  const yours = open.filter(isYours);
-  const theirs = open.filter((pr) => !isYours(pr));
-  const grouped = yours.length > 0;
-  const ordered = grouped ? [...yours, ...theirs] : open;
+  const asking = open.filter(isAsking);
+  const answered = open.filter((pr) => isAssigned(pr) && !isAsking(pr));
+  const fleet = open.filter((pr) => !isAssigned(pr));
+  const grouped = asking.length + answered.length > 0;
+  const marks = open.some((pr) => whoAsked(pr) !== null);
+  const ordered = grouped ? [...asking, ...answered, ...fleet] : open;
 
   return (
     <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
@@ -605,27 +607,32 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         words="subline"
         rows={ordered.map((pr) => {
           const row = prRow(pr, view, actions, watchLabel);
-          if (!grouped) return row;
-          return { ...row, group: band(isYours(pr), yours.length, theirs.length), who: <Who name={whoAsked(pr)} /> };
+          const who = marks ? { who: <Who name={whoAsked(pr)} /> } : {};
+          if (!grouped) return { ...row, ...who };
+          return { ...row, ...who, group: band(pr, asking.length, answered.length, fleet.length) };
         })}
       />
     </section>
   );
 }
 
-function isYours(pr: OpenPullRequest): boolean {
+function isAssigned(pr: OpenPullRequest): boolean {
+  return pr.viewerAssignment !== undefined;
+}
+
+function isAsking(pr: OpenPullRequest): boolean {
   return pr.attention.assignedToYou !== undefined;
 }
 
 function whoAsked(pr: OpenPullRequest): string | null {
   const author = pr.author?.trim() ?? '';
-  return isYours(pr) && author !== '' ? author : null;
+  return pr.viewerAuthored === false && author !== '' ? author : null;
 }
 
-function band(mine: boolean, yours: number, theirs: number): RowGroup {
-  return mine
-    ? { key: 'yours', label: 'Assigned to review', note: `${yours}`, tone: 'ask' }
-    : { key: 'fleet', label: 'The fleet’s', note: `${theirs}` };
+function band(pr: OpenPullRequest, asking: number, answered: number, fleet: number): RowGroup {
+  if (isAsking(pr)) return { key: 'asking', label: 'Assigned to review', note: `${asking}`, tone: 'ask' };
+  if (isAssigned(pr)) return { key: 'answered', label: 'Assigned, not waiting on you', note: `${answered}` };
+  return { key: 'fleet', label: 'The fleet’s', note: `${fleet}` };
 }
 
 function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {

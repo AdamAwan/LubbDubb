@@ -143,6 +143,8 @@ export class FakeGitHubIntegration
               ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
               ...(event.author === undefined ? {} : { author: event.author }),
               ...(event.viewerAuthored === undefined ? {} : { viewerAuthored: event.viewerAuthored }),
+              ...(event.viewerAssignment === undefined ? {} : { viewerAssignment: event.viewerAssignment }),
+              ...(event.viewerApproved === undefined ? {} : { viewerApproved: event.viewerApproved }),
             });
           }
           break;

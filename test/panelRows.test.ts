@@ -145,7 +145,8 @@ test('a pull-request row keeps the court’s reasons and wears none of its words
   const open = state.world.pullRequests;
   const drawn = [
     ...open.filter((pr) => pr.attention.assignedToYou !== undefined),
-    ...open.filter((pr) => pr.attention.assignedToYou === undefined),
+    ...open.filter((pr) => pr.viewerAssignment !== undefined && pr.attention.assignedToYou === undefined),
+    ...open.filter((pr) => pr.viewerAssignment === undefined),
   ];
   assert.equal(rows.length, open.length, 'every open pull request is drawn');
   assert.ok(!rack.includes('cn-why-chip'), 'the rack drew a state word');
