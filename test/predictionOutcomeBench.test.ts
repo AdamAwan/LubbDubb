@@ -5,7 +5,7 @@ import { closeOutPass } from '../src/delivery/closeOut.js';
 import { DeliveryCloseOutDesk } from '../src/delivery/closeOutDesk.js';
 import type { HumanTask, Issue, IssueDelivery } from '../src/types.js';
 
-// → docs/proposals/prediction-record-and-criteria-integrity.md §2.4
+// → docs/spec/14-persistence.md#moment-two--was-the-plan-right
 
 /** The strings the prediction holds. None of them may appear on a bench row. */
 const SENTINELS = {

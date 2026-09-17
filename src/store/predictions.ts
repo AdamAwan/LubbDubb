@@ -188,6 +188,27 @@ export class PredictionStore {
     return rows.map((r) => r.origin_ref);
   }
 
+  /**
+   * Every prediction. The aggregate's read, and it narrows what comes back to marks
+   * and counts before anything reads it — the rows themselves still carry the text,
+   * so this stays as contained as every other method here: it is reached only as
+   * `system.predictions`, never off `Store`.
+   */
+  listPredictions(): GoalPrediction[] {
+    const rows = this.ctx.prep(`SELECT * FROM goal_predictions ORDER BY created_at ASC`).all() as PredictionRow[];
+    return rows.map(rowToPrediction);
+  }
+
+  /** Every reveal. A goal absent from this list was never offered the gate, which is not a decline. */
+  listReveals(): GoalReveal[] {
+    const rows = this.ctx.prep(`SELECT * FROM goal_reveals ORDER BY revealed_at ASC`).all() as RevealRow[];
+    return rows.map((row) => ({
+      originRef: row.origin_ref,
+      revealedAt: row.revealed_at,
+      predicted: row.predicted === 1,
+    }));
+  }
+
   getPrediction(originRef: string): GoalPrediction | null {
     const row = this.ctx.prep(`SELECT * FROM goal_predictions WHERE origin_ref=?`).get(originRef) as
       | PredictionRow

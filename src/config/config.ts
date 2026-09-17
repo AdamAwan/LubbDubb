@@ -62,6 +62,14 @@ export interface Config {
   runway: RunwayPolicy;
   pets: PetPolicy;
   prediction: PredictionConfig;
+  /**
+   * How many goals a rate's denominator needs before the prediction aggregate
+   * carries that rate at all. Below it the figure is absent from the payload rather
+   * than captioned, because a caption saying "small sample" is read by nobody and
+   * withholding it is the only way the panel can be made not to draw it. The counts
+   * are never withheld. → docs/spec/18-observability.md
+   */
+  predictionAggregateMinGoals: number;
   goalCriteria: GoalCriteriaConfig;
   selfUpdate: SelfUpdatePolicy;
   validation: ValidationPolicy;
@@ -219,6 +227,7 @@ const DEFAULTS: Config = {
   runway: DEFAULT_RUNWAY,
   pets: { enabled: true, visible: true },
   prediction: { enabled: false },
+  predictionAggregateMinGoals: 10,
   goalCriteria: { enabled: false },
   selfUpdate: {
     enabled: true,

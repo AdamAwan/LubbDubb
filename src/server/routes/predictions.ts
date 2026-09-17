@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { revealGateOn } from '../../config/config.js';
 import { issueOriginRef } from '../../issueOrigins.js';
 import { PREDICTION_SLOTS } from '../../store/predictions.js';
+import { buildPredictionAggregate, predictionFacts } from '../../insights/predictionAggregate.js';
+import type { PredictionAggregatePayload } from '../../wire.js';
 import { checked, IssueNumberParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -99,6 +101,33 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }),
     );
   }
+
+  /**
+   * The aggregate is its own read rather than a section on the state payload, on
+   * the precedent every other insight here follows (`/api/spend`, `/api/throughput`):
+   * it is a whole-history fold nobody needs on every pulse, and the state payload is
+   * broadcast on each one. It is gated where the rest of this module is — the route
+   * is not mounted at all with both keys off — and everything downstream reads the
+   * presence of the data, never the flag.
+   *
+   * It is keyed by slot and by goal. There is no author parameter and no author in
+   * what it returns, because scoring people is out of scope: `predictionFacts` drops
+   * the author with the slot text on the way in, so the filter a later change would
+   * reach for has nothing to group by.
+   */
+  app.get('/api/predictions/aggregate', async () => {
+    const planned = [...new Set(store.plans.listPlans().map((plan) => plan.originRef))];
+    return {
+      aggregate: buildPredictionAggregate({
+        facts: predictions.listPredictions().map(predictionFacts),
+        reveals: predictions.listReveals(),
+        plannedGoals: planned,
+        drift: store.goalCriteria.listCriteriaDrift(),
+        threshold: config.predictionAggregateMinGoals,
+        now: Date.now(),
+      }),
+    } satisfies PredictionAggregatePayload;
+  });
 
   app.get(
     '/api/goals/:number/prediction',

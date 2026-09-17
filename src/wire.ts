@@ -36,6 +36,7 @@ import type { McpInsights } from './insights/mcpInsights.js';
 import type { OperatorInsights } from './insights/operatorInsights.js';
 import type { SurfaceReachInsights } from './insights/surfaceReachInsights.js';
 import type { SpendTrend } from './insights/spendTrend.js';
+import type { PredictionAggregate } from './insights/predictionAggregate.js';
 import type { Stack } from './stacks/stack.js';
 import type { LocalRunOption } from './localRun/ref.js';
 import type {
@@ -780,6 +781,10 @@ export interface SpendTrendPayload {
   trend: SpendTrend;
 }
 
+export interface PredictionAggregatePayload {
+  aggregate: PredictionAggregate;
+}
+
 export interface McpUsagePayload {
   insights: McpInsights;
 }
@@ -1040,6 +1045,8 @@ export type {
   SpendTrendBucket,
 } from './insights/spendTrend.js';
 // → docs/spec/16-http-api.md
+
+export type { PredictionAggregate } from './insights/predictionAggregate.js';
 
 export type { ChecksSpend, TaskTypeSpend } from './insights/taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';

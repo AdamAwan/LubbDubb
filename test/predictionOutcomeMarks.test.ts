@@ -4,7 +4,7 @@ import { Store } from '../src/store/store.js';
 import type { PredictionStore } from '../src/store/predictions.js';
 import type { PredictionMark, PredictionSlot } from '../src/types.js';
 
-// → docs/proposals/prediction-record-and-criteria-integrity.md §2.4
+// → docs/spec/14-persistence.md#moment-two--was-the-plan-right
 
 /**
  * Moment two — "was the plan right?" — is a second record over the same slots, and
