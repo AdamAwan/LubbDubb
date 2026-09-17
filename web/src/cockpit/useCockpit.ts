@@ -276,6 +276,7 @@ export function useCockpit(): CockpitStatus {
         logUsage('feature.filter');
         go(next);
       },
+      showBlendedPets: (petsBlended) => go({ petsBlended }),
       setOverviewShape: (overview) => go({ overview }),
       setFeatureMode: (featureMode) => go({ featureMode }),
       collapseFeature: (issueNumber, collapsed) =>
@@ -444,6 +445,7 @@ export function useCockpit(): CockpitStatus {
       ticketColumns: place.ticketColumns,
       featureCard: place.featureCard,
       featureSort: place.featureSort,
+      petsBlended: place.petsBlended,
       overviewShape: place.overview,
       featureMode: place.featureMode,
       featurePrs: place.featurePrs,

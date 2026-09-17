@@ -8,9 +8,11 @@ import { Panel } from './panel.js';
 
 // → docs/spec/17-cockpit.md
 
-export function PetsPanel({
+export function PetsCollection({
   pets,
   now,
+  blended,
+  onShowBlended,
   onFeed,
   onRename,
   onPlace,
@@ -19,6 +21,8 @@ export function PetsPanel({
 }: {
   pets: PetState;
   now: number;
+  blended: boolean;
+  onShowBlended: (show: boolean) => void;
   onFeed: (id: string, beats: number) => Promise<unknown>;
   onRename: (id: string, name: string) => Promise<unknown>;
   onPlace: (id: string, placed: boolean) => Promise<unknown>;
@@ -28,6 +32,13 @@ export function PetsPanel({
   const { wallet } = pets;
   const live = new Map<PetView['species'], number>();
   for (const pet of pets.pets) if (pet.dissolvedAt === null) live.set(pet.species, (live.get(pet.species) ?? 0) + 1);
+  /* Drawn from the collection by default. A blended pet is a record rather than an
+     animal — it cannot be fed, put out or blended again — and a shelf that leads
+     with the ones already gone reads as a collection that shrank. The record is
+     never deleted, so the way back to it is a control rather than a rebuild, and
+     it is a `Place` so a link to the fuller shelf is one. */
+  const gone = pets.pets.filter((pet) => pet.dissolvedAt !== null).length;
+  const shown = blended ? pets.pets : pets.pets.filter((pet) => pet.dissolvedAt === null);
   return (
     <div className="pets">
       <div className="pets-wallet">
@@ -41,14 +52,27 @@ export function PetsPanel({
         </p>
       </div>
 
+      {gone === 0 ? null : (
+        <div className="pets-gone">
+          <button type="button" className="ghost small" aria-pressed={blended} onClick={() => onShowBlended(!blended)}>
+            {blended ? 'Hide' : 'Show'} blended
+          </button>
+          <span className="muted small">{gone} blended back into beats. Their record stays either way.</span>
+        </div>
+      )}
+
       {pets.pets.length === 0 ? (
         <p className="muted">
           Nothing has been found yet. Eggs come from things <em>you</em> do — answering an escalation, settling a task,
           accepting a plan, landing a stack. The fleet cannot earn one however much it spends.
         </p>
+      ) : shown.length === 0 ? (
+        <p className="muted">
+          Every pet here has been blended back into beats. Show them to read where each one came from.
+        </p>
       ) : (
         <div className="pets-grid">
-          {pets.pets.map((pet) => (
+          {shown.map((pet) => (
             <PetCard
               key={pet.id}
               pet={pet}

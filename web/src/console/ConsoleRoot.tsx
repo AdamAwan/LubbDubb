@@ -23,9 +23,8 @@ import { RecordPanel } from '../components/RecordPanel.js';
 import { PoolStatus } from '../components/PoolStatus.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
-import { PetsPanel } from '../components/PetsPanel.js';
 import { PetsPage } from '../components/PetsPage.js';
-import { Vivarium } from './Vivarium.js';
+import { Vivarium, openPets } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
 import { InsightsPage } from '../components/InsightsPage.js';
@@ -139,11 +138,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
             pets={view.state.pets}
             runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
             paused={view.state.control.paused}
-            onOpen={() => actions.openPanel('pets')}
-            onOpenPage={() => {
-              actions.selectGoal(null);
-              actions.openTab('pets');
-            }}
+            onOpen={() => openPets(actions)}
             onHatch={(id) => actions.hatchEgg(id)}
           />
         )}
@@ -231,7 +226,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       return view.state.pets === null ? (
         <p className="muted">Pets are hidden on this deployment.</p>
       ) : (
-        <PetsPage pets={view.state.pets} />
+        <PetsPage pets={view.state.pets} now={view.now} blended={view.petsBlended} actions={actions} />
       );
     case 'config':
       return <ConfigPage view={view} actions={actions} />;
@@ -376,7 +371,6 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   faults: 'Faults',
   launch: 'Launch',
   build: 'Build',
-  pets: 'Vivarium',
   localRun: 'Running locally',
   setup: 'Setup',
   record: 'The record',
@@ -469,18 +463,6 @@ function panelBody(
 ): ReactNode {
   const { state } = view;
   switch (panel) {
-    case 'pets':
-      return state.pets === null ? null : (
-        <PetsPanel
-          pets={state.pets}
-          now={view.now}
-          onFeed={(id, beats) => actions.feedPet(id, beats)}
-          onRename={(id, name) => actions.renamePet(id, name)}
-          onPlace={(id, placed) => actions.placePet(id, placed)}
-          onBlend={(id) => actions.blendPet(id)}
-          onHatch={(id) => actions.hatchEgg(id)}
-        />
-      );
     case 'faults':
       return <FaultLog view={view} actions={actions} />;
     case 'upnext': {

@@ -29,7 +29,6 @@ export type ConsolePanel =
   | 'faults'
   | 'launch'
   | 'build'
-  | 'pets'
   | 'localRun'
   | 'setup'
   | 'record'
@@ -167,6 +166,7 @@ export interface CockpitActions {
   renamePet(id: string, name: string): Promise<void>;
   placePet(id: string, placed: boolean): Promise<void>;
   blendPet(id: string): Promise<void>;
+  showBlendedPets(show: boolean): void;
 
   setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
 

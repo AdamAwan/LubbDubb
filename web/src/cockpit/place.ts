@@ -50,6 +50,8 @@ export interface Place {
   featureCard: number | null;
   featureSort: FeatureSort;
   featurePrs: FeaturePrFilter;
+  /** Whether the Pets page draws the pets that have been blended. */
+  petsBlended: boolean;
   /** Which shape the overview draws in. */
   overview: OverviewShape;
   /** Whether the feature board is read as a board or worked one Feature at a time. */
@@ -146,6 +148,7 @@ export const NOWHERE: Place = {
   featureCard: null,
   featureSort: 'wants-you',
   featurePrs: 'open',
+  petsBlended: false,
   overview: 'cards',
   featureMode: 'board',
 };
@@ -159,6 +162,9 @@ const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = {
 
 const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   knowledge: 'obstacles',
+  /* The vivarium panel is the Pets page now, so a saved `?panel=pets` link lands
+     on the surface that absorbed it rather than on the overview. */
+  pets: 'pets',
   findings: 'obstacles',
   lessons: 'obstacles',
 };
@@ -175,7 +181,6 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   upnext: true,
   signals: true,
   environments: true,
-  pets: true,
   localRun: true,
   setup: true,
   record: true,
@@ -235,6 +240,7 @@ export function readPlace(search: string): Place {
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
+    petsBlended: query.has('blended'),
     overview: readOverview(param(query, 'overview')),
     featureMode: FEATURE_MODES.find((m) => m === param(query, 'fmode')) ?? 'board',
   };
@@ -379,6 +385,7 @@ export function placeQuery(place: Place): string {
   if (place.featureCard !== null) query.set('card', String(place.featureCard));
   if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
+  if (place.petsBlended) query.set('blended', '1');
   if (place.overview !== 'cards') query.set('overview', place.overview);
   if (place.featureMode !== 'board') query.set('fmode', place.featureMode);
   const encoded = query.toString();
