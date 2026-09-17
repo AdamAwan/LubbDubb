@@ -1410,6 +1410,11 @@ typed as a nullable union rather than a boolean, and `readMark` maps any column 
 of the three to null — so a value written by a future version, or by hand, reads as _unmarked_ rather
 than as a miss.
 
+`plan_marked_at` says moment one was **answered**, and it is derived from the marks rather than
+stamped on every call: an operator who un-marks what they had marked must not leave behind a stamp
+saying otherwise. Stamp it unconditionally and a non-null value stops implying that a single mark
+exists, so the aggregate's count of answered goals becomes a count of goals somebody once opened.
+
 They are named `plan_mark_*` rather than `mark_*` because there are **two** scoring moments and
 conflating them is the main way this record would produce numbers that mean nothing. Moment two, at
 delivery, asks _"was the plan right?"_ — a claim about the plan rather than about the operator. A

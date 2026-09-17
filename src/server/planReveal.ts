@@ -1,6 +1,18 @@
-import { revealGateOn } from '../config/config.js';
-import type { System } from '../system.js';
+import { revealGateOn, type Config } from '../config/config.js';
+import type { PredictionStore } from '../store/predictions.js';
+import type { Store } from '../store/store.js';
 import type { Plan } from '../types.js';
+
+/**
+ * What deciding this question needs, rather than the whole `System`. `System`
+ * satisfies it structurally, so every caller there is unchanged — but stating it
+ * this narrowly is what lets the composition root hand the *answer* to a channel
+ * that must never be able to ask it, the desktop MCP server above all.
+ */
+interface RevealReader {
+  config: Config;
+  predictions: PredictionStore;
+}
 
 // → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed
 
@@ -24,11 +36,11 @@ export const WITHHELD_PLAN =
  * approved while the gate was off has no stamp and never will, and withholding on
  * the missing stamp alone would leave it withheld for ever.
  */
-export function planIsWithheld(system: System, plan: Plan | null | undefined): boolean {
+export function planIsWithheld(reader: RevealReader, plan: Plan | null | undefined): boolean {
   if (plan === null || plan === undefined) return false;
-  if (!revealGateOn(system.config)) return false;
+  if (!revealGateOn(reader.config)) return false;
   if (plan.status !== 'awaiting_approval') return false;
-  return system.predictions.getReveal(plan.originRef) === null;
+  return reader.predictions.getReveal(plan.originRef) === null;
 }
 
 /**
@@ -42,9 +54,9 @@ export function planIsWithheld(system: System, plan: Plan | null | undefined): b
  * first is one press, and if they then want nothing to do with the plan the
  * record says so honestly: revealed, not predicted on.
  */
-export function withheldPlanRefusal(system: System, planId: unknown): string | null {
+export function withheldPlanRefusal(reader: RevealReader & { store: Store }, planId: unknown): string | null {
   if (typeof planId !== 'string') return null;
-  if (!planIsWithheld(system, system.store.plans.getPlan(planId))) return null;
+  if (!planIsWithheld(reader, reader.store.plans.getPlan(planId))) return null;
   return 'this goal’s plan has not been revealed yet — POST /api/goals/:number/reveal first, which hands you the plan';
 }
 
@@ -64,13 +76,13 @@ export function withheldAction<T extends object>(action: T): T {
  * which is before any reveal can have happened — so an unredacted relay would put
  * the body in the browser ahead of the gate that exists to keep it out.
  */
-export function withheldEscalation(system: System, escalation: unknown): unknown {
+export function withheldEscalation(reader: RevealReader & { store: Store }, escalation: unknown): unknown {
   if (typeof escalation !== 'object' || escalation === null) return escalation;
   const context: unknown = (escalation as { context?: unknown }).context;
   const planId: unknown =
     typeof context === 'object' && context !== null ? (context as { planId?: unknown }).planId : undefined;
   if (typeof planId !== 'string') return escalation;
-  if (!planIsWithheld(system, system.store.plans.getPlan(planId))) return escalation;
+  if (!planIsWithheld(reader, reader.store.plans.getPlan(planId))) return escalation;
   return {
     ...escalation,
     prompt: WITHHELD_PLAN,

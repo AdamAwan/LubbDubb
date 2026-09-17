@@ -108,6 +108,7 @@ import { bySlug, partBase, planIssueNumber } from './plans/parts.js';
 import { LiveConfig } from './config/configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
+import { planIsWithheld } from './server/planReveal.js';
 
 // → docs/spec/01-overview.md
 
@@ -349,8 +350,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }),
   );
 
+  const predictions = store.openPredictions();
   const desktop = new McpDesktopServer({
     store,
+    // The desktop channel is the operator's own Claude Code, and it can read a plan
+    // aloud. It is handed the *answer* to whether a plan is withheld, never the means
+    // to ask — src/mcp/ must not be able to name the prediction store.
+    planWithheld: (plan) => planIsWithheld({ config, predictions }, plan),
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
@@ -965,7 +971,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates,
     runtimeControl,
     pets,
-    predictions: store.openPredictions(),
+    predictions,
     localRun,
     localRunWatch,
     localValidations,

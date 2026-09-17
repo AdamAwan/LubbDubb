@@ -887,6 +887,25 @@ load-bearing both ways:
 
 ## The desktop channel
 
+### A withheld plan is withheld here too
+
+`plan_read` and `proposal_read` refuse while a plan is withheld pending the operator's reveal
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). This channel is the operator's
+**own** assistant, so it can read a plan aloud to them — which defeats the reveal gate exactly as
+reading it in the cockpit would, and leaves no stamp behind saying they looked. It was the eighth path
+past that gate and the easiest to miss, because the gate's other seven are all in `src/server/` and
+this one is not.
+
+It is handed the **answer** rather than the means: `DesktopToolDeps.planWithheld` is a predicate the
+composition root supplies, computed from the one `planIsWithheld`. Nothing under `src/mcp/` may reach
+the prediction store — `test/predictionContainment.test.ts` fails the build if it tries — so the
+question has to be asked somewhere that may, and the answer passed in.
+
+This is the sharp edge `CLAUDE.md` names about the two channels, in its other direction: there, the
+risk is editing the fleet's tool and leaving the operator's on the old behaviour. Here a gate was
+built across the fleet's surfaces and the operator's channel kept the door open.
+
+
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
 spawned agent. Six jobs go there — four about one goal, one about a Feature, and
 [one about the harness itself](#watching-and-steering-the-fleet): a validation check needing a browser and a login the fleet does

@@ -1,5 +1,29 @@
 # 10 — Agent runtimes
 
+## What an agent does not inherit
+
+An agent is launched with the harness's own environment — that is what lets it reach `gh`, the
+provider, and its own MCP socket. Four keys are **stripped** from what it inherits, in
+`src/agents/spawnEnv.ts`, applied at both spawn seams:
+
+`LUBBDUBB_TOKEN` is the cockpit bearer, and every operator-only route answers to it. An agent holding
+it can `curl` the cockpit and read back anything the cockpit can — including, where the reveal gate is
+on, the operator's prediction, verbatim, slot by slot. That is the one thing the whole prediction
+record exists to prevent, and the escape is **over the network rather than through an import**, so
+neither the type system nor the structural containment test can see it. A deny-list at the spawn seam
+is what closes it, and `test/predictionContainment.test.ts` asserts both that the keys are stripped
+and that neither spawn site has gone back to spreading `process.env` wholesale.
+
+`LUBBDUBB_INGRESS_SECRET`, `LUBBDUBB_INGRESS_BASIC` and `LUBBDUBB_DESKTOP_CREDENTIAL` are credentials
+of the same kind, which no agent has any reason to hold.
+
+This strips what is **inherited**. Anything the harness deliberately hands a session through its own
+spec still arrives, because the spec is spread after — which is how `LUBBDUBB_MCP_TOKEN`,
+`LUBBDUBB_TASK_ID` and the rest reach the agent that is meant to have them.
+
+It is the same genre as the standing rule that `ANTHROPIC_API_KEY` is never added to the spawn
+environment: what an agent's environment carries is a decision, not a default.
+
 ## The session contract
 
 `src/agents/session.ts` defines `AgentSession`, which both runtimes implement — `StreamJsonSession`,

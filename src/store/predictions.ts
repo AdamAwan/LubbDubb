@@ -121,6 +121,13 @@ export class PredictionStore {
         marks[slot] = mark;
       }
       const ts = this.ctx.now();
+      // `plan_marked_at` says moment one was *answered*, so it is derived from the
+      // marks rather than stamped on every call: a call that leaves all four null —
+      // an operator un-marking what they had marked — must not leave behind a stamp
+      // saying the moment was answered. Otherwise a non-null stamp would not imply a
+      // single mark exists, and the aggregate's count of answered goals would be a
+      // count of goals somebody once opened.
+      const markedAt = PREDICTION_SLOTS.some((slot) => marks[slot] !== null) ? ts : null;
       this.ctx
         .prep(
           `UPDATE goal_predictions
@@ -128,8 +135,8 @@ export class PredictionStore {
                   plan_mark_surprise=@surprise, plan_marked_at=@markedAt, updated_at=@updatedAt
             WHERE origin_ref=@originRef`,
         )
-        .run({ ...marks, markedAt: ts, updatedAt: ts, originRef: input.originRef });
-      return { ok: true, prediction: { ...standing, planMarks: marks, planMarkedAt: ts, updatedAt: ts } };
+        .run({ ...marks, markedAt, updatedAt: ts, originRef: input.originRef });
+      return { ok: true, prediction: { ...standing, planMarks: marks, planMarkedAt: markedAt, updatedAt: ts } };
     });
     return write();
   }

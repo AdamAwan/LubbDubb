@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
 import { PREDICTION_SLOTS } from '../src/store/predictions.js';
+import { inheritableEnv } from '../src/agents/spawnEnv.js';
 
 // → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
 
@@ -55,6 +56,14 @@ const FORBIDDEN: { pattern: RegExp; what: string }[] = [
   // module that simply held a `System` and asked it.
   { pattern: /\.predictions\b/, what: 'reaches a predictions member' },
   { pattern: /\bgoal_predictions\b/, what: 'names the goal_predictions table' },
+  // Stage 3's vocabulary. The types are re-exported through `wire.js`, which fleet
+  // modules legitimately import — so a module could name `GoalPrediction` and read
+  // `.planMarks` off a value without ever naming the store.
+  { pattern: /\bGoalPrediction\b/, what: 'names the GoalPrediction type' },
+  { pattern: /\bPredictionMark\b/, what: 'names the PredictionMark type' },
+  { pattern: /\bplanMarks\b/, what: 'reads a prediction’s marks' },
+  { pattern: /\bplan_mark_/, what: 'names a prediction mark column' },
+  { pattern: /\brecordPlanMarks\b/, what: 'writes a prediction mark' },
   { pattern: /\bPredictionStore\b/, what: 'names PredictionStore' },
 ];
 
@@ -91,6 +100,42 @@ test('nothing the fleet is handed can name the prediction store', () => {
           'the prediction routes alone. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store',
       );
     }
+  }
+});
+
+/**
+ * The escape that is not an import.
+ *
+ * An agent is launched with the harness's environment so it can reach `gh` and its
+ * own MCP socket. `LUBBDUBB_TOKEN` is the cockpit bearer, and every operator-only
+ * route answers to it — so an agent that inherited it could simply `curl` the
+ * prediction back, over the network, with nothing in any import graph to show for
+ * it. Neither the type system nor the scan above can see that; this can.
+ */
+test('an agent does not inherit the credential that would let it read a prediction back', () => {
+  const inherited = inheritableEnv({
+    ...process.env,
+    LUBBDUBB_TOKEN: 'ZZQX-BEARER-SENTINEL',
+    LUBBDUBB_INGRESS_SECRET: 'ZZQX-INGRESS-SENTINEL',
+    PATH: process.env.PATH,
+  });
+
+  assert.equal(inherited.LUBBDUBB_TOKEN, undefined, 'the cockpit bearer reached an agent');
+  assert.equal(inherited.LUBBDUBB_INGRESS_SECRET, undefined, 'an ingress secret reached an agent');
+  assert.equal(inherited.PATH, process.env.PATH, 'the rest of the environment still goes through');
+
+  // Non-vacuous: the sentinel is findable in what we handed in, so the assertion
+  // above is about the stripping and not about the key never having been set.
+  assert.equal({ ...process.env, LUBBDUBB_TOKEN: 'ZZQX-BEARER-SENTINEL' }.LUBBDUBB_TOKEN, 'ZZQX-BEARER-SENTINEL');
+
+  const spawnSites = ['src/agents/streamJsonSession.ts', 'src/pty/backend.ts'];
+  for (const file of spawnSites) {
+    const source = readFileSync(file, 'utf8');
+    assert.ok(
+      !/\.\.\.process\.env\b/.test(source),
+      `${file} spreads process.env into an agent's environment, which hands it the cockpit bearer. ` +
+        'Use inheritableEnv(). Fix the file, not this assertion.',
+    );
   }
 });
 

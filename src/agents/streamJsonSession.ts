@@ -7,6 +7,7 @@ import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 import type { AccountRateLimits, AgentUsage, RateLimitWindow } from '../types.js';
 import { debugLog } from '../debug.js';
+import { inheritableEnv } from './spawnEnv.js';
 
 // → docs/spec/10-agent-runtimes.md
 
@@ -72,7 +73,7 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     if (this.child) throw new Error('StreamJsonSession already started');
     this.child = this.spawn(this.spec.command, this.spec.args, {
       cwd: this.spec.cwd,
-      env: { ...process.env, ...this.spec.env },
+      env: { ...inheritableEnv(), ...this.spec.env },
     });
     this.setStatus('running');
     this.child.stdout.on('data', (d: Buffer | string) => this.onStdout(d.toString()));
