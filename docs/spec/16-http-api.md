@@ -1920,6 +1920,16 @@ Prediction text is served **here and nowhere else**. It reaches no prompt, no to
 transcript, no retro dossier, no scratchpad and above all no tracker.
 → [14](14-persistence.md#the-prediction-store-is-not-on-store)
 
+### `POST /api/goals/:number/prediction/outcome`
+
+Moment two's marks — _"was the plan right?"_ — on exactly the terms
+[`/marks`](#post-apigoalsnumberpredictionmarks) takes moment one's: the same body, the same four-valued
+mark, the same refusals (404 no prediction, 409 not revealed, 409 naming a skipped slot), and the same
+licence to re-mark.
+
+It does **not** require the goal to have been delivered.
+→ [14](14-persistence.md#moment-two--was-the-plan-right)
+
 ### `POST /api/goals/:number/criteria`
 
 `{ text, reason? }` — appends a version to the goal's append-only criteria chain, answering

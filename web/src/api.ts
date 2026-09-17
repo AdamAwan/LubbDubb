@@ -227,6 +227,12 @@ const realApi = {
     authFetch(`/api/goals/${number}/prediction`).then((r) => json<GoalPredictionReading>(r)),
   markGoalPrediction: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
     post<{ ok: true; prediction: GoalPrediction }>(`/api/goals/${number}/prediction/marks`, marks),
+  // Moment two, the same slots asked a different question: not "did I predict the
+  // plan" but "was the plan right". It is its own route because it is its own
+  // record — writing one says nothing about the other, and either arriving alone
+  // must read as the other being unanswered.
+  markGoalPredictionOutcome: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
+    post<{ ok: true; prediction: GoalPrediction }>(`/api/goals/${number}/prediction/outcome`, marks),
   // The goal's acceptance criteria. Both routes are mounted only where the key is
   // on, so a rejected read is how the card learns there is nothing to draw — the
   // presence of the data decides, never a flag on the payload.

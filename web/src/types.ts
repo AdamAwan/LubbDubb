@@ -113,6 +113,7 @@ export type {
   GoalCriteriaVersion,
   PredictionMark,
   PredictionPlanMarks,
+  PredictionOutcomeMarks,
   PredictionSlot,
   GoalPrediction,
   GoalReveal,

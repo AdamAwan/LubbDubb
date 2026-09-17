@@ -468,6 +468,14 @@ export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   record: 'record',
 };
 
+/**
+ * The pane the prediction card is drawn in. Named once, here beside the map the
+ * strip and the tabs read, so that a press that must land on that card cannot end
+ * up naming a pane the card moved off.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export const PREDICTION_PANE: GoalTab = 'work';
+
 export interface GoalTabOpening {
   tab: GoalTab;
   why: string;

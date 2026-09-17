@@ -1458,6 +1458,37 @@ A goal with **no reveal row** reads `pre-reveal`, with a dispatch still outranki
 spells _never offered_ — the gate may have been off — and calling a version `post-reveal` on a reading
 with no timestamp behind it would invent exactly the claim the derivation exists to avoid.
 
+### Moment two — was the plan right?
+
+`outcome_mark_*` and `outcome_marked_at`, beside moment one's, arriving by the same `ALTER TABLE` and
+with the same four-valued shape. Two column families over one row, because **the rows worth reading
+are the ones where the two disagree**.
+
+Moment one is a claim about the operator's model of the system. Moment two is a claim about the
+**plan**. Conflating them is the main way this record would produce numbers that mean nothing:
+
+- **missed** the plan, and the plan turned out **wrong** → the operator was **right**. The most
+  valuable row in the whole record, and the one moment one alone files as a miss.
+- **matched**, and the plan turned out **wrong** → the operator and the fleet were wrong together —
+  the shared-interpretation failure the feature exists to catch, and the one moment one alone files
+  as a success.
+
+**Moment two is skippable and its absence is recorded as absent, never as a miss.** A goal whose
+moment one was marked and whose moment two was skipped appears in the first aggregate's column and in
+**neither** of the second's. `outcome_marked_at` is derived from the marks exactly as `plan_marked_at`
+is, so un-marking takes the stamp back down and a non-null stamp always implies an answer.
+
+**The reveal is required for moment two as well**, so both moments stand over exactly one population:
+an unrevealed goal can carry no moment-one mark at all, so a moment-two mark on one would be a row in
+the second aggregate's columns with nothing in the first's to compare against — the mirror of the skip
+this moment is careful not to fold into a miss.
+
+**Delivery is deliberately not required.** Delivery is what makes the question worth _asking_ — it is
+what puts the bench row up — not what makes an answer true. A plan can be plainly wrong before
+anything ships, a delivery can be cleared and re-made, and re-marking is allowed anyway, so a refusal
+would only move the same answer later. It would also make `PredictionStore` read delivery bookkeeping
+off `Store`, which it is deliberately contained from.
+
 ### Drift has its own table
 
 A `post-work` version writes a row to `goal_criteria_drift`, idempotent on the version it records.

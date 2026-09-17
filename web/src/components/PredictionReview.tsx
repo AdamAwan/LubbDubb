@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from 'react';
 import { api, type GoalPredictionReading } from '../api.js';
-import type { PlanPart, PlanView, PredictionMark, PredictionSlot } from '../types.js';
+import type { PlanPart, PlanView, PredictionMark, PredictionOutcomeMarks, PredictionSlot } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { relTime } from './util.js';
@@ -31,11 +31,65 @@ const MARKS: readonly { mark: PredictionMark; label: string; why: string }[] = [
   },
 ];
 
+/**
+ * Moment two's three marks, worded for the question moment two asks. The mark
+ * vocabulary is the same three values, and that is exactly why the words must not
+ * be: `matched` here is the *plan* bearing out, not the operator having called it,
+ * and two rows of buttons reading "Matched / Missed" would leave a record nobody
+ * can say which question they answered.
+ */
+const OUTCOME_MARKS: readonly { mark: PredictionMark; label: string; why: string }[] = [
+  { mark: 'matched', label: 'Held up', why: 'Delivery bore the plan out on this' },
+  { mark: 'missed', label: 'Did not hold', why: 'Delivery went the other way — the plan was wrong here' },
+  {
+    mark: 'not-applicable',
+    label: 'Never came up',
+    why: 'Delivery never went near this, so there was nothing for the plan to be right or wrong about',
+  },
+];
+
 const STATE_LABEL: Record<PredictionMark, string> = {
   matched: 'Matched',
   missed: 'Missed',
   'not-applicable': 'The plan is silent on this',
 };
+
+const OUTCOME_STATE_LABEL: Record<PredictionMark, string> = {
+  matched: 'The plan held up',
+  missed: 'The plan did not hold',
+  'not-applicable': 'It never came up',
+};
+
+/**
+ * The two moments' answers said back as one sentence, drawn only where both have
+ * been answered. It derives nothing the server does not hold — it restates the two
+ * marks in the order they were asked — because the reading worth having is the
+ * *pair*, and a pair split across two rows of buttons is a pair nobody reads.
+ * `apart` is the pair where the operator's reading and the plan's came out
+ * differently, which is the row the record exists for; it is a property of the two
+ * marks, not a verdict of its own.
+ * → docs/proposals/prediction-record-and-criteria-integrity.md
+ */
+const PAIRINGS: Readonly<Record<string, { said: string; apart: boolean }>> = {
+  'missed/missed': {
+    said: 'You read this differently from the plan, and the plan did not hold.',
+    apart: true,
+  },
+  'matched/missed': {
+    said: 'You read this the way the plan did, and the plan did not hold.',
+    apart: true,
+  },
+  'missed/matched': { said: 'You read this differently from the plan, and the plan held up.', apart: false },
+  'matched/matched': { said: 'You read this the way the plan did, and the plan held up.', apart: false },
+};
+
+function pairingOf(
+  plan: PredictionMark | null,
+  outcome: PredictionMark | null,
+): { said: string; apart: boolean } | null {
+  if (plan === null || outcome === null) return null;
+  return PAIRINGS[`${plan}/${outcome}`] ?? null;
+}
 
 /**
  * The plan in the operator's own reading order. Each pane names the field it reads
@@ -52,11 +106,18 @@ const PLAN_PANES: readonly { label: string; read: (plan: PlanView) => string | n
 ];
 
 /**
- * Moment one — "did I predict the plan?" — drawn where the gate stood. The plan is
- * beside the prediction because the operator cannot answer without both in front of
- * them, and the card is keyed off the record rather than off the press that made it:
- * a prediction exists and the goal is revealed, so an operator who closed the tab
- * before marking finds it waiting rather than gone.
+ * The card both moments are answered on. Moment one — "did I predict the plan?" —
+ * is drawn where the gate stood. Moment two — "was the plan right?" — is the same
+ * four slots asked a different question, and joins the card once delivery has asked
+ * it. They are *labelled* apart rather than merely stacked: the two moments share a
+ * mark vocabulary and nothing else, and a record whose reader cannot say which
+ * question a mark answered is a record that means nothing.
+ * → docs/proposals/prediction-record-and-criteria-integrity.md §2.4
+ *
+ * The plan is beside the prediction because the operator cannot answer without both
+ * in front of them, and the card is keyed off the record rather than off the press
+ * that made it: a prediction exists and the goal is revealed, so an operator who
+ * closed the tab before marking finds it waiting rather than gone.
  *
  * `revealed` is a dependency of the fetch and not a condition on it, so the reveal
  * the gate has just performed pulls the record down without a remount.
@@ -64,12 +125,14 @@ const PLAN_PANES: readonly { label: string; read: (plan: PlanView) => string | n
 export function PredictionReview({
   issueNumber,
   revealed,
+  outcomeAsked,
   plan,
   parts,
   now,
 }: {
   issueNumber: number;
   revealed: boolean;
+  outcomeAsked: boolean;
   plan: PlanView | null;
   parts: readonly PlanPart[];
   now: number;
@@ -98,6 +161,17 @@ export function PredictionReview({
     setReading((prev) => (prev === null ? prev : { ...prev, prediction: answer.prediction }));
   };
 
+  const writeOutcome = async (slot: PredictionSlot, next: PredictionMark | null): Promise<void> => {
+    const answer = await api.markGoalPredictionOutcome(issueNumber, { [slot]: next });
+    setReading((prev) => (prev === null ? prev : { ...prev, prediction: answer.prediction }));
+  };
+
+  /* Asked, or answered before: a record that carries moment two goes on drawing it
+     once the bench row it was asked through has been closed. Neither is a default —
+     a goal nobody has been asked about draws moment one alone. */
+  const outcomeMarks: PredictionOutcomeMarks = prediction.outcomeMarks;
+  const showOutcome = outcomeAsked || prediction.outcomeMarkedAt !== null;
+
   const panes =
     plan === null
       ? []
@@ -115,9 +189,18 @@ export function PredictionReview({
           leave alone stays unmarked, which is its own answer and never counted as a miss.
           {prediction.planMarkedAt !== null && <> Last marked {relTime(prediction.planMarkedAt, now)}.</>}
         </p>
+        {showOutcome && (
+          <p className="cn-pmark-why cn-pmark-why-two">
+            Delivery has landed, so each line now carries a second, separate question: whether the <em>plan</em> turned
+            out right. It is not the same question as whether you called the plan, and answering one says nothing about
+            the other — either may be left alone.
+            {prediction.outcomeMarkedAt !== null && <> Last answered {relTime(prediction.outcomeMarkedAt, now)}.</>}
+          </p>
+        )}
         {SLOTS.map(({ key, question }) => {
           const said = prediction.slots[key];
           const mark = prediction.planMarks[key];
+          const outcome = outcomeMarks[key];
           if (said === null)
             return (
               <div className="cn-pmark-row is-skipped" key={key}>
@@ -125,36 +208,36 @@ export function PredictionReview({
                 <p className="cn-pmark-skipped">Skipped — nothing was written here, so there is nothing to mark.</p>
               </div>
             );
+          const pairing = showOutcome ? pairingOf(mark, outcome) : null;
           return (
             <div className={`cn-pmark-row ${mark === null ? 'is-unmarked' : `is-${mark}`}`} key={key}>
-              <div className="cn-pmark-q">
-                {question}
-                {mark === null ? (
-                  <i className="cn-pmark-state is-open">Not marked yet</i>
-                ) : (
-                  <i className="cn-pmark-state">{STATE_LABEL[mark]}</i>
-                )}
-              </div>
+              <div className="cn-pmark-q">{question}</div>
               <blockquote className="cn-pmark-said-text">{said}</blockquote>
-              <div className="cn-pmark-marks" role="group" aria-label={`How the plan stood against: ${question}`}>
-                {MARKS.map((option) => (
-                  <AsyncButton
-                    key={option.mark}
-                    size="small"
-                    ghost
-                    className={`cn-pmark-mark ${mark === option.mark ? 'is-on' : ''}`}
-                    aria-pressed={mark === option.mark}
-                    title={
-                      mark === option.mark
-                        ? `${option.why}. Press again to take the mark off and leave this unmarked.`
-                        : option.why
-                    }
-                    onClick={() => write(key, mark === option.mark ? null : option.mark)}
-                  >
-                    {option.label}
-                  </AsyncButton>
-                ))}
-              </div>
+              <Moment
+                moment="one"
+                ask="Did you call it?"
+                about="about your reading of the system"
+                options={MARKS}
+                state={STATE_LABEL}
+                unanswered="Not marked yet"
+                question={question}
+                mark={mark}
+                onPick={(next) => write(key, next)}
+              />
+              {showOutcome && (
+                <Moment
+                  moment="two"
+                  ask="Was the plan right?"
+                  about="about the plan, not about you"
+                  options={OUTCOME_MARKS}
+                  state={OUTCOME_STATE_LABEL}
+                  unanswered="Not answered yet"
+                  question={question}
+                  mark={outcome}
+                  onPick={(next) => writeOutcome(key, next)}
+                />
+              )}
+              {pairing !== null && <p className={`cn-pmark-pair ${pairing.apart ? 'is-apart' : ''}`}>{pairing.said}</p>}
             </div>
           );
         })}
@@ -189,6 +272,67 @@ export function PredictionReview({
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One moment's three-way control over one slot, with the question it answers said
+ * above it. The label is the whole point: the two moments are the same three marks,
+ * and only the wording keeps an operator from answering the wrong one. `null` is
+ * drawn as its own state — never pre-selected, and never as a miss.
+ */
+function Moment({
+  moment,
+  ask,
+  about,
+  options,
+  state,
+  unanswered,
+  question,
+  mark,
+  onPick,
+}: {
+  moment: 'one' | 'two';
+  ask: string;
+  about: string;
+  options: readonly { mark: PredictionMark; label: string; why: string }[];
+  state: Record<PredictionMark, string>;
+  unanswered: string;
+  question: string;
+  mark: PredictionMark | null;
+  onPick: (next: PredictionMark | null) => Promise<void>;
+}): JSX.Element {
+  return (
+    <div className={`cn-pmark-moment is-${moment} ${mark === null ? 'is-unmarked' : `is-${mark}`}`}>
+      <div className="cn-pmark-moment-q">
+        <span className="cn-pmark-moment-ask">{ask}</span>
+        <span className="cn-pmark-moment-of">{about}</span>
+        {mark === null ? (
+          <i className="cn-pmark-state is-open">{unanswered}</i>
+        ) : (
+          <i className={`cn-pmark-state is-${mark}`}>{state[mark]}</i>
+        )}
+      </div>
+      <div className="cn-pmark-marks" role="group" aria-label={`${ask} — ${question}`}>
+        {options.map((option) => (
+          <AsyncButton
+            key={option.mark}
+            size="small"
+            ghost
+            className={`cn-pmark-mark ${mark === option.mark ? 'is-on' : ''}`}
+            aria-pressed={mark === option.mark}
+            title={
+              mark === option.mark
+                ? `${option.why}. Press again to take the answer off and leave this unanswered.`
+                : option.why
+            }
+            onClick={() => onPick(mark === option.mark ? null : option.mark)}
+          >
+            {option.label}
+          </AsyncButton>
+        ))}
       </div>
     </div>
   );

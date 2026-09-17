@@ -1175,6 +1175,7 @@ function PlanWaves({
         <PredictionReview
           issueNumber={page.issue.number}
           revealed={plan !== null && (plan.revealed || lifted)}
+          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
           plan={plan}
           parts={page.parts.map((p) => p.part)}
           now={view.now}

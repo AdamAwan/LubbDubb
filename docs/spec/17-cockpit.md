@@ -2351,6 +2351,28 @@ nothing to mark. The third option is labelled **"Plan is silent"** rather than a
 _I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
 a real answer, not a way of declining to give one.
 
+### Moment two, beside moment one
+
+Where moment two has been asked, each filled slot draws **both** marks, and the card's whole job is
+that an operator cannot mistake which question they are answering. The two share no words: moment one
+asks _"Did you call it?"_ — about your reading of the system — and answers Matched / Missed / Plan is
+silent; moment two asks _"Was the plan right?"_ — about the plan, not about you — and answers Held up
+/ Did not hold / Never came up. Two identical-looking three-way rows would make the record
+meaningless, so they are not drawn alike.
+
+Where both are set, the pair is restated as one sentence, and the two pairs in which **the plan did
+not hold** are tinted apart, because those are the rows the record exists for: matched-and-wrong is
+the operator and the fleet wrong together, and missed-and-wrong is the operator having been right. It
+is a lookup over the two stored marks, not a new verdict the page computes — the cockpit does not
+score what the server did not.
+
+An unanswered moment two draws as not-yet-answered, in the same dashed chip moment one uses, with
+nothing pre-selected. It is skippable by design and absent is absent.
+
+The bench row opens the goal **on the pane that draws this card**, in one navigation, through `Place`
+— selecting the goal alone would land a delivered goal on a pane where the card is not drawn, which is
+a rail row that appears to do nothing.
+
 ### Goal criteria, and drift
 
 Below the plan — criteria are read against the shape that was proposed — the goal page draws the

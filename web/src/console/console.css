@@ -2210,10 +2210,10 @@ a.cn-qbody {
   font-size: 11px;
   color: var(--cn-fg);
 }
-.cn-pmark-row.is-matched .cn-pmark-state {
+.cn-pmark-state.is-matched {
   color: var(--cn-green-ink);
 }
-.cn-pmark-row.is-missed .cn-pmark-state {
+.cn-pmark-state.is-missed {
   color: var(--cn-red-ink);
 }
 .cn-pmark-state.is-open {
@@ -2244,15 +2244,74 @@ a.cn-qbody {
   color: var(--cn-fg);
   background: var(--cn-hover);
 }
-.cn-pmark-row.is-matched .cn-pmark-mark.is-on {
+.cn-pmark-moment.is-matched .cn-pmark-mark.is-on {
   border-color: var(--cn-green-line);
   color: var(--cn-green-ink);
   background: var(--cn-green-fill);
 }
-.cn-pmark-row.is-missed .cn-pmark-mark.is-on {
+.cn-pmark-moment.is-missed .cn-pmark-mark.is-on {
   border-color: var(--cn-red-line);
   color: var(--cn-red-ink);
   background: var(--cn-red-fill);
+}
+/* The two moments, drawn as two blocks rather than two rows of buttons. They share
+   a mark vocabulary and nothing else — moment one is a claim about the operator's
+   reading, moment two a claim about the plan — so each carries its question above
+   its control and moment two is set off in its own hue. Alike, they would leave a
+   record nobody can say which question a mark answered.
+   → docs/proposals/prediction-record-and-criteria-integrity.md */
+.cn-pmark-moment {
+  margin-top: 7px;
+  padding: 6px 0 0 8px;
+  border-left: 2px solid var(--cn-line);
+}
+.cn-pmark-moment.is-two {
+  border-left-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-fill);
+  border-radius: 0 var(--cn-r-sm) var(--cn-r-sm) 0;
+  padding: 6px 8px;
+}
+.cn-pmark-moment-q {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+.cn-pmark-moment-ask {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.cn-pmark-moment.is-two .cn-pmark-moment-ask {
+  color: var(--cn-blue-ink);
+}
+.cn-pmark-moment-of {
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+/* The pair said back as one line, because the reading worth having is the pair and
+   never either mark alone. `is-apart` is the row where the two came out different
+   — the record's whole reason for asking twice — and is louder for it. */
+.cn-pmark-pair {
+  margin: 7px 0 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--cn-line-hi);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-pmark-pair.is-apart {
+  border-left-color: var(--cn-amber-line-hi);
+  background: var(--cn-amber-fill);
+  color: var(--cn-amber-ink);
+}
+.cn-pmark-why-two {
+  margin-top: -4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--cn-blue-line-hi);
+  color: var(--cn-fg-dim);
 }
 /* Stacked rather than squeezed: two columns of prose at phone width is neither.
    The plan comes first so that it is read before it is marked against. */

@@ -298,6 +298,7 @@ function Row({
   const goTo = (dest: NeedRow['opens']): (() => void) | null => {
     if (dest === 'build') return () => actions.openPanel('build');
     if (dest === 'goal') return ref === null ? null : () => actions.selectGoal(ref);
+    if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
     if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
     return null;
   };
