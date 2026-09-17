@@ -5,6 +5,7 @@ import type {
   InsightsWindowView,
   McpInsights,
   PoolInsightsPayload,
+  PredictionAggregate,
   UsagePayload,
   ReliabilityInsights,
   RemedyInsights,
@@ -26,6 +27,7 @@ import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
 import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
+import { PredictionTab } from './PredictionTab.js';
 import { Label } from './label.js';
 import { logUsage } from '../cockpit/usage.js';
 import { POOL_VIEWS } from '../cockpit/place.js';
@@ -60,6 +62,7 @@ const TABS: readonly { id: InsightsView; label: string; asks: string; poolAsks?:
   { id: 'trend', label: 'Trend', asks: 'Is what I changed working?' },
   { id: 'mcp', label: 'MCP', asks: 'Can the fleet reach its tools?' },
   { id: 'review', label: 'Review', asks: 'What do the packs say about the agents that write them?' },
+  { id: 'prediction', label: 'Prediction', asks: 'Did you see the plan coming, and was the plan right?' },
   {
     id: 'usage',
     label: 'Usage',
@@ -115,6 +118,8 @@ export function InsightsPage({
   const calibrationFetchedFor = useRef<InsightsWindow | null>(null);
   const [usage, setUsage] = useState<Fetched<UsagePayload>>(PENDING);
   const usageFetchedFor = useRef<InsightsWindow | null>(null);
+  const [prediction, setPrediction] = useState<Fetched<PredictionAggregate>>(PENDING);
+  const predictionFetched = useRef(false);
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
   useEffect(() => {
@@ -234,6 +239,22 @@ export function InsightsPage({
       live = false;
     };
   }, [view, chosen, scope]);
+
+  /* No window in the dependency list, and no reset when the bar moves: the
+     aggregate is a fold over the whole record. → docs/spec/17-cockpit.md */
+  useEffect(() => {
+    if (scope !== 'mine' || view !== 'prediction' || predictionFetched.current) return;
+    predictionFetched.current = true;
+    let live = true;
+    setPrediction(PENDING);
+    api
+      .getPredictionAggregate()
+      .then((res) => live && setPrediction({ state: 'ready', data: res.aggregate }))
+      .catch(() => live && setPrediction({ state: 'failed', data: null }));
+    return () => {
+      live = false;
+    };
+  }, [view, scope]);
 
   useEffect(() => {
     if (scope !== 'pool' || poolFetchedFor.current === poolProject) return;
@@ -363,6 +384,7 @@ export function InsightsPage({
           throughput={throughput}
           allowance={allowance}
           calibration={calibration}
+          prediction={prediction}
           usage={usage}
           pool={pool}
           windowLabel={resolved?.label ?? 'this window'}
@@ -495,6 +517,7 @@ function Body({
   throughput,
   allowance,
   calibration,
+  prediction,
   usage,
   pool,
   windowLabel,
@@ -509,6 +532,7 @@ function Body({
   throughput: Fetched<ThroughputInsights>;
   allowance: Fetched<AllowancePayload>;
   calibration: Fetched<ReviewCalibration>;
+  prediction: Fetched<PredictionAggregate>;
   usage: Fetched<UsagePayload>;
   pool: Fetched<PoolInsightsPayload>;
   windowLabel: string;
@@ -560,6 +584,22 @@ function Body({
     return <ReviewCalibrationTab calibration={calibration.data} />;
   }
 
+  if (view === 'prediction') {
+    if (prediction.state === 'loading') return <p className="empty">Reading the prediction record…</p>;
+    /* The route is not mounted at all with both keys off, so a read that does not
+       answer is the switch being off far more often than it is a fault — and this
+       surface reads the presence of the data, never the flag.
+       → docs/proposals/prediction-record-and-criteria-integrity.md */
+    if (prediction.data === null)
+      return (
+        <p className="empty">
+          Could not read the prediction record. Neither the reveal gate nor goal criteria is switched on, or the read
+          failed.
+        </p>
+      );
+    return <PredictionTab aggregate={prediction.data} />;
+  }
+
   if (view === 'usage') {
     if (usage.state === 'loading') return <p className="empty">Reading what was asked of you…</p>;
     if (usage.data === null) return <p className="empty">Could not read the operator ledger.</p>;
@@ -592,6 +632,10 @@ function Exports({
   usage: UsagePayload | null;
   page: RefObject<HTMLDivElement | null>;
 }): JSX.Element | null {
+  /* The aggregate carries no author and no word of what was written, and it is not
+     a window's reading either — so it gets neither the CSV of a windowed tab nor,
+     by falling through, somebody else's. */
+  if (view === 'prediction') return null;
   const label = TABS.find((t) => t.id === view)?.label ?? 'Insights';
   const sheet = {
     heading: `Insights · ${label}`,

@@ -50,6 +50,7 @@ export type InsightsView =
   | 'trend'
   | 'mcp'
   | 'review'
+  | 'prediction'
   | 'usage';
 
 /* Whose numbers a reading is over. Every tab answers for this fleet; four of them

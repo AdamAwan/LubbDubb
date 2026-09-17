@@ -40,6 +40,7 @@ import type {
   ObstacleBoardPayload,
   PoolInsightsPayload,
   PoolStatePayload,
+  PredictionAggregatePayload,
   PromptsPayload,
   RetrospectivePayload,
   RunClearOut,
@@ -260,6 +261,10 @@ const realApi = {
   unshareReviewPack: (prNumber: number) => post<ReviewPackSharing>(`/api/prs/${prNumber}/review-pack/unshare`),
   markReviewIdeaRead: (prNumber: number, ideaId: string, read: boolean) =>
     post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/read`, { read }),
+  /* The aggregate takes no window: it is a fold over the whole record, because a
+     prediction is written once and marked once. → docs/spec/17-cockpit.md */
+  getPredictionAggregate: () =>
+    authFetch('/api/predictions/aggregate').then((r) => json<PredictionAggregatePayload>(r)),
   getReviewCalibration: (window: InsightsWindow) =>
     authFetch(`/api/review-calibration?window=${window}`).then((r) => json<ReviewCalibrationPayload>(r)),
   markReviewFindingSeen: (prNumber: number, ideaId: string, seen: boolean) =>
