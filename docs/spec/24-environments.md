@@ -647,6 +647,16 @@ Declining the row records moment two as **unanswered**, never as a plan that tur
 absence is the honest reading, and folding it into a verdict is the error the four-valued mark exists
 to prevent. Turning the key off settles any standing row rather than stranding it.
 
+**Answering moment two settles the row on the press, and that is the route's job rather than the next
+pulse's.** The row is filed and settled only by `DeliveryCloseOutDesk`, and nothing but a cycle wakes
+that desk — so `POST /api/goals/:number/prediction/outcome` runs one whenever the press flips whether
+the goal owes the moment, on the same convention every other operator answer here follows. Without it
+the operator answers the question and the row asking it stays exactly where it was: for five minutes
+on an idle fleet, and for good on a cycle that is held behind a recovery decision or stuck in flight —
+an ask that reads as ignored, with nothing red. The flip is the condition because a cycle reads the
+world, and a second mark on a moment already answered changes nothing the desk would decide.
+→ [16](16-http-api.md)
+
 This is why `ValidationReadyDesk` runs **above** `DeliveryCloseOutDesk` in the pulse. Below it, the
 close-out would read a bench the validate row had not been filed onto yet and ask for the close on the
 very pulse the delivery landed — the two rows arriving together, which is the thing the sequence
