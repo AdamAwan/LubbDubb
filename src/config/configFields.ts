@@ -369,6 +369,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Offer to record a prediction before you first read a plan. A ready plan is drawn obscured with two equal presses; what you write is kept from every agent, and from the tracker above all. Off, nothing is stamped — a goal from before the switch reads as never offered, not as declined.',
   },
   {
+    path: 'predictionAggregateMinGoals',
+    type: 'number',
+    access: 'plain',
+    why: 'How many goals a rate needs behind it before the prediction aggregate carries it. Below this the rate is absent from the payload and the count toward it is drawn instead \u2014 the counts themselves are never withheld.',
+  },
+  {
     path: 'goalCriteria.enabled',
     type: 'boolean',
     access: 'plain',

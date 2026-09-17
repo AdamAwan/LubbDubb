@@ -2123,6 +2123,25 @@ CREATE TABLE IF NOT EXISTS goal_predictions (
   cause      TEXT,
   hard       TEXT,
   surprise   TEXT,
+  -- Moment one: how each filled slot stood against the plan it was predicting.
+  -- 'matched' | 'missed' | 'not-applicable', and null is not marked yet — a fourth
+  -- value that the aggregate counts as nothing, never as a miss. A skipped slot has
+  -- nothing to mark and stays null. Named for moment one because delivery asks a
+  -- second question of the same slots.
+  plan_mark_locus    TEXT,
+  plan_mark_cause    TEXT,
+  plan_mark_hard     TEXT,
+  plan_mark_surprise TEXT,
+  plan_marked_at     TEXT,
+  -- Moment two: whether the plan the fleet produced turned out to be right, per
+  -- slot, asked at delivery. Same three values and the same null, which is skipped
+  -- or not asked yet and is never a miss. A separate record from moment one's
+  -- because the interesting rows are the ones where the two disagree.
+  outcome_mark_locus    TEXT,
+  outcome_mark_cause    TEXT,
+  outcome_mark_hard     TEXT,
+  outcome_mark_surprise TEXT,
+  outcome_marked_at     TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -2148,7 +2167,8 @@ CREATE TABLE IF NOT EXISTS goal_reveals (
 -- is a claim that can be written wrongly once and is then true forever.
 --
 -- Unlike a prediction, criteria are an oracle the implementer is meant to be judged
--- against, and they reach agents by design. The two share a moment and a table
+-- against, so they are not contained the way a prediction is (handing them to an
+-- agent is not built yet). The two share a moment and a table
 -- neighbourhood; they do not share a containment rule.
 CREATE TABLE IF NOT EXISTS goal_criteria (
   id          TEXT PRIMARY KEY,
@@ -2160,6 +2180,17 @@ CREATE TABLE IF NOT EXISTS goal_criteria (
   reason      TEXT,               -- required when the standing is post-work
   authored_at TEXT NOT NULL,
   UNIQUE (origin_ref, version)
+);
+
+CREATE TABLE IF NOT EXISTS goal_criteria_drift (
+  id          TEXT PRIMARY KEY,
+  origin_ref  TEXT NOT NULL,
+  criteria_id TEXT NOT NULL,
+  version     INTEGER NOT NULL,
+  author      TEXT,
+  reason      TEXT,
+  recorded_at TEXT NOT NULL,
+  UNIQUE (criteria_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
@@ -2202,4 +2233,5 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_sugges
 -- obstacle_conditions needs no index of its own: every read of it is by
 -- obstacle_id, which is the leading column of the UNIQUE above.
 CREATE INDEX IF NOT EXISTS idx_goal_criteria_origin ON goal_criteria(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_goal_criteria_drift_origin ON goal_criteria_drift(origin_ref);
 `;

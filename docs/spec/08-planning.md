@@ -807,6 +807,74 @@ released status with the gate closed. Rule `plan-part`'s question — "is this p
 therefore the status check it already had, and a superseded plan structurally cannot release a new
 one, because a replan resets the row.
 
+### The reveal gate stands in front of the approval gate
+
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a plan that is `awaiting_approval`
+and has not been revealed is served to the cockpit **without its body** — no narrative, no parts, no
+atoms, and the approval escalation and its proposal carry a placeholder instead of the prose. The
+operator is drawn the plan obscured, with _"A plan is ready. Predict first?"_ over it and two presses
+of equal weight: **Predict** and **Show me the plan**.
+→ [16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)
+
+This changes nothing about the approval gate itself and holds no work. Nothing is withheld from the
+fleet: parts are not held, the plan is not un-approved, no rule waits on it, and a goal with no
+prediction proceeds exactly as goals proceed today. What is briefly withheld is **the operator's own
+view of the plan, from the operator, at their own request** — which is worth naming as an interruption
+rather than pretending the cost is zero. It is also the only thing this feature is allowed to
+interrupt.
+
+**Approving is refused while the plan is withheld**, and that refusal is not about secrecy. Approving
+or refusing a plan sight-unseen would settle the goal with the reveal never stamped, so the record
+would read _never offered_ when the operator had in fact acted on the plan. One press reveals it; an
+operator who then wants nothing to do with the plan gets an honest row.
+
+It is worth confirming what else can show an operator a plan at that moment, because if anything could,
+the gate would be theatre. `PlanReconciler` writes the plan status comment only when
+`current.status !== 'awaiting_approval'`, so while a plan awaits approval **no plan content has reached
+the tracker at all**. Approval is downstream of the reveal, parts are not dispatched, and no pull
+request exists. The obscured plan really is the only copy the operator can reach.
+
+What it is not, and should not be sold as, is access control. The operator can read the database. This
+is a **self-measurement instrument**, and a determined self-deceiver defeats every possible version of
+one; what the design owes them is that the honest path is also the easy one, and that the record says
+plainly when they looked.
+
+### Goal criteria, beside the planner's acceptance
+
+`plan_parts.acceptance` is the **planner's** restatement of done, at part grain, and it stays exactly
+as it is. Beside it there is now an optional **goal-level** set, human-authored, versioned and
+append-only, behind `goalCriteria.enabled`.
+
+The reason the two coexist rather than one replacing the other is the failure part acceptance cannot
+catch. The planner, the implementer and the validation-plan author are the same model reading the same
+issue; whatever the issue meant to a model at plan time is what it will still mean at test time. So the
+criteria cannot catch the one failure that matters most — the goal was understood wrongly and then
+built, reviewed and validated consistently with the wrong understanding. A human-authored set is an
+independent oracle precisely because it was not written by the thing it judges.
+
+**Where both exist the goal set is the authority.** A part's acceptance that contradicts it is a plan
+defect rather than a criteria change.
+
+What makes a goal criterion independent is not that it predates the planner's dispatch but that it
+predates its author's sight of the plan, so its standing is derived against the same reveal stamp the
+prediction record uses. The reveal interstitial is therefore the natural moment to ask for criteria as
+well: it is the last moment at which either can be authored independently, and one the operator is
+already stopped at. A goal whose criteria were written there has an oracle that provably predates its
+plan. → [14](14-persistence.md#goal-criteria-are-append-only)
+
+Criteria are **not contained the way a prediction is** — that is the opposite posture to the record
+they share a moment with, and conflating the two leaks predictions or hides criteria.
+`GoalCriteriaStore` is an ordinary member of `Store` precisely so that an agent can be given them,
+where a prediction structurally cannot be.
+
+**Delivering them to an agent is not built.** Today the set is authored, versioned, drawn on the goal
+page and counted in the aggregate, and it is read by people. Nothing appends it to a prompt. The place
+for that is the part dispatch, beside the `plan_parts.acceptance` that already arrives there, and it
+is an **append** rather than a `{token}` — an operator-overridable template that never learned a new
+placeholder drops it silently, on exactly the deployments that customised most
+([05](05-dispatcher.md#prompt-templates)). Until that lands, the goal set is an oracle for the human
+reviewing the work and not one the implementer is handed.
+
 ### The status is the plan's life, and only that
 
 `PlanStatus` carries `planning`, `awaiting_approval`, `active`, `complete` and `abandoned` — where the

@@ -7,6 +7,7 @@ import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict
 
 type CloseOutStep =
   | { kind: 'file'; originRef: string; title: string; detail: string }
+  | { kind: 'file-outcome'; originRef: string; title: string; detail: string }
   | { kind: 'settle'; taskId: string; status: 'done' | 'declined'; resolution: string }
   | { kind: 'reopen'; taskId: string; detail: string };
 
@@ -21,6 +22,16 @@ interface CloseOutInput {
   watch: ReadonlyMap<string, string>;
   watchCleared: ReadonlySet<string> | null;
   canClose: boolean;
+  /**
+   * The goals that owe the second scoring moment, as origin refs and nothing else.
+   * The desk is handed refs deliberately: this pass composes prose that is persisted
+   * as a human task and served to surfaces that are not the cockpit, and what the
+   * operator wrote at the gate is a measurement of the fleet that must reach none of
+   * them. The row names the goal; the cockpit fetches the rest by itself.
+   */
+  outcomeOwed?: ReadonlySet<string>;
+  /** The `outcome` rows already on the bench, the way `existing` holds the close-outs. */
+  existingOutcome?: readonly HumanTask[];
 }
 
 export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
@@ -99,7 +110,115 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
     });
   }
 
+  steps.push(...outcomePass(input, { inWorld, shortfalls, delivered, closeOuts: steps }));
+
   return steps;
+}
+
+/**
+ * The second scoring moment's row: "was the plan right?", asked once the goal is
+ * delivered and the close-out in front of it has been dealt with.
+ *
+ * It rides this bench rather than becoming a queue of its own. A separate queue for
+ * an optional feature is the thing that decays first, and this is a surface the
+ * operator already has to clear.
+ *
+ * It is sequenced behind the `close_out` row for the same reason that row is
+ * sequenced behind the `validate` one: filed together, the bench asks two things in
+ * one breath and the second reads as optional.
+ */
+function outcomePass(
+  input: CloseOutInput,
+  seen: {
+    inWorld: ReadonlyMap<string, Issue>;
+    shortfalls: ReadonlySet<string>;
+    delivered: ReadonlySet<string>;
+    /** What the close-out half of this same pass decided, which is half the sequence. */
+    closeOuts: readonly CloseOutStep[];
+  },
+): CloseOutStep[] {
+  const steps: CloseOutStep[] = [];
+  const owed = input.outcomeOwed ?? new Set<string>();
+  const existingOutcome = input.existingOutcome ?? [];
+  const byOrigin = new Map(existingOutcome.map((t) => [t.originRef ?? '', t]));
+  // A close-out standing open, or filed on this very pass. The second half matters
+  // as much as the first: the pulse a goal is delivered on files its close-out, and
+  // without it the two rows would arrive together — which is the thing the sequence
+  // exists to stop.
+  const closingOut = new Set([
+    ...input.existing.filter((t) => t.status === 'open' && t.originRef !== null).map((t) => t.originRef!),
+    ...seen.closeOuts.filter((s) => s.kind === 'file').map((s) => s.originRef),
+  ]);
+
+  for (const delivery of input.deliveries) {
+    const originRef = delivery.originRef;
+    if (closeOutIssueNumber(originRef) === null) continue;
+    if (seen.shortfalls.has(originRef)) continue;
+    const existing = byOrigin.get(originRef);
+
+    if (!owed.has(originRef)) {
+      // Answered, or never asked — and those are the same step, because a row is
+      // only ever filed against a goal that owed the moment in the first place.
+      if (existing?.status === 'open')
+        steps.push({
+          kind: 'settle',
+          taskId: existing.id,
+          status: 'done',
+          resolution: DESK_SETTLED + 'the second moment was answered',
+        });
+      continue;
+    }
+    if (existing) {
+      if (existing.status !== 'open' && deskSettled(existing))
+        steps.push({ kind: 'reopen', taskId: existing.id, detail: outcomeDetail(seen.inWorld.get(originRef) ?? null) });
+      continue;
+    }
+    if (closingOut.has(originRef)) continue;
+
+    steps.push({
+      kind: 'file-outcome',
+      originRef,
+      title: outcomeTitle(closeOutIssueNumber(originRef)!),
+      detail: outcomeDetail(seen.inWorld.get(originRef) ?? null),
+    });
+  }
+
+  for (const task of existingOutcome) {
+    if (task.status !== 'open' || !task.originRef || seen.delivered.has(task.originRef)) continue;
+    steps.push({
+      kind: 'settle',
+      taskId: task.id,
+      status: 'declined',
+      resolution: DESK_SETTLED + 'the goal went back into production — the plan it delivered is not the one to judge',
+    });
+  }
+
+  return steps;
+}
+
+function outcomeTitle(issueNumber: number): string {
+  return `Say whether the plan for #${issueNumber} turned out right`;
+}
+
+/**
+ * Names the goal and nothing else.
+ *
+ * What the operator predicted stays where it was written. This string is persisted,
+ * is read back by the operator's own desktop channel, and is one careless edit from
+ * a tracker comment — and a prediction is a measurement of the fleet, worthless the
+ * moment anything the fleet reads can name it. The cockpit draws the slots from
+ * `GET /api/goals/:number/prediction`, which is the record's one reader.
+ */
+function outcomeDetail(issue: Issue | null): string {
+  const lines = [
+    issue === null ? 'This goal is delivered.' : `**${issue.title}** is delivered and its close-out is done with.`,
+    '',
+    'You marked how your prediction stood against the plan. This asks the other question: slot by ' +
+      'slot, did the **plan** turn out to be right? Open the goal to answer it — or decline this row, ' +
+      'which records the moment as unanswered and never as a wrong plan.',
+  ];
+  if (issue?.url) lines.push('', issue.url);
+  return lines.join('\n');
 }
 
 function closeOutTitle(issueNumber: number): string {

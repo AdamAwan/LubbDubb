@@ -91,6 +91,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   placement: 'A goal is missing from the backlog',
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
+  outcome: 'A delivered goal is waiting on your read of its plan',
   validate: 'A delivered goal is ready to be validated',
   validation_plan: 'A validation check set is waiting on your acceptance',
   watch: 'A post-deploy watch is reporting a regression',

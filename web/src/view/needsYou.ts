@@ -32,6 +32,7 @@ export type NeedKind =
   | 'placement'
   | 'bench'
   | 'close_out'
+  | 'outcome'
   | 'validate'
   | 'validation_plan'
   | 'watch'
@@ -70,6 +71,9 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   intake: 'next',
   profile: 'next',
   close_out: 'next',
+  // Moment two is skippable by design and holds nothing: it belongs behind
+  // everything the fleet is actually waiting on.
+  outcome: 'later',
   validate: 'next',
   validation_plan: 'next',
   bench: 'next',
@@ -138,7 +142,10 @@ function assignedLine(pr: OpenPullRequest): string {
   return oneLine(title === '' ? sentence : `${sentence} on “${title}”`);
 }
 
-type NeedDestination = 'goal' | 'ask' | 'config' | 'build' | 'provider' | null;
+/* `prediction` is `goal` with a pane named: the goal page's prediction card is the
+   only surface moment two can be answered on, and the lifecycle rule lands a
+   delivered goal on its record. → docs/spec/17-cockpit.md#the-panes */
+type NeedDestination = 'goal' | 'prediction' | 'ask' | 'config' | 'build' | 'provider' | null;
 
 export interface NeedRow {
   id: string;
@@ -285,6 +292,7 @@ function kindOf(e: Escalation, proposal: Proposal | undefined, originRef: string
 const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
   ask: 'bench',
   close_out: 'close_out',
+  outcome: 'outcome',
   validate: 'validate',
   watch: 'watch',
   burn: 'burn',
@@ -297,6 +305,10 @@ function needKindOfTask(kind: HumanTask['kind']): NeedKind {
 
 function opensAt(goalRef: string | null, state: AppState): NeedDestination {
   return goalRef !== null && goalIssue(state, goalRef) !== undefined ? 'goal' : 'ask';
+}
+
+function predictionOpensAt(goalRef: string | null, state: AppState): NeedDestination {
+  return opensAt(goalRef, state) === 'goal' ? 'prediction' : 'ask';
 }
 
 function prAddress(state: AppState, number: number): string | undefined {
@@ -571,7 +583,7 @@ export function buildNeedsYou(
       title: askLine(oneLine(t.title), goalRef, state),
       goalRef,
       originRef: t.originRef ?? null,
-      opens: opensAt(goalRef, state),
+      opens: t.kind === 'outcome' ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
       agentId: t.kind === 'burn' ? t.agentId : null,
       agentLabel: t.kind === 'burn' ? agentLabelOf(t.agentId, state) : null,
       holding: holdingForTask(t, parts),

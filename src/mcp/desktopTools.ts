@@ -325,6 +325,12 @@ const planRead: DesktopToolFactory = (deps) => ({
     const found = decompositionFor(deps, ref.issue);
     if (!found.ok) return toolError(found.error);
     const { plan, originRef } = found;
+    if (deps.planWithheld(plan))
+      return toolError(
+        'This plan has not been revealed yet. It is withheld until the operator opens the goal in the ' +
+          'cockpit and presses through the gate there — reading it aloud here would defeat that, which is ' +
+          'the whole point of the gate. Ask them to reveal it first.',
+      );
 
     const parts = deps.store.plans.listPlanParts(plan.id);
     const checks = liveChecks(deps.store.validation.listValidationChecks(originRef));

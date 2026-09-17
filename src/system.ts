@@ -2,7 +2,7 @@ import { tmpdir } from 'node:os';
 import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
 import { prRefStyle } from './pr/prRef.js';
 import { join } from 'node:path';
-import { configFilePath, projectConfigFilePath, type Config } from './config/config.js';
+import { configFilePath, projectConfigFilePath, revealGateOn, type Config } from './config/config.js';
 import { Store } from './store/store.js';
 import type { PredictionStore } from './store/predictions.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
@@ -108,6 +108,7 @@ import { bySlug, partBase, planIssueNumber } from './plans/parts.js';
 import { LiveConfig } from './config/configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
+import { planIsWithheld } from './server/planReveal.js';
 
 // → docs/spec/01-overview.md
 
@@ -349,8 +350,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }),
   );
 
+  const predictions = store.openPredictions();
   const desktop = new McpDesktopServer({
     store,
+    // The desktop channel is the operator's own Claude Code, and it can read a plan
+    // aloud. It is handed the *answer* to whether a plan is withheld, never the means
+    // to ask — src/mcp/ must not be able to name the prediction store.
+    planWithheld: (plan) => planIsWithheld({ config, predictions }, plan),
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
@@ -661,7 +667,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const closeOutSink = opts.sink ?? connector;
-  const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
+  const closeOuts = new DeliveryCloseOutDesk(
+    store,
+    config.environments,
+    () => closeOutSink.canCloseIssue(),
+    // The one place the close-out bench and the prediction record meet, and it
+    // hands over origin refs alone. With the gate off the set is empty, which is
+    // also what settles any row that was standing when it was turned off.
+    () => (revealGateOn(config) ? new Set(predictions.listOutcomeOwed()) : new Set()),
+  );
 
   const validationAsks = new ValidationAskDesk(store);
 
@@ -965,7 +979,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates,
     runtimeControl,
     pets,
-    predictions: store.openPredictions(),
+    predictions,
     localRun,
     localRunWatch,
     localValidations,

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
 import { PREDICTION_SLOTS } from '../src/store/predictions.js';
+import { inheritableEnv } from '../src/agents/spawnEnv.js';
 
 // → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
 
@@ -29,12 +30,69 @@ const CONTAINED_DIRS = [
   'src/sink',
   // The outbound tracker path: `ticketFiler` builds every IssueCreateInput.
   'src/tickets',
+  // Everything that composes prose an agent is handed, or prose that reaches the
+  // tracker. `src/executor` is the sharpest: it renders the dispatch prompt and
+  // persists it.
+  'src/executor',
+  'src/plans',
+  'src/escalation',
+  'src/knowledge',
+  'src/summaries',
+  'src/reviewPacks',
+];
+
+/**
+ * Top-level modules are scanned too: `goalInstructions.ts` is the one thing an
+ * operator writes that IS delivered to agents by design, which makes it the most
+ * inviting place to "just put the prediction as well".
+ */
+const CONTAINED_FILES = [
+  'src/goalInstructions.ts',
+  'src/issueWatch.ts',
+  'src/briefTicket.ts',
+  // The one module that composes *persisted* prose off the prediction record's
+  // shadow. `attention_read` serves an open human task's title and detail to the
+  // operator's own Claude Code, so a close-out row that ever carried prediction text
+  // would put a prediction in front of a model. It carries the goal and nothing else,
+  // and this is what holds it there.
+  'src/delivery/closeOut.ts',
 ];
 
 const FORBIDDEN: { pattern: RegExp; what: string }[] = [
   { pattern: /(?:\.\.?\/)+store\/predictions\.js/, what: 'imports the prediction store' },
   { pattern: /\bopenPredictions\b/, what: 'names openPredictions()' },
   { pattern: /\bstore\.predictions\b/, what: 'reaches for store.predictions' },
+  // The way the store is actually reached today. Without this the scan would pass a
+  // module that simply held a `System` and asked it.
+  { pattern: /\.predictions\b/, what: 'reaches a predictions member' },
+  { pattern: /\bgoal_predictions\b/, what: 'names the goal_predictions table' },
+  // Stage 3's vocabulary. The types are re-exported through `wire.js`, which fleet
+  // modules legitimately import — so a module could name `GoalPrediction` and read
+  // `.planMarks` off a value without ever naming the store.
+  { pattern: /\bGoalPrediction\b/, what: 'names the GoalPrediction type' },
+  { pattern: /\bPredictionMark\b/, what: 'names the PredictionMark type' },
+  { pattern: /\bplanMarks\b/, what: 'reads a prediction’s marks' },
+  { pattern: /\bplan_mark_/, what: 'names a prediction mark column' },
+  { pattern: /\brecordPlanMarks\b/, what: 'writes a prediction mark' },
+  // Moment two's twins. The asymmetry was the gap: a scan that forbids moment one's
+  // vocabulary and not moment two's forbids half a record.
+  { pattern: /\boutcomeMarks\b/, what: "reads a prediction's outcome marks" },
+  { pattern: /\boutcome_mark_/, what: 'names an outcome mark column' },
+  { pattern: /\brecordOutcomeMarks\b/, what: 'writes an outcome mark' },
+  { pattern: /\bPredictionOutcomeMarks\b/, what: 'names the PredictionOutcomeMarks type' },
+  // Stage 6, and the readers that return whole rows.
+  { pattern: /\blistPredictions\b/, what: 'lists predictions, which carry their slot text' },
+  { pattern: /\blistReveals\b/, what: 'lists reveal stamps' },
+  { pattern: /\blistOutcomeOwed\b/, what: 'asks which goals owe moment two' },
+  { pattern: /\bgetPrediction\b/, what: 'reads a prediction' },
+  { pattern: /\bgetReveal\b/, what: 'reads a reveal stamp' },
+  { pattern: /\bpredictionFacts\b/, what: 'names the aggregate’s intake' },
+  { pattern: /\bPredictionAggregate\b/, what: 'names the aggregate' },
+  { pattern: /\bGoalReveal\b/, what: 'names the GoalReveal type' },
+  // `.predictions` is defeated by `const { predictions } = system`, after which the
+  // store is reached under a bare name and the row type is inferred rather than
+  // written. The bare word is the pattern that survives that.
+  { pattern: /\bpredictions\b/, what: 'names predictions at all' },
   { pattern: /\bPredictionStore\b/, what: 'names PredictionStore' },
 ];
 
@@ -55,6 +113,10 @@ test('nothing the fleet is handed can name the prediction store', () => {
     assert.ok(files.length > 0, `${dir} holds no modules; the scan moved or this assertion proves nothing`);
     scanned.push(...files);
   }
+  for (const file of CONTAINED_FILES) {
+    assert.ok(existsSync(file), `${file} moved; the scan names a file that is not there`);
+    scanned.push(file);
+  }
   assert.ok(scanned.length >= 50, 'the containment scan read the fleet, or it proves nothing');
 
   for (const file of scanned) {
@@ -68,6 +130,68 @@ test('nothing the fleet is handed can name the prediction store', () => {
       );
     }
   }
+});
+
+/**
+ * The escape that is not an import.
+ *
+ * An agent is launched with the harness's environment so it can reach `gh` and its
+ * own MCP socket. `LUBBDUBB_TOKEN` is the cockpit bearer, and every operator-only
+ * route answers to it — so an agent that inherited it could simply `curl` the
+ * prediction back, over the network, with nothing in any import graph to show for
+ * it. Neither the type system nor the scan above can see that; this can.
+ */
+test('an agent does not inherit the credential that would let it read a prediction back', () => {
+  const inherited = inheritableEnv({
+    ...process.env,
+    LUBBDUBB_TOKEN: 'ZZQX-BEARER-SENTINEL',
+    LUBBDUBB_INGRESS_SECRET: 'ZZQX-INGRESS-SENTINEL',
+    PATH: process.env.PATH,
+  });
+
+  assert.equal(inherited.LUBBDUBB_TOKEN, undefined, 'the cockpit bearer reached an agent');
+  assert.equal(inherited.LUBBDUBB_INGRESS_SECRET, undefined, 'an ingress secret reached an agent');
+  assert.equal(inherited.PATH, process.env.PATH, 'the rest of the environment still goes through');
+
+  // Non-vacuous: the sentinel is findable in what we handed in, so the assertion
+  // above is about the stripping and not about the key never having been set.
+  assert.equal({ ...process.env, LUBBDUBB_TOKEN: 'ZZQX-BEARER-SENTINEL' }.LUBBDUBB_TOKEN, 'ZZQX-BEARER-SENTINEL');
+
+  const spawnSites = ['src/agents/streamJsonSession.ts', 'src/pty/backend.ts'];
+  for (const file of spawnSites) {
+    const source = readFileSync(file, 'utf8');
+    assert.ok(
+      !/\.\.\.process\.env\b/.test(source),
+      `${file} spreads process.env into an agent's environment, which hands it the cockpit bearer. ` +
+        'Use inheritableEnv(). Fix the file, not this assertion.',
+    );
+  }
+});
+
+/**
+ * `src/server/` is where predictions legitimately live, so it cannot be scanned
+ * wholesale. But a route module is the one place in the codebase where a rendered
+ * agent prompt and `system.predictions` are both in scope at once, and that
+ * combination is one line from a leak that no other assertion here would catch.
+ */
+test('no module that renders an agent prompt also reaches the prediction store', () => {
+  const server = tsFiles('src/server');
+  assert.ok(server.length > 10, 'the server was read, or this assertion proves nothing');
+
+  const renders: string[] = [];
+  for (const file of server) {
+    const source = readFileSync(file, 'utf8');
+    const buildsAPrompt = /\bprompts\.render\b/.test(source);
+    if (!buildsAPrompt) continue;
+    renders.push(file);
+    assert.ok(
+      !/\.predictions\b|\bPredictionStore\b|\bopenPredictions\b/.test(source),
+      `${file} both renders an agent prompt and reaches the prediction store. Those two must not meet ` +
+        `in one module — split the prompt out, or move the prediction read. Fix ${file}, not this ` +
+        'assertion. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store',
+    );
+  }
+  assert.ok(renders.length > 0, 'no server module renders a prompt; the pattern moved and this proves nothing');
 });
 
 const SENTINELS = {

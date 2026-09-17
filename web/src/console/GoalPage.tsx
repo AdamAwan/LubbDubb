@@ -37,6 +37,9 @@ import type {
   WatchCheckVerdict,
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { GoalCriteria } from '../components/GoalCriteria.js';
+import { PlanRevealGate } from '../components/PlanRevealGate.js';
+import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
@@ -249,6 +252,16 @@ function WorkPane({
   return (
     <>
       <PlanWaves page={page} view={view} actions={actions} />
+      {/* Below the plan rather than above it: what "done" means is read against the
+          shape the fleet proposed, and the card draws nothing at all where the
+          criteria routes are not mounted. A part with a task behind it is what
+          makes the next version drift, which is the one thing the form has to know
+          before the operator starts typing. */}
+      <GoalCriteria
+        issueNumber={page.issue.number}
+        workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
+        now={view.now}
+      />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
@@ -1110,6 +1123,13 @@ function PlanWaves({
   })).filter((g) => g.parts.length > 0);
   const retired = page.retiredParts;
   const plan = page.plan;
+  // The gate lifts here the moment the reveal returns, rather than waiting on the
+  // payload the refresh behind it brings. `revealed` is the server's fact and this
+  // is only the page catching up to it, so the flag is never read the other way:
+  // once the payload says revealed, this is dead weight and the gate is gone for
+  // good. → docs/proposals/prediction-record-and-criteria-integrity.md
+  const [lifted, setLifted] = useState(false);
+  const gated = plan !== null && !plan.revealed && !lifted;
   const prs = new Map<number, PartPr>();
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
@@ -1127,7 +1147,7 @@ function PlanWaves({
               acceptance and what was decided are the sheet's, and it was reachable
               from here only through the validation card's aside about amending the
               checks — a door nobody looking for the plan would think to try. */}
-          {plan !== null && (
+          {plan !== null && !gated && (
             <button
               type="button"
               className="cn-linkish"
@@ -1139,7 +1159,29 @@ function PlanWaves({
           )}
         </span>
       </h3>
-      <div className="cn-waves">
+      {gated && (
+        <PlanRevealGate
+          issueNumber={page.issue.number}
+          onRevealed={async () => {
+            try {
+              await actions.refresh();
+            } finally {
+              setLifted(true);
+            }
+          }}
+        />
+      )}
+      {!gated && (
+        <PredictionReview
+          issueNumber={page.issue.number}
+          revealed={plan !== null && (plan.revealed || lifted)}
+          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
+          plan={plan}
+          parts={page.parts.map((p) => p.part)}
+          now={view.now}
+        />
+      )}
+      <div className="cn-waves" hidden={gated}>
         {groups.length === 0 && (
           <p className="cn-empty">
             {page.plan === null

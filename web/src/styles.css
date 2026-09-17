@@ -62,6 +62,12 @@
   --blue-line: color-mix(in srgb, var(--blue) 36%, var(--well));
   --blue-line-2: color-mix(in srgb, var(--blue) 53%, var(--well));
   --blue-fill: color-mix(in srgb, var(--blue) 8%, var(--well));
+  /* Where a withheld rate's count toward its threshold is drawn. It is deliberately
+     not one of the hue tints: the statement standing there is a true count and not
+     a measurement, so it must read as neither a reading nor a warning. Mixes of the
+     neutral over the well, so every theme carries it without owing a value. */
+  --withheld-fill: color-mix(in srgb, var(--grey) 9%, var(--well));
+  --withheld-line: color-mix(in srgb, var(--grey) 30%, var(--border));
   /* A review pack's diff lines. Mixes of the two verdict hues over the well, so a
      theme that moves green or red moves the diff with it and owes these nothing. */
   --diff-add-fill: color-mix(in srgb, var(--green) 14%, var(--well));
@@ -10486,6 +10492,113 @@ select:disabled {
   text-align: right;
 }
 .rc-none {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+/* The prediction aggregate. The counts lead and the rates follow, because the
+   counts are facts at any n and the rates are not facts at all below the
+   threshold. `.pred-withheld` is what stands where a withheld rate would be, and
+   it is deliberately not built like `.pred-rate`: nothing on it is a numeral in
+   figure position. → docs/spec/17-cockpit.md */
+.pred {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.pred-lede {
+  margin: 0;
+  color: var(--muted);
+}
+.pred-block {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+}
+.pred-block h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.pred-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.pred-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-bottom: 10px;
+}
+.pred-figure {
+  display: flex;
+  flex-direction: column;
+}
+.pred-figure-v {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.pred-figure-l {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pred-figure.is-loud .pred-figure-v {
+  color: var(--amber);
+}
+/* The third outcome, held apart from the other two rather than stood beside them:
+   a goal the gate was never put to is not a decline. */
+.pred-apart {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  border-left: 2px solid var(--border-hi);
+  padding-left: 10px;
+}
+.pred-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+}
+.pred-rate {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pred-rate-v {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.pred-rate-l {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pred-withheld {
+  margin: 0;
+  font-size: 12.5px;
+  border: 1px solid var(--withheld-line);
+  background: var(--withheld-fill);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+}
+.pred-moments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+}
+.pred-moment {
+  flex: 1 1 260px;
+}
+.pred-moment h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.pred-about {
+  color: var(--muted);
+  font-weight: 400;
+}
+.pred-absent {
   margin: 0;
   color: var(--muted);
   font-size: 12.5px;

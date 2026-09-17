@@ -2291,6 +2291,125 @@ The overview's segment track is folded by `buildGoalTrack` off **the page's own 
 `status` a second time, so a row and the page it opens cannot disagree about whether a part is held or
 merely not started.
 
+### The reveal gate
+
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan has arrived
+`awaiting_approval` on a goal nobody has revealed it on, the plan card draws the gate in place of the
+waves: a blurred stand-in for the document, and over it _"A plan is ready. Predict first?"_ with
+**Predict** and **Show me the plan** beside each other.
+
+**The two presses are of equal weight, and this is load-bearing rather than taste.** A gate that is
+awkward to decline is a gate that gets resented and then disabled outright, so **Show me the plan** is
+never a small grey link — both are primary buttons, in one row, at the same size. The gate never
+re-prompts on a goal it has been declined on: the stamp ends the offer for good.
+
+**There is nothing to blur, and that is the point.** The plan's body is not on the wire at all while
+it is withheld — no narrative, no parts, no atoms
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)) — so the card draws a stand-in
+rather than blurring an empty body, which would read as _no plan_ instead of _withheld_. The blur is a
+picture of a withheld thing, not a cover over a thing that is present.
+
+The card's other door to the document, "open the full plan", is suppressed while the gate stands. A
+second ungated way into the sheet would make the gate a suggestion.
+
+**Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `hard`,
+`surprise` — each a free-text field labelled with the question it asks, each individually skippable,
+and one press that records the prediction and reveals the plan in the same breath. That is deliberate:
+moment one is one continuous interaction rather than a second visit, because predict → reveal → look
+is the sitting the operator was already having. A draft with nothing in it is caught before it is sent;
+every refusal the routes can give is drawn inline in the operator's own words rather than thrown.
+
+Under the slots, once, a sentence saying what containment does and does not cover: what is written
+here reaches no agent, but pasting it into the goal's standing instructions would leak it, because
+standing instructions are delivered to agents by design. That is the one hole nothing can close, and
+the operator is told about it at the moment they could fall into it.
+
+**No `Place` state.** Whether the composer is open, and whether the gate has lifted on this render, are
+not "where am I": the gate is a one-shot that ends the moment the server stamps the reveal, so a deep
+link to a half-typed composer would be a link to something that no longer exists, and a reload
+correctly re-reads the server's fact rather than the page's memory of it.
+
+### Moment one — the prediction beside the plan
+
+Where the plan has been revealed on a goal that **has** a prediction, the plan card draws the two side
+by side: the four slots on one side with a three-way mark each, the plan's narrative and its parts on
+the other. Reading one against the other is the whole of the interaction, so at narrow widths they
+stack with the plan **first** — it is what the marks are made against.
+
+It sits where the gate stood, so predict → reveal → mark reads as one sitting rather than a second
+visit to a different surface. But it is drawn off the record — a prediction exists and the goal is
+revealed — not off the moments after the press, so an operator who closed the tab comes back to it.
+
+**Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a
+dashed edge and the words "Not marked yet" in faint ink — visibly not the solid red edge and filled
+button of a `missed`. The two must not look alike anywhere, because the aggregate reads them as
+different things and drawing them the same is how an operator comes to believe the record says
+something it does not. Pressing the selected mark again takes it off.
+
+A **skipped** slot draws no buttons at all, and says why: nothing was written there, so there is
+nothing to mark. The third option is labelled **"Plan is silent"** rather than anything that reads as
+_I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
+a real answer, not a way of declining to give one.
+
+### Moment two, beside moment one
+
+Where moment two has been asked, each filled slot draws **both** marks, and the card's whole job is
+that an operator cannot mistake which question they are answering. The two share no words: moment one
+asks _"Did you call it?"_ — about your reading of the system — and answers Matched / Missed / Plan is
+silent; moment two asks _"Was the plan right?"_ — about the plan, not about you — and answers Held up
+/ Did not hold / Never came up. Two identical-looking three-way rows would make the record
+meaningless, so they are not drawn alike.
+
+Where both are set, the pair is restated as one sentence, and the two pairs in which **the plan did
+not hold** are tinted apart, because those are the rows the record exists for: matched-and-wrong is
+the operator and the fleet wrong together, and missed-and-wrong is the operator having been right. It
+is a lookup over the two stored marks, not a new verdict the page computes — the cockpit does not
+score what the server did not.
+
+An unanswered moment two draws as not-yet-answered, in the same dashed chip moment one uses, with
+nothing pre-selected. It is skippable by design and absent is absent.
+
+The bench row opens the goal **on the pane that draws this card**, in one navigation, through `Place`
+— selecting the goal alone would land a delivered goal on a pane where the card is not drawn, which is
+a rail row that appears to do nothing.
+
+### Goal criteria, and drift
+
+Below the plan — criteria are read against the shape that was proposed — the goal page draws the
+current criteria version prominently, with the chain behind it collapsed, newest first. Each version
+carries its derived standing, its author, when it was written, and for a `post-work` version the
+**reason**, which is the whole point of having required one.
+
+**A goal whose criteria changed after work started is marked on the card itself**, beside the version
+count, not buried in the chain. Drift that is only discoverable by expanding a history is drift nobody
+finds.
+
+**The reason is asked for before the press, not after the refusal.** Where the next version would be
+`post-work` the form puts the reason field above the text box and says why. The route refuses a
+post-work append without one, and an append-only chain cannot take a row back — so being told after
+writing the text would cost the operator the draft for a requirement that was knowable beforehand. If
+the standing moves underneath anyway, the draft is kept and the field appears.
+
+A version is the **whole text restated**, not a patch, and the form says so and names the version it
+will append. The page also states plainly that where both exist the goal set is the authority and a
+part acceptance that contradicts it is a plan defect — because the page draws both, and a reader with
+two lists and no rule between them will pick whichever suits.
+
+**None of the prediction card's containment language appears here, and that is deliberate.** Criteria
+are an oracle the work is judged against; they are written **for** the fleet to read. A sentence
+promising they are kept from every agent would be false, and a reader who conflates the two features
+will either leak predictions or hide criteria.
+
+#### Drift in the feed
+
+`criteriaDrift` is its own wire list and the cockpit merges it **at the feed's door**, exactly as
+environment arrivals are merged — same signal shape, same window, sorted together.
+
+The merge is what keeps the feed complete without the record being a `WorldEvent`, and it must stay
+that way: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's
+issue ref, so drift written as one would un-park the goal it has just reported on.
+→ [14](14-persistence.md#drift-has-its-own-table)
+
 ### The pull requests and the tail
 
 **Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part
@@ -2515,6 +2634,39 @@ list is a handful of dispatches at best and empty for any goal not touched in th
 design's stated arm was that this becomes its own route, and this takes that arm: **deferred, not
 half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
 from.
+
+## The prediction reading
+
+An Insights tab of its own — _"Did you see the plan coming, and was the plan right?"_ — drawn only
+where the reveal gate is on, and read off `GET /api/predictions/aggregate` rather than the state
+payload, because it is a whole-history fold nothing needs per pulse.
+
+**Counts lead; rates follow underneath, smaller.** How many goals were offered the gate, how many
+carried a prediction, how many were marked at each moment, how many goals drifted: those are facts at
+any n and they are the figures that matter first.
+
+**A withheld rate is drawn as the count toward the threshold, and never as a number.** Where the
+payload carries null the panel says _"21 goals offered the gate; rates appear at 10"_ — its own
+denominator, and the threshold it is short of. There is **no branch anywhere that renders a null as
+0%, as a dash, or as anything a reader could mistake for a measurement**; the rate is absent from the
+payload precisely so the panel cannot draw it
+([18](18-observability.md#a-rate-nobody-should-read-is-not-shipped)). A rate that does exist is never
+drawn bare — always beside the n it is over.
+
+**_Not offered_ is drawn apart from _declined_**, in its own line rather than as a third figure in the
+row, saying what it is: the goals from before the switch, permanently, in neither rate below. Drawn
+beside the other two it would read as a kind of decline, which is the one misreading the three-outcome
+split exists to prevent.
+
+**An absent slot says it is absent.** The per-slot list is sparse, so the panel looks up each of the
+four and, finding nothing, says no prediction has ever filled it — absent, not nought. Same for a
+filled slot nobody has marked at one of the two moments.
+
+The two moments are labelled as the goal card labels them, side by side per slot: moment one about
+the operator's reading of the system, moment two about the plan.
+
+**Nothing is keyed on a person** — no filter, no legend, no column — and the panel's lede says so.
+→ [18](18-observability.md#nothing-is-grouped-by-author-and-nothing-could-be)
 
 ## The pull request page
 

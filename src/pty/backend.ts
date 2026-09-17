@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { resolveExecutable } from '../agents/resolveCommand.js';
+import { inheritableEnv } from '../agents/spawnEnv.js';
 
 // → docs/spec/10-agent-runtimes.md
 
@@ -29,7 +30,7 @@ export class NodePtyBackend implements PtyBackend {
   spawn(file: string, args: string[], opts: SpawnOptions): PtyProcess {
     const require = createRequire(import.meta.url);
     const pty = require('node-pty') as typeof import('node-pty');
-    const env = { ...process.env, ...opts.env } as Record<string, string>;
+    const env = { ...inheritableEnv(), ...opts.env } as Record<string, string>;
     // TECHDEBT: Resolve up front: node-pty reports a missing binary only by exiting 1 with
     // `execvp(3) failed` in the terminal, so a bad command would otherwise look
     // like an agent that spawned and instantly "failed" for no visible reason.
