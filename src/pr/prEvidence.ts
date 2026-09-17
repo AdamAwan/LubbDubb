@@ -299,8 +299,11 @@ export function renderEvidence(input: {
     out.push(...(entries.length > 0 ? entries.map((e) => `- ${e}`) : ['- _none named_']));
   }
 
-  out.push('', '**The diff**, read off the clone rather than written by the author');
-  out.push(...(facts === null ? ['- The clone could not read this diff.'] : renderDiffFacts(facts)));
+  const computed = facts === null ? ['- The clone could not read this diff.'] : renderDiffFacts(facts);
+  if (computed.length > 0) {
+    out.push('', '**One-way surfaces in the diff**, found by the clone rather than named by the author');
+    out.push(...computed);
+  }
 
   return out.join('\n');
 }

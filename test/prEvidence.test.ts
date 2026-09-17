@@ -165,8 +165,9 @@ test('the rendered block draws the criteria from the plan and never from the age
   assert.match(rendered, /1\. The cursor is stored per source\. → `src\/store\/sync\.ts:41`/);
   assert.match(rendered, /2\. Resume reads the cursor at boot\. → not met: part 2\./);
   assert.match(rendered, /\*\*Cannot be undone\*\*\n- _none named_/);
-  assert.match(rendered, /\*\*The diff\*\*/);
-  assert.match(rendered, /Tests changed: yes/);
+  assert.doesNotMatch(rendered, /Tests changed/, 'the test flag is on the pull request already');
+  assert.doesNotMatch(rendered, /2 files/, 'so is the list of files, one tab over');
+  assert.doesNotMatch(rendered, /One-way surfaces/, 'and this diff touches none');
 });
 
 test('a pickup with no criteria renders the issue instead, rather than an empty list', () => {
@@ -189,11 +190,9 @@ test('changed files are read off the diff, including a rename’s new name', () 
   assert.deepEqual(changedFiles(CODE_AND_TEST), ['src/sync/resume.ts', 'test/sync.test.ts']);
 });
 
-test('the computed block counts the files and names the one-way surface it found', () => {
+test('the computed block names the one-way surfaces it found, and nothing else', () => {
   const facts = diffFacts(diff({ 'src/store/sync.ts': "db.exec('DELETE FROM sync_cursor');" }))!;
   const lines = renderDiffFacts(facts).join('\n');
-  assert.match(lines, /1 file: `src\/store\/sync\.ts`/);
-  assert.match(lines, /Tests changed: no/);
-  assert.match(lines, /database schema/);
+  assert.match(lines, /database schema and its migrations: `src\/store\/sync\.ts`/);
   assert.match(lines, /rows this deletes/);
 });
