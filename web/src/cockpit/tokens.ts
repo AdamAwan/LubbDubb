@@ -235,6 +235,20 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     kind: 'colour',
     why: 'The ground of an amber-tinted box',
   },
+  {
+    name: '--withheld-fill',
+    label: 'Withheld ground',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The ground of the note that stands where a rate is still below its threshold',
+  },
+  {
+    name: '--withheld-line',
+    label: 'Withheld border',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The edge of that note — neutral, because a count toward a threshold is neither a reading nor a warning',
+  },
   { name: '--red-line', label: 'Red border', group: 'tints', kind: 'colour', why: 'The edge of a red-tinted box' },
   { name: '--red-fill', label: 'Red fill', group: 'tints', kind: 'colour', why: 'The ground of a red-tinted box' },
   {
@@ -600,6 +614,20 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     group: 'overlays',
     kind: 'colour',
     why: "The console's own modal dimming",
+  },
+  {
+    name: '--cn-gate-veil',
+    label: 'Reveal-gate veil',
+    group: 'overlays',
+    kind: 'colour',
+    why: 'The wash over a plan you have not read yet',
+  },
+  {
+    name: '--cn-unmarked-line',
+    label: 'Unmarked edge',
+    group: 'tints',
+    kind: 'colour',
+    why: 'A prediction slot you have not marked yet — an open question, never a miss',
   },
   {
     name: '--cn-hatch-flash',

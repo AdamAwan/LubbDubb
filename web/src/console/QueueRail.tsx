@@ -25,10 +25,11 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   placement: 'Backlog',
   bench: 'Bench',
   close_out: 'Close-out',
+  outcome: 'Plan verdict',
   validate: 'Run checks',
   validation_plan: 'Checks',
   watch: 'Watch',
-  burn: 'Spend',
+  burn: 'Runaway',
   limit: 'Usage limit',
   supply: 'Runway',
   dispatch: 'Refused',
@@ -74,6 +75,7 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   placement: 'amber',
   bench: 'blue',
   close_out: 'green',
+  outcome: 'blue',
   validate: 'green',
   validation_plan: 'green',
   watch: 'amber',
@@ -113,6 +115,7 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   placement: '\u25a3',
   bench: '\u25c6',
   close_out: '\u2691',
+  outcome: '\u2696',
   validate: '\u2713',
   validation_plan: '\u25c8',
   watch: '\u25ce',
@@ -295,6 +298,7 @@ function Row({
   const goTo = (dest: NeedRow['opens']): (() => void) | null => {
     if (dest === 'build') return () => actions.openPanel('build');
     if (dest === 'goal') return ref === null ? null : () => actions.selectGoal(ref);
+    if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
     if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
     return null;
   };

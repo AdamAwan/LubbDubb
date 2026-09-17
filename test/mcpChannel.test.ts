@@ -1387,7 +1387,7 @@ test('open_pr opens the pull request for the calling agent, titled by the conven
     summary: 'sync cursor table',
     type: 'feat',
     scope: 'store',
-    body: 'Adds the cursor the reconciler reads.',
+    body: '- The reconciler had no cursor to read, so it refetched every page.\n- Adds the table it reads.',
   });
   const payload = JSON.parse(res.text) as { opened: boolean; pullRequest: number; title: string; base: string };
   assert.equal(payload.opened, true);
@@ -1404,6 +1404,30 @@ test('open_pr opens the pull request for the calling agent, titled by the conven
   assert.ok(
     system.store.workItemLinks.linkedWorkItemPrs().has(payload.pullRequest),
     'and the link is recorded, so it happens once',
+  );
+  system.store.close();
+});
+
+test('open_pr refuses a body that is paragraphs wearing dashes, and opens nothing', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 186, title: 'Ticket sync rewrite', body: '' });
+  await system.harness.runCycle('manual');
+  const agent = spawnAgent(system, 'issue:186');
+
+  const res = await callTool(system, agent, 'open_pr', {
+    summary: 'sync cursor table',
+    body:
+      '## Summary\nThis pull request introduces a persistence layer for reconciliation cursors, which ' +
+      'previously were held only in memory and therefore lost on restart.',
+  });
+  assert.match(res.text, /open_pr rejected/);
+  assert.match(res.text, /## Summary/, 'the refusal quotes the line it caught');
+
+  const world = await system.connector.getState();
+  assert.equal(
+    world.pullRequests.find((p) => p.branch === 'issue/186'),
+    undefined,
+    'nothing was opened',
   );
   system.store.close();
 });

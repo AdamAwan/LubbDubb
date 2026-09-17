@@ -33,6 +33,7 @@ import {
   queueControl,
 } from './desktopOps.js';
 import { agentControl, jobCreate } from './desktopWork.js';
+import { ticketTarget } from './desktopTicket.js';
 import { goalGate, goalInstruct, goalPlacement } from './desktopGoal.js';
 import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
@@ -324,6 +325,12 @@ const planRead: DesktopToolFactory = (deps) => ({
     const found = decompositionFor(deps, ref.issue);
     if (!found.ok) return toolError(found.error);
     const { plan, originRef } = found;
+    if (deps.planWithheld(plan))
+      return toolError(
+        'This plan has not been revealed yet. It is withheld until the operator opens the goal in the ' +
+          'cockpit and presses through the gate there — reading it aloud here would defeat that, which is ' +
+          'the whole point of the gate. Ask them to reveal it first.',
+      );
 
     const parts = deps.store.plans.listPlanParts(plan.id);
     const checks = liveChecks(deps.store.validation.listValidationChecks(originRef));
@@ -656,6 +663,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   proposal_decide: proposalDecide,
   recovery_decide: recoveryDecide,
   job_create: jobCreate,
+  ticket_target: ticketTarget,
   agent_control: agentControl,
   ...DESKTOP_EJECTION_TOOLS,
   validation_read: validationRead,

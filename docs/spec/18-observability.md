@@ -23,7 +23,7 @@ Three operator readings are folded out of those records rather than kept beside 
 [reliability breakdown](#the-reliability-breakdown), which asks what it bought, and the
 [throughput breakdown](#the-throughput-breakdown), which asks how much came out. None has a table.
 
-All of that is retrospective. The [burn watch](#the-burn-watch) is the one cost reading taken while
+All of that is retrospective. The [burn watch](#the-burn-watch) is the one reading taken while
 the money is still being spent — it acts on nothing and files a visible obligation to go and look.
 
 ## The error log
@@ -639,6 +639,63 @@ the goal. That is a large part of the argument for cohorting goals rather than b
 the closed end of the ticket mirror on top of the same all-time agent walk, and a tab an operator
 never opens should cost nothing.
 
+## The prediction record
+
+The one reading here that is not about the fleet. Everything else in this document records what the
+**fleet** did; this records whether the **operator's model of the system** was right, and it exists
+because approving a plan is a prediction, refusing one is a prediction, and none of them was ever
+scored, so none of them ever corrected. → [14](14-persistence.md#the-prediction-store-is-not-on-store)
+
+### A rate nobody should read is not shipped
+
+Every rate is `{rate, n} | null`, and **null means withheld**. Below `predictionAggregateMinGoals`
+marked goals the rate is **absent from the payload**, on exactly the terms `comparison` is above: a
+rate drawn off four goals is noise with a percentage sign on it, and withholding it from the payload
+is the only way the panel can be made not to draw it. A caption saying "small sample" is read by
+nobody.
+
+In its place the payload carries the **count toward the threshold**, so the panel says "4 goals
+marked; rates appear at 10" — a true statement rather than a rate.
+
+**Counts are never withheld.** How many goals carried a prediction, how many were marked, how many had
+criteria drift: those are facts at any n, and they are the figures that matter first anyway. And a
+rate never travels without the n it is over — `{rate, n}` is one object for that reason.
+
+**A slot with no data is absent, not zero.** The per-slot list is sparse: a slot no prediction ever
+filled has no entry, and a filled slot with no marks at a moment carries null for that moment. The
+four slots are not sacred, but adding a fifth later makes every earlier goal **absent** in that column
+rather than zero — the same reason an absent bucket beats a zero one in the runaway watch.
+
+### Three outcomes, because two would lie
+
+**predicted**, **declined**, and **not offered**. A goal with a reveal stamp and a prediction was
+predicted; a reveal stamp and no prediction was declined; **no reveal stamp at all was never offered**,
+which is what every goal from before the switch reads as, permanently. Folding the third into the
+second would open the aggregate on a decline rate the operator never earned, in the one week it has to
+earn any trust.
+
+The **decline rate is a first-class figure beside coverage**, and that is deliberate: the reveal gate's
+own failure mode is reflexive dismissal, and an operator tuning it out should be able to see that they
+are.
+
+### Nothing is grouped by author, and nothing could be
+
+Scoring people is out of scope, and on a single-operator deployment the question is smaller than it
+looks — one bearer token, no user model. The hazard is the day a second operator exists, when grouping
+by the `author` column would be one SQL clause away.
+
+So it is closed structurally rather than forbidden: `predictionFacts()` is the single door a prediction
+comes through on its way into the aggregate, and it drops both the slot text and the author. The
+builder's input type has no author field, so the clause a later change would reach for has nothing to
+group by. That is the no-op the design asks for, rather than a permission system that protects nothing
+and reads as though it does.
+
+**The aggregate reads marks and counts, never slot text**, and a prediction is never read by a model —
+including for analysing this. That is the price of the containment guarantee and it is paid knowingly:
+nothing aggregates _within_ a slot, so if an operator's `locus` predictions are reliably right for
+schema work and wrong for cockpit work, only a human reading the goals can see it. The alternative is
+classifying free text, which means a model reading predictions.
+
 ## The allowance
 
 `src/insights/allowanceInsights.ts`, `GET /api/allowance`, the Insights page's Allowance tab
@@ -725,6 +782,38 @@ deliberately not in the dispatcher: it staffs nobody, holds nothing, and no rule
 writes. It is handed the cycle's own `agents` and `tasks` rather than taking its own reads, so the
 pulse walks those two tables once. Configured by `spendBurn` ([02](02-configuration.md#spendburn)).
 
+### Three axes, because money alone cannot see a cheap runaway
+
+The watch reads **spend, steps and runtime**, in that fixed order, and a run trips it on the first
+axis that is past. They are three readings of one question — is this run going far beyond what this
+work takes — and each covers a blind spot in the others:
+
+- **Spend** is `Agent.costUsd`, folded on from each `result` event.
+- **Steps** is `Agent.steps`, one per `activity` event: the runtime's own statement that the agent
+  did something ([10](10-agent-runtimes.md#the-session-contract)).
+- **Runtime** is wall-clock from `Agent.startedAt`, which needs no reporting from the agent at all.
+
+**Spend on its own is blind to exactly the run this exists to catch.** `recordAgentUsage` lands only
+on a `result` event, which closes a **turn** — so a run grinding away inside one long turn has
+reported nothing at all, and the money arm skips it on `costUsd === null` for as long as it is the
+run most worth looking at. That is not a tuning problem and no threshold fixes it. Steps and runtime
+are both readable mid-turn, and that is why they are here.
+
+**And a cheap model's runaway is cheap.** A run looping for ninety minutes on the cheapest profile can
+cost less than the bucket median while doing so, so the money arm would not flag it even reporting
+perfectly. Steps and runtime are what make the failure visible.
+
+**A parked run is not judged on the clock.** An agent `waiting` on a person, or on an allowance
+window to turn over, is already a row an operator can see, and the hours it spends there are nobody's
+runaway — read on wall-clock it would file a second notice about the same standstill, every pulse,
+for as long as the operator took to answer. Spend and steps are still read: those only move when the
+agent does.
+
+**A null is never a zero, on any axis.** A run that reports no spend, or that the mock runtime never
+counted a step for, is skipped on that axis rather than read as having spent or stepped nothing —
+otherwise every unmeasured run would sit infinitely over its median. Runtime is the one axis always
+available, because the harness itself holds both ends of it.
+
 **The comparison is against the run's own kind of work, and the bucket is the rule _and_ the
 profile.** That pairing is not a refinement — it is what stops the check being useless. A goal pinned
 to a deep profile legitimately costs several times the same rule on a cheap one, so a rule-only
@@ -737,43 +826,67 @@ threshold until nothing could trip it. `rollUpTaskTypes`' `perRunUsd` is a mean 
 not reused here; it answers "what does this cost me", which is a different question and wants every
 run in it.
 
-**Three things must hold together**, because a multiple on its own fires constantly:
+**Three things must hold together** on each axis, because a multiple on its own fires constantly:
 
 - **`minimumRuns` settled runs in the bucket**, or there is no median worth the name. Below that the
   bucket is **absent rather than zero** — a zero would make every live run in a young bucket
-  infinitely over its median.
-- **`floorUsd` in absolute money.** Four times the median of a rule that costs eight cents is
-  thirty-two cents, and a notice about that is the one that teaches an operator to dismiss the next
-  one unread.
-- **`multiple` itself**, kept generous: the spread inside one bucket is real work, not noise.
+  infinitely over its median. The count is per axis, since a bucket can have five runs that reported
+  spend and none that counted steps.
+- **A floor in absolute terms** — `floorUsd`, `floorSteps`, `floorMinutes`. Four times the median of
+  a rule that costs eight cents is thirty-two cents, and a notice about that is the one that teaches
+  an operator to dismiss the next one unread.
+- **`multiple` itself**, kept generous and shared by all three axes: the spread inside one bucket is
+  real work, not noise.
 
-`ceilingUsd` is a separate, profile-blind arm for the case the other three cannot cover — a
-deployment with no history at all, where the first runaway is also the first run. Off by default,
-because the right number is a property of the deployment's work and nothing here can guess it. The
-notice says which arm fired: a run flagged for passing a flat ceiling and one flagged against its own
-kind of work are different facts, and the ceiling notice says out loud that it is not a comparison.
+### The ceilings, and why the runtime one is on
+
+Each axis also has a flat ceiling — `ceilingUsd`, `ceilingSteps`, `ceilingMinutes` — which fires with
+no bucket behind it at all. This is the arm for the deployment with no history, where the first
+runaway is also the first run, and it is the reason the watch can say anything on a young fleet:
+with 37 dispatch rules crossed with profiles, most buckets never reach `minimumRuns`, so a deployment
+relying on the baseline arm alone is a watch that never fires.
+
+**`ceilingMinutes` is the one ceiling on by default.** The others stay `null` for the reason they
+always did — the right number of dollars or steps is a property of the deployment's work and nothing
+here can guess it. An hour of wall-clock is different: it is a number an operator can hold an opinion
+about without knowing anything about the work, and "no run should go an hour without somebody
+looking" is true of every deployment. A run legitimately past it costs one dismissed notice.
+
+**One title, every axis and both arms.** `recordHumanTask` dedups on `(agentId, originRef, title,
+kind)`, so a title naming the axis would file a _second_ row the moment a run already flagged on
+spend also went past the runtime ceiling — two notices about one agent. The title names the rule and
+nothing else; the **detail** says which axis led, whether it was a baseline or a flat ceiling, and
+carries every figure. A ceiling notice still says out loud that it is not a comparison, and the other
+axes' readings ride along beneath it, because "ninety minutes" and "four hundred steps" are one
+diagnosis and either alone is half of it.
+
+**The detail names the rung above the run's own profile**, where the ladder has one. That is the
+whole point of flagging a cheap runaway: the operator's next move is usually to lift the run rather
+than to kill it ([10](10-agent-runtimes.md#lifting-a-run-mid-flight)), and a notice that makes them
+go and work out which profile is next has spent the attention it just asked for. The cockpit draws
+the same judgement as a button on the row ([17](17-cockpit.md#needs-you)).
 
 **It files a note and kills nothing.** An expensive run is not a wrong run, and this module cannot
 tell the two apart — a bucket mixes a one-line fix with a goal that touches nine files. Killing on a
-threshold would eventually kill work that was going to land. The verdict is a `burn` human task
+threshold would eventually kill work that was going to land. Lifting on one would be worse: it throws
+away the work in flight and spends more money to redo it. The verdict is a `burn` human task
 ([13](13-jobs-and-tickets.md#human-tasks)): visible, holding nothing, and answered the same two ways
 a bench row is. What the operator lacked was not the stop button but the prompt to go and look.
 
-**The title carries no figure and the detail carries all of them.** `recordHumanTask` dedups on
-`(agentId, originRef, title, kind)`, so a title naming the dollars would file a fresh row every turn
-the run reported — one notice per pulse, about one agent. The same dedup refreshes the detail in
-place, which is what makes the figure an operator reads the one that is true _now_ rather than the
-one that tripped the watch.
+**The title carries no figure and the detail carries all of them.** The same dedup that forces one
+title also refreshes the detail in place, which is what makes the figure an operator reads the one
+that is true _now_ rather than the one that tripped the watch.
 
 **It settles itself**, for the close-out sweep's reason — the run it names is a thing it watches every
-pulse — with a resolution naming what the run finally cost and how it ended. A notice the operator
-already settled is not re-filed while the run continues. Turning the watch off files nothing and
-**still settles what is standing**, or a row about a run that ended last Tuesday would have no way
-left to close.
+pulse — with a resolution naming what the run finally cost, how long it ran and how it ended. A notice
+the operator already settled is not re-filed while the run continues. Turning the watch off files
+nothing and **still settles what is standing**, or a row about a run that ended last Tuesday would
+have no way left to close.
 
-**The mock runtime reports no usage at all** ([above](#usage-accounting)), so `costUsd` stays null and
-no run there can ever trip this. That is the fail-open direction and the only safe one: unmeasured is not
-free, and a watch that cannot see must not be allowed to conclude anything — in either direction.
+**The mock runtime reports no usage and counts no steps** ([above](#usage-accounting)), so only the
+runtime axis can see a `raw` run at all. That is the fail-open direction and the only safe one:
+unmeasured is not free, and a watch that cannot see must not be allowed to conclude anything — in
+either direction.
 
 ## The reliability breakdown
 

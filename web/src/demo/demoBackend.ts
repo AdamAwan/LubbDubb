@@ -29,6 +29,8 @@ import type {
   FeatureReportRow,
   FeatureRollup,
   FeatureSummary,
+  GoalPrediction,
+  GoalReveal,
   GoalWatch,
   GoalWatchDeclaration,
   FilingTargetProbe,
@@ -1707,6 +1709,19 @@ class DemoServer {
     return { ok: true };
   }
 
+  async liftAgentProfile(id: string, profile: string): Promise<{ ok: true }> {
+    const agent = this.state.agents.find((a) => a.id === id);
+    const task = agent ? this.state.tasks.find((t) => t.id === agent.taskId) : undefined;
+    if (task) {
+      task.profile = profile;
+      task.profileSource = 'pin';
+      this.addDecision('no_op', 'executed', `lifted ${id} to the "${profile}" profile`);
+    }
+    this.append(id, `\nLifted to the "${profile}" profile; the conversation carries on there.`);
+    this.dirty();
+    return { ok: true };
+  }
+
   async resumeAgent(id: string): Promise<{ ok: true }> {
     if (!this.state.parkedOnLimit.includes(id)) return { ok: true };
     this.state.parkedOnLimit = this.state.parkedOnLimit.filter((a) => a !== id);
@@ -1849,6 +1864,7 @@ class DemoServer {
         cacheReadTokens: null,
         cacheCreationTokens: null,
         numTurns: null,
+        steps: null,
         note: null,
         notedAt: null,
         resumedAt: null,
@@ -4146,6 +4162,7 @@ function buildDemoSpend(): SpendInsights {
     costUsd: r.costUsd,
     ...demoTokens(r.costUsd),
     numTurns: r.turns,
+    steps: null,
     startedAt: iso(r.hoursAgo + 1),
     endedAt: iso(r.hoursAgo),
   }));
@@ -4570,6 +4587,22 @@ export const demoApi = {
   getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
   answerFeatureSequence: (): Promise<never> =>
     Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
+  predictGoal: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to write one into')),
+  revealGoalPlan: (): Promise<never> =>
+    Promise.reject(new Error('every plan in the demo is already revealed, so there is no gate to open')),
+  getGoalPrediction: (): Promise<{ prediction: GoalPrediction | null; reveal: GoalReveal | null }> =>
+    Promise.resolve({ prediction: null, reveal: null }),
+  markGoalPrediction: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to mark against a plan')),
+  markGoalPredictionOutcome: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to say the plan turned out')),
+  getPredictionAggregate: (): Promise<never> =>
+    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to fold')),
+  getGoalCriteria: (): Promise<never> =>
+    Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
+  writeGoalCriteria: (): Promise<never> =>
+    Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
   getTickets: (query: {
     watch: string;
     tracking: string;
@@ -4843,6 +4876,7 @@ export const demoApi = {
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
+  liftAgentProfile: (id: string, profile: string) => getServer().liftAgentProfile(id, profile),
   resumeAgent: (id: string) => getServer().resumeAgent(id),
   extendStall: (id: string) => getServer().extendStall(id),
   ejectAgent: (id: string, reason: string) => getServer().ejectAgent(id, reason),

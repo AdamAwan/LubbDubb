@@ -460,6 +460,9 @@ before it.
 | `world_events`              | Observed world transitions — the activity feed's backing store.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                                                                                                                                                                                                                                                                                                                |
 | `world_baseline`            | The last snapshot the harness diffed against.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Single row: `CHECK (id = 1)`                                                                                                                                                                                                                                                                                                                     |
 | `error_events`              | Recorded failures — the Errors panel's backing store.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | —                                                                                                                                                                                                                                                                                                                                                |
+| `goal_predictions`          | What an operator predicted about a goal before they first read its plan — four slots (`locus`, `cause`, `hard`, `surprise`), free text, each individually skippable. Never sent anywhere: [the prediction store is not on `Store`](#the-prediction-store-is-not-on-store).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `origin_ref` is `UNIQUE`; one per goal, and not re-openable                                                                                                                                                                                                                                                                                      |
+| `goal_reveals`              | The reveal gate's answer: the plan was drawn obscured, the operator pressed one of the two, and the plan was handed over. **The absence of a row is not a decline** — it is a goal that was never offered the gate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `origin_ref` is `PRIMARY KEY`; first press wins                                                                                                                                                                                                                                                                                                  |
+| `goal_criteria`             | A goal's human-authored acceptance criteria, one row per version. [Append-only](#goal-criteria-are-append-only); the standing is derived, never stored.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `UNIQUE (origin_ref, version)`                                                                                                                                                                                                                                                                                                                   |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `job_schedules(enabled, next_run_at)`, `plans(origin_ref)`, `plan_parts(plan_id)`, `plan_atoms(plan_id)`, `plan_caveat_answers(plan_id)`, `validation_checks(origin_ref)`,
@@ -1344,6 +1347,160 @@ account, so the key conflict is ignored rather than replaced: there is nothing t
 The history is kept unpruned. A row is five columns per agent turn, which is a few thousand a day on
 a busy fleet and nothing SQLite notices — and a retention sweep would be a boot-time behaviour whose
 failure mode is deleting the readings an operator went looking for.
+
+### The prediction store is not on `Store`
+
+`PredictionStore` (`src/store/predictions.ts`) takes a `StoreContext` like every other domain module
+and is then **deliberately not forwarded**. There is no `store.predictions`. This breaks the
+named-member convention this document opens with, on purpose, and a tidy-up that folds it back on
+silently removes the only guarantee the prediction record has.
+
+A prediction is a measurement of the fleet's work, made by a human before that work's account of
+itself exists. It is worth exactly nothing the moment the thing being measured can read it, and the
+harness ships operator text to agents wholesale along several paths at once — the rendered prompt,
+the MCP tool channel, the retro dossier, the scratchpad, and above all the tracker, where `worldRead`
+serves an issue's body and comments **verbatim** to every agent on the goal.
+
+So the containment is made a property of the composition root rather than a rule somebody has to
+remember. `buildTools` is handed `deps.store`; the dispatcher is handed the store; `goalRecord` is
+handed the store. None of them can name a prediction, because the member does not exist. The store is
+opened once, by `Store.openPredictions()`, in `src/system.ts`, and handed to the prediction routes and
+to nothing else — so leaking a prediction into a prompt costs somebody a new dependency threaded
+through the composition root, which is a diff a reviewer sees.
+
+`Store.openPredictions()` is the one escape hatch, and it is named so it can be grepped for.
+`test/predictionContainment.test.ts` is what makes reaching for it a failing build rather than a
+review comment, in two arms:
+
+- **Structurally**, no module under `src/dispatcher/`, `src/agents/`, `src/mcp/`, `src/retro/`,
+  `src/briefing/`, `src/scratch/`, `src/sink/` or `src/tickets/` imports `src/store/predictions.ts`
+  or names the store at all. `src/tickets/` is on that list because `ticketFiler` builds every
+  `IssueCreateInput` the harness files, which is the outbound tracker path by another name.
+- **Live**, a prediction whose text is a distinctive sentinel is recorded, a mock agent is dispatched
+  on the goal, and the sentinel is asserted to appear in no rendered prompt, no tool response, no
+  transcript row and **no outbound sink call**. The sink arm is the one that catches the tracker
+  path, which no type system can, and it is the arm that would have caught the obvious mistake this
+  whole shape exists to prevent: writing the prediction as an issue comment, because that is where
+  operator text usually goes.
+
+If one of those two tests fails, fix the file it names, not the assertion.
+
+What is **not** guaranteed, stated plainly: an operator who pastes their own prediction into
+`goalInstructions` has leaked it, and nothing here can stop that — standing instructions are
+delivered to agents by design. And a prediction is never read by a model, including for analysing the
+aggregate; a request to classify prediction text automatically is a request to break this invariant
+and is refused at that level rather than sandboxed.
+
+**Acceptance criteria are the opposite case and must not inherit this posture.** Criteria are an
+oracle the implementer is _meant_ to be judged against, and today's `plan_parts.acceptance` already
+reaches the part prompt. `GoalCriteriaStore` is an ordinary member of `Store`. The two features share
+a moment and a table neighbourhood; they do not share a containment rule, and a reader who conflates
+them will either leak predictions or hide criteria.
+
+### Moment one, and why a mark is four-valued
+
+`goal_predictions` carries the mark per slot for **moment one** — _"did I predict the plan?"_ — in
+`plan_mark_locus|cause|hard|surprise`, with `plan_marked_at` for when it was answered.
+
+The mark is `matched`, `missed`, `not-applicable`, **or null meaning not yet marked**, and null must
+never fold into `missed`. It is the same shape as `fleetCanStart`'s three-valued answer and the same
+trap one subsystem over: fold them and every slot the operator has not got to silently becomes a wrong
+prediction, in an aggregate whose whole claim is that it is honest about what it does not know. It is
+typed as a nullable union rather than a boolean, and `readMark` maps any column value that is not one
+of the three to null — so a value written by a future version, or by hand, reads as _unmarked_ rather
+than as a miss.
+
+`plan_marked_at` says moment one was **answered**, and it is derived from the marks rather than
+stamped on every call: an operator who un-marks what they had marked must not leave behind a stamp
+saying otherwise. Stamp it unconditionally and a non-null value stops implying that a single mark
+exists, so the aggregate's count of answered goals becomes a count of goals somebody once opened.
+
+They are named `plan_mark_*` rather than `mark_*` because there are **two** scoring moments and
+conflating them is the main way this record would produce numbers that mean nothing. Moment two, at
+delivery, asks _"was the plan right?"_ — a claim about the plan rather than about the operator. A
+prediction that missed the plan and a plan that then turned out wrong is the operator having been
+**right**, which is the most valuable row in the whole record and the one moment one alone files as a
+miss.
+
+The columns arrived after the table existed, so they are declared in `PREDICTION_COLUMNS` as well as
+in the schema — see [Migrations](#migrations). **No backfill**: null is the truth for every row that
+predates them, and a backfill here would be inventing marks.
+
+**Marking is refused before the reveal, in the store.** A mark against a plan the operator has not
+been shown is not a mark. Re-marking, by contrast, is allowed and deliberately so: the prediction
+itself is sealed by the reveal because one written after the plan is not a prediction, but a mark is a
+judgement about a record that is already fixed, and nothing is contaminated by the operator correcting
+it.
+
+### Goal criteria are append-only
+
+`goal_criteria` is a version chain and **no method writes an `UPDATE`**. An edit appends a row with an
+incremented `version`, a `supersedes` pointer at the row it replaces, an `author`, an `authoredAt`
+and a `reason`. The goal page draws the current version with the chain behind it.
+
+The version number is taken inside the write, so two presses cannot mint the same one; the
+`UNIQUE (origin_ref, version)` index refuses the second if they somehow do.
+
+**The standing of a version is derived, never stored.** Whether a criterion is `pre-reveal`,
+`post-reveal` or `post-work` falls out of comparing its `authored_at` against `goal_reveals` and the
+first part dispatch. A stored flag would be a claim that can be written wrongly once and is then true
+forever; a derivation against two timestamps the harness already keeps cannot be. `post-work` is
+drift, and drift is surfaced rather than refused — refusing it would mean a goal whose criteria were
+not written in time can never have any, which is worse.
+
+`criteriaStanding` (`src/criteria/standing.ts`) is a pure function of three timestamps: the version's
+`authoredAt`, the goal's reveal stamp, and the **first part dispatch** — the earliest task on any
+`part` origin of the goal, so a re-dispatch or a crash requeue writes a later row and cannot move the
+moment earlier. Both boundaries are inclusive: authored at the instant of the reveal is `post-reveal`,
+at the instant of the dispatch is `post-work`.
+
+A goal with **no reveal row** reads `pre-reveal`, with a dispatch still outranking it. A null reveal
+spells _never offered_ — the gate may have been off — and calling a version `post-reveal` on a reading
+with no timestamp behind it would invent exactly the claim the derivation exists to avoid.
+
+### Moment two — was the plan right?
+
+`outcome_mark_*` and `outcome_marked_at`, beside moment one's, arriving by the same `ALTER TABLE` and
+with the same four-valued shape. Two column families over one row, because **the rows worth reading
+are the ones where the two disagree**.
+
+Moment one is a claim about the operator's model of the system. Moment two is a claim about the
+**plan**. Conflating them is the main way this record would produce numbers that mean nothing:
+
+- **missed** the plan, and the plan turned out **wrong** → the operator was **right**. The most
+  valuable row in the whole record, and the one moment one alone files as a miss.
+- **matched**, and the plan turned out **wrong** → the operator and the fleet were wrong together —
+  the shared-interpretation failure the feature exists to catch, and the one moment one alone files
+  as a success.
+
+**Moment two is skippable and its absence is recorded as absent, never as a miss.** A goal whose
+moment one was marked and whose moment two was skipped appears in the first aggregate's column and in
+**neither** of the second's. `outcome_marked_at` is derived from the marks exactly as `plan_marked_at`
+is, so un-marking takes the stamp back down and a non-null stamp always implies an answer.
+
+**The reveal is required for moment two as well**, so both moments stand over exactly one population:
+an unrevealed goal can carry no moment-one mark at all, so a moment-two mark on one would be a row in
+the second aggregate's columns with nothing in the first's to compare against — the mirror of the skip
+this moment is careful not to fold into a miss.
+
+**Delivery is deliberately not required.** Delivery is what makes the question worth _asking_ — it is
+what puts the bench row up — not what makes an answer true. A plan can be plainly wrong before
+anything ships, a delivery can be cleared and re-made, and re-marking is allowed anyway, so a refusal
+would only move the same answer later. It would also make `PredictionStore` read delivery bookkeeping
+off `Store`, which it is deliberately contained from.
+
+### Drift has its own table
+
+A `post-work` version writes a row to `goal_criteria_drift`, idempotent on the version it records.
+
+**It is never a `WorldEvent`, and this is the whole reason it has a table.** `deliveryHold` expires a
+standing delivery verdict on **any** world event matching the goal's issue ref, so a drift record
+written as one would un-park the goal it has just reported on and hand delivered work back to the
+fleet — the reading deleting the rows it was reported into. Same trap as an
+[environment arrival](24-environments.md#in-the-cockpit) and a sheet reading, one subsystem over.
+
+It gets its own wire list, and the cockpit merges it at the feed's door exactly as arrivals are
+merged, so the feed is complete without the record being a world event.
 
 ## Durability rules
 

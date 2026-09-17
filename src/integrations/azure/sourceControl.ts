@@ -14,7 +14,7 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest, ViewerAssignment } from '../../types.js';
-import { ourReplyRefs, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
+import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
@@ -475,19 +475,20 @@ export function buildReviewThreads(threads: AzThread[], ourReplies: ReadonlySet<
     if (!root) continue;
     const replies = comments.slice(1);
     const lastReply = replies.length > 0 ? replies[replies.length - 1]! : null;
+    const threadId = String(thread.id);
     const built: PrReviewThread = {
-      id: String(thread.id),
+      id: threadId,
       author: root.authorUniqueName,
       body: root.content,
       state: threadState({
         resolved: thread.status !== null && RESOLVED.has(thread.status),
-        answered: lastReply !== null && ourReplies.has(String(lastReply.id)),
+        answered: lastReply !== null && ourReplies.has(replyKey(threadId, String(lastReply.id))),
       }),
       replies: replies.map((c) => ({
         id: String(c.id),
         author: c.authorUniqueName,
         body: c.content,
-        ours: ourReplies.has(String(c.id)),
+        ours: ourReplies.has(replyKey(threadId, String(c.id))),
       })),
     };
     if (thread.filePath !== undefined && thread.filePath !== null) built.path = thread.filePath.replace(/^\//, '');

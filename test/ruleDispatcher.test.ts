@@ -719,6 +719,7 @@ const runningAgent = (id: string) => ({
   cacheReadTokens: null,
   cacheCreationTokens: null,
   numTurns: null,
+  steps: null,
   note: null,
   notedAt: null,
   resumedAt: null,

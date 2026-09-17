@@ -419,6 +419,20 @@ test('the vivarium comes after the situation area, not inside the rail', () => {
   assert.ok(sit < viv, 'the enclosure is the last thing in the body, not a strip in the middle of it');
 });
 
+/* The focus shape draws the creatures on its own card, so the shell must not draw
+   the strip as well — both at once is the vivarium twice, on the one surface that
+   argues for a single thing at full voice.
+   → docs/spec/22-pets.md#the-focus-shapes-floor */
+test('focus mode takes the vivarium strip with the rail', () => {
+  const html = render(view({ overviewShape: 'focus' }));
+  assert.ok(!html.includes('cn-viv-bar'), 'the banner is drawn under a shape that draws its own pets');
+  assert.ok(!html.includes('cn-viv-since'), 'the date the banner carried outlived it');
+  assert.ok(html.includes('cn-ov-focus-pets'), 'the shape drew no creatures of its own either');
+
+  const cards = render(view({ overviewShape: 'cards' }));
+  assert.ok(cards.includes('cn-viv-bar'), 'the strip lost its home on the shape that has one');
+});
+
 test('an empty queue collapses the rail rather than removing it', () => {
   const html = render(view({ needsYou: [] }));
   assert.ok(html.includes('cn-rail'), 'a surface that vanishes when quiet reads as one that broke');

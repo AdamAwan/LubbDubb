@@ -11,7 +11,7 @@ import { logUsage, notePlace, placeReach } from './usage.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 import { reconnectWatch } from './reconnect.js';
-import { goalPrNumbers } from '../view/goalPage.js';
+import { goalPrNumbers, PREDICTION_PANE } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 
@@ -203,6 +203,7 @@ export function useCockpit(): CockpitStatus {
       killAgent: (id) => then(api.killAgent(id)),
       completeAgent: (id) => then(api.completeAgent(id)),
       interruptAgent: (id) => api.interruptAgent(id).then(() => undefined),
+      liftAgentProfile: (id, profile) => then(api.liftAgentProfile(id, profile)),
       respondAgent: (id, text) => api.respondAgent(id, text).then(() => undefined),
       resumeAgent: (id) => then(api.resumeAgent(id)),
       ejectAgent: (id, reason) => then(api.ejectAgent(id, reason)),
@@ -263,6 +264,8 @@ export function useCockpit(): CockpitStatus {
         }),
       selectGoal: (ref) =>
         go((current) => (ref === null ? { goal: null, pr: null } : { goal: ref, pr: null, tab: homeTab(current.tab) })),
+      openGoalPrediction: (ref) =>
+        go((current) => ({ goal: ref, pr: null, tab: homeTab(current.tab), goalTab: PREDICTION_PANE })),
       selectPr: (prNumber) =>
         go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),

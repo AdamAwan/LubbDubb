@@ -2106,6 +2106,93 @@ CREATE INDEX IF NOT EXISTS idx_job_schedules_next ON job_schedules(enabled, next
 -- Both readers select by date: the panel folds a window, and the prior-remedy note
 -- takes the most recent few. Neither ever asks for a remedy by id.
 CREATE INDEX IF NOT EXISTS idx_remedies_created ON remedies(created_at);
+-- An operator's prediction about a goal, written before they first read its plan.
+-- One row per issue:<n> origin at most: parts do not exist when the prediction is
+-- made, and *where the decomposition falls* is one of the things a prediction can
+-- be wrong about, so the goal is the only grain that can hold it.
+--
+-- This table is reached through PredictionStore, which is deliberately NOT a member
+-- of Store. Nothing handed a Store can name it, which is what keeps the
+-- containment invariant a property of the composition root rather than a rule
+-- somebody has to remember. → 14-persistence.md#the-prediction-store-is-not-on-store
+CREATE TABLE IF NOT EXISTS goal_predictions (
+  id         TEXT PRIMARY KEY,
+  origin_ref TEXT NOT NULL UNIQUE,
+  author     TEXT,
+  locus      TEXT,
+  cause      TEXT,
+  hard       TEXT,
+  surprise   TEXT,
+  -- Moment one: how each filled slot stood against the plan it was predicting.
+  -- 'matched' | 'missed' | 'not-applicable', and null is not marked yet — a fourth
+  -- value that the aggregate counts as nothing, never as a miss. A skipped slot has
+  -- nothing to mark and stays null. Named for moment one because delivery asks a
+  -- second question of the same slots.
+  plan_mark_locus    TEXT,
+  plan_mark_cause    TEXT,
+  plan_mark_hard     TEXT,
+  plan_mark_surprise TEXT,
+  plan_marked_at     TEXT,
+  -- Moment two: whether the plan the fleet produced turned out to be right, per
+  -- slot, asked at delivery. Same three values and the same null, which is skipped
+  -- or not asked yet and is never a miss. A separate record from moment one's
+  -- because the interesting rows are the ones where the two disagree.
+  outcome_mark_locus    TEXT,
+  outcome_mark_cause    TEXT,
+  outcome_mark_hard     TEXT,
+  outcome_mark_surprise TEXT,
+  outcome_marked_at     TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- The reveal gate's answer: this goal's plan was drawn obscured, the operator
+-- pressed one of the two, and the plan was handed over.
+--
+-- The absence of a row is load-bearing and is not a decline. A goal that was never
+-- offered the gate — every goal from before the switch was thrown — has no row, for
+-- good, and the aggregate reads it as "not offered". Stamping a reveal while the
+-- feature is off would hand the operator who turns it on a fabricated backlog of
+-- declines in the one week the record has to earn any trust.
+CREATE TABLE IF NOT EXISTS goal_reveals (
+  origin_ref  TEXT PRIMARY KEY,
+  revealed_at TEXT NOT NULL,
+  predicted   INTEGER NOT NULL   -- 0/1: whether a prediction existed at the reveal
+);
+
+-- A goal's human-authored acceptance criteria, append-only and versioned. An edit
+-- is a new row pointing at the one it supersedes; no UPDATE ever touches criteria
+-- text. The standing (pre-reveal / post-reveal / post-work) is *derived* against
+-- goal_reveals and the first part dispatch and is deliberately not stored: a flag
+-- is a claim that can be written wrongly once and is then true forever.
+--
+-- Unlike a prediction, criteria are an oracle the implementer is meant to be judged
+-- against, so they are not contained the way a prediction is (handing them to an
+-- agent is not built yet). The two share a moment and a table
+-- neighbourhood; they do not share a containment rule.
+CREATE TABLE IF NOT EXISTS goal_criteria (
+  id          TEXT PRIMARY KEY,
+  origin_ref  TEXT NOT NULL,
+  version     INTEGER NOT NULL,
+  supersedes  TEXT,
+  text        TEXT NOT NULL,
+  author      TEXT,
+  reason      TEXT,               -- required when the standing is post-work
+  authored_at TEXT NOT NULL,
+  UNIQUE (origin_ref, version)
+);
+
+CREATE TABLE IF NOT EXISTS goal_criteria_drift (
+  id          TEXT PRIMARY KEY,
+  origin_ref  TEXT NOT NULL,
+  criteria_id TEXT NOT NULL,
+  version     INTEGER NOT NULL,
+  author      TEXT,
+  reason      TEXT,
+  recorded_at TEXT NOT NULL,
+  UNIQUE (criteria_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
@@ -2145,4 +2232,6 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_notices_agent ON obstacle_notices(agent_
 CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_suggestions(suggested_id);
 -- obstacle_conditions needs no index of its own: every read of it is by
 -- obstacle_id, which is the leading column of the UNIQUE above.
+CREATE INDEX IF NOT EXISTS idx_goal_criteria_origin ON goal_criteria(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_goal_criteria_drift_origin ON goal_criteria_drift(origin_ref);
 `;

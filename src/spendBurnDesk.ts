@@ -1,6 +1,7 @@
 import type { Store } from './store/store.js';
 import type { Agent, TaskSummary } from './types.js';
 import { burnPass, type BurnPolicy } from './spendBurn.js';
+import { orderedProfiles, type AgentModels } from './agents/modelPolicy.js';
 
 // → docs/spec/18-observability.md
 
@@ -13,6 +14,7 @@ export class SpendBurnDesk {
   constructor(
     private readonly store: Store,
     private readonly policy: BurnPolicy,
+    private readonly models: AgentModels | undefined,
   ) {}
 
   /**
@@ -30,6 +32,8 @@ export class SpendBurnDesk {
       agents: world.agents,
       tasks: world.tasks,
       existing: this.store.humanTasks.listHumanTasksOfKind('burn'),
+      now: new Date().toISOString(),
+      profiles: orderedProfiles(this.models).map((p) => p.name),
     });
     for (const step of steps) {
       if (step.kind === 'file')

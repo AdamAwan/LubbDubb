@@ -659,6 +659,14 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   why first, one line each, no headings and no prose paragraphs. Unlike the title, the body ships as
   the agent wrote it (the reference is appended and nothing is rewritten), so the schema is the only
   place a form is expressible at all. Left unsaid, agents write thirty lines under `##` headings.
+- **And the shape is checked, because a description is a request.** `prBodyRefusal`
+  (`src/pr/prBody.ts`) runs before anything resolves, and a body that breaks the form is a
+  `toolError` rather than a pull request: every line a bullet, at most `PR_BODY.bullets` of them,
+  none past `PR_BODY.bulletChars` characters, and the review packs' plainness rules and reading-ease
+  floor over the bullets. Asked politely for five bullets, agents wrote five paragraphs with a dash
+  in front of each. Refused rather than trimmed — a cut bullet reads as a finished thought that is
+  wrong — and the refusal quotes the line it caught, so the agent fixes that line.
+  → [07](07-pull-requests.md#the-body-is-not-templated)
   It states the **sigil a pull request takes** on the configured provider too (`!12` on Azure DevOps,
   where `#12` is work item 12). The harness writes the issue reference itself, but a stacked part
   naming the rung beneath it is the agent's own prose, and this description is the last thing it reads
@@ -879,6 +887,25 @@ load-bearing both ways:
 
 ## The desktop channel
 
+### A withheld plan is withheld here too
+
+`plan_read` and `proposal_read` refuse while a plan is withheld pending the operator's reveal
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). This channel is the operator's
+**own** assistant, so it can read a plan aloud to them — which defeats the reveal gate exactly as
+reading it in the cockpit would, and leaves no stamp behind saying they looked. It was the eighth path
+past that gate and the easiest to miss, because the gate's other seven are all in `src/server/` and
+this one is not.
+
+It is handed the **answer** rather than the means: `DesktopToolDeps.planWithheld` is a predicate the
+composition root supplies, computed from the one `planIsWithheld`. Nothing under `src/mcp/` may reach
+the prediction store — `test/predictionContainment.test.ts` fails the build if it tries — so the
+question has to be asked somewhere that may, and the answer passed in.
+
+This is the sharp edge `CLAUDE.md` names about the two channels, in its other direction: there, the
+risk is editing the fleet's tool and leaving the operator's on the old behaviour. Here a gate was
+built across the fleet's surfaces and the operator's channel kept the door open.
+
+
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
 spawned agent. Six jobs go there — four about one goal, one about a Feature, and
 [one about the harness itself](#watching-and-steering-the-fleet): a validation check needing a browser and a login the fleet does
@@ -911,7 +938,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `sequence_read`     | Read the order the stories under a Feature are worked in: the edges, why the sequencer said so, and whether anybody accepted it. A story number resolves to its parent. Records nothing.                  |
 | `sequence_amend`    | Rewrite that order, as the whole order rather than a patch — what is sent replaces what stands. Lands `accepted`, so it holds work immediately; an empty order releases everything the last one held.     |
 | `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment.                         |
-| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, recent failures.                  |
+| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the cycle in flight, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, failures.    |
 | `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing.                                       |
 | `agent_read`        | One agent close up: its row, the files it wrote, the tail of its transcript, and any question it is parked on. Records nothing.                                                                           |
 | `ejection_*`        | Three tools: `ejection_read` an ejected run, `ejection_note` a line about what you are doing with it, `ejection_settle` it. The channel's other half of [35](35-ejection.md#what-the-session-gets).       |
@@ -926,7 +953,8 @@ and [the run](20-validation.md#getting-the-application-up);
 | `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing.                                                                                   |
 | `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**.                                                                      |
 | `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned.                                                                                                                                                  |
-| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise.                                                                                             |
+| `ticket_target`     | Where a ticket filed from here lands and what it will carry: tracker, watch tag, assignee, type, container types, pickup states, and what would stop a filed item being picked up. Records nothing.        |
+| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise. Answers with the tracker and the tag the item actually carried.                             |
 | `agent_control`     | The six verbs on a live agent: respond, interrupt, complete, kill, extend a stall park, resume a usage-limit park.                                                                                        |
 
 ### Answering a question about a goal
@@ -1001,7 +1029,11 @@ Four reads and twelve verbs. The reads:
   **`headroom` is shipped rather than left to be derived**: a paused fleet with four free slots
   dispatches nothing, and `cap` minus `running` is a reading that says there is room. **The account
   window is three-valued in effect** — `null` means nothing has reported one since this harness
-  started, which is not the same as room to spare, and the hand-back note says so.
+  started, which is not the same as room to spare, and the hand-back note says so. **The cycle in
+  flight is shipped for the same reason the other two are**: an empty queue and idle agents are the
+  reading a wedged harness gives, and `cycle.overdue` is the one field that tells the two apart
+  ([04](04-harness-cycle.md#when-a-cycle-does-not-come-back)). `cycle` is null between cycles, which is
+  the ordinary case.
 - **`attention_read`** is the inbox, and every row names its own `kind` and its own `settledBy`. The
   four kinds share a panel in the cockpit and are four different objects: a question an agent parked
   on, a permission request it is blocked _inside_, an act proposed for approval, and a run orphaned

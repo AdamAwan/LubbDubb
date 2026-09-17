@@ -2,8 +2,9 @@ import { tmpdir } from 'node:os';
 import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
 import { prRefStyle } from './pr/prRef.js';
 import { join } from 'node:path';
-import { configFilePath, projectConfigFilePath, type Config } from './config/config.js';
+import { configFilePath, projectConfigFilePath, revealGateOn, type Config } from './config/config.js';
 import { Store } from './store/store.js';
+import type { PredictionStore } from './store/predictions.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations, buildPoolTransport, worldScope } from './integrations/registry.js';
 import { PoolDesk } from './pool/poolDesk.js';
@@ -64,7 +65,7 @@ import { RemoteReadingDesk } from './remoteValidation/readings.js';
 import { RemoteListingDesk } from './remoteValidation/listing.js';
 import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
 import { WatchDesk } from './environments/watchDesk.js';
-import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
+import { screenCheckNote, stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { validationPlanNote } from './validation/authoring.js';
 import { stepCapabilities } from './validation/steps.js';
 import { remoteRunBriefs } from './remoteValidation/briefing.js';
@@ -107,6 +108,7 @@ import { bySlug, partBase, planIssueNumber } from './plans/parts.js';
 import { LiveConfig } from './config/configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
+import { planIsWithheld } from './server/planReveal.js';
 
 // → docs/spec/01-overview.md
 
@@ -143,6 +145,12 @@ export interface System {
   updates: UpdateDesk;
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
+  /**
+   * Deliberately NOT `store.predictions`. Opened here and handed to the prediction
+   * routes and nothing else, so that nothing holding a `Store` can reach an operator's
+   * prediction. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
+   */
+  predictions: PredictionStore;
   localRun: LocalRunner;
   localValidations: LocalValidationDesk;
   localRunWatch: LocalRunWatch;
@@ -184,6 +192,8 @@ interface BuildOptions {
   poolTransport?: PoolTransport;
   obstacleReader?: ObstacleReader;
   bootedAt?: string;
+  /** Overrides the harness's stuck-cycle threshold. Injected by tests; nothing else sets it. */
+  stuckCycleAfterMs?: number;
 }
 
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
@@ -340,8 +350,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }),
   );
 
+  const predictions = store.openPredictions();
   const desktop = new McpDesktopServer({
     store,
+    // The desktop channel is the operator's own Claude Code, and it can read a plan
+    // aloud. It is handed the *answer* to whether a plan is withheld, never the means
+    // to ask — src/mcp/ must not be able to name the prediction store.
+    planWithheld: (plan) => planIsWithheld({ config, predictions }, plan),
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
@@ -533,6 +548,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watchNote: watchNote(config.environments),
     watchDeclareNote: watchDeclareNote(config.environments),
     testPartNote: testPartNote(config.environments),
+    screenCheckNote: screenCheckNote(config.environments),
     stateDeclareNote: stateDeclareNote(config.environments),
     remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
     checkSets: config.validation.checkSets,
@@ -651,13 +667,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const closeOutSink = opts.sink ?? connector;
-  const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
+  const closeOuts = new DeliveryCloseOutDesk(
+    store,
+    config.environments,
+    () => closeOutSink.canCloseIssue(),
+    // The one place the close-out bench and the prediction record meet, and it
+    // hands over origin refs alone. With the gate off the set is empty, which is
+    // also what settles any row that was standing when it was turned off.
+    () => (revealGateOn(config) ? new Set(predictions.listOutcomeOwed()) : new Set()),
+  );
 
   const validationAsks = new ValidationAskDesk(store);
 
   const validationReady = new ValidationReadyDesk(store, config.environments);
 
-  const burn = new SpendBurnDesk(store, config.spendBurn);
+  const burn = new SpendBurnDesk(store, config.spendBurn, config.agentModels);
 
   const runway = new RunwayDesk(store, config.runway);
 
@@ -778,6 +802,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
+    stuckCycleAfterMs: opts.stuckCycleAfterMs,
     readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
     errors,
     runtime: runtimeControl,
@@ -954,6 +979,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates,
     runtimeControl,
     pets,
+    predictions,
     localRun,
     localRunWatch,
     localValidations,

@@ -31,6 +31,7 @@ it on does.
 | Path                  | What it holds                                                                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------- |
 | `spec/`               | The specification, one document per subsystem. Numbered by the order they build on each other. |
+| `mission.md`          | Why the harness exists: what moves off the engineer's desk, and what deliberately does not.    |
 | `workflow.md`         | The end-to-end workflow the harness is built to run, and where a different one slots in.       |
 | `operating.md`        | The operator's guide: what changes about the job, and the five decisions that stay yours.      |
 | `operating.html`      | The same guide as a page to skim — open it in a browser. Kept in step with `operating.md`.     |
@@ -45,8 +46,7 @@ discussed**. It is not a description of the application and must not be read as 
 work it argues for lands, the reasoning that is still load-bearing moves into the spec document that
 owns the behaviour and the proposal is **deleted by that change**, for the reason build plans are —
 two documents describing the application, and a reader cannot tell by looking which is true. A
-proposal that is declined is deleted too; the rest is in the git history. There is none open at
-present.
+proposal that is declined is deleted too; the rest is in the git history. None is open at present.
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same

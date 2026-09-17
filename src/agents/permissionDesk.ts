@@ -21,6 +21,7 @@ export class PermissionDesk {
   constructor(private readonly escalations: EscalationInbox) {}
 
   request(agent: Agent, task: Task, toolName: string, input: Record<string, unknown>): Promise<PermissionVerdict> {
+    if (task.permissionAutoApprove === true) return Promise.resolve({ behavior: 'allow', updatedInput: input });
     const summary = summarisePermission(toolName, input);
     const esc = this.escalations.create({
       type: 'approve_change',

@@ -40,6 +40,15 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
     if (!id) return toolError('id required — take it from attention_read.');
     const proposal = deps.store.escalations.getProposal(id);
     if (!proposal) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
+    const planId: unknown = (proposal.action as { planId?: unknown }).planId;
+    // The proposal's action carries the plan's prompt, its detail and its caveats, so
+    // reading one here is reading the plan — and this channel is the operator's own
+    // assistant, where that defeats the reveal gate exactly as the cockpit would.
+    if (typeof planId === 'string' && deps.planWithheld(deps.store.plans.getPlan(planId)))
+      return toolError(
+        'The plan behind this proposal has not been revealed yet, so its contents are withheld. Ask the ' +
+          'operator to open the goal in the cockpit and press through the gate there first.',
+      );
     const caveats = proposedCaveats(proposal);
     return toolJson({
       id: proposal.id,

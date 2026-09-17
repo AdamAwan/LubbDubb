@@ -50,6 +50,7 @@ export type InsightsView =
   | 'trend'
   | 'mcp'
   | 'review'
+  | 'prediction'
   | 'usage';
 
 /* Whose numbers a reading is over. Every tab answers for this fleet; four of them
@@ -66,6 +67,7 @@ export interface CockpitActions {
   killAgent(agentId: string): Promise<void>;
   completeAgent(agentId: string): Promise<void>;
   interruptAgent(agentId: string): Promise<void>;
+  liftAgentProfile(agentId: string, profile: string): Promise<void>;
   respondAgent(agentId: string, text: string): Promise<void>;
   resumeAgent(agentId: string): Promise<void>;
   extendStall(agentId: string): Promise<void>;
@@ -110,6 +112,14 @@ export interface CockpitActions {
     poolProject?: string | null;
   }): void;
   selectGoal(ref: string | null): void;
+  /**
+   * The goal, opened on the pane its prediction card is drawn in. Moment two is
+   * asked from the rail and answered on that card, so the press must carry the pane
+   * with it: `selectGoal` alone leaves the landing to the lifecycle rule, which
+   * sends a delivered goal to its record — a press that goes somewhere the question
+   * cannot be answered, with nothing red. → docs/spec/17-cockpit.md#the-address-bar
+   */
+  openGoalPrediction(ref: string): void;
   selectPr(prNumber: number | null): void;
   reopenThread(prNumber: number, threadId: string, reopened: boolean): Promise<void>;
   openPanel(panel: ConsolePanel): void;

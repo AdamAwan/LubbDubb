@@ -51,6 +51,7 @@ function agent(id: string, endedAt: string | null): Agent {
     cacheReadTokens: null,
     cacheCreationTokens: null,
     numTurns: null,
+    steps: null,
     note: null,
     notedAt: null,
     resumedAt: null,

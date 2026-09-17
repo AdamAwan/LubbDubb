@@ -19,13 +19,20 @@ import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
-import { runPulse, type PulseDeps } from './pulseDesks.js';
+import { runPulse, type PulseDeps, type PulsePhase } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 
 // → docs/spec/04-harness-cycle.md
 
 const READ_PLAN_EVENTS = 200;
+
+/**
+ * How long a cycle may be in flight before the watchdog calls it stuck: whichever is longer of ten
+ * heartbeats and five minutes. → docs/spec/04-harness-cycle.md#when-a-cycle-does-not-come-back
+ */
+const STUCK_CYCLE_HEARTBEATS = 10;
+const STUCK_CYCLE_FLOOR_MS = 5 * 60_000;
 
 interface HarnessDeps extends PulseDeps {
   connector: Connector;
@@ -34,6 +41,8 @@ interface HarnessDeps extends PulseDeps {
   heartbeatIntervalMs: number;
   idleHeartbeatIntervalMs: number;
   readLanes: ReadLanes;
+  /** Overrides the derived stuck-cycle threshold. Injected by tests; nothing else sets it. */
+  stuckCycleAfterMs?: number;
   runtime: RuntimeControl;
   prWatchLabel: string;
   modelPins?: { labelPrefix: string; models: AgentModels };
@@ -59,6 +68,15 @@ export interface CycleReport {
   at: string;
 }
 
+export interface CycleStanding {
+  cycleId: string;
+  source: CycleSource;
+  startedAt: string;
+  elapsedMs: number;
+  where: string;
+  overdue: boolean;
+}
+
 export function cycleRan(report: CycleReport): boolean {
   return report.cycleId.startsWith('cyc_');
 }
@@ -72,6 +90,13 @@ interface HarnessEvents {
 export class Harness extends EventEmitter {
   private readonly heartbeat: Heartbeat;
   private cycleInFlight = false;
+  private inFlight: {
+    cycleId: string;
+    source: CycleSource;
+    startedMs: number;
+    where: string;
+    watchdog: NodeJS.Timeout | null;
+  } | null = null;
   private pendingManual = false;
   private stopped = false;
   private prevWorld: WorldSnapshot | null = null;
@@ -79,6 +104,41 @@ export class Harness extends EventEmitter {
 
   get upcoming(): UpcomingPlan | null {
     return this.lastPlan;
+  }
+
+  /**
+   * The cycle in flight, if there is one, and where in it the harness is sitting. Null between
+   * cycles. → docs/spec/04-harness-cycle.md#when-a-cycle-does-not-come-back
+   *
+   * @public — read by the `fleet_status` MCP tool.
+   */
+  get inFlightCycle(): CycleStanding | null {
+    const flight = this.inFlight;
+    if (!flight) return null;
+    const elapsedMs = Date.now() - flight.startedMs;
+    return {
+      cycleId: flight.cycleId,
+      source: flight.source,
+      startedAt: new Date(flight.startedMs).toISOString(),
+      elapsedMs,
+      where: flight.where,
+      overdue: elapsedMs >= this.stuckAfterMs(),
+    };
+  }
+
+  private stuckAfterMs(): number {
+    return (
+      this.deps.stuckCycleAfterMs ??
+      Math.max(this.deps.heartbeatIntervalMs * STUCK_CYCLE_HEARTBEATS, STUCK_CYCLE_FLOOR_MS)
+    );
+  }
+
+  private at(where: string): void {
+    if (this.inFlight) this.inFlight.where = where;
+  }
+
+  private markPass(phase: PulsePhase): (pass: string | null) => void {
+    return (pass) => this.at(pass === null ? `the ${phase} phase` : `pass "${pass}" of the ${phase} phase`);
   }
 
   constructor(private readonly deps: HarnessDeps) {
@@ -122,6 +182,29 @@ export class Harness extends EventEmitter {
     this.heartbeat.stop();
   }
 
+  /**
+   * A cycle that never returns takes the heartbeat with it: `Heartbeat` re-arms its timer only once
+   * `onTick` settles, so nothing else is left to notice. The watchdog is the one thing that still
+   * fires. → docs/spec/04-harness-cycle.md#when-a-cycle-does-not-come-back
+   */
+  private armWatchdog(): void {
+    const flight = this.inFlight;
+    if (!flight) return;
+    const afterMs = this.stuckAfterMs();
+    flight.watchdog = setTimeout(() => {
+      flight.watchdog = null;
+      if (this.inFlight !== flight) return;
+      this.deps.errors.record({
+        source: 'cycle',
+        message:
+          `Cycle ${flight.cycleId} (${flight.source}) has not returned after ${Math.round(afterMs / 1000)}s — ` +
+          `it is stuck at ${flight.where}. No cycle can start behind it, so nothing is being dispatched.`,
+        detail: null,
+      });
+    }, afterMs);
+    flight.watchdog.unref?.();
+  }
+
   async runCycle(source: CycleSource = 'manual'): Promise<CycleReport> {
     this.deps.localRun?.noteAlive();
     const awaiting = this.deps.recovery?.pendingCount() ?? 0;
@@ -139,12 +222,16 @@ export class Harness extends EventEmitter {
     }
     if (this.cycleInFlight) {
       if (source === 'manual') this.pendingManual = true;
+      const standing = this.inFlightCycle;
       return {
         cycleId: 'coalesced',
         source,
         readWorld: false,
         nextIntervalMs: this.intervalMs(),
-        rationale: 'cycle already running',
+        rationale:
+          standing?.overdue === true
+            ? `cycle ${standing.cycleId} has been running for ${Math.round(standing.elapsedMs / 1000)}s at ${standing.where}`
+            : 'cycle already running',
         summary: { cycleId: 'coalesced', executed: 0, deferred: 0, rejected: 0 },
         at: new Date().toISOString(),
       };
@@ -165,6 +252,8 @@ export class Harness extends EventEmitter {
     const readWorld = cached === null;
     this.cycleInFlight = true;
     const cycleId = `cyc_${nanoid(8)}`;
+    this.inFlight = { cycleId, source, startedMs: Date.now(), where: 'starting', watchdog: null };
+    this.armWatchdog();
     this.emit('cycle:start', { cycleId, source });
     try {
       const { store } = this.deps;
@@ -178,16 +267,23 @@ export class Harness extends EventEmitter {
             fresh: this.deps.freshReads?.drain(),
           })
         : undefined;
+      this.at('reading the world');
       const observed = cached ?? (await this.deps.connector.getState(readPlan));
       const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
       if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
       const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
-      await runPulse('reconcile', this.deps, { world, previousWorld, readWorld }, readWorld);
-      await runPulse('open', this.deps, {}, readWorld);
+      await runPulse(
+        'reconcile',
+        this.deps,
+        { world, previousWorld, readWorld },
+        readWorld,
+        this.markPass('reconcile'),
+      );
+      await runPulse('open', this.deps, {}, readWorld, this.markPass('open'));
       const tasks = store.tasks.listTasks();
-      await runPulse('afterTasks', this.deps, { world, tasks }, readWorld);
+      await runPulse('afterTasks', this.deps, { world, tasks }, readWorld, this.markPass('afterTasks'));
       const agents = store.agents.listAgents();
-      await runPulse('afterAgents', this.deps, { tasks, agents }, readWorld);
+      await runPulse('afterAgents', this.deps, { tasks, agents }, readWorld, this.markPass('afterAgents'));
       const queuedJobs = store.jobs.listQueuedJobs();
       const plans = store.plans.listPlans();
       const planParts = store.plans.listAllPlanParts();
@@ -199,13 +295,14 @@ export class Harness extends EventEmitter {
         ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
       const appraisals = store.verdicts.listAppraisals();
-      await runPulse('afterVerdicts', this.deps, { world }, readWorld);
+      await runPulse('afterVerdicts', this.deps, { world }, readWorld, this.markPass('afterVerdicts'));
       const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
       await runPulse(
         'afterOrigins',
         this.deps,
         { world, tasks, signals: { retrospectiveOrigins, conclusions, deliveries, shortfalls, plans, planParts } },
         readWorld,
+        this.markPass('afterOrigins'),
       );
       const recentDecisions = store.decisions.listDecisions(200);
       const liveAgents = store.agents.countLiveAgents();
@@ -230,8 +327,15 @@ export class Harness extends EventEmitter {
 
       const prReviews = store.prReviews.listPrReviews();
       const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
-      await runPulse('afterReviews', this.deps, { dispatchWorld, prReviews, prReviewRoutes }, readWorld);
+      await runPulse(
+        'afterReviews',
+        this.deps,
+        { dispatchWorld, prReviews, prReviewRoutes },
+        readWorld,
+        this.markPass('afterReviews'),
+      );
 
+      this.at('the dispatch decision');
       const plan = await this.deps.dispatcher.decide(
         buildDispatchInputs(store, {
           world: dispatchWorld,
@@ -305,8 +409,9 @@ export class Harness extends EventEmitter {
         detail: `[${source}] ${caveat}${plan.rationale}`,
       });
 
+      this.at('executing the plan');
       const summary = await this.deps.executor.execute(cycleId, plan);
-      await runPulse('afterExecute', this.deps, {}, readWorld);
+      await runPulse('afterExecute', this.deps, {}, readWorld, this.markPass('afterExecute'));
       const report: CycleReport = {
         cycleId,
         source,
@@ -336,6 +441,8 @@ export class Harness extends EventEmitter {
       this.emit('cycle:end', report);
       return report;
     } finally {
+      if (this.inFlight?.watchdog) clearTimeout(this.inFlight.watchdog);
+      this.inFlight = null;
       this.cycleInFlight = false;
       if (this.pendingManual && !this.stopped) {
         this.pendingManual = false;

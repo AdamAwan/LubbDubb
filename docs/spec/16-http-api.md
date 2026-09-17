@@ -1854,6 +1854,131 @@ delete re-files the same obligation next pulse) and the snapshot keeps shipping 
 stops drawing it. Broadcasts `dirty`, `dismissFinding`'s reason — nothing in the world moved. Returns
 `{ ok: true, humanTask }`. → [13](13-jobs-and-tickets.md#getting-it-off-the-bench--post-apihuman-tasksiddismiss)
 
+### The plan body is withheld until it is revealed
+
+While the [reveal gate](02-configuration.md#the-reveal-gate) is on — either `prediction.enabled` or
+`goalCriteria.enabled` — a plan that is `awaiting_approval` and has no reveal stamp is served with its
+**body removed from the payload**, not merely marked. With both keys off nothing is withheld, every
+plan reads `revealed: true`, and this route behaves exactly as it did before the gate existed.
+
+A blur would not do, and it is worth being plain about why. What the record is for is the claim that a
+prediction was written **before** its author read the plan. If the body were sitting in the payload
+behind a client-side blur, it would be one network tab away, and `revealedAt` would be a timestamp the
+page reported about itself. Withholding it server-side makes the ordering a fact of the same kind as
+every other timestamp the harness keeps, rather than a courtesy the client extends.
+
+The body reaches the cockpit by **seven** paths, and a gate over one of them is a gate over none. All
+seven are closed by the single predicate `planIsWithheld` in `src/server/planReveal.ts`:
+
+| Path                                                                    | While withheld                                                                                                                                                              |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The plan on the wire                                                    | Every narrative field null, `evidence` empty. `id`, `originRef`, `title`, `status` and the timestamps stay — the cockpit must know a plan is there to draw the gate for it. |
+| Its **parts**                                                           | Absent. `title`, `scope` and `acceptanceCriteria` are the narrative at part grain, and _where the decomposition falls_ is one of the things a prediction is about.          |
+| Its atoms                                                               | Absent.                                                                                                                                                                     |
+| The `approve_change` escalation                                         | `prompt` and `context.detail` replaced; both are built from the plan.                                                                                                       |
+| The proposal behind it                                                  | `action.prompt` and `action.detail` replaced, and `action.caveats` emptied — a caveat carries the plan's `risks` and `openQuestions` verbatim.                              |
+| `GET /api/plans/:id/history`, and the four routes that hand back a part | **409**, naming the reveal route.                                                                                                                                           |
+| Accepting, rejecting, backing out or dismissing the proposal            | **409**, naming the reveal route.                                                                                                                                           |
+
+That last row is a refusal rather than a redaction, and it is the one that is about more than reading.
+Deciding a plan is the act the gate stands in front of: approving or refusing one sight-unseen would
+settle the goal with `revealed_at` never stamped, so the record would read **never offered** when the
+operator had in fact acted on the plan. Revealing is one press, and an operator who then wants nothing
+to do with the plan gets an honest row — revealed, not predicted on.
+
+**One predicate, in one file.** A second copy is how two readers come to disagree, and that
+disagreement would be silent: the gate would still render and the body would be one fetch away. The
+predicate's `awaiting_approval` arm carries as much weight as the reveal stamp — a plan approved while
+the gate was off has no stamp and never will, so withholding on the missing stamp alone would withhold
+it for ever.
+
+### `POST /api/goals/:number/reveal`
+
+Stamps the reveal server-side and answers `{ ok, reveal, plan }` with the full document. This is the
+call that ends the offer, and the act that ends the opportunity to predict is the same act that would
+have contaminated it — which is why there is no rule against back-filling a prediction to enforce
+anywhere. Reveal is the seal.
+
+**409 when the goal has no plan `awaiting_approval`.** A goal is offered the gate once, and the stamp
+is what ends the offer, so a stray press on a goal whose plan has not landed would burn that goal's
+gate for good over a press that revealed nothing — and the goal would then read as a **decline** rather
+than as never offered, which is the fabricated decline rate the whole "off means nothing is stamped"
+rule exists to prevent. A standing reveal is answered idempotently before that check, so re-reading an
+already-revealed plan still works and does not re-stamp.
+
+### `POST /api/goals/:number/prediction`
+
+`{ locus?, cause?, hard?, surprise? }` — the four slots, free text, each individually skippable. A
+prediction with one slot filled is a prediction; **400** when none is. **409** when the goal already
+has one: the row records what was believed at one moment and is never re-opened. **409** when the goal
+has already been revealed — a prediction typed after the plan was read is not a prediction, and that
+refusal lives in `PredictionStore.recordPrediction`, inside the transaction, rather than at this route,
+so it is an invariant of the record rather than a check somebody remembered to write. The route keeps
+its own check only so the refusal can say which rule refused.
+
+Prediction text is served **here and nowhere else**. It reaches no prompt, no tool response, no
+transcript, no retro dossier, no scratchpad and above all no tracker.
+→ [14](14-persistence.md#the-prediction-store-is-not-on-store)
+
+### `POST /api/goals/:number/prediction/outcome`
+
+Moment two's marks — _"was the plan right?"_ — on exactly the terms
+[`/marks`](#post-apigoalsnumberpredictionmarks) takes moment one's: the same body, the same four-valued
+mark, the same refusals (404 no prediction, 409 not revealed, 409 naming a skipped slot), and the same
+licence to re-mark.
+
+It does **not** require the goal to have been delivered.
+→ [14](14-persistence.md#moment-two--was-the-plan-right)
+
+### `GET /api/predictions/aggregate`
+
+The prediction record folded: three goal outcomes, coverage, the decline rate, per-slot marks for both
+moments, and the criteria-drift count. Mounted only while the reveal gate is on.
+
+**A route of its own rather than a section on `/api/state`**, for the reason `/api/spend` and
+`/api/throughput` have theirs: it is a whole-history fold that nothing needs on every pulse, and the
+state payload is broadcast per pulse.
+
+Every rate is `{rate, n} | null`, so a rate is never served without the n it is over, and **`null` is
+the withheld case** — see [18](18-observability.md#a-rate-nobody-should-read-is-not-shipped).
+
+It reads **marks and counts only**. No slot text crosses this boundary and neither does the `author`
+column: the aggregate is keyed by slot and by goal, and there is nothing in its input to group a
+person by. → [18](18-observability.md#a-rate-nobody-should-read-is-not-shipped)
+
+### `POST /api/goals/:number/criteria`
+
+`{ text, reason? }` — appends a version to the goal's append-only criteria chain, answering
+`{ ok, version, standing }`.
+
+**`reason` is required when the standing would be `post-work`**, and the refusal is decided **before**
+the append, because the chain cannot take a row back. 400 naming the requirement. A `post-work`
+version also writes the drift row.
+
+### `GET /api/goals/:number/criteria`
+
+`{ current, versions }`, oldest first, each version carrying its **derived** standing.
+→ [14](14-persistence.md#goal-criteria-are-append-only)
+
+### `POST /api/goals/:number/prediction/marks`
+
+`{ locus?, cause?, hard?, surprise? }`, each `matched`, `missed`, `not-applicable` or `null`. A slot
+left out is left as it stands; a slot given `null` is un-marked again, because unmarked is a real
+state and there has to be a way back to it.
+
+**404** when the goal has no prediction. **409** when it has not been revealed — marking a prediction
+against a plan the operator has not been shown is not a mark, and that refusal lives in the store
+rather than here. **409, naming the slot**, when a mark names a slot the prediction left empty: a
+skipped slot has nothing to mark.
+
+Re-marking is allowed. The prediction is sealed by the reveal; a mark is a judgement about a record
+that is already fixed. → [14](14-persistence.md#moment-one-and-why-a-mark-is-four-valued)
+
+### `GET /api/goals/:number/prediction`
+
+`{ prediction, reveal }`, both nullable. A goal that was never offered the gate answers null for both,
+and that is a third outcome rather than a decline.
+
 ### `GET /api/plans/:id/history`
 
 404 when the plan is unknown. Ships `{ revisions, diff, pending }` — every verdict this plan has had,
@@ -2139,6 +2264,21 @@ task settle `done`, so the branch, the commits and whatever the run produced are
 finished piece of work rather than of an interrupted one. A decision row is written under
 `human:<agent id>` naming the operator, which is what separates it in the audit from the same ending
 reached by a stall park expiring (`stall:<agent id>`, [10](10-agent-runtimes.md#when-nobody-answers-the-stop)).
+
+### `POST /api/agents/:id/profile`
+
+Body `{profile}` — lift a run that is **already going** onto another `agentModels` profile, usually a
+deeper one, because the job turned out to be harder than the profile its rule priced it at
+([10](10-agent-runtimes.md#lifting-a-live-run-to-another-profile)). 400 when the name is not one this
+deployment configures, and the error lists the ones that are, the way
+[`POST /api/upnext/profile`](#post-apiupnextprofile) does — the two are the same choice made at
+different moments, one before the work is dispatched and one after. 404 when there is no such agent.
+409 when it is no longer live, or is already on the profile named.
+
+The profile is resolved against the **task's own rule**, so `permissionMode` and `autoApprove` come
+from the new profile exactly as they would have at dispatch. On success the named agent is gone and a
+new one is running in its place: `{ok: true, profile, agentId, taskId}` carries the successor's ids,
+because the id the operator pressed on no longer names anything live. Broadcasts `dirty`.
 
 ### `POST /api/agents/:id/interrupt`
 

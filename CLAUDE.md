@@ -56,23 +56,21 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 
 ### Identity
 
-- **`userId` gates pickup, so a provider that cannot report label authorship stops the fleet
-  silently.** With it set, `issuePickup.ts` reads `labelsAddedByViewer` instead of `labels`; a
-  provider that never populates that field resolves every issue's labels to `[]` and **nothing is
-  ever picked up**, with nothing red. `FakeIssuesIntegration` mirrors `labels` into it for that reason.
-  → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
+- **`userId` gates pickup, so a provider that cannot report label authorship stops the fleet silently.** With it set,
+  `issuePickup.ts` reads `labelsAddedByViewer` instead of `labels`; a provider that never populates that field resolves
+  every issue's labels to `[]` and **nothing is ever picked up**, with nothing red. `FakeIssuesIntegration` mirrors
+  `labels` into it for that reason. → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
 
 ### Review threads
 
-- **Whether a review reply is the fleet's is a _record_, never the reply's author.** `ours` and
-  `answered` read `pr_replies_sent` (`src/store/prReplies.ts`) — one row per reply that actually left
-  through `sink.postPrReply` — and `config.userId` is the credential the harness posts under, which on
-  a single-operator deployment is the operator's own account. Compare against it and the operator's
-  follow-up on their own thread reads as the harness's: `answered` folds to `PrComment.handled`, the
-  only bit rule `pr-review-comment` reads, so their comment is marked as work already done and never
-  dispatched for. Both providers must read the same record through `src/pr/prThreads.ts`, and every
-  uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**.
-  → [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
+- **Whether a review reply is the fleet's is a _record_, never the reply's author.** `ours` and `answered` read
+  `pr_replies_sent` (`src/store/prReplies.ts`) — one row per reply that actually left through `sink.postPrReply` — and
+  `config.userId` is the credential the harness posts under, which on a single-operator deployment is the operator's own
+  account. Compare against it and the operator's follow-up on their own thread reads as the harness's: `answered` folds
+  to `PrComment.handled`, the only bit rule `pr-review-comment` reads, so their comment is marked as work already done
+  and never dispatched for. Both providers must read the same record through `src/pr/prThreads.ts`, and every
+  uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**. →
+  [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
 
 ### Persistence
 
@@ -89,38 +87,40 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   clash the index exists to refuse. A status is a **column value** and needs no `ALTER TABLE`; the
   index over it is schema. → [14](docs/spec/14-persistence.md#a-partial-index-predicate-is-not-idempotent),
   [36](docs/spec/36-remote-validation.md#a-runs-status-vocabulary)
-- **A column whose _null means something_ needs a backfill as well**, gated on `ensureColumns`'
-  report of what it added. `pets.opened_at` null spells "still an egg", so the column alone turns
-  every existing vivarium back into shells; a backfill on _every_ boot opens the eggs operators were
-  saving. → [14](docs/spec/14-persistence.md#when-a-null-means-something)
-- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id
-  a re-introduced `runOnce` is given. Changing one declares a _second_ pass, which every database that
-  ran the first runs again on the next boot. A further pass is a further id, added deliberately. There
-  is no `runOnce` right now: all three of its callers folded rows into the claim store and went with
-  it, so the mechanism comes back with the next migration that needs it.
-  → [22](docs/spec/22-pets.md#clearing-the-vivarium), [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the
-  aggregate as another fleet's, and looks exactly like the pool working.
-  → [28](docs/spec/28-cross-fleet-pool.md)
-- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
-  `DELETE`.** Which verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer
-  that clears its siblings itself silently reintroduces the pairwise drift the matrix replaced.
-  → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
-- **A validation check's `area` comes from a `suite` step and from nothing else, and a second writer
-  of that column is a silent undo.** It was inherited from the `coverage` of a covered part and
-  repaired from SQL at boot; both are gone, because a boot pass that recomputes it now overwrites what
-  the step named on _every_ boot — the join quietly unpicking the author, with nothing red.
-  → [36](docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)
-- **`fleetCanStart` is three-valued and `null` must never fold into `false`.** Null is _this check has
-  no steps_ — `fleetCandidate` and the operator's press still decide, which is every check written
-  before test plans. False is a plan whose first step is a person's, which can never execute. Fold them
-  and every prose check on the deployment stops being dispatchable, with a full "Up next" queue and
-  nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
-- **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's
-  **delivery** row, and the delivery is what parks the goal: writing one un-parks it, settles the
-  close-out obligation and declines the validation bench row — the reading deleting the rows it was
-  reported into, with delivered work handed back to the fleet. Rule `validation-failed` is the
-  consumer, on its own origin. → [20](docs/spec/20-validation.md#when-a-check-fails)
+- **A column whose _null means something_ needs a backfill as well**, gated on `ensureColumns`' report of what it added.
+  `pets.opened_at` null spells "still an egg", so the column alone turns every existing vivarium back into shells; a
+  backfill on _every_ boot opens the eggs operators were saving. →
+  [14](docs/spec/14-persistence.md#when-a-null-means-something)
+- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id a re-introduced
+  `runOnce` is given. Changing one declares a _second_ pass, which every database that ran the first runs again on the
+  next boot. A further pass is a further id, added deliberately. There is no `runOnce` right now: all three of its
+  callers folded rows into the claim store and went with it, so the mechanism comes back with the next migration that
+  needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
+  [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
+- **The prediction store is deliberately NOT forwarded on `Store`, and tidying it on removes the guarantee.** There is
+  no `store.predictions`: `Store.openPredictions()` is called once in `src/system.ts` and handed to the prediction
+  routes alone, so nothing the fleet is given can name one. A prediction measures the fleet, and `worldRead` serves
+  issue bodies and comments verbatim — on the tracker it is a prediction every agent on the goal has read. →
+  [14](docs/spec/14-persistence.md#the-prediction-store-is-not-on-store)
+- **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
+  another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
+- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
+  verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself
+  silently reintroduces the pairwise drift the matrix replaced. →
+  [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
+- **A validation check's `area` comes from a `suite` step and from nothing else, and a second writer of that column is a
+  silent undo.** It was inherited from the `coverage` of a covered part and repaired from SQL at boot; both are gone,
+  because a boot pass that recomputes it now overwrites what the step named on _every_ boot — the join quietly unpicking
+  the author, with nothing red. → [36](docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)
+- **`fleetCanStart` is three-valued and `null` must never fold into `false`.** Null is _this check has no steps_ —
+  `fleetCandidate` and the operator's press still decide, which is every check written before test plans. False is a
+  plan whose first step is a person's, which can never execute. Fold them and every prose check on the deployment stops
+  being dispatchable, with a full "Up next" queue and nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
+- **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's **delivery** row,
+  and the delivery is what parks the goal: writing one un-parks it, settles the close-out obligation and declines the
+  validation bench row — the reading deleting the rows it was reported into, with delivered work handed back to the
+  fleet. Rule `validation-failed` is the consumer, on its own origin. →
+  [20](docs/spec/20-validation.md#when-a-check-fails)
 
 ### Tests
 
@@ -314,47 +314,48 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   worktree under that root, so a preview checkout in there is a pool slot: handed to an agent and
   wiped. `localRunRoot` is separate, and only `ensurePreview` touches it.
   → [23](docs/spec/23-local-runs.md#the-checkout)
+- **Every `runGit` call carries a deadline.** A git that never exits is a promise that never settles, and the cycle's `updates` pass awaits one — so it holds `cycleInFlight` true, coalesces every later pulse and stops the fleet, with nothing thrown and nothing logged. A subcommand that legitimately runs long goes in `SLOW_SUBCOMMANDS`, never on `timeoutMs: 0`. → [09](docs/spec/09-execution.md#a-git-that-never-exits)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. `GitObserver` methods stay read-only and
   fetch-free.
 
 ### Environments
 
-- **A reach verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An
-  expired credential, a missing binary and a commit that genuinely has not shipped all fail the same
-  way, and only the last is about deployment. `GitObserver.contains` answers `boolean | null`, and a
-  probe that could not say makes **every** landing of that environment `unknown`.
-  → [24](docs/spec/24-environments.md#the-three-verdicts)
-- **A stacked pull request's squash commit is not a landing, and recording it as one holds the goal's
-  gates for ever.** Part 2's PR based on part 1's branch squashes onto that _topic_ branch — a branch
-  that is then deleted and is an ancestor of nothing — so no environment can ever hold it. Counted in
-  `total`, the goal reads `partial` in every environment for good; `newArrivals` only ever reads
-  `reached`, so no arrival is written and every gate the arrival opens stays shut, with nothing red.
-  `unrecordedLandings` cuts on `baseBranch`, `unattributedMerges` on the node's `baseRef`, and
-  `EnvironmentDesk` reconciles what neither can see against the clone into `goal_landings.on_integration`.
-  → [24](docs/spec/24-environments.md#what-counts-as-a-landing)
-- **A `RemoteValidationDesk` pass that stamps an arrival it did not assemble burns the guard that
-  makes turning remote validation on next month safe.** `goal_arrivals.sheeted_at` null means _not
-  considered yet_, and the freshness guard does a backfill's job — so the early return where no
-  environment declares a `validate` block stamps **nothing**, and an arrival on an environment with
-  no `validate` block is left unstamped. Stamp on the way past and the operator who turns it on gets
-  a sheet, a spawned query and a bench row for every goal that ever arrived.
-  → [36](docs/spec/36-remote-validation.md#the-desk)
-- **Anything a sheet run owes its agent is counted at the press, or the run settles with it still
-  owed.** `runnableSelectors`, `runnableScripts`, `runnableScreens` and `runnableDrives` are four
-  halves of one question, and a check that carries only the newest of them names nothing the older
-  ones count: the press ends the run on the spot, the check stays `unrun` for ever, and the sheet
-  reads as a run that answered. A fifth thing a run can carry is a fifth entry there.
-  → [36](docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run)
-- **Two dispatches must never share one browser profile directory.** A persistent profile is held by
-  one browser at a time, so a remote validation run pointed at `localValidationProfileDir` refuses to
-  start whenever a local validation is up — every row it was pressed for comes back `blocked`, which
-  is a right answer to the wrong question, with nothing red. `remoteValidationProfileDir` is per
-  environment. → [36](docs/spec/36-remote-validation.md#the-browser-the-run-drives)
-- **A sheet reading is never a `WorldEvent` and never a `watch_readings` row.** Same trap as an
-  arrival's, one subsystem over: `deliveryHold` expires a standing delivery verdict on any world event
-  matching the goal's issue ref, so a reading written as one un-parks the goal it just reported on.
-  → [36](docs/spec/36-remote-validation.md#what-a-finding-does-and-what-it-must-never-do)
+- **A reach verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An expired credential, a
+  missing binary and a commit that genuinely has not shipped all fail the same way, and only the last is about
+  deployment. `GitObserver.contains` answers `boolean | null`, and a probe that could not say makes **every** landing of
+  that environment `unknown`. → [24](docs/spec/24-environments.md#the-three-verdicts)
+- **A stacked pull request's squash commit is not a landing, and recording it as one holds the goal's gates for ever.**
+  Part 2's PR based on part 1's branch squashes onto that _topic_ branch — a branch that is then deleted and is an
+  ancestor of nothing — so no environment can ever hold it. Counted in `total`, the goal reads `partial` in every
+  environment for good; `newArrivals` only ever reads `reached`, so no arrival is written and every gate the arrival
+  opens stays shut, with nothing red. `unrecordedLandings` cuts on `baseBranch`, `unattributedMerges` on the node's
+  `baseRef`, and `EnvironmentDesk` reconciles what neither can see against the clone into
+  `goal_landings.on_integration`. → [24](docs/spec/24-environments.md#what-counts-as-a-landing)
+- **A `RemoteValidationDesk` pass that stamps an arrival it did not assemble burns the guard that makes turning remote
+  validation on next month safe.** `goal_arrivals.sheeted_at` null means _not considered yet_, and the freshness guard
+  does a backfill's job — so the early return where no environment declares a `validate` block stamps **nothing**, and
+  an arrival on an environment with no `validate` block is left unstamped. Stamp on the way past and the operator who
+  turns it on gets a sheet, a spawned query and a bench row for every goal that ever arrived. →
+  [36](docs/spec/36-remote-validation.md#the-desk)
+- **Anything a sheet run owes its agent is counted at the press, or the run settles with it still owed.**
+  `runnableSelectors`, `runnableScripts`, `runnableScreens` and `runnableDrives` are four halves of one question, and a
+  check that carries only the newest of them names nothing the older ones count: the press ends the run on the spot, the
+  check stays `unrun` for ever, and the sheet reads as a run that answered. A fifth thing a run can carry is a fifth
+  entry there. → [36](docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run)
+- **Two dispatches must never share one browser profile directory.** A persistent profile is held by one browser at a
+  time, so a remote validation run pointed at `localValidationProfileDir` refuses to start whenever a local validation
+  is up — every row it was pressed for comes back `blocked`, which is a right answer to the wrong question, with nothing
+  red. `remoteValidationProfileDir` is per environment. →
+  [36](docs/spec/36-remote-validation.md#the-browser-the-run-drives)
+- **A sheet reading is never a `WorldEvent` and never a `watch_readings` row.** Same trap as an arrival's, one subsystem
+  over: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's issue ref, so a
+  reading written as one un-parks the goal it just reported on. →
+  [36](docs/spec/36-remote-validation.md#what-a-finding-does-and-what-it-must-never-do)
+- **A criteria-drift record is never a `WorldEvent`.** Same trap as an arrival and a sheet reading: `deliveryHold`
+  expires a standing delivery verdict on any world event matching the goal's issue ref, so drift written as one un-parks
+  the goal it just reported on and hands delivered work back to the fleet. Own table, own wire list, merged at the
+  feed's door. → [14](docs/spec/14-persistence.md#goal-criteria-are-append-only)
 - **An arrival must never be written as a `WorldEvent`.** `deliveryHold` expires a standing delivery
   verdict on **any** world event matching the goal's issue ref, so an arrival written as one un-parks
   the goal it just announced and hands delivered work back to the fleet. Arrivals have their own

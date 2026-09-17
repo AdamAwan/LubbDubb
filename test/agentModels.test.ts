@@ -25,6 +25,7 @@ test('a rule with an assignment resolves to that profile', () => {
     model: 'opus',
     effort: 'medium',
     permissionMode: null,
+    autoApprove: false,
     source: 'rule',
   });
 });
@@ -36,6 +37,7 @@ test('a rule with no assignment falls through to the default, as does a dispatch
     model: 'sonnet',
     effort: 'medium',
     permissionMode: null,
+    autoApprove: false,
     source: 'default',
   } as const;
   assert.deepEqual(resolveAgentProfile(models, 'pr-ci-failing'), standard);
@@ -54,6 +56,7 @@ test('a rule mapped explicitly to the default profile resolves the same as falli
     model: 'sonnet',
     effort: 'medium',
     permissionMode: null,
+    autoApprove: false,
     source: 'rule',
   });
   assert.deepEqual(resolveAgentProfile(models, 'issue-appraisal'), {
@@ -61,6 +64,7 @@ test('a rule mapped explicitly to the default profile resolves the same as falli
     model: 'sonnet',
     effort: 'medium',
     permissionMode: null,
+    autoApprove: false,
     source: 'default',
   });
 });
@@ -242,4 +246,21 @@ test('with no policy at all, every launch carries the fleet-wide permission mode
   const { args, task } = await dispatch(undefined, 936);
   assert.equal(task.permissionMode, 'auto', 'and records it, with no profile to have named one');
   assert.equal(args[args.indexOf('--permission-mode') + 1], 'auto');
+});
+
+test('a profile marked autoApprove stamps the row, and every other dispatch leaves it off', async () => {
+  const profiles = { ...PROFILES, fast: { ...PROFILES.fast, autoApprove: true } };
+  const trusting = await dispatch({ profiles, default: 'fast' }, 937);
+  assert.equal(trusting.task.permissionAutoApprove, true, 'resolved at dispatch and stored on the row');
+  const asking = await dispatch({ profiles, default: 'deep' }, 938);
+  assert.equal(asking.task.permissionAutoApprove, false, 'a profile that does not opt in still asks');
+  const none = await dispatch(undefined, 939);
+  assert.equal(none.task.permissionAutoApprove, false, 'and with no policy at all, so does every dispatch');
+});
+
+test('config load rejects an autoApprove that is not a boolean', () => {
+  assert.throws(
+    () => load({ profiles: { deep: { model: 'opus', autoApprove: 'yes' } } as never }),
+    /agentModels\.profiles\."deep"\.autoApprove must be true or false/,
+  );
 });

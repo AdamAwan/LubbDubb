@@ -484,8 +484,8 @@ once.
 | `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
 | `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
-| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                       |
-| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                     |
+| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
+| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                    |
 | `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -818,7 +818,7 @@ within it.
 | `escalation`   | Escalation    | red   | `?`   | An agent hit a question it cannot get past.                   |
 | `permission`   | Permission    | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.          |
 | `limit`        | Usage limit   | amber | `‖`   | Nothing broke; an allowance window has to turn over.          |
-| `burn`         | Spend         | amber | `▲`   | A heads-up on a run that carries on either way.               |
+| `burn`         | Runaway       | amber | `▲`   | A heads-up on a run that carries on either way.               |
 | `plan`         | Plan          | blue  | `◇`   | A plan to read and decide on.                                 |
 | `reply`        | Reply         | amber | `↵`   | A drafted reply, held until you send it.                      |
 | `merge`        | Merge         | amber | `⊕`   | A merge waiting on your verdict.                              |
@@ -1039,7 +1039,7 @@ empty "Yours to do" under a full "Blocking" is furniture.
 
 ### An ask that asks for work draws the work
 
-Almost every ask on this surface is answered *by* the ask: a verdict, a pick, a sentence in a box. The
+Almost every ask on this surface is answered _by_ the ask: a verdict, a pick, a sentence in a box. The
 `validate` bench row is not — it asks somebody to go and run a delivered goal's checks and record what
 they saw ([20](20-validation.md#saying-so-on-the-bench)) — and its body used to be the desk's prose and
 nothing else: a paragraph, a line per outstanding check naming it, and the ticket's link. On the rail
@@ -1535,7 +1535,7 @@ panel you were looking at, and nobody had decided it.
 settling row went out as `<ButtonRow bar><HumanTaskActions/></ButtonRow>`, and `HumanTaskActions`
 drew its own `<span>` around both buttons — so the group's gap reached that one span and the two
 buttons touched. A group whose only child is another element styles nothing, and it renders as
-*almost* right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
+_almost_ right, which is how it survived two passes over the same row. `test/cockpitButton.test.ts`
 pins it: the buttons are the group's own children, with nothing in between.
 
 `bar` is the group **at the foot of something it settles**: an ask, a form. It takes a rule above it and
@@ -2291,6 +2291,125 @@ The overview's segment track is folded by `buildGoalTrack` off **the page's own 
 `status` a second time, so a row and the page it opens cannot disagree about whether a part is held or
 merely not started.
 
+### The reveal gate
+
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan has arrived
+`awaiting_approval` on a goal nobody has revealed it on, the plan card draws the gate in place of the
+waves: a blurred stand-in for the document, and over it _"A plan is ready. Predict first?"_ with
+**Predict** and **Show me the plan** beside each other.
+
+**The two presses are of equal weight, and this is load-bearing rather than taste.** A gate that is
+awkward to decline is a gate that gets resented and then disabled outright, so **Show me the plan** is
+never a small grey link — both are primary buttons, in one row, at the same size. The gate never
+re-prompts on a goal it has been declined on: the stamp ends the offer for good.
+
+**There is nothing to blur, and that is the point.** The plan's body is not on the wire at all while
+it is withheld — no narrative, no parts, no atoms
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)) — so the card draws a stand-in
+rather than blurring an empty body, which would read as _no plan_ instead of _withheld_. The blur is a
+picture of a withheld thing, not a cover over a thing that is present.
+
+The card's other door to the document, "open the full plan", is suppressed while the gate stands. A
+second ungated way into the sheet would make the gate a suggestion.
+
+**Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `hard`,
+`surprise` — each a free-text field labelled with the question it asks, each individually skippable,
+and one press that records the prediction and reveals the plan in the same breath. That is deliberate:
+moment one is one continuous interaction rather than a second visit, because predict → reveal → look
+is the sitting the operator was already having. A draft with nothing in it is caught before it is sent;
+every refusal the routes can give is drawn inline in the operator's own words rather than thrown.
+
+Under the slots, once, a sentence saying what containment does and does not cover: what is written
+here reaches no agent, but pasting it into the goal's standing instructions would leak it, because
+standing instructions are delivered to agents by design. That is the one hole nothing can close, and
+the operator is told about it at the moment they could fall into it.
+
+**No `Place` state.** Whether the composer is open, and whether the gate has lifted on this render, are
+not "where am I": the gate is a one-shot that ends the moment the server stamps the reveal, so a deep
+link to a half-typed composer would be a link to something that no longer exists, and a reload
+correctly re-reads the server's fact rather than the page's memory of it.
+
+### Moment one — the prediction beside the plan
+
+Where the plan has been revealed on a goal that **has** a prediction, the plan card draws the two side
+by side: the four slots on one side with a three-way mark each, the plan's narrative and its parts on
+the other. Reading one against the other is the whole of the interaction, so at narrow widths they
+stack with the plan **first** — it is what the marks are made against.
+
+It sits where the gate stood, so predict → reveal → mark reads as one sitting rather than a second
+visit to a different surface. But it is drawn off the record — a prediction exists and the goal is
+revealed — not off the moments after the press, so an operator who closed the tab comes back to it.
+
+**Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a
+dashed edge and the words "Not marked yet" in faint ink — visibly not the solid red edge and filled
+button of a `missed`. The two must not look alike anywhere, because the aggregate reads them as
+different things and drawing them the same is how an operator comes to believe the record says
+something it does not. Pressing the selected mark again takes it off.
+
+A **skipped** slot draws no buttons at all, and says why: nothing was written there, so there is
+nothing to mark. The third option is labelled **"Plan is silent"** rather than anything that reads as
+_I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
+a real answer, not a way of declining to give one.
+
+### Moment two, beside moment one
+
+Where moment two has been asked, each filled slot draws **both** marks, and the card's whole job is
+that an operator cannot mistake which question they are answering. The two share no words: moment one
+asks _"Did you call it?"_ — about your reading of the system — and answers Matched / Missed / Plan is
+silent; moment two asks _"Was the plan right?"_ — about the plan, not about you — and answers Held up
+/ Did not hold / Never came up. Two identical-looking three-way rows would make the record
+meaningless, so they are not drawn alike.
+
+Where both are set, the pair is restated as one sentence, and the two pairs in which **the plan did
+not hold** are tinted apart, because those are the rows the record exists for: matched-and-wrong is
+the operator and the fleet wrong together, and missed-and-wrong is the operator having been right. It
+is a lookup over the two stored marks, not a new verdict the page computes — the cockpit does not
+score what the server did not.
+
+An unanswered moment two draws as not-yet-answered, in the same dashed chip moment one uses, with
+nothing pre-selected. It is skippable by design and absent is absent.
+
+The bench row opens the goal **on the pane that draws this card**, in one navigation, through `Place`
+— selecting the goal alone would land a delivered goal on a pane where the card is not drawn, which is
+a rail row that appears to do nothing.
+
+### Goal criteria, and drift
+
+Below the plan — criteria are read against the shape that was proposed — the goal page draws the
+current criteria version prominently, with the chain behind it collapsed, newest first. Each version
+carries its derived standing, its author, when it was written, and for a `post-work` version the
+**reason**, which is the whole point of having required one.
+
+**A goal whose criteria changed after work started is marked on the card itself**, beside the version
+count, not buried in the chain. Drift that is only discoverable by expanding a history is drift nobody
+finds.
+
+**The reason is asked for before the press, not after the refusal.** Where the next version would be
+`post-work` the form puts the reason field above the text box and says why. The route refuses a
+post-work append without one, and an append-only chain cannot take a row back — so being told after
+writing the text would cost the operator the draft for a requirement that was knowable beforehand. If
+the standing moves underneath anyway, the draft is kept and the field appears.
+
+A version is the **whole text restated**, not a patch, and the form says so and names the version it
+will append. The page also states plainly that where both exist the goal set is the authority and a
+part acceptance that contradicts it is a plan defect — because the page draws both, and a reader with
+two lists and no rule between them will pick whichever suits.
+
+**None of the prediction card's containment language appears here, and that is deliberate.** Criteria
+are an oracle the work is judged against; they are written **for** the fleet to read. A sentence
+promising they are kept from every agent would be false, and a reader who conflates the two features
+will either leak predictions or hide criteria.
+
+#### Drift in the feed
+
+`criteriaDrift` is its own wire list and the cockpit merges it **at the feed's door**, exactly as
+environment arrivals are merged — same signal shape, same window, sorted together.
+
+The merge is what keeps the feed complete without the record being a `WorldEvent`, and it must stay
+that way: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's
+issue ref, so drift written as one would un-park the goal it has just reported on.
+→ [14](14-persistence.md#drift-has-its-own-table)
+
 ### The pull requests and the tail
 
 **Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part
@@ -2515,6 +2634,39 @@ list is a handful of dispatches at best and empty for any goal not touched in th
 design's stated arm was that this becomes its own route, and this takes that arm: **deferred, not
 half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
 from.
+
+## The prediction reading
+
+An Insights tab of its own — _"Did you see the plan coming, and was the plan right?"_ — drawn only
+where the reveal gate is on, and read off `GET /api/predictions/aggregate` rather than the state
+payload, because it is a whole-history fold nothing needs per pulse.
+
+**Counts lead; rates follow underneath, smaller.** How many goals were offered the gate, how many
+carried a prediction, how many were marked at each moment, how many goals drifted: those are facts at
+any n and they are the figures that matter first.
+
+**A withheld rate is drawn as the count toward the threshold, and never as a number.** Where the
+payload carries null the panel says _"21 goals offered the gate; rates appear at 10"_ — its own
+denominator, and the threshold it is short of. There is **no branch anywhere that renders a null as
+0%, as a dash, or as anything a reader could mistake for a measurement**; the rate is absent from the
+payload precisely so the panel cannot draw it
+([18](18-observability.md#a-rate-nobody-should-read-is-not-shipped)). A rate that does exist is never
+drawn bare — always beside the n it is over.
+
+**_Not offered_ is drawn apart from _declined_**, in its own line rather than as a third figure in the
+row, saying what it is: the goals from before the switch, permanently, in neither rate below. Drawn
+beside the other two it would read as a kind of decline, which is the one misreading the three-outcome
+split exists to prevent.
+
+**An absent slot says it is absent.** The per-slot list is sparse, so the panel looks up each of the
+four and, finding nothing, says no prediction has ever filled it — absent, not nought. Same for a
+filled slot nobody has marked at one of the two moments.
+
+The two moments are labelled as the goal card labels them, side by side per slot: moment one about
+the operator's reading of the system, moment two about the plan.
+
+**Nothing is keyed on a person** — no filter, no legend, no column — and the panel's lede says so.
+→ [18](18-observability.md#nothing-is-grouped-by-author-and-nothing-could-be)
 
 ## The pull request page
 
@@ -3457,16 +3609,31 @@ operator moves along the queue rather than choosing from it.
 
 **What it is answering is that Cards has no room for the operator's own move.** Every reading there is
 true continuously — six agents out, four goals in flight, three pull requests open — and none of it is
-a question addressed to anybody. The ask that *is* a question lives on the rail beside it, in a column
+a question addressed to anybody. The ask that _is_ a question lives on the rail beside it, in a column
 narrow enough that its reason has to be a tooltip. The rail already computes the better reading:
 `needsYou.ts` gives every ask its kind, its tier and **`holding`**, the count of plan parts stalled
 behind it, which is the number that should decide what is opened first. This shape is that list, one
 row at a time, at full width.
 
-**The order is `byWeight` — tier first, then `holding`.** Both halves are the rail's own; nothing here
-re-decides what the server decided.
+**The order is `byWeight` — tier first, then `holding`, then the ask's _stage_.** The first two halves
+are the rail's own; nothing here re-decides what the server decided.
 
-**It absorbs the rail.** Drawing the queue beside a surface that *is* the queue is the same list twice,
+The stage is this shape's own cut and it decides only the ties. `holding` is zero on most asks, so what
+was left to order them was `raisedAt` — oldest first — and the oldest ask on a deployment is almost
+always the one about work that never started: a page of **intake holds** in front of every review
+thread, bench row and merge on work the fleet is out on right now. That is the queue reading backwards.
+`STAGE_RANK` in `web/src/console/overviews/asks.ts` is a part's own life run backwards, lowest first: a
+**merge** is one press from landing; a **reply** or an assigned review is on a pull request that
+exists; a **bench row**, a validation or a close-out is checking something already delivered; an
+**escalation**, permission or park is an agent out this minute; an **intake** hold, a profile proposal
+or a placement question is work that has not begun; and the **deployment's own** asks — a config gap,
+an upgrade — come last. Total over `NeedKind`, like the rail's own tables, so a new kind is placed
+deliberately rather than inheriting the last one's.
+
+**It sorts under `holding`, never over it.** An ask stalling four parts is stopping more work than one
+stalling none whatever either is about, and a stage that outranked it would quietly re-decide that.
+
+**It absorbs the rail.** Drawing the queue beside a surface that _is_ the queue is the same list twice,
 and the copy on the rail is the one with no room for the reason — so `.cn-body` loses its first track
 while this shape is the situation area. Not on a goal page reached from it: that is a place one rung
 in, and the queue belongs where it has always been.
@@ -3490,17 +3657,17 @@ is cheaper than width.
 **Every region wears its name.** An unlabelled band over an unlabelled track is a row of boxes whose
 meaning the reader infers differently for each one, which is the cost this shape was meant to remove.
 
-#### What the fleet is doing, under the ask
+#### What the fleet is doing, above the ask
 
-`FleetSlots` in `web/src/console/overviews/FleetSlots.tsx`, drawn below the ask card on both states of
-the shape — the ask, and [Clear](#when-nothing-needs-you).
+`FleetSlots` in `web/src/console/overviews/FleetSlots.tsx`, drawn between the shape switch and the ask
+card on both states of the shape — the ask, and [Clear](#when-nothing-needs-you).
 
 **The shape's own cost was the flick-back.** Absorbing the rail took the fleet off the screen along
 with it, so an operator sat on an ask they were answering and left it anyway, to check the fleet was
 still moving — which is the trip this shape exists to remove. The answer is not to give the fleet band
 back: it is a reading nobody is being asked to act on, and the shape's argument is that the thing to do
 is the only thing at full weight. So the reading comes to the shape at the weight it deserves — one
-card under the work, on the panel's ground, its tiles on the track's.
+strip of tiles above the work, drawn on the pane's own ground.
 
 **A tile per _slot_, not per agent.** That is what makes the free one a reading rather than a gap: the
 card answers _is the fleet full_ in the same glance as _what is it on_, and those are the two questions
@@ -3514,11 +3681,19 @@ tile is the way to Up next, or to the launch desk where nothing is queued.
 fleet holds its slot while the cap is lowered under it, so the live count outruns the cap and a raw
 difference draws a negative number of free slots. → [the account usage windows](10-agent-runtimes.md#the-account-usage-windows)
 
-**Under the ask, not over it.** At a tile's height, above pushes the ask itself down the page, which is
-the one thing this shape exists to prevent — and a tile is a thing to look at rather than a line to
-skim past, so it belongs after the work. **This is the one place the shape prefers below**: the earlier
-attempt at the reading was a single row above the switch, and one row could not carry the agent's note
-without ellipsing the task title beside it. The tile has two lines, so it carries both.
+**Above the ask, and it was below it first.** The argument for below was that a tile's height pushes the
+ask itself down the page, which is the one thing this shape exists to prevent — but below the fold is
+where a reading goes to be missed, and the flick-back it was drawn to remove survived it. What pays for
+the height is that the tiles are a **strip**, one row deep and holding one line of tiles: the ask card's
+own top is still on the first screen at every width this shape is used at. The earlier attempt at the
+reading was a single row of _text_ above the switch, which could not carry the agent's note without
+ellipsing the task title beside it; the tile has two lines, so it carries both.
+
+**It is not in a panel.** The tiles are drawn straight on the pane — no border, no ground, no padding of
+its own — because a card above the ask is a second card competing with the one the operator is meant to
+be reading, and the shape's whole argument is that the thing to do is the only thing with a frame around
+it. The tiles keep their own borders and tones, which is what stops the row reading as loose text. The
+ask card keeps its panel: that is the one object on this surface anybody is being asked to act on.
 
 **The tile's ground comes from `agentLamp`, the lamp modifier the fleet band uses**, rather than from
 the status read a second time. Read twice, the two disagreed: an agent with an open escalation drew the
@@ -3536,24 +3711,47 @@ second copy of it here, which is the answer `buildLeads` already gives for a rea
 break the claim the grid is making; left out entirely it would be a person at a keyboard the focus
 shape never mentions.
 
-**It is held back at rest and brought up when reached for** — `opacity: 0.62`, full on `:hover` and on
+**It is held back at rest and brought up when reached for** — `opacity: 0.4`, full on `:hover` and on
 `:focus-within`. It is the one block on this shape nobody is being asked to act on, and the shape's
-argument is that the thing to do is the only thing at full voice, so the card stays legible from where
-the eye already is and recedes the moment it is not being read. The opacity sits on the **card**, not
-its parts, so the tones inside keep their relationship to each other and the block moves as one.
-`:focus-within` is not decoration: without it the card a keyboard has tabbed into stays dimmed.
+argument is that the thing to do is the only thing at full voice, so the strip stays legible from where
+the eye already is and recedes the moment it is not being read. **It is held back further than it was**
+(`0.62`) because it now sits _above_ the ask rather than below it, where the eye lands first: at the
+old weight the first thing read on the surface was the one thing nobody is being asked to act on. The
+opacity sits on the **strip**, not its parts, so the tones inside keep their relationship to each other
+and the block moves as one. `:focus-within` is not decoration: without it the strip a keyboard has
+tabbed into stays dimmed.
 
 **Under `(hover: none)` it is never dimmed.** There is no hover to restore it on a touch device, so the
-rule alone would dim the card for a whole session with no way back — the quiet kind of failure, since
+rule alone would dim the strip for a whole session with no way back — the quiet kind of failure, since
 it renders and reads as a design choice.
 
-**It draws on an empty fleet too**, saying so. A card that vanishes with its reading reads as one that
+**It draws on an empty fleet too**, saying so. A strip that vanishes with its reading reads as one that
 failed to load — the same argument the ask's own aside makes for a goal-less ask.
+
+#### The vivarium on the card's floor
+
+**This shape draws no [vivarium strip](22-pets.md#the-vivarium).** `ConsoleRoot` suppresses it on the
+same `railless` cut that takes the queue rail away, and the creatures come back inside the ask card
+instead, bottom left, through `PetFloor` — the sprite floor lifted out of `Vivarium` so both can draw
+it. → [22](22-pets.md#the-focus-shapes-floor)
+
+**What is dropped is the banner, not the pets.** The strip carries three quiet readings and a chevron —
+`Pets`, _n_ of _n_, the eggs, the beats, and the date under it — and three quiet readings pinned across
+the bottom of the one surface that argues for a single thing at full voice are a second surface. The
+creatures are not a reading and never were: they are the corner of the room the operator looks at
+between decisions, and this is the shape where the decisions are. Every count the banner carried is on
+the Pets page and on every other shape, one click away through any animal.
+
+**Inside the card, on the left.** The right of this card is where every control on it lives — Prev,
+Next, and whatever the ask's own body offers — and a creature in among them reads as one more of them.
+Held at `opacity: 0.75` at rest on the same argument as the fleet strip, and full when reached for.
+The eggs still hatch and the animals still open the panel, which is the only part of the floor that
+was ever a control.
 
 #### Moving along the queue
 
 **The cursor is held by id, never by index.** The queue re-sorts under the operator — answering an ask
-removes it — and an index would slide a *different* ask under the cursor. On a surface whose next
+removes it — and an index would slide a _different_ ask under the cursor. On a surface whose next
 control is `Approve merge`, that is how somebody approves what they were not looking at. The id is
 resolved back to an index each render; where it is gone, the position it held is where the next ask
 falls.
@@ -3568,12 +3766,23 @@ most-pressed control somewhere different on every one of them. The arrow keys mo
 except where the operator is writing: every ask that takes a note puts a field on the page, and an
 arrow inside one is a caret move.
 
+**What is worth a look is the queue's last stop.** The [leads](#when-nothing-needs-you) used to be
+drawn only when the queue emptied, which made the one reading here that says _what could be done_
+reachable by having nothing to do — a panel an operator on a busy deployment never sees. It is a stop
+after the asks now, arrived at the way everything else here is: keep pressing Next. It is a `null` stop
+in the shape's own list rather than a `NeedRow` of a new kind, because it answers nothing and carries
+no tone, `holding` or goal, which is everything a row is; its pip is a short inert mark rather than a
+tone, and the card wears no tone on it. It stays the **end** rather than a position among the asks —
+nothing on it is anybody's move, and an ask that is would then sort behind it.
+
 **There is no set-aside.** Skip was a one-way door with no way back short of a reload, which made every
 press a small decision rather than navigation. Passing an ask leaves it where the server put it.
 
 #### When nothing needs you
 
-`buildLeads` in `web/src/console/overviews/leads.ts`, drawn by the shape's `Clear` panel.
+`buildLeads` in `web/src/console/overviews/leads.ts`, drawn by the shape's `Leads` component — on the
+`Clear` panel when the queue is empty, and on the queue's [last stop](#moving-along-the-queue) when it
+is not. One component for both, because two would drift and the reading is the same reading.
 
 **An empty ask queue is not an empty deployment.** It says one thing only: nothing is blocked on a
 person — which is the state a fleet spends most of its hours in. What was drawn for it was a green
@@ -3587,13 +3796,13 @@ ask is raised when something is _stopped_, and nothing raises one for a ticket t
 been shown or a goal quietly waiting on its own plan. So the clear state draws **leads** — the
 readings that are true right now and have somewhere to go:
 
-| Lead                                             | The cut                                                               | Where it goes                          |
-| ------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------- |
-| _n_ **open pull requests nobody has approved**   | `approved === false`, less the branches `agentOnBranch` holds          | the **Cards** shape                    |
-| _n_ **queued, and nobody is out**                | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
-| _n_ **tracker items nobody has picked up**       | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
-| _n_ **goals in flight with nobody on them**      | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
-| _n_ **faults recorded**                          | `errors`                                                              | the fault log                          |
+| Lead                                           | The cut                                                               | Where it goes                          |
+| ---------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- |
+| _n_ **open pull requests nobody has approved** | `approved === false`, less the branches `agentOnBranch` holds         | the **Cards** shape                    |
+| _n_ **queued, and nobody is out**              | `upNext`, and only while no agent, readying action or desk run is out | the **Up next** panel                  |
+| _n_ **tracker items nobody has picked up**     | `pickup.status === 'unwatched'`                                       | the Tickets tab, filtered to unwatched |
+| _n_ **goals in flight with nobody on them**    | `IN_FLIGHT`, less the goals `agentOnGoal` holds                       | the **Cards** shape                    |
+| _n_ **faults recorded**                        | `errors`                                                              | the fault log                          |
 
 **The order is what the operator can act on, first.** An approval is theirs alone, so the pull
 requests lead; then the queue and the reservoir, which are work waiting to enter the fleet; then the
@@ -3614,11 +3823,11 @@ name the panel's full width. The grid is the trade this surface takes: the leads
 worth a glance, and the list each one opens is where the full names live.
 
 **Each tile wears its lead's tone, and one of them wears none.** `LEAD_TONE` is total over the keys,
-like the rail's own tables, and it answers *whose* the reading is rather than how bad it is: amber the
+like the rail's own tables, and it answers _whose_ the reading is rather than how bad it is: amber the
 operator's own move, blue the fleet's supply, red something wrong, and **no tone at all** on the goals
 quietly working their plans — a colour on every tile is a colour that says nothing. It reaches the
 glass as a rule along the tile's top edge and the figure's ink, and nothing else: a fill behind five
-tiles is a page of colour. The rule is the tone's *line* at rest and its ink on hover — five saturated
+tiles is a page of colour. The rule is the tone's _line_ at rest and its ink on hover — five saturated
 edges is the loudest thing on a surface whose whole subject is that nothing is urgent.
 
 Five more rules run through them.
@@ -6340,6 +6549,22 @@ operator opens a finished run to answer. A row is drawn quieter than the dispatc
 because it is context rather than the thing the drawer was opened to read, and the model half is absent
 entirely on a deployment that assigns no models. The policy itself is visible in the running-config
 panel, under **Agents** — [02](02-configuration.md#model-assignment-by-rule).
+
+**On a live run the row ends in a `ProfilePicker`, and picking from it lifts the agent onto that
+profile** ([16](16-http-api.md#post-apiagentsidprofile),
+[10](10-agent-runtimes.md#lifting-a-live-run-to-another-profile)). It is the same control the queue
+ends its rows with and the same choice, made at the other moment: Up next prices work nobody has
+started, and this prices work an operator is **watching go wrong** — which is when a mis-priced job
+actually announces itself, an hour into a conflict that read as mechanical. It sits beside the model
+and profile facts and not with respond/interrupt/kill below, because the reading that makes an operator
+reach for it is right there: this run is on `fast`, and it is not going to get there.
+
+The empty option reads "Lift to…" rather than naming a fallback — there is nothing to fall back to
+once a run is going, and clearing it would mean nothing. Picking the profile the run is already on is
+not sent. The press replaces the agent, so the drawer follows the snapshot onto the successor row
+rather than holding an id that no longer names anything live, and the picker then reads the new
+profile with its `· pinned` source beside it. Like every other `ProfilePicker`, it draws nothing on a
+deployment with no `agentModels`.
 
 The drawer also shows the artifact chips, the **files changed** list, and offers respond, interrupt
 and kill.

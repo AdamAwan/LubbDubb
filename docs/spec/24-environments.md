@@ -620,6 +620,33 @@ marked done, or declined — not the checks. The close-out's detail still carrie
 outstanding ([20](20-validation.md)), so a row settled early is closed in front of the count rather
 than past it.
 
+### A third row, where the prediction record is on
+
+A goal whose prediction carries moment-one marks and no moment-two answer carries **one additional
+close-out row**: _"Say whether the plan for #N turned out right."_ It is sequenced **behind** the
+`close_out` row on exactly the terms the `validate` row is sequenced ahead of it — the bench asks one
+thing at a time, and a verdict on the plan asked in the same breath as the close is a verdict nobody
+reads.
+
+It rides this bench rather than becoming a queue of its own, and that is the point: a second
+standalone queue for an optional feature is the thing that decays first, while the close-out bench is
+a surface the operator already has to clear.
+
+It is its **own** `HumanTask` kind rather than a second `close_out` row. That kind is the key
+`closeOutPass` groups by, the one the close-ticket route will close a ticket from, and the one the
+runway watch treats as a hold — reusing it would have broken all three silently.
+
+**The row carries the goal reference and nothing else, and that is an invariant rather than
+tidiness.** `attention_read` serves every open human task's title and detail to the operator's own
+Claude Code, so a row carrying prediction text would put a prediction in front of a model. The desk is
+handed a closure of the origin refs that owe an answer, computed in the composition root, so nothing
+under `src/delivery/` can name a prediction at all.
+→ [14](14-persistence.md#the-prediction-store-is-not-on-store)
+
+Declining the row records moment two as **unanswered**, never as a plan that turned out wrong — the
+absence is the honest reading, and folding it into a verdict is the error the four-valued mark exists
+to prevent. Turning the key off settles any standing row rather than stranding it.
+
 This is why `ValidationReadyDesk` runs **above** `DeliveryCloseOutDesk` in the pulse. Below it, the
 close-out would read a bench the validate row had not been filed onto yet and ask for the close on the
 very pulse the delivery landed — the two rows arriving together, which is the thing the sequence

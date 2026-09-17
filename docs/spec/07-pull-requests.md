@@ -582,6 +582,28 @@ That leaves the form of the body expressible in exactly one place: the descripti
 first, one line each, no headings and no prose paragraphs. It reads as an odd place for a house style
 until you notice it is the only place the agent reads before writing.
 
+**And the description is not where it ends, because a description is a request.** Asked for five
+bullets and nothing else, agents wrote five paragraphs with a dash in front of each, which is the
+shape satisfied and the reading lost. `prBodyRefusal` (`src/pr/prBody.ts`) asserts it instead, and
+`open_pr` refuses the call rather than opening the pull request:
+
+- **Every non-empty line is a bullet.** A heading or a paragraph is refused and the line is quoted.
+- **At most `PR_BODY.bullets` of them**, and none longer than `PR_BODY.bulletChars` characters. The
+  length cap is what makes a paragraph impossible rather than merely discouraged — a bullet that
+  needs a second line is a paragraph wearing a dash.
+- **The review packs' plainness rules, per bullet**, and their reading-ease floor over the set
+  (`src/reviewPacks/plainness.ts`, [31](31-review-packs.md#say-it-in-plainer-words)). Same numbers,
+  because it is the same question one subsystem over: no semicolons, no clause hung off a dash, no
+  sentence past `PLAINNESS.sentenceWords`, and a Flesch floor of `PLAINNESS.readingEase`. A per-line
+  cap cannot catch a register — every bullet can be short and every word still be one the reader has
+  to look up — so the body answers for its prose as a whole.
+
+**Refused, never trimmed.** A truncated bullet reads as a finished thought that is wrong, and it
+ships that way: the body is the one thing about a pull request the harness does not rewrite. A
+refusal costs the agent one turn and names the exact line that broke it, which is a fix rather than
+a re-read of the description. An absent body is not refused — the appended reference stands on its
+own, and an agent with nothing to add should add nothing.
+
 ### Naming a pull request
 
 **`#12` is a work item on Azure DevOps, and `!12` is the pull request.** GitHub has one id space and
@@ -937,10 +959,24 @@ Every reply the harness sends leaves through exactly one call site, `sink.postPr
 `src/executor/actionExecutor.ts`, and `SendResult.commentRef` carries the provider's own id for the
 comment it created — in the same vocabulary `PrThreadMessage.id` uses on the way back in.
 `PrReplyStore` (`src/store/prReplies.ts`) writes one row per reply, keyed on
-`(pr_number, comment_ref)`. Both providers read it through the same `SentPrReplies` seam, threaded in
-from `src/system.ts` via the registry, so the reply list a person reads and the comment list a rule
-dispatches on cannot come to disagree about a thread — which is why there is one derivation in
-`src/pr/prThreads.ts` at all.
+`(pr_number, thread_id, comment_ref)`. Both providers read it through the same `SentPrReplies` seam,
+threaded in from `src/system.ts` via the registry, so the reply list a person reads and the comment
+list a rule dispatches on cannot come to disagree about a thread — which is why there is one
+derivation in `src/pr/prThreads.ts` at all.
+
+**A reply ref is unique only within its thread, so the ledger is keyed on the pair.** On GitHub a
+review-comment id is repo-global; on Azure DevOps the id a comment carries is scoped to the **thread**
+— effectively an ordinal, so the root comment is 1, the first reply is 2, and nearly every reply the
+fleet sends is comment `2` of its thread. `prReplyRefs` therefore answers with a set of
+`` `${thread_id}:${comment_ref}` `` keys, built through `replyKey` in `src/pr/prThreads.ts`, and both
+providers look a reply up with the thread id they already hold in `buildReviewThreads`. Read as a
+PR-wide set of bare comment refs it matched **any** other thread's second comment — an author's own
+follow-up on their own thread came back `ours`, and as the last reply it marked that thread
+`answered`, which folds to `PrComment.handled` and is the only bit rule `pr-review-comment` reads. A
+genuine review comment was silently treated as work already done. GitHub was unaffected, but only
+accidentally: a flat set is not a key the record can rely on, and there is no schema change here —
+`pr_replies_sent` always stored `thread_id`; only the read discarded it. The answer is still never the
+comment's author.
 
 `commentRef` is deliberately separate from `SendResult.ref`. `ref` is a URL for a person to click in
 the audit log and matches nothing on a read; comparing the wrong one would quietly never match, which

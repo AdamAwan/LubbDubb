@@ -363,6 +363,24 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Label → weight, for ordering pickup when headroom is short.',
   },
   {
+    path: 'prediction.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Offer to record a prediction before you first read a plan. A ready plan is drawn obscured with two equal presses; what you write is kept from every agent, and from the tracker above all. Off, nothing is stamped — a goal from before the switch reads as never offered, not as declined.',
+  },
+  {
+    path: 'predictionAggregateMinGoals',
+    type: 'number',
+    access: 'plain',
+    why: 'How many goals a rate needs behind it before the prediction aggregate carries it. Below this the rate is absent from the payload and the count toward it is drawn instead \u2014 the counts themselves are never withheld.',
+  },
+  {
+    path: 'goalCriteria.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Let you write a goal\u2019s acceptance criteria yourself, versioned and append-only, beside the planner\u2019s own. Criteria written after work started are drift, and drift is surfaced rather than refused.',
+  },
+  {
     path: 'issueSequencing',
     type: 'enum',
     options: ['off', 'links', 'full'],
@@ -616,7 +634,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'spendBurn.enabled',
     type: 'boolean',
     access: 'plain',
-    why: 'Watch a run spending past what its kind costs.',
+    why: 'Watch a run going past what its kind of work usually costs, steps or takes.',
   },
   {
     path: 'spendBurn.multiple',
@@ -636,6 +654,30 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'number',
     access: 'plain',
     why: 'Spend above which a run is flagged whatever its comparables say.',
+  },
+  {
+    path: 'spendBurn.floorSteps',
+    type: 'number',
+    access: 'plain',
+    why: 'Tool-using steps below which nothing is ever flagged.',
+  },
+  {
+    path: 'spendBurn.ceilingSteps',
+    type: 'number',
+    access: 'plain',
+    why: 'Steps above which a run is flagged whatever its comparables say.',
+  },
+  {
+    path: 'spendBurn.floorMinutes',
+    type: 'number',
+    access: 'plain',
+    why: 'Minutes below which nothing is ever flagged.',
+  },
+  {
+    path: 'spendBurn.ceilingMinutes',
+    type: 'number',
+    access: 'plain',
+    why: 'Minutes a run may go before it is flagged whatever its comparables say.',
   },
   {
     path: 'runway.enabled',

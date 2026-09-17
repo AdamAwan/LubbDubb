@@ -200,9 +200,9 @@ export function testPartNote(
     '- **A check about how something *looks* is not an area.** A legibility check at a particular ' +
       'width, a single component’s rendering, a spacing or truncation judgement: there is no journey ' +
       'to select and no area that could honestly claim it, so the honest answer is no test part — it ' +
-      'stays a person’s check, or the snapshot suite’s. Picking the nearest area for one of these ' +
-      'produces a green row that verified something the check does not talk about, which is worse ' +
-      'than the manual row it replaced.',
+      'belongs to the snapshot suite, or to a validation check whose `screenshot` step the fleet ' +
+      'captures and a person judges. Picking the nearest area for one of these produces a green row ' +
+      'that verified something the check does not talk about, which is worse than the row it replaced.',
     '- **The critical path is an allow-list, never a deny-list.** The deployment pipeline selects only ' +
       'what carries the critical tag, so a new spec is invisible to it until somebody deliberately tags ' +
       'it. Promoting one into the critical path is a separate, reviewed pull request with an argument ' +
@@ -212,6 +212,47 @@ export function testPartNote(
       '`acceptance` that any inherited tags are stripped.',
     '',
     'Declaring at most one is the usual shape. Declaring none is a complete answer.',
+  ].join('\n');
+}
+
+/**
+ * Why a plan-time prompt needs telling that a screen is not automatically a person's: the templates
+ * are written once, for every deployment, so they name a person's eyes as the thing only running the
+ * finished work answers — which is true where nothing drives a browser and wrong here. The planner
+ * that reads it writes *somebody will have to look at this by hand* into a hint that is then read by
+ * the check author as the intent an operator approved, and a deployment that captures screens for a
+ * living fills its bench with trips the fleet could have made, with nothing red.
+ *
+ * It says nothing about **who** carries the step, which is not the plan's to say and is read off the
+ * configuration at authoring time (`validationPlanNote`, and
+ * [20](../../docs/spec/20-validation.md#who-carries-a-step)). What it asks for is a hint that names
+ * the screen and what would be wrong with it, and leaves the assignment out.
+ */
+export function screenCheckNote(
+  environments: readonly { name: string; validate?: { browser?: { runner?: string } } }[],
+): string {
+  if (!environments.some((env) => env.validate?.browser !== undefined)) return '';
+  return [
+    '',
+    '',
+    '## Somebody looking at a screen',
+    '',
+    'This deployment’s fleet drives a browser. So **“somebody should look at this” is not by itself a ' +
+      'person’s job here**: a validation check can carry a `screenshot` step, and the fleet navigates to ' +
+      'the screen and captures it. What stays a person’s is the **judgement** on what came back — ' +
+      'whether the spacing is wrong, whether that copy reads right — and never the going and looking.',
+    '',
+    '- **In the `validation` hint, name the screen and what would be wrong with it, not who looks.** ' +
+      '“Worth looking at the batch page after an import: the row count beside each batch, and what the ' +
+      'page shows while one is still running” is a hint that can be carried. “Somebody will have to ' +
+      'check this by hand” nominates a person for a trip the fleet can make, and it is not yours to ' +
+      'nominate — who carries a step is read off what each environment declares, by the agent that ' +
+      'writes the checks against the code that shipped.',
+    '- **`expectedKind: "human"` is for what no agent can reach at all** — a console nobody gave the ' +
+      'fleet an account for, something physically plugged in, a decision that is somebody else’s to ' +
+      'make. A rendered screen is not one of those. A `human` part is never dispatched and everything ' +
+      'naming it waits on a person’s day, so reaching for it to get a screen looked at stalls the plan ' +
+      'for a reason that is not true.',
   ].join('\n');
 }
 

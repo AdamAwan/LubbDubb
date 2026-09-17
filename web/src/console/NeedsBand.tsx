@@ -82,6 +82,24 @@ function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
  *
  * @public shared with the ask panel, which draws the body under its own header
  */
+const LIVE_AGENT: readonly string[] = ['starting', 'running', 'waiting'];
+
+/**
+ * The rung above the one a flagged run is on, or null where there is none to
+ * offer — no profiles configured, an unpinned run, the deepest profile already,
+ * or a run that has since ended.
+ */
+function liftTargetFor(task: HumanTask, view: CockpitView): string | null {
+  if (task.agentId === null) return null;
+  const agent = view.state.agents.find((a) => a.id === task.agentId);
+  if (agent === undefined || !LIVE_AGENT.includes(agent.status)) return null;
+  const profile = view.state.tasks.find((t) => t.id === agent.taskId)?.profile ?? null;
+  if (profile === null) return null;
+  const ladder = view.state.config.profiles.map((p) => p.name);
+  const at = ladder.indexOf(profile);
+  return at < 0 || at + 1 >= ladder.length ? null : (ladder[at + 1] ?? null);
+}
+
 export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
   if (row.kind === 'watch') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
@@ -106,10 +124,23 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   if (row.kind === 'bench' || row.kind === 'burn') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
+    const liftTo = row.kind === 'burn' ? liftTargetFor(task, view) : null;
+    const liftAgentId = task.agentId;
     return (
       <>
         <p>{task.title}</p>
         {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+        {liftTo !== null && liftAgentId !== null && (
+          <ButtonRow>
+            <AsyncButton
+              tone="primary"
+              onClick={() => actions.liftAgentProfile(liftAgentId, liftTo)}
+              title={`Stop this run where it stands and hand the same task to “${liftTo}”`}
+            >
+              Lift to “{liftTo}”
+            </AsyncButton>
+          </ButtonRow>
+        )}
         <HumanTaskActions
           task={task}
           look={{ tone: 'secondary' }}

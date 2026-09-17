@@ -1,5 +1,29 @@
 # 10 — Agent runtimes
 
+## What an agent does not inherit
+
+An agent is launched with the harness's own environment — that is what lets it reach `gh`, the
+provider, and its own MCP socket. Four keys are **stripped** from what it inherits, in
+`src/agents/spawnEnv.ts`, applied at both spawn seams:
+
+`LUBBDUBB_TOKEN` is the cockpit bearer, and every operator-only route answers to it. An agent holding
+it can `curl` the cockpit and read back anything the cockpit can — including, where the reveal gate is
+on, the operator's prediction, verbatim, slot by slot. That is the one thing the whole prediction
+record exists to prevent, and the escape is **over the network rather than through an import**, so
+neither the type system nor the structural containment test can see it. A deny-list at the spawn seam
+is what closes it, and `test/predictionContainment.test.ts` asserts both that the keys are stripped
+and that neither spawn site has gone back to spreading `process.env` wholesale.
+
+`LUBBDUBB_INGRESS_SECRET`, `LUBBDUBB_INGRESS_BASIC` and `LUBBDUBB_DESKTOP_CREDENTIAL` are credentials
+of the same kind, which no agent has any reason to hold.
+
+This strips what is **inherited**. Anything the harness deliberately hands a session through its own
+spec still arrives, because the spec is spread after — which is how `LUBBDUBB_MCP_TOKEN`,
+`LUBBDUBB_TASK_ID` and the rest reach the agent that is meant to have them.
+
+It is the same genre as the standing rule that `ANTHROPIC_API_KEY` is never added to the spawn
+environment: what an agent's environment carries is a decision, not a default.
+
 ## The session contract
 
 `src/agents/session.ts` defines `AgentSession`, which both runtimes implement — `StreamJsonSession`,
@@ -32,6 +56,15 @@ Two properties are load-bearing:
   program's output from anything else, never emits it at all.
 - **It is narrowed to tool calls, not any block.** Prose after an escalation is usually the agent
   explaining that it is waiting, and reading that as work would mark alerts stale that need answering.
+
+**Each `activity` is also counted onto the agent row, as `Agent.steps`.** `recordAgentUsage` lands only
+on a `result` event, which closes a turn — so `costUsd` and `numTurns` say nothing at all about a run
+still inside its first long turn, which is the run most worth watching. A step count ticked as the
+steps happen is the one measure of what an agent is doing that does not wait for it to stop doing it,
+and it is what lets the burn watch see a runaway mid-turn
+([18](18-observability.md#three-axes-because-money-alone-cannot-see-a-cheap-runaway)). The terminal
+runtime emits no `activity`, so its runs count **null** steps rather than zero — unmeasured, and read
+as such.
 
 `SessionFactory` builds one from an `AgentSessionSpec` (`command`, `args`, `cwd`, `env`,
 `waitingPatterns`, `sessionId`, `resume`). The composition root picks the factory from `agentMode`.
@@ -230,6 +263,22 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
   unattended path stays synchronous; the backstop fires only for what the allow-list misses. See
   [11](11-mcp-tools.md#request_permission) for the `request_permission` tool, the blocking
   `PermissionDesk`, and how the operator's Allow/Deny reaches the same live agent.
+
+A third mechanism sits above both, off by default: **a profile may mark itself `autoApprove`**, and
+`PermissionDesk.request` then answers `allow` for that profile's agents without raising an escalation
+at all. It exists for the profiles that cannot take `auto`: they fall back to `acceptEdits`, which
+auto-accepts file edits and nothing else, so everything the allow-list misses reaches the backstop and
+parks on a person — on a mechanical profile, most of a run. The flag is resolved at dispatch beside the
+model and the mode and stored on the task row (`tasks.permission_auto_approve`), so a boot-`resume`
+keeps the posture the conversation started on, a live agent's grant cannot change under it, and the
+row says afterwards which dispatches were never gated. Null on that column is off, which is what every
+task written before the column is and what the behaviour was — so it needs no backfill.
+
+**It is `bypassPermissions` scoped to one profile, and reads no allow-list.** The allow-list names
+commands; this names an agent and allows it whatever it asks for, in a worktree of the real repo with
+the operator's shell environment inherited. Being per profile is the whole of the containment: the
+cheap, mechanical profiles run unattended, and the deep ones — the ones writing the code that
+matters — keep the person at the desk. → [02](02-configuration.md#model-assignment-by-rule)
 
 `agentPermissionMode` stays available, root-refusal caveat included. Its **default is now `auto`**,
 which leaves both mechanisms above exactly as they are: the allow-list is evaluated first either way,
@@ -765,6 +814,61 @@ decided **after** the working directory is resolved and not before — a cold ag
 in its conversation is its own earlier work is being lied to about an empty transcript. That is why
 the executor resolves the slot ahead of writing the task row, and why a dispatch that fails to get one
 still writes the row it was going to run before abandoning it.
+
+### Lifting a live run to another profile
+
+A profile is chosen when work is dispatched, from the rule that raised it and whatever pin stands over
+it ([05](05-dispatcher.md#prompt-templates), [02](02-configuration.md)) — and the thing that most
+reliably says a job was priced wrong is **watching it being worked**. A CI conflict that reads as a
+mechanical rebase and turns out to be two features disagreeing is the standing case: by the time an
+operator can see it, a `fast` agent is an hour into it. The **burn watch** is what shortens that "by
+the time": it flags the run on spend, steps or runtime and names the rung above its profile in the
+notice ([18](18-observability.md#the-burn-watch)). It never lifts anything itself — a lift throws away
+the work in flight and spends more to redo it, which is not a call a threshold can make. `AgentManager.lift(agentId, profile)`, reached
+through [`POST /api/agents/:id/profile`](16-http-api.md#post-apiagentsidprofile), moves that run onto
+another profile without giving up what it has learnt.
+
+It is a **re-dispatch the operator asks for by hand**, and every rule of
+[the section above](#inheriting-a-conversation-on-re-dispatch) holds unchanged: a new task row, a new
+agent row, one `sessionId` across both, `--resume` and never `--session-id`, the same `cwd` because
+`claude --resume` resolves the transcript inside the launch directory's project dir. The successor row
+copies the task it succeeds — kind, title, branch, origin, rule, CI checks, extra MCP servers — and
+takes its `model`, `effort`, `permissionMode` and `autoApprove` from the new profile, resolved against
+that same rule so the lift is priced exactly as a dispatch on that profile would have been. Its
+`profileSource` is `pin`, because that is what it is: a person naming this profile over the rule's.
+
+Three things are this case's own.
+
+**The successor task row is written _before_ the old agent is killed.** Worktree release hangs off
+`reaped` and skips a branch that an active task still holds
+([above](#terminal-exit-and-reap), `src/system.ts`); the successor row, `queued`, is what holds it. In
+the other order the slot is released between the two halves of one operation and the worktree the lift
+exists to carry on in is wiped from under the agent resuming into it — `--resume` into a directory
+holding no transcript, which is the silent death this page keeps returning to.
+
+**A run with no session id is refused, not lifted cold.** The `raw` runtime keeps none, and without one
+the "lift" would be a fresh agent starting the concern from nothing while the cockpit reported a
+carried-on conversation. So is a lift to the profile the run is already on: both refusals are the
+manager's own sentence, surfaced as a 409.
+
+**The note is adversarial, and that is the point.** A model handed a transcript treats it as its own
+memory and carries on from where it stops — which is precisely the reasoning that had to be replaced.
+`liftNote` (`src/agents/profileLift.ts`) is prepended to the concern and says, in these terms: the
+conversation above is somebody else's and it did not work; an operator judged the concern beyond that
+profile rather than merely unlucky; every conclusion in it is unverified; its **observations** (a
+command run, the output it got) are worth keeping and its **conclusions** are not; the approach in
+flight is the approach that was not working, so do not resume it by default, and if you land on it
+anyway say what you now know that makes it right. It closes by asking for a line on what is actually
+going on and where the earlier run went wrong, before any work — a cheap forcing function that is hard
+to answer while merely continuing. The worktree is described as it is: commits on the branch,
+uncommitted work still in the tree, sound or not, read it back before building on it.
+
+The old agent is killed the way `kill` kills any agent — process subtree first
+([below](#reaping-the-process-subtree)) — so its shells do not keep the worktree as cwd while the
+successor is launched into it. Its task settles `interrupted`, its escalations are dismissed, and the
+lift is audited under `human:<agent id>` naming both profiles, both agent ids and both task ids, since
+a run that changed models mid-flight is one an operator reading the spend later needs to be able to
+see.
 
 ### Events emitted
 

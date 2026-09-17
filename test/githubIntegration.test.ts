@@ -310,7 +310,7 @@ test('buildUnresolvedComments: handled when the latest reply is one the harness 
     { id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null },
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'here is why', inReplyToId: 100 },
   ];
-  assert.equal(buildUnresolvedComments(comments, new Set(['101']))[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(['100:101']))[0]!.handled, true);
   assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
@@ -334,7 +334,7 @@ test('buildUnresolvedComments: an unresolved thread the bot already replied to i
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
   ];
   const threads: GhReviewThread[] = [{ rootCommentId: 100, isResolved: false }];
-  assert.equal(buildUnresolvedComments(comments, new Set(['101']), threads)[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(['100:101']), threads)[0]!.handled, true);
 });
 
 test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
@@ -359,7 +359,7 @@ test('buildUnresolvedComments: the operator reviewing under their own token stil
     { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: 'the-operator', body: 'done', inReplyToId: 100 },
   ];
-  assert.equal(buildUnresolvedComments(comments, new Set(['101']))[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(['100:101']))[0]!.handled, true);
   assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 

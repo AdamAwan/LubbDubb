@@ -11,6 +11,7 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
 import { waitedFor } from '../GoalPage.js';
+import { PetFloor } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';
 import { byWeight, partsHeld } from './asks.js';
@@ -44,12 +45,17 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
   const [cursor, setCursor] = useState<{ id: string; at: number } | null>(null);
   const held = partsHeld(rows);
 
-  const found = cursor === null ? -1 : rows.findIndex((r) => r.id === cursor.id);
-  const at = Math.min(found === -1 ? (cursor?.at ?? 0) : found, Math.max(rows.length - 1, 0));
-  const row = rows[at];
+  /* The queue is the asks and then one stop that is not an ask: the leads, which
+     used to be reachable only by emptying the queue. A null stop rather than a
+     row of its own kind, because it answers nothing and carries no tone, holding
+     or goal — everything a `NeedRow` is. */
+  const stops: (NeedRow | null)[] = [...rows, null];
+  const found = cursor === null ? -1 : stops.findIndex((s) => (s?.id ?? LOOK_ID) === cursor.id);
+  const at = Math.min(found === -1 ? (cursor?.at ?? 0) : found, stops.length - 1);
+  const row = stops[at] ?? null;
   const go = (to: number): void => {
-    const next = rows[to];
-    if (next !== undefined) setCursor({ id: next.id, at: to });
+    if (to < 0 || to >= stops.length) return;
+    setCursor({ id: stops[to]?.id ?? LOOK_ID, at: to });
   };
 
   /* The arrows move the cursor, except where the operator is writing — every ask
@@ -70,16 +76,15 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  if (row === undefined) return <Clear view={view} actions={actions} />;
-
-  const body = needBody(row, view, actions);
-  const subject = subjectLabel(row);
+  if (rows.length === 0) return <Clear view={view} actions={actions} />;
 
   return (
     <div className="cn-ov-focus">
       <OverviewSwitch shape="focus" actions={actions} />
 
-      <div className={`cn-ov-focus-card cn-t-${KIND_TONE[row.kind]}`}>
+      <FleetSlots view={view} actions={actions} />
+
+      <div className={`cn-ov-focus-card ${row === null ? '' : `cn-t-${KIND_TONE[row.kind]}`}`}>
         {/* The pips are the whole queue and each is a way into it: a bar that only
             reports a position, on a surface whose complaint about the rail was
             that it could not be acted on, would be the same mistake one size
@@ -87,14 +92,18 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
             thing is waiting where. */}
         <div className="cn-ov-focus-progress">
           <span className="cn-ov-pips">
-            {rows.map((r, i) => (
+            {stops.map((r, i) => (
               <button
-                key={r.id}
+                key={r?.id ?? LOOK_ID}
                 type="button"
-                className={`cn-ov-pip cn-t-${KIND_TONE[r.kind]} ${i === at ? 'cn-ov-pip-here' : ''}`}
-                aria-label={`${i + 1} of ${rows.length} — ${KIND_LABEL[r.kind]}: ${r.title}`}
+                className={`cn-ov-pip ${r === null ? 'cn-ov-pip-look' : `cn-t-${KIND_TONE[r.kind]}`} ${i === at ? 'cn-ov-pip-here' : ''}`}
+                aria-label={
+                  r === null
+                    ? `${i + 1} of ${stops.length} — ${LOOK_TITLE}`
+                    : `${i + 1} of ${stops.length} — ${KIND_LABEL[r.kind]}: ${r.title}`
+                }
                 aria-current={i === at}
-                title={`${KIND_LABEL[r.kind]} — ${r.title}`}
+                title={r === null ? LOOK_TITLE : `${KIND_LABEL[r.kind]} — ${r.title}`}
                 onClick={() => go(i)}
               />
             ))}
@@ -107,7 +116,7 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
               does. */}
           <ButtonRow className="cn-ov-focus-nav">
             <span className="cn-ov-focus-count">
-              {at + 1} of {rows.length}
+              {at + 1} of {stops.length}
             </span>
             <Button
               tone="secondary"
@@ -123,7 +132,7 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
               tone="secondary"
               ghost
               size="small"
-              disabled={at >= rows.length - 1}
+              disabled={at >= stops.length - 1}
               onClick={() => go(at + 1)}
               title="The ask after this one (→)"
             >
@@ -132,57 +141,106 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
           </ButtonRow>
         </div>
 
-        {/* Setting beside the act rather than over it. Stacked, the plan pushed the
-            ask itself under the fold on a wide screen — a surface whose whole
-            argument is that the thing to do is in front of you, with the thing to
-            do scrolled off. They collapse back into one column below 1100px,
-            where the height is cheaper than the width. */}
-        <div className="cn-ov-focus-split">
-          <aside className="cn-ov-focus-aside">
-            <Context row={row} view={view} actions={actions} />
-          </aside>
+        {row === null ? (
+          <Look view={view} actions={actions} />
+        ) : (
+          <Ask row={row} view={view} actions={actions} after={rows.length - at - 1} held={held} />
+        )}
 
-          <div className="cn-ov-focus-main">
-            <h3 className="cn-ov-ctx-label cn-ov-ask-label">Your move</h3>
-            <h2 className="cn-ov-focus-title">
-              <span className="cn-sym" aria-hidden="true">
-                {KIND_SYMBOL[row.kind]}
-              </span>
-              {row.title}
-            </h2>
-
-            <div className="cn-ov-focus-meta">
-              <span className="cn-ov-ask-kind">{KIND_LABEL[row.kind]}</span>
-              {subject !== null && <span className="cn-ov-ask-subject">{subject}</span>}
-              {row.goalRef !== null && <Ref to={row.goalRef} />}
-              {row.originRef !== null && row.originRef !== row.goalRef && <Ref to={row.originRef} />}
-              {row.raisedAt !== '' && <span className="cn-ov-ask-age">{relTime(row.raisedAt, view.now)}</span>}
-            </div>
-
-            {row.holding > 0 && (
-              <p className="cn-ov-focus-cost">
-                <b>{holdingLabel(row.holding)}</b> waiting on this answer.
-              </p>
-            )}
-
-            {row.note !== undefined && <p className="cn-ov-ask-note">{row.note}</p>}
-
-            <div className="cn-ov-focus-body">{body}</div>
-
-            <footer className="cn-ov-focus-foot">
-              <span className="cn-ov-focus-rest">
-                {rows.length - at - 1 === 0
-                  ? 'last one'
-                  : `${rows.length - at - 1} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
-              </span>
-            </footer>
-          </div>
-        </div>
+        <Pets view={view} actions={actions} />
       </div>
+    </div>
+  );
+}
 
-      {/* Under the ask rather than over it: at a tile's height, above pushes the
-          ask itself down the page. → {@link FleetSlots} */}
-      <FleetSlots view={view} actions={actions} />
+/**
+ * The ask itself: its setting beside the act rather than over it. Stacked, the
+ * plan pushed the ask under the fold on a wide screen — a surface whose whole
+ * argument is that the thing to do is in front of you, with the thing to do
+ * scrolled off. They collapse back into one column below 1100px, where the height
+ * is cheaper than the width.
+ */
+function Ask({
+  row,
+  view,
+  actions,
+  after,
+  held,
+}: {
+  row: NeedRow;
+  view: CockpitView;
+  actions: CockpitActions;
+  after: number;
+  held: number;
+}): JSX.Element {
+  const subject = subjectLabel(row);
+  return (
+    <div className="cn-ov-focus-split">
+      <aside className="cn-ov-focus-aside">
+        <Context row={row} view={view} actions={actions} />
+      </aside>
+
+      <div className="cn-ov-focus-main">
+        <h3 className="cn-ov-ctx-label cn-ov-ask-label">Your move</h3>
+        <h2 className="cn-ov-focus-title">
+          <span className="cn-sym" aria-hidden="true">
+            {KIND_SYMBOL[row.kind]}
+          </span>
+          {row.title}
+        </h2>
+
+        <div className="cn-ov-focus-meta">
+          <span className="cn-ov-ask-kind">{KIND_LABEL[row.kind]}</span>
+          {subject !== null && <span className="cn-ov-ask-subject">{subject}</span>}
+          {row.goalRef !== null && <Ref to={row.goalRef} />}
+          {row.originRef !== null && row.originRef !== row.goalRef && <Ref to={row.originRef} />}
+          {row.raisedAt !== '' && <span className="cn-ov-ask-age">{relTime(row.raisedAt, view.now)}</span>}
+        </div>
+
+        {row.holding > 0 && (
+          <p className="cn-ov-focus-cost">
+            <b>{holdingLabel(row.holding)}</b> waiting on this answer.
+          </p>
+        )}
+
+        {row.note !== undefined && <p className="cn-ov-ask-note">{row.note}</p>}
+
+        <div className="cn-ov-focus-body">{needBody(row, view, actions)}</div>
+
+        <footer className="cn-ov-focus-foot">
+          <span className="cn-ov-focus-rest">
+            {after === 0
+              ? 'last ask — what is worth a look is next'
+              : `${after} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
+          </span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The vivarium's creatures on the card's own floor, without the banner.
+ *
+ * The strip the rest of the cockpit carries is suppressed on this shape — the
+ * counts, the beats and the chevron are three quiet readings, and three quiet
+ * readings pinned across the bottom of the one surface that argues for a single
+ * thing at full voice are a second surface. The creatures stay because they were
+ * never a reading: they are the corner of the room the operator looks at between
+ * decisions, and this shape is where the decisions are.
+ * → {@link PetFloor}, docs/spec/22-pets.md
+ */
+function Pets({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
+  if (view.state.pets === null) return null;
+  return (
+    <div className="cn-ov-focus-pets">
+      <PetFloor
+        pets={view.state.pets}
+        runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+        paused={view.state.control.paused}
+        onOpen={() => actions.openPanel('pets')}
+        onHatch={(id) => actions.hatchEgg(id)}
+      />
     </div>
   );
 }
@@ -293,26 +351,54 @@ const GROUP_WORD: Record<PartGroup, string> = {
 };
 
 /**
+ * The last stop on the queue: what nobody is asking about.
+ *
+ * The leads were drawn only when the ask queue emptied, which made the one
+ * reading on this surface that says *what could be done* reachable by having
+ * nothing to do — a panel an operator on a busy deployment never sees. It is a
+ * stop on the queue now, after the asks, so it is arrived at the same way as
+ * everything else here: keep pressing Next. It stays the queue's **end** rather
+ * than a position among the asks, because nothing on it is anybody's move and an
+ * ask that is would then sort behind it.
+ *
+ * Exported for `test/overviewLeads.test.ts`: the cursor is local state, so the
+ * stop cannot be reached from a static render of the shape.
+ * → {@link buildLeads}
+ */
+export function Look({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  return (
+    <div className="cn-ov-focus-look">
+      <h3 className="cn-ov-ctx-label cn-ov-ask-label">{LOOK_TITLE}</h3>
+      <h2 className="cn-ov-focus-title">Nothing here is asking for an answer.</h2>
+      <p className="cn-ov-focus-look-say">
+        The end of the queue. These are the readings that are true right now and have somewhere to go — the work nobody
+        is asking about, which is the work nobody is looking at.
+      </p>
+      <Leads view={view} actions={actions} />
+    </div>
+  );
+}
+
+const LOOK_ID = 'focus:look';
+const LOOK_TITLE = 'Worth a look';
+
+/**
  * What the surface says when the ask queue is empty.
  *
  * An empty queue is not an empty deployment — it says only that nothing is
  * blocked on a person — and the sentence alone left the operator on the one
  * surface whose whole argument is that the thing to do is in front of them, with
- * nothing in front of them. So the work nobody is *asking* about is drawn instead:
- * the leads, each a reading that is true now and a way to the surface that owns
- * it. → {@link buildLeads}
- *
- * Where there is not even a lead, the panel says so in the same words it would
- * have used for a reading and offers the launch desk, because the answer to an
- * empty fleet is to give it something.
+ * nothing in front of them. So the work nobody is *asking* about is drawn
+ * instead: the same leads the queue's last stop carries, which is where they are
+ * read from the moment there is an ask.
  */
 function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const leads = buildLeads(view);
   const working = view.live.length;
 
   return (
     <div className="cn-ov-focus">
       <OverviewSwitch shape="focus" actions={actions} />
+      <FleetSlots view={view} actions={actions} />
       <div className="cn-ov-focus-clear">
         <h2>Nothing needs you.</h2>
         <p>
@@ -320,34 +406,51 @@ function Clear({ view, actions }: { view: CockpitView; actions: CockpitActions }
           {view.state.control.paused && ', and dispatch is paused'}. The next thing that wants an answer will land here.
         </p>
 
-        {leads.length === 0 ? (
-          <>
-            <h3 className="cn-ov-ctx-label">Nothing to look at either</h3>
-            <p className="cn-ov-lead-say">
-              None of the readings this panel watches has anything in it — nothing queued, nothing unwatched, no goal
-              sitting unattended, nothing waiting on your approval. The fleet is out of work rather than between it.
-            </p>
-            <ButtonRow>
-              <Button tone="primary" size="small" onClick={() => actions.openPanel('launch')}>
-                Write a brief
-              </Button>
-            </ButtonRow>
-          </>
-        ) : (
-          <>
-            <h3 className="cn-ov-ctx-label">
-              Worth a look <span>{leads.length === 1 ? '1 reading' : `${leads.length} readings`}</span>
-            </h3>
-            <ul className="cn-ov-leads">
-              {leads.map((lead) => (
-                <LeadTile key={lead.key} lead={lead} now={view.now} actions={actions} />
-              ))}
-            </ul>
-          </>
-        )}
+        <Leads view={view} actions={actions} />
+        <Pets view={view} actions={actions} />
       </div>
-      <FleetSlots view={view} actions={actions} />
     </div>
+  );
+}
+
+/**
+ * The leads themselves, drawn the same on both surfaces that carry them — the
+ * clear state and the queue's last stop. One component rather than two, because
+ * the two would drift and the reading is the same reading.
+ *
+ * Where there is not even a lead, it says so in the same words it would have used
+ * for a reading and offers the launch desk, because the answer to an empty fleet
+ * is to give it something.
+ */
+function Leads({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const leads = buildLeads(view);
+  if (leads.length === 0) {
+    return (
+      <>
+        <h3 className="cn-ov-ctx-label">Nothing to look at either</h3>
+        <p className="cn-ov-lead-say">
+          None of the readings this panel watches has anything in it — nothing queued, nothing unwatched, no goal
+          sitting unattended, nothing waiting on your approval. The fleet is out of work rather than between it.
+        </p>
+        <ButtonRow>
+          <Button tone="primary" size="small" onClick={() => actions.openPanel('launch')}>
+            Write a brief
+          </Button>
+        </ButtonRow>
+      </>
+    );
+  }
+  return (
+    <>
+      <h3 className="cn-ov-ctx-label">
+        {LOOK_TITLE} <span>{leads.length === 1 ? '1 reading' : `${leads.length} readings`}</span>
+      </h3>
+      <ul className="cn-ov-leads">
+        {leads.map((lead) => (
+          <LeadTile key={lead.key} lead={lead} now={view.now} actions={actions} />
+        ))}
+      </ul>
+    </>
   );
 }
 

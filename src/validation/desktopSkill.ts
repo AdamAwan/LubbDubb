@@ -6,14 +6,16 @@ import type { ErrorRecorder } from '../errorLog.js';
 
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, take over a piece of work an operator has pulled off the fleet, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — to pick up work taken off the fleet: "/lubbdubb eject 412" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
+description: Write a new ticket onto the tracker LubbDubb actually reads, carrying what the harness needs to pick it up — or answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, take over a piece of work an operator has pulled off the fleet, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to put new work to it: "/lubbdubb file", "raise a ticket for …", "can LubbDubb do X?" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — to pick up work taken off the fleet: "/lubbdubb eject 412" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
 ---
 
 # LubbDubb at your keyboard
 
-Eight jobs, told apart by the argument. \`fleet\` — or anything about the harness
+Nine jobs, told apart by the argument. \`fleet\` — or anything about the harness
 rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
 \`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
+\`file\` — or anything asking for work that has no ticket yet — is
+[writing one the harness can ingest](#file-a-ticket),
 \`clarify 284\` — or "why won't it pick up 284" — is
 [rewriting a ticket the goal check refused](#clarify-a-ticket),
 \`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`order 500\` —
@@ -26,7 +28,10 @@ anything else is [a validation check](#run-a-validation-check).
 A question asked in plain words — "what happened on 284", "did we ever ship the
 export fix", "is 284 on hallway" — is the goal one whether or not the word
 \`ask\` was typed. One with **no goal number in it** — "is anything stuck", "what
-is it working on", "why is nothing running" — is the fleet one.
+is it working on", "why is nothing running" — is the fleet one. A **wish** with no
+number in it — "we should fix the export", "get LubbDubb onto the login bug" — is
+the filing one: there is nothing to read yet, and the thing that starts it is a
+ticket.
 
 <!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
      rewritten from scratch every time the harness starts. There is no setting
@@ -219,6 +224,81 @@ alone — and the operator cannot tell that apart from the real one.
   circles on a part, that is the answer. An account that smooths it over is worth
   nothing to somebody deciding what to change about how this goal is being worked.
 
+## File a ticket
+
+The operator wants work started that has no ticket yet. A ticket is how it starts:
+the tracker is the door the whole funnel opens on — the goal check, the planner,
+the plan's parts — and nothing in LubbDubb works from a sentence said here. The
+two ways this goes wrong are both silent. A ticket filed on the wrong tracker is
+read by nobody. A ticket filed on the right one without the tag the config names
+is read, ignored, and looks exactly like a fleet that has decided not to answer.
+
+1. **Find out where one would land, before drafting.** \`ticket_target\` — it names
+   the tracker this harness reads issues from, the watch tag, who the item is
+   assigned to, the work item type, which types are containers, and the states an
+   item has to be in to be picked up. A non-empty \`blockers\` means nothing can be
+   filed from this deployment at all: say that, and stop. \`cautions\` are the things
+   that would keep a filed ticket from being worked — read them now, not after.
+2. **Work out what they actually want**, against
+   [what a ticket has to say](#what-a-ticket-has-to-say). You have the repository
+   open: where a question can be settled by reading the code, propose the answer
+   and let them confirm it rather than sending them away to find it; where it is a
+   product decision, ask. Every gap you leave here comes back as a hold on the
+   ticket and they end up in [clarify](#clarify-a-ticket) for the same answers.
+3. **Show them the whole thing and wait.** Title and body, in their words and the
+   tracker's own formatting. Filing writes to a shared tracker under the harness's
+   credential and puts work in front of a fleet — it happens when they say yes.
+4. **File it with \`job_create\`, \`kind: "code"\`.** Never \`gh issue create\`, never
+   \`az boards work-item update\`, and never the repository this session happens to be
+   open on. The harness resolves the tracker, the watch tag, the type and the
+   assignee per call; each of those, left to a command line, fails by producing a
+   perfectly good ticket that is never dispatched for. Hand back the number the
+   call returns, the tracker it names, and the tag it carried.
+5. **Say what happens next, precisely.** Nothing was dispatched by that call. The
+   harness appraises the ticket on its next pass and decides its own order. If the
+   goal check holds it, a comment on the ticket lists what is missing, and
+   \`/lubbdubb clarify <n>\` is the way back.
+
+### What a ticket has to say
+
+Always: **the problem** (who has it, why it matters), **what success looks like**
+(observable — someone could tell done from not done), and **its words defined**
+where they could mean two things. And where the change implies it: a **design or
+mockup** for anything with a UI, or an exact description of layout, states and
+behaviour; an **example of the data** for anything with data going in or out — a
+real-looking sample, not a type name; and **links to the specs or docs** it relates
+to. Implementation hints and an out-of-scope list help and are never required.
+
+This is the bar the goal check reads every watched ticket against before anything
+is dispatched for it. It is not house style: a ticket under the bar is held, and
+the next agent gets the ticket rather than this conversation.
+
+### Where this goes wrong
+
+- **The repository open here is not necessarily the tracker.** A fleet can work a
+  checkout whose issues live in a different system entirely. \`ticket_target\` is the
+  only thing that says which, and "the repo I can see" is the wrong answer
+  confidently given.
+- **A tag the harness did not write may not count.** Where \`labelAuthorship\` comes
+  back \`own\`, the watch tag counts only when the harness's own account put it there
+  — an operator adding the same label by hand leaves the ticket unwatched, with
+  nothing red. This is the whole reason filing goes through \`job_create\`.
+- **A container is not work.** The harness never works a Feature or an Epic
+  directly; it works the stories under one. \`job_create\` files one item of the story
+  type, which is the right default — the planner does the decomposing. If they are
+  already thinking in several separately shippable pieces, file the first and say
+  the rest need the same, rather than filing a container nothing will pick up.
+- **A story with no parent is not blocked, but it does ask.** It lands on the
+  operator's bench as a placement question; \`goal_placement\` settles it.
+- **No tracker means no ticket.** On a deployment with none configured, a code
+  brief queues as a job instead — a different thing, worked off the prompt with no
+  appraisal and no plan. Say which of the two actually happened.
+- **Not everything is a ticket.** A question, a piece of research or a document is
+  \`kind: "desk"\` — it queues for an agent that reads and writes, and never opens a
+  branch.
+- **Do not start the work.** Filing is the whole job. Nothing here opens a branch
+  or writes code against the ticket you just filed.
+
 ## Clarify a ticket
 
 LubbDubb reads every watched ticket before it dispatches anything for it, and
@@ -227,14 +307,8 @@ listing what is missing, and it ends **only when the ticket's own text changes**
 not on a reply, not on a timer. The person here wrote that ticket, or is the one
 who has to fix it, and the comment sent them to you.
 
-What a story has to say, always: **the problem** (who has it, why it matters),
-**what success looks like** (observable — someone could tell done from not
-done), and **its words defined** where they could mean two things. And where the
-change implies it: a **design or mockup** for anything with a UI, or an exact
-description of layout, states and behaviour; an **example of the data** for
-anything with data going in or out — a real-looking sample, not a type name; and
-**links to the specs or docs** it relates to. Implementation hints and an
-out-of-scope list help and are never required.
+The bar it was held against is [what a ticket has to say](#what-a-ticket-has-to-say),
+and the rewrite is measured against the same one.
 
 1. **Read what was found.** \`goal_read\` with the goal number. \`appraisal\` is
    the verdict: \`summary\` is why the check could not start, \`missing\` is the

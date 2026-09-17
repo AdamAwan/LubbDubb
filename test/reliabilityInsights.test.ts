@@ -27,6 +27,7 @@ function agent(id: string, status: AgentStatus, over: Partial<Agent> = {}): Agen
     cacheReadTokens: null,
     cacheCreationTokens: null,
     numTurns: 3,
+    steps: null,
     note: null,
     notedAt: null,
     resumedAt: null,

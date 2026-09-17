@@ -24,6 +24,7 @@ function agent(id: string, over: Partial<Agent> = {}): Agent {
     cacheReadTokens: null,
     cacheCreationTokens: null,
     numTurns: 3,
+    steps: null,
     note: null,
     notedAt: null,
     resumedAt: null,

@@ -25,6 +25,10 @@ export interface SentPrReplies {
 
 const NO_REPLIES: ReadonlySet<string> = new Set();
 
+export function replyKey(threadId: string, commentRef: string): string {
+  return `${threadId}:${commentRef}`;
+}
+
 export function ourReplyRefs(sent: SentPrReplies | undefined, prNumber: number): ReadonlySet<string> {
   return sent === undefined ? NO_REPLIES : sent.prReplyRefs(prNumber);
 }

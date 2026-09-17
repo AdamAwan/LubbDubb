@@ -249,7 +249,11 @@ test('a reply the harness sent is attributed to the fleet and marks the thread a
   await reply(system, agent, 'Renamed in the latest commit.', '100');
 
   assert.equal(sink.replies.length, 1, 'the reply went out');
-  assert.deepEqual([...system.store.prReplies.prReplyRefs(42)], ['101'], 'and the harness wrote down what it sent');
+  assert.deepEqual(
+    [...system.store.prReplies.prReplyRefs(42)],
+    ['100:101'],
+    'and the harness wrote down what it sent, keyed on the thread as well as the comment',
+  );
   assert.deepEqual([...system.store.prReplies.prReplyRefs(43)], [], 'scoped to the pull request it was sent on');
 
   const comments: GhReviewComment[] = [
@@ -315,6 +319,55 @@ test('both providers read the same record and reach the same verdict on a thread
   system.store.close();
 });
 
+test('an Azure reply ref is unique only within its thread, so the ledger is keyed on the pair', async () => {
+  const system = build();
+  system.store.prReplies.recordPrReplySent(42, '300', '2');
+
+  const threads: AzThread[] = [
+    {
+      id: 300,
+      status: 'active',
+      comments: [
+        { id: 1, authorUniqueName: OPERATOR, content: 'rename this', parentCommentId: null, commentType: 'text' },
+        { id: 2, authorUniqueName: OPERATOR, content: 'renamed', parentCommentId: 1, commentType: 'text' },
+      ],
+    },
+    {
+      id: 301,
+      status: 'active',
+      comments: [
+        { id: 1, authorUniqueName: OPERATOR, content: 'this needs a test', parentCommentId: null, commentType: 'text' },
+        {
+          id: 2,
+          authorUniqueName: OPERATOR,
+          content: 'a covering one, I mean',
+          parentCommentId: 1,
+          commentType: 'text',
+        },
+      ],
+    },
+  ];
+
+  const pr = await azurePr(threads, system.store.prReplies);
+  const [answered, theirs] = pr.reviewThreads!;
+
+  assert.equal(answered!.state, 'answered', 'the thread the fleet replied on is settled');
+  assert.equal(answered!.replies[0]!.ours, true);
+
+  assert.equal(
+    theirs!.replies[0]!.ours,
+    false,
+    'their follow-up shares the reply ordinal 2, but not the thread that was recorded',
+  );
+  assert.equal(theirs!.state, 'open', 'so their thread still owes an answer');
+  assert.equal(
+    pr.unresolvedComments.find((c) => c.id === '301')!.handled,
+    false,
+    'which is the bit rule pr-review-comment reads, so it is still dispatched for',
+  );
+  system.store.close();
+});
+
 test('a send the provider will not name records no attribution, and says so out loud', async () => {
   const sink = replySink();
   const system = build(sink);
@@ -322,7 +375,7 @@ test('a send the provider will not name records no attribution, and says so out 
   await reply(system, agent, 'Renamed in the latest commit.', '100');
 
   assert.equal(sink.replies.length, 1, 'the reply still went out');
-  assert.deepEqual([...system.store.prReplies.prReplyRefs(42)], [], 'but nothing is claimed as the fleet’s');
+  assert.deepEqual([...system.store.prReplies.prReplyRefs(42)], [], 'but nothing is claimed as the fleetâ€™s');
   const errors = system.store.errors.listErrors();
   assert.equal(errors.length, 1);
   assert.match(errors[0]!.message, /no comment id/i);
@@ -336,7 +389,11 @@ test('the record survives a restart', async () => {
   before.close();
 
   const after = new Store(dbPath);
-  assert.deepEqual([...after.prReplies.prReplyRefs(42)], ['101'], 'the schema pass reopened the table, rows and all');
+  assert.deepEqual(
+    [...after.prReplies.prReplyRefs(42)],
+    ['100:101'],
+    'the schema pass reopened the table, rows and all',
+  );
 
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: OPERATOR, body: 'rename this', inReplyToId: null },

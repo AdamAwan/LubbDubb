@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { issueOriginRef } from '../issueOrigins.js';
 import type { System } from '../system.js';
 import type { Config } from '../config/config.js';
+import { revealGateOn } from '../config/config.js';
+import { planIsWithheld, withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import { sheetFoldLine } from '../remoteValidation/sheet.js';
 import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
@@ -41,6 +43,7 @@ import type {
   LocalValidationView,
   OpenPullRequest,
   PlanPartView,
+  PlanView,
   PullRequest,
   RemoteReadingView,
   RemoteSheetView,
@@ -200,7 +203,36 @@ export function buildStateSections(
   const landings = once(() =>
     store.landings.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped'),
   );
-  const wirePlans = plans.map((p) => ({ ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef) }));
+  const reveals = once(() => {
+    const byPlan = new Map<string, { revealed: boolean; revealedAt: string | null }>();
+    for (const plan of plans) {
+      byPlan.set(plan.id, {
+        revealed: !planIsWithheld(system, plan),
+        revealedAt: revealGateOn(config) ? (system.predictions.getReveal(plan.originRef)?.revealedAt ?? null) : null,
+      });
+    }
+    return byPlan;
+  });
+  const withheld = (planId: unknown): boolean =>
+    typeof planId === 'string' && reveals().get(planId)?.revealed === false;
+  const wirePlans: PlanView[] = plans.map((p) => {
+    const stamp = reveals().get(p.id) ?? { revealed: true, revealedAt: null };
+    const view = { ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef), ...stamp };
+    if (stamp.revealed) return view;
+    return {
+      ...view,
+      diagnosis: null,
+      approach: null,
+      reason: null,
+      risks: null,
+      outOfScope: null,
+      alternatives: null,
+      openQuestions: null,
+      verification: null,
+      document: null,
+      evidence: [],
+    };
+  });
   const drift = once(() => {
     const partOrigins = new Set(
       plans.flatMap((plan) => {
@@ -229,12 +261,14 @@ export function buildStateSections(
   const wirePlanParts = once((): PlanPartView[] => {
     const partIndexes = new Map(plans.map((plan) => [plan.id, bySlug(partsOfPlan(plan.id))]));
     const drifted = drift();
-    return planParts().map((part) => ({
-      ...part,
-      depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
-      acceptanceCriteria: acceptanceCriteria(part),
-      outsideScope: drifted.get(part.id) ?? [],
-    }));
+    return planParts()
+      .filter((part) => !withheld(part.planId))
+      .map((part) => ({
+        ...part,
+        depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
+        acceptanceCriteria: acceptanceCriteria(part),
+        outsideScope: drifted.get(part.id) ?? [],
+      }));
   });
   const claimNow = new Date().toISOString();
   const validationChecks = once((): ValidationCheckView[] =>
@@ -333,9 +367,17 @@ export function buildStateSections(
     };
   });
   const worldEvents = store.world.listWorldEvents(100);
+  // The Decision log persists the whole action, and a `propose_plan` action carries
+  // the plan's narrative in its prompt and its diagnosis and approach in its detail.
+  // The inbox redacts the escalation and the proposal built from that same action, so
+  // an unredacted shift log would be the body arriving by the one door left open.
   const shiftLog = recentDecisions()
     .slice(0, 100)
-    .map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
+    .map((d) => {
+      const row = { ...d, subjectRef: decisionSubjectRef(d.action) };
+      if (!withheld((d.action as { planId?: unknown }).planId)) return row;
+      return { ...row, detail: WITHHELD_PLAN, action: withheldAction(d.action) };
+    });
   const refUrls = buildRefUrls({
     pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...archivedPullRequests],
     issues: world.issues,
@@ -535,6 +577,7 @@ export function buildStateSections(
     | 'environmentHealth'
     | 'goalWatchWindows'
     | 'environmentArrivals'
+    | 'criteriaDrift'
     | 'remoteSheets'
     | 'stackLandings'
   > => {
@@ -573,6 +616,7 @@ export function buildStateSections(
       environmentHealth: buildEnvironmentHealth(store, environments),
       goalWatchWindows: buildGoalWatchWindows(store, environments, goalWatches),
       environmentArrivals: arrivals.slice(0, 50),
+      ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),
       remoteSheets: remoteSheets(),
       stackLandings: [
         ...stacks().map((stack) => {
@@ -619,7 +663,7 @@ export function buildStateSections(
   > => ({
     plans: wirePlans,
     planParts: wirePlanParts(),
-    planAtoms: store.plans.listAllPlanAtoms(),
+    planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks: validationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
@@ -680,8 +724,18 @@ export function buildStateSections(
   const inboxSection = (): Pick<CockpitState, 'bugFilings' | 'humanTasks' | 'escalations' | 'proposals'> => ({
     bugFilings,
     humanTasks,
-    escalations: store.escalations.listOpenEscalations(),
-    proposals,
+    escalations: store.escalations.listOpenEscalations().map((e) => {
+      if (!withheld(e.context.planId)) return e;
+      return {
+        ...e,
+        prompt: WITHHELD_PLAN,
+        context: { ...e.context, detail: WITHHELD_PLAN, detailFrom: 'Withheld until the plan is revealed' },
+      };
+    }),
+    proposals: proposals.map((p) => {
+      if (!withheld(p.action.planId)) return p;
+      return { ...p, action: withheldAction(p.action) };
+    }),
   });
 
   const activitySection = (): Pick<CockpitState, 'decisions' | 'worldEvents' | 'errors'> => ({
