@@ -133,98 +133,100 @@ export function GoalCriteria({
           </Tag>
         )}
       </h3>
-      <p className="cn-crit-why">
-        The goal&rsquo;s acceptance criteria, written by hand and kept as an append-only chain. Where these and a
-        part&rsquo;s own acceptance disagree, these are the authority and the part is the defect. They are an oracle the
-        work is judged against, so they are written for the fleet to read.
-      </p>
+      <div className="cn-crit-body">
+        <p className="cn-crit-why">
+          The goal&rsquo;s acceptance criteria, written by hand and kept as an append-only chain. Where these and a
+          part&rsquo;s own acceptance disagree, these are the authority and the part is the defect. They are an oracle
+          the work is judged against, so they are written for the fleet to read.
+        </p>
 
-      {current === null && <p className="cn-empty">No criteria have been written for this goal.</p>}
-      {current !== null && <CurrentVersion version={current} now={now} />}
+        {current === null && <p className="cn-empty">No criteria have been written for this goal.</p>}
+        {current !== null && <CurrentVersion version={current} now={now} />}
 
-      {earlier.length > 0 && (
-        <details className="cn-crit-chain">
-          <summary>
-            {earlier.length === 1 ? 'The version behind it' : `The ${earlier.length} versions behind it`}
-          </summary>
-          <ol className="cn-crit-olds">
-            {earlier.map((version) => (
-              <li className="cn-crit-old" key={version.id}>
-                <div className="hdr hdr-base">
-                  <span className="cn-crit-v">v{version.version}</span>
-                  <Tag tone="grey" title={STANDING[version.standing].why}>
-                    {STANDING[version.standing].label}
-                  </Tag>
-                  <span className="cn-crit-by">
-                    {version.author ?? 'author unrecorded'} · {relTime(version.authoredAt, now)}
-                  </span>
-                </div>
-                <blockquote className="cn-crit-text">{version.text}</blockquote>
-                {version.standing === 'post-work' && <Reason reason={version.reason} />}
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
+        {earlier.length > 0 && (
+          <details className="cn-crit-chain">
+            <summary>
+              {earlier.length === 1 ? 'The version behind it' : `The ${earlier.length} versions behind it`}
+            </summary>
+            <ol className="cn-crit-olds">
+              {earlier.map((version) => (
+                <li className="cn-crit-old" key={version.id}>
+                  <div className="hdr hdr-base">
+                    <span className="cn-crit-v">v{version.version}</span>
+                    <Tag tone="grey" title={STANDING[version.standing].why}>
+                      {STANDING[version.standing].label}
+                    </Tag>
+                    <span className="cn-crit-by">
+                      {version.author ?? 'author unrecorded'} · {relTime(version.authoredAt, now)}
+                    </span>
+                  </div>
+                  <blockquote className="cn-crit-text">{version.text}</blockquote>
+                  {version.standing === 'post-work' && <Reason reason={version.reason} />}
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
 
-      {!writing && (
-        <div className="cn-crit-presses">
-          <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setWriting(true)}>
-            {current === null ? 'Write the criteria' : 'Revise the criteria'}
-          </button>
-          {nextIsDrift && <span className="cn-crit-warn">A revision now is drift, and will want a reason.</span>}
-        </div>
-      )}
+        {!writing && (
+          <div className="cn-crit-presses">
+            <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setWriting(true)}>
+              {current === null ? 'Write the criteria' : 'Revise the criteria'}
+            </button>
+            {nextIsDrift && <span className="cn-crit-warn">A revision now is drift, and will want a reason.</span>}
+          </div>
+        )}
 
-      {writing && (
-        <div className="cn-crit-form">
-          {/* The requirement is surfaced before the press rather than after it: the
-              chain is append-only, so a refused submission is a whole draft the
-              operator retypes. */}
-          {nextIsDrift && <p className="cn-crit-warn">{DRIFT_REASON_HINT}</p>}
-          {nextIsDrift && (
+        {writing && (
+          <div className="cn-crit-form">
+            {/* The requirement is surfaced before the press rather than after it: the
+                chain is append-only, so a refused submission is a whole draft the
+                operator retypes. */}
+            {nextIsDrift && <p className="cn-crit-warn">{DRIFT_REASON_HINT}</p>}
+            {nextIsDrift && (
+              <label>
+                <span>Why are the criteria changing?</span>
+                <input
+                  className="cn-crit-reason"
+                  value={reason}
+                  placeholder="What we learned, and what it changes"
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+            )}
             <label>
-              <span>Why are the criteria changing?</span>
-              <input
-                className="cn-crit-reason"
-                value={reason}
-                placeholder="What we learned, and what it changes"
-                onChange={(e) => setReason(e.target.value)}
+              <span>What “done” means for this goal</span>
+              <textarea
+                className="cn-crit-write"
+                rows={6}
+                value={text}
+                placeholder={current === null ? 'One criterion per line' : "The whole of what 'done' means, restated"}
+                onChange={(e) => setText(e.target.value)}
               />
             </label>
-          )}
-          <label>
-            <span>What “done” means for this goal</span>
-            <textarea
-              className="cn-crit-write"
-              rows={6}
-              value={text}
-              placeholder={current === null ? 'One criterion per line' : "The whole of what 'done' means, restated"}
-              onChange={(e) => setText(e.target.value)}
-            />
-          </label>
-          <p className="cn-crit-note">
-            A version is the whole text rather than a patch, and nothing is ever edited in place: this appends v
-            {versions.length + 1} behind the one that stands now.
-          </p>
-          {refusal !== null && <p className="cn-crit-refusal">{refusal}</p>}
-          <div className="cn-crit-presses">
-            <AsyncButton tone="primary" onClick={submit} onRefused={setRefusal}>
-              Append this version
-            </AsyncButton>
-            <button
-              type="button"
-              className={buttonClass({})}
-              onClick={() => {
-                setWriting(false);
-                setRefusal(null);
-              }}
-            >
-              Cancel
-            </button>
+            <p className="cn-crit-note">
+              A version is the whole text rather than a patch, and nothing is ever edited in place: this appends v
+              {versions.length + 1} behind the one that stands now.
+            </p>
+            {refusal !== null && <p className="cn-crit-refusal">{refusal}</p>}
+            <div className="cn-crit-presses">
+              <AsyncButton tone="primary" onClick={submit} onRefused={setRefusal}>
+                Append this version
+              </AsyncButton>
+              <button
+                type="button"
+                className={buttonClass({})}
+                onClick={() => {
+                  setWriting(false);
+                  setRefusal(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
