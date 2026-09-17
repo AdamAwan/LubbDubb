@@ -825,7 +825,7 @@ interrupt.
 
 **Approving is refused while the plan is withheld**, and that refusal is not about secrecy. Approving
 or refusing a plan sight-unseen would settle the goal with the reveal never stamped, so the record
-would read *never offered* when the operator had in fact acted on the plan. One press reveals it; an
+would read _never offered_ when the operator had in fact acted on the plan. One press reveals it; an
 operator who then wants nothing to do with the plan gets an honest row.
 
 It is worth confirming what else can show an operator a plan at that moment, because if anything could,
@@ -838,6 +838,32 @@ What it is not, and should not be sold as, is access control. The operator can r
 is a **self-measurement instrument**, and a determined self-deceiver defeats every possible version of
 one; what the design owes them is that the honest path is also the easy one, and that the record says
 plainly when they looked.
+
+### Goal criteria, beside the planner's acceptance
+
+`plan_parts.acceptance` is the **planner's** restatement of done, at part grain, and it stays exactly
+as it is. Beside it there is now an optional **goal-level** set, human-authored, versioned and
+append-only, behind `goalCriteria.enabled`.
+
+The reason the two coexist rather than one replacing the other is the failure part acceptance cannot
+catch. The planner, the implementer and the validation-plan author are the same model reading the same
+issue; whatever the issue meant to a model at plan time is what it will still mean at test time. So the
+criteria cannot catch the one failure that matters most — the goal was understood wrongly and then
+built, reviewed and validated consistently with the wrong understanding. A human-authored set is an
+independent oracle precisely because it was not written by the thing it judges.
+
+**Where both exist the goal set is the authority.** A part's acceptance that contradicts it is a plan
+defect rather than a criteria change.
+
+What makes a goal criterion independent is not that it predates the planner's dispatch but that it
+predates its author's sight of the plan, so its standing is derived against the same reveal stamp the
+prediction record uses. The reveal interstitial is therefore the natural moment to ask for criteria as
+well: it is the last moment at which either can be authored independently, and one the operator is
+already stopped at. A goal whose criteria were written there has an oracle that provably predates its
+plan. → [14](14-persistence.md#goal-criteria-are-append-only)
+
+Criteria **reach agents by design** — that is what an oracle is for — which is the opposite posture to
+the prediction record they share a moment with. Conflating the two leaks predictions or hides criteria.
 
 ### The status is the plan's life, and only that
 

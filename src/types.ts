@@ -2144,6 +2144,29 @@ export interface GoalReveal {
   predicted: boolean;
 }
 
+/**
+ * Where a criteria version sits relative to the plan's reveal and the first part
+ * dispatch. Derived from those timestamps on every read, never stored.
+ * → docs/spec/08-planning.md
+ */
+export type CriteriaStanding = 'pre-reveal' | 'post-reveal' | 'post-work';
+
+/**
+ * A goal whose criteria changed after work had started. Its own record and its own
+ * wire list, because a drift record must never be a `WorldEvent`: `deliveryHold`
+ * expires a standing delivery verdict on any world event matching the goal's issue
+ * ref, so a drift record written as one would un-park the goal it just reported on.
+ */
+export interface GoalCriteriaDrift {
+  id: string;
+  originRef: string;
+  criteriaId: string;
+  version: number;
+  author: string | null;
+  reason: string | null;
+  recordedAt: string;
+}
+
 /** One version in a goal's append-only acceptance-criteria chain. */
 export interface GoalCriteriaVersion {
   id: string;

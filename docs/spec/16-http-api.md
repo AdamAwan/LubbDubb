@@ -1870,15 +1870,15 @@ every other timestamp the harness keeps, rather than a courtesy the client exten
 The body reaches the cockpit by **seven** paths, and a gate over one of them is a gate over none. All
 seven are closed by the single predicate `planIsWithheld` in `src/server/planReveal.ts`:
 
-| Path                                                                       | While withheld                                                                          |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| The plan on the wire                                                       | Every narrative field null, `evidence` empty. `id`, `originRef`, `title`, `status` and the timestamps stay — the cockpit must know a plan is there to draw the gate for it. |
-| Its **parts**                                                              | Absent. `title`, `scope` and `acceptanceCriteria` are the narrative at part grain, and _where the decomposition falls_ is one of the things a prediction is about. |
-| Its atoms                                                                  | Absent.                                                                                  |
-| The `approve_change` escalation                                            | `prompt` and `context.detail` replaced; both are built from the plan.                    |
-| The proposal behind it                                                     | `action.prompt` and `action.detail` replaced, and `action.caveats` emptied — a caveat carries the plan's `risks` and `openQuestions` verbatim. |
-| `GET /api/plans/:id/history`, and the four routes that hand back a part    | **409**, naming the reveal route.                                                        |
-| Accepting, rejecting, backing out or dismissing the proposal               | **409**, naming the reveal route.                                                        |
+| Path                                                                    | While withheld                                                                                                                                                              |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The plan on the wire                                                    | Every narrative field null, `evidence` empty. `id`, `originRef`, `title`, `status` and the timestamps stay — the cockpit must know a plan is there to draw the gate for it. |
+| Its **parts**                                                           | Absent. `title`, `scope` and `acceptanceCriteria` are the narrative at part grain, and _where the decomposition falls_ is one of the things a prediction is about.          |
+| Its atoms                                                               | Absent.                                                                                                                                                                     |
+| The `approve_change` escalation                                         | `prompt` and `context.detail` replaced; both are built from the plan.                                                                                                       |
+| The proposal behind it                                                  | `action.prompt` and `action.detail` replaced, and `action.caveats` emptied — a caveat carries the plan's `risks` and `openQuestions` verbatim.                              |
+| `GET /api/plans/:id/history`, and the four routes that hand back a part | **409**, naming the reveal route.                                                                                                                                           |
+| Accepting, rejecting, backing out or dismissing the proposal            | **409**, naming the reveal route.                                                                                                                                           |
 
 That last row is a refusal rather than a redaction, and it is the one that is about more than reading.
 Deciding a plan is the act the gate stands in front of: approving or refusing one sight-unseen would
@@ -1919,6 +1919,20 @@ its own check only so the refusal can say which rule refused.
 Prediction text is served **here and nowhere else**. It reaches no prompt, no tool response, no
 transcript, no retro dossier, no scratchpad and above all no tracker.
 → [14](14-persistence.md#the-prediction-store-is-not-on-store)
+
+### `POST /api/goals/:number/criteria`
+
+`{ text, reason? }` — appends a version to the goal's append-only criteria chain, answering
+`{ ok, version, standing }`.
+
+**`reason` is required when the standing would be `post-work`**, and the refusal is decided **before**
+the append, because the chain cannot take a row back. 400 naming the requirement. A `post-work`
+version also writes the drift row.
+
+### `GET /api/goals/:number/criteria`
+
+`{ current, versions }`, oldest first, each version carrying its **derived** standing.
+→ [14](14-persistence.md#goal-criteria-are-append-only)
 
 ### `POST /api/goals/:number/prediction/marks`
 

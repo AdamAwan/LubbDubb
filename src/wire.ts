@@ -56,6 +56,7 @@ import type {
   Escalation,
   GoalArrival,
   GoalAppraisalVerdict,
+  GoalCriteriaDrift,
   GoalPause,
   GoalEnvironmentReach,
   GoalReachStatus,
@@ -388,6 +389,15 @@ export interface CockpitState {
   goalWatchWindows: GoalWatchView[];
   featureSequences: FeatureSequence[];
   environmentArrivals: GoalArrival[];
+  /**
+   * Goals whose criteria changed after work had started. Its own list, never a
+   * `WorldEvent` — `deliveryHold` expires a standing delivery verdict on any world
+   * event matching the goal's issue ref, so drift written as one would un-park the
+   * goal it just reported on. The cockpit merges these at the feed's door, exactly
+   * as it merges `environmentArrivals`. Absent when `goalCriteria.enabled` is off:
+   * that flag is read here and in `src/system.ts`, and nowhere downstream.
+   */
+  criteriaDrift?: GoalCriteriaDrift[];
   remoteSheets: RemoteSheetView[];
   stackLandings: StackLandingView[];
   tasks: TaskSummary[];
@@ -844,6 +854,9 @@ export type {
   ErrorLogEntry,
   Escalation,
   GoalArrival,
+  GoalCriteriaDrift,
+  GoalCriteriaVersion,
+  CriteriaStanding,
   GoalEnvironmentReach,
   GoalPrediction,
   GoalReachStatus,

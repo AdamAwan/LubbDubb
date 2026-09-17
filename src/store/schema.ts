@@ -2172,6 +2172,17 @@ CREATE TABLE IF NOT EXISTS goal_criteria (
   UNIQUE (origin_ref, version)
 );
 
+CREATE TABLE IF NOT EXISTS goal_criteria_drift (
+  id          TEXT PRIMARY KEY,
+  origin_ref  TEXT NOT NULL,
+  criteria_id TEXT NOT NULL,
+  version     INTEGER NOT NULL,
+  author      TEXT,
+  reason      TEXT,
+  recorded_at TEXT NOT NULL,
+  UNIQUE (criteria_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
@@ -2212,4 +2223,5 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_sugges
 -- obstacle_conditions needs no index of its own: every read of it is by
 -- obstacle_id, which is the leading column of the UNIQUE above.
 CREATE INDEX IF NOT EXISTS idx_goal_criteria_origin ON goal_criteria(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_goal_criteria_drift_origin ON goal_criteria_drift(origin_ref);
 `;

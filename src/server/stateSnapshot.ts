@@ -577,6 +577,7 @@ export function buildStateSections(
     | 'environmentHealth'
     | 'goalWatchWindows'
     | 'environmentArrivals'
+    | 'criteriaDrift'
     | 'remoteSheets'
     | 'stackLandings'
   > => {
@@ -615,6 +616,7 @@ export function buildStateSections(
       environmentHealth: buildEnvironmentHealth(store, environments),
       goalWatchWindows: buildGoalWatchWindows(store, environments, goalWatches),
       environmentArrivals: arrivals.slice(0, 50),
+      ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),
       remoteSheets: remoteSheets(),
       stackLandings: [
         ...stacks().map((stack) => {

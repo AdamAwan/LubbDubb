@@ -108,6 +108,8 @@ export type {
   PlanNarrative,
   PlanPart,
   PlanPartView,
+  CriteriaStanding,
+  GoalCriteriaVersion,
   PredictionMark,
   PredictionPlanMarks,
   PredictionSlot,
