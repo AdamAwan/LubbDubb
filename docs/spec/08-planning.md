@@ -857,15 +857,21 @@ defect rather than a criteria change.
 
 What makes a goal criterion independent is not that it predates the planner's dispatch but that it
 predates its author's sight of the plan, so its standing is derived against the same reveal stamp the
-prediction record uses. The reveal interstitial is therefore the natural moment to ask for criteria as
-well: it is the last moment at which either can be authored independently, and one the operator is
-already stopped at. A goal whose criteria were written there has an oracle that provably predates its
-plan. → [14](14-persistence.md#goal-criteria-are-append-only)
+prediction record uses. The reveal interstitial therefore **asks for the criteria as well as the
+prediction**: it is the last moment at which either can be authored independently, and one the operator
+is already stopped at. A goal whose criteria were written there has an oracle that provably predates
+its plan; criteria first written on the goal page are `post-reveal`, which is an honest reading and a
+weaker oracle. Both records are written before the reveal is stamped, because the stamp is what ends
+their independence. → [14](14-persistence.md#goal-criteria-are-append-only),
+[17](17-cockpit.md#the-criteria-half-of-the-gate)
 
 Criteria are **not contained the way a prediction is** — that is the opposite posture to the record
 they share a moment with, and conflating the two leaks predictions or hides criteria.
 `GoalCriteriaStore` is an ordinary member of `Store` precisely so that an agent can be given them,
-where a prediction structurally cannot be.
+where a prediction structurally cannot be. They now share a **form** as well as a moment, so that
+invariant has to be drawn as well as held: the criteria field sits behind a rule with a note of its
+own, never as a fifth prediction slot under one containment sentence.
+→ [17](17-cockpit.md#the-criteria-half-of-the-gate)
 
 **Delivering them to an agent is not built.** Today the set is authored, versioned, drawn on the goal
 page and counted in the aggregate, and it is read by people. Nothing appends it to a prompt. The place

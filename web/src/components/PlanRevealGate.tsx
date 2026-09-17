@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { api, type PredictionDraft } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
@@ -18,6 +18,18 @@ const CONTAINMENT =
   'transcript and no tool answer. The one leak the containment cannot stop is you: paste it into ' +
   "this goal's standing instructions and the fleet reads it.";
 
+/**
+ * The criteria field's own note, and the reason it cannot be folded in under
+ * {@link CONTAINMENT}. The two records share this moment and have opposite postures:
+ * a prediction is withheld from the fleet and criteria are written for it. Drawn as
+ * one block, the operator carries whichever posture they read first across to the
+ * other field — which either leaks the prediction or buries the criteria.
+ */
+const REACHES_THE_FLEET =
+  'Unlike the prediction above, this is meant to be read: it is the oracle the work is judged ' +
+  'against, and where it and a part’s own acceptance disagree, this is the authority. Writing it ' +
+  'now, before you have read the plan, is what makes it independent of the plan.';
+
 type Draft = Record<keyof PredictionDraft, string>;
 
 const EMPTY: Draft = { locus: '', cause: '', hard: '', surprise: '' };
@@ -36,6 +48,19 @@ function filled(draft: Draft): PredictionDraft {
  * are the same button at the same weight: a gate that is awkward to decline is a
  * gate that gets resented and then disabled outright.
  *
+ * It asks for the two records that can only be authored here, because the reveal is
+ * the last moment at which either is independent of the plan: the prediction, and
+ * the goal's acceptance criteria. Criteria offered only on the goal page are
+ * criteria written after the plan has been read, which is the one standing that
+ * cannot catch a goal understood wrongly and then built consistently with the wrong
+ * understanding.
+ *
+ * Whether the criteria half is asked at all is keyed off the reading rather than a
+ * flag: the routes are mounted only where `goalCriteria.enabled` is on, so a read
+ * that does not answer is a deployment with no criteria and the field is not drawn.
+ * A goal that already has criteria is not asked again either — revising them is the
+ * goal page's job, and a revision is a version with a standing of its own.
+ *
  * `onRevealed` lifts the gate on this page at once; the payload refresh behind it
  * carries the parts, which the reveal's own response does not have.
  */
@@ -48,21 +73,62 @@ export function PlanRevealGate({
 }): JSX.Element {
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [criteria, setCriteria] = useState('');
+  const [asksCriteria, setAsksCriteria] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  // What has already landed, so a retry after one half failed does not re-send the
+  // half that succeeded. Both writes are once-only in opposite ways — a second
+  // prediction is refused outright, a second criteria version is silently v2 — so a
+  // press that resent them would either dead-end the gate or mint a version nobody
+  // asked for.
+  const [landed, setLanded] = useState({ prediction: false, criteria: false });
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .getGoalCriteria(issueNumber)
+      .then((reading) => {
+        if (live) setAsksCriteria(reading.current === null);
+      })
+      .catch(() => {
+        if (live) setAsksCriteria(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [issueNumber]);
 
   const reveal = async (): Promise<void> => {
     await api.revealGoalPlan(issueNumber);
     await onRevealed();
   };
 
-  const predictThenReveal = async (): Promise<void> => {
+  /**
+   * Everything the operator wrote, then the reveal. Both records are written first
+   * and the stamp last, because the stamp is what ends their independence: a
+   * prediction after it is refused, and criteria after it are a version that reads
+   * `post-reveal` for ever.
+   */
+  const recordThenReveal = async (): Promise<void> => {
     const slots = filled(draft);
-    if (Object.keys(slots).length === 0) {
-      setRefusal('Every slot is skippable, but not all four — write one of them and the prediction is a prediction.');
+    const text = criteria.trim();
+    if (Object.keys(slots).length === 0 && text === '') {
+      setRefusal(
+        asksCriteria
+          ? 'Nothing is written down yet — fill one prediction slot or say what “done” means, and there is a record to keep.'
+          : 'Every slot is skippable, but not all four — write one of them and the prediction is a prediction.',
+      );
       return;
     }
     setRefusal(null);
-    await api.predictGoal(issueNumber, slots);
+    if (Object.keys(slots).length > 0 && !landed.prediction) {
+      await api.predictGoal(issueNumber, slots);
+      setLanded((was) => ({ ...was, prediction: true }));
+    }
+    if (text !== '' && !landed.criteria) {
+      await api.writeGoalCriteria(issueNumber, { text });
+      setLanded((was) => ({ ...was, criteria: true }));
+    }
     await reveal();
   };
 
@@ -77,15 +143,18 @@ export function PlanRevealGate({
         <span />
       </div>
       <div className="cn-gate-over">
-        <h4>A plan is ready. Predict first?</h4>
+        <h4>{asksCriteria ? 'A plan is ready. Anything to write down first?' : 'A plan is ready. Predict first?'}</h4>
         <p className="cn-gate-why">
           Writing down what you expect before you read it is the only way the record can tell a hunch that was right
-          from one you formed afterwards. It holds nothing up: the fleet is not waiting on this.
+          from one you formed afterwards.
+          {asksCriteria &&
+            ' This is also the last moment at which what you call “done” is your answer and not the plan’s.'}{' '}
+          It holds nothing up: the fleet is not waiting on this.
         </p>
         {!composing && (
           <div className="cn-gate-presses">
             <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setComposing(true)}>
-              Predict
+              {asksCriteria ? 'Write these down' : 'Predict'}
             </button>
             <AsyncButton tone="primary" onClick={reveal}>
               Show me the plan
@@ -107,10 +176,28 @@ export function PlanRevealGate({
               </label>
             ))}
             <p className="cn-gate-kept">{CONTAINMENT}</p>
+            {asksCriteria && (
+              /* Fenced off rather than listed as a fifth slot: the posture is the
+                 opposite of the four above it and the note has to land before the
+                 field, not after it. */
+              <div className="cn-gate-crit">
+                <label>
+                  <span>What “done” means for this goal</span>
+                  <p className="cn-gate-crit-why">{REACHES_THE_FLEET}</p>
+                  <textarea
+                    className="cn-gate-slot"
+                    rows={4}
+                    value={criteria}
+                    placeholder="One criterion per line — skip this by leaving it empty"
+                    onChange={(e) => setCriteria(e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
             {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
             <div className="cn-gate-presses">
-              <AsyncButton tone="primary" onClick={predictThenReveal} onRefused={setRefusal}>
-                Predict and show me the plan
+              <AsyncButton tone="primary" onClick={recordThenReveal} onRefused={setRefusal}>
+                {asksCriteria ? 'Record these and show me the plan' : 'Predict and show me the plan'}
               </AsyncButton>
               <button
                 type="button"

@@ -2096,6 +2096,20 @@ a.cn-qbody {
   outline: none;
   border-color: var(--cn-blue-line-hi);
 }
+/* The criteria half of the gate, fenced off from the four slots above it. The rule
+   is the fence: the record either side of it has the opposite posture, and a field
+   that reads as a fifth prediction slot is criteria the operator thinks are
+   withheld. */
+.cn-gate-crit {
+  border-top: 1px solid var(--cn-line);
+  padding-top: 10px;
+}
+.cn-gate-crit-why {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cn-fg-faint);
+}
 
 /* Moment one: the prediction drawn beside the plan it was predicting, with a mark
    per filled slot. → docs/spec/17-cockpit.md */
@@ -2329,12 +2343,24 @@ a.cn-qbody {
    the control that appends the next. Nothing here borrows the prediction card's
    containment language — criteria are meant to reach the fleet.
    → docs/spec/17-cockpit.md */
+.cn-crit-body {
+  padding: 13px;
+}
+/* The card's own empty state pads itself against a bare `.cn-card`, so inside a
+   body that already pads it would sit twice as far in as everything beside it. */
+.cn-crit-body > .cn-empty {
+  padding: 0 0 10px;
+}
 .cn-crit-why,
 .cn-crit-note {
   margin: 0 0 10px;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--cn-fg-dim);
+}
+/* The note only ever sits in the form, which is a grid and spaces its own rows. */
+.cn-crit-form > .cn-crit-note {
+  margin-bottom: 0;
 }
 .cn-crit-now {
   border-left: 3px solid var(--cn-line);

@@ -2298,6 +2298,11 @@ Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan ha
 waves: a blurred stand-in for the document, and over it _"A plan is ready. Predict first?"_ with
 **Predict** and **Show me the plan** beside each other.
 
+Where the goal's criteria can also be written here the offer names both — _"A plan is ready. Anything
+to write down first?"_, over **Write these down** — because the reveal is the last moment at which
+either record is independent of the plan, and two interstitials over one instant is a gate the
+operator meets twice and declines the second time. → [the criteria half](#the-criteria-half-of-the-gate)
+
 **The two presses are of equal weight, and this is load-bearing rather than taste.** A gate that is
 awkward to decline is a gate that gets resented and then disabled outright, so **Show me the plan** is
 never a small grey link — both are primary buttons, in one row, at the same size. The gate never
@@ -2323,6 +2328,37 @@ Under the slots, once, a sentence saying what containment does and does not cove
 here reaches no agent, but pasting it into the goal's standing instructions would leak it, because
 standing instructions are delivered to agents by design. That is the one hole nothing can close, and
 the operator is told about it at the moment they could fall into it.
+
+#### The criteria half of the gate
+
+Below the slots and the containment sentence, where `goalCriteria.enabled` is on and the goal has no
+criteria yet, the composer asks one more thing: **what "done" means for this goal**, written into the
+same sitting and recorded before the reveal.
+
+**It is asked here because nowhere else can ask it independently.** Criteria first offered on the goal
+page are criteria written after the plan has been read, and a `post-reveal` oracle cannot catch the one
+failure part acceptance also cannot — the goal understood wrongly and then built, reviewed and
+validated consistently with the wrong understanding ([08](08-planning.md#goal-criteria-beside-the-planners-acceptance)).
+Written at the gate, the version's `authoredAt` precedes the reveal stamp and its standing derives as
+`pre-reveal` for good.
+
+**Whether it is asked is keyed off the reading, never a flag.** The gate reads the chain; a read that
+does not answer is a deployment where the criteria routes are not mounted, and the field is not drawn.
+A goal that already has criteria is not asked again either — revising them is the goal page's job, and
+a revision is a version with a standing of its own.
+
+**The field is fenced off from the four slots above it, and the fence is load-bearing.** The two
+records share this instant and have opposite postures: a prediction is withheld from every agent, and
+criteria are written for the fleet to read. Drawn as a fifth slot under one containment sentence, the
+operator carries whichever posture they read first across to the other field — which either leaks the
+prediction or buries the criteria. So the criteria sit behind a rule, under a note of their own saying
+they are meant to be read and are the authority where they and a part's acceptance disagree.
+
+**Each half is sent once, and a retry sends only what has not landed.** The two writes are once-only in
+opposite ways — a second prediction is refused outright, a second criteria version is silently v2 — so
+a press that resent both after one had failed would either dead-end the gate or mint a version nobody
+asked for. The gate remembers which landed and the reveal goes last, because the stamp is what ends
+their independence.
 
 **No `Place` state.** Whether the composer is open, and whether the gate has lifted on this render, are
 not "where am I": the gate is a one-shot that ends the moment the server stamps the reveal, so a deep
