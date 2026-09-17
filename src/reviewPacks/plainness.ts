@@ -91,7 +91,7 @@ function ease(wordCount: number, sentenceCount: number, syllableCount: number): 
  * syllable rule, and a gist that names the method it is about would fail for
  * doing the right thing.
  */
-function stripCode(value: string): string {
+export function stripCode(value: string): string {
   return value
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`[^`]*`/g, ' ')

@@ -68,13 +68,20 @@ test('a pickup origin opens one PR onto the default branch, with no stack positi
     base: 'main',
     position: 1,
     total: 1,
+    criteria: [],
   });
 });
 
 test('a part origin stacks on the dependency it declares', () => {
   const parts = [
     part({ slug: 'migrations', seq: 1 }),
-    part({ slug: 'cursor', seq: 2, dependsOn: ['migrations'], branch: 'issue/182/cursor' }),
+    part({
+      slug: 'cursor',
+      seq: 2,
+      dependsOn: ['migrations'],
+      branch: 'issue/182/cursor',
+      acceptance: '- The cursor is stored per source.\n- Resume reads it at boot.',
+    }),
   ];
   const target = resolveOpenPr('issue:182:part:cursor', ctx({ plan, parts }));
   assert.deepEqual(target, {
@@ -84,7 +91,15 @@ test('a part origin stacks on the dependency it declares', () => {
     base: 'issue/182/migrations',
     position: 2,
     total: 2,
+    criteria: ['The cursor is stored per source.', 'Resume reads it at boot.'],
   });
+});
+
+test('the ask a part carries is the plan’s own criteria, so the body cannot restate them', () => {
+  const parts = [part({ slug: 'cursor', seq: 1 })];
+  const target = resolveOpenPr('issue:182:part:cursor', ctx({ plan, parts }));
+  assert.ok(!('error' in target));
+  assert.deepEqual(target.criteria, [], 'a part with no acceptance block asks for nothing in particular');
 });
 
 test('a part depending on nothing is the bottom rung and targets the default branch', () => {

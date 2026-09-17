@@ -325,6 +325,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       prompts,
       watchLabel,
       prRefStyle: prRefStyle(config.integrations.sourceControl),
+      git: gitObserver,
     }),
     filing: (): McpToolDeps['filing'] => filing,
     prReply: (): McpToolDeps['prReply'] => executor,
