@@ -122,6 +122,8 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'remoteValidation',
       'obstacleDormantMs',
       'obstacleTicketApproval',
+      'prediction',
+      'goalCriteria',
     ],
   },
   {

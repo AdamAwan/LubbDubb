@@ -63,6 +63,8 @@ import { BugFilingStore } from './bugFilings.js';
 import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
 import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
+import { GoalCriteriaStore } from './goalCriteria.js';
+import { PredictionStore } from './predictions.js';
 import type { Job, CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
@@ -116,9 +118,11 @@ export class Store {
   readonly floor: FloorStore;
   readonly tickets: TicketStore;
   readonly sequences: SequenceStore;
+  readonly goalCriteria: GoalCriteriaStore;
   readonly upgrades: UpgradeStore;
   readonly pets: PetStore;
   readonly pool: PoolStore;
+  private readonly ctx: StoreContext;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -228,8 +232,23 @@ export class Store {
     this.floor = new FloorStore(ctx);
     this.tickets = new TicketStore(ctx);
     this.sequences = new SequenceStore(ctx);
+    this.goalCriteria = new GoalCriteriaStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
     this.pets = new PetStore(ctx);
+    this.ctx = ctx;
+  }
+
+  /**
+   * The one store `Store` does not forward. A prediction is a measurement of the
+   * fleet, so nothing the fleet is handed may be able to name it: there is no
+   * `store.predictions`, and the composition root opens the store here and hands it
+   * to the prediction routes alone. `test/predictionContainment.test.ts` is what
+   * makes reaching for this from a dispatcher, agent, MCP, retro, briefing, scratch
+   * or sink module a failing build rather than a review comment.
+   * → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
+   */
+  openPredictions(): PredictionStore {
+    return new PredictionStore(this.ctx);
   }
 
   get open(): boolean {

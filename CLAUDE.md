@@ -56,23 +56,21 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 
 ### Identity
 
-- **`userId` gates pickup, so a provider that cannot report label authorship stops the fleet
-  silently.** With it set, `issuePickup.ts` reads `labelsAddedByViewer` instead of `labels`; a
-  provider that never populates that field resolves every issue's labels to `[]` and **nothing is
-  ever picked up**, with nothing red. `FakeIssuesIntegration` mirrors `labels` into it for that reason.
-  → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
+- **`userId` gates pickup, so a provider that cannot report label authorship stops the fleet silently.** With it set,
+  `issuePickup.ts` reads `labelsAddedByViewer` instead of `labels`; a provider that never populates that field resolves
+  every issue's labels to `[]` and **nothing is ever picked up**, with nothing red. `FakeIssuesIntegration` mirrors
+  `labels` into it for that reason. → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
 
 ### Review threads
 
-- **Whether a review reply is the fleet's is a _record_, never the reply's author.** `ours` and
-  `answered` read `pr_replies_sent` (`src/store/prReplies.ts`) — one row per reply that actually left
-  through `sink.postPrReply` — and `config.userId` is the credential the harness posts under, which on
-  a single-operator deployment is the operator's own account. Compare against it and the operator's
-  follow-up on their own thread reads as the harness's: `answered` folds to `PrComment.handled`, the
-  only bit rule `pr-review-comment` reads, so their comment is marked as work already done and never
-  dispatched for. Both providers must read the same record through `src/pr/prThreads.ts`, and every
-  uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**.
-  → [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
+- **Whether a review reply is the fleet's is a _record_, never the reply's author.** `ours` and `answered` read
+  `pr_replies_sent` (`src/store/prReplies.ts`) — one row per reply that actually left through `sink.postPrReply` — and
+  `config.userId` is the credential the harness posts under, which on a single-operator deployment is the operator's own
+  account. Compare against it and the operator's follow-up on their own thread reads as the harness's: `answered` folds
+  to `PrComment.handled`, the only bit rule `pr-review-comment` reads, so their comment is marked as work already done
+  and never dispatched for. Both providers must read the same record through `src/pr/prThreads.ts`, and every
+  uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**. →
+  [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
 
 ### Persistence
 
@@ -89,38 +87,40 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   clash the index exists to refuse. A status is a **column value** and needs no `ALTER TABLE`; the
   index over it is schema. → [14](docs/spec/14-persistence.md#a-partial-index-predicate-is-not-idempotent),
   [36](docs/spec/36-remote-validation.md#a-runs-status-vocabulary)
-- **A column whose _null means something_ needs a backfill as well**, gated on `ensureColumns`'
-  report of what it added. `pets.opened_at` null spells "still an egg", so the column alone turns
-  every existing vivarium back into shells; a backfill on _every_ boot opens the eggs operators were
-  saving. → [14](docs/spec/14-persistence.md#when-a-null-means-something)
-- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id
-  a re-introduced `runOnce` is given. Changing one declares a _second_ pass, which every database that
-  ran the first runs again on the next boot. A further pass is a further id, added deliberately. There
-  is no `runOnce` right now: all three of its callers folded rows into the claim store and went with
-  it, so the mechanism comes back with the next migration that needs it.
-  → [22](docs/spec/22-pets.md#clearing-the-vivarium), [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the
-  aggregate as another fleet's, and looks exactly like the pool working.
-  → [28](docs/spec/28-cross-fleet-pool.md)
-- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
-  `DELETE`.** Which verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer
-  that clears its siblings itself silently reintroduces the pairwise drift the matrix replaced.
-  → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
-- **A validation check's `area` comes from a `suite` step and from nothing else, and a second writer
-  of that column is a silent undo.** It was inherited from the `coverage` of a covered part and
-  repaired from SQL at boot; both are gone, because a boot pass that recomputes it now overwrites what
-  the step named on _every_ boot — the join quietly unpicking the author, with nothing red.
-  → [36](docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)
-- **`fleetCanStart` is three-valued and `null` must never fold into `false`.** Null is _this check has
-  no steps_ — `fleetCandidate` and the operator's press still decide, which is every check written
-  before test plans. False is a plan whose first step is a person's, which can never execute. Fold them
-  and every prose check on the deployment stops being dispatchable, with a full "Up next" queue and
-  nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
-- **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's
-  **delivery** row, and the delivery is what parks the goal: writing one un-parks it, settles the
-  close-out obligation and declines the validation bench row — the reading deleting the rows it was
-  reported into, with delivered work handed back to the fleet. Rule `validation-failed` is the
-  consumer, on its own origin. → [20](docs/spec/20-validation.md#when-a-check-fails)
+- **A column whose _null means something_ needs a backfill as well**, gated on `ensureColumns`' report of what it added.
+  `pets.opened_at` null spells "still an egg", so the column alone turns every existing vivarium back into shells; a
+  backfill on _every_ boot opens the eggs operators were saving. →
+  [14](docs/spec/14-persistence.md#when-a-null-means-something)
+- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id a re-introduced
+  `runOnce` is given. Changing one declares a _second_ pass, which every database that ran the first runs again on the
+  next boot. A further pass is a further id, added deliberately. There is no `runOnce` right now: all three of its
+  callers folded rows into the claim store and went with it, so the mechanism comes back with the next migration that
+  needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
+  [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
+- **The prediction store is deliberately NOT forwarded on `Store`, and tidying it on removes the guarantee.** There is
+  no `store.predictions`: `Store.openPredictions()` is called once in `src/system.ts` and handed to the prediction
+  routes alone, so nothing the fleet is given can name one. A prediction measures the fleet, and `worldRead` serves
+  issue bodies and comments verbatim — on the tracker it is a prediction every agent on the goal has read. →
+  [14](docs/spec/14-persistence.md#the-prediction-store-is-not-on-store)
+- **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
+  another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
+- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
+  verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself
+  silently reintroduces the pairwise drift the matrix replaced. →
+  [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
+- **A validation check's `area` comes from a `suite` step and from nothing else, and a second writer of that column is a
+  silent undo.** It was inherited from the `coverage` of a covered part and repaired from SQL at boot; both are gone,
+  because a boot pass that recomputes it now overwrites what the step named on _every_ boot — the join quietly unpicking
+  the author, with nothing red. → [36](docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)
+- **`fleetCanStart` is three-valued and `null` must never fold into `false`.** Null is _this check has no steps_ —
+  `fleetCandidate` and the operator's press still decide, which is every check written before test plans. False is a
+  plan whose first step is a person's, which can never execute. Fold them and every prose check on the deployment stops
+  being dispatchable, with a full "Up next" queue and nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
+- **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's **delivery** row,
+  and the delivery is what parks the goal: writing one un-parks it, settles the close-out obligation and declines the
+  validation bench row — the reading deleting the rows it was reported into, with delivered work handed back to the
+  fleet. Rule `validation-failed` is the consumer, on its own origin. →
+  [20](docs/spec/20-validation.md#when-a-check-fails)
 
 ### Tests
 
