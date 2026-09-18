@@ -1,8 +1,8 @@
 # The operator writes the pull request description
 
 **Status: proposed, nothing built.** This argues for a change to
-[07-pull-requests.md](../spec/07-pull-requests.md#the-body-is-not-templated), which currently states
-the opposite. Nothing here describes running code.
+[07-pull-requests.md](../spec/07-pull-requests.md#the-body-is-not-templated) and, behind it, to
+[`mission.md`](../mission.md). Both currently state the opposite. Nothing here describes running code.
 
 ## The ask
 
@@ -10,24 +10,85 @@ Beside the prediction and the goal criteria, the operator authors the **pull req
 one per part, because one part is one pull request — and that text is what ships as the body. The
 harness may tidy its shape before the operator accepts it; it never tidies the claim.
 
-## What it collides with
+## Why: the thing writing is for
 
-`07` argues the body is the agent's: _"a body is an account of a change only the agent that made it
-has"_, and _"the body is the one thing about a pull request the harness does not rewrite"_. Both
-sentences are load-bearing today and both have to move.
+The mission's founding line is that _"the old job was producing the change. The new job is stating
+the goal, and judging the evidence — everything between those two belongs to the harness."_ Read
+strictly, everything between is work to be removed, and each removal is a win.
 
-The first one moves narrowly rather than being deleted. Read it beside the sentence four paragraphs
-down — _"whatever an agent writes about its own change is written by the thing with the most reason
-to be wrong about it"_ — and the two are in tension already. `07` resolves that tension by giving
-the agent the bullets and taking the four reviewer questions away from it. This proposal resolves it
-one step further along the same line: the account goes to an author with no stake in the verdict,
-for the reason [`08`](../spec/08-planning.md#goal-criteria-beside-the-planners-acceptance) gives for
-goal criteria — an independent oracle is independent because it was not written by the thing it
-judges. What survives of the first sentence is its real content: **a template cannot produce a
-reading**. An operator is not a template.
+That is the line this proposal moves. **Some of the work between the two ends was never overhead —
+it was the mechanism by which the person came to understand the change.** Writing is not the report
+of comprehension that follows it; it is the instrument that produces it. A description you cannot
+write is a change you have not understood, and that is information available at no other moment and
+by no other means. Remove the writing and nothing announces what was lost, because what was lost is
+a state of mind and nothing measures one.
 
-The second one, _the harness does not rewrite the body_, must stay true as written, and the tidy
-pass is where it is at risk. See below.
+So the goal is not a better body. It is that **somebody who read the change has to say what it
+does**, and the saying is the check.
+
+### The inconsistency this repairs
+
+The repo already holds this principle one subsystem over. On review packs, `mission.md` says a change
+is restated _"by a party that did not write it — how much scrutiny a change deserves is exactly the
+judgement not to take from its author."_
+
+Review packs took the **scrutiny judgement** away from the author. They left the **account of the
+change** with it. The pull request description is, today, written by its author, which is the one
+place the principle is not applied. This finishes the job rather than opening a new front.
+
+### And it is owed to the reviewer
+
+A pull request spends another person's attention, and the operator is the one spending it. Sent with
+a body written by the thing that made the change, with nobody who understood it anywhere in between,
+that is an ask which costs the asker nothing and the reader an hour. A reviewer is entitled to a
+description written by someone who will answer for it.
+
+That is also why this cannot be an oracle kept in a drawer. It has to **ship**, under the operator's
+name, where the reviewer reads it.
+
+## Same shape as the prediction and the criteria
+
+This is the third instrument of one kind, and the family is the argument for it:
+
+|                 | written before         | judged against                 |
+| --------------- | ---------------------- | ------------------------------ |
+| Prediction      | seeing the plan        | what the plan turned out to be |
+| Goal criteria   | seeing the plan        | what was delivered             |
+| **Description** | **the reviewer reads** | **the diff, by the reviewer**  |
+
+Each asks the operator to commit to a reading and then exposes that reading to something that can
+contradict it. The description's judge is the strongest of the three, because it is a person who was
+not in the room and did not want to be told the answer.
+
+## What it collides with in `07`
+
+Two sentences, and they part company.
+
+**"A body is an account of a change only the agent that made it has."** This one goes. It is already
+in tension with the sentence four paragraphs below it — _"whatever an agent writes about its own
+change is written by the thing with the most reason to be wrong about it"_ — and `07` resolves that
+tension halfway, by leaving the agent five bullets and taking the four reviewer questions off it. The
+bullets are the half that is still a claim rather than a coordinate, and they are the half a person
+should be making. What survives of the sentence is its real content: **a template cannot produce a
+reading.** An operator is not a template.
+
+**"The body is the one thing about a pull request the harness does not rewrite."** This one stays
+true as written, and the tidy pass is where it is at risk. See below.
+
+## What "tidy" may do
+
+Nothing at `open_pr` time. If the harness tidied a stored description on the way out, `07`'s
+refusal-never-trim rule would be a dead letter and the operator's name would sit on prose they never
+read.
+
+So the tidy runs **at authoring**, in the cockpit, against the operator: they write, press, are shown
+the tidied text beside their own, and accept or edit. What ships is text a person accepted. The pass
+answers for shape only — the arms `prBodyRefusal` (`src/pr/prBody.ts`) already asserts: bullets, the
+count, the length cap, the plainness floor. It may not add a claim, drop one, or change which one is
+first.
+
+A description that fails `prBodyRefusal` and was accepted anyway is refused at authoring, not at
+open. The operator is the one who can fix it.
 
 ## Grain, and therefore when it is asked for
 
@@ -35,29 +96,25 @@ Per part. A part is a pull request; a goal is not.
 
 That settles the timing against the obvious guess. Parts do not exist until the plan does, so this
 **cannot** be asked for at the [reveal interstitial](../spec/08-planning.md#the-reveal-gate-stands-in-front-of-the-approval-gate)
-— the operator would be writing N descriptions before seeing the plan that decides N. It is asked
-for at the **approval gate**, where the operator is already stopped, already reading the parts one
-at a time, and already pressing once per plan.
+— the operator would be writing N descriptions before seeing the plan that decides N. It is asked for
+at the **approval gate**, where the operator is already stopped, already reading the parts one at a
+time, and already pressing once per plan.
 
-The lost pre-reveal independence is not a cost here. It is a cost for criteria, whose whole standing
-is that they predate their author's sight of the plan. A description that _ships_ has no such
-standing to protect: it is public by construction, and what makes it worth having is only that a
-person wrote it.
+The lost pre-reveal independence is not a cost here, because independence is not what this instrument
+is for. Criteria need to predate their author's sight of the plan or they judge nothing. A
+description needs only to predate the reviewer.
 
-## What "tidy" may do
+## Writing nothing is not an option
 
-Nothing at `open_pr` time. If the harness rewrote a stored description on the way out, `07`'s
-refusal-never-trim rule would be a dead letter and the operator's name would sit on prose they never
-read.
+Falling back to the agent's body when the operator writes nothing looked like the honest default. It
+is not, under the reasoning above: the whole point is that a person understood the change, so a route
+that produces a shipped description with no person behind it defeats the feature while appearing to
+run it. That is the quietest failure in the book — a gate that is theatre.
 
-So the tidy runs **at authoring**, in the cockpit, against the operator: they write, press, are
-shown the tidied text beside their own, and accept or edit. What ships is text a person accepted.
-The pass answers for shape only — the same arms `prBodyRefusal` (`src/pr/prBody.ts`) already
-asserts: bullets, the count, the length cap, the plainness floor. It may not add a claim, drop one,
-or change which one is first.
-
-A description that fails `prBodyRefusal` and was accepted anyway is refused at authoring, not at
-open. The operator is the one who can fix it.
+**The approval press requires one per part.** The cost is real and should be named: approving an
+eight-part plan becomes eight pieces of writing, and that is the single largest thing this proposal
+asks of an operator. It is defensible only because it buys exactly what the mission says the
+operator's day is for.
 
 ## What the agent still owns
 
@@ -65,9 +122,6 @@ The five evidence fields — `satisfies`, `one_way`, `unverified`, `reach`, `dec
 [four questions a reviewer has](../spec/07-pull-requests.md#the-four-questions-a-reviewer-has), they
 are coordinates rather than claims, and they are answerable only by the agent that made the change.
 Nothing about them moves.
-
-And where no description was authored, `open_pr`'s `body` argument works exactly as it does today.
-This adds a source; it does not remove one.
 
 ## Storage
 
@@ -84,10 +138,15 @@ Two things it must not be:
   nearly share a moment, which is exactly how the containment invariant gets leaked.
   → [08](../spec/08-planning.md#goal-criteria-beside-the-planners-acceptance)
 
+## `mission.md` is what actually changes
+
+If this lands, the line to amend is not in `07` but in the mission: _"everything between those two
+belongs to the harness"_ is no longer true, and should not be repaired by adding an exception to a
+list. The honest statement is that the engineer keeps the two ends **and the understanding**, and
+that a piece of work between them is kept deliberately where removing it would remove the
+understanding with it.
+
 ## Open
 
 - **A replan changes the parts.** A description authored against part 3 of the old plan has no owner
   under the new one. Drop it, or carry it and record the drift the way criteria drift is recorded?
-- **The operator who writes nothing.** Falling back to the agent's body is the honest default, but it
-  makes the feature skippable by doing nothing, which is how a gate becomes theatre. Worth deciding
-  whether the approval press should require one.
