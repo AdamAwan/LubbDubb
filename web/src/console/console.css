@@ -6383,3 +6383,169 @@ button.cn-grow {
     padding-right: 26px;
   }
 }
+
+/* The description an operator writes for one part's pull request.
+   → docs/spec/17-cockpit.md#the-description-a-reviewer-reads */
+.cn-desc > h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cn-desc-why {
+  margin: 0;
+  padding: 0 13px 11px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-desc > .cn-empty {
+  padding: 0 13px 11px;
+}
+.cn-desc-current {
+  padding: 0 13px 11px;
+}
+.cn-desc-text {
+  margin: 0;
+  padding: 0 0 0 10px;
+  border-left: 3px solid var(--cn-line);
+  font-size: 13px;
+  line-height: 1.55;
+  /* The operator typed paragraphs into a plain field, and the body ships what they
+     typed — so the blank line between two of them is theirs and is kept. */
+  white-space: pre-wrap;
+}
+.cn-desc-by {
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+/* The check's own block, drawn under the text it was taken of rather than beside
+   it: the marks are a reading of those words and read as a verdict on the panel
+   when they sit in the header. */
+.cn-desc-check {
+  margin-top: 11px;
+  padding: 10px 12px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel-2);
+}
+.cn-desc-check-hdr {
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  margin-bottom: 8px;
+}
+.cn-desc-marks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.cn-desc-ask {
+  font-size: 12.5px;
+  color: var(--cn-fg);
+  flex-grow: 1;
+}
+.cn-desc-form {
+  padding: 0 13px 11px;
+  display: grid;
+  gap: 10px;
+}
+/* The hints sit beside the field and never under it as four inputs: four boxes make
+   the form the task, and a question with nothing to say under it gets an answer
+   anyway. */
+.cn-desc-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .cn-desc-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cn-desc-cols > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.cn-desc-cols > label > span {
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-desc-write {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: 12.5px/1.6 var(--cn-ui);
+  color: var(--cn-fg);
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  padding: 10px 11px;
+}
+.cn-desc-hints {
+  border: 1px solid var(--cn-violet-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-violet-fill);
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.cn-desc-hints-hdr {
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-desc-hints ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.cn-desc-hints li {
+  font-size: 12.5px;
+  color: var(--cn-fg);
+}
+.cn-desc-hints-foot {
+  margin: auto 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-desc-refusal {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--cn-red-ink);
+}
+.cn-desc-presses {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  padding: 0 13px 13px;
+}
+.cn-desc-form .cn-desc-presses {
+  padding: 0;
+}
+/* The part's number and name in the panel heading: these stack one per part, and
+   three panels under one title are three an operator cannot tell apart. */
+.cn-desc-part {
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  padding: 2px 6px;
+}
+.cn-desc-title {
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

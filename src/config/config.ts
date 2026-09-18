@@ -71,6 +71,16 @@ export interface Config {
    */
   predictionAggregateMinGoals: number;
   goalCriteria: GoalCriteriaConfig;
+  /**
+   * Whether the operator writes a part's pull-request description themselves.
+   *
+   * Off, and every deployment is off until somebody turns it on, the agent writes
+   * the body exactly as it does today. On, the body is the operator's text and
+   * `open_pr` refuses a `body` argument — but it holds nothing up: a part nobody
+   * described opens its pull request with no body above the reference.
+   * → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+   */
+  manualDescriptions: boolean;
   selfUpdate: SelfUpdatePolicy;
   validation: ValidationPolicy;
   ejection: EjectionPolicy;
@@ -238,6 +248,7 @@ const DEFAULTS: Config = {
   prediction: { enabled: false },
   predictionAggregateMinGoals: 10,
   goalCriteria: { enabled: false },
+  manualDescriptions: false,
   selfUpdate: {
     enabled: true,
     remote: 'origin',

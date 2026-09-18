@@ -1,4 +1,5 @@
 import type {
+  PrDescriptionVersion,
   RemoteSheetView,
   AgentFilesPayload,
   AllowanceInsights,
@@ -332,6 +333,69 @@ const WITHHELD_PLAN = 'A plan is ready for this goal. It is withheld until you r
 /** `predictionAggregateMinGoals`' own default, so the demo's panel is read against the real bar. */
 const DEMO_PREDICTION_THRESHOLD = 10;
 
+const DEMO_OPERATOR = 'you';
+
+/** Minutes back from load, for the seeded rows below. The demo world has no clock of its own. */
+const ago = (mins: number): string => new Date(Date.now() - mins * 60_000).toISOString();
+
+/**
+ * Three parts in the three states the panel has, so the demo shows all of them at
+ * once: one described and checked, one described and not, and one nobody has touched.
+ *
+ * `schemas` carries a `contradicted` mark deliberately. It is the reading this whole
+ * feature exists to produce — a sentence the operator wrote that the diff does not
+ * support, caught before a reviewer spent an hour on it — and a demo whose check
+ * only ever comes back clean never shows what the check is for.
+ */
+const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] = [
+  [
+    'issue:390:part:schemas',
+    [
+      {
+        id: 'desc-demo-1',
+        originRef: 'issue:390:part:schemas',
+        version: 1,
+        supersedes: null,
+        text:
+          'Payload schemas are declared in four places today and they have already drifted apart once. This ' +
+          'moves every one of them into the jobs catalog, and the old paths re-export so nothing importing ' +
+          'them has to change.\n\nNothing here validates anything yet — that is the next part. If this is ' +
+          'wrong the blast radius is every job type at once, because there is no longer a second copy to ' +
+          'fall back on.',
+        author: DEMO_OPERATOR,
+        authoredAt: ago(240),
+        checkedAt: ago(236),
+        marks: {
+          'asked-for': 'matched',
+          undone: 'contradicted',
+          missing: 'matched',
+          reach: 'matched',
+        },
+      },
+    ],
+  ],
+  [
+    'issue:390:part:validate',
+    [
+      {
+        id: 'desc-demo-2',
+        originRef: 'issue:390:part:validate',
+        version: 1,
+        supersedes: null,
+        text:
+          'Four routes each parse the job payload their own way, so four of them can disagree with the ' +
+          'catalog. This makes the enqueue the one place a payload is checked, and deletes the parsers the ' +
+          'routes carried.\n\nAn enqueue that the catalog rejects now throws before the row is written, ' +
+          'which is the behaviour change a reviewer should look hardest at.',
+        author: DEMO_OPERATOR,
+        authoredAt: ago(20),
+        checkedAt: null,
+        marks: { 'asked-for': null, undone: null, missing: null, reach: null },
+      },
+    ],
+  ],
+];
+
 class DemoServer {
   private seed = buildDemoState();
   private state: AppState = this.seed.state;
@@ -357,6 +421,7 @@ class DemoServer {
   private deskBeats = 0;
   private seq = 1000;
   private readonly predictions = new DemoPredictions();
+  private readonly descriptions = new Map<string, PrDescriptionVersion[]>(DEMO_DESCRIPTIONS);
   /**
    * What the reveal hands back, per withheld plan: the approval ask's prose and the
    * caveats that carry the plan's risks and open questions verbatim.
@@ -435,6 +500,35 @@ class DemoServer {
 
   predictionReading(issueNumber: number): { prediction: GoalPrediction | null; reveal: GoalReveal | null } {
     return this.predictions.reading(issueNumber);
+  }
+
+  /**
+   * The descriptions a visitor writes, and the one this world ships with already
+   * written and already checked. It is seeded rather than empty because the panel's
+   * whole argument is visible only once a check has been reported on it — the
+   * contradicted mark is the reading this feature exists to produce, and a demo that
+   * only ever shows an empty box never shows it.
+   */
+  descriptionReading(originRef: string): { current: PrDescriptionVersion | null; versions: PrDescriptionVersion[] } {
+    const versions = this.descriptions.get(originRef) ?? [];
+    return { current: versions[versions.length - 1] ?? null, versions };
+  }
+
+  writeDescription(originRef: string, text: string): { ok: true; version: PrDescriptionVersion } {
+    const held = this.descriptions.get(originRef) ?? [];
+    const version: PrDescriptionVersion = {
+      id: this.id('desc'),
+      originRef,
+      version: held.length + 1,
+      supersedes: held[held.length - 1]?.id ?? null,
+      text,
+      author: DEMO_OPERATOR,
+      authoredAt: new Date().toISOString(),
+      checkedAt: null,
+      marks: { 'asked-for': null, undone: null, missing: null, reach: null },
+    };
+    this.descriptions.set(originRef, [...held, version]);
+    return { ok: true, version };
   }
 
   markPrediction(
@@ -4722,6 +4816,10 @@ export const demoApi = {
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
   writeGoalCriteria: (): Promise<never> =>
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
+  getPrDescription: (number: number, slug: string) =>
+    Promise.resolve(getServer().descriptionReading(`issue:${number}:part:${slug}`)),
+  writePrDescription: (number: number, slug: string, body: { text: string }) =>
+    Promise.resolve().then(() => getServer().writeDescription(`issue:${number}:part:${slug}`, body.text)),
   getTickets: (query: {
     watch: string;
     tracking: string;

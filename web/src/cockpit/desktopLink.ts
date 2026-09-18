@@ -25,6 +25,10 @@ export function checkPrompt(issueNumber: number, letter: string): string {
   return `/lubbdubb ${issueNumber}:${letter}`;
 }
 
+export function descriptionPrompt(issueNumber: number, slug: string): string {
+  return `/lubbdubb describe ${issueNumber}:${slug}`;
+}
+
 export function questionPrompt(): string {
   return '/lubbdubb ';
 }

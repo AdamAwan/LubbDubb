@@ -21,6 +21,7 @@ import { checkBriefing } from '../validation/fleet.js';
 import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
+import { descriptionCheck, descriptionRead } from './desktopDescription.js';
 import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
 import {
   agentRead,
@@ -673,6 +674,8 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   plan_amend: planAmend,
   ...DESKTOP_SEQUENCE_TOOLS,
   local_run: localRun,
+  description_read: descriptionRead,
+  description_check: descriptionCheck,
 };
 
 export function buildDesktopTools(deps: DesktopToolDeps, session: DesktopSession): McpTool[] {

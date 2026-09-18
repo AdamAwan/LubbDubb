@@ -199,6 +199,8 @@ export const DESKTOP_TOOL_NAMES = [
   'sequence_read',
   'sequence_amend',
   'local_run',
+  'description_read',
+  'description_check',
 ] as const;
 
 export type DesktopToolName = (typeof DESKTOP_TOOL_NAMES)[number];

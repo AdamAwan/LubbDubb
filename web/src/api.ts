@@ -19,6 +19,7 @@ import type {
   Plan,
   CriteriaStanding,
   GoalCriteriaVersion,
+  PrDescriptionVersion,
   GoalPrediction,
   GoalReveal,
   PredictionMark,
@@ -105,6 +106,12 @@ export type CriteriaVersionReading = GoalCriteriaVersion & { standing: CriteriaS
 export interface GoalCriteriaReading {
   current: CriteriaVersionReading | null;
   versions: CriteriaVersionReading[];
+}
+
+/** A part's whole description chain, oldest first, and the version that stands now. */
+export interface PrDescriptionReading {
+  current: PrDescriptionVersion | null;
+  versions: PrDescriptionVersion[];
 }
 
 export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
@@ -241,6 +248,18 @@ const realApi = {
     authFetch(`/api/goals/${number}/criteria`).then((r) => json<GoalCriteriaReading>(r)),
   writeGoalCriteria: (number: number, body: { text: string; reason?: string }) =>
     post<{ ok: true; version: GoalCriteriaVersion; standing: CriteriaStanding }>(`/api/goals/${number}/criteria`, body),
+  // A part's pull-request description. Both routes are mounted only where
+  // `manualDescriptions` is on, so a rejected read is how the panel learns there is
+  // nothing to draw — the same shape the criteria card uses one subsystem over.
+  getPrDescription: (number: number, slug: string) =>
+    authFetch(`/api/goals/${number}/parts/${encodeURIComponent(slug)}/description`).then((r) =>
+      json<PrDescriptionReading>(r),
+    ),
+  writePrDescription: (number: number, slug: string, body: { text: string }) =>
+    post<{ ok: true; version: PrDescriptionVersion }>(
+      `/api/goals/${number}/parts/${encodeURIComponent(slug)}/description`,
+      body,
+    ),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>

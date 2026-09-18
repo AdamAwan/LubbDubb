@@ -65,6 +65,7 @@ import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { GoalCriteriaStore } from './goalCriteria.js';
 import { PredictionStore, PREDICTION_COLUMNS } from './predictions.js';
+import { PrDescriptionStore } from './prDescriptions.js';
 import type { Job, CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
@@ -119,6 +120,7 @@ export class Store {
   readonly tickets: TicketStore;
   readonly sequences: SequenceStore;
   readonly goalCriteria: GoalCriteriaStore;
+  readonly prDescriptions: PrDescriptionStore;
   readonly upgrades: UpgradeStore;
   readonly pets: PetStore;
   readonly pool: PoolStore;
@@ -234,6 +236,7 @@ export class Store {
     this.tickets = new TicketStore(ctx);
     this.sequences = new SequenceStore(ctx);
     this.goalCriteria = new GoalCriteriaStore(ctx);
+    this.prDescriptions = new PrDescriptionStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
     this.pets = new PetStore(ctx);
     this.ctx = ctx;

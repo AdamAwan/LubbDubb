@@ -2208,6 +2208,31 @@ CREATE TABLE IF NOT EXISTS goal_criteria_drift (
   UNIQUE (criteria_id)
 );
 
+-- One part's pull-request description, as the operator wrote it, behind
+-- manualDescriptions. Append-only for goal_criteria's reason: what shipped on a
+-- pull request stays readable after the operator has rewritten it. origin_ref is
+-- the *part's* origin, because one part is one pull request.
+--
+-- The four mark columns are the desktop session's reading written onto the version
+-- it read, null where it did not reach that question. They are columns rather than
+-- a table of their own because a check answers a version once: a second check is a
+-- second read of the same text, and the row it lands on is the one it read.
+CREATE TABLE IF NOT EXISTS pr_descriptions (
+  id                TEXT PRIMARY KEY,
+  origin_ref        TEXT NOT NULL,
+  version           INTEGER NOT NULL,
+  supersedes        TEXT,
+  text              TEXT NOT NULL,
+  author            TEXT,
+  authored_at       TEXT NOT NULL,
+  checked_at        TEXT,
+  mark_asked_for    TEXT,
+  mark_undone       TEXT,
+  mark_missing      TEXT,
+  mark_reach        TEXT,
+  UNIQUE (origin_ref, version)
+);
+
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
@@ -2249,4 +2274,5 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_sugges
 -- obstacle_id, which is the leading column of the UNIQUE above.
 CREATE INDEX IF NOT EXISTS idx_goal_criteria_origin ON goal_criteria(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_goal_criteria_drift_origin ON goal_criteria_drift(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_pr_descriptions_origin ON pr_descriptions(origin_ref);
 `;

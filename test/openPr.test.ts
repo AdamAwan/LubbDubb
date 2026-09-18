@@ -69,6 +69,7 @@ test('a pickup origin opens one PR onto the default branch, with no stack positi
     position: 1,
     total: 1,
     criteria: [],
+    partRef: null,
   });
 });
 
@@ -92,6 +93,7 @@ test('a part origin stacks on the dependency it declares', () => {
     position: 2,
     total: 2,
     criteria: ['The cursor is stored per source.', 'Resume reads it at boot.'],
+    partRef: 'issue:182:part:cursor',
   });
 });
 

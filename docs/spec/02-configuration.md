@@ -160,6 +160,17 @@ worktrees, so `slots()` cannot see one and the pool's own slot names (`slot-<n>`
 No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
 from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
 
+### `manualDescriptions`
+
+Off by default. On, the operator writes a part's pull-request description themselves and `open_pr`
+refuses a `body` argument; off, the agent writes it exactly as it always has. It holds nothing up
+either way — a part nobody described opens its pull request with no body above the reference.
+→ [07](07-pull-requests.md#the-operator-writes-the-description)
+
+Its routes are mounted only where it is on, which is how the cockpit learns: the panel draws nothing
+where the read does not answer, so the presence of the data decides and never a flag on the payload.
+The same shape `goalCriteria.enabled` uses.
+
 ## The project layer
 
 `lubbdubb.project.json`, at the root of the repository the harness works on, is the layer a **team**

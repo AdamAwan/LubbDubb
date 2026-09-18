@@ -2217,3 +2217,60 @@ export interface GoalCriteriaVersion {
   reason: string | null;
   authoredAt: string;
 }
+
+/**
+ * The four things a reviewer has to be able to answer, as the questions the
+ * description field puts under itself. They are the same four
+ * [07](../docs/spec/07-pull-requests.md) already takes off the agent and turns into
+ * coordinates — asked here of the operator, in prose, about the same change.
+ *
+ * Hints rather than fields: nothing requires an answer to any of them. What they buy
+ * is that an operator who cannot answer one notices before a reviewer does.
+ */
+export type DescriptionQuestion = 'asked-for' | 'undone' | 'missing' | 'reach';
+
+/**
+ * How one question stood when the description was checked against the diff.
+ *
+ * Four-valued where {@link PredictionMark} is three, and the fourth is the whole
+ * reason this is not that type. A prediction can only fail by being wrong about
+ * something; a description can fail by being wrong about something **or** by
+ * asserting something the diff contradicts, and those are not the same defect. A
+ * question nobody answered leaves a reviewer to find out for themselves;
+ * `contradicted` ships a false sentence under a person's name, which is worse than
+ * having said nothing. Folded together, the reading that matters most disappears
+ * into the one that matters least.
+ */
+export type DescriptionMark = 'matched' | 'missed' | 'contradicted' | 'not-applicable';
+
+/**
+ * A question's mark, or null for one the check did not reach. Null is a fifth value
+ * and never a miss, for {@link PredictionPlanMarks}' reason: the aggregate counts
+ * marks, and folding an unreached question into `missed` files a question nobody
+ * asked as a description that failed.
+ */
+export type DescriptionMarks = Readonly<Record<DescriptionQuestion, DescriptionMark | null>>;
+
+/**
+ * One version of a part's pull-request description, as the operator wrote it.
+ *
+ * Append-only the way `goal_criteria` is: an edit is a new version pointing at the
+ * one it supersedes, so what actually shipped on a pull request stays readable after
+ * the operator has rewritten it. `originRef` is the **part's** origin —
+ * `issue:<n>:part:<slug>` — because one part is one pull request and a goal is not.
+ *
+ * `checkedAt` and `marks` are the desktop session's reading, written onto the
+ * version it read. A version with `checkedAt` null was saved without a check, which
+ * is an ordinary outcome and not a failure: the check is offered, never required.
+ */
+export interface PrDescriptionVersion {
+  id: string;
+  originRef: string;
+  version: number;
+  supersedes: string | null;
+  text: string;
+  author: string | null;
+  authoredAt: string;
+  checkedAt: string | null;
+  marks: DescriptionMarks;
+}

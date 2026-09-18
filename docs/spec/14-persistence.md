@@ -1432,6 +1432,23 @@ itself is sealed by the reveal because one written after the plan is not a predi
 judgement about a record that is already fixed, and nothing is contaminated by the operator correcting
 it.
 
+### A part's description is append-only
+
+`pr_descriptions` is one row per version, keyed on the **part's** origin ref because one part is one
+pull request and a goal is not. An edit is a new version pointing at the one it supersedes, so what
+actually shipped on a pull request stays readable after the operator has rewritten it — the reason
+`goal_criteria` is shaped this way, one subsystem over.
+
+The four mark columns are columns on the version rather than a table of their own: a check answers one
+version once, and the row it lands on is the row it read. The only `UPDATE` in `PrDescriptionStore`
+writes them, addressed by id — never by "the current one", because the operator can edit while their
+own Claude Code is still reading.
+
+It is **not a `WorldEvent`**, the same trap as an arrival, a sheet reading and criteria drift:
+`deliveryHold` expires a standing delivery verdict on any world event matching the goal's issue ref,
+so a description written as one would un-park the goal it describes.
+→ [07](07-pull-requests.md#the-operator-writes-the-description)
+
 ### Goal criteria are append-only
 
 `goal_criteria` is a version chain and **no method writes an `UPDATE`**. An edit appends a row with an
