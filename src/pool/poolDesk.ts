@@ -177,12 +177,7 @@ export class PoolDesk {
   private land(document: PoolClockDocument, staleBefore: string): void {
     try {
       if (document.fleetId === this.deps.fleetId) {
-        this.deps.store.pool.recordFleetReading({
-          fleetId: document.fleetId,
-          project: document.project,
-          digestAt: null,
-          ahead: false,
-        });
+        this.deps.store.pool.recordOwnFleetReading(document.fleetId, document.project);
         return;
       }
       if (document.publishedAt >= staleBefore) {
