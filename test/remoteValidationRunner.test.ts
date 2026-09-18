@@ -117,6 +117,7 @@ function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
   const store = new Store(file);
   const desk = new RemoteValidationDesk({
     sink: commentSink(),
+    validationRoot: dir,
     store,
     environments,
     observer: new FakeEnvironmentObserver(),

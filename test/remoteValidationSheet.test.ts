@@ -23,6 +23,12 @@ import type {
 } from '../src/types.js';
 import { PULSE_PIPELINE, type PulseId } from '../src/pulseDesks.js';
 
+/**
+ * These benches post no capture, so nothing ever reads it — but the desk takes a root rather than
+ * defaulting to one, so that a bench which *does* post cannot quietly read the checkout.
+ */
+const NO_CAPTURES = join(tmpdir(), 'lubbdubb-no-captures');
+
 // → docs/spec/36-remote-validation.md
 
 const PROBE_MS = 60_000;
@@ -109,6 +115,7 @@ function bench(
   const env = opts.observer ?? observer();
   const desk = new RemoteValidationDesk({
     sink: commentSink(),
+    validationRoot: NO_CAPTURES,
     store,
     environments,
     observer: env,
@@ -428,6 +435,7 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
   try {
     const desk = new RemoteValidationDesk({
       sink: commentSink(),
+      validationRoot: NO_CAPTURES,
       store,
       environments: [ACCEPTANCE],
       observer: observer(),
@@ -649,6 +657,7 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
       );
       const desk = new RemoteValidationDesk({
         sink: commentSink(),
+        validationRoot: NO_CAPTURES,
         store,
         environments: [ACCEPTANCE],
         observer: observer(),

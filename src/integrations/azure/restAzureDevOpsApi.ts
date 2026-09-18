@@ -13,6 +13,7 @@ import type {
   AzThread,
   AzTimelineRecord,
   AzWorkItem,
+  AzAttachmentRef,
   AzWorkItemCommentRef,
   AzWorkItemUpdate,
   AzureDevOpsApi,
@@ -640,6 +641,50 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       headers: { 'Content-Type': 'application/json-patch+json' },
       body: JSON.stringify([{ op: 'add', path: '/fields/System.State', value: state }]),
     });
+  }
+
+  /**
+   * The bytes, into the **project's** attachment store. It is the one request in this client that
+   * sends something other than JSON, so it names its own `Content-Type`: `request` defaults a body to
+   * `application/json`, and an octet-stream posted as JSON is rejected with a parse error that says
+   * nothing about what was wrong.
+   *
+   * `fileName` is a query parameter and the tracker's own name for the file — never a path. What the
+   * harness calls the file on disk is the harness's business.
+   */
+  async createWorkItemAttachment(fileName: string, bytes: Buffer): Promise<AzAttachmentRef> {
+    const data = await this.request<{ id?: string; url?: string }>(
+      this.withApiVersion(`${this.projectUrl}/_apis/wit/attachments`, { fileName }),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: new Uint8Array(bytes),
+      },
+    );
+    if (typeof data.url !== 'string' || data.url === '')
+      throw new Error(`Azure DevOps accepted the attachment "${fileName}" but named no URL for it`);
+    return { id: data.id ?? '', url: data.url };
+  }
+
+  /**
+   * **Not an optional tidy.** Azure DevOps prunes attachments no work item references, so an image
+   * embedded by URL alone is a picture that works today and is a broken image in the comment later —
+   * the quietest possible failure, because the comment still reads correctly.
+   *
+   * An attachment already held is not an error: the same screen re-linked is the state we wanted.
+   */
+  async linkWorkItemAttachment(id: number, url: string, comment: string): Promise<void> {
+    try {
+      await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json-patch+json' },
+        body: JSON.stringify([
+          { op: 'add', path: '/relations/-', value: { rel: 'AttachedFile', url, attributes: { comment } } },
+        ]),
+      });
+    } catch (err) {
+      if (!isRelationAlreadyExists((err as Error).message)) throw err;
+    }
   }
 
   async createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef> {

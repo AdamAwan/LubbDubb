@@ -1451,17 +1451,28 @@ pass below assembly, and three things about it are rules this codebase already h
   `captured` row is waiting on a person; a comment that read as a result would be a result derived
   rather than declared ([20](20-validation.md#states)).
 
-**Why a link and not an upload.** The alternative was a new capability on `ActionSink` — upload the
-image, so the ticket carries the bytes. It is the better thing where it can be done, and it cannot be
-done here honestly: GitHub has no public API for attaching an image to an issue comment, so the
-capability would be real on Azure DevOps, unimplementable on GitHub and green in the scripted fake —
-one provider's deployments silently getting nothing, which is the shape this design refuses everywhere
-else. Committing operator screenshots into the product's own repository to manufacture a GitHub URL is
-not a side effect a validation screenshot is entitled to.
+**The image where the provider can hold it, a link where it cannot.** These are not two designs and a
+compromise between them; they are one design and a provider capability that is genuinely uneven
+([15](15-integrations.md#uploading-an-image-to-a-ticket)).
 
-So the comment carries the link, and **the prose is what it really carries**: which check the screen
-belongs to, which environment took it, which run, and what the file is called. Two limits are stated
-here rather than papered over, because both are real:
+- **Azure DevOps holds the image.** The desk uploads the bytes through `IssueImageSink`, and the
+  comment embeds the URL the tracker gave back for its own copy. The screen is _in_ the discussion,
+  stored with the work item, kept as long as the work item is and gated by the same project access.
+  Nobody has to reach the harness at all, which is the whole point of posting to a ticket.
+- **GitHub cannot**, and the spec says so rather than leaving it to be discovered: there is no public
+  API for attaching an image to an issue comment, and committing operator screenshots into the
+  product's own repository to manufacture a URL is not a side effect a validation screenshot is
+  entitled to. There the comment carries the prose and a link.
+
+**A failed upload must never cost the comment.** The posting is the only thing that tells anybody a
+screen is waiting, so an upload that throws is recorded through `errors.record` and falls back to the
+link — never rethrown, which would leave the row unposted and retry the same failing upload every pulse
+for ever. A worse answer, not no answer. The same holds for a provider that simply has no such API:
+`canAttachIssueImage()` answering false is a fact, not an incident, and nothing is recorded.
+
+**Where there is no upload, the prose is what the comment really carries**: which check the screen
+belongs to, which environment took it, which run, and what the file is called. Two limits on the link
+are stated here rather than papered over, because both are real:
 
 - **The harness does not know its own address.** The only URL it can name for itself is a loopback, and
   a loopback in a ticket is a dead end dressed as a link. `remoteValidation.captureLinkBase` is where an
@@ -1476,7 +1487,8 @@ here rather than papered over, because both are real:
   stable across restarts, which changes the posture of all four signed routes and is its own change.
 
 The URL is a bearer capability for one image, which is why its subject is this one `(run, row)` and
-nothing wider.
+nothing wider — and why it is **not minted at all** where the image itself went up: a reader looking at
+the screen has no use for a token that expires.
 
 ### The browser the run drives
 

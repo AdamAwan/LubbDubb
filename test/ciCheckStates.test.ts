@@ -91,6 +91,8 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
     async listPullLabels() {
       return [];
     },
+    createWorkItemAttachment: unused('createWorkItemAttachment'),
+    linkWorkItemAttachment: unused('linkWorkItemAttachment'),
     listOpenWorkItems: unused('listOpenWorkItems'),
     listWorkItemsChangedSince: unused('listWorkItemsChangedSince'),
     getWorkItems: unused('getWorkItems'),

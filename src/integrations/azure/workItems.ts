@@ -4,6 +4,8 @@ import type {
   IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
+  IssueImageInput,
+  IssueImageResult,
   IssueLabelInput,
   SendResult,
   WorkItemAreaPathInput,
@@ -18,6 +20,7 @@ import type {
   Integration,
   IssueCloseCapable,
   IssueCommentCapable,
+  IssueImageCapable,
   IssueCreateCapable,
   IssueLabelCapable,
   RefResolvable,
@@ -60,6 +63,7 @@ export class AzureDevOpsWorkItemsIntegration
     IssueLabelCapable,
     IssueCreateCapable,
     IssueCommentCapable,
+    IssueImageCapable,
     TicketHistoryCapable
 {
   readonly id = 'issues:azure';
@@ -225,6 +229,23 @@ export class AzureDevOpsWorkItemsIntegration
   async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
     await this.opts.api.linkWorkItemToPull(input.number, input.prNumber);
     return { ok: true, ref: `#${input.number} -> PR ${input.prNumber}` };
+  }
+
+  /**
+   * The screen itself, into the work item's own attachment store — so it is visible **in** the
+   * comment rather than behind a link, it lives as long as the work item does, and it is gated by the
+   * same project access the ticket is.
+   *
+   * Two calls and both are required. The upload alone yields a URL that renders today and is a broken
+   * image later, because Azure DevOps prunes attachments no work item references; the relation is
+   * what holds it. A relation that fails is **not** swallowed — the caller is told, and its fallback
+   * is a comment carrying a link, which is a worse answer rather than no answer.
+   * → docs/spec/15-integrations.md#uploading-an-image-to-a-ticket
+   */
+  async attachIssueImage(input: IssueImageInput): Promise<IssueImageResult> {
+    const attachment = await this.opts.api.createWorkItemAttachment(input.fileName, input.bytes);
+    await this.opts.api.linkWorkItemAttachment(input.number, attachment.url, input.fileName);
+    return { ok: true, url: attachment.url };
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

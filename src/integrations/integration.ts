@@ -8,6 +8,8 @@ import type {
   IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
+  IssueImageInput,
+  IssueImageResult,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -226,6 +228,14 @@ export interface IssueCreateCapable {
 
 export function isIssueCreateCapable(x: Integration): x is Integration & IssueCreateCapable {
   return typeof (x as Partial<IssueCreateCapable>).createIssue === 'function';
+}
+
+export interface IssueImageCapable {
+  attachIssueImage(input: IssueImageInput): Promise<IssueImageResult>;
+}
+
+export function isIssueImageCapable(x: Integration): x is Integration & IssueImageCapable {
+  return typeof (x as Partial<IssueImageCapable>).attachIssueImage === 'function';
 }
 
 export interface IssueCommentCapable {
