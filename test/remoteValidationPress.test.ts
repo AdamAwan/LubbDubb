@@ -23,6 +23,12 @@ import { join } from 'node:path';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { RemoteRowOutcome, StateQueryInput, ValidationCheckInput } from '../src/types.js';
 
+/**
+ * These benches post no capture, so nothing ever reads it — but the desk takes a root rather than
+ * defaulting to one, so that a bench which *does* post cannot quietly read the checkout.
+ */
+const NO_CAPTURES = join(tmpdir(), 'lubbdubb-no-captures');
+
 /*
  * The press, the pin and the lock. → docs/spec/36-remote-validation.md#the-press
  *
@@ -100,6 +106,7 @@ function bench(
   const tenants = new FakeTenantKeeper();
   const desk = new RemoteValidationDesk({
     sink: commentSink(),
+    validationRoot: NO_CAPTURES,
     store,
     environments,
     observer: new FakeEnvironmentObserver(),

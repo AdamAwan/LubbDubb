@@ -81,3 +81,22 @@ test('an attribute-breaking link and unknown markup cannot escape their context'
   assert.match(html, /<p>&lt;img src=x onerror=y&gt;<\/p>/);
   assert.doesNotMatch(html, /<script|<img/);
 });
+
+test('a markdown image becomes a real img, while a raw img tag stays shut out', () => {
+  // The two routes are deliberately different. `![alt](url)` is the body's own format and is rebuilt
+  // from its parsed parts; a literal tag is somebody's markup and is escaped, which is what keeps the
+  // image case from widening the passthrough for everything shaped like it.
+  const html = markdownToHtml('![The screen captured on acceptance](https://dev.azure.test/att/1?fileName=a.png)');
+  assert.match(
+    html,
+    /<img src="https:\/\/dev.azure.test\/att\/1\?fileName=a.png" alt="The screen captured on acceptance">/,
+  );
+  assert.doesNotMatch(markdownToHtml('<img src="x.png" alt="y">'), /<img/, 'a raw tag is still not markup here');
+});
+
+test('an image cannot break out of its own attributes', () => {
+  const html = markdownToHtml('![a" onerror="alert(1)](https://example.com/"onload="alert(1))');
+  // The words survive as text; what must not survive is a quote that ends the attribute they sit in.
+  assert.doesNotMatch(html, /onerror="|onload="/, 'both halves are attribute-escaped, the link rule exactly');
+  assert.match(html, /alt="a&quot; onerror=&quot;alert\(1\)"/);
+});

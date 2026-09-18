@@ -39,6 +39,15 @@ export interface AzureDevOpsApi {
 
   setWorkItemState(id: number, state: string): Promise<void>;
 
+  /**
+   * Upload one file to the project's attachment store and get back the URL a work item's HTML fields
+   * may embed. It does **not** attach it to anything: an attachment nothing references is pruned, so
+   * `linkWorkItemAttachment` is the second half and not an optional tidy.
+   */
+  createWorkItemAttachment(fileName: string, bytes: Buffer): Promise<AzAttachmentRef>;
+  /** Hold an uploaded attachment against a work item, so it outlives the pruning of unreferenced ones. */
+  linkWorkItemAttachment(id: number, url: string, comment: string): Promise<void>;
+
   createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef>;
   updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef>;
 
@@ -64,6 +73,11 @@ export interface AzureDevOpsApi {
 
 export interface AzWorkItemCommentRef {
   id: number;
+}
+
+export interface AzAttachmentRef {
+  id: string;
+  url: string;
 }
 
 export interface AzPull {

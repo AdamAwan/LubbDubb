@@ -370,6 +370,8 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     deleteBranch: unused,
     setWorkItemState: unused,
     createWorkItemComment: unused,
+    createWorkItemAttachment: unused,
+    linkWorkItemAttachment: unused,
     updateWorkItemComment: unused,
     createWorkItem: unused,
     relateWorkItem: unused,

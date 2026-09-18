@@ -5,14 +5,16 @@ import { sheetableArrivals, watchWindowMs } from '../environments/watchWindow.js
 import { watchCheckVerdict } from '../environments/watchVerdict.js';
 import type { WatchResult } from '../environments/watchResult.js';
 import { issueOriginNumber } from '../issueOrigins.js';
-import type { ActionSink } from '../sink/actionSink.js';
+import { readFile } from 'node:fs/promises';
+import type { ActionSink, IssueImageSink } from '../sink/actionSink.js';
+import { validationResourcePath } from '../validation/resources.js';
 import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
 import { checkSetReleased } from '../validation/planApproval.js';
 import { sweptScripts } from '../validation/steps.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
-import { captureComment, postableCaptures, type CaptureLink } from './capturePost.js';
+import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
 import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
@@ -34,8 +36,17 @@ interface RemoteValidationDeskDeps {
    * delivery. → docs/spec/36-remote-validation.md#the-one-off-script
    */
   scriptGraceMs: number;
-  /** How a captured screen is put in front of somebody who never opens the cockpit. */
-  sink: ActionSink;
+  /**
+   * How a captured screen is put in front of somebody who never opens the cockpit. The image half is
+   * `Partial` because it is a capability only some providers have — Azure DevOps has an attachment
+   * API and GitHub has none — and a caller has a working answer either way.
+   * → docs/spec/15-integrations.md#uploading-an-image-to-a-ticket
+   */
+  sink: ActionSink & Partial<IssueImageSink>;
+  /** Where a goal's validation directory is, which is where a capture outlives the run that took it. */
+  validationRoot: string;
+  /** How a kept capture is read back off disk. Injected so a test lays no image down. */
+  readCapture?: (goalRef: string, name: string) => Promise<Buffer>;
   /**
    * How a posted capture's link is built, installed by `buildApp` because minting the capability
    * needs the server's key. Absent — or answering null — the comment still goes up, carrying the
@@ -59,9 +70,13 @@ export class RemoteValidationDesk {
 
   private captureLink: CaptureLink | null;
 
+  private readonly readCapture: (goalRef: string, name: string) => Promise<Buffer>;
+
   constructor(private readonly deps: RemoteValidationDeskDeps) {
     this.now = deps.now ?? (() => Date.now());
     this.captureLink = deps.captureLink ?? null;
+    this.readCapture =
+      deps.readCapture ?? ((goalRef, name) => readFile(validationResourcePath(deps.validationRoot, goalRef, name)));
   }
 
   /**
@@ -118,10 +133,17 @@ export class RemoteValidationDesk {
     for (const capture of postable) {
       const number = issueOriginNumber('root', capture.goalRef);
       if (number === null) continue;
+      const attached = await this.attach(number, capture);
       try {
         await this.deps.sink.upsertIssueComment({
           number,
-          body: captureComment({ ...capture, url: this.captureLink?.(capture.runId, capture.rowId) ?? null }),
+          body: captureComment({
+            ...capture,
+            attached,
+            // The link is the fallback and is not minted where the image itself went up: a reader
+            // looking at the screen has no use for a URL that stops verifying at the next restart.
+            url: attached === null ? (this.captureLink?.(capture.runId, capture.rowId) ?? null) : null,
+          }),
           commentRef: null,
         });
       } catch (err) {
@@ -134,6 +156,36 @@ export class RemoteValidationDesk {
         continue;
       }
       store.remoteValidation.markCapturePosted(capture);
+    }
+  }
+
+  /**
+   * The screen itself, into the tracker's own store, where the provider has somewhere to put it.
+   * Null is *post the prose and a link instead*, and it is the answer in three cases that are not the
+   * same but want the same thing: no provider can hold an image, the file could not be read, or the
+   * upload failed.
+   *
+   * **A failure here must never cost the comment.** The posting is the only thing that tells anybody a
+   * screen is waiting, so an upload that throws is recorded and falls back — never rethrown into the
+   * caller, where it would leave the row unposted and retry the same failing upload every pulse for
+   * ever. The comment that follows is a worse answer, not no answer.
+   * → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+   */
+  private async attach(number: number, capture: PostableCapture): Promise<string | null> {
+    const { sink, errors } = this.deps;
+    if (sink.canAttachIssueImage?.() !== true || sink.attachIssueImage === undefined) return null;
+    try {
+      const bytes = await this.readCapture(capture.goalRef, capture.capture);
+      const held = await sink.attachIssueImage({ number, fileName: capture.capture, bytes });
+      return held.ok ? held.url : null;
+    } catch (err) {
+      errors?.record({
+        source: 'cycle',
+        message:
+          `attaching the screen captured for ${capture.rowId} on ${capture.environment} to ` +
+          `${capture.goalRef} failed: ${(err as Error).message}. The comment still goes up, carrying a link.`,
+      });
+      return null;
     }
   }
 

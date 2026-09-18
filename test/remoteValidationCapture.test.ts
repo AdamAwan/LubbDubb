@@ -18,7 +18,7 @@ import { remoteValidationRunDir } from '../src/remoteValidation/origin.js';
 import { captureComment, postableCaptures } from '../src/remoteValidation/capturePost.js';
 import { commentSink } from './support/commentSink.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { IssueCommentInput } from '../src/sink/actionSink.js';
+import type { IssueCommentInput, IssueImageInput, IssueImageResult } from '../src/sink/actionSink.js';
 import type { RemoteReading, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*
@@ -81,18 +81,33 @@ interface Bench {
   dir: string;
   runId: string;
   comments: IssueCommentInput[];
+  /** Every image the provider was asked to hold, as the desk handed it over. */
+  attached: Array<{ number: number; fileName: string; bytes: number }>;
 }
 
-function bench(opts: { refuses?: string } = {}): Bench {
+function bench(opts: { refuses?: string; attaches?: boolean | string } = {}): Bench {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-capture-'));
-  const recorder = commentSink();
-  const sink =
-    opts.refuses === undefined
-      ? recorder
+  const attached: Array<{ number: number; fileName: string; bytes: number }> = [];
+  // `attaches` is three-valued on purpose, because the desk's three cases are: a provider with no
+  // attachment API at all (undefined), one that holds the image (true), and one that fails while
+  // trying (a message). The third is the one worth a test — a comment must still go up.
+  const image =
+    opts.attaches === undefined
+      ? {}
       : {
-          ...recorder,
-          upsertIssueComment: (): Promise<never> => Promise.reject(new Error(opts.refuses)),
+          canAttachIssueImage: () => true,
+          attachIssueImage: async (input: IssueImageInput): Promise<IssueImageResult> => {
+            if (typeof opts.attaches === 'string') throw new Error(opts.attaches);
+            attached.push({ number: input.number, fileName: input.fileName, bytes: input.bytes.length });
+            return { ok: true, url: `https://ado.test/_apis/wit/attachments/att-1?fileName=${input.fileName}` };
+          },
         };
+  const sink = commentSink({
+    ...image,
+    ...(opts.refuses === undefined
+      ? {}
+      : { upsertIssueComment: (): Promise<never> => Promise.reject(new Error(opts.refuses)) }),
+  });
   const system = buildSystem(
     loadConfig({
       selfUpdate: { enabled: false } as never,
@@ -147,7 +162,7 @@ function bench(opts: { refuses?: string } = {}): Bench {
   const artefacts = join(remoteValidationRunDir(config.validationRoot, GOAL, run.id), 'artefacts');
   mkdirSync(artefacts, { recursive: true });
   writeFileSync(join(artefacts, 'confirmation.png'), PIXEL);
-  return { system, dir, runId: run.id, comments: recorder.comments };
+  return { system, dir, runId: run.id, comments: sink.comments, attached };
 }
 
 function report(dir: string, rows: unknown[]): string {
@@ -242,7 +257,7 @@ test('a captured screen is posted to the goal’s ticket once, and never a secon
   const posted = b.comments[0];
   assert.equal(posted?.number, 12);
   assert.equal(posted?.commentRef, null);
-  assert.match(posted?.body ?? '', /A screen was captured on `acceptance`/);
+  assert.match(posted?.body ?? '', /A screen was captured on acceptance/);
   assert.match(posted?.body ?? '', /confirmation screen reads legibly/, 'it names the check, not just the row id');
   assert.match(posted?.body ?? '', /a person judges that/, 'and states that nothing here judges the screen');
 
@@ -281,6 +296,68 @@ test('a posting the tracker refused is not recorded, so the next pulse is the re
       .join('\n'),
     /posting the screen captured for check:confirmation-reads/,
     'and the failure is recorded rather than swallowed',
+  );
+  close(b);
+});
+
+// ---------------------------------------------- and, where the provider can hold it, the image itself
+
+test('where the provider can hold an image the comment carries the screen, not a link', async () => {
+  const b = bench({ attaches: true });
+  await settle(b);
+  await b.system.remoteValidation.run();
+
+  assert.equal(b.attached.length, 1, 'the bytes went to the tracker, not a URL pointing back at us');
+  assert.equal(b.attached[0]?.number, 12);
+  assert.match(b.attached[0]?.fileName ?? '', /^capture-/, 'named as the harness kept it');
+  assert.equal(b.attached[0]?.bytes, PIXEL.length, 'and it is the file, not a path to it');
+
+  const body = b.comments[0]?.body ?? '';
+  assert.match(body, /!\[The screen captured on acceptance for The confirmation screen reads legibly at 1280\]\(/);
+  assert.match(body, /ado\.test\/_apis\/wit\/attachments/, 'embedded from the tracker’s own copy');
+  assert.doesNotMatch(body, /Open the screen/, 'a reader looking at the screen has no use for a link that expires');
+  assert.match(body, /a person judges that/, 'and it still says nothing here judges it');
+  close(b);
+});
+
+test('an image that could not be uploaded still gets a comment, carrying the link instead', async () => {
+  const b = bench({ attaches: 'the attachment store refused it' });
+  await settle(b);
+  await b.system.remoteValidation.run();
+
+  // The posting is the only thing that tells anybody a screen is waiting. An upload that throws must
+  // never cost it, or the row goes unposted and retries the same failing upload every pulse for ever.
+  assert.equal(b.comments.length, 1, 'a worse answer, not no answer');
+  assert.match(b.comments[0]?.body ?? '', /held with this goal on the harness as `capture-/);
+  assert.doesNotMatch(b.comments[0]?.body ?? '', /!\[/, 'and it embeds no image it does not have');
+  assert.match(
+    b.system.store.errors
+      .listErrors(10)
+      .map((e) => e.message)
+      .join('\n'),
+    /attaching the screen captured for check:confirmation-reads .* refused it\. The comment still goes up/s,
+    'the failure is recorded rather than swallowed',
+  );
+  assert.deepEqual(
+    b.system.store.remoteValidation.listPostedCaptures().map((r) => r.rowId),
+    [ROW],
+    'and the row is posted, so the next pulse does not try the whole thing again',
+  );
+  close(b);
+});
+
+test('a provider with no attachment API is not asked, and falls back without an error', async () => {
+  const b = bench();
+  await settle(b);
+  await b.system.remoteValidation.run();
+
+  assert.deepEqual(b.attached, [], 'GitHub has no such API, and that is not a failure to record');
+  assert.equal(b.comments.length, 1);
+  assert.doesNotMatch(b.comments[0]?.body ?? '', /!\[/);
+  assert.deepEqual(
+    b.system.store.errors.listErrors(10).filter((e) => e.message.includes('attaching the screen')),
+    [],
+    'a capability a provider does not have is a fact, not an incident',
   );
   close(b);
 });
@@ -333,11 +410,16 @@ test('only a run’s reading with a screen is postable, and the link is optional
     'and one already posted is never offered again',
   );
 
-  const linkless = captureComment({ ...postable[0]!, title: null, url: null });
+  const linkless = captureComment({ ...postable[0]!, title: null, url: null, attached: null });
   assert.match(linkless, /capture-confirmation-reads-run-1\.png/, 'a deployment with no address still names it');
   assert.doesNotMatch(linkless, /\]\(http/, 'and posts no link it cannot honour');
 
-  const linked = captureComment({ ...postable[0]!, title: 'The confirmation screen', url: 'https://harness/x?tk=1' });
+  const linked = captureComment({
+    ...postable[0]!,
+    title: 'The confirmation screen',
+    url: 'https://harness/x?tk=1',
+    attached: null,
+  });
   assert.match(linked, /\[Open the screen\]\(https:\/\/harness\/x\?tk=1\)/);
   assert.match(linked, /capture-confirmation-reads-run-1\.png/, 'the prose is what it really carries');
 });

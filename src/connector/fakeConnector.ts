@@ -5,6 +5,9 @@ import type {
   BranchDeleteInput,
   CiCheckRequeueInput,
   IssueCommentInput,
+  IssueImageInput,
+  IssueImageResult,
+  IssueImageSink,
   IssueCreateInput,
   IssueCloseInput,
   IssueLabelInput,
@@ -32,7 +35,7 @@ import { FakeIssuesIntegration } from '../integrations/fake/fakeIssues.js';
 
 // → docs/spec/03-world-model.md
 
-export class FakeConnector implements Connector, ActionSink {
+export class FakeConnector implements Connector, ActionSink, IssueImageSink {
   private readonly composite: CompositeConnector;
   private readonly github: FakeGitHubIntegration;
   private readonly issues: FakeIssuesIntegration;
@@ -117,6 +120,14 @@ export class FakeConnector implements Connector, ActionSink {
   }
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     return this.composite.upsertIssueComment(input);
+  }
+
+  canAttachIssueImage(): boolean {
+    return this.composite.canAttachIssueImage();
+  }
+
+  attachIssueImage(input: IssueImageInput): Promise<IssueImageResult> {
+    return this.composite.attachIssueImage(input);
   }
 
   createPullRequest(input: PrCreateInput): Promise<SendResult> {

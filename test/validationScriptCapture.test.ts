@@ -430,6 +430,7 @@ test('the grace sweep removes a script past its window, names where it was, and 
 
   const desk = new RemoteValidationDesk({
     sink: commentSink(),
+    validationRoot: dir,
     store,
     environments: [TENANTED],
     observer: new FakeEnvironmentObserver(),

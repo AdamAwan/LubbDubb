@@ -645,6 +645,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     scriptGraceMs: config.remoteValidation.scriptGraceMs,
     probeIntervalMs: config.environmentProbeIntervalMs,
     sink: opts.sink ?? connector,
+    validationRoot: config.validationRoot,
     errors,
   });
 

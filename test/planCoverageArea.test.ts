@@ -233,6 +233,7 @@ test('with the area written, a sheet’s check row confirms and the run has a se
 
     const desk = new RemoteValidationDesk({
       sink: commentSink(),
+      validationRoot: dir,
       store,
       environments,
       observer: new FakeEnvironmentObserver(),
@@ -267,6 +268,7 @@ test('the harness takes no listing of its own, and keeps no offering to be shown
   try {
     const desk = new RemoteValidationDesk({
       sink: commentSink(),
+      validationRoot: dir,
       store,
       environments,
       observer: new FakeEnvironmentObserver(),

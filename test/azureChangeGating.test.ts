@@ -120,6 +120,8 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     async setPullLabel() {},
     async setWorkItemState() {},
     createWorkItemComment: nope,
+    createWorkItemAttachment: nope,
+    linkWorkItemAttachment: nope,
     updateWorkItemComment: nope,
     async linkWorkItemToPull() {},
     createWorkItem: nope,

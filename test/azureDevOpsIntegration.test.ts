@@ -102,6 +102,8 @@ interface Recorded {
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
   abandoned: number[];
+  attachments: Array<{ fileName: string; bytes: number }>;
+  attachmentLinks: Array<{ id: number; url: string; comment: string }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -133,8 +135,17 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     baseSets: [],
     deletedBranches: [],
     abandoned: [],
+    attachments: [],
+    attachmentLinks: [],
   };
   const api: AzureDevOpsApi = {
+    async createWorkItemAttachment(fileName, bytes) {
+      recorded.attachments.push({ fileName, bytes: bytes.length });
+      return { id: 'att-1', url: `https://dev.azure.test/_apis/wit/attachments/att-1?fileName=${fileName}` };
+    },
+    async linkWorkItemAttachment(id, url, comment) {
+      recorded.attachmentLinks.push({ id, url, comment });
+    },
     async createPull(input) {
       recorded.createdPulls.push(input);
       return { pullRequestId: script.createdPullNumber ?? 88 };
@@ -1341,4 +1352,25 @@ test('setPullBase is the retarget Azure never does itself when a rung merges', a
   await sc.setPullBase({ prNumber: 42, base: 'main' });
   assert.deepEqual(recorded.titleSets, [{ id: 42, title: '#12 feat(store): cursor' }]);
   assert.deepEqual(recorded.baseSets, [{ id: 42, base: 'main' }]);
+});
+
+test('attachIssueImage uploads the bytes and holds them against the work item', async () => {
+  const { api, recorded } = fakeApi();
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+
+  const held = await issues.attachIssueImage({
+    number: 101,
+    fileName: 'capture-confirmation-reads-run-1.png',
+    bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+  });
+
+  assert.equal(held.ok, true);
+  assert.match(held.url, /_apis\/wit\/attachments\/att-1/, 'the URL a comment embeds is the tracker’s own');
+  assert.deepEqual(recorded.attachments, [{ fileName: 'capture-confirmation-reads-run-1.png', bytes: 4 }]);
+
+  // Not an optional tidy: Azure DevOps prunes attachments no work item references, so an image
+  // embedded by URL alone renders today and is a broken image in the comment later.
+  assert.deepEqual(recorded.attachmentLinks, [
+    { id: 101, url: held.url, comment: 'capture-confirmation-reads-run-1.png' },
+  ]);
 });

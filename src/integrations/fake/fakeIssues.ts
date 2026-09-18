@@ -4,6 +4,8 @@ import type { InjectableEvent } from '../../connector/connector.js';
 import type {
   IssueCloseInput,
   IssueCommentInput,
+  IssueImageInput,
+  IssueImageResult,
   IssueCreateInput,
   IssueLabelInput,
   SendResult,
@@ -15,6 +17,7 @@ import type {
   Injectable,
   Integration,
   IssueCommentCapable,
+  IssueImageCapable,
   IssueCreateCapable,
   IssueCloseCapable,
   IssueLabelCapable,
@@ -40,6 +43,7 @@ export class FakeIssuesIntegration
     IssueCloseCapable,
     IssueCreateCapable,
     IssueCommentCapable,
+    IssueImageCapable,
     TicketHistoryCapable
 {
   readonly id = 'issues:fake';
@@ -47,6 +51,10 @@ export class FakeIssuesIntegration
 
   private readonly comments = new Map<string, { number: number; body: string }>();
   private nextCommentId = 1;
+
+  /** @public read by tests asserting a screen actually reached a ticket, and with what bytes */
+  readonly attachments = new Map<string, { number: number; fileName: string; bytes: Buffer }>();
+  private nextAttachmentId = 1;
 
   private readonly seenAt = new Map<number, string>();
 
@@ -142,6 +150,17 @@ export class FakeIssuesIntegration
       if (issue) issue.workItemState = input.state;
     });
     return { ok: true };
+  }
+
+  /**
+   * The scripted half of `IssueImageCapable`. It holds the bytes rather than dropping them, because a
+   * fake that answered a URL for an image it never took would let a test assert a screen reached a
+   * ticket that could not have carried it.
+   */
+  async attachIssueImage(input: IssueImageInput): Promise<IssueImageResult> {
+    const id = `att_${this.nextAttachmentId++}`;
+    this.attachments.set(id, { number: input.number, fileName: input.fileName, bytes: input.bytes });
+    return { ok: true, url: `https://fake.attachments.test/${id}/${encodeURIComponent(input.fileName)}` };
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

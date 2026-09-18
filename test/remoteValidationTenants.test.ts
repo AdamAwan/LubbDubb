@@ -24,6 +24,12 @@ import { join } from 'node:path';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { StateQueryInput } from '../src/types.js';
 
+/**
+ * This bench posts no capture, so nothing ever reads it — but the desk takes a root rather than
+ * defaulting to one, so that a bench which *does* post cannot quietly read the checkout.
+ */
+const NO_CAPTURES = join(tmpdir(), 'lubbdubb-no-captures');
+
 /*
  * The tenant, in the three shapes a project may supply. The one rule everything here follows from:
  * **the harness never generates or infers a tenant identifier.** Environments commonly reap tenants
@@ -95,6 +101,7 @@ function bench(env: EnvironmentConfig, opts: { env?: Record<string, string | und
     environments,
     desk: new RemoteValidationDesk({
       sink: commentSink(),
+      validationRoot: NO_CAPTURES,
       store,
       environments,
       observer: new FakeEnvironmentObserver(),

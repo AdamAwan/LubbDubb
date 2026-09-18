@@ -106,6 +106,37 @@ export interface IssueCommentInput {
   commentRef: string | null;
 }
 
+/**
+ * One image, put where the ticket itself keeps it. `bytes` rather than a path because the sink knows
+ * nothing about the harness's directories, and `fileName` because that is what the tracker names the
+ * attachment — never the harness's own path to it.
+ */
+export interface IssueImageInput {
+  number: number;
+  fileName: string;
+  bytes: Buffer;
+}
+
+/** Where the provider put it, which is what a comment body embeds. */
+export interface IssueImageResult {
+  ok: boolean;
+  url: string;
+}
+
+/**
+ * Uploading an image to a ticket, which **only some providers can do**. It is a capability beside
+ * `ActionSink` rather than two more members on it for one reason: Azure DevOps has a documented
+ * attachment API and GitHub has none — the upload endpoint its web UI uses is not in the REST API —
+ * so this is permanently a thing one provider does and another does not. A caller asks
+ * `canAttachIssueImage()` and has a **working** answer either way: the image where it can be had, a
+ * link where it cannot.
+ * → docs/spec/15-integrations.md#uploading-an-image-to-a-ticket
+ */
+export interface IssueImageSink {
+  canAttachIssueImage(): boolean;
+  attachIssueImage(input: IssueImageInput): Promise<IssueImageResult>;
+}
+
 export interface FilingTarget {
   target: string;
   identity: string | null;

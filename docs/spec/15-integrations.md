@@ -109,7 +109,7 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrCloseCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
-`IssueCloseCapable`,
+`IssueCloseCapable`, `IssueImageCapable`,
 `CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
 
 `PrThreadResolveCapable` marks a review thread resolved, and is separate from `PrReplyCapable`
@@ -125,6 +125,37 @@ head branches" setting removes the branch at merge time, so absence is the commo
 failure. GitHub deletes the ref; Azure has no delete verb for one and updates it to the zero object
 id, which needs the id it currently points at, so the Azure arm is two calls and the first is also
 the already-gone check.
+
+### Uploading an image to a ticket
+
+`IssueImageCapable` puts one image where the ticket itself keeps it, so a reader sees it **in** the
+comment rather than behind a link back to the harness. It is the sharpest example of why these
+interfaces are separate, because it is a capability one provider has and the other does not, and will
+not:
+
+- **Azure DevOps has an attachment API** — `POST /_apis/wit/attachments` returns a URL that a work
+  item's HTML fields may embed. `AzureDevOpsWorkItemsIntegration` implements it.
+- **GitHub has none.** The upload endpoint its web UI uses for `user-attachments` is not in the REST
+  API and `gh` cannot reach it. The only ways to get a GitHub-rendered image are committing the bytes
+  into the repository, or a release asset — which does not even render on a private repo, because
+  Camo fetches it unauthenticated. `GitHubIssuesIntegration` therefore does **not** implement this,
+  and that is a statement about GitHub rather than a gap to be filled later.
+
+So `CompositeConnector` exposes it as `IssueImageSink` — `canAttachIssueImage()` beside
+`attachIssueImage()` — and every caller is expected to have a **working** answer for false. The one
+caller is the remote validation capture posting
+([36](36-remote-validation.md#posting-the-screen-to-the-ticket)): the image where it can be had, a
+comment carrying a link where it cannot. A caller that treated false as a failure would turn a fact
+about a provider into an incident.
+
+**Two calls on the Azure arm, and the second is not a tidy.** Azure DevOps prunes attachments no work
+item references, so the upload alone yields a URL that renders today and is a broken image in the
+comment later — the quietest possible failure, because the comment still reads correctly. The
+attachment is linked to the work item as an `AttachedFile` relation in the same operation.
+
+**The bytes are not signed and not converted.** `CompositeConnector.signed` is about a body a person
+reads, and an image is neither markdown nor HTML. It is the comment that later embeds the returned
+URL that goes through the ordinary body path.
 
 `PrCloseCapable` closes a pull request **without merging it** — the plan part restart's superseded PR
 ([08](08-planning.md#restarting-a-part)), and nothing else: no rule reaches it, because a reviewable
@@ -396,8 +427,17 @@ asterisks and hyphens on the operator's board.
 
 The converter covers the dialect the harness actually writes — paragraphs, `**bold**`, `_italic_`,
 code spans and fences, bullet and ordered lists including one level of nesting, headings, block
-quotes, horizontal rules and inline links — escaping `&`, `<` and `>` in text so a code span
-carrying markup cannot inject any. Two shapes pass through verbatim: an HTML comment line, which is
+quotes, horizontal rules, inline links and **images** — escaping `&`, `<` and `>` in text so a code
+span carrying markup cannot inject any.
+
+An image is `![alt](url)` and is rebuilt from its parsed `src` and `alt`, both attribute-escaped, the
+link rule exactly. It is written as markdown rather than as a raw `<img>` tag for the reason every
+body is: nothing upstream of the composite connector knows which provider a comment is bound for, so
+one sentence reaches a markdown tracker and an HTML one. A **literal** `<img ...>` line stays escaped
+and drawn as text, and that asymmetry is deliberate — widening the raw-tag passthrough to carry
+attributes would open it for everything shaped like a tag, in bodies that carry agent-written prose.
+The alt text is not decoration: it is what a reader on a screen reader, or looking at a broken image,
+is left with, so the one caller names the check rather than saying "screenshot". Two shapes pass through verbatim: an HTML comment line, which is
 how the `<!-- lubbdubb:* -->` markers survive, and a line opening with one of the tags the
 converter itself emits, so a body read back from a provider and re-sent converts to itself. Any
 _other_ line opening with `<` is escaped and drawn as text, and a link's href is attribute-escaped:

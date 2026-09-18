@@ -5,6 +5,9 @@ import type {
   CiCheckRequeueInput,
   IssueCloseInput,
   IssueCommentInput,
+  IssueImageInput,
+  IssueImageResult,
+  IssueImageSink,
   IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
@@ -36,6 +39,7 @@ import {
   isIssueCloseCapable,
   isIssueCommentCapable,
   isIssueCreateCapable,
+  isIssueImageCapable,
   isIssueLabelCapable,
   isPrBaseCapable,
   isPrBaseUpdateCapable,
@@ -57,7 +61,7 @@ import {
 
 // → docs/spec/15-integrations.md
 
-export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader {
+export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader, IssueImageSink {
   constructor(
     private readonly integrations: Integration[],
     private readonly now: () => string = () => new Date().toISOString(),
@@ -257,6 +261,27 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isIssueCreateCapable);
     if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
     return handler.createIssue({ ...input, body: this.signed(handler, input.body) });
+  }
+
+  /**
+   * Whether any provider can hold an image for a ticket at all. False is not a failure and has a
+   * working answer behind it — a comment carrying a link — so a caller reads this rather than
+   * catching a throw. → docs/spec/15-integrations.md#uploading-an-image-to-a-ticket
+   */
+  canAttachIssueImage(): boolean {
+    return this.integrations.some(isIssueImageCapable);
+  }
+
+  /**
+   * The bytes are **not** signed and **not** converted: `signed` is about a body a person reads, and
+   * an image is neither markdown nor HTML. It is the comment that later embeds the returned URL that
+   * goes through the ordinary body path.
+   */
+  async attachIssueImage(input: IssueImageInput): Promise<IssueImageResult> {
+    const handler = this.integrations.find(isIssueImageCapable);
+    if (!handler)
+      throw new Error('no integration can attach images to issues (no issues provider is IssueImageCapable)');
+    return handler.attachIssueImage(input);
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

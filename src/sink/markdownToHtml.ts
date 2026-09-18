@@ -170,10 +170,23 @@ function inline(text: string): string {
     .join('');
 }
 
+/**
+ * Links, and **images**. An image is `![alt](url)` — markdown, like everything else a body is written
+ * in — rather than a raw `<img>` tag, and that is the whole point: a body stays one format and the
+ * connector converts it, so the same sentence reaches a markdown tracker and an HTML one.
+ *
+ * It is built from the parsed `src` and `alt` and never passed through, which keeps this converter's
+ * escape-by-default posture intact. Bodies carry agent-authored text, and a rule that let a raw tag
+ * through for images would let one through for everything shaped like it.
+ * → docs/spec/15-integrations.md#uploading-an-image-to-a-ticket
+ */
 function emphasis(text: string): string {
   return text
-    .split(/(\[[^\]]+\]\((?:https?:|#)[^)\s]*\))/)
+    .split(/(!?\[[^\]]+\]\((?:https?:|#)[^)\s]*\))/)
     .map((part) => {
+      const image = /^!\[([^\]]+)\]\(((?:https?:|#)[^)\s]*)\)$/.exec(part);
+      if (image)
+        return `<img src="${escapeAttribute(image[2] as string)}" alt="${escapeAttribute(image[1] as string)}">`;
       const link = /^\[([^\]]+)\]\(((?:https?:|#)[^)\s]*)\)$/.exec(part);
       return link ? `<a href="${escapeAttribute(link[2] as string)}">${style(link[1] as string)}</a>` : style(part);
     })
