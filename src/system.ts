@@ -316,6 +316,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewModes: reviewModeNames(config.review),
     reviewAllowSkip: config.review.allowSkip,
     checkSets: config.validation.checkSets,
+    manualDescriptions: config.manualDescriptions,
     repoRoot: config.repoRoot,
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
     permissions: (): PermissionDesk => permissions,

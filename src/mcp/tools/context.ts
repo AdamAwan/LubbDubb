@@ -139,6 +139,13 @@ export interface McpToolDeps {
    */
   checkSets?: boolean;
   permissions?: PermissionDesk;
+  /**
+   * `config.manualDescriptions`. On, `open_pr` refuses a `body` argument and ships the
+   * operator's stored description instead — or nothing, for a part nobody described.
+   * Absent is off, which is what every deployment is until somebody turns it on.
+   * → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+   */
+  manualDescriptions?: boolean;
   openPr?: {
     sink: ActionSink;
     defaultBranch: string;

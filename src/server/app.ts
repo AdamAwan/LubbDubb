@@ -37,6 +37,7 @@ import { register as registerObstacles } from './routes/obstacles.js';
 import { register as registerPets } from './routes/pets.js';
 import { register as registerPool } from './routes/pool.js';
 import { register as registerPlans } from './routes/plans.js';
+import { register as registerPrDescriptions } from './routes/prDescriptions.js';
 import { register as registerPredictions } from './routes/predictions.js';
 import { register as registerPrs } from './routes/prs.js';
 import { register as registerReadings } from './routes/readings.js';
@@ -79,6 +80,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerPets,
   registerPool,
   registerPlans,
+  registerPrDescriptions,
   registerPredictions,
   registerPrs,
   registerReadings,

@@ -1,4 +1,4 @@
-import { issueOriginId, issueOriginNumber } from '../issueOrigins.js';
+import { issueOriginId, issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { acceptanceCriteria, bySlug, liveParts, partBase, partBranch } from '../plans/parts.js';
 import type { Issue, Plan, PlanPart } from '../types.js';
 
@@ -18,6 +18,13 @@ interface OpenPrTarget {
    * → docs/spec/07-pull-requests.md#the-four-questions-a-reviewer-has
    */
   criteria: string[];
+  /**
+   * The part's own origin, or null for a pickup that has no plan behind it. It is
+   * the key `pr_descriptions` is written under, so `open_pr` can ask for the
+   * operator's text without rebuilding the ref from pieces it would have to keep in
+   * step. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+   */
+  partRef: string | null;
 }
 
 export interface OpenPrContext {
@@ -55,6 +62,7 @@ function pickupTarget(issueNumber: number, ctx: OpenPrContext): OpenPrTarget | {
     position: 1,
     total: 1,
     criteria: [],
+    partRef: null,
   };
 }
 
@@ -74,6 +82,7 @@ function partTarget(issueNumber: number, slug: string, ctx: OpenPrContext): Open
     position: ordered.findIndex((p) => p.slug === slug) + 1,
     total: ordered.length,
     criteria: acceptanceCriteria(part).map((c) => c.text),
+    partRef: issueOriginRef('part', issueNumber, slug),
   };
 }
 

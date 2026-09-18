@@ -1,0 +1,251 @@
+import { useCallback, useEffect, useState, type JSX } from 'react';
+import { api, type PrDescriptionReading } from '../api.js';
+import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import { descriptionPrompt } from '../cockpit/desktopLink.js';
+import { AsyncButton } from './AsyncButton.js';
+import { buttonClass } from './button.js';
+import { DesktopLink } from './DesktopLink.js';
+import { relTime } from './util.js';
+import { Tag } from './tag.js';
+
+// → docs/spec/17-cockpit.md#the-description-a-reviewer-reads
+
+/**
+ * The four questions, as hints under the field.
+ *
+ * They are drawn beside the box and never as four boxes, which is the whole
+ * decision: four inputs make the form the task, and a question with nothing to say
+ * under it gets an answer anyway. Beside it they do the one job worth doing — an
+ * operator who cannot answer one notices before a reviewer does.
+ */
+const PROMPTS: readonly { key: DescriptionQuestion; ask: string }[] = [
+  { key: 'asked-for', ask: 'Is this what we asked for?' },
+  { key: 'undone', ask: 'What can’t be undone if this is wrong?' },
+  { key: 'missing', ask: 'What’s missing?' },
+  { key: 'reach', ask: 'How far does it reach if it’s wrong?' },
+];
+
+const ASK: Readonly<Record<DescriptionQuestion, string>> = Object.fromEntries(
+  PROMPTS.map(({ key, ask }) => [key, ask]),
+) as Record<DescriptionQuestion, string>;
+
+/**
+ * How a finding is drawn. `contradicted` is the only one that takes red: it means
+ * the pull request would have carried a false sentence under a person's name, which
+ * is not the same defect as having left something out.
+ */
+const KINDS: Readonly<Record<DescriptionFindingKind, { label: string; tone: 'red' | 'amber' }>> = {
+  contradicted: { label: 'the diff contradicts this', tone: 'red' },
+  gap: { label: 'the diff raises this and you did not', tone: 'amber' },
+};
+
+const STOOD: Readonly<Record<'clean' | 'gaps' | 'contradicted', { label: string; tone: 'green' | 'amber' | 'red' }>> = {
+  clean: { label: 'checked, and it stood up', tone: 'green' },
+  gaps: { label: 'checked — gaps', tone: 'amber' },
+  contradicted: { label: 'checked — contradicted', tone: 'red' },
+};
+
+/**
+ * The check's findings, as a list rather than a row per question.
+ *
+ * A check is not four answers. The four questions are hints under the field, and a
+ * reading keyed by them could only ever report on four things while most of what is
+ * worth saying about a description against its diff is none of them. So a finding
+ * stands on its own and names a question only where it happens to be one.
+ */
+function Checked({ version, now }: { version: PrDescriptionVersion; now: number }): JSX.Element | null {
+  if (version.checkedAt === null) return null;
+  const stood = version.findings.some((f) => f.kind === 'contradicted')
+    ? 'contradicted'
+    : version.findings.length > 0
+      ? 'gaps'
+      : 'clean';
+  return (
+    <div className="cn-desc-check">
+      <div className="cn-desc-check-hdr">
+        <Tag tone={STOOD[stood].tone}>{STOOD[stood].label}</Tag>
+        <span className="cn-desc-when">{relTime(version.checkedAt, now)}</span>
+      </div>
+      {version.findings.length === 0 && (
+        <p className="cn-desc-clean">Nothing it could hold against the diff. A clean check, not an unchecked one.</p>
+      )}
+      {version.findings.length > 0 && (
+        <ul className="cn-desc-findings">
+          {version.findings.map((finding, i) => (
+            <li key={i}>
+              <div className="cn-desc-finding-hdr">
+                <Tag tone={KINDS[finding.kind].tone}>{KINDS[finding.kind].label}</Tag>
+                {/* Only where the finding happens to be one of the four. Most are not. */}
+                {finding.question !== null && <span className="cn-desc-tagged">{ASK[finding.question]}</span>}
+              </div>
+              <p className="cn-desc-note">{finding.note}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The description an operator writes for one part's pull request, and the offer to
+ * have their own Claude Code argue with it.
+ *
+ * Drawn only where `manualDescriptions` is on, and it learns that the way the
+ * criteria card does: the routes are mounted only where the key is on, so a read
+ * that does not answer is a deployment with the feature off and the panel is not
+ * drawn. The presence of the data decides, never a flag on the payload.
+ *
+ * Nothing here holds anything up. A part nobody describes opens its pull request
+ * with no body above the reference, which is why the empty state says so rather than
+ * nagging.
+ */
+export function PrDescription({
+  issueNumber,
+  slug,
+  position,
+  title,
+  desktopFolder,
+  now,
+}: {
+  issueNumber: number;
+  slug: string;
+  position: number;
+  title: string;
+  desktopFolder: string | null;
+  now: number;
+}): JSX.Element | null {
+  const [reading, setReading] = useState<PrDescriptionReading | null>(null);
+  const [writing, setWriting] = useState(false);
+  const [text, setText] = useState('');
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    setReading(await api.getPrDescription(issueNumber, slug));
+  }, [issueNumber, slug]);
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .getPrDescription(issueNumber, slug)
+      .then((answer) => {
+        if (live) setReading(answer);
+      })
+      .catch(() => {
+        if (live) setReading(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [issueNumber, slug]);
+
+  if (reading === null) return null;
+
+  const current = reading.current;
+
+  const submit = async (): Promise<void> => {
+    const body = text.trim();
+    if (body === '') {
+      setRefusal('There is nothing here to save. Say what the pull request does, or leave it and it will carry none.');
+      return;
+    }
+    setRefusal(null);
+    await api.writePrDescription(issueNumber, slug, { text: body });
+    setText('');
+    setWriting(false);
+    await load();
+  };
+
+  return (
+    <section className="cn-card cn-desc">
+      {/* The part is named in the heading because these stack one per part: three
+          panels under one title are three panels an operator cannot tell apart. */}
+      <h3>
+        <span className="cn-desc-part">{position}</span>
+        What pull request {position} says it does
+        <span className="cn-desc-title">{title}</span>
+        {reading.versions.length > 1 && <i className="cn-n">v{reading.versions.length}</i>}
+      </h3>
+
+      {/* Only where nobody has written one. On a panel that already carries a
+          description the argument for writing it has been made and won, and the same
+          three sentences under every part is noise a reader learns to skip. */}
+      {current === null && !writing && (
+        <p className="cn-desc-why">
+          A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
+          the agent&rsquo;s. It holds nothing up: leave it and the pull request opens with no description.
+        </p>
+      )}
+
+      {current === null && !writing && <p className="cn-empty">Nobody has described this part.</p>}
+
+      {current !== null && !writing && (
+        <div className="cn-desc-current">
+          <blockquote className="cn-desc-text">{current.text}</blockquote>
+          <div className="cn-desc-by">
+            {current.author ?? 'author unrecorded'} · {relTime(current.authoredAt, now)}
+          </div>
+          <Checked version={current} now={now} />
+        </div>
+      )}
+
+      {writing && (
+        <div className="cn-desc-form">
+          <div className="cn-desc-cols">
+            <label>
+              <span>Say what this pull request does, in your own words</span>
+              <textarea
+                className="cn-desc-write"
+                rows={8}
+                value={text}
+                placeholder="Why it is needed, and what it changes"
+                onChange={(e) => setText(e.target.value)}
+              />
+            </label>
+            <div className="cn-desc-hints">
+              <div className="cn-desc-hints-hdr">A reviewer has to be able to answer these</div>
+              <ul>
+                {PROMPTS.map(({ key, ask }) => (
+                  <li key={key}>{ask}</li>
+                ))}
+              </ul>
+              <p className="cn-desc-hints-foot">
+                Hints, not boxes. Nothing is required — but a question you cannot answer is worth noticing before a
+                reviewer meets it.
+              </p>
+            </div>
+          </div>
+          {refusal !== null && <p className="cn-desc-refusal">{refusal}</p>}
+          <div className="cn-desc-presses">
+            <button type="button" className={buttonClass({ ghost: true })} onClick={() => setWriting(false)}>
+              Cancel
+            </button>
+            <AsyncButton tone="primary" onClick={submit}>
+              Save it
+            </AsyncButton>
+          </div>
+        </div>
+      )}
+
+      {!writing && (
+        <div className="cn-desc-presses">
+          <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setWriting(true)}>
+            {current === null ? 'Describe it' : 'Rewrite it'}
+          </button>
+          {/* The check is the operator's own Claude Code rather than a dispatched
+              agent, because what follows the report is an argument and an argument on
+              the pulse costs an afternoon. It contradicts; it never hands back prose.
+              → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts */}
+          {current !== null && desktopFolder !== null && (
+            <DesktopLink
+              folder={desktopFolder}
+              prompt={descriptionPrompt(issueNumber, slug)}
+              label="Check my description"
+              explain="which reads what you wrote against the diff and says where they disagree. It will not write one for you."
+            />
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

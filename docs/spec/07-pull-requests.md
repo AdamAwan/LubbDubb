@@ -569,10 +569,13 @@ is what keeps a conditional clause invisible when it is empty rather than merely
 ### The body is not templated
 
 Only the title is. There is no `pr-body` entry in the prompt book, and there will not be one: a title
-is a convention over a fixed set of known fields, and a body is an account of a change only the agent
-that made it has. A template could produce a shape, not a reading — and a shape filled in by an agent
-with nothing to say is exactly the thirty-line `## Summary` / `## Changes` / `## Testing` restatement
-of the diff the reviewer already has.
+is a convention over a fixed set of known fields, and **a template could produce a shape, not a
+reading** — a shape filled in by an agent with nothing to say is exactly the thirty-line `## Summary`
+/ `## Changes` / `## Testing` restatement of the diff the reviewer already has.
+
+Which leaves who writes it, and that is `manualDescriptions`' question rather than this section's.
+With the key off, the body is the agent's, under the rules the rest of this section states; with it
+on, [the operator writes it](#the-operator-writes-the-description) and an operator is not a template.
 
 What the harness does own is the **reference**, appended by `open_pr` after the agent's text and never
 a closing keyword ([11](11-mcp-tools.md#open_pr)). Everything above it ships as written.
@@ -687,6 +690,119 @@ asked to invent a one-way door. That is what keeps this from becoming a form to 
 
 `reach` firing on every code change is the one deliberate exception to trigger-gating, and it is
 worth naming as such: how far a change carries if it is wrong is live on all of them.
+
+### The operator writes the description
+
+Behind `manualDescriptions`, off by default. With it off nothing in this section happens: the agent
+writes the body as the two sections above describe, and `open_pr` is unchanged.
+
+With it on, the body is the **operator's**, written before a reviewer reads it, and `open_pr` refuses
+a `body` argument rather than merging the two. The five evidence lists are untouched — those are
+coordinates, and they are answerable only by the agent that made the change.
+
+The case is not that the operator writes a better body. It is that **writing is the instrument of
+understanding rather than a report of it**: a description you cannot write is a change you have not
+understood, and that is information available at no other moment and by no other means. Remove the
+writing and nothing announces what was lost, because what was lost is a state of mind and nothing
+measures one. The same argument [`mission.md`](../mission.md) already makes of review packs — a
+change is restated _"by a party that did not write it"_ — applied to the one part of a pull request
+where it was not.
+
+It is also owed to the reviewer. A pull request spends another person's attention and the operator
+is the one spending it; sent with a body written by the thing that made the change, with nobody who
+understood it anywhere in between, that is an ask which costs the asker nothing.
+
+#### It holds nothing up
+
+Not the plan's release, not the dispatch, not the pull request, not the review watch. A part nobody
+described opens its pull request with **no body above the reference**, which is this document's
+existing answer to an absent body rather than a new one.
+
+And nothing fills the gap — emphatically not the agent. A backstop would reintroduce the account
+written by the thing with the most reason to be wrong about it, _and_ make the gap invisible: the
+pull request would read as described when nobody had. Either a person wrote the body or it has none,
+and the absence is on the page where a reviewer can see it. That is what keeps a skipped description
+from being the quiet failure a required one would only have moved.
+
+#### The field is free, and the four questions are hints
+
+`descriptionRefusal` (`src/pr/prDescription.ts`) asserts two things: not empty, and under
+`PR_DESCRIPTION.maxChars`. That is a bound, not a shape, and the contrast with `prBodyRefusal` two
+sections up is deliberate.
+
+Those rules exist because asking an agent for a shape did not work — asked for five bullets, agents
+wrote five paragraphs with a dash in front of each. A person writing about a change they read is not
+that party. A refusal that bounced their prose for a semicolon would teach them to write for the
+checker, and the value here is in what the writing makes them notice, which nothing about a Flesch
+score is about.
+
+The [four questions](#the-four-questions-a-reviewer-has) sit beside the field as prompts. They are
+**hints and never four boxes**: four inputs make the form the task, and a question with nothing to
+say under it gets an answer anyway. Beside it they do the one job worth doing — an operator who
+cannot answer one notices before a reviewer does.
+
+#### It contradicts, it never drafts
+
+The operator may hand the description to their **own** Claude Code, over the deep link the validation
+bench already uses ([20](20-validation.md#starting-a-run-from-the-cockpit)). That session reads what
+they wrote and the diff it is already sitting on, and reports through `description_read` and
+`description_check` on the [desktop channel](11-mcp-tools.md#the-desktop-channel).
+
+It has to be that session rather than a dispatched one. What follows the report is an **argument** —
+the session says the diff contradicts a sentence, the operator says the throw is behind a flag that
+defaults off, the session checks and concedes — and that exchange is worth having only at
+conversational speed. A fleet agent answers on the pulse, queued behind the headroom cut, its reply
+arriving as a row on a surface the operator has to go back to; three rounds of that is an afternoon,
+and an instrument that costs an afternoon is one nobody reaches for twice. The fleet's channel must
+also never grow this tool: a dispatched agent marking its own operator's description of its own
+change is the conflict of interest this feature exists to remove, handed back through a side door.
+
+**`description_check` takes marks and findings and no text, and that is the invariant.** A session
+that hands back better prose gets it accepted, and then the pull request carries an account that
+reads as the operator's and is not — which is strictly worse than the agent-written body this
+replaces, because that one is at least _known_ to be an agent's. Every reason for the feature is
+gone and the surface still reads as though it is working. There is no argument on the tool that
+could carry a description, the skill says never to offer one, and the press is named **Check my
+description** rather than anything that suggests the session produces it.
+
+#### A check is findings, not four answers
+
+`description_check` takes a list of findings and no marks, and this is the correction
+worth recording rather than the design that was almost shipped.
+
+The four questions are **hints under the field**. A check keyed *by* them — one mark
+per question — quietly makes them the schema: it can report on four things, and
+everything else a session notices reading a description against its diff has nowhere
+to go. That is most of it. A rename the description does not mention, a claim about a
+re-export the index contradicts, a behaviour change buried in a sentence about
+something else: none of those is one of the four, and all of them are why the check
+exists.
+
+So a finding stands on its own. It carries a `kind` and a note, and a `question` only
+where it happens to be one of the four — which is worth recording, because "the diff
+raises this and the description does not answer it" is a real finding, but it is one
+finding shape among others rather than the frame.
+
+Two kinds, and they are not the same defect:
+
+- **`contradicted`** — the description asserts something the diff does not do. This
+  is the one to say first: it means the pull request would have carried a false
+  sentence under a person's name into somebody's review.
+- **`gap`** — the diff raises something the description does not. A reviewer left to
+  find it out for themselves, which is worse than nothing said and better than
+  something untrue.
+
+`descriptionStanding` derives one word from them — `unchecked`, `clean`, `gaps`,
+`contradicted` — and is derived rather than stored so there is no second record to
+disagree with the first. `contradicted` outranks `gaps` wherever both are present.
+
+**A clean check is not an unchecked description.** An empty finding list with
+`checkedAt` set says a session read it against the diff and it stood up; a null
+`checkedAt` says nobody looked. Folding them together loses the whole reading, and it
+is the one the operator most wants to see.
+
+**A re-check replaces the reading.** Two sessions over one text are two readings of
+it, and appended they read as one session that found twice as much.
 
 ### What the harness can see for itself
 

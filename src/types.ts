@@ -2217,3 +2217,53 @@ export interface GoalCriteriaVersion {
   reason: string | null;
   authoredAt: string;
 }
+
+/**
+ * The four things a reviewer has to be able to answer, as the questions the
+ * description field puts under itself. They are the same four
+ * [07](../docs/spec/07-pull-requests.md) already takes off the agent and turns into
+ * coordinates — asked here of the operator, in prose, about the same change.
+ *
+ * Hints rather than fields: nothing requires an answer to any of them. What they buy
+ * is that an operator who cannot answer one notices before a reviewer does.
+ */
+export type DescriptionQuestion = 'asked-for' | 'undone' | 'missing' | 'reach';
+
+/**
+ * What one finding of a description check says.
+ *
+ * `contradicted` is the description asserting something the diff does not do, and it
+ * is the one worth reading on its own: it means the pull request would have carried
+ * a false sentence under a person's name into somebody's review. `gap` is something
+ * the diff raises that the description does not — a reviewer left to find it out for
+ * themselves, which is worse than nothing said but not the same defect.
+ */
+export type DescriptionFindingKind = 'contradicted' | 'gap';
+
+/**
+ * One thing a check found.
+ *
+ * `question` is an **optional tag**, not the schema. The four questions are hints
+ * under the field and it is worth recording when the diff raises one the description
+ * cannot answer — but a check keyed *by* them can only report on four things, and
+ * most of what is worth saying about a description against its diff is none of them.
+ * So a finding stands on its own and names a question only where it happens to be
+ * one. → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts
+ */
+export interface DescriptionFinding {
+  kind: DescriptionFindingKind;
+  note: string;
+  question: DescriptionQuestion | null;
+}
+
+export interface PrDescriptionVersion {
+  id: string;
+  originRef: string;
+  version: number;
+  supersedes: string | null;
+  text: string;
+  author: string | null;
+  authoredAt: string;
+  checkedAt: string | null;
+  findings: DescriptionFinding[];
+}

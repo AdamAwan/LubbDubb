@@ -381,6 +381,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Let you write a goal\u2019s acceptance criteria yourself, versioned and append-only, beside the planner\u2019s own. Criteria written after work started are drift, and drift is surfaced rather than refused.',
   },
   {
+    path: 'manualDescriptions',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Write a pull request\u2019s description yourself instead of letting the agent that made the change write it \u2014 a reviewer reads it, and you are the one spending their hour. It holds nothing up: a part you leave undescribed opens its pull request with no body above the reference.',
+  },
+  {
     path: 'issueSequencing',
     type: 'enum',
     options: ['off', 'links', 'full'],

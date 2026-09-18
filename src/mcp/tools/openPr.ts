@@ -73,14 +73,18 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       body: z
         .string()
         .describe(
-          'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
-            `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
-            'the change is needed first and what it does after, one line each. No headings, no prose ' +
-            'paragraphs — a reviewer reads this before the diff, not instead of it. These are checked and ' +
-            `a body that breaks them is refused: every line starts with \`- \`, no bullet runs past ` +
-            `${PR_BODY.bulletChars} characters, no semicolons, no clauses hung off a dash, and the plainest ` +
-            'word that is still true. ' +
-            prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
+          deps.manualDescriptions
+            ? 'Do not use this. On this deployment the description is written by the operator before a ' +
+                'reviewer reads it, and a body sent here is refused rather than merged with theirs. What ' +
+                'you know about the change goes in the evidence arguments below, as coordinates.'
+            : 'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
+                `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
+                'the change is needed first and what it does after, one line each. No headings, no prose ' +
+                'paragraphs — a reviewer reads this before the diff, not instead of it. These are checked and ' +
+                `a body that breaks them is refused: every line starts with \`- \`, no bullet runs past ` +
+                `${PR_BODY.bulletChars} characters, no semicolons, no clauses hung off a dash, and the plainest ` +
+                'word that is still true. ' +
+                prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
         )
         .optional(),
       satisfies: evidenceField(
@@ -121,8 +125,17 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
     const given = typeof args.body === 'string' ? args.body.trim() : '';
-    const bodyRefusal = prBodyRefusal(given);
-    if (bodyRefusal !== null) return toolError(`open_pr rejected: ${bodyRefusal}`);
+    if (deps.manualDescriptions && given !== '')
+      return toolError(
+        'open_pr rejected: this deployment writes its own pull-request descriptions. The body is the ' +
+          'operator\u2019s, written before a reviewer reads it, so there is nothing for you to say here \u2014 ' +
+          'drop the body argument and call again. Your account of the change goes in the evidence ' +
+          'arguments, as coordinates.',
+      );
+    if (!deps.manualDescriptions) {
+      const bodyRefusal = prBodyRefusal(given);
+      if (bodyRefusal !== null) return toolError(`open_pr rejected: ${bodyRefusal}`);
+    }
 
     const issueNumber = issueSubtreeNumber(task.originRef);
     const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
@@ -163,7 +176,16 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       issueTitle: target.issueTitle,
       facts,
     });
-    const body = [given, evidenceBlock, reference].filter((part) => part !== '').join('\n\n');
+    // With `manualDescriptions` on the account above the block is the operator's or
+    // there is none: a part nobody described opens with the reference standing on its
+    // own, which is `07`'s existing answer to an absent body and not a new one. The
+    // agent's `given` cannot reach here — it was refused above.
+    // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+    const written = deps.manualDescriptions
+      ? ((target.partRef === null ? null : deps.store.prDescriptions.currentDescription(target.partRef))?.text.trim() ??
+        '')
+      : given;
+    const body = [written, evidenceBlock, reference].filter((part) => part !== '').join('\n\n');
 
     try {
       const result = await wiring.sink.createPullRequest({

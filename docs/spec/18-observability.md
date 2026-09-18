@@ -696,6 +696,35 @@ nothing aggregates _within_ a slot, so if an operator's `locus` predictions are 
 schema work and wrong for cockpit work, only a human reading the goals can see it. The alternative is
 classifying free text, which means a model reading predictions.
 
+## How a description stood
+
+`GET /api/insights/descriptions`, mounted only where `manualDescriptions` is on, folds every
+description a desktop session checked. It inherits two rules from
+[the prediction record](#the-prediction-record) rather than inventing its own, and they are the
+reason this section is short:
+
+- **Never keyed by author.** `predictionAggregate` drops the `author` column and says why — the
+  aggregate is keyed by goal, and scoring people is out of scope. A description accuracy keyed by
+  person is a performance metric on an engineer, which is a different product from this one.
+- **Never a bare percentage.** Below `predictionAggregateMinGoals` the counts are withheld and the n
+  stands in their place, the shape `PredictionRate` already uses. A rate over four descriptions is
+  noise wearing a percentage.
+
+It also drops the description's **text**, which a prediction's containment rule would demand and this
+one does not need: a description is published, so reading it leaks nothing. It is dropped so that no
+panel downstream can quote an operator back at themselves.
+
+`contradicted` is counted apart from `gaps` and is the figure worth reading on its own: it counts the
+pull requests that would have carried a false sentence into somebody's review. A single "wrong"
+column would bury it inside the gaps, which is the reading this aggregate exists to surface. `clean`
+is counted too, because a description checked and found sound is a different outcome from one nobody
+checked and the denominator has to say so.
+
+`questionsRaised` is last and is deliberately weak. It counts how often a finding happened to name
+one of the four questions — but the questions are hints under the field rather than the shape of a
+check, most findings name none of them, and a panel leading with it would be reporting on the four
+things a check is *not* keyed by. → [07](07-pull-requests.md#a-check-is-findings-not-four-answers)
+
 ## The allowance
 
 `src/insights/allowanceInsights.ts`, `GET /api/allowance`, the Insights page's Allowance tab

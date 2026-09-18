@@ -18,7 +18,7 @@ export function DesktopLink({
   prompt: string;
   explain: string;
   ready?: string;
-  label?: 'Open in Claude Code' | 'Question?';
+  label?: 'Open in Claude Code' | 'Question?' | 'Check my description';
   control?: boolean;
 }): JSX.Element {
   const inControlRow = useInControlRow();

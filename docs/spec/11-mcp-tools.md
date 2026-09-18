@@ -907,6 +907,17 @@ load-bearing both ways:
 
 ### A withheld plan is withheld here too
 
+**`description_read` and `description_check`** are on this channel and must never be on the fleet's.
+They are how the operator's own Claude Code checks a pull-request description the operator wrote
+against the diff it is sitting on. A dispatched agent that could mark its own operator's description
+of its own change is the conflict of interest the feature exists to remove, so the fleet's
+`buildTools` does not carry them and should not grow them.
+
+`description_check` takes marks and findings and **no text**, which is the invariant rather than an
+omission: a session that hands back a rewritten description gets it accepted, and the pull request
+then carries an account that reads as the operator's and is not.
+→ [07](07-pull-requests.md#it-contradicts-it-never-drafts)
+
 `plan_read` and `proposal_read` refuse while a plan is withheld pending the operator's reveal
 ([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). This channel is the operator's
 **own** assistant, so it can read a plan aloud to them — which defeats the reveal gate exactly as

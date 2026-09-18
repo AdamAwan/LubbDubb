@@ -441,6 +441,31 @@ drawing over one another. It is also why the enclosure is reached by scrolling r
 across the bottom of the glass: a strip that is always there is a pane's footer, and one column has
 no pane to be the footer of.
 
+## The description a reviewer reads
+
+One `PrDescription` panel per live part on the goal page, because one part is one pull request. It
+draws nothing where `manualDescriptions` is off — the routes are not mounted there and the read does
+not answer.
+
+Two decisions worth keeping:
+
+- **The four questions sit beside the field, never as four inputs.** Four boxes make the form the
+  task: an operator fills each because it is there, and a question with nothing to say under it gets
+  an answer anyway. Beside it they do the only job worth doing — an operator who cannot answer one
+  notices before a reviewer does.
+- **The press is _Check my description_, not _Validate with Claude_.** The first names what happens;
+  the second names who does it, and the failure mode is a session handing back polished prose the
+  operator accepts. A `DesktopLink` carries it, so the check runs in the operator's own Claude Code.
+  → [07](07-pull-requests.md#it-contradicts-it-never-drafts)
+
+The check is drawn under the text it was taken of rather than in the header, where it would read as a
+verdict on the panel rather than a reading of those words. It is a **list of findings**, not a row
+per question: a finding names one of the four only where it happens to be one, and the tag is drawn
+after the kind rather than instead of it, because led with it would read as the schema it is not.
+`contradicted` is the only kind that takes red. A check that found nothing says so in words — a
+clean check and an unchecked description are different things and the panel has to tell them apart.
+→ [07](07-pull-requests.md#a-check-is-findings-not-four-answers)
+
 ## The address bar
 
 Where the operator is lives in the URL's **query string**, so the browser's back button, a reload, a

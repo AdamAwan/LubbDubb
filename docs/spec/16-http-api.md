@@ -231,6 +231,18 @@ Silently ignoring a field the caller clearly meant to set is the failure this is
 
 ## Routes
 
+### `POST|GET /api/goals/:number/parts/:slug/description`
+
+Both live in `src/server/routes/prDescriptions.ts` and **register nothing where `manualDescriptions`
+is off**, which is how the cockpit panel learns there is nothing to draw: the read does not answer,
+so the presence of the data decides and never a flag on the payload. `goalCriteria` uses the same
+shape.
+
+The write refuses an empty description and one over `PR_DESCRIPTION.maxChars`, and asserts nothing
+else about its shape — the rules over the agent's body are about a party that games shapes, and an
+operator is not that party.
+→ [07](07-pull-requests.md#the-field-is-free-and-the-four-questions-are-hints)
+
 ### `GET /api/state`
 
 The cockpit snapshot, whole or in named parts. See [_The state snapshot_](#the-state-snapshot) below
