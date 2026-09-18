@@ -103,10 +103,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   issue bodies and comments verbatim — on the tracker it is a prediction every agent on the goal has read. →
   [14](docs/spec/14-persistence.md#the-prediction-store-is-not-on-store)
 - **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
-  another fleet's, and looks exactly like the pool working. Its own reading goes through
-  `recordOwnFleetReading`, which clears `digest_at`: `recordFleetReading` COALESCEs a null over what is there, so a
-  stamp left on the own row can never be moved again and the fleet reads **expired** against its own live publishing.
-  → [28](docs/spec/28-cross-fleet-pool.md#a-mirrored-fleet-expires-after-a-week)
+  another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
   verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself
   silently reintroduces the pairwise drift the matrix replaced. →
