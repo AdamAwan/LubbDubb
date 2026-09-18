@@ -39,6 +39,20 @@ export class PoolStore {
       .run({ ...reading, ahead: reading.ahead ? 1 : 0, seenAt: this.ctx.now() });
   }
 
+  recordOwnFleetReading(fleetId: string, project: string | null): void {
+    this.ctx
+      .prep(
+        `INSERT INTO pool_fleets (fleet_id, project, digest_at, ahead, seen_at)
+         VALUES (@fleetId, @project, NULL, 0, @seenAt)
+         ON CONFLICT(fleet_id) DO UPDATE SET
+           project = excluded.project,
+           digest_at = NULL,
+           ahead = 0,
+           seen_at = excluded.seen_at`,
+      )
+      .run({ fleetId, project, seenAt: this.ctx.now() });
+  }
+
   listPoolFleets(): PoolFleetReading[] {
     const before = poolStaleBefore(this.ctx.now());
     const rows = this.ctx.prep(`SELECT * FROM pool_fleets ORDER BY fleet_id ASC`).all() as FleetRow[];

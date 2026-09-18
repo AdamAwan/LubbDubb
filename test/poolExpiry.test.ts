@@ -153,3 +153,34 @@ test('a publishedAt that is not a timestamp is malformed rather than an ageless 
   assert.equal(parsed.ok, false);
   assert.match(parsed.ok === false && parsed.reason === 'malformed' ? parsed.detail : '', /not a timestamp/);
 });
+
+test("this fleet's own document is a reading and never a digest stamp", async () => {
+  const { s, transport, desk, advance } = harness();
+  transport.seed(digest('alice@acme-api', '2026-08-24T09:00:00.000Z'));
+  advance(8);
+  await desk.run();
+
+  const own = s.pool.listPoolFleets().find((f) => f.fleetId === 'alice@acme-api');
+  assert.equal(own?.digestAt, null, 'its own document is never mirrored, so there is no stamp to carry');
+  assert.equal(own?.stale, false, 'and it ages on seenAt, which every poll advances');
+  assert.deepEqual(s.pool.listDigestRows(null), [], 'its numbers are already the store, never the mirror');
+});
+
+test("a digest stamp an older build left on this fleet's own row is cleared, not kept", async () => {
+  const { s, transport, desk, advance } = harness();
+  // What a build that stamped its own reading left behind: COALESCE can only replace
+  // this, so a null reading of its own pins it and the fleet reads expired for ever.
+  s.pool.recordFleetReading({
+    fleetId: 'alice@acme-api',
+    project: 'acme-api',
+    digestAt: '2026-08-24T09:00:00.000Z',
+    ahead: false,
+  });
+  transport.seed(digest('alice@acme-api', '2026-09-01T09:00:00.000Z'));
+  advance(8);
+  await desk.run();
+
+  const own = s.pool.listPoolFleets().find((f) => f.fleetId === 'alice@acme-api');
+  assert.equal(own?.digestAt, null);
+  assert.equal(own?.stale, false);
+});

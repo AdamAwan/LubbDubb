@@ -463,7 +463,7 @@ summed twice under two names — a company-wide figure inflated by however many 
 with nothing red and nothing to notice.
 
 **The stamp is `publishedAt`, never `seenAt`.** That is the whole mechanism: the abandoned document is
-still *fetched* on every poll, so anything keyed on when it was last read never ages. Only the
+still _fetched_ on every poll, so anything keyed on when it was last read never ages. Only the
 publisher's own stamp stops advancing when the fleet behind it stops.
 
 **Seven days, and a stated constant like retention.** The digest republishes hourly and a fleet is
@@ -493,6 +493,19 @@ deletes it from the repository by hand.
 **A fleet ahead of this build never expires on the digest stamp**, because there is none to read — its
 row ages on `seenAt` instead, which is the only stamp such a fleet has. It contributes no rows either
 way, so it cannot double-count.
+
+**This fleet's own row never carries a digest stamp, and its reading clears one.** `PoolDesk` fetches
+its own document back on every poll — one writer per namespace is not one reader — and lands it as a
+reading and nothing else: the numbers in it are already this fleet's store, and mirroring them would
+fold its own figures back into the aggregate as another fleet's. So the row has no `publishedAt` to
+age on and ages on `seenAt`, exactly as a fleet ahead of this build does. The clearing is the
+load-bearing half. `recordFleetReading` writes `COALESCE(excluded.digest_at, pool_fleets.digest_at)`
+so that an `ahead` reading — which has no stamp — cannot wipe a fleet's known one, and the cost of
+that is a null which can never _clear_ a stamp either. A build that stamped its own reading before it
+was only a reading therefore left a time on the row that no later poll could move: the fleet reads
+expired against its own live publishing, for ever, on the one page that would have said so.
+`recordOwnFleetReading` writes the null outright, so a database carrying such a stamp heals on its
+next poll and no migration is owed for it.
 
 **Re-publishing undoes it.** There is no tombstone and nothing to clear: the next document inside the
 window lands like any other and the fleet is counted again. That is what makes the expiry safe — it
