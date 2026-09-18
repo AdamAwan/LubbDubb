@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { DescriptionMark, DescriptionMarks, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import type { DescriptionFinding, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -16,8 +16,6 @@ export const DESCRIPTION_QUESTIONS = [
   'missing',
   'reach',
 ] as const satisfies readonly DescriptionQuestion[];
-
-const NO_MARKS: DescriptionMarks = { 'asked-for': null, undone: null, missing: null, reach: null };
 
 /**
  * `pr_descriptions`. Append-only: an edit is a new version pointing at the one it
@@ -44,7 +42,7 @@ export class PrDescriptionStore {
         author: input.author,
         authoredAt: this.ctx.now(),
         checkedAt: null,
-        marks: NO_MARKS,
+        findings: [],
       };
       this.ctx
         .prep(
@@ -70,7 +68,7 @@ export class PrDescriptionStore {
     const row = this.ctx
       .prep(`SELECT * FROM pr_descriptions WHERE origin_ref=? ORDER BY version DESC LIMIT 1`)
       .get(originRef) as DescriptionRow | undefined;
-    return row ? rowToVersion(row) : null;
+    return row ? this.toVersion(row) : null;
   }
 
   /** The whole chain, oldest first. What the part's panel draws behind the current one. */
@@ -78,7 +76,7 @@ export class PrDescriptionStore {
     const rows = this.ctx
       .prep(`SELECT * FROM pr_descriptions WHERE origin_ref=? ORDER BY version ASC`)
       .all(originRef) as DescriptionRow[];
-    return rows.map(rowToVersion);
+    return rows.map((r) => this.toVersion(r));
   }
 
   /** Every version that carries a check, newest first. The aggregate's input. */
@@ -86,50 +84,70 @@ export class PrDescriptionStore {
     const rows = this.ctx
       .prep(`SELECT * FROM pr_descriptions WHERE checked_at IS NOT NULL ORDER BY checked_at DESC, rowid DESC`)
       .all() as DescriptionRow[];
-    return rows.map(rowToVersion);
+    return rows.map((r) => this.toVersion(r));
   }
 
   /**
-   * Writes a check's marks onto the version it read, addressed by id rather than by
-   * "the current one". The operator can edit while their own Claude Code is still
+   * Writes a check's findings onto the version it read, addressed by id rather than
+   * by "the current one". The operator can edit while their own Claude Code is still
    * reading, and a report that landed on whatever happened to be newest would mark
    * text the session never saw.
+   *
+   * A check that found nothing is a real outcome and writes `checkedAt` with no
+   * findings — which has to stay tellable from a version nobody checked.
    *
    * Returns null for a version that is not there, which is the honest answer to a
    * report naming an id the store does not hold.
    */
-  recordCheck(input: {
-    id: string;
-    marks: Partial<Readonly<Record<DescriptionQuestion, DescriptionMark | null>>>;
-  }): PrDescriptionVersion | null {
+  recordCheck(input: { id: string; findings: readonly DescriptionFinding[] }): PrDescriptionVersion | null {
     const write = this.ctx.db.transaction((): PrDescriptionVersion | null => {
       const row = this.ctx.prep(`SELECT * FROM pr_descriptions WHERE id=?`).get(input.id) as DescriptionRow | undefined;
       if (row === undefined) return null;
-      const held = rowToVersion(row);
-      const marks: Record<DescriptionQuestion, DescriptionMark | null> = { ...held.marks };
-      for (const question of DESCRIPTION_QUESTIONS) {
-        const given = input.marks[question];
-        if (given !== undefined) marks[question] = given;
-      }
       const checkedAt = this.ctx.now();
-      this.ctx
-        .prep(
-          `UPDATE pr_descriptions
-              SET checked_at=@checkedAt, mark_asked_for=@askedFor, mark_undone=@undone,
-                  mark_missing=@missing, mark_reach=@reach
-            WHERE id=@id`,
-        )
-        .run({
-          id: input.id,
-          checkedAt,
-          askedFor: marks['asked-for'],
-          undone: marks.undone,
-          missing: marks.missing,
-          reach: marks.reach,
-        });
-      return { ...held, checkedAt, marks };
+      // A re-check replaces the reading rather than appending to it: two sessions
+      // over one text are two readings of it, and kept together they read as one
+      // session that found twice as much.
+      this.ctx.prep(`DELETE FROM pr_description_findings WHERE description_id=?`).run(input.id);
+      for (const [i, finding] of input.findings.entries()) {
+        this.ctx
+          .prep(
+            `INSERT INTO pr_description_findings (id, description_id, seq, kind, note, question)
+             VALUES (@id, @descriptionId, @seq, @kind, @note, @question)`,
+          )
+          .run({
+            id: `find_${nanoid(10)}`,
+            descriptionId: input.id,
+            seq: i + 1,
+            kind: finding.kind,
+            note: finding.note,
+            question: finding.question,
+          });
+      }
+      this.ctx.prep(`UPDATE pr_descriptions SET checked_at=@checkedAt WHERE id=@id`).run({ id: input.id, checkedAt });
+      return { ...this.toVersion(row), checkedAt, findings: [...input.findings] };
     });
     return write();
+  }
+
+  private findingsOf(descriptionId: string): DescriptionFinding[] {
+    const rows = this.ctx
+      .prep(`SELECT kind, note, question FROM pr_description_findings WHERE description_id=? ORDER BY seq ASC`)
+      .all(descriptionId) as { kind: DescriptionFinding['kind']; note: string; question: DescriptionQuestion | null }[];
+    return rows.map((r) => ({ kind: r.kind, note: r.note, question: r.question }));
+  }
+
+  private toVersion(r: DescriptionRow): PrDescriptionVersion {
+    return {
+      id: r.id,
+      originRef: r.origin_ref,
+      version: r.version,
+      supersedes: r.supersedes,
+      text: r.text,
+      author: r.author,
+      authoredAt: r.authored_at,
+      checkedAt: r.checked_at,
+      findings: r.checked_at === null ? [] : this.findingsOf(r.id),
+    };
   }
 }
 
@@ -142,27 +160,4 @@ interface DescriptionRow {
   author: string | null;
   authored_at: string;
   checked_at: string | null;
-  mark_asked_for: DescriptionMark | null;
-  mark_undone: DescriptionMark | null;
-  mark_missing: DescriptionMark | null;
-  mark_reach: DescriptionMark | null;
-}
-
-function rowToVersion(r: DescriptionRow): PrDescriptionVersion {
-  return {
-    id: r.id,
-    originRef: r.origin_ref,
-    version: r.version,
-    supersedes: r.supersedes,
-    text: r.text,
-    author: r.author,
-    authoredAt: r.authored_at,
-    checkedAt: r.checked_at,
-    marks: {
-      'asked-for': r.mark_asked_for,
-      undone: r.mark_undone,
-      missing: r.mark_missing,
-      reach: r.mark_reach,
-    },
-  };
 }

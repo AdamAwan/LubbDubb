@@ -714,10 +714,16 @@ It also drops the description's **text**, which a prediction's containment rule 
 one does not need: a description is published, so reading it leaks nothing. It is dropped so that no
 panel downstream can quote an operator back at themselves.
 
-`withContradiction` is counted separately from the per-question rows and is the figure worth reading
-on its own: it counts the pull requests that would have carried a false sentence into somebody's
-review. A single "wrong" column would bury it inside the misses, which is the reading this aggregate
-exists to surface. → [07](07-pull-requests.md#four-marks-because-a-description-can-fail-two-ways)
+`contradicted` is counted apart from `gaps` and is the figure worth reading on its own: it counts the
+pull requests that would have carried a false sentence into somebody's review. A single "wrong"
+column would bury it inside the gaps, which is the reading this aggregate exists to surface. `clean`
+is counted too, because a description checked and found sound is a different outcome from one nobody
+checked and the denominator has to say so.
+
+`questionsRaised` is last and is deliberately weak. It counts how often a finding happened to name
+one of the four questions — but the questions are hints under the field rather than the shape of a
+check, most findings name none of them, and a panel leading with it would be reporting on the four
+things a check is *not* keyed by. → [07](07-pull-requests.md#a-check-is-findings-not-four-answers)
 
 ## The allowance
 

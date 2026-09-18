@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { api, type PrDescriptionReading } from '../api.js';
-import type { DescriptionMark, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
@@ -25,38 +25,64 @@ const PROMPTS: readonly { key: DescriptionQuestion; ask: string }[] = [
   { key: 'reach', ask: 'How far does it reach if it’s wrong?' },
 ];
 
+const ASK: Readonly<Record<DescriptionQuestion, string>> = Object.fromEntries(
+  PROMPTS.map(({ key, ask }) => [key, ask]),
+) as Record<DescriptionQuestion, string>;
+
 /**
- * How a mark is drawn. `contradicted` is the only one that takes red, and it is
- * spelled out rather than shortened: it is the mark that says the pull request is
- * carrying a false sentence under a person's name, and it is the reason this is a
- * four-valued mark where a prediction's is three.
+ * How a finding is drawn. `contradicted` is the only one that takes red: it means
+ * the pull request would have carried a false sentence under a person's name, which
+ * is not the same defect as having left something out.
  */
-const MARKS: Readonly<Record<DescriptionMark, { label: string; tone: 'green' | 'amber' | 'red' | 'grey' }>> = {
-  matched: { label: 'matched the diff', tone: 'green' },
-  missed: { label: 'the diff answers this and you did not', tone: 'amber' },
+const KINDS: Readonly<Record<DescriptionFindingKind, { label: string; tone: 'red' | 'amber' }>> = {
   contradicted: { label: 'the diff contradicts this', tone: 'red' },
-  'not-applicable': { label: 'not applicable here', tone: 'grey' },
+  gap: { label: 'the diff raises this and you did not', tone: 'amber' },
 };
 
+const STOOD: Readonly<Record<'clean' | 'gaps' | 'contradicted', { label: string; tone: 'green' | 'amber' | 'red' }>> = {
+  clean: { label: 'checked, and it stood up', tone: 'green' },
+  gaps: { label: 'checked — gaps', tone: 'amber' },
+  contradicted: { label: 'checked — contradicted', tone: 'red' },
+};
+
+/**
+ * The check's findings, as a list rather than a row per question.
+ *
+ * A check is not four answers. The four questions are hints under the field, and a
+ * reading keyed by them could only ever report on four things while most of what is
+ * worth saying about a description against its diff is none of them. So a finding
+ * stands on its own and names a question only where it happens to be one.
+ */
 function Checked({ version, now }: { version: PrDescriptionVersion; now: number }): JSX.Element | null {
   if (version.checkedAt === null) return null;
-  const marked = PROMPTS.filter(({ key }) => version.marks[key] !== null);
-  if (marked.length === 0) return null;
+  const stood = version.findings.some((f) => f.kind === 'contradicted')
+    ? 'contradicted'
+    : version.findings.length > 0
+      ? 'gaps'
+      : 'clean';
   return (
     <div className="cn-desc-check">
-      <div className="cn-desc-check-hdr">Checked against the diff · {relTime(version.checkedAt, now)}</div>
-      <ul className="cn-desc-marks">
-        {marked.map(({ key, ask }) => {
-          const mark = version.marks[key];
-          if (mark === null) return null;
-          return (
-            <li className="hdr hdr-base" key={key}>
-              <span className="cn-desc-ask">{ask}</span>
-              <Tag tone={MARKS[mark].tone}>{MARKS[mark].label}</Tag>
+      <div className="cn-desc-check-hdr">
+        <Tag tone={STOOD[stood].tone}>{STOOD[stood].label}</Tag>
+        <span className="cn-desc-when">{relTime(version.checkedAt, now)}</span>
+      </div>
+      {version.findings.length === 0 && (
+        <p className="cn-desc-clean">Nothing it could hold against the diff. A clean check, not an unchecked one.</p>
+      )}
+      {version.findings.length > 0 && (
+        <ul className="cn-desc-findings">
+          {version.findings.map((finding, i) => (
+            <li key={i}>
+              <div className="cn-desc-finding-hdr">
+                <Tag tone={KINDS[finding.kind].tone}>{KINDS[finding.kind].label}</Tag>
+                {/* Only where the finding happens to be one of the four. Most are not. */}
+                {finding.question !== null && <span className="cn-desc-tagged">{ASK[finding.question]}</span>}
+              </div>
+              <p className="cn-desc-note">{finding.note}</p>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

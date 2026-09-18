@@ -1,4 +1,3 @@
-import { DESCRIPTION_QUESTIONS } from '../store/prDescriptions.js';
 import type { DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -58,30 +57,17 @@ export function descriptionRefusal(text: string): string | null {
 }
 
 /**
- * How a checked description stood, as one line for a surface to draw.
+ * How a checked description stood, as one word for a surface to draw.
  *
- * `contradicted` is named first and alone wherever it appears, because it is the one
- * mark that says the pull request is carrying a false sentence under a person's
- * name. Counted in with the misses it disappears into the reading that matters
- * least. → docs/spec/18-observability.md
+ * Derived from the findings rather than stored, so there is no second record to
+ * disagree with the first. `contradicted` outranks `gaps` wherever both are present:
+ * a false sentence under a person's name is what a reader has to be told first, and
+ * a description that also left something out is still primarily one that says
+ * something untrue. → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts
  */
-export function describeMarks(version: PrDescriptionVersion): {
-  matched: number;
-  missed: number;
-  contradicted: number;
-  marked: number;
-} {
-  let matched = 0;
-  let missed = 0;
-  let contradicted = 0;
-  let marked = 0;
-  for (const question of DESCRIPTION_QUESTIONS) {
-    const mark = version.marks[question];
-    if (mark === null) continue;
-    marked += 1;
-    if (mark === 'matched') matched += 1;
-    else if (mark === 'missed') missed += 1;
-    else if (mark === 'contradicted') contradicted += 1;
-  }
-  return { matched, missed, contradicted, marked };
+export function descriptionStanding(version: PrDescriptionVersion): 'unchecked' | 'clean' | 'gaps' | 'contradicted' {
+  if (version.checkedAt === null) return 'unchecked';
+  if (version.findings.some((f) => f.kind === 'contradicted')) return 'contradicted';
+  if (version.findings.length > 0) return 'gaps';
+  return 'clean';
 }

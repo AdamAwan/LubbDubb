@@ -765,22 +765,44 @@ gone and the surface still reads as though it is working. There is no argument o
 could carry a description, the skill says never to offer one, and the press is named **Check my
 description** rather than anything that suggests the session produces it.
 
-#### Four marks, because a description can fail two ways
+#### A check is findings, not four answers
 
-`DescriptionMark` is `matched | missed | contradicted | not-applicable`, where `PredictionMark` is
-three-valued. The fourth is the reason it is not that type: a prediction can only be wrong about
-something, but a description can be wrong about something **or assert something the diff
-contradicts**, and those are not the same defect. A question nobody answered leaves a reviewer to
-find out for themselves; `contradicted` ships a false sentence under a person's name. Folded
-together, the reading that matters most disappears into the one that matters least.
+`description_check` takes a list of findings and no marks, and this is the correction
+worth recording rather than the design that was almost shipped.
 
-Null is a fifth value and never a miss, for the reason an unmarked prediction slot is not one: the
-aggregate counts marks, and folding an unreached question into `missed` files a question nobody
-asked as a description that failed.
+The four questions are **hints under the field**. A check keyed *by* them — one mark
+per question — quietly makes them the schema: it can report on four things, and
+everything else a session notices reading a description against its diff has nowhere
+to go. That is most of it. A rename the description does not mention, a claim about a
+re-export the index contradicts, a behaviour change buried in a sentence about
+something else: none of those is one of the four, and all of them are why the check
+exists.
 
-A check is addressed by **version id**, never by "the current one". The operator can edit while their
-own Claude Code is still reading, and a report that landed on whatever was newest would mark text the
-session never saw.
+So a finding stands on its own. It carries a `kind` and a note, and a `question` only
+where it happens to be one of the four — which is worth recording, because "the diff
+raises this and the description does not answer it" is a real finding, but it is one
+finding shape among others rather than the frame.
+
+Two kinds, and they are not the same defect:
+
+- **`contradicted`** — the description asserts something the diff does not do. This
+  is the one to say first: it means the pull request would have carried a false
+  sentence under a person's name into somebody's review.
+- **`gap`** — the diff raises something the description does not. A reviewer left to
+  find it out for themselves, which is worse than nothing said and better than
+  something untrue.
+
+`descriptionStanding` derives one word from them — `unchecked`, `clean`, `gaps`,
+`contradicted` — and is derived rather than stored so there is no second record to
+disagree with the first. `contradicted` outranks `gaps` wherever both are present.
+
+**A clean check is not an unchecked description.** An empty finding list with
+`checkedAt` set says a session read it against the diff and it stood up; a null
+`checkedAt` says nobody looked. Folding them together loses the whole reading, and it
+is the one the operator most wants to see.
+
+**A re-check replaces the reading.** Two sessions over one text are two readings of
+it, and appended they read as one session that found twice as much.
 
 ### What the harness can see for itself
 

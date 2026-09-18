@@ -9,7 +9,7 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { descriptionRefusal, describeMarks, PR_DESCRIPTION } from '../src/pr/prDescription.js';
+import { descriptionRefusal, descriptionStanding, PR_DESCRIPTION } from '../src/pr/prDescription.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -86,12 +86,12 @@ test('a check lands on the version it read, never on whatever is newest', () => 
 
     const marked = system.store.prDescriptions.recordCheck({
       id: read.id,
-      marks: { 'asked-for': 'matched', undone: 'contradicted' },
+      findings: [{ kind: 'contradicted', note: 'src/sync/resume.ts:91 throws on a missing row.', question: null }],
     });
 
     assert.equal(marked!.id, read.id);
-    assert.equal(marked!.marks.undone, 'contradicted');
-    assert.equal(marked!.marks.missing, null, 'a question the check did not reach stays null, never a miss');
+    assert.equal(marked!.findings.length, 1);
+    assert.equal(marked!.findings[0]!.question, null, 'a finding names a question only where it is one');
     assert.equal(
       system.store.prDescriptions.currentDescription(ref)!.checkedAt,
       null,
@@ -106,25 +106,69 @@ test('a check lands on the version it read, never on whatever is newest', () => 
 test('a report naming a version the store does not hold is answered null, not guessed at', () => {
   const system = systemWith(true);
   try {
-    assert.equal(system.store.prDescriptions.recordCheck({ id: 'desc_gone', marks: { reach: 'matched' } }), null);
+    assert.equal(system.store.prDescriptions.recordCheck({ id: 'desc_gone', findings: [] }), null);
   } finally {
     system.store.close();
   }
 });
 
-test('contradicted is counted apart from missed, because they are not the same defect', () => {
+test('a check is findings, not four answers, and a clean one is not an unchecked one', () => {
   const system = systemWith(true);
   try {
-    const version = system.store.prDescriptions.appendDescription({
-      originRef: 'issue:390:part:schemas',
-      text: 'The old paths re-export, so nothing importing them has to change.',
-      author: 'operator',
-    });
-    const marked = system.store.prDescriptions.recordCheck({
-      id: version.id,
-      marks: { 'asked-for': 'matched', undone: 'contradicted', missing: 'missed', reach: 'matched' },
-    });
-    assert.deepEqual(describeMarks(marked!), { matched: 2, missed: 1, contradicted: 1, marked: 4 });
+    const store = system.store.prDescriptions;
+
+    const untouched = store.appendDescription({ originRef: 'issue:390:part:a', text: 'A.', author: 'operator' });
+    assert.equal(descriptionStanding(untouched), 'unchecked');
+
+    // A check that found nothing is a result, and has to stay tellable from no check.
+    const clean = store.appendDescription({ originRef: 'issue:390:part:b', text: 'B.', author: 'operator' });
+    assert.equal(descriptionStanding(store.recordCheck({ id: clean.id, findings: [] })!), 'clean');
+
+    // Findings that name none of the four questions are the ordinary case, and the
+    // record has to hold them — a check keyed by the questions could not.
+    const gaps = store.appendDescription({ originRef: 'issue:390:part:c', text: 'C.', author: 'operator' });
+    const gapped = store.recordCheck({
+      id: gaps.id,
+      findings: [
+        { kind: 'gap', note: 'The rename in src/jobs/catalog.ts:8 is not mentioned.', question: null },
+        { kind: 'gap', note: 'Nothing covers the older-build row.', question: 'missing' },
+      ],
+    })!;
+    assert.equal(descriptionStanding(gapped), 'gaps');
+    assert.deepEqual(
+      gapped.findings.map((f) => f.question),
+      [null, 'missing'],
+      'the tag is optional and the order is the session’s',
+    );
+
+    // One contradiction outranks any number of gaps.
+    const bad = store.appendDescription({ originRef: 'issue:390:part:d', text: 'D.', author: 'operator' });
+    assert.equal(
+      descriptionStanding(
+        store.recordCheck({
+          id: bad.id,
+          findings: [
+            { kind: 'gap', note: 'A gap.', question: null },
+            { kind: 'contradicted', note: 'src/a.ts:1 does not do this.', question: null },
+          ],
+        })!,
+      ),
+      'contradicted',
+    );
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a re-check replaces the reading rather than piling onto it', () => {
+  const system = systemWith(true);
+  try {
+    const store = system.store.prDescriptions;
+    const version = store.appendDescription({ originRef: 'issue:390:part:e', text: 'E.', author: 'operator' });
+    store.recordCheck({ id: version.id, findings: [{ kind: 'gap', note: 'first pass', question: null }] });
+    const second = store.recordCheck({ id: version.id, findings: [] })!;
+    assert.deepEqual(second.findings, [], 'two sessions over one text are two readings, never one that found twice');
+    assert.equal(descriptionStanding(second), 'clean');
   } finally {
     system.store.close();
   }

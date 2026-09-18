@@ -2230,39 +2230,32 @@ export interface GoalCriteriaVersion {
 export type DescriptionQuestion = 'asked-for' | 'undone' | 'missing' | 'reach';
 
 /**
- * How one question stood when the description was checked against the diff.
+ * What one finding of a description check says.
  *
- * Four-valued where {@link PredictionMark} is three, and the fourth is the whole
- * reason this is not that type. A prediction can only fail by being wrong about
- * something; a description can fail by being wrong about something **or** by
- * asserting something the diff contradicts, and those are not the same defect. A
- * question nobody answered leaves a reviewer to find out for themselves;
- * `contradicted` ships a false sentence under a person's name, which is worse than
- * having said nothing. Folded together, the reading that matters most disappears
- * into the one that matters least.
+ * `contradicted` is the description asserting something the diff does not do, and it
+ * is the one worth reading on its own: it means the pull request would have carried
+ * a false sentence under a person's name into somebody's review. `gap` is something
+ * the diff raises that the description does not — a reviewer left to find it out for
+ * themselves, which is worse than nothing said but not the same defect.
  */
-export type DescriptionMark = 'matched' | 'missed' | 'contradicted' | 'not-applicable';
+export type DescriptionFindingKind = 'contradicted' | 'gap';
 
 /**
- * A question's mark, or null for one the check did not reach. Null is a fifth value
- * and never a miss, for {@link PredictionPlanMarks}' reason: the aggregate counts
- * marks, and folding an unreached question into `missed` files a question nobody
- * asked as a description that failed.
+ * One thing a check found.
+ *
+ * `question` is an **optional tag**, not the schema. The four questions are hints
+ * under the field and it is worth recording when the diff raises one the description
+ * cannot answer — but a check keyed *by* them can only report on four things, and
+ * most of what is worth saying about a description against its diff is none of them.
+ * So a finding stands on its own and names a question only where it happens to be
+ * one. → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts
  */
-export type DescriptionMarks = Readonly<Record<DescriptionQuestion, DescriptionMark | null>>;
+export interface DescriptionFinding {
+  kind: DescriptionFindingKind;
+  note: string;
+  question: DescriptionQuestion | null;
+}
 
-/**
- * One version of a part's pull-request description, as the operator wrote it.
- *
- * Append-only the way `goal_criteria` is: an edit is a new version pointing at the
- * one it supersedes, so what actually shipped on a pull request stays readable after
- * the operator has rewritten it. `originRef` is the **part's** origin —
- * `issue:<n>:part:<slug>` — because one part is one pull request and a goal is not.
- *
- * `checkedAt` and `marks` are the desktop session's reading, written onto the
- * version it read. A version with `checkedAt` null was saved without a check, which
- * is an ordinary outcome and not a failure: the check is offered, never required.
- */
 export interface PrDescriptionVersion {
   id: string;
   originRef: string;
@@ -2272,5 +2265,5 @@ export interface PrDescriptionVersion {
   author: string | null;
   authoredAt: string;
   checkedAt: string | null;
-  marks: DescriptionMarks;
+  findings: DescriptionFinding[];
 }

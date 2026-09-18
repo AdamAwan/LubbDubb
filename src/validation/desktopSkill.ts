@@ -590,21 +590,28 @@ an agent's. There is no argument on \`description_check\` that could carry a
 rewritten description, and that is deliberate. **Never offer one, even if asked.**
 Say what is wrong and let them fix it.
 
-Mark each of the four questions you reached:
+Report one finding per thing you found, most serious first:
 
-- \`matched\` — they got it right.
-- \`missed\` — the diff answers this and the description does not.
-- \`contradicted\` — the description asserts something the diff does not do. Say this
-  one first and plainly. It is the reading the whole exercise exists to produce, and
-  it is the only one that means the pull request is carrying a false sentence under
-  somebody's name.
-- \`not-applicable\` — the change genuinely does not raise this question.
+- \`contradicted\` — the description asserts something the diff does not do. Say
+  these first. They are the only findings that mean the pull request would have put
+  a false sentence in front of a reviewer under somebody else's name.
+- \`gap\` — the diff raises something the description does not.
+
+**The four questions under the field are hints, not the shape of your check.** Tag a
+finding with one only where it genuinely is one of them; most of what is worth saying
+about a description against its diff is none of the four, and a check that only looks
+for those four answers is a check that misses everything else. Report what you
+actually found.
+
+A check that found nothing real reports an **empty list**. That is a result — the
+description stood up — and it is recorded differently from a description nobody
+checked. Do not pad it with findings you do not believe to make the check look like
+it did something.
 
 Then argue. They will push back — "that throw is behind a flag we default off" —
 and they are often right, because they know things the diff does not say. Check, and
 say so when you were wrong. A finding you cannot stand behind after one round was
-not a finding. Report once you have both settled, with a coordinate on every finding
-the diff is what settles.
+not a finding; drop it rather than reporting it softened.
 
 Leave a description alone where nobody wrote one: \`description_read\` says so, and
 the answer is that there is nothing to check — not an offer to write it.

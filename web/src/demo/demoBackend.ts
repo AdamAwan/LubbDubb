@@ -365,12 +365,18 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
         author: DEMO_OPERATOR,
         authoredAt: ago(240),
         checkedAt: ago(236),
-        marks: {
-          'asked-for': 'matched',
-          undone: 'contradicted',
-          missing: 'matched',
-          reach: 'matched',
-        },
+        findings: [
+          {
+            kind: 'contradicted',
+            note: 'The old paths do not re-export — packages/jobs/src/index.ts:12 drops four of them, so three callers outside this package stop compiling.',
+            question: null,
+          },
+          {
+            kind: 'gap',
+            note: 'The migration that backfills job_catalog has already run on anything that booted this build, so a revert leaves the rows behind — packages/jobs/migrations/014_catalog.sql:1',
+            question: 'undone',
+          },
+        ],
       },
     ],
   ],
@@ -390,7 +396,7 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
         author: DEMO_OPERATOR,
         authoredAt: ago(20),
         checkedAt: null,
-        marks: { 'asked-for': null, undone: null, missing: null, reach: null },
+        findings: [],
       },
     ],
   ],
@@ -525,7 +531,7 @@ class DemoServer {
       author: DEMO_OPERATOR,
       authoredAt: new Date().toISOString(),
       checkedAt: null,
-      marks: { 'asked-for': null, undone: null, missing: null, reach: null },
+      findings: [],
     };
     this.descriptions.set(originRef, [...held, version]);
     return { ok: true, version };

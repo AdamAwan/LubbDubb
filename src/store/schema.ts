@@ -2226,11 +2226,22 @@ CREATE TABLE IF NOT EXISTS pr_descriptions (
   author            TEXT,
   authored_at       TEXT NOT NULL,
   checked_at        TEXT,
-  mark_asked_for    TEXT,
-  mark_undone       TEXT,
-  mark_missing      TEXT,
-  mark_reach        TEXT,
   UNIQUE (origin_ref, version)
+);
+
+-- What one check found, one row each. A table rather than columns on the version
+-- because a check is not four answers: the four questions under the field are hints,
+-- and a record keyed by them can only ever report on four things, while most of what
+-- is worth saying about a description against its diff is none of them. A finding
+-- names a question only where it happens to be one.
+CREATE TABLE IF NOT EXISTS pr_description_findings (
+  id             TEXT PRIMARY KEY,
+  description_id TEXT NOT NULL,
+  seq            INTEGER NOT NULL,
+  kind           TEXT NOT NULL,   -- contradicted | gap
+  note           TEXT NOT NULL,
+  question       TEXT,            -- an optional tag, never the schema
+  UNIQUE (description_id, seq)
 );
 
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
@@ -2275,4 +2286,5 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_sugges
 CREATE INDEX IF NOT EXISTS idx_goal_criteria_origin ON goal_criteria(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_goal_criteria_drift_origin ON goal_criteria_drift(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_pr_descriptions_origin ON pr_descriptions(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_pr_description_findings_desc ON pr_description_findings(description_id);
 `;

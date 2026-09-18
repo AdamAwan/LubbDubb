@@ -6430,21 +6430,48 @@ button.cn-grow {
   background: var(--cn-panel-2);
 }
 .cn-desc-check-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.cn-desc-when {
   font-size: 11.5px;
   color: var(--cn-fg-dim);
-  margin-bottom: 8px;
 }
-.cn-desc-marks {
+.cn-desc-clean {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+/* A list of findings rather than a row per question: a check is not four answers,
+   and most of what it has to say names none of the four. */
+.cn-desc-findings {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 7px;
+  gap: 11px;
 }
-.cn-desc-ask {
+.cn-desc-finding-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+/* The question a finding happens to name, drawn after the kind rather than instead
+   of it — the tag is an aside, and led with it would read as the schema it is not. */
+.cn-desc-tagged {
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-desc-note {
+  margin: 0;
   font-size: 12.5px;
+  line-height: 1.55;
   color: var(--cn-fg);
-  flex-grow: 1;
 }
 .cn-desc-form {
   padding: 0 13px 11px;

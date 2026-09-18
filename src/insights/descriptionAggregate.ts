@@ -1,57 +1,55 @@
-import { DESCRIPTION_QUESTIONS } from '../store/prDescriptions.js';
-import type { DescriptionMark, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import { descriptionStanding } from '../pr/prDescription.js';
+import type { DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 
 // → docs/spec/18-observability.md#how-a-description-stood
 
 /**
- * What the aggregate is allowed to see of a description: which questions were
- * marked, and how. **Never the text, and never the author.**
+ * What the aggregate is allowed to see of a description: how it stood, and which of
+ * the four questions its findings happened to name. **Never the text, never a
+ * finding's note, and never the author.**
  *
  * The author column is dropped for the reason `predictionAggregate` drops it —
  * scoring people is out of scope, so the author-grouped filter a later change would
- * reach for has nothing here to group by. The text is dropped for a weaker reason
- * than a prediction's containment, because a description is published and reading it
- * leaks nothing: it is dropped so that no panel downstream can quote an operator
- * back at themselves. Both are the invariant made structural rather than promised.
+ * reach for has nothing here to group by. The prose is dropped so that no panel
+ * downstream can quote either the operator or the session that checked them back at
+ * anybody; the aggregate is a count of how often the account and the code agreed,
+ * and it needs no sentence to say that.
  */
 interface DescriptionFacts {
   originRef: string;
-  marks: Readonly<Record<DescriptionQuestion, DescriptionMark | null>>;
+  stood: ReturnType<typeof descriptionStanding>;
+  questionsRaised: readonly DescriptionQuestion[];
 }
 
 /** The one door a `PrDescriptionVersion` comes through on its way to a figure. */
 function descriptionFacts(version: PrDescriptionVersion): DescriptionFacts {
-  return { originRef: version.originRef, marks: version.marks };
-}
-
-/**
- * How one question has stood across every checked description.
- *
- * `contradicted` has a count of its own and is never folded into `missed`. They are
- * not the same defect: a question nobody answered leaves a reviewer to find out for
- * themselves, and a contradicted one ships a false sentence under a person's name.
- * A single "wrong" column would bury the second inside the first, which is exactly
- * the reading this aggregate exists to surface.
- * → docs/spec/07-pull-requests.md#four-marks-because-a-description-can-fail-two-ways
- */
-interface DescriptionQuestionCount {
-  question: DescriptionQuestion;
-  matched: number;
-  missed: number;
-  contradicted: number;
-  notApplicable: number;
+  return {
+    originRef: version.originRef,
+    stood: descriptionStanding(version),
+    questionsRaised: version.findings.flatMap((f) => (f.question === null ? [] : [f.question])),
+  };
 }
 
 interface DescriptionAggregate {
   /** Descriptions with a check on them. The n every count below is over. */
   checked: number;
+  /** Checked and nothing found. A real outcome, and not the same as never checked. */
+  clean: number;
   /**
-   * Descriptions whose check found at least one contradiction, which is the figure
-   * worth reading on its own: it counts pull requests that would have carried a
-   * false sentence into a review.
+   * Checks that found the description asserting something the diff does not do. The
+   * figure worth reading on its own: it counts the pull requests that would have
+   * carried a false sentence into somebody's review.
    */
-  withContradiction: number;
-  questions: DescriptionQuestionCount[];
+  contradicted: number;
+  /** Checks whose findings were all gaps — something the diff raises and the description does not. */
+  gaps: number;
+  /**
+   * How often each of the four questions was the thing a finding named. A weak
+   * signal deliberately placed last: the questions are hints under the field rather
+   * than the shape of a check, most findings name none of them, and a panel that led
+   * with this would be reporting on the four things a check is *not* keyed by.
+   */
+  questionsRaised: { question: DescriptionQuestion; count: number }[];
   /**
    * Below `threshold` the counts are withheld and this carries the n instead, the
    * shape `PredictionRate` already uses — a rate over four descriptions is noise
@@ -69,35 +67,29 @@ export function buildDescriptionAggregate(
   threshold: number,
 ): DescriptionAggregate {
   const facts = versions.map(descriptionFacts);
-  const questions: DescriptionQuestionCount[] = DESCRIPTION_QUESTIONS.map((question) => ({
-    question,
-    matched: 0,
-    missed: 0,
-    contradicted: 0,
-    notApplicable: 0,
-  }));
-  let withContradiction = 0;
+  const raised = new Map<DescriptionQuestion, number>();
+  let clean = 0;
+  let contradicted = 0;
+  let gaps = 0;
 
   for (const fact of facts) {
-    let contradicted = false;
-    for (const [i, question] of DESCRIPTION_QUESTIONS.entries()) {
-      const mark = fact.marks[question];
-      const row = questions[i]!;
-      if (mark === 'matched') row.matched += 1;
-      else if (mark === 'missed') row.missed += 1;
-      else if (mark === 'contradicted') {
-        row.contradicted += 1;
-        contradicted = true;
-      } else if (mark === 'not-applicable') row.notApplicable += 1;
-    }
-    if (contradicted) withContradiction += 1;
+    if (fact.stood === 'clean') clean += 1;
+    else if (fact.stood === 'contradicted') contradicted += 1;
+    else if (fact.stood === 'gaps') gaps += 1;
+    for (const question of new Set(fact.questionsRaised)) raised.set(question, (raised.get(question) ?? 0) + 1);
   }
 
   const belowThreshold = facts.length < threshold;
   return {
     checked: facts.length,
-    withContradiction: belowThreshold ? 0 : withContradiction,
-    questions: belowThreshold ? [] : questions,
+    clean: belowThreshold ? 0 : clean,
+    contradicted: belowThreshold ? 0 : contradicted,
+    gaps: belowThreshold ? 0 : gaps,
+    questionsRaised: belowThreshold
+      ? []
+      : [...raised.entries()]
+          .map(([question, count]) => ({ question, count }))
+          .sort((a, b) => b.count - a.count || a.question.localeCompare(b.question)),
     belowThreshold,
   };
 }

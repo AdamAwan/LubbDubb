@@ -458,9 +458,13 @@ Two decisions worth keeping:
   operator accepts. A `DesktopLink` carries it, so the check runs in the operator's own Claude Code.
   → [07](07-pull-requests.md#it-contradicts-it-never-drafts)
 
-The marks are drawn under the text they were taken of rather than in the header, where they would
-read as a verdict on the panel rather than a reading of those words. `contradicted` is the only one
-that takes red, and it is spelled out.
+The check is drawn under the text it was taken of rather than in the header, where it would read as a
+verdict on the panel rather than a reading of those words. It is a **list of findings**, not a row
+per question: a finding names one of the four only where it happens to be one, and the tag is drawn
+after the kind rather than instead of it, because led with it would read as the schema it is not.
+`contradicted` is the only kind that takes red. A check that found nothing says so in words — a
+clean check and an unchecked description are different things and the panel has to tell them apart.
+→ [07](07-pull-requests.md#a-check-is-findings-not-four-answers)
 
 ## The address bar
 
