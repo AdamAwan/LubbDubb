@@ -8,6 +8,7 @@ import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatCheckli
 import { CheckSetAsk, useCheckDeclines } from './CheckSetAsk.js';
 import { checkSetOf } from '../checkSet.js';
 import { PlanAnswers } from './PlanAnswers.js';
+import { HOLDS_NOTHING_UP, PREDICT_WHY } from './PlanRevealGate.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
@@ -34,6 +35,8 @@ export function EscalationCard({
   onExtend,
   stallExpiresAt,
   onViewPlan,
+  withheld,
+  onReveal,
 }: {
   escalation: Escalation;
   proposal?: Proposal;
@@ -60,6 +63,14 @@ export function EscalationCard({
   stallExpiresAt?: string | null;
   onExtend?: (agentId: string) => Promise<unknown> | unknown;
   onViewPlan?: (planId: string) => void;
+  /**
+   * Whether this ask's plan is still withheld pending the reveal. Handed in rather
+   * than read here, because the card holds no plans — it is `PlanView.revealed`,
+   * the one fact the wire carries for exactly this.
+   */
+  withheld?: boolean;
+  /** Opens the goal on the pane the gate is drawn in. → docs/spec/17-cockpit.md#the-reveal-gate */
+  onReveal?: () => void;
 }) {
   const [text, setText] = useState('');
   const [asking, setAsking] = useState(false);
@@ -75,6 +86,13 @@ export function EscalationCard({
   const ack = useAcknowledgements(caveats);
   const held = ack.outstanding.length > 0;
   const planDecidable = decidable?.kind === 'plan' && onDecide && onBackOut ? decidable : null;
+  /* While the gate stands there is exactly one thing to do here and it is not on
+     this card: approving, refusing and backing out are all refused server-side, and
+     the sheet behind "Read the full plan" answers 409 — so the verdict row and both
+     doors into the document are replaced by the one press that leads to the gate.
+     A card offering four answers that each end in a refusal is the ask telling the
+     operator to guess. → docs/spec/17-cockpit.md#the-reveal-gate */
+  const gated = planDecidable !== null && withheld === true && onReveal !== undefined;
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
   const expiring = escalation.agentId && stallExpiresAt ? stallExpiresAt : null;
   const [headline, prose] = splitPrompt(escalation.prompt);
@@ -166,7 +184,21 @@ export function EscalationCard({
           wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
       {checkSet !== null ? <CheckSetAsk set={checkSet} declines={declines} /> : null}
 
-      {context.detail && checkSet === null ? (
+      {/* The stand-in is the *same sentence* as the prompt above it, so a withheld
+          plan drew "it is withheld until you reveal it" twice and made no case for
+          the press under it. The gate's own argument stands here instead: this card
+          is where the operator meets the plan first, and the offer has to be made
+          where it is met. → docs/spec/17-cockpit.md#the-reveal-gate */}
+      {gated ? (
+        <div className="esc-context">
+          <div className="lb lb-sm">Why you are being stopped</div>
+          <div className="esc-detail">
+            <p>
+              {PREDICT_WHY} {HOLDS_NOTHING_UP}
+            </p>
+          </div>
+        </div>
+      ) : context.detail && checkSet === null ? (
         <div className="esc-context">
           <div className="lb lb-sm">{detailLabel(context, escalation.agentId)}</div>
           <div className="esc-detail">{renderMarkdown(String(context.detail), refUrls)}</div>
@@ -220,7 +252,7 @@ export function EscalationCard({
         </div>
       ) : null}
 
-      {planId && !planDecidable ? (
+      {planId && !planDecidable && !gated ? (
         <Button className="esc-plan-open" onClick={() => onViewPlan!(planId)}>
           <span className="esc-plan-open-label">Read the full plan</span>
           <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
@@ -261,6 +293,13 @@ export function EscalationCard({
             Deny
           </AsyncButton>
         </div>
+      ) : gated ? (
+        <Button className="esc-plan-open" onClick={onReveal}>
+          <span className="esc-plan-open-label">Reveal the plan</span>
+          <span className="esc-plan-open-hint">
+            the prediction and what “done” means are asked first, on the goal — then it is yours to read →
+          </span>
+        </Button>
       ) : planDecidable ? (
         <>
           <CaveatChecklist

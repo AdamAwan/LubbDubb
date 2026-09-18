@@ -13,6 +13,30 @@ const SLOTS: readonly { key: keyof PredictionDraft; question: string }[] = [
   { key: 'surprise', question: 'What would surprise me?' },
 ];
 
+/**
+ * Why predicting is worth the interruption, in the gate's own words.
+ *
+ * Exported because the approval ask carries it too: the rail is where an operator
+ * meets this plan first, and a card that says only that the plan is withheld argues
+ * nothing — it reads as an obstacle rather than as the offer it is. Two spellings of
+ * the one argument is how the gate comes to be resented on one surface and welcomed
+ * on the other.
+ *
+ * @public drawn by `EscalationCard` on a withheld plan's ask
+ */
+export const PREDICT_WHY =
+  'Writing down what you expect before you read it is the only way the record can tell a hunch that was ' +
+  'right from one you formed afterwards.';
+
+/**
+ * The half of the offer that is about cost, always said last. It is the answer to
+ * the question the interruption raises — is the fleet waiting on me — and it is no
+ * less true on the ask than it is on the gate.
+ *
+ * @public drawn by `EscalationCard` on a withheld plan's ask
+ */
+export const HOLDS_NOTHING_UP = 'It holds nothing up: the fleet is not waiting on this.';
+
 const CONTAINMENT =
   'What you write here is kept from every agent the harness runs — it goes into no prompt, no ' +
   'transcript and no tool answer. The one leak the containment cannot stop is you: paste it into ' +
@@ -145,11 +169,10 @@ export function PlanRevealGate({
       <div className="cn-gate-over">
         <h4>{asksCriteria ? 'A plan is ready. Anything to write down first?' : 'A plan is ready. Predict first?'}</h4>
         <p className="cn-gate-why">
-          Writing down what you expect before you read it is the only way the record can tell a hunch that was right
-          from one you formed afterwards.
+          {PREDICT_WHY}
           {asksCriteria &&
             ' This is also the last moment at which what you call “done” is your answer and not the plan’s.'}{' '}
-          It holds nothing up: the fleet is not waiting on this.
+          {HOLDS_NOTHING_UP}
         </p>
         {!composing && (
           <div className="cn-gate-presses">

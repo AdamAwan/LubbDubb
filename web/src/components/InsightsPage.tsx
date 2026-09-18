@@ -119,7 +119,6 @@ export function InsightsPage({
   const [usage, setUsage] = useState<Fetched<UsagePayload>>(PENDING);
   const usageFetchedFor = useRef<InsightsWindow | null>(null);
   const [prediction, setPrediction] = useState<Fetched<PredictionAggregate>>(PENDING);
-  const predictionFetched = useRef(false);
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
   useEffect(() => {
@@ -241,10 +240,15 @@ export function InsightsPage({
   }, [view, chosen, scope]);
 
   /* No window in the dependency list, and no reset when the bar moves: the
-     aggregate is a fold over the whole record. → docs/spec/17-cockpit.md */
+     aggregate is a fold over the whole record. → docs/spec/17-cockpit.md
+     It is read again on every arrival at the tab rather than once per mount,
+     because marking a slot on a goal page moves these figures — and a once-only
+     ref would have to be cleared somewhere, which under the double-invoked effects
+     of a development build leaves the panel reading "Reading the prediction
+     record…" for good: the first pass is cancelled and the second bails on the
+     ref the first one set. */
   useEffect(() => {
-    if (scope !== 'mine' || view !== 'prediction' || predictionFetched.current) return;
-    predictionFetched.current = true;
+    if (scope !== 'mine' || view !== 'prediction') return;
     let live = true;
     setPrediction(PENDING);
     api

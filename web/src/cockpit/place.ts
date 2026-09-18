@@ -93,6 +93,24 @@ const DEFAULT_HOME: ConsoleTab = 'overview';
 export function homeTab(tab: ConsoleTab): ConsoleTab {
   return HOME_TABS.includes(tab) ? tab : DEFAULT_HOME;
 }
+
+/**
+ * The patch that opens a goal page, or closes one.
+ *
+ * The pane and the section folds are picks made on **one** goal and are dropped on
+ * the way to another. Carried over, the pane outranks the lifecycle rule on a goal
+ * the operator has never opened — so a rail row sending them to a goal to answer
+ * something lands them wherever they happened to be reading last, on a pane that
+ * may draw nothing about why they were sent, with nothing red.
+ * → docs/spec/17-cockpit.md#which-pane-opens
+ *
+ * @public the seam `useCockpit`'s goal moves are asserted through
+ */
+export function goalMove(current: Place, ref: string | null): Partial<Place> {
+  if (ref === null) return { goal: null, pr: null };
+  const move = { goal: ref, pr: null, tab: homeTab(current.tab) };
+  return current.goal === ref ? move : { ...move, goalTab: null, goalOpen: [], goalShut: [] };
+}
 const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'economics',
   'allowance',

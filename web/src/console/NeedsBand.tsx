@@ -7,6 +7,8 @@ import type { HumanTask, Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
+import { GOAL_ANCHOR } from '../view/goalPage.js';
+import { scrollToAnchor } from './jump.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { ParentPicker } from '../components/ParentPicker.js';
@@ -342,9 +344,28 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   }
   const escalation = view.state.escalations.find((e) => e.id === row.id);
   if (!escalation) return null;
+  /* `PlanView.revealed` is the server's fact about whether the plan behind this ask
+     is on the wire at all, and the card holds no plans of its own. Without it the
+     card draws four answers the routes refuse. → docs/spec/17-cockpit.md#the-reveal-gate */
+  const planId = typeof escalation.context.planId === 'string' ? escalation.context.planId : null;
+  const withheld = planId !== null && (view.state.plans ?? []).some((p) => p.id === planId && !p.revealed);
+  const goalRef = row.goalRef;
   return (
     <EscalationCard
       escalation={escalation}
+      withheld={withheld}
+      {...(goalRef === null
+        ? {}
+        : {
+            /* Both halves, and the second is not decoration: pressed from the goal
+               page the ask is already on, the navigation is a no-op and the card
+               reads as a control that does nothing — the gate is further down the
+               same page. → docs/spec/17-cockpit.md#the-reveal-gate */
+            onReveal: () => {
+              actions.openGoalPrediction(goalRef);
+              scrollToAnchor(GOAL_ANCHOR.plan);
+            },
+          })}
       proposal={view.proposalFor.get(escalation.id)}
       resumedAt={escalation.agentId ? (view.agentById.get(escalation.agentId)?.resumedAt ?? null) : null}
       now={view.now}

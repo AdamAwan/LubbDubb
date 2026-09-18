@@ -15,6 +15,7 @@ import type { NeedRow } from '../view/needsYou.js';
 import {
   buildGoalStrip,
   goalSectionsOpen,
+  GOAL_ANCHOR,
   goalTabBadges,
   goalTabOpening,
   reachCount,
@@ -72,6 +73,7 @@ import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
+import { scrollToAnchor } from './jump.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
@@ -97,13 +99,6 @@ const CHIP_TONE: Record<LocalValidationTone, string> = {
   busy: 't-amber',
   bad: 't-red',
   off: '',
-};
-
-const ANCHOR: Record<GoalStageAt, string> = {
-  plan: 'cn-plan',
-  validation: 'cn-validation',
-  environments: 'cn-environments',
-  tail: 'cn-tail',
 };
 
 const STAGE_SECTION: Record<GoalStageAt, GoalSection | null> = {
@@ -384,11 +379,7 @@ function buildJump(folds: Record<GoalSection, Fold>, actions: CockpitActions): G
   return (tab, section, anchor) => {
     actions.openGoalTab(tab);
     if (section !== null) folds[section].reveal();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      });
-    });
+    scrollToAnchor(anchor);
   };
 }
 
@@ -411,7 +402,7 @@ function Stage({ stage, jump }: { stage: GoalStage; jump: GoalJump }): JSX.Eleme
     <button
       type="button"
       className={`cn-tk cn-t-${stage.tone}`}
-      onClick={() => jump(STAGE_TAB[stage.at], STAGE_SECTION[stage.at], ANCHOR[stage.at])}
+      onClick={() => jump(STAGE_TAB[stage.at], STAGE_SECTION[stage.at], GOAL_ANCHOR[stage.at])}
       title={`${stage.label}: ${stage.reading} — go to it`}
     >
       <span className="cn-tkk">{stage.label}</span>
@@ -565,7 +556,7 @@ function Header({
           <button
             type="button"
             className={`tag tag-fill tag-button ${issue.validation.state === 'clear' ? 't-green' : 't-amber'}`}
-            onClick={() => jump(GOAL_TAB_OF.validation, 'validation', ANCHOR.validation)}
+            onClick={() => jump(GOAL_TAB_OF.validation, 'validation', GOAL_ANCHOR.validation)}
             title={
               issue.validation.state === 'clear'
                 ? `All ${issue.validation.total} checks are done — go to them`
@@ -944,7 +935,7 @@ function Validation({
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
 
   return (
-    <section className="cn-card" id={ANCHOR.validation}>
+    <section className="cn-card" id={GOAL_ANCHOR.validation}>
       <h3>
         <Disclosure open={fold.open} onToggle={fold.onToggle} label="Checks" />
         {live.length > 0 && (
@@ -1134,7 +1125,7 @@ function PlanWaves({
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
 
   return (
-    <section className="cn-card" id={ANCHOR.plan}>
+    <section className="cn-card" id={GOAL_ANCHOR.plan}>
       <h3>
         The plan
         {page.parts.length > 0 && <i className="cn-n">{page.parts.length} parts</i>}
@@ -1526,7 +1517,7 @@ function Environments({
   const number = page.issue.number;
   const reached = page.environments.filter((e) => e.status === 'reached').length;
   return (
-    <section className="cn-card" id={ANCHOR.environments}>
+    <section className="cn-card" id={GOAL_ANCHOR.environments}>
       <h3>
         <Disclosure open={fold.open} onToggle={fold.onToggle} label="Environments" />
         {/* The count folded away is the whole reading: a card shut on "0/3
@@ -1875,7 +1866,7 @@ function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions;
   const ref = `issue:${issue.number}`;
   const check = issue.delivery?.summary ?? issue.shortfall?.summary ?? null;
   return (
-    <section className="cn-card" id={ANCHOR.tail}>
+    <section className="cn-card" id={GOAL_ANCHOR.tail}>
       <h3>
         <Disclosure open={fold.open} onToggle={fold.onToggle} label="The tail" />
         <i className="cn-n">{issue.state === 'open' ? 'ticket open' : issue.state}</i>

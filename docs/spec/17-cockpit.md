@@ -476,7 +476,7 @@ once.
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `pane`                               | which of the goal page's five panes is open, as `work` — absent means the lifecycle rule answers → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                           |
+| `pane`                               | which of the goal page's five panes is open, as `work` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1264,6 +1264,14 @@ never tell two stories. The sentence is not decoration: it rides in the selected
 is not consulted again — a goal that lands in an environment while somebody is reading its plan must
 not take the pane out from under them. `?pane=` is that pick; absent, the rule answers
 ([The address bar](#the-address-bar)).
+
+**The pick belongs to the goal it was made on, and does not follow the operator to the next one.**
+`goalMove` in `web/src/cockpit/place.ts` is the one patch every move to a goal page goes through, and
+it drops `pane`, `open` and `shut` whenever the goal changes — a fold is about sections of _that_
+goal, and a pane carried across outranks the lifecycle rule on a goal nobody has been to. That is the
+quiet version of the failure this rule exists to prevent: a rail row that sends the operator to a goal
+to answer something lands them on whichever pane they last read, which may draw nothing about why they
+were sent, with nothing red. Staying on the goal changes nothing, because there the pick is theirs.
 
 ### Folding what is not relevant yet
 
@@ -2322,6 +2330,25 @@ picture of a withheld thing, not a cover over a thing that is present.
 
 The card's other door to the document, "open the full plan", is suppressed while the gate stands. A
 second ungated way into the sheet would make the gate a suggestion.
+
+**The ask on the rail leads to the gate, and says so.** While the plan is withheld the approval ask is
+the one ask on the rail that cannot be answered where it is drawn: approving, refusing and backing out
+are all refused server-side, and the plan sheet answers 409
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). So the row opens the goal **on
+the pane the gate is drawn in** rather than leaving the landing to the lifecycle rule, and carries a
+note saying the plan is withheld and the prediction is asked first — "Plan ready" alone reads as a
+verdict being asked for. In the band, the four answers and both doors into the document are replaced
+by one press that leads to the gate — and _leads_ is both halves: it carries the pane and then scrolls
+to the card. Pressed from the goal page the ask is already drawn on, the navigation alone is a no-op
+and the press reads as a control that does nothing, with the gate sitting further down the same page. A card offering four answers that each end in a refusal is the
+ask telling the operator to guess, and the guess it invites is the one the gate exists to prevent.
+
+**The offer is made where the plan is met, which is the ask.** The card draws the gate's own argument
+for predicting — one sentence on why, one on what it costs — in place of the stand-in, because the
+stand-in is the same sentence as the prompt above it: a withheld plan was saying _it is withheld_
+twice and making no case at all for the press underneath. The words are the gate's, exported from it
+rather than written again here, since two spellings of one argument is how a gate comes to be resented
+on one surface and welcomed on the other.
 
 **Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `hard`,
 `surprise` — each a free-text field labelled with the question it asks, each individually skippable,
@@ -7945,6 +7972,30 @@ What stays refused is **asking for a pack** and **sharing one** — there is no 
 no pool to publish into, and each refusal says which. The operator's calibration reading is counted
 off that same pack rather than invented, because a reading that contradicted the pack a visitor can
 open would be the one thing worse than no reading.
+
+**The demo meets the reveal gate, and the record it writes into is a deployment's, not a session's.**
+Issue #333's plan is served withheld — `demoBackend` applies the redaction the routes apply, so the
+approval ask draws the stand-in sentence, its caveats are empty and the doors into the document are
+the gate. Both presses commit: predicting writes the record and stamps the reveal, declining stamps
+it alone, and the prose and the caveats are handed back on the spot. The marking card then draws on
+that goal like any other, and the goal's own figures reach the Prediction panel.
+
+What the demo seeds beside it is **fourteen reveals over three plans**, which is not an inconsistency:
+a snapshot carries the plans of work that is live, and the record is over everything the gate was ever
+put to. The seed is shaped so the panel is worth reading rather than merely populated — three slots
+clear the ten-goal threshold and draw a rate, `surprise` does not and draws the count toward it,
+moment two lags moment one everywhere because it is asked at delivery, and two goals were offered the
+gate and declined it, which is the third outcome the aggregate exists to keep apart from _never
+offered_. Issue #395 carries both moments answered, so the pair sentences are reachable, and its
+`outcome` bench row is the demo's one row that opens a goal on the pane its answer is given on.
+
+**What the static demo cannot claim is the containment, and it does not.** A withheld plan's document
+is in the bundle, as every fixture is; what is demonstrated here is the gate's interaction and its
+record, not the server-side withholding that makes the ordering a fact
+([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). Goal criteria stay unbuilt in
+the demo, and both criteria routes go on refusing — so the gate reads as a deployment with
+`prediction.enabled` on and `goalCriteria.enabled` off, which is a configuration somebody actually
+runs rather than a half-drawn feature.
 
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
