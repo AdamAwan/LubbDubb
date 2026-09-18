@@ -6,7 +6,7 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
-import { homeTab, POOL_VIEWS, type Place } from './place.js';
+import { goalMove, homeTab, POOL_VIEWS, type Place } from './place.js';
 import { logUsage, notePlace, placeReach } from './usage.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
@@ -262,10 +262,8 @@ export function useCockpit(): CockpitStatus {
           const scope = next.insightsScope ?? current.insightsScope;
           return scope === 'pool' && !POOL_VIEWS.includes(view) ? { ...next, insightsView: 'economics' } : next;
         }),
-      selectGoal: (ref) =>
-        go((current) => (ref === null ? { goal: null, pr: null } : { goal: ref, pr: null, tab: homeTab(current.tab) })),
-      openGoalPrediction: (ref) =>
-        go((current) => ({ goal: ref, pr: null, tab: homeTab(current.tab), goalTab: PREDICTION_PANE })),
+      selectGoal: (ref) => go((current) => goalMove(current, ref)),
+      openGoalPrediction: (ref) => go((current) => ({ ...goalMove(current, ref), goalTab: PREDICTION_PANE })),
       selectPr: (prNumber) =>
         go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),

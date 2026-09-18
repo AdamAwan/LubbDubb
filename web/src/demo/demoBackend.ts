@@ -31,6 +31,10 @@ import type {
   FeatureSummary,
   GoalPrediction,
   GoalReveal,
+  Plan,
+  PredictionAggregate,
+  PredictionMark,
+  PredictionSlot,
   GoalWatch,
   GoalWatchDeclaration,
   FilingTargetProbe,
@@ -91,9 +95,10 @@ import type {
   CheckDecline,
   PlanCaveat,
 } from '../types.js';
-import type { ReviewPackReading, WsClient } from '../api.js';
+import type { PredictionDraft, ReviewPackReading, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
+import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 import { inFlight } from '../view/localValidation.js';
 import { planCaveatsOf } from '../planCaveats.js';
@@ -316,6 +321,17 @@ const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
   },
 ];
 
+/**
+ * What stands in for a withheld plan's prose everywhere it would otherwise ship.
+ * The demo's own copy of `WITHHELD_PLAN` — the fake serves the payload here, and
+ * `src/wire.ts` is the only server module this directory may name.
+ * → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed
+ */
+const WITHHELD_PLAN = 'A plan is ready for this goal. It is withheld until you reveal it, on the goal in the cockpit.';
+
+/** `predictionAggregateMinGoals`' own default, so the demo's panel is read against the real bar. */
+const DEMO_PREDICTION_THRESHOLD = 10;
+
 class DemoServer {
   private seed = buildDemoState();
   private state: AppState = this.seed.state;
@@ -340,6 +356,103 @@ class DemoServer {
   private reply = MESSAGE_TURN.length;
   private deskBeats = 0;
   private seq = 1000;
+  private readonly predictions = new DemoPredictions();
+  /**
+   * What the reveal hands back, per withheld plan: the approval ask's prose and the
+   * caveats that carry the plan's risks and open questions verbatim.
+   *
+   * The demo withholds them the way the routes do — the card draws the stand-in
+   * sentence, and the gate is the only way past it. What a statically hosted demo
+   * cannot honestly claim is the *containment*: the plan's own document is in the
+   * bundle, as every fixture is. What it demonstrates is the interaction.
+   * → docs/spec/17-cockpit.md#the-reveal-gate
+   */
+  private readonly withheldProse = new Map<string, { prompt: string; detail: string; caveats: PlanCaveat[] }>();
+
+  constructor() {
+    this.withholdUnrevealedPlans();
+  }
+
+  /**
+   * The redaction, applied once at boot to every plan the record has no reveal for.
+   * It is the demo's copy of `withheldAction` / `withheldEscalation`, and the copy
+   * has to exist: the fake serves the payload, so a fake that shipped the prose
+   * would be demonstrating a gate with the answer printed underneath it.
+   */
+  private withholdUnrevealedPlans(): void {
+    for (const plan of this.state.plans) {
+      const issue = Number(/^issue:(\d+)$/.exec(plan.originRef)?.[1] ?? NaN);
+      if (Number.isNaN(issue) || this.predictions.revealed(issue)) continue;
+      plan.revealed = false;
+      plan.revealedAt = null;
+      const proposal = this.state.proposals.find((p) => p.kind === 'plan' && p.action.planId === plan.id);
+      const escalation = this.state.escalations.find((e) => e.context.planId === plan.id);
+      if (!proposal || !escalation) continue;
+      this.withheldProse.set(plan.id, {
+        prompt: escalation.prompt,
+        detail: String(escalation.context.detail ?? ''),
+        caveats: planCaveatsOf(proposal),
+      });
+      escalation.prompt = WITHHELD_PLAN;
+      escalation.context = {
+        ...escalation.context,
+        detail: WITHHELD_PLAN,
+        detailFrom: 'Withheld until the plan is revealed',
+      };
+      proposal.action = { ...proposal.action, prompt: WITHHELD_PLAN, detail: WITHHELD_PLAN, caveats: [] };
+    }
+  }
+
+  /**
+   * The gate's second press, and the seal on both records. It stamps the reveal,
+   * hands the plan's body back to every surface that was drawn a stand-in, and the
+   * aggregate counts this goal from here on.
+   */
+  revealPlan(issueNumber: number): { ok: true; reveal: GoalReveal; plan: Plan | null } {
+    const reveal = this.predictions.stampReveal(issueNumber);
+    const plan = this.state.plans.find((p) => p.originRef === `issue:${issueNumber}`) ?? null;
+    if (plan !== null) {
+      plan.revealed = true;
+      plan.revealedAt = reveal.revealedAt;
+      const prose = this.withheldProse.get(plan.id);
+      const proposal = this.state.proposals.find((p) => p.kind === 'plan' && p.action.planId === plan.id);
+      const escalation = this.state.escalations.find((e) => e.context.planId === plan.id);
+      if (prose && proposal && escalation) {
+        escalation.prompt = prose.prompt;
+        escalation.context = { ...escalation.context, detail: prose.detail, detailFrom: 'What the plan says' };
+        proposal.action = { ...proposal.action, prompt: prose.prompt, detail: prose.detail, caveats: prose.caveats };
+        this.withheldProse.delete(plan.id);
+      }
+    }
+    this.dirty();
+    return { ok: true, reveal, plan };
+  }
+
+  predict(issueNumber: number, slots: Partial<Record<PredictionSlot, string>>): { ok: true } {
+    this.predictions.record(issueNumber, slots);
+    return { ok: true };
+  }
+
+  predictionReading(issueNumber: number): { prediction: GoalPrediction | null; reveal: GoalReveal | null } {
+    return this.predictions.reading(issueNumber);
+  }
+
+  markPrediction(
+    issueNumber: number,
+    marks: Partial<Record<PredictionSlot, PredictionMark | null>>,
+    moment: 'plan' | 'outcome',
+  ): { ok: true; prediction: GoalPrediction } {
+    return { ok: true, prediction: this.predictions.mark(issueNumber, marks, moment) };
+  }
+
+  /**
+   * The fold, over the plans this world holds — so the goal a visitor has just
+   * predicted on leaves `notOffered` and joins the coverage rate on the same press.
+   */
+  predictionAggregate(): { aggregate: PredictionAggregate } {
+    const planned = this.state.plans.map((plan) => plan.originRef);
+    return { aggregate: this.predictions.aggregate(planned, DEMO_PREDICTION_THRESHOLD, Date.now()) };
+  }
 
   private id(prefix: string): string {
     return `${prefix}-${++this.seq}`;
@@ -4587,18 +4700,20 @@ export const demoApi = {
   getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
   answerFeatureSequence: (): Promise<never> =>
     Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
-  predictGoal: (): Promise<never> =>
-    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to write one into')),
-  revealGoalPlan: (): Promise<never> =>
-    Promise.reject(new Error('every plan in the demo is already revealed, so there is no gate to open')),
-  getGoalPrediction: (): Promise<{ prediction: GoalPrediction | null; reveal: GoalReveal | null }> =>
-    Promise.resolve({ prediction: null, reveal: null }),
-  markGoalPrediction: (): Promise<never> =>
-    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to mark against a plan')),
-  markGoalPredictionOutcome: (): Promise<never> =>
-    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to say the plan turned out')),
-  getPredictionAggregate: (): Promise<never> =>
-    Promise.reject(new Error('the demo keeps no prediction record, so there is nothing to fold')),
+  /* The gate and the record commit, like every other demo interaction: the reveal
+     hands the plan's body over for good, a prediction is written once, and both sets
+     of marks merge. A refusal the real routes give is given here in the same words,
+     because the gate's presses are the one place the cockpit draws a refusal inline
+     rather than throwing it. → docs/spec/17-cockpit.md#demo-mode */
+  predictGoal: (number: number, slots: PredictionDraft) =>
+    Promise.resolve().then(() => getServer().predict(number, slots)),
+  revealGoalPlan: (number: number) => Promise.resolve().then(() => getServer().revealPlan(number)),
+  getGoalPrediction: (number: number) => Promise.resolve(getServer().predictionReading(number)),
+  markGoalPrediction: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
+    Promise.resolve().then(() => getServer().markPrediction(number, marks, 'plan')),
+  markGoalPredictionOutcome: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
+    Promise.resolve().then(() => getServer().markPrediction(number, marks, 'outcome')),
+  getPredictionAggregate: () => Promise.resolve(getServer().predictionAggregate()),
   getGoalCriteria: (): Promise<never> =>
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
   writeGoalCriteria: (): Promise<never> =>

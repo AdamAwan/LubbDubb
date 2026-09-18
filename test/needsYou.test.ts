@@ -214,6 +214,37 @@ test('an ask raised on a pull request opens the goal that pull request belongs t
   assert.equal(row?.originRef, `pr:${linked.linkedPrNumber}`);
 });
 
+test('a plan ask whose plan is withheld lands on the pane the reveal gate is drawn in', () => {
+  const state = buildDemoState();
+  const plan = state.plans[0];
+  assert.ok(plan, 'the demo fixtures must carry a plan');
+  const ask = escalation({
+    id: 'plan-ask',
+    type: 'approve_change',
+    context: { originRef: plan.originRef, planId: plan.id },
+  });
+  const rowsFor = (revealed: boolean): NeedRow[] =>
+    buildNeedsYou(
+      stateWith({
+        ...state,
+        plans: state.plans.map((p) => (p.id === plan.id ? { ...p, revealed } : p)),
+        escalations: [ask],
+        humanTasks: [],
+        proposals: [],
+        recovery: [],
+        tasks: [],
+      }),
+    );
+
+  const withheld = rowsFor(false).find((r) => r.id === 'plan-ask');
+  assert.equal(withheld?.opens, 'prediction', 'the gate is the only place this ask can be answered');
+  assert.match(withheld?.note ?? '', /reveal/i, 'the row says what the press will do');
+
+  const revealed = rowsFor(true).find((r) => r.id === 'plan-ask');
+  assert.equal(revealed?.opens, 'goal', 'once revealed the lifecycle rule picks the pane again');
+  assert.equal(revealed?.note, undefined);
+});
+
 test('a permission request is its own kind, not a plain escalation', () => {
   const rows = buildNeedsYou(
     stateWith({

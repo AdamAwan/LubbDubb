@@ -2719,6 +2719,30 @@ export function buildDemoState(): DemoSeed {
         resolvedAt: null,
         dismissedAt: null,
       },
+      // Moment two, asked at delivery. It is the one bench row whose answer is not on
+      // the bench: the two marks are made on the goal's prediction card, beside the
+      // plan they are about, so the row opens the goal on that pane rather than the
+      // ask panel. → docs/spec/17-cockpit.md#moment-two-beside-moment-one
+      {
+        id: 'hum-6',
+        title: 'Say how the plan for #395 turned out',
+        detail:
+          'You predicted this one before you read its plan, and you marked the plan against it. ' +
+          '**Snapshot downloads 401 in the review console** has since been delivered, so each line now carries a ' +
+          'second question: whether the *plan* turned out right. It is not the same question, and either may be ' +
+          'left alone.',
+        originRef: 'issue:395',
+        partId: null,
+        kind: 'outcome',
+        agentId: null,
+        taskId: null,
+        status: 'open',
+        resolution: null,
+        createdAt: ago(16),
+        updatedAt: ago(16),
+        resolvedAt: null,
+        dismissedAt: null,
+      },
       {
         id: 'hum-4',
         title: 'Close issue #364 in the tracker',

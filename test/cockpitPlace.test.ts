@@ -6,6 +6,7 @@ import {
   NOWHERE,
   placeQuery,
   readPlace,
+  goalMove,
   statePick,
   widenedFor,
   type Place,
@@ -317,6 +318,22 @@ test('every pane of the goal page round-trips, and the rule\u2019s own landing i
   }
   assert.equal(placeQuery(at({ goal: 'issue:142' })), '?goal=issue%3A142', 'no pick is not a place');
   assert.equal(readPlace('?goal=issue:142&pane=nowhere').goalTab, null, 'a pane nobody drew hands it back to the rule');
+});
+
+test('a pane and its folds belong to the goal they were picked on, and do not follow you to the next', () => {
+  const reading = at({ goal: 'issue:142', goalTab: 'record', goalOpen: ['ticket'], goalShut: ['signals'] });
+
+  const same = goalMove(reading, 'issue:142');
+  assert.equal(same.goalTab, undefined, 'staying on the goal leaves the pane the operator picked alone');
+  assert.equal(same.goalOpen, undefined);
+
+  const next = goalMove(reading, 'issue:988');
+  assert.equal(next.goalTab, null, 'the next goal lands where its own lifecycle rule says');
+  assert.deepEqual(next.goalOpen, []);
+  assert.deepEqual(next.goalShut, []);
+  assert.equal(next.goal, 'issue:988');
+
+  assert.deepEqual(goalMove(reading, null), { goal: null, pr: null }, 'closing a goal page changes nothing else');
 });
 
 test('a hand-edited fold list drops a section that does not exist', () => {

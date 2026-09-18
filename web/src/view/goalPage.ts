@@ -469,12 +469,30 @@ export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
 };
 
 /**
- * The pane the prediction card is drawn in. Named once, here beside the map the
- * strip and the tabs read, so that a press that must land on that card cannot end
- * up naming a pane the card moved off.
+ * The pane the prediction card is drawn in — and with it the reveal gate, which
+ * stands in the same card and asks the same record one moment earlier. Named once,
+ * here beside the map the strip and the tabs read, so that a press that must land
+ * on that card cannot end up naming a pane the card moved off.
  * → docs/spec/17-cockpit.md#the-panes
  */
 export const PREDICTION_PANE: GoalTab = 'work';
+
+/**
+ * The element id each stage of the track scrolls to, beside the pane map for the
+ * same reason that map is here: a press that names a card and a press that names
+ * the pane the card is drawn in must not be able to disagree.
+ *
+ * `plan` is the card the reveal gate stands in, which is why an ask on the rail can
+ * name it — the ask is answered there and nowhere else.
+ *
+ * @public read by the goal page's own jumps and by the ask that leads to the gate
+ */
+export const GOAL_ANCHOR: Record<GoalStageAt, string> = {
+  plan: 'cn-plan',
+  validation: 'cn-validation',
+  environments: 'cn-environments',
+  tail: 'cn-tail',
+};
 
 export interface GoalTabOpening {
   tab: GoalTab;

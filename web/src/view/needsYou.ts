@@ -311,6 +311,24 @@ function predictionOpensAt(goalRef: string | null, state: AppState): NeedDestina
   return opensAt(goalRef, state) === 'goal' ? 'prediction' : 'ask';
 }
 
+/**
+ * Whether the plan this ask is about is still withheld pending the reveal.
+ *
+ * It decides where the row goes and what it says it will do, because while the
+ * gate stands the ask **cannot** be answered where it is drawn: approving,
+ * refusing and backing out are all refused server-side
+ * ([16](../../../docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)),
+ * so a row that lands anywhere but the gate is a press that ends in a 409.
+ */
+function planWithheld(e: Escalation, state: AppState): boolean {
+  const { planId } = e.context;
+  if (typeof planId !== 'string') return false;
+  return (state.plans ?? []).some((p) => p.id === planId && !p.revealed);
+}
+
+/** What the rail says a withheld plan's row will do, rather than leaving "Plan ready" to imply a verdict. */
+const REVEAL_NOTE = 'Withheld — reveal it to read it, and the prediction is asked first';
+
 function prAddress(state: AppState, number: number): string | undefined {
   return state.refUrls[`pr:${number}`] ?? state.refUrls[`#${number}`];
 }
@@ -474,6 +492,7 @@ export function buildNeedsYou(
     const proposal = proposals.find((p) => p.escalationId === e.id);
     const originRef = state.tasks.find((t) => t.id === e.taskId)?.originRef ?? e.context.originRef ?? null;
     const goalRef = goalOf(originRef, state);
+    const withheld = planWithheld(e, state);
     rows.push({
       id: e.id,
       kind: kindOf(e, proposal, originRef),
@@ -481,7 +500,8 @@ export function buildNeedsYou(
       title: askLine(escalationSummary(e, proposal, originRef, state), goalRef, state),
       goalRef,
       originRef,
-      opens: opensAt(goalRef, state),
+      opens: withheld ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
+      ...(withheld ? { note: REVEAL_NOTE } : {}),
       agentId: e.agentId,
       agentLabel: agentLabelOf(e.agentId, state),
       holding: holdingForEscalation(e, state),
