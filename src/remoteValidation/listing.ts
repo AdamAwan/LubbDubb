@@ -118,6 +118,8 @@ export class RemoteListingDesk {
         retries: null,
         durationMs: null,
         artefacts: null,
+        // A row the listing blocked never ran, so it handed nothing back to look at.
+        capture: null,
       });
     }
     if (listingPath !== null) store.remoteValidation.recordRemoteListingPath(run.id, listingPath);

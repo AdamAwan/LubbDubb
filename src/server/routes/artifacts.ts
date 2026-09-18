@@ -125,7 +125,80 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       return reply.send(readFileSync(file));
     }),
   );
+
+  /**
+   * The same screen, on the row that actually holds it. A run that declined to overwrite a check
+   * somebody else settled keeps its reading on the sheet, and the capture with it — so the sheet row
+   * is served on its **own** key, `(run, row)`, rather than borrowing the check's. Nothing here reads
+   * or writes the check row: this is about where an image is shown, never about whose reading it is.
+   *
+   * The file name is no more a parameter here than it is on the check's route — it is read off the
+   * reading, and the goal it resolves against comes off the reading too.
+   * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+   */
+  app.get(
+    '/validation-captures/run/:runId/:rowId',
+    { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
+    checked({ params: RemoteCaptureParams }, async ({ params, req, reply }) => {
+      const { runId, rowId } = params;
+      if (artifactKey) {
+        const tk = (req.query as { tk?: unknown })?.tk;
+        if (
+          typeof tk !== 'string' ||
+          !verifyArtifactCapability(artifactKey, tk, remoteCaptureSubject(runId, rowId), Date.now())
+        )
+          return reply.code(401).send({ error: 'missing or invalid capture capability' });
+      }
+      const reading = store.remoteValidation.getRemoteReading(runId, rowId);
+      if (!reading?.capture) return reply.code(404).send({ error: 'capture not found' });
+      const file = confinedTo(
+        validationGoalDir(config.validationRoot, reading.goalRef),
+        validationResourcePath(config.validationRoot, reading.goalRef, reading.capture),
+      );
+      if (!file) return reply.code(404).send({ error: 'capture not found' });
+      reply
+        .header('content-type', artifactMime(file))
+        .header('content-security-policy', 'sandbox')
+        .header('x-content-type-options', 'nosniff')
+        .header('cache-control', 'private, max-age=300, immutable');
+      return reply.send(readFileSync(file));
+    }),
+  );
 }
+
+const RemoteCaptureParams = z.object({
+  runId: z.string().min(1).max(200),
+  rowId: z.string().min(1).max(200),
+});
+
+function remoteCaptureSubject(runId: string, rowId: string): string {
+  return `remote-capture:${runId}:${rowId}`;
+}
+
+export function remoteCaptureSignerFor(key: Buffer): (runId: string, rowId: string) => string {
+  return (runId, rowId) => {
+    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
+    return mintArtifactCapability(key, remoteCaptureSubject(runId, rowId), bucket * ARTIFACT_CAP_TTL_MS);
+  };
+}
+
+/**
+ * The same capability, minted for a **ticket comment** rather than for a cockpit that reloads its
+ * snapshot every few seconds. Five minutes is a dead link by the time anybody reads a ticket, so the
+ * posted one is minted against the capture's own retention horizon instead.
+ *
+ * Two things about it are stated in the spec rather than worked around here: the artifact key is
+ * minted per boot (`src/server/app.ts`), so a posted link stops verifying at the next restart — which
+ * is why the comment's **prose** is what it really carries — and the URL is a bearer capability, which
+ * is why its subject is this one `(run, row)` and nothing wider.
+ * → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+ */
+export function remoteCaptureLinkSignerFor(key: Buffer): (runId: string, rowId: string) => string {
+  return (runId, rowId) =>
+    mintArtifactCapability(key, remoteCaptureSubject(runId, rowId), Date.now() + CAPTURE_LINK_TTL_MS);
+}
+
+const CAPTURE_LINK_TTL_MS = 30 * 24 * 60 * 60_000;
 
 const ValidationCaptureParams = z.object({
   originRef: z.string().min(1).max(200),

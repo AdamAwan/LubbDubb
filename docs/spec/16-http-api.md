@@ -21,7 +21,7 @@ is about.
 | `routes/state.ts`           | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                                                                                        |
 | `routes/agents.ts`          | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                                                                                                  |
 | `routes/localValidation.ts` | Validating a goal on this machine: the press, and calling one off. → [32](32-local-validation.md)                                                                                                                                               |
-| `routes/artifacts.ts`       | `/artifacts/:id`, `/attachments/:id` and `/local-validations/:id/files/:name`, their capability signers, and the path confinement                                                                                                               |
+| `routes/artifacts.ts`       | `/artifacts/:id`, `/attachments/:id`, `/local-validations/:id/files/:name` and the two `/validation-captures/…` routes, their capability signers, and the path confinement                                                                      |
 | `routes/control.ts`         | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                                                                                                     |
 | `routes/escalations.ts`     | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                                                                                                   |
 | `routes/humanTasks.ts`      | Work only a person can do: filing one, and the two ways it settles                                                                                                                                                                              |
@@ -2346,6 +2346,24 @@ The **directory** comes from the stored row and the **name** from the request, w
 here the two routes above do not do: so the name is refused as a path before it is joined, and the
 join is re-confined to the row's own directory afterwards. Either check alone would do; both are what
 keeps that true if the schema ever widens.
+
+### `GET /validation-captures/:originRef/:checkId` and `GET /validation-captures/run/:runId/:rowId`
+
+The screen a `screenshot` step handed back, on each of the two rows that can hold one: the goal's own
+validation check, and the remote validation sheet's row. Outside `/api` and capability-authorized for
+`/attachments/:id`'s reason — both are loaded as an `<img src>`, and a subresource fetch carries no
+`Authorization` header.
+
+**Neither takes a file name.** The name is read off the row the key names, and so is the goal whose
+validation directory it is resolved against: that directory also holds the goal's resources, and a
+route that took a name would serve any of them. The join is re-confined to the goal's directory
+afterwards, `/local-validations/:id/files/:name`'s belt and braces.
+
+They are **two keys rather than one** because a run writes onto the check row only where the reading
+there is `unrun` or was one it took itself. A run that declines keeps its reading — and its screen — on
+the sheet, and borrowing the check's key made exactly those captures unreachable. Neither route reads
+or writes a check row's result.
+→ [36](36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at)
 
 ### `POST /api/local-run`
 

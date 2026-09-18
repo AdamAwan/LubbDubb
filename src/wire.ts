@@ -494,6 +494,13 @@ export interface RemoteReadingView extends RemoteReading {
   taskId: string | null;
   /** The agent that ran it, which is the transcript's own key — `GET /api/agents/:id/transcript`. */
   agentId: string | null;
+  /**
+   * Where this row's own capture can be looked at, keyed on the run and the row. The row carries the
+   * capture's **name**; minting a URL is the server's job, `ValidationCheckView.captureUrl`'s reason.
+   * Null where the row handed back no screen — and on a reading no run took, which can hand none back.
+   * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+   */
+  captureUrl: string | null;
 }
 
 export interface GoalWatchView extends WatchWindow {

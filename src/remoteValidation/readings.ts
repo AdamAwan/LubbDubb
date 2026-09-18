@@ -194,6 +194,12 @@ export class RemoteReadingDesk {
         retries: folded.retries,
         durationMs: folded.durationMs,
         artefacts: input.artefacts,
+        // **The reading carries the screen whether or not the check row did.** `writeCheck` declines
+        // a check somebody else settled — a reading somebody took is theirs — and until this column
+        // existed that decline also threw the image away, because the only URL the cockpit could
+        // build came off the check row. The file is kept either way, so the row that actually holds
+        // it names it. → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+        capture: folded.capture ?? null,
       });
       if (folded.outcome === 'blocked') blocked += 1;
       else read += 1;

@@ -924,10 +924,25 @@ CREATE TABLE IF NOT EXISTS remote_readings (
   rows        INTEGER,
   value       REAL,
   detail      TEXT,
+  capture     TEXT,            -- file name of the screen this row handed back; NULL is no screen
   read_at     TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS remote_readings_row ON remote_readings (goal_ref, environment, row_id);
+
+-- One row per (run, row) whose capture has been posted to the goal's ticket. The
+-- record IS the idempotence: a capture posted twice on a re-read is worse than one
+-- never posted, and nothing about the comment itself can be read back to find out
+-- whether it went. Like an arrival's announcement, a posting is never a WorldEvent.
+-- (see docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at)
+CREATE TABLE IF NOT EXISTS remote_capture_posts (
+  run_id    TEXT NOT NULL,
+  row_id    TEXT NOT NULL,
+  goal_ref  TEXT NOT NULL,
+  capture   TEXT NOT NULL,
+  posted_at TEXT NOT NULL,
+  PRIMARY KEY (run_id, row_id)
+);
 
 -- One press (see RemoteValidationStore). Kept after it ends, local_validations' rule:
 -- a run abandoned because the environment went back past the goal's work is the case

@@ -16,6 +16,8 @@ import {
   artifactSignerFor,
   attachmentSignerFor,
   localValidationFileSignerFor,
+  remoteCaptureLinkSignerFor,
+  remoteCaptureSignerFor,
   validationCaptureSignerFor,
   register as registerArtifacts,
 } from './routes/artifacts.js';
@@ -207,8 +209,23 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
     localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
     validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
+    remoteCaptureSigner: artifactKey ? remoteCaptureSignerFor(artifactKey) : undefined,
   };
   for (const registerRoutes of ROUTE_MODULES) registerRoutes(app, ctx);
+
+  // The one link the harness puts somewhere it cannot reach. The desk is built before this app is, so
+  // the signer is installed rather than constructed — and a deployment that has declared no address
+  // for itself gets a comment carrying the prose alone.
+  // → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+  const linkBase = config.remoteValidation.captureLinkBase;
+  if (linkBase !== null) {
+    const sign = artifactKey ? remoteCaptureLinkSignerFor(artifactKey) : null;
+    system.remoteValidation.linkCapturesWith((runId, rowId) => {
+      const path = `/validation-captures/run/${encodeURIComponent(runId)}/${encodeURIComponent(rowId)}`;
+      const url = `${linkBase.replace(/\/+$/, '')}${path}`;
+      return sign ? `${url}?tk=${encodeURIComponent(sign(runId, rowId))}` : url;
+    });
+  }
 
   const distDir = resolve(process.cwd(), 'web/dist');
   if (existsSync(distDir)) {

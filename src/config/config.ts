@@ -136,12 +136,21 @@ interface RemoteValidationPolicy {
    * → docs/spec/36-remote-validation.md#the-one-off-script
    */
   scriptGraceMs: number;
+  /**
+   * The absolute URL this harness is reachable at from wherever its tickets are read, used for the
+   * one thing that leaves the machine: the link on a posted capture. Null — the default — posts the
+   * comment without one, because the harness does not otherwise know its own address and the only
+   * one it can name is a loopback, which in a ticket is a dead end dressed as a link.
+   * → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+   */
+  captureLinkBase: string | null;
 }
 
 const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
   runTimeoutMs: 30 * 60 * 1000,
   tenantTimeoutMs: 60 * 60 * 1000,
   scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
+  captureLinkBase: null,
 };
 
 interface AuthConfig {

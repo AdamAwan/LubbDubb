@@ -11,6 +11,7 @@ export interface RouteContext {
   attachmentSigner?: (attachmentId: string) => string;
   localValidationFileSigner?: (id: string, name: string) => string;
   validationCaptureSigner?: (originRef: string, checkId: string) => string;
+  remoteCaptureSigner?: (runId: string, rowId: string) => string;
   artifactKey: Buffer | null;
 }
 

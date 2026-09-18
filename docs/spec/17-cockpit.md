@@ -2235,6 +2235,28 @@ nothing at all, because that is already what a validation checklist means — th
 exceptions, which is exactly what a reader deciding how much a tick is worth needs.
 → [20](20-validation.md#the-desktop-channel)
 
+### A sheet row draws its own capture
+
+A `screenshot` step hands a screen back, and a `captured` row asks for exactly one thing: somebody's
+eyes. Both surfaces that can hold one draw it the same way — an inline thumbnail on the row, clicking
+through to full size — and each draws it off **its own** URL:
+
+- The goal's check row draws `ValidationCheckView.captureUrl`, keyed on the check.
+- The remote validation sheet's row draws `RemoteReadingView.captureUrl`, keyed on the **run and the
+  row**.
+
+They are two keys rather than one because a run writes onto the check row only where the reading there
+is `unrun` or was one it took itself — a reading somebody took is theirs — and the run that declines
+keeps its own reading, and the screen it took, on the sheet. Drawing the sheet row off the check's URL
+made exactly those captures invisible: the check rendered somebody else's reading, the route answered
+404 and the row rendered prose, with the file sitting on the harness's disk. A capture nobody can reach
+is a row asking for a judgement about an image that might as well be gone.
+
+**The URL is minted on the server, never assembled in the cockpit.** The row carries the capture's
+_name_; where a goal's validation directory is, and what capability signs a request for it, are the
+server's to know. A cockpit that built the path itself would be a second opinion about both.
+→ [36](36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at)
+
 ### The plan
 
 Four groups — **Merged**, **Now**, **Held**, **Not started** — folded by `PartGroup` off `status`
