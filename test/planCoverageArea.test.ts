@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { commentSink } from './support/commentSink.js';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -231,6 +232,7 @@ test('with the area written, a sheet’s check row confirms and the run has a se
     });
 
     const desk = new RemoteValidationDesk({
+      sink: commentSink(),
       store,
       environments,
       observer: new FakeEnvironmentObserver(),
@@ -264,6 +266,7 @@ test('the harness takes no listing of its own, and keeps no offering to be shown
   const environments = [ACCEPTANCE];
   try {
     const desk = new RemoteValidationDesk({
+      sink: commentSink(),
       store,
       environments,
       observer: new FakeEnvironmentObserver(),

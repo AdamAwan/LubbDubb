@@ -349,6 +349,7 @@ export class RemoteRunDesk {
           retries: null,
           durationMs: null,
           artefacts: null,
+          capture: null,
         });
         read += 1;
       } catch (err) {

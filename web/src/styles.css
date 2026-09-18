@@ -3730,10 +3730,12 @@ select:disabled {
 }
 /* The screen itself, on the row. Bounded so a tall page does not push the rest of
    the card off the screen, and a link out for the full thing. */
-.pm-vcap {
+.pm-vcap,
+.cn-sig-cap {
   margin-top: 6px;
 }
-.pm-vcap img {
+.pm-vcap img,
+.cn-sig-cap img {
   display: block;
   max-width: 100%;
   max-height: 340px;

@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { commentSink } from './support/commentSink.js';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
@@ -93,6 +94,7 @@ function bench(env: EnvironmentConfig, opts: { env?: Record<string, string | und
     store,
     environments,
     desk: new RemoteValidationDesk({
+      sink: commentSink(),
       store,
       environments,
       observer: new FakeEnvironmentObserver(),

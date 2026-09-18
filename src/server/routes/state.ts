@@ -25,7 +25,15 @@ import type { RouteContext } from './context.js';
 
 export function register(
   app: FastifyInstance,
-  { system, artifactSigner, attachmentSigner, localValidationFileSigner, validationCaptureSigner, hub }: RouteContext,
+  {
+    system,
+    artifactSigner,
+    attachmentSigner,
+    localValidationFileSigner,
+    validationCaptureSigner,
+    remoteCaptureSigner,
+    hub,
+  }: RouteContext,
 ): void {
   const { config, errors, liveConfig, store, updates, agents, runtimeControl } = system;
   const filePath = system.configFile;
@@ -70,12 +78,14 @@ export function register(
             attachmentSigner,
             localValidationFileSigner,
             validationCaptureSigner,
+            remoteCaptureSigner,
           })
         : buildStateSections(system, query.sections, {
             artifactSigner,
             attachmentSigner,
             localValidationFileSigner,
             validationCaptureSigner,
+            remoteCaptureSigner,
           }),
     ),
   );

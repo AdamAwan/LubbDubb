@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type {
+  RemoteCapturePost,
   RemoteReading,
   RemoteRun,
   RemoteRunStatus,
@@ -38,6 +39,9 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // of the matched tests ran, how many retries it took, how long it stood there, and where the
   // artefacts were published. `matched` is **not** here — it is on the sheet row, from the
   // pre-flight's listing, because derived from a report a selector matching nothing reads as a pass.
+  // `capture` is the file name of the screen this row handed back, held with the goal. Null is *no
+  // screen*, which is true of every row from before the column and stays true — there is nothing to
+  // compute it from, so nothing is backfilled.
   remote_readings: {
     started_sha: 'TEXT',
     ended_sha: 'TEXT',
@@ -45,6 +49,7 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
     retries: 'INTEGER',
     duration_ms: 'INTEGER',
     artefacts: 'TEXT',
+    capture: 'TEXT',
   },
   // A run row a dispatched agent reports against: which task claimed it, and where the report and
   // the artefacts landed. Columns on a table that was new one release ago, which is what this entry
@@ -54,6 +59,7 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // stays true — there is nothing to compute it from and nothing that would be right to invent.
   remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT' },
   remote_tenants: {},
+  remote_capture_posts: {},
 };
 
 /**
@@ -312,32 +318,60 @@ export class RemoteValidationStore {
     this.ctx
       .prep(
         `INSERT INTO remote_readings (goal_ref, environment, row_id, run_id, outcome, rows, value, detail,
-           started_sha, ended_sha, executed, retries, duration_ms, artefacts, read_at)
+           started_sha, ended_sha, executed, retries, duration_ms, artefacts, capture, read_at)
          VALUES (@goalRef, @environment, @rowId, @runId, @outcome, @rows, @value, @detail,
-           @startedSha, @endedSha, @executed, @retries, @durationMs, @artefacts, @readAt)`,
+           @startedSha, @endedSha, @executed, @retries, @durationMs, @artefacts, @capture, @readAt)`,
       )
       .run({ ...input, readAt: this.ctx.now() });
   }
 
   listRemoteReadings(): RemoteReading[] {
     const rows = this.ctx.prep(`SELECT * FROM remote_readings ORDER BY id ASC`).all() as ReadingRow[];
+    return rows.map(toRemoteReading);
+  }
+
+  /**
+   * The latest reading a run took on one row. It is the capture route's whole lookup: the file
+   * **name** is read off the row rather than taken from the caller, `/validation-captures`' rule and
+   * for its reason — the goal's validation directory also holds its resources, and a route that took
+   * a name would serve any of them.
+   *
+   * @public the seam `GET /validation-captures/run/:runId/:rowId` resolves a sheet-kept capture through
+   */
+  getRemoteReading(runId: string, rowId: string): RemoteReading | null {
+    const row = this.ctx
+      .prep(`SELECT * FROM remote_readings WHERE run_id=? AND row_id=? ORDER BY id DESC LIMIT 1`)
+      .get(runId, rowId) as ReadingRow | undefined;
+    return row === undefined ? null : toRemoteReading(row);
+  }
+
+  /**
+   * Which captures have already been posted to a goal's ticket. The record is the idempotence, and
+   * it is a record rather than anything read back off the tracker: a re-read that posted the same
+   * screen a second time is worse than one never posted.
+   */
+  listPostedCaptures(): RemoteCapturePost[] {
+    const rows = this.ctx.prep(`SELECT * FROM remote_capture_posts ORDER BY posted_at ASC`).all() as CapturePostRow[];
     return rows.map((r) => ({
-      goalRef: r.goal_ref,
-      environment: r.environment,
-      rowId: r.row_id,
       runId: r.run_id,
-      outcome: r.outcome as RemoteRowOutcome,
-      rows: r.rows,
-      value: r.value,
-      detail: r.detail,
-      startedSha: r.started_sha ?? null,
-      endedSha: r.ended_sha ?? null,
-      executed: r.executed ?? null,
-      retries: r.retries ?? null,
-      durationMs: r.duration_ms ?? null,
-      artefacts: r.artefacts ?? null,
-      readAt: r.read_at,
+      rowId: r.row_id,
+      goalRef: r.goal_ref,
+      capture: r.capture,
+      postedAt: r.posted_at,
     }));
+  }
+
+  /**
+   * Written **after** the comment has gone up, never before: a posting the tracker refused and the
+   * store recorded is a screen nobody will ever be told about, and the next pulse is the retry.
+   */
+  markCapturePosted(input: { runId: string; rowId: string; goalRef: string; capture: string }): void {
+    this.ctx
+      .prep(
+        `INSERT OR IGNORE INTO remote_capture_posts (run_id, row_id, goal_ref, capture, posted_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(input.runId, input.rowId, input.goalRef, input.capture, this.ctx.now());
   }
 
   /**
@@ -569,7 +603,37 @@ interface ReadingRow {
   retries: number | null | undefined;
   duration_ms: number | null | undefined;
   artefacts: string | null | undefined;
+  capture: string | null | undefined;
   read_at: string;
+}
+
+function toRemoteReading(r: ReadingRow): RemoteReading {
+  return {
+    goalRef: r.goal_ref,
+    environment: r.environment,
+    rowId: r.row_id,
+    runId: r.run_id,
+    outcome: r.outcome as RemoteRowOutcome,
+    rows: r.rows,
+    value: r.value,
+    detail: r.detail,
+    startedSha: r.started_sha ?? null,
+    endedSha: r.ended_sha ?? null,
+    executed: r.executed ?? null,
+    retries: r.retries ?? null,
+    durationMs: r.duration_ms ?? null,
+    artefacts: r.artefacts ?? null,
+    capture: r.capture ?? null,
+    readAt: r.read_at,
+  };
+}
+
+interface CapturePostRow {
+  run_id: string;
+  row_id: string;
+  goal_ref: string;
+  capture: string;
+  posted_at: string;
 }
 
 interface RunRow {

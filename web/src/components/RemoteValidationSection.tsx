@@ -192,6 +192,18 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
           {!row.selected && <Tag title="Taken out of the next press">not selected</Tag>}
         </HeadRow>
         <p className="cn-sig-read">{said(row)}</p>
+        {/* The screen itself, on the row that actually holds it. A run that declined to overwrite a
+            check somebody else settled keeps its reading here — and the screen with it — so drawing
+            it only on the check row left the image reachable nowhere but the harness's own disk,
+            which defeats the whole point of a capture outliving its run.
+            → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at */}
+        {row.reading?.captureUrl != null && (
+          <div className="cn-sig-cap">
+            <a href={row.reading.captureUrl} target="_blank" rel="noreferrer" title="Open the full capture">
+              <img src={row.reading.captureUrl} alt={`The screen captured for “${row.title}”`} />
+            </a>
+          </div>
+        )}
         <Measured row={row} controls={controls} />
       </div>
       <div className="cn-sig-ctrls">

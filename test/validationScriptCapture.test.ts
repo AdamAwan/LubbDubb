@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { commentSink } from './support/commentSink.js';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -428,6 +429,7 @@ test('the grace sweep removes a script past its window, names where it was, and 
   delivery('issue:13', NOW - 1000);
 
   const desk = new RemoteValidationDesk({
+    sink: commentSink(),
     store,
     environments: [TENANTED],
     observer: new FakeEnvironmentObserver(),

@@ -1675,7 +1675,29 @@ export interface RemoteReading {
   durationMs: number | null;
   /** The URL the publish command printed, which is what makes a red row actionable in thirty seconds. */
   artefacts: string | null;
+  /**
+   * The screen this row handed back, as a **file name** in the goal's validation directory — the
+   * check row's `capture` rule, for the check row's reason. It is written whether or not the run went
+   * on to write the check row, because a run that declined to overwrite somebody else's reading still
+   * took the picture and somebody still has to look at it.
+   * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+   */
+  capture: string | null;
   readAt: string;
+}
+
+/**
+ * That a sheet-kept capture has been posted to the goal's ticket. The row **is** the idempotence —
+ * nothing about a tracker comment can be read back to find out whether it went, and a screen posted
+ * twice on a re-read is worse than one never posted.
+ * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+ */
+export interface RemoteCapturePost {
+  runId: string;
+  rowId: string;
+  goalRef: string;
+  capture: string;
+  postedAt: string;
 }
 
 /**

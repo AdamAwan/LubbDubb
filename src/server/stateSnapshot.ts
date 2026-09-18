@@ -126,6 +126,7 @@ interface SnapshotOpts {
   attachmentSigner?: (attachmentId: string) => string;
   localValidationFileSigner?: (id: string, name: string) => string;
   validationCaptureSigner?: (originRef: string, checkId: string) => string;
+  remoteCaptureSigner?: (runId: string, rowId: string) => string;
 }
 
 export function buildStateSnapshot(system: System, opts?: SnapshotOpts): CockpitState {
@@ -563,7 +564,7 @@ export function buildStateSections(
 
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
-  const remoteSheets = once(() => buildRemoteSheets(store, config.environments, tasks));
+  const remoteSheets = once(() => buildRemoteSheets(store, config.environments, tasks, opts?.remoteCaptureSigner));
 
   const goalsSection = (): Pick<
     CockpitState,
@@ -943,6 +944,7 @@ function buildRemoteSheets(
   store: System['store'],
   environments: EnvironmentConfig[],
   tasks: readonly TaskSummary[],
+  captureSigner?: (runId: string, rowId: string) => string,
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
@@ -961,6 +963,7 @@ function buildRemoteSheets(
       ...r,
       taskId,
       agentId: taskId === null ? null : (agentOfTask.get(taskId) ?? null),
+      captureUrl: remoteCaptureUrl(r, captureSigner),
     });
   }
   const rowsByGoalEnvironment = groupBy(
@@ -1111,6 +1114,21 @@ function localValidationView(
     agent: agentOf(row.taskId),
     fixAgent: agentOf(row.fixTaskId),
   };
+}
+
+/**
+ * Where a **sheet row's** capture can be looked at, keyed on the run and the row rather than on the
+ * check. A run that declined to overwrite a check somebody else settled keeps its reading — and the
+ * screen it took — here, and until this existed that screen was reachable only on disk.
+ * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+ */
+function remoteCaptureUrl(
+  reading: { runId: string | null; rowId: string; capture: string | null },
+  signer?: (runId: string, rowId: string) => string,
+): string | null {
+  if (reading.capture === null || reading.runId === null) return null;
+  const base = `/validation-captures/run/${encodeURIComponent(reading.runId)}/${encodeURIComponent(reading.rowId)}`;
+  return signer ? `${base}?tk=${encodeURIComponent(signer(reading.runId, reading.rowId))}` : base;
 }
 
 /**

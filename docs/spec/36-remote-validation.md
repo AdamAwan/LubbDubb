@@ -1400,6 +1400,84 @@ off **before** its agent has gone anywhere — a `pending` one the operator no l
 `dispatched` one whose agent is still working. The desk's sweep is the other half and covers only the
 case the operator cannot: an agent that has already gone ([The sweep](#the-sweep)).
 
+### Where a sheet-kept capture is looked at
+
+**Built.** A run writes onto the goal's check row only where the current reading is `unrun` or was one
+this instrument itself took ([the overwrite rule](#a-screen-from-the-sheets-own-run)), and that rule is
+not weakened by anything here. Where the check is settled by somebody else the run keeps its reading on
+the **sheet** instead — and it used to keep the screen there too, reachable by nobody: the only URL
+anything could build came off `validation_checks.capture`, so the check row rendered no image, the
+capture route answered 404 and the sheet row rendered prose. The file was on disk under the goal's
+validation directory, and the only way to see it was to go and find it on the harness host.
+
+That defeats the reason a capture outlives its run at all. The whole point is that a person still has
+to look at it, so a capture nobody can reach is a row asking for a judgement about an image that might
+as well be gone.
+
+So **the reading carries the capture's file name itself**. `remote_readings.capture` holds a name and
+never a path or a URL — `validation_checks.capture`'s rule, for its reason — and it is written on
+**every** row that handed a screen back, whether or not the run went on to write the check. It is a new
+column on an existing table, additive in `REMOTE_VALIDATION_COLUMNS`, and null means _no screen_, which
+is true of every row from before it and stays true, so nothing is backfilled.
+
+`GET /validation-captures/run/:runId/:rowId` serves it, capability-signed exactly as the check's route
+is and keyed on the **run and the row** rather than on the check. Two properties carry over unchanged:
+the file name is not a parameter — it is read off the reading, and so is the goal whose directory it
+resolves against — and the route reads no check row and writes nothing anywhere. This is about where an
+image is shown, never about whose reading it is. The signed URL reaches the cockpit as
+`RemoteReadingView.captureUrl`, null on a row that handed no screen back and on a reading no run took,
+which can hand none back.
+
+The sheet row draws it the way the check row does: an inline thumbnail on the row, clicking through to
+full size ([17](17-cockpit.md#a-sheet-row-draws-its-own-capture)).
+
+### Posting the screen to the ticket
+
+**Built.** A capture is kept precisely because somebody still has to look at it, and the cockpit is not
+where everybody is. `RemoteValidationDesk` posts each captured screen to the goal's ticket once, in the
+pass below assembly, and three things about it are rules this codebase already holds:
+
+- **It is never a `WorldEvent`,** an arrival's rule and for an arrival's reason: `deliveryHold` expires
+  a standing delivery verdict on **any** world event matching the goal's issue ref, so a posting
+  written as one would un-park the goal it just reported on and hand delivered work back to the fleet
+  ([24](24-environments.md#in-the-cockpit)). It has its own table, `remote_capture_posts`, and nothing
+  else reads it.
+- **The record is written after the comment has gone up, never before.** A posting the tracker refused
+  and the store recorded is a screen nobody will ever be told about; the failure goes through
+  `errors.record` and the next pulse is the retry. The record **is** the idempotence — nothing about a
+  tracker comment can be read back to find out whether it went — and it is keyed `(run, row)`, because
+  a capture posted twice on a re-read is worse than one never posted.
+- **It writes on no check row**, and the comment says plainly that nothing in it judges the screen. A
+  `captured` row is waiting on a person; a comment that read as a result would be a result derived
+  rather than declared ([20](20-validation.md#states)).
+
+**Why a link and not an upload.** The alternative was a new capability on `ActionSink` — upload the
+image, so the ticket carries the bytes. It is the better thing where it can be done, and it cannot be
+done here honestly: GitHub has no public API for attaching an image to an issue comment, so the
+capability would be real on Azure DevOps, unimplementable on GitHub and green in the scripted fake —
+one provider's deployments silently getting nothing, which is the shape this design refuses everywhere
+else. Committing operator screenshots into the product's own repository to manufacture a GitHub URL is
+not a side effect a validation screenshot is entitled to.
+
+So the comment carries the link, and **the prose is what it really carries**: which check the screen
+belongs to, which environment took it, which run, and what the file is called. Two limits are stated
+here rather than papered over, because both are real:
+
+- **The harness does not know its own address.** The only URL it can name for itself is a loopback, and
+  a loopback in a ticket is a dead end dressed as a link. `remoteValidation.captureLinkBase` is where an
+  operator declares the address the harness is reachable at from wherever their tickets are read; null
+  — the default — posts the comment with no link at all rather than a broken one.
+- **A posted link stops verifying at the next restart.** The artifact key is minted per boot
+  (`src/server/app.ts`), so the capability cannot outlive the process that signed it. The ticket's link
+  is minted through its own signer at the capture's own retention horizon rather than the snapshot's
+  five minutes — `remoteCaptureLinkSignerFor`, thirty days — because a five-minute token is a dead link
+  by the time anybody reads a ticket. A reader who finds it expired still has the prose, which is enough
+  to know the screen exists and ask for it. Making the link durable means making the artifact key
+  stable across restarts, which changes the posture of all four signed routes and is its own change.
+
+The URL is a bearer capability for one image, which is why its subject is this one `(run, row)` and
+nothing wider.
+
 ### The browser the run drives
 
 **Built.** The run's agent is launched with a **second MCP server** beside the harness's own, exactly
@@ -1684,7 +1762,7 @@ that supports another:
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `operator` | A person carried the steps out. Draws no marker — that is what a checklist means.                                                                                                     |
 | `desktop`  | The operator's own Claude ran it at their keyboard, against the real environment.                                                                                                     |
-| `agent`    | The fleet ran it unattended — the `validate-check` dispatch, or a sheet run driving the browser itself.                                                                                |
+| `agent`    | The fleet ran it unattended — the `validate-check` dispatch, or a sheet run driving the browser itself.                                                                               |
 | `spec`     | **A reviewed spec ran against a real environment and its report said so.** Stronger than `agent` — no model read anything — and different from `operator`, because nobody watched it. |
 
 Two rules govern what a run may write on a check row, and the second is the one a second
@@ -1894,7 +1972,12 @@ rather than `error`.
       },
     },
   ],
-  "remoteValidation": { "runTimeoutMs": 1800000, "tenantTimeoutMs": 3600000, "scriptGraceMs": 2592000000 },
+  "remoteValidation": {
+    "runTimeoutMs": 1800000,
+    "tenantTimeoutMs": 3600000,
+    "scriptGraceMs": 2592000000,
+    "captureLinkBase": "https://lubbdubb.internal.example",
+  },
 }
 ```
 
@@ -1921,7 +2004,11 @@ under the run agent's own stall park. It is left declared rather than withdrawn 
 an operator-facing key is a change to the configuration surface and belongs in one of its own; it is
 the one loose end this increment leaves. And `tenantTimeoutMs`,
 default one hour, the kill for `ensureTenant` and `reseed`. Every other command, `state.run` included,
-keeps the 30-second kill. The tenant commands get their own key rather than sharing the runner's
+keeps the 30-second kill. And `captureLinkBase`, default **null** — the address this harness is
+reachable at from wherever its tickets are read, used for the one link the harness posts somewhere it
+cannot reach ([Posting the screen to the ticket](#posting-the-screen-to-the-ticket)). It is a key
+rather than something derived because the harness does not know its own address: the only URL it can
+name for itself is a loopback, and null posts the comment with no link rather than a broken one. The tenant commands get their own key rather than sharing the runner's
 because the two are unrelated lengths — a suite's runtime against a provisioning job's — and they get
 one at all because this document's own account of `ensureTenant` is "possibly very slow": provisioning
 or reseeding a tenant is a job of tens of minutes, so the ordinary kill would end both commands on
@@ -1994,9 +2081,9 @@ environment moves. A reading with no commit beside it is a reading of a product 
 
 ### Migrations
 
-- **Every one of the seven tables declares a `ColumnMigrations` block, empty or not.** A table being
+- **Every one of the eight tables declares a `ColumnMigrations` block, empty or not.** A table being
   new **once** does not keep it exempt, which is exactly what `local_runs`' usage columns and
-  `validation_checks`' band cost ([14](14-persistence.md#migrations)). All seven are declared in
+  `validation_checks`' band cost ([14](14-persistence.md#migrations)). All eight are declared in
   `REMOTE_VALIDATION_COLUMNS` (`src/store/remoteValidation.ts`), and the entry is what the next column
   any of them takes is added to — which is what `remote_readings`' `started_sha` and `ended_sha`
   already are: a column on a table that was new **one release ago**, additive, guarded by
@@ -2042,6 +2129,14 @@ environment moves. A reading with no commit beside it is a reading of a product 
   the listing is taken **only** where a step holds one, and an empty list normalises to null at both
   ends rather than being stored as an expectation of nothing
   ([An expected spec the runner does not offer](#an-expected-spec-the-runner-does-not-offer)).
+- **`remote_readings.capture`** is the same case again, and the newest of them: a column on an
+  existing table, additive, declared in `REMOTE_VALIDATION_COLUMNS` and guarded by `PRAGMA
+table_info`. Null is _this row handed no screen back_, which is what every reading written before the
+  column already was, so nothing is backfilled and its null does not change meaning
+  ([Where a sheet-kept capture is looked at](#where-a-sheet-kept-capture-is-looked-at)).
+  **`remote_capture_posts` is a new table**, and it declares an empty `ColumnMigrations` block like the
+  seven before it — a table being new **once** is exactly what does not keep it exempt from the next
+  column it takes.
 - **`remote_sheet_rows.idle_reason`** is a column on an **existing** table and is **built**: declared
   in `REMOTE_VALIDATION_COLUMNS` beside `matched`, additive, guarded by `PRAGMA table_info`. Null is
   _a press reads this row_, which is what every row written before the column already was, so nothing
@@ -2147,7 +2242,8 @@ not turned this on from reading as a deployment where it is broken.
 
 It draws one block per environment that has a sheet: the tenant and its age against the declared
 freshness window, the deployed commit, every row with its kind, its outcome and its reason, the
-artefact link on a browser row, matched-versus-executed and retries and wall-clock, the selector
+artefact link on a browser row, **the screen a row handed back**, matched-versus-executed and retries
+and wall-clock, the selector
 mismatches the run's own listing found, and the four controls the gate is made of — approve a query on its
 dry run, deselect a row, reseed, press go. A row waived through the check's own control draws its
 reason and does not run. **An `unknown` from a query and a `blocked` row say why in words**, and never
@@ -2180,6 +2276,15 @@ Three conventions this card is held to, each of which fails silently if missed:
 - **Which environment's sheet am I looking at is a field on `Place`** (`web/src/cockpit/place.ts`),
   never a `useState` in `useCockpit`. The cockpit's place is the query string, and state held outside
   it breaks on the back button and on reload. → [17](17-cockpit.md#the-address-bar)
+
+**A sheet row draws its own capture.** A `captured` row asks for exactly one thing — somebody's eyes —
+and until the reading carried the file name, a run that declined to overwrite a check somebody else had
+settled left the image reachable nowhere but the harness's own disk. The row draws it the way the check
+row does: an inline thumbnail, clicking through to full size, off
+`RemoteReadingView.captureUrl` — which the **server** mints, keyed on the run and the row rather than on
+the check. A cockpit that assembled the path itself would be a second opinion about where a goal's
+validation directory is. → [Where a sheet-kept capture is looked at](#where-a-sheet-kept-capture-is-looked-at),
+[17](17-cockpit.md#a-sheet-row-draws-its-own-capture)
 
 **Wire types.** `RemoteSheetView`, `RemoteSheetRowView` and `RemoteReadingView` in `src/wire.ts`,
 shipped on `CockpitState.remoteSheets` and re-exported by `web/src/types.ts`. A wire type either **is**

@@ -17,6 +17,13 @@ import type {
 
 // → docs/spec/17-cockpit.md
 
+/**
+ * The screen the staging run handed back, inlined so the demo needs no harness behind it. On a real
+ * deployment this is the signed `/validation-captures/run/...` URL the server mints for the row.
+ * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+ */
+const DEMO_CAPTURE = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NDAnIGhlaWdodD0nMzYwJz48cmVjdCB3aWR0aD0nNjQwJyBoZWlnaHQ9JzM2MCcgZmlsbD0nI2Y0ZjVmNycvPjxyZWN0IHg9JzAnIHk9JzAnIHdpZHRoPSc2NDAnIGhlaWdodD0nNDQnIGZpbGw9JyMxZjI5MzMnLz48dGV4dCB4PScxOCcgeT0nMjknIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxNScgZmlsbD0nI2ZmZmZmZic+Tm9ydGh3aW5kIOKAlCBvcmRlciBjb25maXJtZWQ8L3RleHQ+PHJlY3QgeD0nMjQnIHk9JzcyJyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzcyJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTA0JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTgnIGZpbGw9JyMxZjI5MzMnPk9yZGVyIDQ4MjEzIGlzIGNvbmZpcm1lZDwvdGV4dD48dGV4dCB4PSc0NCcgeT0nMTI4JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPkEgcmVjZWlwdCBpcyBvbiBpdHMgd2F5IHRvIHNhbUBleGFtcGxlLmNvbTwvdGV4dD48cmVjdCB4PScyNCcgeT0nMTY0JyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzE1MCcgZmlsbD0nI2ZmZmZmZicgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzE5MicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjNjE3MDdkJz4yIMOXIFN0b25ld2FyZSBtdWc8L3RleHQ+PHRleHQgeD0nNTIwJyB5PScxOTInIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzFmMjkzMyc+wqMyNC4wMDwvdGV4dD48dGV4dCB4PSc0NCcgeT0nMjIwJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPjEgw5cgQ2FzdCBpcm9uIHBhbjwvdGV4dD48dGV4dCB4PSc1MjAnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjMWYyOTMzJz7CozU4LjAwPC90ZXh0PjxsaW5lIHgxPSc0NCcgeTE9JzI0NCcgeDI9JzU5NicgeTI9JzI0NCcgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz5Ub3RhbDwvdGV4dD48dGV4dCB4PSc1MTQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz7CozgyLjAwPC90ZXh0Pjx0ZXh0IHg9JzI0JyB5PSczNDAnIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMScgZmlsbD0nIzg3OTVhMSc+c3RhZ2luZyDCtyB2YWxpZGF0aW9uLWN1c3RvbWVyLTE8L3RleHQ+PC9zdmc+`;
+
 interface DemoSeed {
   state: AppState;
   transcripts: Record<string, string>;
@@ -1209,6 +1216,8 @@ export function buildDemoState(): DemoSeed {
               rowId: 'state:orders-carry-a-channel',
               runId: null,
               outcome: 'passed' as const,
+              capture: null,
+              captureUrl: null,
               rows: 0,
               value: null,
               detail: null,
@@ -1238,6 +1247,44 @@ export function buildDemoState(): DemoSeed {
             matched: null,
             idleReason: null,
             reading: null,
+          },
+          {
+            goalRef: 'issue:390',
+            environment: 'staging',
+            rowId: 'check:confirmation-reads',
+            kind: 'check' as const,
+            seq: 4,
+            title: 'The confirmation screen reads legibly at 1280',
+            sourceId: 'confirmation-reads',
+            selected: true,
+            blockedReason: null,
+            awaitingApproval: false,
+            matched: null,
+            idleReason: null,
+            reading: {
+              goalRef: 'issue:390',
+              environment: 'staging',
+              rowId: 'check:confirmation-reads',
+              runId: 'run-staging-1',
+              outcome: 'captured' as const,
+              capture: 'capture-confirmation-reads-run-staging-1.png',
+              captureUrl: DEMO_CAPTURE,
+              rows: null,
+              value: null,
+              detail:
+                'A screen was handed back for somebody to look at. This is not written onto the goal’s own ' +
+                'check: it already reads `passed`, recorded by a person who carried the steps out, and a ' +
+                'reading somebody took is theirs. The sheet keeps this one instead.',
+              startedSha: null,
+              endedSha: null,
+              executed: null,
+              retries: null,
+              durationMs: 41_000,
+              taskId: null,
+              agentId: null,
+              artefacts: null,
+              readAt: '2026-08-19T09:20:38.000Z',
+            },
           },
         ],
       },

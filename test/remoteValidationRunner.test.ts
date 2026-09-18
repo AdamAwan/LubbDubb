@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { commentSink } from './support/commentSink.js';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -115,6 +116,7 @@ function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
   const file = join(dir, 'harness.sqlite');
   const store = new Store(file);
   const desk = new RemoteValidationDesk({
+    sink: commentSink(),
     store,
     environments,
     observer: new FakeEnvironmentObserver(),

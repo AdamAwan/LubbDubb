@@ -157,6 +157,7 @@ function seed(sys: System): void {
     startedSha: DEPLOYED,
     endedSha: DEPLOYED,
     executed: 4,
+    capture: null,
     retries: 1,
     durationMs: 41_000,
     artefacts: 'https://reports.example.com/run/9f2c',
@@ -237,6 +238,7 @@ test('a reading no run took carries no agent, and says so as null rather than as
       executed: null,
       retries: null,
       durationMs: null,
+      capture: null,
       artefacts: null,
     });
 

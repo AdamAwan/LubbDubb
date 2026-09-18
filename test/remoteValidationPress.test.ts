@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { commentSink } from './support/commentSink.js';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
@@ -98,6 +99,7 @@ function bench(
   for (const [head, commit, held] of opts.contains ?? [[DEPLOYED, LANDED, true]]) git.setContains(head, commit, held);
   const tenants = new FakeTenantKeeper();
   const desk = new RemoteValidationDesk({
+    sink: commentSink(),
     store,
     environments,
     observer: new FakeEnvironmentObserver(),

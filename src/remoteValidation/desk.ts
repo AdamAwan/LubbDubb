@@ -4,12 +4,15 @@ import type { EnvironmentConfig } from '../environments/policy.js';
 import { sheetableArrivals, watchWindowMs } from '../environments/watchWindow.js';
 import { watchCheckVerdict } from '../environments/watchVerdict.js';
 import type { WatchResult } from '../environments/watchResult.js';
+import { issueOriginNumber } from '../issueOrigins.js';
+import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
 import { checkSetReleased } from '../validation/planApproval.js';
 import { sweptScripts } from '../validation/steps.js';
 import { queryDigest } from '../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../types.js';
+import { captureComment, postableCaptures, type CaptureLink } from './capturePost.js';
 import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
@@ -31,6 +34,14 @@ interface RemoteValidationDeskDeps {
    * delivery. → docs/spec/36-remote-validation.md#the-one-off-script
    */
   scriptGraceMs: number;
+  /** How a captured screen is put in front of somebody who never opens the cockpit. */
+  sink: ActionSink;
+  /**
+   * How a posted capture's link is built, installed by `buildApp` because minting the capability
+   * needs the server's key. Absent — or answering null — the comment still goes up, carrying the
+   * prose alone. → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+   */
+  captureLink?: CaptureLink;
   errors?: ErrorRecorder;
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
@@ -46,16 +57,84 @@ interface RemoteValidationDeskDeps {
 export class RemoteValidationDesk {
   private readonly now: () => number;
 
+  private captureLink: CaptureLink | null;
+
   constructor(private readonly deps: RemoteValidationDeskDeps) {
     this.now = deps.now ?? (() => Date.now());
+    this.captureLink = deps.captureLink ?? null;
+  }
+
+  /**
+   * The server's own capability signer, handed over once the HTTP app exists. It is installed rather
+   * than constructed because the artifact key is minted in `buildApp` and the harness is built before
+   * it; nothing here is worse for arriving late, because a pulse that runs first simply posts the
+   * prose. → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+   *
+   * @public the seam `buildApp` hands the capture link to this desk through
+   */
+  linkCapturesWith(link: CaptureLink): void {
+    this.captureLink = link;
   }
 
   /** @public the pass `Harness.runCycle` runs below `EnvironmentDesk` */
   async run(): Promise<void> {
     if (!this.deps.environments.some((e) => e.validate !== undefined)) return;
     await this.assembleAll();
+    await this.postCaptures();
     this.sweep();
     this.sweepScripts();
+  }
+
+  /**
+   * The screens a run handed back, put on the goal's ticket. A capture is kept precisely because
+   * somebody still has to look at it, and a person who never opens the cockpit would otherwise never
+   * be told one exists.
+   *
+   * Three things about it, and each is one this codebase already holds:
+   *
+   * - **It is never a `WorldEvent`,** an arrival's rule and for an arrival's reason: `deliveryHold`
+   *   expires a standing delivery verdict on any world event matching the goal's issue ref, so a
+   *   posting written as one would un-park the goal it reported on and hand delivered work back to
+   *   the fleet. Its own table, and nothing else reads it.
+   * - **The record is written after the comment has gone up, never before.** A posting the tracker
+   *   refused and the store recorded is a screen nobody will ever be told about; the failure goes
+   *   through `errors.record` and the next pulse is the retry.
+   * - **It writes on no check row.** A reading somebody took is theirs, and this pass is about where
+   *   an image is shown.
+   */
+  private async postCaptures(): Promise<void> {
+    const { store, errors } = this.deps;
+    let postable;
+    try {
+      postable = postableCaptures({
+        readings: store.remoteValidation.listRemoteReadings(),
+        rows: store.remoteValidation.listRemoteSheetRows(),
+        posted: store.remoteValidation.listPostedCaptures(),
+      });
+    } catch (err) {
+      errors?.record({ source: 'cycle', message: `choosing captures to post failed: ${(err as Error).message}` });
+      return;
+    }
+    for (const capture of postable) {
+      const number = issueOriginNumber('root', capture.goalRef);
+      if (number === null) continue;
+      try {
+        await this.deps.sink.upsertIssueComment({
+          number,
+          body: captureComment({ ...capture, url: this.captureLink?.(capture.runId, capture.rowId) ?? null }),
+          commentRef: null,
+        });
+      } catch (err) {
+        errors?.record({
+          source: 'cycle',
+          message:
+            `posting the screen captured for ${capture.rowId} on ${capture.environment} to ` +
+            `${capture.goalRef} failed: ${(err as Error).message}`,
+        });
+        continue;
+      }
+      store.remoteValidation.markCapturePosted(capture);
+    }
   }
 
   private async assembleAll(): Promise<void> {
@@ -264,6 +343,9 @@ export class RemoteValidationDesk {
       retries: null,
       durationMs: null,
       artefacts: null,
+      // A query hands nothing back to look at. Only a `screenshot` step's row carries a screen, and
+      // that only ever arrives through a run's report.
+      capture: null,
     });
   }
 

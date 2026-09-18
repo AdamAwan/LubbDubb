@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { commentSink } from './support/commentSink.js';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -107,6 +108,7 @@ function bench(
   const stateReader = opts.reader ?? reader();
   const env = opts.observer ?? observer();
   const desk = new RemoteValidationDesk({
+    sink: commentSink(),
     store,
     environments,
     observer: env,
@@ -425,6 +427,7 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
   const store = new Store(':memory:');
   try {
     const desk = new RemoteValidationDesk({
+      sink: commentSink(),
       store,
       environments: [ACCEPTANCE],
       observer: observer(),
@@ -645,6 +648,7 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
         'the column is present, readable, and not backfilled',
       );
       const desk = new RemoteValidationDesk({
+        sink: commentSink(),
         store,
         environments: [ACCEPTANCE],
         observer: observer(),
