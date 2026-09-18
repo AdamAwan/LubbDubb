@@ -20,20 +20,30 @@ export interface PrReviewState {
   headSha: string | null;
 }
 
+/**
+ * Whether the project's own review tooling opened this thread, by the stamp it declared.
+ *
+ * One predicate, two readers: the merge gate's `addressed` arm and the record of who raised a thread
+ * ([18](../../docs/spec/18-observability.md#telling-a-person-from-a-machine)). Two copies of the
+ * `.role` rule would let one of them count a summary thread the other does not.
+ */
+export function threadStamped(thread: PrReviewThread, policy: PrReviewPolicy): boolean {
+  const key = policy.publishedThreadProperty;
+  if (key === null || key === '') return false;
+  const props = thread.properties;
+  if (props === undefined || props[key] === undefined) return false;
+  const role = policy.publishedThreadRole;
+  return role === null || role === '' || props[`${key}.role`] === role;
+}
+
 function reviewAddressed(
   publishedThread: string | null,
   threads: readonly PrReviewThread[],
   policy: PrReviewPolicy,
 ): boolean {
   if (publishedThread !== null && threads.some((t) => t.id === publishedThread && t.state === 'resolved')) return true;
-  const key = policy.publishedThreadProperty;
-  if (key === null || key === '') return false;
-  const role = policy.publishedThreadRole;
-  const stamped = threads.filter((t) => {
-    const props = t.properties;
-    if (props === undefined || props[key] === undefined) return false;
-    return role === null || role === '' || props[`${key}.role`] === role;
-  });
+  if (policy.publishedThreadProperty === null || policy.publishedThreadProperty === '') return false;
+  const stamped = threads.filter((t) => threadStamped(t, policy));
   return stamped.length > 0 && stamped.every((t) => t.state === 'resolved');
 }
 

@@ -1202,9 +1202,43 @@ resolved themselves, or one the operator answered, never reaches an agent and is
 here. A share read as "of all review comments" would be wrong by however much of the review traffic
 people settle without the fleet.
 
+### Telling a person from a machine
+
 The thread's **author** is kept for the same reason the denominator is stated: a review bot and a
 person leave very different comments, and a single number that merges them answers a question nobody
 asked. It is a count beside the others, never a classification of who is worth listening to.
+
+The hard case is not a bot that announces itself — it is **a machine posting as a human**: a service
+account on a personal access token, a review bot commenting under an ordinary user. `authorKind`
+(`src/reviewLabels/authors.ts`) answers it from three sources, in this order.
+
+1. **The provider's own word.** A GitHub App posts as `type: "Bot"` and cannot hide it, so
+   `GhReviewComment.authorIsBot` carries it onto the thread. Azure DevOps reports nothing here, and
+   `undefined` means *it did not say* rather than *a person*.
+2. **The stamp the project declared.** `review.publishedThreadProperty` (with `.role`) is the key a
+   project's **own** review tooling marks its threads with in the provider's per-thread property bag,
+   and it already exists — the merge gate's `addressed` arm reads it
+   ([07](07-pull-requests.md#a-thread-the-harness-stamped)). It is the same question asked twice, so
+   it is **one predicate**: `threadStamped` in `src/review/prReviewState.ts`, read by both. Two copies
+   of the `.role` rule would let one reader count a summary thread the other does not.
+3. **The names the repository gave.** `review.machineAuthors` — regular expressions over the login —
+   for the poster neither of the first two can see. It sits beside `publishedThreadProperty` in
+   `lubbdubb.project.json` for the same reason that one does: which machines comment on a repository
+   is a fact about that repository, and a committed file means every clone reads the same list.
+
+**The first two are stored, the third is derived.** A provider's word and a stamp are facts at
+observation time and nothing can recompute them, so `recordThreadLabel` folds both into
+`author_is_bot` as the reply is made. The name list is config, so it is applied when the reading is
+built — same split as the areas, and for the same reason: a list corrected next month corrects the
+whole back-catalogue.
+
+**An unlisted author reads as a person, and that is an assumption rather than a finding.** A third
+`unknown` bucket was the alternative and is worse: with the stamp and the provider covering the
+declared machines, everything left is people plus whatever nobody has named yet, so `unknown` would
+swallow every real person and the reading would say nothing until the config was exhaustive. What
+keeps it honest instead is that the reading draws **authors by name**: a machine sitting in the People
+row is visible to anyone reading the rows, where a single merged total would hide it. The cockpit's
+method note says which three sources decided it.
 
 ## The live tail
 

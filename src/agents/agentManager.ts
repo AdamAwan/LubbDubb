@@ -51,6 +51,8 @@ import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../reviewLabels/labels.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
+import { threadStamped } from '../review/prReviewState.js';
+import type { PrReviewPolicy } from '../review/policy.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -90,6 +92,7 @@ interface AgentManagerOptions {
   featureStanding?: (featureOrigin: string) => string | null;
   featureSequenceStanding?: (featureOrigin: string) => { key: string; members: number[] } | null;
   whitelistedApprovals: WhitelistRule[];
+  reviewPolicy?: PrReviewPolicy;
   createSession: SessionFactory;
   initialInput?: (task: Task) => string | null;
   resumeInput?: () => string | null;
@@ -628,11 +631,25 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         resolved: input.resolved,
         path: thread?.path ?? null,
         author: thread?.author ?? null,
+        authorIsBot: this.threadAuthorIsMachine(thread),
         agentId,
         taskId: task.id,
       });
       return { ok: true, label };
     });
+  }
+
+  /**
+   * The two sources that are facts at observation time, folded into one. The provider's own word
+   * first; then the stamp the project declared, which is the only thing that sees a poster the
+   * provider reports as an ordinary user. Null is "neither said" — never "a person".
+   */
+  private threadAuthorIsMachine(thread: PrReviewThread | null): boolean | null {
+    if (thread === null) return null;
+    if (thread.authorIsBot !== undefined) return thread.authorIsBot;
+    const policy = this.opts.reviewPolicy;
+    if (policy !== undefined && threadStamped(thread, policy)) return true;
+    return null;
   }
 
   private findReviewThread(prNumber: number, threadId: string): PrReviewThread | null {

@@ -235,6 +235,7 @@ export class OctokitGitHubApi implements GitHubApi {
     return comments.map((c) => ({
       id: c.id,
       authorLogin: c.user?.login ?? '',
+      authorIsBot: c.user?.type === 'Bot',
       body: c.body,
       inReplyToId: c.in_reply_to_id ?? null,
       path: c.path,

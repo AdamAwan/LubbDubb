@@ -1,7 +1,14 @@
 import type { PrThreadLabel, PrThreadLabelInput } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
+
+export const PR_THREAD_LABEL_COLUMNS: ColumnMigrations = {
+  pr_thread_labels: {
+    author_is_bot: 'INTEGER',
+  },
+};
 
 export class PrThreadLabelStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -11,14 +18,15 @@ export class PrThreadLabelStore {
     this.ctx
       .prep(
         `INSERT INTO pr_thread_labels
-           (pr_number, thread_id, about_comment, changed_code, resolved, path, author, agent_id, task_id, answered_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (pr_number, thread_id, about_comment, changed_code, resolved, path, author, author_is_bot, agent_id, task_id, answered_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(pr_number, thread_id) DO UPDATE SET
            about_comment = excluded.about_comment,
            changed_code = excluded.changed_code,
            resolved = excluded.resolved,
            path = excluded.path,
            author = excluded.author,
+           author_is_bot = excluded.author_is_bot,
            agent_id = excluded.agent_id,
            task_id = excluded.task_id,
            answered_at = excluded.answered_at`,
@@ -31,6 +39,7 @@ export class PrThreadLabelStore {
         input.resolved ? 1 : 0,
         input.path,
         input.author,
+        input.authorIsBot === null ? null : input.authorIsBot ? 1 : 0,
         input.agentId,
         input.taskId,
         answeredAt,
@@ -54,6 +63,7 @@ interface Row {
   resolved: number;
   path: string | null;
   author: string | null;
+  author_is_bot: number | null;
   agent_id: string;
   task_id: string;
   answered_at: string;
@@ -68,6 +78,7 @@ function hydrate(row: Row): PrThreadLabel {
     resolved: row.resolved === 1,
     path: row.path,
     author: row.author,
+    authorIsBot: row.author_is_bot === null ? null : row.author_is_bot === 1,
     agentId: row.agent_id,
     taskId: row.task_id,
     answeredAt: row.answered_at,

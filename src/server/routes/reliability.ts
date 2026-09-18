@@ -38,6 +38,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           labels: store.prThreadLabels.listThreadLabelsSince(since),
           replies: store.prReplies.listPrRepliesSentSince(since),
           areas: system.config.reviewAreas,
+          botAuthors: system.config.review.machineAuthors,
         }),
       } satisfies ReliabilityPayload;
     }),

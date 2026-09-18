@@ -1,6 +1,7 @@
 import type { PrReplySent, PrThreadLabel } from '../types.js';
 import type { ReviewAreaRule } from '../config/config.js';
 import { areaNames, areasForPath } from '../reviewLabels/areas.js';
+import { authorKind } from '../reviewLabels/authors.js';
 
 // → docs/spec/18-observability.md#which-part-of-the-code-a-review-thread-was-about
 
@@ -18,6 +19,7 @@ export interface ReviewAreaTotal extends ReviewLabelTotal {
 
 interface ReviewAuthorTotal extends ReviewLabelTotal {
   author: string;
+  kind: 'bot' | 'person';
 }
 
 export interface ReviewLabelInsights extends ReviewLabelTotal {
@@ -30,6 +32,10 @@ export interface ReviewLabelInsights extends ReviewLabelTotal {
   unanchored: number;
   /** Threads whose file matched no area rule. */
   unplaced: number;
+  /** Threads raised by an author the provider or the repository calls a machine. */
+  byBots: ReviewLabelTotal;
+  /** Everything else — which is an assumption, not a finding. See `authorKind`. */
+  byPeople: ReviewLabelTotal;
   byArea: ReviewAreaTotal[];
   byAuthor: ReviewAuthorTotal[];
 }
@@ -38,6 +44,7 @@ interface ReviewLabelInput {
   labels: readonly PrThreadLabel[];
   replies: readonly PrReplySent[];
   areas: readonly ReviewAreaRule[];
+  botAuthors: readonly string[];
 }
 
 function tally(labels: readonly PrThreadLabel[]): ReviewLabelTotal {
@@ -75,8 +82,12 @@ export function buildReviewLabelInsights(input: ReviewLabelInput): ReviewLabelIn
   const replies = [...repliesPerThread.values()].reduce((sum, n) => sum + n, 0);
   const answeredOnce = [...repliesPerThread.values()].filter((n) => n === 1).length;
 
+  const kindOf = (l: PrThreadLabel): 'bot' | 'person' => authorKind(l.author, l.authorIsBot, input.botAuthors);
   const byAuthor = [...new Set(labels.map((l) => l.author).filter((a): a is string => a !== null))]
-    .map((author) => ({ author, ...tally(labels.filter((l) => l.author === author)) }))
+    .map((author) => {
+      const mine = labels.filter((l) => l.author === author);
+      return { author, kind: kindOf(mine[0]!), ...tally(mine) };
+    })
     .sort((a, b) => b.threads - a.threads || a.author.localeCompare(b.author))
     .slice(0, AUTHOR_ROWS);
 
@@ -87,6 +98,8 @@ export function buildReviewLabelInsights(input: ReviewLabelInput): ReviewLabelIn
     replies,
     unanchored,
     unplaced,
+    byBots: tally(labels.filter((l) => kindOf(l) === 'bot')),
+    byPeople: tally(labels.filter((l) => kindOf(l) === 'person')),
     byArea: [...placed].map(([area, rows]) => ({ area, ...tally(rows) })),
     byAuthor,
   };

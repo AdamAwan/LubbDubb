@@ -83,6 +83,42 @@ function ReviewComments({ labels, windowLabel }: { labels: ReviewLabelInsights; 
           ))}
         </tbody>
       </table>
+      <table className="sp-tbl">
+        <thead>
+          <tr>
+            <th>Who raised it</th>
+            <th className="n">Threads</th>
+            <th className="n">About a comment</th>
+            <th className="n">Changed code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span className="nm">People</span>
+            </td>
+            <td className="n b">{labels.byPeople.threads}</td>
+            <td className="n">
+              {labels.byPeople.aboutComment} ({fmtShare(labels.byPeople.aboutComment, labels.byPeople.threads)})
+            </td>
+            <td className="n">
+              {labels.byPeople.changedCode} ({fmtShare(labels.byPeople.changedCode, labels.byPeople.threads)})
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span className="nm">Machines</span>
+            </td>
+            <td className="n b">{labels.byBots.threads}</td>
+            <td className="n">
+              {labels.byBots.aboutComment} ({fmtShare(labels.byBots.aboutComment, labels.byBots.threads)})
+            </td>
+            <td className="n">
+              {labels.byBots.changedCode} ({fmtShare(labels.byBots.changedCode, labels.byBots.threads)})
+            </td>
+          </tr>
+        </tbody>
+      </table>
       <p className="sp-note">
         {labels.replies} repl{labels.replies === 1 ? 'y' : 'ies'} across {labels.threads} thread
         {labels.threads === 1 ? '' : 's'} &middot; {labels.threads - labels.answeredOnce} needed more than one
@@ -104,6 +140,7 @@ function ReviewComments({ labels, windowLabel }: { labels: ReviewLabelInsights; 
               <tr key={a.author}>
                 <td>
                   <span className="nm">{a.author}</span>
+                  <Tag>{a.kind === 'bot' ? 'machine' : 'person'}</Tag>
                 </td>
                 <td className="n b">{a.threads}</td>
                 <td className="n">
@@ -121,6 +158,13 @@ function ReviewComments({ labels, windowLabel }: { labels: ReviewLabelInsights; 
         <p>
           <b>The denominator is threads the fleet answered</b>, not review comments left. A thread a reviewer resolved
           themselves, or one an operator answered, never reaches an agent and is counted nowhere here.
+        </p>
+        <p>
+          <b>A machine is one the provider owns up to</b>, one whose thread carries the stamp this project declared in{' '}
+          <code>review.publishedThreadProperty</code>, or one named in <code>review.machineAuthors</code>. Anything else
+          is counted as a person, which is an assumption rather than a finding &mdash; a machine nobody has named yet
+          sits in the People row until somebody names it. The authors are drawn by name for that reason: one hiding
+          among the people is visible in the rows, where a total would hide it.
         </p>
         <p>
           <b>Both columns are the answering agent&rsquo;s own word</b>, given as it replied. An area is worked out from

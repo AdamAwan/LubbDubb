@@ -3186,9 +3186,11 @@ function buildDemoReviewLabels(): ReviewLabelInsights {
     unplaced: 1,
     byArea: [area('ui', 11, 1, 8), area('sql', 4, 0, 3), area('backend', 15, 4, 10), area('test', 6, 1, 5)],
     byAuthor: [
-      { author: 'claude-code-review', threads: 21, aboutComment: 5, changedCode: 13 },
-      { author: 'adamawan', threads: 10, aboutComment: 1, changedCode: 9 },
+      { author: 'claude-code-review[bot]', kind: 'bot', threads: 21, aboutComment: 5, changedCode: 13 },
+      { author: 'adamawan', kind: 'person', threads: 10, aboutComment: 1, changedCode: 9 },
     ],
+    byBots: { threads: 21, aboutComment: 5, changedCode: 13 },
+    byPeople: { threads: 13, aboutComment: 1, changedCode: 10 },
   };
 }
 

@@ -1330,7 +1330,7 @@ answered were about. Returns `{ insights, remedies, reviewLabels }` — see
 second, and [18](18-observability.md#which-part-of-the-code-a-review-thread-was-about) for the third.
 
 `reviewLabels` rides here for the same reason `remedies` does, and it is folded against
-`config.reviewAreas` at request time rather than from anything stored — the rows hold the thread's
+`config.reviewAreas` and `config.review.machineAuthors` at request time rather than from anything stored — the rows hold the thread's
 path, and the areas are derived on the way out, so an operator who corrects a rule sees the whole
 window re-read rather than only the threads answered after the correction.
 

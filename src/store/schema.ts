@@ -1146,6 +1146,7 @@ CREATE TABLE IF NOT EXISTS pr_thread_labels (
   resolved      INTEGER NOT NULL,  -- the reply asked the harness to mark the thread resolved
   path          TEXT,              -- repository-relative file the thread is anchored to; null for a PR-level thread
   author        TEXT,              -- who left the thread, to tell a review bot from a person
+  author_is_bot INTEGER,           -- the provider's own word at the time; null where it said nothing
   agent_id      TEXT NOT NULL,
   task_id       TEXT NOT NULL,
   answered_at   TEXT NOT NULL,

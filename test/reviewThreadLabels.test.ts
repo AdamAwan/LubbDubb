@@ -9,7 +9,12 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { areasForPath } from '../src/reviewLabels/areas.js';
 import { buildReviewLabelInsights } from '../src/insights/reviewLabelInsights.js';
-import type { Agent, PrThreadLabel, WorldSnapshot } from '../src/types.js';
+import { authorKind } from '../src/reviewLabels/authors.js';
+import { threadStamped } from '../src/review/prReviewState.js';
+import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
+import type { Agent, PrReviewThread, PrThreadLabel, WorldSnapshot } from '../src/types.js';
+
+const BOT_AUTHORS = ['\\[bot\\]$'];
 
 const AREAS: ReviewAreaRule[] = [
   { area: 'ui', path: '^web/src/' },
@@ -18,9 +23,10 @@ const AREAS: ReviewAreaRule[] = [
   { area: 'test', path: '\\.test\\.tsx?$' },
 ];
 
-function build(): System {
+function build(overrides: Record<string, unknown> = {}): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-labels-'));
   const config = loadConfig({
+    ...overrides,
     dbPath: ':memory:',
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
@@ -34,7 +40,7 @@ function build(): System {
   });
 }
 
-function worldWithThread(opts: { path?: string; author?: string }): WorldSnapshot {
+function worldWithThread(opts: { path?: string; author?: string; properties?: Record<string, string> }): WorldSnapshot {
   return {
     takenAt: new Date().toISOString(),
     issues: [],
@@ -54,6 +60,7 @@ function worldWithThread(opts: { path?: string; author?: string }): WorldSnapsho
             state: 'open',
             replies: [],
             ...(opts.path === undefined ? {} : { path: opts.path }),
+            ...(opts.properties === undefined ? {} : { properties: opts.properties }),
           },
         ],
       },
@@ -184,6 +191,7 @@ function label(over: Partial<PrThreadLabel> = {}): PrThreadLabel {
     resolved: true,
     path: 'src/system.ts',
     author: 'a-reviewer',
+    authorIsBot: null,
     agentId: 'a',
     taskId: 't',
     answeredAt: '2026-01-01T00:00:00.000Z',
@@ -206,6 +214,7 @@ test('the reading counts a thread once per area it is in, and says what it could
       { prNumber: 99, threadId: 'other', commentRef: 'r4', sentAt: '2026-01-01T00:03:00.000Z' },
     ],
     areas: AREAS,
+    botAuthors: BOT_AUTHORS,
   });
 
   assert.equal(insights.threads, 4);
@@ -217,4 +226,90 @@ test('the reading counts a thread once per area it is in, and says what it could
   assert.equal(insights.byArea.find((a) => a.area === 'sql')!.threads, 0, 'a declared area with nothing in it stays');
   assert.equal(insights.replies, 3, 'the reply on a thread this window never labelled is not counted');
   assert.equal(insights.answeredOnce, 1, 't2 alone was answered once and left alone');
+});
+
+test('a machine is the provider’s word first, then the stamp this project declared, then its named list', () => {
+  const policy = { ...DEFAULT_PR_REVIEW, publishedThreadProperty: 'ReviewTool', publishedThreadRole: 'finding' };
+
+  assert.equal(authorKind('anyone', true, []), 'bot', 'the provider owning up settles it');
+  assert.equal(authorKind('claude-code-review[bot]', null, BOT_AUTHORS), 'bot', 'and so does the named list');
+  assert.equal(authorKind('a-person', null, BOT_AUTHORS), 'person');
+  assert.equal(authorKind(null, null, BOT_AUTHORS), 'person', 'an author the world never named');
+
+  const stamped: PrReviewThread = {
+    id: 't',
+    author: 'svc-review',
+    body: 'x',
+    state: 'open',
+    replies: [],
+    properties: { ReviewTool: '1', 'ReviewTool.role': 'finding' },
+  };
+  assert.equal(threadStamped(stamped, policy), true, 'the stamp the merge gate already reads');
+  assert.equal(threadStamped({ ...stamped, properties: { ReviewTool: '1' } }, policy), false, 'the role must match');
+  assert.equal(threadStamped({ ...stamped, properties: {} }, policy), false);
+  assert.equal(threadStamped(stamped, DEFAULT_PR_REVIEW), false, 'a project that declared no stamp claims nothing');
+});
+
+test('an unlisted author reads as a person, and the pattern that will not compile is skipped', () => {
+  assert.equal(authorKind('nobody-named-me', null, []), 'person');
+  assert.equal(authorKind('x[bot]', null, ['([', '\\[bot\\]$']), 'bot');
+});
+
+test('the reading splits people from machines and tags each author with which it is', () => {
+  const insights = buildReviewLabelInsights({
+    labels: [
+      label({ threadId: 't1', author: 'review[bot]', aboutComment: true }),
+      label({ threadId: 't2', author: 'review[bot]' }),
+      label({ threadId: 't3', author: 'svc-account', authorIsBot: true }),
+      label({ threadId: 't4', author: 'a-person', aboutComment: true }),
+    ],
+    replies: [],
+    areas: AREAS,
+    botAuthors: BOT_AUTHORS,
+  });
+
+  assert.equal(insights.byBots.threads, 3, 'two by pattern, one the provider owned up to');
+  assert.equal(insights.byPeople.threads, 1);
+  assert.equal(insights.byBots.aboutComment, 1);
+  assert.equal(insights.byPeople.aboutComment, 1);
+  assert.equal(insights.byAuthor.find((a) => a.author === 'review[bot]')!.kind, 'bot');
+  assert.equal(insights.byAuthor.find((a) => a.author === 'svc-account')!.kind, 'bot');
+  assert.equal(insights.byAuthor.find((a) => a.author === 'a-person')!.kind, 'person');
+});
+
+test('the stamp the project declared is folded in at record time, not left for the reading to guess', async () => {
+  const system = build({
+    review: {
+      ...DEFAULT_PR_REVIEW,
+      enabled: true,
+      publishedThreadProperty: 'ReviewTool',
+      publishedThreadRole: 'finding',
+    },
+  });
+  system.store.world.setWorldBaseline(
+    worldWithThread({
+      path: 'src/system.ts',
+      author: 'svc-review',
+      properties: { ReviewTool: '1', 'ReviewTool.role': 'finding' },
+    }),
+  );
+  const agent = reviewAgent(system);
+
+  await callReply(system, agent, { body: 'Done.', thread: 'c-1', about_comment: true, changed_code: true });
+
+  const [row] = system.store.prThreadLabels.listThreadLabelsSince('');
+  assert.equal(row!.authorIsBot, true, 'a poster the provider reports as an ordinary user, caught by the stamp');
+  system.store.close();
+});
+
+test('with no stamp declared and nothing from the provider, the record says neither rather than person', async () => {
+  const system = build();
+  system.store.world.setWorldBaseline(worldWithThread({ path: 'src/system.ts', author: 'svc-review' }));
+  const agent = reviewAgent(system);
+
+  await callReply(system, agent, { body: 'Done.', thread: 'c-1', about_comment: false, changed_code: true });
+
+  const [row] = system.store.prThreadLabels.listThreadLabelsSince('');
+  assert.equal(row!.authorIsBot, null, 'null is "neither said", and the named list decides at read time');
+  system.store.close();
 });
