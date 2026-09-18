@@ -10,29 +10,62 @@ interface FeatureGroup {
   feature: IssueRelative;
   children: Issue[];
   members: number[];
+  /** The open children carrying no watch tag — the stories the order covers that nothing will work. */
+  unwatched: number[];
 }
 
-function featureGroups(
+/**
+ * Every Feature the watch tag reaches, with **all** of its children under it.
+ *
+ * The gate is the Feature's, never the child's: a Feature is in when it carries the tag itself, or
+ * when any one of its children does — the second arm for the operator who tags stories and not the
+ * container, whose Features were the only ones sequenced before this. Once a Feature is in, every
+ * child is a member whatever its own tag says, because an order over the watched half of a Feature
+ * is an order over a set the operator never described.
+ * → docs/spec/33-story-sequencing.md#which-features-are-asked-about
+ */
+export function featureGroups(
   issues: readonly Issue[],
   containerTypes: readonly string[] | undefined,
   watched: (issue: Issue) => boolean,
 ): FeatureGroup[] {
-  const groups = new Map<number, FeatureGroup>();
+  const containers = new Map<number, Issue>();
+  for (const issue of issues) if (isContainerIssue(issue, containerTypes)) containers.set(issue.number, issue);
+
+  const groups = new Map<number, FeatureGroup & { anyWatched: boolean }>();
   for (const issue of issues) {
     const parent = issue.parent;
     if (!parent) continue;
     if (isContainerIssue(issue, containerTypes)) continue;
-    if (!watched(issue)) continue;
-    const group = groups.get(parent.number) ?? { feature: parent, children: [], members: [] };
+    const group = groups.get(parent.number) ?? {
+      feature: parent,
+      children: [],
+      members: [],
+      unwatched: [],
+      anyWatched: false,
+    };
     group.members.push(issue.number);
-    if (issue.state === 'open') group.children.push(issue);
+    const isWatched = watched(issue);
+    if (isWatched) group.anyWatched = true;
+    if (issue.state === 'open') {
+      group.children.push(issue);
+      if (!isWatched) group.unwatched.push(issue.number);
+    }
     groups.set(parent.number, group);
   }
-  for (const group of groups.values()) {
+
+  const out: FeatureGroup[] = [];
+  for (const [number, group] of groups) {
+    const container = containers.get(number);
+    // No container in the world snapshot is not "unwatched" — the harness cannot read a tag it was
+    // never shown, so the children's own tags are the only statement there is.
+    if (!(container === undefined ? false : watched(container)) && !group.anyWatched) continue;
     group.children.sort((a, b) => a.number - b.number);
     group.members.sort((a, b) => a - b);
+    group.unwatched.sort((a, b) => a - b);
+    out.push({ feature: group.feature, children: group.children, members: group.members, unwatched: group.unwatched });
   }
-  return [...groups.values()].sort((a, b) => a.feature.number - b.feature.number);
+  return out.sort((a, b) => a.feature.number - b.feature.number);
 }
 
 export function featureSequenceKey(members: readonly number[], edges: readonly SequenceEdge[]): string {

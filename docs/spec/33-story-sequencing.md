@@ -57,9 +57,9 @@ contradicted one would be the harness overruling the board it is supposed to be 
 
 Most boards have no dependency links at all, which is the case this feature exists for. One desk
 agent per Feature — rule `feature-sequence` (`src/dispatcher/rules/featureSequence.ts`), origin
-`issue:<n>:sequence` — reads the Feature's description and its watched children and proposes the
-rest of the order. It runs only at `issueSequencing: full`; at `links` there is nothing for it to
-propose, because every edge was drawn by a person.
+`issue:<n>:sequence` — reads the Feature's description and **every** open story under it and
+proposes the rest of the order. It runs only at `issueSequencing: full`; at `links` there is nothing
+for it to propose, because every edge was drawn by a person.
 
 Two Features are never asked about: one with a **single story**, where an order is a question with
 one arm, and one above `issueSequenceMaxChildren`, where the prompt would not fit and the order
@@ -98,6 +98,29 @@ that firing — the primed arm, and when the acceptance carries — is [a story 
 That is the whole difference from the summary's key, which digests standings precisely because a
 summary is about movement: re-proposing an order every time a child landed would ask an operator to
 re-accept the same sequence eight times.
+
+### Which Features are asked about
+
+`featureGroups` (`src/sequence/sequence.ts`) is where that set is drawn, and the gate is the
+**Feature's**, never the child's: a Feature is in when it carries the watch tag itself, or when any
+one of its children does. The second arm is not a courtesy — it is the whole of what the harness
+sequenced before this, on the deployments where an operator tags stories and never the container,
+and a gate that dropped it would silently stop sequencing the boards most likely to need it.
+
+Once a Feature is in, **every** story under it is a member of the order, whatever its own tag says.
+An order over the watched half of a Feature is an order over a set nobody described: the operator
+asked for the work under this Feature to be put in an order, and the half the tag happens to reach
+is not a shape they stated. It is also the half that moves — one cascade, one story added afterwards
+— so an order scoped to it would be re-proposed by a tag rather than by the tracker.
+
+The membership digest follows from that, and is the reason it costs nothing: `featureSequenceKey`
+digests the same set, so **tagging a story does not re-propose the order**. A story _added_ to the
+Feature still does, because that is a change to the statements the order was written over.
+→ [the record](#the-record)
+
+A Feature the world snapshot does not hold is read off its children alone. The harness cannot read a
+tag it was never shown, so an absent container is never the same as an unwatched one — the same
+three-valued discipline the mirror's `parent` is held to ([17](17-cockpit.md#three-buckets-for-a-parent-link-not-two)).
 
 **It may decline to order.** An agent that cannot support an order from the items' own text says so
 and proposes them all parallel. This is `isOrphanIssue`'s discipline one tier up
@@ -166,6 +189,34 @@ the whole of what the dispatcher can see: it reads no git, and a goal's branch a
 it as a pull request. It errs towards satisfied, which is the direction every uncertainty here errs
 in.
 
+### An unwatched predecessor holds
+
+An order covers every story under the Feature, so it can name a predecessor **nothing is going to
+work**: one that is open, has pushed no branch, and carries no watch tag. It holds, exactly as any
+other unsatisfied predecessor does.
+
+That is a deliberate departure from [fail open](#fail-open), and the only one in this document. The
+argument for it is that the operator accepted an order over a set they were shown in full, and a
+harness that quietly skipped the edges it found inconvenient would be enforcing a different order
+from the one on the card — which is the one failure this mechanism cannot afford, because an order
+nobody can trust is one nobody accepts. The argument against it is the one fail-open exists for: a
+story waiting behind a tag that is never applied waits for good.
+
+So the hold is paid for by being **loud**, on every surface, and `sequenceReadiness` answers a
+`SequenceWait` rather than a list to make that possible: `on` is everything the story waits on, and
+`unworkable` is the subset that carries no tag. `sequenceHoldReason` names them and says the one
+thing that distinguishes this wait from every other — that it does not end on its own — and points
+at both ways out: tag the story, or amend the order. Beside it, a
+["Needs you" row](06-issue-pickup.md#a-watched-feature-reports-the-children-nothing-can-see) is
+standing for the Feature that has an unseen story at all, and it names the ones holding work.
+
+Fold `unworkable` back into `on` and the hold is still correct and still stated — but the sentence
+stops saying that waiting will not help, and the row that would have said it is the only thing left
+between the operator and a story that never starts.
+
+A caller that states no watch reading at all gets the reading every caller had before an order could
+cover an unwatched story: every predecessor workable, `unworkable` empty.
+
 The verdict rides on `StageContext.sequenceWaits` for later stages to read, and it is computed
 **once**, in the
 dispatcher's context assembly, beside `routes` and `eligibleIssues`. It is not a second opinion
@@ -180,7 +231,7 @@ only gate that asks about **content** ([06](06-issue-pickup.md)). It reads the t
 read-only checkout of the default branch and is told to check that the things it names exist — so a
 story whose predecessor has not landed is read against a repository missing exactly what that
 predecessor was going to build, and a schema or an interface the ticket names is simply absent. That
-reads as `unclear`: *names things that do not exist*.
+reads as `unclear`: _names things that do not exist_.
 
 The cost of getting it wrong there is worse than a wasted dispatch, because **an appraisal is a
 record and the hold is not**. `appraisalHold` keys on `goalFingerprint(title, body)`
@@ -242,7 +293,7 @@ appraiser is asked to name in its summary what it took to be arriving from elsew
 reading is visible before an agent acts on it.
 
 It narrows the verdict rather than excusing it. A ticket that does not say enough for the appraiser
-to tell *what it expects the dependency to provide* is still `unclear`, and that is the same
+to tell _what it expects the dependency to provide_ is still `unclear`, and that is the same
 question the rubric already asks.
 
 The note draws no edge and schedules nothing. Where the appraiser concludes a story does have to
@@ -261,6 +312,9 @@ Every one of these leaves **every story eligible, in exactly the order it has to
 - a cycle, a self-edge, or an edge naming a story the Feature does not have — all refused at
   ingestion with nothing stored;
 - `issueSequencing` off, which is the default.
+
+The one arm that does **not** fail open is a predecessor nothing will work, which holds and says so
+— stated, argued and paid for [above](#an-unwatched-predecessor-holds).
 
 This is `resolvePlanRoute`'s discipline ([08](08-planning.md#the-four-arms)): a planner that fails
 falls through to `single` rather than parking the issue. A mechanism that adds ordering must never be
@@ -515,6 +569,17 @@ is a statement about the queue and nothing about it needs a worktree or an agent
   a declined one back;
 - `linkEdges`, `sequenceReadiness`, `sequenceHoldReason`, `featureSequenceKey` and `resequenceVerdict`
   as pure unit tests, with no world.
+
+`test/unwatchedChildren.test.ts` covers the set the order is drawn over and the hold that follows
+from it:
+
+- a watched Feature is ordered over every story under it, tagged or not, and a Feature tagged only
+  on a child is still ordered;
+- a Feature nothing watches is not ordered, and one the world does not hold is read off its
+  children;
+- tagging a story does not change the key;
+- a story waiting on an unwatched one is held, the reason says waiting will not end it, and a
+  watched predecessor's reason does not.
 
 The readiness function and the key are pure, so the two things most likely to be wrong — which
 stories are ready, and when a Feature is re-proposed — are testable without a harness.

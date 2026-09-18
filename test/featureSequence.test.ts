@@ -626,7 +626,7 @@ test('an unaccepted order names the predecessors it would hold behind, and says 
   const note = predecessorNote(
     issues[1]!,
     issues,
-    new Map([['issue:500:sequence', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
+    new Map([['issue:500', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
     [],
   );
   assert.match(note, /waiting on #11/);
@@ -639,7 +639,7 @@ test('a predecessor that has pushed a branch is not named — there is nothing l
   const note = predecessorNote(
     issues[1]!,
     issues,
-    new Map([['issue:500:sequence', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
+    new Map([['issue:500', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
     [{ id: 'p7', number: 7, title: 'x', branch: 'issue/11', ciStatus: 'passing', unresolvedComments: [] }],
   );
   assert.doesNotMatch(note, /waiting on #11/);
@@ -648,7 +648,7 @@ test('a predecessor that has pushed a branch is not named — there is nothing l
 
 test('an accepted order contributes no note — it is the hold that covers that story', () => {
   const issues = [story(11), story(12)];
-  const note = predecessorNote(issues[1]!, issues, new Map([['issue:500:sequence', sequence()]]), []);
+  const note = predecessorNote(issues[1]!, issues, new Map([['issue:500', sequence()]]), []);
   assert.doesNotMatch(note, /waiting on #11/);
 });
 

@@ -19,6 +19,7 @@ import type { StackLandingDesk } from './stacks/landingDesk.js';
 import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
+import type { UnwatchedChildDesk } from './features/unwatchedDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { EnvironmentDesk } from './environments/environmentDesk.js';
@@ -47,6 +48,7 @@ export interface PulseDeps {
   remoteValidation?: RemoteValidationDesk;
   validationReady?: ValidationReadyDesk;
   closeOuts?: DeliveryCloseOutDesk;
+  unwatchedChildren?: UnwatchedChildDesk;
   notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   graduations?: { run(): void };
   clusters?: { run(): void };
@@ -116,6 +118,7 @@ const ENTRIES = [
     { id: 'remoteValidation', readWorld: true, run: (d) => d.remoteValidation?.run() },
     { id: 'validationReady', readWorld: false, run: (d, at) => d.validationReady?.run(at.world) },
     { id: 'closeOuts', readWorld: false, run: (d, at) => d.closeOuts?.run(at.world) },
+    { id: 'unwatchedChildren', readWorld: false, run: (d, at) => d.unwatchedChildren?.run(at.world) },
     { id: 'notices', readWorld: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
     { id: 'graduations', readWorld: false, run: (d) => d.graduations?.run() },
     { id: 'clusters', readWorld: false, run: (d) => d.clusters?.run() },

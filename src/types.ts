@@ -483,7 +483,7 @@ export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch' | 'outcome';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch' | 'unwatched' | 'outcome';
 
 export interface HumanTask {
   id: string;

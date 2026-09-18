@@ -46,6 +46,7 @@ import { ObstacleDesk, type ObstacleReader } from './obstacles/desk.js';
 import { trackerCoordinates } from './mcp/findings.js';
 import { PrNamingDesk } from './pr/prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
+import { UnwatchedChildDesk } from './features/unwatchedDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
@@ -682,6 +683,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     () => (revealGateOn(config) ? new Set(predictions.listOutcomeOwed()) : new Set()),
   );
 
+  const unwatchedChildren = new UnwatchedChildDesk({
+    store,
+    containerTypes: config.issueContainerTypes,
+    watched: (issue) => issueWatchGateReason(issue, sequenceWatchPolicy) === null,
+    errors,
+  });
+
   const validationAsks = new ValidationAskDesk(store);
 
   const validationReady = new ValidationReadyDesk(store, config.environments);
@@ -762,6 +770,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     areaPaths,
     naming,
     closeOuts,
+    unwatchedChildren,
     validationAsks,
     validationReady,
     burn,

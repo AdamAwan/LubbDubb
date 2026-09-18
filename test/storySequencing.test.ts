@@ -65,7 +65,7 @@ test('a self-edge is dropped rather than holding its own story for good', () => 
 test('a story waits on a predecessor that is open and has pushed nothing', () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const waits = sequenceReadiness(linkEdges(issues), { issues, openPrs: [] });
-  assert.deepEqual(waits.get(12), [11]);
+  assert.deepEqual(waits.get(12), { on: [11], unworkable: [] });
   assert.equal(waits.get(11), undefined, 'the story nothing waits behind is not held');
 });
 
@@ -87,12 +87,18 @@ test('an edge naming an issue the world does not hold is ignored, never a hold',
 
 test('a story waiting on several names all of them, in order, once each', () => {
   const issues = [issue(9), issue(11), issue(12, { dependsOn: [relative(11), relative(9), relative(11)] })];
-  assert.deepEqual(sequenceReadiness(linkEdges(issues), { issues, openPrs: [] }).get(12), [9, 11]);
+  assert.deepEqual(sequenceReadiness(linkEdges(issues), { issues, openPrs: [] }).get(12), {
+    on: [9, 11],
+    unworkable: [],
+  });
 });
 
 test('the held reason names what the story waits behind, not the mechanism', () => {
-  assert.equal(sequenceHoldReason([593]), 'Held: waits on #593, which has not pushed a branch yet.');
-  assert.match(sequenceHoldReason([593, 597]), /#593, #597, none of which/);
+  assert.equal(
+    sequenceHoldReason({ on: [593], unworkable: [] }),
+    'Held: waits on #593, which has not pushed a branch yet.',
+  );
+  assert.match(sequenceHoldReason({ on: [593, 597], unworkable: [] }), /#593, #597, none of which/);
 });
 
 test('a held story is queued with its reason, not dropped', async () => {

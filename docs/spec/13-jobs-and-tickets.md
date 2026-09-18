@@ -455,7 +455,7 @@ interface HumanTask {
   detail: string | null; // what to do and how to know it is done, markdown
   originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
   partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
-  kind: 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch'; // who it is for the harness — see below
+  kind: 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch' | 'unwatched'; // who it is for the harness — see below
   agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
   taskId: string | null;
   status: 'open' | 'done' | 'declined';
@@ -736,6 +736,14 @@ Tests: `test/validationReady.test.ts`.
   It holds nothing and dispatches nobody — the one thing it offers that costs the fleet anything is a
   **bug**, behind an operator's click, and that click is the whole bound on the subsystem.
   → [29](29-post-deploy-watch.md#the-bench-row)
+- **The unseen-story report**: `kind: 'unwatched'`, a null `agentId` for the close-out sweep's
+  reason, and **one row per Feature rather than one per story** — a cascade that missed four stories
+  is one thing an operator does about it, and four rows would be the rail burying one press under
+  its own arithmetic. Its title carries the Feature's number and not its count, because the count
+  moves and the title is the dedup key. It settles itself when the last story is tagged or the
+  Feature leaves the watched set, wearing `DESK_SETTLED` so an operator's own Done is never
+  overwritten, and it holds nothing and dispatches nobody.
+  → [06](06-issue-pickup.md#a-watched-feature-reports-the-children-nothing-can-see)
 - **The runway watch**: `kind: 'supply'`, a null `agentId` and a **null
   `originRef`** — it is the one row that is about the fleet rather than about a piece of work, so an
   origin here would file it onto whichever goal happened to be last in the world. Exactly one is ever

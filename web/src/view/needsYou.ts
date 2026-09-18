@@ -36,6 +36,7 @@ export type NeedKind =
   | 'validate'
   | 'validation_plan'
   | 'watch'
+  | 'unwatched'
   | 'burn'
   | 'limit'
   | 'supply'
@@ -81,6 +82,7 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   supply: 'next',
   limit: 'later',
   watch: 'later',
+  unwatched: 'next',
   burn: 'later',
   placement: 'later',
   assigned: 'later',
@@ -295,6 +297,7 @@ const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
   outcome: 'outcome',
   validate: 'validate',
   watch: 'watch',
+  unwatched: 'unwatched',
   burn: 'burn',
   supply: 'supply',
 };

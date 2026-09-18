@@ -95,6 +95,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   validate: 'A delivered goal is ready to be validated',
   validation_plan: 'Some checks need your OK',
   watch: 'A post-deploy watch is reporting a regression',
+  unwatched: 'A watched feature has stories the fleet cannot see',
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
   supply: 'The fleet is running out of work',

@@ -10,6 +10,7 @@ import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type { LocalValidationPolicy } from '../../localValidation/policy.js';
 import type { SequenceableFeature } from '../../sequence/sequence.js';
+import type { SequenceWait } from '../../sequence/readiness.js';
 import type {
   Decision,
   FeatureSequence,
@@ -60,7 +61,7 @@ export interface StageContext {
   eligibleIssues: { issue: Issue; weight: number }[];
   parentCandidates: IssueRelative[];
   routes: Map<number, PlanRouteVerdict>;
-  sequenceWaits: ReadonlyMap<number, number[]>;
+  sequenceWaits: ReadonlyMap<number, SequenceWait>;
   sequenceableFeatures: readonly SequenceableFeature[];
   sequences: ReadonlyMap<string, FeatureSequence>;
   validationChecks: Map<string, ValidationCheck[]>;
