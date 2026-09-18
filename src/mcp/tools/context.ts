@@ -12,6 +12,7 @@ import type {
   PadDecision,
   PartOutcomeKind,
   PlanPart,
+  PrThreadLabel,
   Remedy,
   FeatureSequenceEdge,
   ScratchEntry,
@@ -33,6 +34,7 @@ import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
+import type { ReviewThreadLabelSubmission } from '../../reviewLabels/labels.js';
 import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
 import type { ReviewPackAuthor } from '../../reviewPacks/author.js';
 import type { ReviewPackChecker } from '../../reviewPacks/checker.js';
@@ -122,6 +124,10 @@ export interface AgentToolTarget {
     agentId: string,
     submission: RemedySubmission,
   ): { ok: true; remedy: Remedy } | { ok: false; error: string };
+  recordThreadLabel(
+    agentId: string,
+    submission: ReviewThreadLabelSubmission,
+  ): { ok: true; label: PrThreadLabel } | { ok: false; error: string };
 }
 
 export interface McpToolDeps {

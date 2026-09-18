@@ -109,6 +109,12 @@ export function replyToolNote(): string {
     'to close. **You cannot resolve a thread any other way** — the reply goes out as the harness, so a ' +
     'thread you answer without this flag stays open in front of the reviewer, and the fleet comes back ' +
     'to it.\n\n' +
+    'Two arguments on that call are not part of the reply and are shown to nobody on the pull request. ' +
+    '`about_comment` says whether what the reviewer raised was about a **code comment** — one missing, ' +
+    'stale, wrong, badly worded, or one that should not be there — rather than about the code itself. ' +
+    '`changed_code` says whether you changed code for that thread or are defending what is there. Both ' +
+    'are per thread, so answer them separately even where a single edit settled several, and answer ' +
+    '`about_comment` for what the reviewer raised rather than for what you ended up changing.\n\n' +
     '**Do not post to a review thread yourself**: not with `gh`, not with `az`, not with the provider’s ' +
     'REST API, not from a shell of any kind, even if your credentials would let you. A reply the harness ' +
     'sends is signed as the harness and recorded against the pull request; one you post is unsigned, ' +

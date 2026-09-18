@@ -1133,6 +1133,25 @@ CREATE TABLE IF NOT EXISTS pr_replies_sent (
   PRIMARY KEY (pr_number, comment_ref)
 );
 
+-- What the agent answering a review thread said the thread was about. One row per
+-- thread rather than per reply: the fleet may come back to a thread several times and
+-- the count wants the thread once. How often it came back is pr_replies_sent, which
+-- keeps a row per reply that left. The path is stored and the area derived from it at
+-- read time, so a correction to the area rules corrects the whole back-catalogue.
+CREATE TABLE IF NOT EXISTS pr_thread_labels (
+  pr_number     INTEGER NOT NULL,
+  thread_id     TEXT NOT NULL,
+  about_comment INTEGER NOT NULL,  -- the reviewer's point was about a code comment, not the code
+  changed_code  INTEGER NOT NULL,  -- the agent changed code for it, rather than defending it
+  resolved      INTEGER NOT NULL,  -- the reply asked the harness to mark the thread resolved
+  path          TEXT,              -- repository-relative file the thread is anchored to; null for a PR-level thread
+  author        TEXT,              -- who left the thread, to tell a review bot from a person
+  agent_id      TEXT NOT NULL,
+  task_id       TEXT NOT NULL,
+  answered_at   TEXT NOT NULL,
+  PRIMARY KEY (pr_number, thread_id)
+);
+
 -- The last reading of every pull request that has left the open set (see
 -- PrArchiveStore), kept for good. WorldSnapshot.closedPullRequests is a window --
 -- it carries a merge for closedPrWindowMs and then forgets it -- and the goal
@@ -2121,6 +2140,7 @@ CREATE INDEX IF NOT EXISTS idx_job_schedules_next ON job_schedules(enabled, next
 -- Both readers select by date: the panel folds a window, and the prior-remedy note
 -- takes the most recent few. Neither ever asks for a remedy by id.
 CREATE INDEX IF NOT EXISTS idx_remedies_created ON remedies(created_at);
+CREATE INDEX IF NOT EXISTS idx_pr_thread_labels_answered ON pr_thread_labels(answered_at);
 -- An operator's prediction about a goal, written before they first read its plan.
 -- One row per issue:<n> origin at most: parts do not exist when the prediction is
 -- made, and *where the decomposition falls* is one of the things a prediction can

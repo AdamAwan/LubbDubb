@@ -249,6 +249,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Prompt substrings the harness may answer on your behalf. Written deliberately, in the file.',
   },
   {
+    path: 'reviewAreas',
+    type: 'json',
+    access: 'fileOnly',
+    why: 'Which part of the code a review thread was about, worked out from the file it is anchored to. Each row is an area name and a regular expression over the repository-relative path; a path may match several, and one matching nothing leaves the thread in no area at all.',
+  },
+  {
     path: 'claudeCommand',
     type: 'string',
     access: 'advanced',

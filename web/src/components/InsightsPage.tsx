@@ -8,6 +8,7 @@ import type {
   PredictionAggregate,
   UsagePayload,
   ReliabilityInsights,
+  ReviewLabelInsights,
   RemedyInsights,
   ThroughputInsights,
   ReviewCalibration,
@@ -106,6 +107,7 @@ export function InsightsPage({
   const [spend, setSpend] = useState<Fetched<SpendInsights>>(PENDING);
   const [reliability, setReliability] = useState<Fetched<ReliabilityInsights>>(PENDING);
   const [remedies, setRemedies] = useState<RemedyInsights | null>(null);
+  const [reviewLabels, setReviewLabels] = useState<ReviewLabelInsights | null>(null);
   const [trend, setTrend] = useState<Fetched<SpendTrend>>({ state: 'loading', data: null });
   const [throughput, setThroughput] = useState<Fetched<ThroughputInsights>>(PENDING);
   const throughputFetchedFor = useRef<InsightsWindow | null>(null);
@@ -148,6 +150,7 @@ export function InsightsPage({
         if (!live) return;
         setReliability({ state: 'ready', data: res.insights });
         setRemedies(res.remedies);
+        setReviewLabels(res.reviewLabels);
       })
       .catch(() => live && setReliability({ state: 'failed', data: null }));
     return () => {
@@ -296,6 +299,7 @@ export function InsightsPage({
             spend={spend.data}
             reliability={reliability.data}
             remedies={remedies}
+            reviewLabels={reviewLabels}
             trend={trend.data}
             mcp={mcp.data}
             throughput={throughput.data}
@@ -383,6 +387,7 @@ export function InsightsPage({
           spend={spend}
           reliability={reliability}
           remedies={remedies}
+          reviewLabels={reviewLabels}
           trend={trend}
           mcp={mcp}
           throughput={throughput}
@@ -516,6 +521,7 @@ function Body({
   spend,
   reliability,
   remedies,
+  reviewLabels,
   trend,
   mcp,
   throughput,
@@ -531,6 +537,7 @@ function Body({
   spend: Fetched<SpendInsights>;
   reliability: Fetched<ReliabilityInsights>;
   remedies: RemedyInsights | null;
+  reviewLabels: ReviewLabelInsights | null;
   trend: Fetched<SpendTrend>;
   mcp: Fetched<McpInsights>;
   throughput: Fetched<ThroughputInsights>;
@@ -561,7 +568,7 @@ function Body({
     if (reliability.data === null) return <p className="empty">Could not read the run log.</p>;
     if (view === 'reliability') return <ReliabilityTab insights={reliability.data} />;
     if (remedies === null) return <p className="empty">No causes were reported for this window.</p>;
-    return <CausesTab remedies={remedies} windowLabel={windowLabel.toLowerCase()} />;
+    return <CausesTab remedies={remedies} reviewLabels={reviewLabels} windowLabel={windowLabel.toLowerCase()} />;
   }
 
   if (view === 'throughput') {
@@ -620,6 +627,7 @@ function Exports({
   spend,
   reliability,
   remedies,
+  reviewLabels,
   trend,
   mcp,
   throughput,
@@ -630,6 +638,7 @@ function Exports({
   spend: SpendInsights | null;
   reliability: ReliabilityInsights | null;
   remedies: RemedyInsights | null;
+  reviewLabels: ReviewLabelInsights | null;
   trend: SpendTrend | null;
   mcp: McpInsights | null;
   throughput: ThroughputInsights | null;
@@ -743,7 +752,7 @@ function Exports({
           {
             format: 'json',
             title: 'The exact payload this tab drew, unrounded',
-            build: () => JSON.stringify({ insights: reliability, remedies }, null, 2),
+            build: () => JSON.stringify({ insights: reliability, remedies, reviewLabels }, null, 2),
           },
         ]}
         sheet={sheet}

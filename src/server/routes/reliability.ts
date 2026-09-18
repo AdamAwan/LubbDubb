@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ReliabilityPayload } from '../../wire.js';
 import { buildReliabilityInsights } from '../../insights/reliabilityInsights.js';
 import { buildRemedyInsights, isReturnOrigin } from '../../insights/remedyInsights.js';
+import { buildReviewLabelInsights } from '../../insights/reviewLabelInsights.js';
 import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insights/insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -32,6 +33,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           remedies: store.remedies.listRemediesSince(since),
           returnDispatches: tasks.filter((t) => t.createdAt >= since && isReturnOrigin(t.originRef)).map((t) => t.id),
           usageEvents,
+        }),
+        reviewLabels: buildReviewLabelInsights({
+          labels: store.prThreadLabels.listThreadLabelsSince(since),
+          replies: store.prReplies.listPrRepliesSentSince(since),
+          areas: system.config.reviewAreas,
         }),
       } satisfies ReliabilityPayload;
     }),

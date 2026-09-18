@@ -68,6 +68,8 @@ import type {
   ReviewRange,
   RemedyCause,
   RemedyInsights,
+  ReviewAreaTotal,
+  ReviewLabelInsights,
   RemedyRow,
   RunClearOut,
   RunOutcome,
@@ -3166,6 +3168,30 @@ const DEMO_REPEATS: {
   { originRef: 'issue:345', title: 'Retry the pickup on #345', runs: 2, lost: 0, costUsd: 4.1, hoursAgo: 19 },
 ];
 
+function buildDemoReviewLabels(): ReviewLabelInsights {
+  const area = (name: string, threads: number, aboutComment: number, changedCode: number): ReviewAreaTotal => ({
+    area: name,
+    threads,
+    aboutComment,
+    changedCode,
+  });
+  return {
+    threads: 34,
+    aboutComment: 6,
+    changedCode: 23,
+    resolved: 27,
+    answeredOnce: 29,
+    replies: 39,
+    unanchored: 3,
+    unplaced: 1,
+    byArea: [area('ui', 11, 1, 8), area('sql', 4, 0, 3), area('backend', 15, 4, 10), area('test', 6, 1, 5)],
+    byAuthor: [
+      { author: 'claude-code-review', threads: 21, aboutComment: 5, changedCode: 13 },
+      { author: 'adamawan', threads: 10, aboutComment: 1, changedCode: 9 },
+    ],
+  };
+}
+
 function buildDemoRemedies(): RemedyInsights {
   const hour = 3_600_000;
   const now = Date.now();
@@ -4765,7 +4791,12 @@ export const demoApi = {
     Promise.resolve(demoMark(ideaId, { attention })),
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
   getSpendTrend: () => Promise.resolve({ trend: buildDemoTrend() }),
-  getReliability: () => Promise.resolve({ insights: buildDemoReliability(), remedies: buildDemoRemedies() }),
+  getReliability: () =>
+    Promise.resolve({
+      insights: buildDemoReliability(),
+      remedies: buildDemoRemedies(),
+      reviewLabels: buildDemoReviewLabels(),
+    }),
   getThroughput: () => Promise.resolve({ insights: buildDemoThroughput() }),
   getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
   getUsage: () => Promise.resolve(buildDemoUsage()),

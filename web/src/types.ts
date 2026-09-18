@@ -151,6 +151,8 @@ export type {
   RemedyCauseTotal,
   RemedyGuard,
   RemedyInsights,
+  ReviewAreaTotal,
+  ReviewLabelInsights,
   RemedyKind,
   RemedyKindHealth,
   RemedyRow,

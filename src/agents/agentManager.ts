@@ -22,6 +22,8 @@ import type {
   ObstacleBlock,
   PartOutcomeKind,
   PlanPart,
+  PrReviewThread,
+  PrThreadLabel,
   Remedy,
   PadDecision,
   ScratchEntry,
@@ -46,6 +48,7 @@ import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summari
 import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import type { FeatureSequenceEdge } from '../types.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
+import type { ReviewThreadLabelSubmission } from '../reviewLabels/labels.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
@@ -609,6 +612,36 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
       return { ok: true, remedy };
     });
+  }
+
+  recordThreadLabel(
+    agentId: string,
+    input: ReviewThreadLabelSubmission,
+  ): { ok: true; label: PrThreadLabel } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const thread = this.findReviewThread(input.prNumber, input.threadId);
+      const label = this.store.prThreadLabels.recordThreadLabel({
+        prNumber: input.prNumber,
+        threadId: input.threadId,
+        aboutComment: input.aboutComment,
+        changedCode: input.changedCode,
+        resolved: input.resolved,
+        path: thread?.path ?? null,
+        author: thread?.author ?? null,
+        agentId,
+        taskId: task.id,
+      });
+      return { ok: true, label };
+    });
+  }
+
+  private findReviewThread(prNumber: number, threadId: string): PrReviewThread | null {
+    const world = this.store.world.getWorldBaseline();
+    if (world === null) return null;
+    const pr =
+      world.pullRequests.find((p) => p.number === prNumber) ??
+      (world.closedPullRequests ?? []).find((p) => p.number === prNumber);
+    return pr?.reviewThreads?.find((t) => t.id === threadId) ?? null;
   }
 
   recordConclusion(

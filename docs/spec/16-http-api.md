@@ -1323,10 +1323,16 @@ disagreement a reader attributes to the data.
 ### `GET /api/reliability`
 
 What the spending bought: run outcomes all-time, CI health over the last fortnight, and — over that
-same window — the accounts agents wrote of why they had to come back. Returns
-`{ insights, remedies }` — see [18](18-observability.md#the-reliability-breakdown) for what each half
-of the first means and why `killed` is not counted as a failure, and
-[18](18-observability.md#causes-why-the-fleet-came-back) for the second.
+same window — the accounts agents wrote of why they had to come back, and what the review threads they
+answered were about. Returns `{ insights, remedies, reviewLabels }` — see
+[18](18-observability.md#the-reliability-breakdown) for what each half of the first means and why
+`killed` is not counted as a failure, [18](18-observability.md#causes-why-the-fleet-came-back) for the
+second, and [18](18-observability.md#which-part-of-the-code-a-review-thread-was-about) for the third.
+
+`reviewLabels` rides here for the same reason `remedies` does, and it is folded against
+`config.reviewAreas` at request time rather than from anything stored — the rows hold the thread's
+path, and the areas are derived on the way out, so an operator who corrects a rule sees the whole
+window re-read rather than only the threads answered after the correction.
 
 `remedies` rides on **this** payload rather than a route of its own because it shares the window: two
 fetches would be two chances for the two halves to describe different stretches. It is folded from the same `usage_events` this handler already read,

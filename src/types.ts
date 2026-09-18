@@ -187,6 +187,23 @@ export interface PrReplySent {
   sentAt: string;
 }
 
+/** What an agent said about one review thread as it answered it. One row per thread, last answer wins. */
+export interface PrThreadLabelInput {
+  prNumber: number;
+  threadId: string;
+  aboutComment: boolean;
+  changedCode: boolean;
+  resolved: boolean;
+  path: string | null;
+  author: string | null;
+  agentId: string;
+  taskId: string;
+}
+
+export interface PrThreadLabel extends PrThreadLabelInput {
+  answeredAt: string;
+}
+
 export interface ErrorLogEntry {
   id: string;
   source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
