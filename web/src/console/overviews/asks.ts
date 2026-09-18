@@ -50,6 +50,7 @@ const STAGE_RANK: Record<NeedKind, number> = {
   intake: 4,
   profile: 4,
   placement: 4,
+  unwatched: 4,
   watch: 4,
   supply: 4,
   config: 5,

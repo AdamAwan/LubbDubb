@@ -370,7 +370,11 @@ export class RuleDispatcher implements Dispatcher {
               .filter((s) => s.status === 'accepted')
               .flatMap((s) => s.edges.map((e) => ({ issue: e.issue, dependsOn: e.dependsOn }))),
           ];
-    const sequenceWaits = sequenceReadiness(edges, { issues: ctx.world.issues, openPrs });
+    const sequenceWaits = sequenceReadiness(edges, {
+      issues: ctx.world.issues,
+      openPrs,
+      watched: (issue) => issueWatchGateReason(issue, pickup) === null,
+    });
     const sequenceableFeatures =
       sequencing === 'full'
         ? sequenceable(

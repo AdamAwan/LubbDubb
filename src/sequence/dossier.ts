@@ -1,5 +1,6 @@
 import type { FeatureSequence, Issue, PullRequest } from '../types.js';
-import { featureSequenceOrigin, featureSequenceSubmitOrigin } from './sequence.js';
+import { issueOriginRef } from '../issueOrigins.js';
+import { featureSequenceSubmitOrigin } from './sequence.js';
 import { sequenceReadiness } from './readiness.js';
 
 // → docs/spec/33-story-sequencing.md
@@ -104,12 +105,12 @@ export function predecessorNote(
   );
   if (siblings.length === 0) return '';
 
-  const standing = sequences.get(featureSequenceOrigin(parent.number)) ?? null;
+  const standing = sequences.get(issueOriginRef('root', parent.number)) ?? null;
   const proposed =
     standing !== null && standing.status === 'proposed'
       ? standing.edges.map((e) => ({ issue: e.issue, dependsOn: e.dependsOn }))
       : [];
-  const waiting = sequenceReadiness(proposed, { issues, openPrs: [...openPrs] }).get(issue.number) ?? [];
+  const waiting = sequenceReadiness(proposed, { issues, openPrs: [...openPrs] }).get(issue.number)?.on ?? [];
 
   const lines =
     waiting.length > 0

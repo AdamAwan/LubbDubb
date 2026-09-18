@@ -86,6 +86,53 @@ This is a **write to the tracker**, and the one place the harness's reading of t
 into a change to it — the tags, never the links. Nothing here re-parents, links or edits a work item's
 own structure.
 
+### A watched Feature reports the children nothing can see
+
+The cascade is **one write, at the moment it is pressed**, and that is the whole of its reach. A
+story added to the Feature the next day is outside it. So is one an operator untagged by hand, and
+so is every child of a Feature whose tag was put on in the tracker rather than through the cockpit.
+The result is the quiet shape this codebase spends its sharp edges on: a Feature the operator
+believes they are working, with stories under it that are not behind and not in the queue, because
+nothing has ever read them.
+
+`UnwatchedChildDesk` (`src/features/unwatchedDesk.ts`) reports it. One **"Needs you"** row per
+watched Feature with at least one untagged open story, filed as a human task of kind `unwatched`
+([13](13-jobs-and-tickets.md)), naming the stories and saying what the tag's reach actually is. It
+is a **reading, not a fix**: it writes no tag, holds nothing, and dispatches nothing. Re-cascading
+on the harness's own initiative would be the harness deciding what the operator's scope is, which is
+the one judgement the watch tag exists to leave with them.
+
+Which Features it reports on is `featureGroups`' answer and not a second one
+([33](33-story-sequencing.md#which-features-are-asked-about)), so the set the order is written over
+and the set this row is filed for can never disagree — a Feature ordered over a story it then failed
+to mention would be the worst of both.
+
+Four things about it are load-bearing:
+
+- **The count is in the detail, never the title.** The title is the key `recordHumanTask` dedups on,
+  and the count is the one thing about this row that moves. Fold it in and every story tagged files
+  a second row beside the first, with the stale one settling for nobody. The detail is rewritten on
+  every pulse, `ValidationReadyDesk`'s discipline ([13](13-jobs-and-tickets.md)).
+- **It settles itself**, and for the reason that one does: it names something the harness refetches
+  every pulse, so leaving it to a click would ask the operator to tell the harness what it can see.
+  The last story tagged settles the row; so does the Feature dropping out of the watched set
+  entirely, and the resolution says the harness no longer reads it as watched work rather than
+  claiming anybody tagged anything.
+- **It reopens only its own settlements.** `deskSettled` gates the reopen arm, so an operator's own
+  Done — "those stories are deliberately out of scope" — stands for good. The harness retracts and
+  re-files its own row, never theirs.
+- **An empty world settles nothing.** A provider that is down on a first boot returns no issues at
+  all, and settling every standing row off that reading is the one way this can be wrong at scale —
+  the gone-arm's rule in [13](13-jobs-and-tickets.md), one desk over.
+
+Where a story it names is a predecessor in an **accepted** order, the row says so and says what it
+is holding: that is the one case where an untagged story is not merely invisible but is stopping
+work, and it is the cost of the hold
+[33](33-story-sequencing.md#an-unwatched-predecessor-holds) chose to pay.
+
+A tracker with no container hierarchy produces no groups, so the desk is silent on it without a flag
+of its own. There is nothing to configure.
+
 ## Pausing a Feature, which is not un-watching one
 
 An operator with ten Features on the go wants a way to say **"mine, but not now"**, and un-watching is
@@ -656,7 +703,7 @@ The appraisal reads the ticket against the default branch, and the rubric asks i
 things the ticket names exist. Those two together mean a story whose predecessor has not landed is
 judged against a repository missing exactly what that predecessor was going to build — and the
 schema, interface or migration the ticket names is genuinely absent, which is `unclear`'s own
-wording: *names things that do not exist*.
+wording: _names things that do not exist_.
 
 So `issue-appraisal` reads `StageContext.sequenceWaits` and is held with `held: 'sequenced'` like
 `issue-plan` and `issue-pickup`, queued in Up next with the reason naming what it waits behind
