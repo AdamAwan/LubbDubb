@@ -249,6 +249,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Prompt substrings the harness may answer on your behalf. Written deliberately, in the file.',
   },
   {
+    path: 'reviewAreas',
+    type: 'json',
+    access: 'fileOnly',
+    why: 'Which part of the code a review thread was about, worked out from the file it is anchored to. Each row is an area name and a regular expression over the repository-relative path; a path may match several, and one matching nothing leaves the thread in no area at all.',
+  },
+  {
     path: 'claudeCommand',
     type: 'string',
     access: 'advanced',
@@ -551,6 +557,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'string',
     access: 'plain',
     why: 'The thread property your review tooling stamps its own threads with. Set it, and findings read as dealt with once every stamped thread is resolved — the way a deployment that publishes findings itself, rather than through the reviewer agent, gets its mark back to green. Azure DevOps only; GitHub carries no thread properties.',
+  },
+  {
+    path: 'review.machineAuthors',
+    type: 'stringList',
+    access: 'fileOnly',
+    why: 'Author names that are machines, as regular expressions over the login the provider reports. The third and last source, for a poster neither of the others can see: a service account on a personal access token, a review bot commenting under an ordinary user. Belongs beside publishedThreadProperty in lubbdubb.project.json — which machines comment on a repository is a fact about that repository.',
   },
   {
     path: 'review.publishedThreadRole',

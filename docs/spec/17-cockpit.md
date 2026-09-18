@@ -6288,6 +6288,23 @@ flake this window" is a reading, and a table that dropped its own zero rows coul
 total rather than in a footnote — every share in it is a share of what was _reported_, and
 `unaccounted` is what says how much that is.
 
+Below the accounts sits **Review threads**, the same window again
+([18](18-observability.md#which-part-of-the-code-a-review-thread-was-about)). It answers a question the
+cause tables cannot: how much of the fleet's review time goes on **code comments**, and where in the
+tree. One row for everything answered and one per configured area, each carrying the thread count, how
+many were about a comment and how many changed code — plus a second table by the thread's author,
+drawn only where there is more than one, because a review bot and a person leave very different
+comments and one merged number answers nobody's question.
+
+Two things are said on the panel rather than left to arithmetic, both in the method note. The
+**denominator is threads the fleet answered**, not comments left — a thread its reviewer resolved is
+counted nowhere. And the area rows **do not sum to the total**: a path may match several rules, a
+thread on no file is in no area at all, and the note says how many of each there were.
+
+No area gets a colour. Areas are operator-configured, so a token could not be registered for one in
+advance ([tokens](#tokens)), and a literal at the use site is a colour no theme can reach — the section
+is tables throughout for that reason.
+
 ### The Trend tab
 
 `web/src/components/SpendTrendTab.tsx`, drawing `GET /api/spend/trend`

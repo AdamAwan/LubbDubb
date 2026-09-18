@@ -408,6 +408,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
     whitelistedApprovals: config.whitelistedApprovals,
+    reviewPolicy: config.review,
     goalProfile:
       config.labelPrefix && config.agentModels
         ? {

@@ -80,6 +80,8 @@ export interface GhReview {
 export interface GhReviewComment {
   id: number;
   authorLogin: string;
+  /** The provider's own word: a GitHub App posts as type `Bot`. Undefined where it did not say. */
+  authorIsBot?: boolean;
   body: string;
   inReplyToId: number | null;
   path?: string;

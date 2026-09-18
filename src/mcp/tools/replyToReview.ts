@@ -20,7 +20,10 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
     'is on this machine, who did not write it.\n\n' +
     'The harness may put your reply to the operator before it goes out — that is their setting, not ' +
     'a fault, and the call tells you which happened. Either way your work here is done when you have ' +
-    'called this; nothing is waiting on you afterwards.',
+    'called this; nothing is waiting on you afterwards.\n\n' +
+    'Two of the arguments are not part of the reply and the reviewer never sees them: `about_comment` ' +
+    'and `changed_code` are what this fleet knows about the thread and nothing else records. Answer ' +
+    'them for the thread in front of you, not for the dispatch as a whole.',
   inputSchema: toolSchema(
     z.object({
       body: z
@@ -38,6 +41,21 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
             'an omitted id means nobody reading the thread sees your answer in it.',
         )
         .optional(),
+      about_comment: z
+        .boolean()
+        .describe(
+          'True if the reviewer’s point was about a code comment — that one is missing, stale, wrong, ' +
+            'badly worded, or should not be there — rather than about the code itself. A thread asking ' +
+            'you to rename a variable or restructure a function is not this; a thread asking you to ' +
+            'explain that function in a comment is. Answer for what the reviewer raised, not for what ' +
+            'you ended up changing.',
+        ),
+      changed_code: z
+        .boolean()
+        .describe(
+          'True if you changed code for this thread, false if you are defending what is already there. ' +
+            'Answer for this thread alone, even where one edit settled several.',
+        ),
       resolved: z
         .boolean()
         .describe(
@@ -83,6 +101,17 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       originRef: scope.originRef,
       reason: `agent reply on ${scope.originRef}${thread ? ` (thread ${thread})` : ''}`,
     });
+    if (thread !== null) {
+      const labelled = deps.agents.recordThreadLabel(agent.id, {
+        prNumber: scope.prNumber,
+        threadId: thread,
+        aboutComment: args.about_comment === true,
+        changedCode: args.changed_code === true,
+        resolved: resolve,
+      });
+      if (!labelled.ok) return toolError(labelled.error);
+    }
+
     return ok({
       handedOver: true,
       thread,

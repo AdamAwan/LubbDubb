@@ -22,6 +22,8 @@ import type {
   ObstacleBlock,
   PartOutcomeKind,
   PlanPart,
+  PrReviewThread,
+  PrThreadLabel,
   Remedy,
   PadDecision,
   ScratchEntry,
@@ -46,8 +48,11 @@ import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summari
 import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import type { FeatureSequenceEdge } from '../types.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
+import type { ReviewThreadLabelSubmission } from '../reviewLabels/labels.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
+import { threadStamped } from '../review/prReviewState.js';
+import type { PrReviewPolicy } from '../review/policy.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -87,6 +92,7 @@ interface AgentManagerOptions {
   featureStanding?: (featureOrigin: string) => string | null;
   featureSequenceStanding?: (featureOrigin: string) => { key: string; members: number[] } | null;
   whitelistedApprovals: WhitelistRule[];
+  reviewPolicy?: PrReviewPolicy;
   createSession: SessionFactory;
   initialInput?: (task: Task) => string | null;
   resumeInput?: () => string | null;
@@ -609,6 +615,50 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
       return { ok: true, remedy };
     });
+  }
+
+  recordThreadLabel(
+    agentId: string,
+    input: ReviewThreadLabelSubmission,
+  ): { ok: true; label: PrThreadLabel } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const thread = this.findReviewThread(input.prNumber, input.threadId);
+      const label = this.store.prThreadLabels.recordThreadLabel({
+        prNumber: input.prNumber,
+        threadId: input.threadId,
+        aboutComment: input.aboutComment,
+        changedCode: input.changedCode,
+        resolved: input.resolved,
+        path: thread?.path ?? null,
+        author: thread?.author ?? null,
+        authorIsBot: this.threadAuthorIsMachine(thread),
+        agentId,
+        taskId: task.id,
+      });
+      return { ok: true, label };
+    });
+  }
+
+  /**
+   * The two sources that are facts at observation time, folded into one. The provider's own word
+   * first; then the stamp the project declared, which is the only thing that sees a poster the
+   * provider reports as an ordinary user. Null is "neither said" — never "a person".
+   */
+  private threadAuthorIsMachine(thread: PrReviewThread | null): boolean | null {
+    if (thread === null) return null;
+    if (thread.authorIsBot !== undefined) return thread.authorIsBot;
+    const policy = this.opts.reviewPolicy;
+    if (policy !== undefined && threadStamped(thread, policy)) return true;
+    return null;
+  }
+
+  private findReviewThread(prNumber: number, threadId: string): PrReviewThread | null {
+    const world = this.store.world.getWorldBaseline();
+    if (world === null) return null;
+    const pr =
+      world.pullRequests.find((p) => p.number === prNumber) ??
+      (world.closedPullRequests ?? []).find((p) => p.number === prNumber);
+    return pr?.reviewThreads?.find((t) => t.id === threadId) ?? null;
   }
 
   recordConclusion(

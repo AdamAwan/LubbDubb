@@ -11,6 +11,7 @@ export interface PrReviewPolicy {
   publish: 'none' | 'comment' | 'tooling';
   publishedThreadProperty: string | null;
   publishedThreadRole: string | null;
+  machineAuthors: string[];
   modes: Record<string, PrReviewMode>;
   allowSkip: boolean;
   reviewedElsewhere: string | null;
@@ -24,6 +25,7 @@ export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   publish: 'none',
   publishedThreadProperty: null,
   publishedThreadRole: null,
+  machineAuthors: ['\\[bot\\]$'],
   modes: {},
   allowSkip: false,
   reviewedElsewhere: null,

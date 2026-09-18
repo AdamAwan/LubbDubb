@@ -30,6 +30,7 @@ import type { ReliabilityInsights, RunTally } from './insights/reliabilityInsigh
 import type { ThroughputInsights } from './insights/throughputInsights.js';
 import type { ReviewCalibration } from './reviewPacks/calibration.js';
 import type { RemedyInsights } from './insights/remedyInsights.js';
+import type { ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 import type { AllowanceInsights } from './insights/allowanceInsights.js';
 import type { SpendInsights } from './insights/spendInsights.js';
 import type { McpInsights } from './insights/mcpInsights.js';
@@ -804,6 +805,7 @@ export interface UsagePayload {
 export interface ReliabilityPayload {
   insights: ReliabilityInsights;
   remedies: RemedyInsights;
+  reviewLabels: ReviewLabelInsights;
 }
 
 export interface ThroughputPayload {
@@ -1016,6 +1018,7 @@ export type {
   ReviewProminenceReading,
 } from './reviewPacks/calibration.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
+export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';
 export type { CiCheck } from './types.js';

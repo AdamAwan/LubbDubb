@@ -53,6 +53,7 @@ import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrSplitStore } from './prSplits.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
 import { PrReplyStore } from './prReplies.js';
+import { PrThreadLabelStore, PR_THREAD_LABEL_COLUMNS } from './prThreadLabels.js';
 import { PrArchiveStore } from './prArchive.js';
 import { ObstacleStore, OBSTACLE_COLUMNS } from './obstacles.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
@@ -109,6 +110,7 @@ export class Store {
   readonly prSplits: PrSplitStore;
   readonly threadReopens: PrThreadReopenStore;
   readonly prReplies: PrReplyStore;
+  readonly prThreadLabels: PrThreadLabelStore;
   readonly prArchive: PrArchiveStore;
   readonly obstacles: ObstacleStore;
   readonly decisions: DecisionStore;
@@ -155,6 +157,7 @@ export class Store {
       REMOTE_VALIDATION_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
       PR_REVIEW_COLUMNS,
+      PR_THREAD_LABEL_COLUMNS,
       SCRATCH_COLUMNS,
       REVIEW_PACK_COLUMNS,
       OBSTACLE_COLUMNS,
@@ -225,6 +228,7 @@ export class Store {
     this.prSplits = new PrSplitStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
     this.prReplies = new PrReplyStore(ctx);
+    this.prThreadLabels = new PrThreadLabelStore(ctx);
     this.prArchive = new PrArchiveStore(ctx);
     this.obstacles = new ObstacleStore(ctx);
     this.decisions = new DecisionStore(ctx);

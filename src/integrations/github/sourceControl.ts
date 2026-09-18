@@ -504,6 +504,7 @@ export function buildReviewThreads(
         ours: ourReplies.has(replyKey(threadId, String(r.id))),
       })),
     };
+    if (root.authorIsBot !== undefined) thread.authorIsBot = root.authorIsBot;
     if (root.path !== undefined) thread.path = root.path;
     if (root.line !== undefined && root.line !== null) thread.line = root.line;
     return thread;

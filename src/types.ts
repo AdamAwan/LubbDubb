@@ -69,6 +69,11 @@ export interface PrThreadMessage {
 export interface PrReviewThread {
   id: string;
   author: string;
+  /**
+   * The provider's own word on whether the author is a machine account. Undefined where it did not
+   * say — which is not "a person", and is why `reviewBotAuthors` exists.
+   */
+  authorIsBot?: boolean;
   body: string;
   state: PrThreadState;
   replies: PrThreadMessage[];
@@ -185,6 +190,25 @@ export interface PrReplySent {
   threadId: string;
   commentRef: string;
   sentAt: string;
+}
+
+/** What an agent said about one review thread as it answered it. One row per thread, last answer wins. */
+export interface PrThreadLabelInput {
+  prNumber: number;
+  threadId: string;
+  aboutComment: boolean;
+  changedCode: boolean;
+  resolved: boolean;
+  path: string | null;
+  author: string | null;
+  /** What the provider said at the time; null where it said nothing. Never a re-derivation. */
+  authorIsBot: boolean | null;
+  agentId: string;
+  taskId: string;
+}
+
+export interface PrThreadLabel extends PrThreadLabelInput {
+  answeredAt: string;
 }
 
 export interface ErrorLogEntry {

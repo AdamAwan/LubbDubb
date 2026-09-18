@@ -33,6 +33,7 @@ export interface Config {
   startPaused: boolean;
   sendPrRepliesWithoutApproval: boolean;
   whitelistedApprovals: WhitelistRule[];
+  reviewAreas: ReviewAreaRule[];
   userId?: string;
   ownWorkOnly: boolean;
   integrations: IntegrationSelection;
@@ -218,6 +219,11 @@ export interface WhitelistRule {
   response: string;
 }
 
+export interface ReviewAreaRule {
+  area: string;
+  path: string;
+}
+
 const DEFAULTS: Config = {
   heartbeatIntervalMs: 30 * 1000,
   idleHeartbeatIntervalMs: 5 * 60 * 1000,
@@ -227,6 +233,12 @@ const DEFAULTS: Config = {
   startPaused: false,
   sendPrRepliesWithoutApproval: true,
   whitelistedApprovals: [],
+  reviewAreas: [
+    { area: 'ui', path: '^web/src/' },
+    { area: 'sql', path: '^src/store/' },
+    { area: 'backend', path: '^src/(?!store/)' },
+    { area: 'test', path: '\\.test\\.tsx?$' },
+  ],
   ownWorkOnly: true,
   integrations: { sourceControl: 'fake', issues: 'fake', pool: 'fake' },
   pool: {},

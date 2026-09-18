@@ -1841,6 +1841,18 @@ one agent, with all of the threads in its prompt (`reviewThreadsNote`, `src/disp
 
 Two things fall out, and both are load-bearing:
 
+- **Every thread the agent deals with is replied to, including the ones it simply fixes.** A reply is
+  the only thing that writes `pr_replies_sent`, `handled` reads that record, and the concern above
+  re-forms from `!c.handled` — so a thread fixed silently is still open in front of the reviewer and
+  the fleet is dispatched for it again, round after round, until rule `cooldown-escalate` hands the
+  pull request to a person. The appended note says so in as many words, and the prompt body was
+  tightened to match: it read "if defending, prepare a concise reply", which is exactly the reading
+  that produces the loop. This is also what makes `reply_to_review` the one place a thread can be
+  counted ([18](18-observability.md#which-part-of-the-code-a-review-thread-was-about)) — it is the
+  chokepoint every dealt-with thread passes through. The stamp a project declares for its own review
+  tooling is read there too, through the same `threadStamped` the `addressed` arm uses, to tell a
+  machine posting under an ordinary account from a person
+  ([18](18-observability.md#telling-a-person-from-a-machine)).
 - **The threads are appended to the rendered prompt, never interpolated.** `pr-review-comment` is
   operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so an override
   written against the older one-comment prompt declares no token for a thread list — interpolating

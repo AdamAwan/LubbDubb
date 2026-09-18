@@ -1178,6 +1178,97 @@ renders unconditionally, because the account is the thing being asked for and a 
 recorded yet is the fleet that most needs it. The note renders only when the record says something,
 so a deployment with an empty table produces byte-identical prompts to a build without the feature.
 
+## Which part of the code a review thread was about
+
+Causes say why the fleet came back. They cannot say **what the reviewer was talking about**, and they
+cannot say it at the right grain: a `pr:<n>:comments` dispatch answers every unhandled thread on a
+pull request at once and files **one** remedy, so `clarity` on that row means "something in this
+round was about naming, comments or structure" and nothing more. The question "how much review time
+goes on code comments, and where in the tree" is a count of **threads**, so it is recorded where
+threads are answered one at a time — on `reply_to_review` ([11](11-mcp-tools.md#reply_to_review)).
+
+`pr_thread_labels` is the record and `buildReviewLabelInsights`
+(`src/insights/reviewLabelInsights.ts`) is its reading, shown under Causes on the same payload and
+over the same window ([17](17-cockpit.md#causes)).
+
+**One row per thread, not per reply.** The fleet may be sent back to a thread several times, and the
+count wants that thread once — so the row is keyed `(pr_number, thread_id)` and the last answer
+replaces the one before it. How often the fleet came back is a different number and already has a
+record: `pr_replies_sent` holds a row per reply that actually left, and the reading joins the two to
+say how many threads took more than one round.
+
+**The agent answers two things; the harness works out the rest.** `about_comment` and `changed_code`
+are judgements only the answering agent can make, and it makes them having just read the thread and
+the code. The **path** is not a judgement — it is on the thread already, put there by both providers
+(`src/integrations/github/sourceControl.ts`, `src/integrations/azure/sourceControl.ts`) — so the
+harness reads it off the world baseline at record time rather than asking. An agent asked which area
+a file is in would answer, and would drift between dispatches.
+
+### The area is derived at read time, never stored
+
+The row stores the **path**; `areasForPath` (`src/reviewLabels/areas.ts`) turns it into areas when the
+reading is built, against the `reviewAreas` rules from config ([02](02-configuration.md)). Stored
+labels would freeze a mapping that is certain to be revised — the first time a directory is decided to
+belong somewhere other than where the rules put it, every row written before the fix keeps the old
+answer and the back-catalogue is unusable. Derived, a corrected rule corrects the whole history.
+
+This is the opposite of the two booleans, which **must** be stored: nothing can recompute a judgement.
+
+**Areas overlap, and null is not an area.** A path may match several rules and is counted under each,
+so the rows do not sum to the total — a test for UI code is both, and a single `area` enum would force
+a false choice. A thread anchored to **no file** — a comment on the pull request rather than on a line
+— is `unanchored` and belongs to nothing; a thread on a file no rule claims is `unplaced`. Folding
+either into whichever area is listed first inflates that one with nothing red. Same three-valued
+habit as a reach verdict ([24](24-environments.md#the-three-verdicts)) and `fleetCanStart`
+([20](20-validation.md#who-carries-a-step)).
+
+### The denominator is threads the fleet answered
+
+Not review comments left, and the cockpit says so on the panel rather than leaving it to be assumed.
+Rule `pr-review-comment` dispatches only for threads that are not `handled`
+([07](07-pull-requests.md#attribution-is-a-record-never-an-identity)), so a thread the reviewer
+resolved themselves, or one the operator answered, never reaches an agent and is counted nowhere
+here. A share read as "of all review comments" would be wrong by however much of the review traffic
+people settle without the fleet.
+
+### Telling a person from a machine
+
+The thread's **author** is kept for the same reason the denominator is stated: a review bot and a
+person leave very different comments, and a single number that merges them answers a question nobody
+asked. It is a count beside the others, never a classification of who is worth listening to.
+
+The hard case is not a bot that announces itself — it is **a machine posting as a human**: a service
+account on a personal access token, a review bot commenting under an ordinary user. `authorKind`
+(`src/reviewLabels/authors.ts`) answers it from three sources, in this order.
+
+1. **The provider's own word.** A GitHub App posts as `type: "Bot"` and cannot hide it, so
+   `GhReviewComment.authorIsBot` carries it onto the thread. Azure DevOps reports nothing here, and
+   `undefined` means *it did not say* rather than *a person*.
+2. **The stamp the project declared.** `review.publishedThreadProperty` (with `.role`) is the key a
+   project's **own** review tooling marks its threads with in the provider's per-thread property bag,
+   and it already exists — the merge gate's `addressed` arm reads it
+   ([07](07-pull-requests.md#a-thread-the-harness-stamped)). It is the same question asked twice, so
+   it is **one predicate**: `threadStamped` in `src/review/prReviewState.ts`, read by both. Two copies
+   of the `.role` rule would let one reader count a summary thread the other does not.
+3. **The names the repository gave.** `review.machineAuthors` — regular expressions over the login —
+   for the poster neither of the first two can see. It sits beside `publishedThreadProperty` in
+   `lubbdubb.project.json` for the same reason that one does: which machines comment on a repository
+   is a fact about that repository, and a committed file means every clone reads the same list.
+
+**The first two are stored, the third is derived.** A provider's word and a stamp are facts at
+observation time and nothing can recompute them, so `recordThreadLabel` folds both into
+`author_is_bot` as the reply is made. The name list is config, so it is applied when the reading is
+built — same split as the areas, and for the same reason: a list corrected next month corrects the
+whole back-catalogue.
+
+**An unlisted author reads as a person, and that is an assumption rather than a finding.** A third
+`unknown` bucket was the alternative and is worse: with the stamp and the provider covering the
+declared machines, everything left is people plus whatever nobody has named yet, so `unknown` would
+swallow every real person and the reading would say nothing until the config was exhaustive. What
+keeps it honest instead is that the reading draws **authors by name**: a machine sitting in the People
+row is visible to anyone reading the rows, where a single merged total would hide it. The cockpit's
+method note says which three sources decided it.
+
 ## The live tail
 
 `agent:tail` is a per-agent rolling last-non-empty-line, folded in `Hub.updateTail` with ANSI stripped.
