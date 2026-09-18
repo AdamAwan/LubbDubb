@@ -8,7 +8,8 @@
 
 Beside the prediction and the goal criteria, the operator authors the **pull request description** —
 one per part, because one part is one pull request — and that text is what ships as the body. The
-harness may tidy its shape before the operator accepts it; it never tidies the claim.
+harness may tidy its shape before the operator accepts it; it never tidies the claim. It holds nothing
+up: a part nobody described opens its pull request anyway, with no body above the reference.
 
 ## Why: the thing writing is for
 
@@ -104,17 +105,51 @@ The lost pre-reveal independence is not a cost here, because independence is not
 is for. Criteria need to predate their author's sight of the plan or they judge nothing. A
 description needs only to predate the reviewer.
 
-## Writing nothing is not an option
+## It blocks nothing
 
-Falling back to the agent's body when the operator writes nothing looked like the honest default. It
-is not, under the reasoning above: the whole point is that a person understood the change, so a route
-that produces a shipped description with no person behind it defeats the feature while appearing to
-run it. That is the quietest failure in the book — a gate that is theatre.
+This is an offer, never a hold. The plan releases, the parts dispatch, the pull request opens, the
+review is watched and the comments come back, whether or not a description was ever written. The
+approval press is not gated on it and nothing waits behind it — the same posture the reveal gate
+takes, and for the same reason: a step that is awkward to decline is a step that gets resented and
+then turned off.
 
-**The approval press requires one per part.** The cost is real and should be named: approving an
-eight-part plan becomes eight pieces of writing, and that is the single largest thing this proposal
-asks of an operator. It is defensible only because it buys exactly what the mission says the
-operator's day is for.
+**What an ignored ask produces is a pull request with no body at all** — the harness's appended
+reference and nothing above it. That is already `07`'s stated behaviour, one sentence on from the
+refusal rules: _"An absent body is not refused — the appended reference stands on its own."_
+
+This is what answers the worry the last draft had backwards. A feature that is skippable by doing
+nothing is theatre only when skipping it still produces something that looks like the real thing.
+Here it does not: the absence is on the pull request, legible to the reviewer and to the operator who
+skipped it. Nobody is told a description exists when none does. An empty body is an honest reading,
+and an honest reading is the whole standard the rest of this repo holds itself to.
+
+So there is no fallback, and that is the load-bearing part: **the agent does not write one either.**
+A backstop that quietly fills the gap would reintroduce exactly the thing this proposal removes — an
+account of the change written by the thing with the most reason to be wrong about it — while making
+the gap invisible. Either a person wrote the body or the pull request has none.
+
+### Which withdraws `open_pr`'s `body`
+
+If the agent never authors a body, the argument it authors one through goes. `open_pr` keeps its five
+evidence lists and loses `body`; `prBodyRefusal` (`src/pr/prBody.ts`) stays exactly as it is and
+serves the cockpit's authoring pass instead, which is the same rule against the same shape with a
+different author in front of it.
+
+Two things that costs, both worth naming: the built-in prompt bodies that tell an agent how to write
+one need the instruction removed, and a deployment that overrode those templates keeps telling its
+agents to write a body they can no longer send. An argument is not a `PromptId` or a tool name, so
+neither retirement mechanism covers it — the call arrives with an unknown key and the agent gets a
+refusal that has to name what happened.
+
+## When it is asked, and until when
+
+At the approval gate, per part, as above — but because it holds nothing, the ask does not end there.
+The field stays open on the part for as long as the pull request is open, and a description written
+after the pull request exists updates its body in place. That is not the harness rewriting a body: it
+is the operator writing theirs, later.
+
+The practical shape is that an operator approves eight parts in one press and writes the descriptions
+as the pull requests actually arrive, which is also when they have something to describe.
 
 ## What the agent still owns
 
