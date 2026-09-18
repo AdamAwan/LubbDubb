@@ -2,7 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OpenPullRequest, ValidationCheckView } from '../web/src/types.js';
 import type { GoalPageView } from '../web/src/view/goalPage.js';
-import { buildGoalPage, goalTabBadges, goalTabOpening, GOAL_TABS, GOAL_TAB_OF } from '../web/src/view/goalPage.js';
+import {
+  buildGoalPage,
+  goalLanding,
+  goalTabBadges,
+  goalTabOpening,
+  GOAL_TABS,
+  GOAL_TAB_OF,
+} from '../web/src/view/goalPage.js';
 import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -188,4 +195,40 @@ test('the shipping badge says the gate before it says the count', () => {
     text: 'gate held',
     tone: 'amber',
   });
+});
+
+test('the landing is decided on arrival and held, however the goal moves under it', () => {
+  const page = bare();
+  const reading: GoalPageView = { ...page, openPullRequests: [openPr()] };
+  assert.equal(goalTabOpening(reading).tab, 'work', 'the fixture must land on work for this to say anything');
+
+  const landed = goalLanding(null, 'issue:1', reading);
+  assert.equal(landed.opening.tab, 'work');
+
+  /* The goal moves while somebody is reading it: a pull request lands in their court, then the work
+     reaches an environment. Both re-answer the rule, and neither is allowed to move the pane —
+     that is the whole of "it decides the landing only".
+     → docs/spec/17-cockpit.md#which-pane-opens */
+  const called: GoalPageView = {
+    ...reading,
+    openPullRequests: [openPr({ attention: { status: 'you', reasons: [] } })],
+  };
+  assert.equal(goalLanding(landed, 'issue:1', called).opening.tab, 'work');
+
+  const shipped: GoalPageView = {
+    ...called,
+    environments: [
+      { environment: 'prod', status: 'reached', landed: 1, total: 1, unplaced: 0, at: null, opens: [], sheet: null },
+    ],
+  };
+  assert.equal(goalTabOpening(shipped).tab, 'work', 'the court arm outranks the shipped one');
+  const still = goalLanding(landed, 'issue:1', shipped);
+  assert.equal(still.opening.tab, 'work');
+  assert.equal(still, landed, 'the held landing is returned as it stands, sentence and all');
+
+  /* The next goal is a fresh arrival, and the pick made on this one does not follow the operator to
+     it — `goalMove` drops `?pane=` for the same reason. */
+  const next = goalLanding(landed, 'issue:2', shipped);
+  assert.equal(next.ref, 'issue:2');
+  assert.equal(next.opening.tab, goalTabOpening(shipped).tab);
 });

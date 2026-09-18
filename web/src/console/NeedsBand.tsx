@@ -7,7 +7,7 @@ import type { HumanTask, Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
-import { GOAL_ANCHOR } from '../view/goalPage.js';
+import { GOAL_ANCHOR, GOAL_TAB_OF } from '../view/goalPage.js';
 import { scrollToAnchor } from './jump.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
@@ -30,12 +30,15 @@ export function NeedsBand({
   row,
   view,
   actions,
+  checksBelow = false,
 }: {
   row: NeedRow;
   view: CockpitView;
   actions: CockpitActions;
+  /** This band is drawn on the goal page, whose Checks pane holds the same rows. */
+  checksBelow?: boolean;
 }): JSX.Element | null {
-  const body = needBody(row, view, actions);
+  const body = needBody(row, view, actions, checksBelow);
   if (body === null) return null;
   return (
     <div className={`cn-needs cn-t-${KIND_TONE[row.kind]}`}>
@@ -102,7 +105,7 @@ function liftTargetFor(task: HumanTask, view: CockpitView): string | null {
   return at < 0 || at + 1 >= ladder.length ? null : (ladder[at + 1] ?? null);
 }
 
-export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions, checksBelow = false): ReactNode {
   if (row.kind === 'watch') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
@@ -111,12 +114,12 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   if (row.kind === 'validate') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
-    return <ValidateAsk task={task} view={view} actions={actions} />;
+    return <ValidateAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
   }
   if (row.kind === 'close_out') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
-    return <CloseOutAsk task={task} view={view} actions={actions} />;
+    return <CloseOutAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
   }
   if (row.kind === 'supply') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
@@ -407,16 +410,18 @@ function ValidateAsk({
   task,
   view,
   actions,
+  checksBelow,
 }: {
   task: HumanTask;
   view: CockpitView;
   actions: CockpitActions;
+  checksBelow: boolean;
 }): JSX.Element {
   return (
     <>
       <p>{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-      <GoalChecks originRef={task.originRef} view={view} actions={actions} />
+      <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
       <HumanTaskActions
         task={task}
         look={{ tone: 'secondary' }}
@@ -443,16 +448,18 @@ function CloseOutAsk({
   task,
   view,
   actions,
+  checksBelow,
 }: {
   task: HumanTask;
   view: CockpitView;
   actions: CockpitActions;
+  checksBelow: boolean;
 }): JSX.Element {
   return (
     <>
       <p>{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-      <GoalChecks originRef={task.originRef} view={view} actions={actions} />
+      <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
       <HumanTaskActions
         task={task}
         look={{ tone: 'secondary' }}
@@ -479,21 +486,56 @@ function CloseOutAsk({
  * Nothing where the snapshot holds no live check for the goal: a row filed against
  * a goal whose checks this cockpit cannot see is still a row somebody has to
  * settle, and the desk's prose above is what it says then.
+ *
+ * **Except on the goal page**, which `checksBelow` says this band is on. The rule is
+ * about reaching the work from where the ask is read, and on the rail or in the panel
+ * that means drawing it; there it means the opposite, because the rows are a pane
+ * away already. Two live copies of one control, one of them above the tab row and
+ * pushing it off the screen, is the ask drawing the page it is standing on. So there
+ * the band says how many and offers the way to them — and counts off the snapshot
+ * rather than building the whole goal page to do it.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
 function GoalChecks({
   originRef,
   view,
   actions,
+  checksBelow,
 }: {
   originRef: string | null;
   view: CockpitView;
   actions: CockpitActions;
+  checksBelow: boolean;
 }): JSX.Element | null {
-  const page = originRef === null ? null : buildGoalPage(view.state, originRef, view.needsYou, null);
   const number = Number(/^issue:(\d+)$/.exec(originRef ?? '')?.[1]);
+  if (originRef === null || !Number.isFinite(number)) return null;
+  if (checksBelow) {
+    const live = (view.state.validationChecks ?? []).filter(
+      (c) => c.originRef === originRef && c.supersededReason === null,
+    );
+    if (live.length === 0) return null;
+    return (
+      <button
+        type="button"
+        className="cn-ask-checks-to"
+        onClick={() => {
+          /* All three, in the order `buildJump` does them: the pane, then the card's
+             own fold, then the scroll two frames later. A jump that skipped the fold
+             would land on a heading and read as a control that did nothing.
+             → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet */
+          actions.openGoalTab(GOAL_TAB_OF.validation);
+          actions.openGoalSection('validation', true);
+          scrollToAnchor(GOAL_ANCHOR.validation);
+        }}
+      >
+        {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
+        Checks, below — go to them
+      </button>
+    );
+  }
+  const page = buildGoalPage(view.state, originRef, view.needsYou, null);
   const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
-  if (page === null || !Number.isFinite(number) || live.length === 0) return null;
+  if (page === null || live.length === 0) return null;
   return (
     <div className="cn-ask-checks">
       <ValidationSection

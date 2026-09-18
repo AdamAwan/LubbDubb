@@ -1082,8 +1082,19 @@ So the body draws the goal's **own check rows**, from the same `ValidationSectio
 (`web/src/components/ValidationSection.tsx`) the goal page manages them with — the steps, the
 resources, and the four readings — with every check still owed **already open**. One component, so a
 check cannot read one way in the ask and another on the goal page, and recording a result here is the
-same write it is there. It is `needBody`, so the ask panel and the goal page's band get it too: this
-is one ask drawn three ways, not a fourth ask.
+same write it is there. It is `needBody`, so the ask panel gets it too: this is one ask drawn several
+ways, not several asks.
+
+**Except on the goal page, where the rows are already a pane away.** The rule is about _reaching_ the
+work from where the ask is read, and on the rail and in the panel that means drawing it. On the goal
+page it means the opposite: the band sits above the tab row, so a second live copy of the whole sheet
+is the ask drawing the page it is standing on — and pushing that page's own navigation off the screen
+to do it, which is worst on exactly the goals carrying more than one ask. So `NeedsBand` takes
+`checksBelow` there, and the band says how many checks it is about and offers the way to them —
+selecting the Checks pane through `GOAL_TAB_OF` and scrolling to `GOAL_ANCHOR.validation`, the same
+pair the track strip routes through. The rows themselves stay in one place on that surface, and it is
+the place that already owns them. `test/askBodies.test.ts` pins both halves: the band draws no sheet
+with `checksBelow`, and draws one without it.
 
 The desk's prose stays above the rows. It is the harness's own refreshed statement of what the goal
 owes — the sheet assembled for an environment, the ticket's link — and it is what the row says
@@ -1286,10 +1297,17 @@ Every arm names a state some other surface on this page already draws, so the la
 never tell two stories. The sentence is not decoration: it rides in the selected tab's title, so
 "why am I here" is answerable without reading this document.
 
-**It decides the landing only.** The moment an operator picks a tab the pick is on `Place` and the rule
-is not consulted again — a goal that lands in an environment while somebody is reading its plan must
-not take the pane out from under them. `?pane=` is that pick; absent, the rule answers
-([The address bar](#the-address-bar)).
+**It decides the landing only, and the landing is latched to the visit.** `goalTabOpening` is a reading
+of live state, so a page that consults it on every render has no landing at all: a pull request
+arriving in the operator's court, a gate closing or an environment landing each re-answer it and move
+the pane mid-read. So `useGoalLanding` in `web/src/console/GoalPage.tsx` holds the rule's answer —
+the tab _and_ its sentence — for as long as the page stays on that goal, keyed on the goal so the next
+one lands again. A reload lands again too, which is right: that is a fresh arrival.
+
+The operator's pick still beats the latch, and once made it is the only thing read — `?pane=` is that
+pick; absent, the latched answer stands ([The address bar](#the-address-bar)). Before the latch the
+guarantee held only _after_ a pick, which left the operator who had not touched a tab — every operator
+on arrival — reading the one surface the rule exists to keep still.
 
 **The pick belongs to the goal it was made on, and does not follow the operator to the next one.**
 `goalMove` in `web/src/cockpit/place.ts` is the one patch every move to a goal page goes through, and
@@ -1331,6 +1349,13 @@ has already ruled on, or one waiting on the operator, is a card with something i
 `partial` counts as arrived and **`unknown` does not**: half the work being out there is what the
 validation card is most needed for, and a probe that could not say is not a reading that the work
 arrived ([24](24-environments.md#the-three-verdicts)).
+
+**Both arms of the validation row count live checks only.** A superseded row is one the plan has moved
+past, and it is drawn nowhere on the card — so a goal whose only started check was superseded has an
+empty card, and read off `page.checks` unfiltered the default opened it to say so. Every other reader
+of that list already filtered it, the server's `validationVerdict` among them
+([20](20-validation.md)), which is what made the one that did not quietly disagree with the heading it
+was opening.
 
 The **ticket is the mirror image** of the rest, and that is why it is back at the top. It was moved to
 the foot of the page as one of "the two surfaces that ask nothing of the reader", which was true of it

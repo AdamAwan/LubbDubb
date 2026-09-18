@@ -408,9 +408,13 @@ export const GOAL_SECTIONS = [
 export type GoalSection = (typeof GOAL_SECTIONS)[number];
 
 export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolean> {
+  const live = livePageChecks(page);
   return {
     ticket: !workStarted(page),
-    validation: (shipped(page) && liveChecks(page) > 0) || page.checks.some((c) => c.state !== 'unrun'),
+    /* `live`, never `page.checks`: a superseded row is one the plan has already
+       moved past, so a goal whose only started check was superseded has nothing
+       live to show and the card opening on it reports work nobody can act on. */
+    validation: (shipped(page) && live.length > 0) || live.some((c) => c.state !== 'unrun'),
     localValidation: page.issue.localValidation !== null,
     remoteValidation: page.remoteSheets.length > 0,
     signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
@@ -429,8 +433,8 @@ function shipped(page: GoalPageView): boolean {
   return page.environments.some((e) => e.status === 'reached' || e.status === 'partial');
 }
 
-function liveChecks(page: GoalPageView): number {
-  return page.checks.filter((c) => c.supersededReason === null).length;
+function livePageChecks(page: GoalPageView): ValidationCheckView[] {
+  return page.checks.filter((c) => c.supersededReason === null);
 }
 
 function tailBegun(page: GoalPageView): boolean {
@@ -520,6 +524,31 @@ export function goalTabOpening(page: GoalPageView): GoalTabOpening {
   if (validationBegun(page)) return { tab: 'validation', why: 'the work is merged and its checks have begun' };
   if (workStarted(page)) return { tab: 'work', why: 'there is a plan, a pull request or an agent on this goal' };
   return { tab: 'ticket', why: 'nothing has been planned yet, so the ask is the page' };
+}
+
+export interface GoalLanding {
+  ref: string;
+  opening: GoalTabOpening;
+}
+
+/**
+ * The landing this visit is holding, given the one it was holding before.
+ *
+ * {@link goalTabOpening} is a reading of live state, so a page that calls it on every
+ * render has no landing at all: a pull request arriving in the operator's court, a
+ * gate closing or an environment landing each re-answer it and move the pane out from
+ * under whoever is reading. This is the "it decides the landing only" half of that
+ * rule, held here rather than in the component so the holding *is* the tested part —
+ * the component's `useRef` only carries the answer between renders.
+ *
+ * A different goal lands again, which is the point of keying on the ref. The sentence
+ * is held with the tab, because a `why` re-read against a reading the tab no longer
+ * answers is the title explaining a pane the operator is not on.
+ * → docs/spec/17-cockpit.md#which-pane-opens
+ */
+export function goalLanding(held: GoalLanding | null, ref: string, page: GoalPageView): GoalLanding {
+  if (held !== null && held.ref === ref) return held;
+  return { ref, opening: goalTabOpening(page) };
 }
 
 export interface GoalTabBadge {
