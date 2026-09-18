@@ -42,7 +42,7 @@ function view(state: CockpitView['state'] = buildDemoState().state): CockpitView
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
-function askBody(v: CockpitView, row: NeedRow): string {
+function askBody(v: CockpitView, row: NeedRow, checksBelow = false): string {
   return renderToStaticMarkup(
     createElement(RefLinks, {
       refUrls: v.state.refUrls,
@@ -50,7 +50,7 @@ function askBody(v: CockpitView, row: NeedRow): string {
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
       openPr: () => undefined,
       hasPr: (n: number) => hasPrPage(v.state, n),
-      children: needBody(row, v, actions),
+      children: needBody(row, v, actions, checksBelow),
     }),
   );
 }
@@ -117,6 +117,31 @@ test('the close-out ask draws the checks its own note is about', () => {
      sentence this body has to keep honest, so the rows it names are drawn before
      the verbs, and waiving one is a control here rather than a trip to the goal. */
   assert.ok(html.indexOf('pm-vrow') < html.indexOf('>Decline<'), 'the checks are drawn below the verbs');
+});
+
+test('on the goal page an ask that is about the checks does not draw them a second time', () => {
+  const v = view();
+  for (const kind of ['validate', 'close_out'] as const) {
+    const row = rowOfKind(v, kind);
+    const html = askBody(v, row, true);
+    const live = v.state.validationChecks!.filter((c) => c.originRef === row.originRef && c.supersededReason === null);
+    assert.ok(live.length > 0, `the goal the ${kind} row is about has no checks`);
+    /* The rows are a pane away on this surface, and drawn here too they are a second live copy of
+       one control — above the tab row, pushing it off the screen.
+       → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+    assert.ok(!html.includes('pm-vrow'), `the ${kind} ask redraws the check sheet on the goal page`);
+    assert.ok(
+      html.includes(`The ${live.length} check`) || html.includes('The 1 check'),
+      `the ${kind} ask should say how many checks it is about`,
+    );
+    assert.match(html, /go to them/, `the ${kind} ask should offer the way to the checks it names`);
+  }
+});
+
+test('the same ask off the goal page still draws the work', () => {
+  const v = view();
+  const html = askBody(v, validateRow(v));
+  assert.ok(html.includes('pm-vrow'), 'the rail and the panel are the surfaces the sheet has to be on');
 });
 
 test('the runway ask lists the items it is asking to be put in play, with the control that does it', () => {

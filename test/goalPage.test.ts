@@ -716,6 +716,32 @@ test('a check anyone has ruled on opens validation wherever the work is', () => 
   );
 });
 
+test('a superseded check is not something in the card', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues.find((i) =>
+    state.validationChecks.some((c) => c.originRef === `issue:${i.number}`),
+  )!;
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+  const live = page.checks.filter((c) => c.supersededReason === null);
+  assert.ok(live.length > 0, 'the goal the fixture picked has no live checks to supersede');
+
+  /* Every live row unrun, and one the plan moved past already passed. The card draws the superseded
+     row nowhere, so opening on it is the page reporting work that is not on it — and the heading it
+     opens under still reads "no checks". */
+  const moved: GoalPageView = {
+    ...page,
+    environments: [],
+    checks: [
+      ...live.map((c) => ({ ...c, state: 'unrun' as const })),
+      { ...live[0]!, id: `${live[0]!.id}-old`, state: 'passed' as const, supersededReason: 'the plan was amended' },
+    ],
+  };
+  assert.equal(goalSectionsOpen(moved).validation, false, 'a superseded verdict opened a card with nothing live in it');
+
+  const ruled: GoalPageView = { ...moved, checks: [{ ...live[0]!, state: 'passed' as const }, ...live.slice(1)] };
+  assert.equal(goalSectionsOpen(ruled).validation, true, 'a live verdict still opens the card');
+});
+
 test('the record has no relevant moment, so it never opens itself', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;

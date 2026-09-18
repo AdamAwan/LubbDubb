@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type {
@@ -8,6 +8,7 @@ import type {
   GoalStageAt,
   GoalTab,
   GoalTabBadge,
+  GoalLanding,
   GoalTabOpening,
   PartGroup,
 } from '../view/goalPage.js';
@@ -17,7 +18,7 @@ import {
   goalSectionsOpen,
   GOAL_ANCHOR,
   goalTabBadges,
-  goalTabOpening,
+  goalLanding,
   reachCount,
   GOAL_SECTIONS,
   GOAL_TABS,
@@ -132,11 +133,12 @@ export function GoalPage({
 }): JSX.Element {
   const folds = buildFolds(page, view, actions);
   const jump = buildJump(folds, actions);
-  const opening = goalTabOpening(page);
-  /* The operator's pick beats the rule, and once made it is the only thing read:
-     a goal that lands in an environment while somebody is reading its plan must
-     not take the pane out from under them.
+  /* The landing is latched to the visit, never re-read from the live snapshot:
+     the rule answers once, on arrival at this goal, and the answer is held until
+     the operator picks a pane or leaves. The operator's pick beats it and is the
+     only thing read once made.
      → docs/spec/17-cockpit.md#which-pane-opens */
+  const opening = useGoalLanding(`issue:${page.issue.number}`, page);
   const tab = view.goalTab ?? opening.tab;
   return (
     <div className="cn-goal">
@@ -146,7 +148,7 @@ export function GoalPage({
       {/* Above the tabs, never inside one: an ask is the reason the page was
           opened, and a pane is a thing you have to be on to see. */}
       {parentAskElsewhere(page).map((row) => (
-        <NeedsBand key={row.id} row={row} view={view} actions={actions} />
+        <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow />
       ))}
       <GoalTabs page={page} tab={tab} chosen={view.goalTab} opening={opening} actions={actions} />
       <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
@@ -158,6 +160,17 @@ export function GoalPage({
       </div>
     </div>
   );
+}
+
+/**
+ * Carries the landing between renders. The decision is `goalLanding`'s — this
+ * only holds its answer, which is what keeps the rule out of a render's reach.
+ * → docs/spec/17-cockpit.md#which-pane-opens
+ */
+function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
+  const held = useRef<GoalLanding | null>(null);
+  held.current = goalLanding(held.current, ref, page);
+  return held.current.opening;
 }
 
 function GoalTabs({

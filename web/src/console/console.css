@@ -1718,6 +1718,24 @@ a.cn-qbody {
 .cn-ask-checks {
   margin: 11px 0;
 }
+/* The same ask on the goal page, where the rows themselves are a pane away: one
+   line that says how many and goes to them, in the band's own tone rather than a
+   colour of its own. */
+.cn-ask-checks-to {
+  display: block;
+  margin: 11px 0 0;
+  padding: 7px 11px;
+  border: 1px solid var(--cn-tone-line);
+  border-radius: var(--cn-r);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cn-ask-checks-to:hover {
+  background: var(--cn-tone-fill);
+}
 /* Two lists an ask draws to say what is waiting: the unwatched items the runway
    ask can put in play, and the threads on a pull request somebody assigned. One
    row grammar, because they are the same shape of reading — a name, what it is,
