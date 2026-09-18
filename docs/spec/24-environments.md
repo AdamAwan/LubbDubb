@@ -190,18 +190,40 @@ Two cuts, because neither is enough alone:
   clone, but it answers only about pull requests the harness saw while they were open.
 - **The clone.** `baseBranch` is absent on a pull request first seen after it merged, and a stacked
   node whose base was never observed has no `baseRef` either. So the desk reconciles: for every
-  landing it has not yet placed it asks `git.contains(shas, [defaultBranch])`, and reads the
-  [three-valued](#the-three-verdicts) answer as it is read everywhere else — `true` is on the
+  landing it has not yet placed **as `yes`** it asks `git.contains(shas, [defaultBranch])`, and reads
+  the [three-valued](#the-three-verdicts) answer as it is read everywhere else — `true` is on the
   integration branch, `null` is the clone unable to say and is asked again next pulse, and `false`
   is a commit the clone holds that the integration branch does not reach: it never landed on its own.
+
+**Only `yes` is terminal; `no` is provisional and is re-asked until it answers `yes`.** The
+integration ref the reconciler reads is `origin/<defaultBranch>` in a clone that
+[never fetches](#asking-the-clone) on this path, and LubbDubb's worktrees share the target repo's
+object store — so between a merge and the next `git fetch` the merge commit is **present locally and
+not yet reachable from `origin/<defaultBranch>`**, which is the one shape where `contains` returns a
+confident `false` where the honest answer was `null`. Every other reader of the column treats `false`
+as settled: `reconcile` would not revisit it, `due()` skips it, and `goalReach` drops it from the
+goal's landings. So a `false` written inside that window is a **one-way door** — the goal's work is
+never probed for again, `newArrivals` never sees `reached`, and every gate the arrival opens is held
+for good with nothing red. Measured against one live deployment, eight of seventeen `no` rows were
+reachable from the integration branch by the time anybody looked, across six goals, one of which was
+confirmed deployed by hand.
+
+Making the `no` provisional is the whole repair, and it needs no migration: the reconciler's pending
+set is every landing not placed `yes`, `markLandingIntegration` is a plain `UPDATE` keyed on
+`pr_number`, so a row written wrong corrects itself on the next pulse the clone can see the commit,
+`due()` starts probing it and `recordArrivals` recomputes. Landings never asked are placed **before**
+the re-asks in the pending set, so a new merge is never starved out of the per-pulse cap by a
+deployment's accumulated stack merges. Re-asking costs nothing per landing: `contains` is two `git`
+invocations for the whole batch, whatever its size.
 
 **The verdict is marked, never deleted.** `goal_landings` is keyed on `pr_number` and `landedPrs()`
 is what stops the sweep re-adding a row, so a delete would flap on every pulse. It is an additive
 `on_integration` column, and a null means _not yet asked_ rather than _no_ — which is why it needs no
-backfill and heals the rows already written on the first pulse after this ships. A landing marked
-`no` is dropped from the goal's `total`, is never probed for again, and is counted on the row as
-`unplaced` so the cockpit can say what the fraction is missing rather than draw a number nobody can
-account for.
+backfill and heals the rows already written on the first pulse after this ships. A landing standing
+at `no` is dropped from the goal's `total`, is not probed for in any environment, and is counted on
+the row as `unplaced` so the cockpit can say what the fraction is missing rather than draw a number
+nobody can account for — all of it for as long as the clone keeps saying `no`, and none of it for
+longer.
 
 The behaviour this changes, deliberately: a goal whose work all merges onto a long-lived feature
 branch reads `absent` with `total: 0` until that branch's own pull request merges. That is a fraction

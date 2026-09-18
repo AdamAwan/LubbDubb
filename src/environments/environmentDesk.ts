@@ -84,10 +84,11 @@ export class EnvironmentDesk {
 
   private async reconcile(): Promise<void> {
     const { store, errors } = this.deps;
-    const pending = store.environments
-      .listGoalLandings()
-      .filter((l) => l.onIntegration === null)
-      .slice(0, MAX_LANDINGS_PER_PULSE);
+    const unplaced = store.environments.listGoalLandings().filter((l) => l.onIntegration !== true);
+    const pending = [
+      ...unplaced.filter((l) => l.onIntegration === null),
+      ...unplaced.filter((l) => l.onIntegration === false),
+    ].slice(0, MAX_LANDINGS_PER_PULSE);
     if (pending.length === 0) return;
     try {
       const held = await this.deps.git.contains(
