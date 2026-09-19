@@ -1112,16 +1112,11 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
   assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
 });
 
-test('the ticket arrives folded on a goal under way, and opens from the place', () => {
-  const shut = render(goalView(() => {}, goalRef(), [], [], 'ask'));
-  assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
-  assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
+test('the ticket is always drawn, on a goal under way as on a fresh one', () => {
+  const under = render(goalView(() => {}, goalRef(), [], [], 'ask'));
+  assert.ok(under.includes('The ticket'), 'the ticket is named');
+  assert.ok(under.includes('class="cn-tick"'), 'and its body is drawn even once the work has started');
 
-  const open = render(goalView(() => {}, goalRef(), ['ticket'], [], 'ask'));
-  assert.ok(open.includes('class="cn-tick"'), 'the place is what opens it');
-});
-
-test('a goal nobody has planned opens on its ticket, unless the operator folded it', () => {
   const fresh = goalView((s) => {
     s.plans = [];
     s.planParts = [];
@@ -1146,11 +1141,6 @@ test('a goal nobody has planned opens on its ticket, unless the operator folded 
     },
   };
   assert.ok(render(bare).includes('class="cn-tick"'), 'the ticket is the page on a goal with nothing else on it');
-
-  assert.ok(
-    !render({ ...bare, goalShut: new Set(['ticket']) }).includes('class="cn-tick"'),
-    'and the operator folding it outranks that reading',
-  );
 });
 
 test('validation and signals are folded on a goal that has not shipped', () => {

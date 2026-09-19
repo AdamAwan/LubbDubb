@@ -206,7 +206,7 @@ function TicketPane({
 }): JSX.Element {
   return (
     <>
-      <Ticket issue={page.issue} refUrls={view.state.refUrls} fold={folds.ticket} />
+      <Ticket issue={page.issue} refUrls={view.state.refUrls} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <Instructions issue={page.issue} actions={actions} />
@@ -1397,19 +1397,17 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
   );
 }
 
-function Ticket({ issue, refUrls, fold }: { issue: Issue; refUrls: Record<string, string>; fold: Fold }): JSX.Element {
+function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, string> }): JSX.Element {
   return (
     <section className="cn-card" id="cn-ticket">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="The ticket" />
+        The ticket
         <span className="cn-more">as it stood at pickup</span>
       </h3>
-      {fold.open && (
-        <div className="cn-tick">
-          {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
-          {renderRichText(issue.body, refUrls)}
-        </div>
-      )}
+      <div className="cn-tick">
+        {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
+        {renderRichText(issue.body, refUrls)}
+      </div>
     </section>
   );
 }

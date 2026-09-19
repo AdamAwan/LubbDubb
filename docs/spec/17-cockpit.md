@@ -1322,13 +1322,13 @@ So the cards are grouped behind **five tabs**, declared once in `GOAL_TABS`
 (`web/src/view/goalPage.ts`) with `GOAL_TAB_OF` mapping each foldable section to the pane that holds
 it:
 
-| Pane        | id        | What is behind it                                                                                  |
-| ----------- | --------- | -------------------------------------------------------------------------------------------------- |
-| **Ask**     | `ask`     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind  |
-| **Plan**    | `plan`    | the plan's waves, the pull requests they carry, who is on the goal now                             |
-| **Merged**  | `merged`  | the goal's checks and its local check plan — everything that gates or follows a **merge**          |
-| **Shipped** | `shipped` | the reach matrix, the environments and the gate, the remote sheets, and the signals                |
-| **Done**    | `done`    | spend, the tail, and this goal's subtree of the work graph                                         |
+| Pane        | id        | What is behind it                                                                                 |
+| ----------- | --------- | ------------------------------------------------------------------------------------------------- |
+| **Ask**     | `ask`     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
+| **Plan**    | `plan`    | the plan's waves, the pull requests they carry, who is on the goal now                            |
+| **Merged**  | `merged`  | the goal's checks and its local check plan — everything that gates or follows a **merge**         |
+| **Shipped** | `shipped` | the reach matrix, the environments and the gate, the remote sheets, and the signals               |
+| **Done**    | `done`    | spend, the tail, and this goal's subtree of the work graph                                        |
 
 **The five are moments in a goal's life, and that is the whole of why there are five.** A pane that
 names an activity rather than a moment drifts: `Checks` once held both the checks that gate a merge
@@ -1389,7 +1389,7 @@ top of a page:
   `unknown` in its own words before it would ever say "not shipped".
 - **A meter is drawn only against a denominator that cannot grow**, and this is the rule the others
   are read through. `GoalEnvironmentReach.total` is `landings + unattributed merges + the code parts
-  still owed`, so it grows every time a plan decomposes further — a bar against it runs **backwards**
+still owed`, so it grows every time a plan decomposes further — a bar against it runs **backwards**
   while the work goes forwards. Worse, it is a fraction of the wrong question: a goal is checked as a
   whole or not at all, so between its first part landing and its last it is not part-way checked, it
   is **not checkable**, and a bar at 57% says the first. Shipped therefore reads what is still owed
@@ -1428,16 +1428,16 @@ whatever pane it now sits behind.
 `goalTabOpening(page)` answers which pane a goal opens on when nobody has picked one, and the sentence
 that says why — read top to bottom, first answer wins, and **the order is the rule**:
 
-| The goal…                                    | opens on |
-| -------------------------------------------- | -------- |
-| is finished, closed or abandoned             | Done     |
-| is held at an environment gate               | Shipped  |
-| has a pull request in the operator's court   | Plan     |
-| has a flagged check plan or local run        | Merged   |
-| has **every** landing in an environment      | Shipped  |
-| has begun its checks                         | Merged   |
-| has a plan, a pull request or an agent       | Plan     |
-| has none of those                            | Ask      |
+| The goal…                                  | opens on |
+| ------------------------------------------ | -------- |
+| is finished, closed or abandoned           | Done     |
+| is held at an environment gate             | Shipped  |
+| has a pull request in the operator's court | Plan     |
+| has a flagged check plan or local run      | Merged   |
+| has **every** landing in an environment    | Shipped  |
+| has begun its checks                       | Merged   |
+| has a plan, a pull request or an agent     | Plan     |
+| has none of those                          | Ask      |
 
 **The environment arm reads `reached`, never `partial`.** A goal with one part in staging and three
 unwritten has nothing behind Shipped but an account of what is owed, and landing an operator there
@@ -1483,7 +1483,6 @@ defaults unlock is the order the questions are asked in:
 
 | Section        | Open from                                                                             |
 | -------------- | ------------------------------------------------------------------------------------- |
-| `ticket`       | until the work starts — a plan, a pull request or an agent folds it                   |
 | `validation`   | the work reaching an environment **and** there being a check, or one anybody ruled on |
 | `signals`      | the same arrival **and** a declared check, or one awaiting the operator               |
 | `environments` | any environment reading that is not `absent`                                          |
