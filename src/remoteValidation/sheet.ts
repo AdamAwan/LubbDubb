@@ -262,7 +262,7 @@ export function sheetFoldLine(rows: readonly SheetFoldRow[]): string | null {
   // nothing was learned from — it is one waiting on a person's eyes, which is its own ask.
   const captured = rows.filter((r) => r.blockedReason === null && r.outcome === 'captured').length;
   return [
-    `sheet · ${count(rows.length, 'row')}`,
+    `check plan · ${count(rows.length, 'check')}`,
     ...(failed === 0 ? [] : [`${String(failed)} failed`]),
     ...(captured === 0 ? [] : [`${String(captured)} captured`]),
     ...(blocked === 0 ? [] : [`${String(blocked)} blocked`]),

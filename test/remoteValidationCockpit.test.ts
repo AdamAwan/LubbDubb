@@ -277,7 +277,11 @@ test('the Environments card’s folded line is folded on the server, off the sam
     const reach = (state['environmentReach'] as GoalReachView[]).find((r) => r.goalRef === 'issue:12');
     const row = reach?.environments.find((e) => e.environment === 'acceptance');
 
-    assert.equal(row?.sheet, 'sheet · 3 rows · 1 blocked', 'the line the card draws is already a string on the wire');
+    assert.equal(
+      row?.sheet,
+      'check plan · 3 checks · 1 blocked',
+      'the line the card draws is already a string on the wire',
+    );
 
     // The same fold, off the same rows, so a change to one is a change to both.
     const sheets = state['remoteSheets'] as RemoteSheetView[];
@@ -300,7 +304,7 @@ test('a failed row and a blocked one are both folded into the line, and a goal w
       { blockedReason: 'no tenant', outcome: null },
       { blockedReason: null, outcome: 'blocked' },
     ]),
-    'sheet · 4 rows · 1 failed · 2 blocked',
+    'check plan · 4 checks · 1 failed · 2 blocked',
     'a row nothing was learned from is blocked whichever road it took there',
   );
   assert.equal(sheetFoldLine([]), null, 'and a goal with no sheet gets no line rather than an empty one');

@@ -10,7 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
-import { buildGoalPage, buildGoalStrip } from '../web/src/view/goalPage.js';
+import { buildGoalNav, buildGoalPage } from '../web/src/view/goalPage.js';
 import type { AppState } from '../web/src/types.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -139,7 +139,7 @@ test('presence answering zero reads unknown on the glass, in the goal page’s o
   assert.equal(check?.reading?.verdict, 'unknown');
   assert.match(check!.reading!.detail!, /could not read testUk/);
   assert.match(check!.reading!.detail!, /has not run here/);
-  const shipped = buildGoalStrip(page!).find((s) => s.at === 'environments');
+  const shipped = buildGoalNav(page!).find((t) => t.tab === 'shipped');
   assert.equal(shipped?.reading, 'reached testUk · watch not read');
   assert.deepEqual(
     observer.asked.map((a) => a.kind),

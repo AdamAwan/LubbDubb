@@ -449,7 +449,7 @@ export interface GoalReachView {
  * second opinion drawn beside the reading it describes.
  */
 export interface GoalEnvironmentReachView extends GoalEnvironmentReach {
-  /** `sheet · 4 rows · 1 blocked`, or null where this goal has no sheet against this environment. */
+  /** `check plan · 4 checks · 1 blocked`, or null where this goal has no check plan against this environment. */
   sheet: string | null;
 }
 

@@ -202,3 +202,56 @@ test('an assigned pull request draws its waiting threads and its reasons apart',
      harness is not doing about it. */
   assert.ok(!html.includes((pr.attention?.reasons ?? []).join(' · ')), 'the reasons are drawn as one joined line');
 });
+
+/* The three below were assertions on the goal page's own band. The goal page
+   draws a row per ask now and the whole of one is the ask panel's, drawn by this
+   same `needBody` — so the rules they are about are asserted here, where the
+   body is, rather than lost with the band.
+   → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+
+test('a profile proposal is answered on the ask, both ways', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues.find((i) => i.number === 395);
+  assert.ok(issue, 'the fixture goal must be in the world');
+  issue.appraisal = {
+    verdict: 'workable',
+    summary: 'Three subsystems and an auth guard between them.',
+    missing: [],
+    by: 'appraiser',
+    decidedAt: new Date(Date.now() - 3600_000).toISOString(),
+    commentRef: null,
+    proposedProfile: 'deep',
+    awaitingProfileAnswer: true,
+    placement: [],
+    parentSettledAt: null,
+  };
+  const v = view(state);
+  const html = askBody(v, rowOfKind(v, 'profile'));
+  assert.ok(html.includes('The goal appraisal wants this run on “deep”'), 'the ask says what is being asked');
+  assert.ok(html.includes('Use “deep”'), 'and offers the proposal');
+  assert.ok(html.includes('Leave it unpinned') || /Keep “/.test(html), 'and the way to keep what is standing');
+});
+
+test('an escalation’s offered choices stay one click on the ask', () => {
+  const state = buildDemoState().state;
+  const row = view(state).needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
+  assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
+  const asked = state.escalations.find((e) => e.id === row.id);
+  assert.ok(asked, 'the escalation the row names must be in the state');
+  asked.context = { ...asked.context, options: ['Take ours', 'Take theirs'] };
+  const html = askBody(view(state), row);
+  assert.match(html, /class="esc-quick"/, 'offered choices stay one click');
+  assert.match(html, />Take theirs</);
+});
+
+test('a decision on an escalation reads as one, and is never free text', () => {
+  const state = buildDemoState().state;
+  const row = view(state).needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
+  assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
+  state.escalations = state.escalations.filter((e) => e.id === row.id);
+  state.proposals = [{ ...state.proposals![0]!, id: 'p-band', kind: 'merge', status: 'pending', escalationId: row.id }];
+  const html = askBody(view(state), row);
+  assert.match(html, /needs your decision/, 'a decision must read as one');
+  assert.match(html, />Approve merge</);
+  assert.doesNotMatch(html, /placeholder="Your answer…"/, 'a proposal is never answered with free text');
+});

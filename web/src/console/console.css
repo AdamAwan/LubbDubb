@@ -1315,9 +1315,9 @@ a.cn-qbody {
    segmented control crushed to a sliver. */
 .cn-ctlgrp {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   flex: none;
 }
 .cn-ctlcap {
@@ -1461,48 +1461,104 @@ a.cn-qbody {
   padding-right: 22px;
 }
 
-/* The goal's track: the pipeline in one row, each stretch a way to the section
-   that owns it. `cn-strip` rather than `cn-track`, which the overview's segment
-   bar already owns — and `--cn-track`, the token, is a third thing again.
+/* The tabbed panel — the dressing for `web/src/console/TabbedPanel.tsx`.
 
-   A grid with a 1px gap over a lined ground rather than borders on the cells,
-   because the strip wraps: `auto-fit` puts four stages on one row on a wide page
-   and two on two rows on a narrow one, and a `border-right` would leave a stray
-   line at the end of every row but the last.
+   One object, not two: the tabs sit on a bar of their own and the selected one
+   is cut out of the panel below it — the panel's ground, no bottom edge, its own
+   top corners. A row of separate cards above a separate panel reads as two
+   surfaces that happen to be stacked, and nothing about that says the row is
+   what changes what is underneath.
 
-   Every stage takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias the
-   stage carries. No colour of its own, and so no new token: a theme moves the
-   strip with everything else it already moves. */
-.cn-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+   The bar is a *continuous* surface behind the tabs rather than a gap between
+   them: with the page showing through, each tab reads as its own card again and
+   the bar it is supposed to be sitting on does not exist. Unselected tabs are
+   told apart by a hairline, which is what a bar with no gaps leaves room for.
+
+   `cn-tabp` rather than `cn-strip`, which is gone, or `cn-gnav`, which this
+   replaced: the rack's second line uses `--cn-strip-cols` a thousand lines below
+   and the two matched silently once already. A new class name in this sheet is
+   grepped for first.
+
+   Every tab takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias it
+   carries. No colour of its own, and so no new token: a theme moves the panel
+   with everything else it already moves.
+
+   `.cn button` sets `background: none; border: 0` and outranks a bare class, so
+   every rule here that gives a tab a ground or an edge is scoped `.cn` first.
+   → CLAUDE.md, the control kit's specificity traps */
+.cn-tabp {
+  min-width: 0;
+}
+.cn-tabp-bar {
+  display: flex;
+  align-items: stretch;
   gap: 1px;
+  /* The hairlines between tabs are this ground showing through the gap, which is
+     why the bar is a line colour and not a panel one. */
   background: var(--cn-line);
   border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  overflow: hidden;
+  border-bottom: 0;
+  border-radius: var(--cn-r) var(--cn-r) 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.cn-tk {
+.cn-tabp-bar::-webkit-scrollbar {
+  display: none;
+}
+.cn .cn-tabp-tab {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
-  padding: 9px 12px;
-  background: var(--cn-panel);
+  /* Past this the row scrolls rather than wrapping: five tabs on two lines stop
+     reading as one row of alternatives, and the panel below is what width is for. */
+  min-width: 124px;
+  padding: 9px 13px 10px;
+  /* Darker than the panel, so the selected tab is the one that lifts. The bar is
+     chrome and the panel is the page's own surface; a tab that stood *above* the
+     panel's lightness would read as the selected one wherever the eye landed. */
+  background: var(--cn-bg);
   border: 0;
+  border-radius: 0;
   text-align: left;
   font: inherit;
   color: inherit;
   cursor: pointer;
 }
-.cn-tk:hover {
+.cn .cn-tabp-tab:first-child {
+  border-top-left-radius: var(--cn-r);
+}
+.cn .cn-tabp-tab:last-child {
+  border-top-right-radius: var(--cn-r);
+}
+.cn .cn-tabp-tab:hover {
   background: var(--cn-hover);
 }
-.cn-tkk {
+/* The selected tab is the panel, standing up: same ground, and it keeps the
+   hairline on either side of it so the cut reads as a cut. */
+.cn .cn-tabp-tab.cn-on {
+  background: var(--cn-panel);
+}
+.cn-tabp-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--cn-mono);
   color: var(--cn-fg-faint);
 }
-.cn-tkv {
+.cn .cn-tabp-tab.cn-on .cn-tabp-name {
+  color: var(--cn-fg);
+}
+/* One dot, where an ask is waiting in that pane. It is what a whole band above
+   the navigation used to say, said by the control you would press anyway — the
+   ask itself is a row at the top of the page. */
+.cn-tabp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+}
+.cn-tabp-read {
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1511,100 +1567,60 @@ a.cn-qbody {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cn-tkb {
+.cn-tabp-meter {
   height: 3px;
   border-radius: 2px;
   background: var(--cn-track);
   overflow: hidden;
 }
-.cn-tkb i {
+.cn-tabp-meter i {
   display: block;
   height: 100%;
   background: var(--cn-tone);
 }
-/* A stage with nothing to measure draws no track at all, rather than an empty
-   one. An empty bar under "no checks" reads as every check outstanding, which is
-   the one thing a null reading exists to keep it from saying. */
-.cn-tkb.cn-none {
+/* A tab with nothing to measure draws no meter at all, rather than an empty one.
+   An empty bar under "no checks" reads as every check outstanding, which is the
+   one thing a null reading exists to keep it from saying. */
+.cn-tabp-meter.cn-none {
   background: none;
 }
-
-/* The goal's five panes. The strip above says where the goal *is*; this row says
-   which reading you are looking at, and the two are one control — a strip stage
-   selects the pane that holds it. → docs/spec/17-cockpit.md#the-panes
-
-   Scrollable rather than wrapping: five tabs on two lines stop reading as one
-   row of alternatives, and the pane below is what the width is for. */
-.cn-gtabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--cn-line);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.cn-gtabs::-webkit-scrollbar {
-  display: none;
-}
-.cn-gtab {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-  margin-bottom: -1px;
-  padding: 8px 14px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--cn-fg-dim);
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: var(--cn-r) var(--cn-r) 0 0;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.cn-gtab:hover {
-  color: var(--cn-fg);
-  background: var(--cn-hover);
-}
-.cn-gtab.cn-on {
-  color: var(--cn-fg);
-  font-weight: 600;
-  background: var(--cn-panel);
-  border-color: var(--cn-line);
-  border-bottom: 1px solid var(--cn-panel);
-}
-/* The count on a tab's own label. Toneless by default — a badge is a reading,
-   and most readings are not verdicts — and it takes its hue from the `cn-t-*`
-   alias the badge carries, so a theme moves it with everything else. */
-.cn-gtb {
-  font-family: var(--cn-mono);
-  font-size: 10px;
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  padding: 2px 5px;
-  border: 1px solid var(--cn-inert);
-  border-radius: var(--cn-r-sm);
-  color: var(--cn-fg-faint);
-}
-.cn-gtb.cn-t-green,
-.cn-gtb.cn-t-amber,
-.cn-gtb.cn-t-red,
-.cn-gtb.cn-t-blue {
-  color: var(--cn-tone-ink);
-  border-color: var(--cn-tone-line);
-  background: var(--cn-tone-bg);
-}
-.cn-gpane {
+/* The panel. Its top edge is the bar's own, so it carries none. */
+.cn-tabp-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  padding: 14px;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-top: 0;
+  border-radius: 0 0 var(--cn-r) var(--cn-r);
 }
-/* The pane takes focus when a jump lands in it, and a focus ring around the
+/* The panel takes focus when a jump lands in it, and a focus ring around the
    whole page body is furniture: the tab that selected it is the thing that
    reads as focused. */
-.cn-gpane:focus {
+.cn-tabp-body:focus {
   outline: none;
+}
+/* A card sitting directly on the panel is a section of that one surface, not a
+   box on it: its own border and ground would be a box inside a box. Direct
+   children only — a card nested inside a component keeps its own edges, which
+   are what tell it apart from the card holding it. */
+.cn-tabp-body > .cn-card {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.cn-tabp-body > .cn-card + .cn-card {
+  padding-top: 12px;
+  border-top: 1px solid var(--cn-line-soft);
+}
+/* The asks, a row each, above the tabs. */
+.cn-asklines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 /* The orphan warning — a goal hanging off no Feature, said above every card on
@@ -6593,4 +6609,51 @@ button.cn-grow {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* An ask after the first in a stack: one row, the whole of it a press that opens
+   the ask in full. The first band on a pane is the reason you are there and
+   answering it in place is the point; a second and third stacked under it push
+   the pane's own content off the screen and leave the navigation reading as
+   unrelated to what is below it.
+   → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+.cn .cn-needs-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--cn-fg);
+  background: var(--cn-tone-fill);
+  border: 1px solid var(--cn-tone-line);
+  border-radius: var(--cn-r);
+  cursor: pointer;
+}
+.cn .cn-needs-line:hover {
+  background: var(--cn-hover);
+}
+.cn-needs-kind {
+  flex: none;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-tone-ink);
+}
+.cn-needs-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cn-needs-line .cn-age,
+.cn-needs-line .cn-open {
+  flex: none;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
 }

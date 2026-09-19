@@ -11,13 +11,7 @@ import type {
   TaskSummary,
 } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
-import {
-  buildGoalPage,
-  buildGoalStrip,
-  buildGoalTrack,
-  goalSectionsOpen,
-  standsFor,
-} from '../web/src/view/goalPage.js';
+import { buildGoalPage, buildGoalNav, buildGoalTrack, goalSectionsOpen, standsFor } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -555,21 +549,21 @@ test('a stage with nothing to measure draws no proportion', () => {
   const ref = `issue:${issue.number}`;
   const page = buildGoalPage({ ...state, plans: [], planParts: [], environmentReach: [] }, ref, [])!;
 
-  const strip = buildGoalStrip({ ...page, issue: { ...page.issue, validation: null } });
-  const plan = strip.find((s) => s.at === 'plan')!;
-  const validation = strip.find((s) => s.at === 'validation')!;
+  const nav = buildGoalNav({ ...page, issue: { ...page.issue, validation: null } });
+  const plan = nav.find((t) => t.tab === 'plan')!;
+  const checks = nav.find((t) => t.tab === 'checks')!;
 
   assert.equal(plan.reading, 'not drawn');
   assert.equal(plan.done, null, 'a goal with no plan has no parts outstanding, so nothing to measure');
-  assert.equal(validation.reading, 'no checks');
+  assert.equal(checks.reading, 'no checks');
   assert.equal(
-    validation.done,
+    checks.done,
     null,
-    'a goal with no validation plan has no checks outstanding — a bar at 0 would report every one still to run',
+    'a goal with no check plan has no checks outstanding — a bar at 0 would report every one still to run',
   );
 });
 
-test('the strip quotes the parts and the checks rather than re-reading them', () => {
+test('a tab quotes the parts and the checks rather than re-reading them', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
@@ -596,35 +590,34 @@ test('the strip quotes the parts and the checks rather than re-reading them', ()
       },
     },
   };
-  const strip = buildGoalStrip(withChecks);
+  const nav = buildGoalNav(withChecks);
 
-  const planStage = strip.find((s) => s.at === 'plan')!;
-  assert.equal(planStage.reading, '1/3 parts merged', 'the same fold the plan card draws');
-  assert.equal(planStage.done, (1 / 3) * 100);
-  assert.equal(planStage.tone, 'blue', 'something is moving and nothing is held');
+  const planTab = nav.find((t) => t.tab === 'plan')!;
+  assert.equal(planTab.reading, '1/3 parts merged', 'the same fold the plan card draws');
+  assert.equal(planTab.done, (1 / 3) * 100);
+  assert.equal(planTab.tone, 'blue', 'something is moving and nothing is held');
 
-  const validation = strip.find((s) => s.at === 'validation')!;
-  assert.equal(validation.reading, '1 of 4 done', 'passed plus waived, as the header chip counts them');
-  assert.equal(validation.tone, 'amber', 'a check actually failed');
+  const checks = nav.find((t) => t.tab === 'checks')!;
+  assert.equal(checks.reading, '1 of 4 done', 'passed plus waived, as the check plan counts them');
+  assert.equal(checks.tone, 'amber', 'a check actually failed');
 });
 
-test('the shipped stage is absent without environments, and never folds unknown into absent', () => {
+test('the shipped tab is drawn without environments, and never folds unknown into absent', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const bare = buildGoalPage({ ...state, environmentReach: [] }, ref, [])!;
-  assert.deepEqual(
-    buildGoalStrip(bare).map((s) => s.at),
-    ['plan', 'validation', 'tail'],
-    'a stage of question marks on a deployment with no environments is a feature announcing itself as broken',
-  );
+  /* The tab is drawn and says so, rather than being left out: the row keeps its
+     shape between goals, and "no environments" is the reading that keeps a
+     deployment with none from looking like a feature announcing itself broken. */
+  assert.equal(buildGoalNav(bare).find((t) => t.tab === 'shipped')!.reading, 'no environments');
 
-  const unknown = buildGoalStrip({
+  const unknown = buildGoalNav({
     ...bare,
     environments: [
       { environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
     ],
-  }).find((s) => s.at === 'environments')!;
+  }).find((t) => t.tab === 'shipped')!;
   assert.equal(unknown.reading, 'not known', 'a probe that could not say is not work that has not shipped');
   assert.equal(unknown.done, null);
 });

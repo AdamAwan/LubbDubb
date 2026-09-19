@@ -19,7 +19,8 @@ import type {
   ValidationPlanRecord,
   ValidationResourceView,
 } from '../types.js';
-import type { NeedRow } from './needsYou.js';
+import type { NeedKind, NeedRow } from './needsYou.js';
+import { inFlight, localValidationSaid } from './localValidation.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -295,11 +296,11 @@ export function buildGoalTrack(parts: readonly GoalPartView[]): GoalTrack {
   };
 }
 
-export type GoalStageAt = 'plan' | 'validation' | 'environments' | 'tail';
+type GoalStageAt = 'plan' | 'validation' | 'environments' | 'tail';
 
 type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
 
-export interface GoalStage {
+interface GoalStage {
   at: GoalStageAt;
   label: string;
   reading: string;
@@ -307,15 +308,16 @@ export interface GoalStage {
   done: number | null;
 }
 
-export function buildGoalStrip(page: GoalPageView): GoalStage[] {
-  const stages: GoalStage[] = [planStage(page), validationStage(page)];
-  if (page.environments.length > 0) stages.push(environmentStage(page));
-  stages.push(tailStage(page));
-  return stages;
-}
-
 function planStage(page: GoalPageView): GoalStage {
   const base = { at: 'plan', label: 'Plan' } as const;
+  /* A pull request waiting on the operator outranks how far the plan has got,
+     because it is the one reading on this stage that is about them. The tab row
+     said it and the track did not, and folding the two into one control is how a
+     reading gets lost — so it is said here, where both now read from. */
+  const court = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
+  if (court > 0) {
+    return { ...base, reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done: null };
+  }
   if (page.plan === null) return { ...base, reading: 'not drawn', tone: 'grey', done: null };
   if (page.plan.status === 'planning') return { ...base, reading: 'being drawn', tone: 'blue', done: null };
   if (page.plan.status === 'awaiting_approval')
@@ -334,8 +336,18 @@ function planStage(page: GoalPageView): GoalStage {
 
 function validationStage(page: GoalPageView): GoalStage {
   const base = { at: 'validation', label: 'Checks' } as const;
+  /* A local check plan that is running outranks the set's own count, because it
+     is the only thing on the goal that is happening right now — and with the
+     header's chip gone this is the one place outside the pane that says so. */
+  const local = page.issue.localValidation;
+  if (local !== null && inFlight(local)) {
+    return { ...base, reading: localValidationSaid(local), tone: 'blue', done: null };
+  }
   const v = page.issue.validation;
-  if (v === null || v.total === 0) return { ...base, reading: 'no checks', tone: 'grey', done: null };
+  if (v === null || v.total === 0) {
+    if (flaggedLocally(page)) return { ...base, reading: 'flagged locally', tone: 'amber', done: null };
+    return { ...base, reading: 'no checks', tone: 'grey', done: null };
+  }
   const settled = v.passed + v.waived;
   return {
     ...base,
@@ -348,6 +360,11 @@ function validationStage(page: GoalPageView): GoalStage {
 function environmentStage(page: GoalPageView): GoalStage {
   const base = { at: 'environments', label: 'Shipped' } as const;
   const envs = page.environments;
+  /* Held short of an environment outranks how many it has reached, for the same
+     reason a pull request in the operator's court outranks the plan's progress:
+     it is the reading somebody has to do something about. */
+  if (page.gateHold !== null) return { ...base, reading: 'gate held', tone: 'amber', done: null };
+  if (envs.length === 0) return { ...base, reading: 'no environments', tone: 'grey', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
   const furthest = reached[reached.length - 1];
   const done = (reached.length / envs.length) * 100;
@@ -442,44 +459,50 @@ function tailBegun(page: GoalPageView): boolean {
   return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }
 
-export const GOAL_TABS = ['ticket', 'work', 'validation', 'shipping', 'record'] as const;
+export const GOAL_TABS = ['ticket', 'plan', 'checks', 'shipped', 'closeout'] as const;
 
 export type GoalTab = (typeof GOAL_TABS)[number];
 
-export const GOAL_TAB_LABEL: Record<GoalTab, string> = {
+/* A tab's id is its label, lower case: the pane the label says is the pane
+   `?pane=` names and the pane `GOAL_TAB_OF` maps a section to. The two drifted
+   once — the row said "Checks" while every id under it said `validation` — and
+   an id that disagrees with the word on the control is a rename nobody can grep
+   for. → docs/spec/17-cockpit.md#the-panes */
+const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ticket: 'Ticket',
-  work: 'Work',
-  validation: 'Checks',
-  shipping: 'Shipping',
-  record: 'Record',
+  plan: 'Plan',
+  checks: 'Checks',
+  shipped: 'Shipped',
+  closeout: 'Close-out',
 };
 
 /**
  * Which pane each foldable section lives behind. The page's own map rather than
- * the console's, because the track strip routes through it too: a strip stage
- * and the tab it belongs to must never disagree about where a stage is drawn.
+ * the console's, because a press that names a card and the tab that card is
+ * drawn behind must never disagree: a jump that landed on a card behind a pane
+ * nobody had opened would be a control that appears to do nothing.
  * → docs/spec/17-cockpit.md#the-panes
  */
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   ticket: 'ticket',
   sequence: 'ticket',
-  validation: 'validation',
-  localValidation: 'validation',
-  remoteValidation: 'validation',
-  environments: 'shipping',
-  signals: 'shipping',
-  tail: 'record',
-  record: 'record',
+  validation: 'checks',
+  localValidation: 'checks',
+  remoteValidation: 'checks',
+  environments: 'shipped',
+  signals: 'shipped',
+  tail: 'closeout',
+  record: 'closeout',
 };
 
 /**
  * The pane the prediction card is drawn in — and with it the reveal gate, which
  * stands in the same card and asks the same record one moment earlier. Named once,
- * here beside the map the strip and the tabs read, so that a press that must land
+ * here beside the map the tabs read, so that a press that must land
  * on that card cannot end up naming a pane the card moved off.
  * → docs/spec/17-cockpit.md#the-panes
  */
-export const PREDICTION_PANE: GoalTab = 'work';
+export const PREDICTION_PANE: GoalTab = 'plan';
 
 /**
  * The element id each stage of the track scrolls to, beside the pane map for the
@@ -514,15 +537,15 @@ export interface GoalTabOpening {
  * → docs/spec/17-cockpit.md#which-pane-opens
  */
 export function goalTabOpening(page: GoalPageView): GoalTabOpening {
-  if (settled(page)) return { tab: 'record', why: 'this goal is finished — the record is what the page is for now' };
-  if (page.gateHold !== null) return { tab: 'shipping', why: 'a gate is holding this goal short of an environment' };
+  if (settled(page)) return { tab: 'closeout', why: 'this goal is finished — the record is what the page is for now' };
+  if (page.gateHold !== null) return { tab: 'shipped', why: 'a gate is holding this goal short of an environment' };
   if (page.openPullRequests.some((pr) => pr.attention.status === 'you'))
-    return { tab: 'work', why: 'a pull request is in your court' };
+    return { tab: 'plan', why: 'a pull request is in your court' };
   if (page.issue.validation?.state === 'flagged' || flaggedLocally(page))
-    return { tab: 'validation', why: 'the validation plan is not settled' };
-  if (shipped(page)) return { tab: 'shipping', why: 'the work has reached an environment' };
-  if (validationBegun(page)) return { tab: 'validation', why: 'the work is merged and its checks have begun' };
-  if (workStarted(page)) return { tab: 'work', why: 'there is a plan, a pull request or an agent on this goal' };
+    return { tab: 'checks', why: 'the check plan is not settled' };
+  if (shipped(page)) return { tab: 'shipped', why: 'the work has reached an environment' };
+  if (validationBegun(page)) return { tab: 'checks', why: 'the work is merged and its checks have begun' };
+  if (workStarted(page)) return { tab: 'plan', why: 'there is a plan, a pull request or an agent on this goal' };
   return { tab: 'ticket', why: 'nothing has been planned yet, so the ask is the page' };
 }
 
@@ -551,65 +574,97 @@ export function goalLanding(held: GoalLanding | null, ref: string, page: GoalPag
   return { ref, opening: goalTabOpening(page) };
 }
 
-export interface GoalTabBadge {
-  text: string;
-  tone: 'green' | 'amber' | 'red' | 'blue' | null;
+/**
+ * Which pane an ask belongs to, or null for one that is about the goal as a
+ * whole rather than any stage of it. Total over {@link NeedKind}, like the
+ * rail's own tables, so a new kind is placed deliberately rather than
+ * inheriting whatever the last one meant.
+ *
+ * Every ask is drawn the same way — a row above the navigation — so what this
+ * map decides is the dot: an ask with a pane puts one on that pane's nav entry,
+ * and one about the goal as a whole puts none anywhere. The row says there is
+ * something; the dot says which stage it is about.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
+  assigned: 'plan',
+  bench: 'plan',
+  burn: 'plan',
+  escalation: 'plan',
+  merge: 'plan',
+  permission: 'plan',
+  plan: 'plan',
+  reply: 'plan',
+  validate: 'checks',
+  validation_plan: 'checks',
+  unwatched: 'shipped',
+  watch: 'shipped',
+  close_out: 'closeout',
+  outcome: 'closeout',
+  shortfall: 'closeout',
+  /* About the goal itself, or about the fleet carrying it: neither has a stage
+     to be drawn in, so neither carries a dot. */
+  config: null,
+  config_gap: null,
+  dispatch: null,
+  intake: null,
+  limit: null,
+  placement: null,
+  profile: null,
+  project_pull: null,
+  recovery: null,
+  supply: null,
+  upgrade: null,
+};
+
+/** The asks a pane is about, which is what puts the dot on its nav entry. */
+function goalPaneAsks(page: GoalPageView, tab: GoalTab): NeedRow[] {
+  return page.needs.filter((row) => GOAL_ASK_TAB[row.kind] === tab);
+}
+
+interface GoalNavEntry {
+  tab: GoalTab;
+  label: string;
+  reading: string;
+  tone: GoalStageTone;
+  done: number | null;
+  /** An ask is waiting in this pane, which is what the dot on the entry says. */
+  needsYou: boolean;
 }
 
 /**
- * What each tab carries on its own label: a count, and the tone the strip would
- * give the same reading. Null is a real answer and means the pane holds nothing
- * yet — a badge reading `0` says a thing was counted, which is not the same.
- * → docs/spec/17-cockpit.md#the-panes
+ * The page's one navigation control. It was two — a track strip reading the
+ * stages and a tab row badging the same numbers one line below it — and two
+ * controls stating one thing is why the page read as cluttered. A stage is
+ * where you go, so the stage is the button.
+ *
+ * Every entry is always drawn, including an environment stage for a goal with
+ * no environments: a control that changes shape between goals cannot be aimed
+ * at from memory. → docs/spec/17-cockpit.md#the-panes
  */
-export function goalTabBadges(page: GoalPageView): Record<GoalTab, GoalTabBadge | null> {
-  return {
-    ticket: page.issue.instructions.length === 0 ? null : { text: `${page.issue.instructions.length}`, tone: null },
-    work: workBadge(page),
-    validation: validationBadge(page),
-    shipping: shippingBadge(page),
-    record: page.issue.spend === null ? null : { text: fmtCost(page.issue.spend.costUsd), tone: null },
+export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
+  const stages: Record<Exclude<GoalTab, 'ticket'>, GoalStage> = {
+    plan: planStage(page),
+    checks: validationStage(page),
+    shipped: environmentStage(page),
+    closeout: tailStage(page),
   };
+  return GOAL_TABS.map((tab) => {
+    const needsYou = goalPaneAsks(page, tab).length > 0;
+    if (tab === 'ticket') return { tab, label: GOAL_TAB_LABEL.ticket, ...ticketReading(page), needsYou };
+    const stage = stages[tab];
+    return { tab, label: GOAL_TAB_LABEL[tab], reading: stage.reading, tone: stage.tone, done: stage.done, needsYou };
+  });
 }
 
-function workBadge(page: GoalPageView): GoalTabBadge | null {
-  const wants = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
-  if (wants > 0) return { text: `${wants} in your court`, tone: 'red' };
-  const track = buildGoalTrack(page.parts);
-  if (track.total > 0) {
-    const text = `${track.merged}/${track.total}`;
-    if (track.merged === track.total) return { text, tone: 'green' };
-    if (track.held > 0) return { text, tone: 'amber' };
-    return { text, tone: track.now > 0 ? 'blue' : null };
+/* The ticket is the only entry with no stage behind it: nothing about it
+   progresses, so it reads what was asked for rather than how far it has got. */
+function ticketReading(page: GoalPageView): { reading: string; tone: GoalStageTone; done: number | null } {
+  const instructions = page.issue.instructions.length;
+  if (instructions > 0) {
+    return { reading: instructions === 1 ? '1 instruction' : `${instructions} instructions`, tone: 'blue', done: null };
   }
-  const open = page.openPullRequests.length;
-  return open === 0 ? null : { text: `${open} open`, tone: 'blue' };
-}
-
-function validationBadge(page: GoalPageView): GoalTabBadge | null {
-  const v = page.issue.validation;
-  if (v === null || v.total === 0) return flaggedLocally(page) ? { text: 'asked of you', tone: 'amber' } : null;
-  const settledChecks = v.passed + v.waived;
-  return {
-    text: `${settledChecks}/${v.total}`,
-    tone: v.state === 'clear' ? 'green' : v.failed > 0 ? 'red' : 'amber',
-  };
-}
-
-function shippingBadge(page: GoalPageView): GoalTabBadge | null {
-  if (page.gateHold !== null) return { text: 'gate held', tone: 'amber' };
-  const envs = page.environments;
-  if (envs.length === 0) return null;
-  const reached = envs.filter((e) => e.status === 'reached').length;
-  if (reached === 0) return envs.some((e) => e.status === 'partial') ? { text: 'partial', tone: 'amber' } : null;
-  return { text: `${reached}/${envs.length}`, tone: reached === envs.length ? 'green' : 'blue' };
-}
-
-/* Two decimals under ten dollars and none over: the badge is a glance at what a
-   goal has cost, and cents on a two-figure number are three characters of noise
-   on a control that has to stay one line. */
-function fmtCost(usd: number): string {
-  return usd >= 10 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
+  return { reading: 'as filed', tone: 'grey', done: null };
 }
 
 function settled(page: GoalPageView): boolean {
