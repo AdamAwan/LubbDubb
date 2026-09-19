@@ -43,6 +43,7 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
       linkWorkItem: unused,
       createPullRequest: unused,
       setPullTitle: unused,
+      setPullBody: unused,
       setPullBase: unused,
       updatePrBranch: unused,
       requeueCiCheck: unused,

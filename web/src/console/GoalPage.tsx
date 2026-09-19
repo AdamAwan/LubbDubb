@@ -1,4 +1,4 @@
-import { useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX, type MutableRefObject } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, GoalSection, GoalTab, GoalLanding, GoalTabOpening, PartGroup } from '../view/goalPage.js';
@@ -6,6 +6,7 @@ import type { NeedRow } from '../view/needsYou.js';
 import {
   buildGoalNav,
   goalSectionsOpen,
+  planUnderWay,
   GOAL_ANCHOR,
   goalLanding,
   reachCount,
@@ -27,6 +28,7 @@ import type {
 import { AsyncButton } from '../components/AsyncButton.js';
 import { GoalCriteria } from '../components/GoalCriteria.js';
 import { PrDescription } from '../components/PrDescription.js';
+import { PartDescriptionsProvider, PartDescriptionTag, usePartDescriptions } from '../components/partDescriptions.js';
 import { PlanRevealGate } from '../components/PlanRevealGate.js';
 import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -121,7 +123,7 @@ export function GoalPage({
         label="This goal"
       >
         {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} />}
+        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'checks' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'shipped' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'closeout' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
@@ -220,14 +222,86 @@ function WorkPane({
   page,
   view,
   actions,
+  folds,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
 }): JSX.Element {
+  /* The provider is above the body rather than around each reader because the board
+     and the panel ask the same question of different parts — and a component cannot
+     read a context it renders itself, which is why the body is its own.
+     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  return (
+    <PartDescriptionsProvider issueNumber={page.issue.number}>
+      <WorkPaneBody page={page} view={view} actions={actions} folds={folds} />
+    </PartDescriptionsProvider>
+  );
+}
+
+function WorkPaneBody({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  const held = usePartDescriptions();
+  /* The chosen card itself, so the panel can draw its pointer under it. The board's
+     columns wrap on a narrow pane, so where that card ends up is a question only the
+     laid-out page can answer — a share of the width would point at whichever card
+     happened to be there. → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  const chosenRef = useRef<HTMLDivElement | null>(null);
+  const underWay = planUnderWay(page);
+  const describable = page.parts
+    .map(({ part }, i) => ({ part, position: i + 1 }))
+    .filter((p) => p.part.prNumber !== null);
+  /* The operator's pick, or the part that wants them: the first nobody has
+     described, and failing that the first that opened. Never none while there is a
+     pull request to describe — an empty space where the panel was is a feature an
+     operator has to know to go looking for. */
+  const chosen =
+    describable.find((p) => p.part.slug === view.goalPart) ??
+    describable.find((p) => held !== null && held.parts[p.part.slug] === undefined) ??
+    describable[0] ??
+    null;
   return (
     <>
-      <PlanWaves page={page} view={view} actions={actions} />
+      <PlanWaves
+        page={page}
+        view={view}
+        actions={actions}
+        fold={folds.prediction}
+        chosen={chosen?.part.slug ?? null}
+        chosenRef={chosenRef}
+      />
+      {/* One panel, for the part in front — never one per part. A goal is five
+          parts, and five descriptions stacked is five walls of prose an operator tells
+          apart by counting headings. Which part a description belongs to is a question
+          the board above already answers, so the board is where the part is chosen and
+          the panel follows the choice.
+
+          Directly under the board, above the criteria card: the panel points back at
+          the card it was opened for, and a pointer with another card in between points
+          at that one instead.
+          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      {chosen !== null && chosen.part.prNumber !== null && (
+        <PrDescription
+          issueNumber={page.issue.number}
+          slug={chosen.part.slug}
+          position={chosen.position}
+          prNumber={chosen.part.prNumber}
+          title={chosen.part.title}
+          anchor={chosenRef}
+          desktopFolder={view.state.config.desktopFolder}
+          now={view.now}
+        />
+      )}
       {/* Below the plan rather than above it: what "done" means is read against the
           shape the fleet proposed, and the card draws nothing at all where the
           criteria routes are not mounted. A part with a task behind it is what
@@ -238,21 +312,6 @@ function WorkPane({
         workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
         now={view.now}
       />
-      {/* One per live part, because one part is one pull request. Each panel draws
-          nothing where `manualDescriptions` is off — the routes are not mounted
-          there, so the read does not answer and the presence of the data decides.
-          → docs/spec/17-cockpit.md#the-description-a-reviewer-reads */}
-      {page.parts.map(({ part }, i) => (
-        <PrDescription
-          key={part.id}
-          issueNumber={page.issue.number}
-          slug={part.slug}
-          position={i + 1}
-          title={part.title}
-          desktopFolder={view.state.config.desktopFolder}
-          now={view.now}
-        />
-      ))}
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
@@ -261,6 +320,24 @@ function WorkPane({
           <OnThisGoal page={page} view={view} actions={actions} />
         </div>
       </div>
+      {/* Last on the pane, once the plan is approved and the work is under way: it is
+          a record of a moment that has passed, and everything above it — the parts,
+          the description in front, what "done" means, the pull requests — is the work
+          itself. At the plan's gate it is the opposite way round and the plan card
+          draws it above the parts.
+          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
+      {underWay && (
+        <PredictionReview
+          issueNumber={page.issue.number}
+          revealed={page.plan?.revealed ?? false}
+          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
+          plan={page.plan}
+          parts={page.parts.map((p) => p.part)}
+          open={folds.prediction.open}
+          onToggle={folds.prediction.onToggle}
+          now={view.now}
+        />
+      )}
     </>
   );
 }
@@ -997,6 +1074,16 @@ function RemoteValidation({
 type PartPr = { open: true; pr: OpenPullRequest } | { open: false; pr: PullRequest };
 
 const GROUP_ORDER: PartGroup[] = ['merged', 'now', 'held', 'waiting'];
+
+/**
+ * The groups the board actually draws, in order. One definition, because the pane
+ * reads it too: the panel's pointer is aimed at the card the operator chose, and a
+ * second spelling of which columns exist is how that pointer comes to aim at the
+ * wrong one.
+ */
+function liveGroups(page: GoalPageView): PartGroup[] {
+  return GROUP_ORDER.filter((group) => page.parts.some((p) => p.group === group));
+}
 const GROUP_LABEL: Record<PartGroup, string> = {
   merged: 'Merged',
   now: 'Now',
@@ -1008,15 +1095,23 @@ function PlanWaves({
   page,
   view,
   actions,
+  fold,
+  chosen,
+  chosenRef,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
+  fold: Fold;
+  /** The part whose description is in front, so the board can say which one that is. */
+  chosen: string | null;
+  /** Attached to the chosen card, so the panel below can point back at it. */
+  chosenRef: MutableRefObject<HTMLDivElement | null>;
 }): JSX.Element {
-  const groups = GROUP_ORDER.map((group) => ({
+  const groups = liveGroups(page).map((group) => ({
     group,
     parts: page.parts.filter((p) => p.group === group),
-  })).filter((g) => g.parts.length > 0);
+  }));
   const retired = page.retiredParts;
   const plan = page.plan;
   // The gate lifts here the moment the reveal returns, rather than waiting on the
@@ -1029,6 +1124,7 @@ function PlanWaves({
   const prs = new Map<number, PartPr>();
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
+  const underWay = planUnderWay(page);
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.plan}>
@@ -1067,13 +1163,21 @@ function PlanWaves({
           }}
         />
       )}
-      {!gated && (
+      {/* Above the parts, and only while the plan is still at its gate: marking the
+          prediction against what the plan says is what this pane is *for* at that
+          moment, and the parts below it are not going anywhere until it is approved.
+          Once the plan is approved the prediction leaves this card altogether —
+          `WorkPaneBody` draws it at the foot of the pane.
+          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
+      {!gated && !underWay && (
         <PredictionReview
           issueNumber={page.issue.number}
           revealed={plan !== null && (plan.revealed || lifted)}
           outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
           plan={plan}
           parts={page.parts.map((p) => p.part)}
+          open={fold.open}
+          onToggle={fold.onToggle}
           now={view.now}
         />
       )}
@@ -1098,6 +1202,9 @@ function PlanWaves({
                 agentId={p.agentId}
                 agentLive={p.agentLive}
                 pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
+                chosen={chosen === p.part.slug}
+                chosenRef={chosenRef}
+                receded={chosen !== null && chosen !== p.part.slug}
                 now={view.now}
                 actions={actions}
               />
@@ -1115,6 +1222,9 @@ function PlanWaves({
                 agentId={null}
                 agentLive={false}
                 pr={null}
+                chosen={false}
+                chosenRef={chosenRef}
+                receded={chosen !== null}
                 now={view.now}
                 actions={actions}
               />
@@ -1132,6 +1242,9 @@ function Part({
   agentId,
   agentLive,
   pr,
+  chosen,
+  chosenRef,
+  receded,
   now,
   actions,
 }: {
@@ -1140,11 +1253,17 @@ function Part({
   agentId: string | null;
   agentLive: boolean;
   pr: PartPr | null;
+  chosen: boolean;
+  chosenRef: MutableRefObject<HTMLDivElement | null>;
+  receded: boolean;
   now: number;
   actions: CockpitActions;
 }): JSX.Element {
   return (
-    <div className={`cn-part cn-${group}`}>
+    <div
+      ref={chosen ? chosenRef : undefined}
+      className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''} ${receded ? 'is-receded' : ''}`}
+    >
       <b>
         {part.seq} · {part.title}
       </b>
@@ -1172,6 +1291,16 @@ function Part({
           )}
         </span>
       )}
+      {/* The description, said on the part it belongs to, and the way to write it:
+          the board is where the parts are told apart, so it is where the one whose
+          description is in front is chosen.
+          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      <PartDescriptionTag
+        slug={part.slug}
+        prNumber={part.prNumber}
+        selected={chosen}
+        onSelect={() => actions.openGoalPart(part.slug)}
+      />
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
         {part.prNumber !== null && (

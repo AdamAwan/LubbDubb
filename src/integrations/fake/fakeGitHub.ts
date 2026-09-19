@@ -3,6 +3,7 @@ import type { InjectableEvent } from '../../connector/connector.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,
+  PrBodyInput,
   PrBaseUpdateInput,
   PrCloseInput,
   PrCreateInput,
@@ -29,6 +30,7 @@ import type {
   PrReplyCapable,
   PrThreadResolveCapable,
   PrTitleCapable,
+  PrBodyCapable,
   WorldSlice,
 } from '../integration.js';
 import type { FakeWorld, FakeWorldStore } from './fakeWorld.js';
@@ -57,11 +59,13 @@ export class FakeGitHubIntegration
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
+    PrBodyCapable,
     PrBaseCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
     Injectable
 {
+  private readonly bodies = new Map<number, string>();
   readonly id = 'sourceControl:fake';
   readonly capability: WorldCapability = 'sourceControl';
 
@@ -211,6 +215,7 @@ export class FakeGitHubIntegration
         labels: [],
       });
     });
+    this.bodies.set(number, input.body);
     return { ok: true, ref: String(number) };
   }
 
@@ -219,6 +224,22 @@ export class FakeGitHubIntegration
       mutatePr(world, input.prNumber, (pr) => (pr.title = input.title));
     });
     return { ok: true, ref: `fake-title_${nanoid(6)}` };
+  }
+
+  async setPullBody(input: PrBodyInput): Promise<SendResult> {
+    this.bodies.set(input.prNumber, input.body);
+    return { ok: true, ref: `fake-body_${nanoid(6)}` };
+  }
+
+  /**
+   * The body one pull request carries. Kept beside the world rather than on
+   * `PullRequest`, because no reading the harness makes needs a pull request's body
+   * and a domain field nothing reads is a field the next change has to keep true.
+   *
+   * @public the seam a test asserts a pushed description through
+   */
+  pullBody(prNumber: number): string | null {
+    return this.bodies.get(prNumber) ?? null;
   }
 
   async setPullBase(input: PrBaseInput): Promise<SendResult> {

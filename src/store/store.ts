@@ -66,7 +66,7 @@ import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { GoalCriteriaStore } from './goalCriteria.js';
 import { PredictionStore, PREDICTION_COLUMNS } from './predictions.js';
-import { PrDescriptionStore } from './prDescriptions.js';
+import { PrDescriptionStore, PR_DESCRIPTION_COLUMNS } from './prDescriptions.js';
 import type { Job, CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
@@ -164,6 +164,7 @@ export class Store {
       SEQUENCE_COLUMNS,
       EJECTION_COLUMNS,
       PREDICTION_COLUMNS,
+      PR_DESCRIPTION_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }

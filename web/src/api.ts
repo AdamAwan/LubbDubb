@@ -108,12 +108,6 @@ export interface GoalCriteriaReading {
   versions: CriteriaVersionReading[];
 }
 
-/** A part's whole description chain, oldest first, and the version that stands now. */
-export interface PrDescriptionReading {
-  current: PrDescriptionVersion | null;
-  versions: PrDescriptionVersion[];
-}
-
 export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
 
 export class UnauthorizedError extends Error {
@@ -248,12 +242,13 @@ const realApi = {
     authFetch(`/api/goals/${number}/criteria`).then((r) => json<GoalCriteriaReading>(r)),
   writeGoalCriteria: (number: number, body: { text: string; reason?: string }) =>
     post<{ ok: true; version: GoalCriteriaVersion; standing: CriteriaStanding }>(`/api/goals/${number}/criteria`, body),
-  // A part's pull-request description. Both routes are mounted only where
-  // `manualDescriptions` is on, so a rejected read is how the panel learns there is
-  // nothing to draw — the same shape the criteria card uses one subsystem over.
-  getPrDescription: (number: number, slug: string) =>
-    authFetch(`/api/goals/${number}/parts/${encodeURIComponent(slug)}/description`).then((r) =>
-      json<PrDescriptionReading>(r),
+  /* The pull-request descriptions of one goal: the newest of each described part, by
+     slug, and one read for the whole board. Mounted only where `manualDescriptions`
+     is on, so a rejected read is how the board and the panel learn there is nothing
+     to draw — the same shape the criteria card uses one subsystem over. */
+  getGoalDescriptions: (number: number) =>
+    authFetch(`/api/goals/${number}/descriptions`).then((r) =>
+      json<{ parts: Record<string, PrDescriptionVersion> }>(r),
     ),
   writePrDescription: (number: number, slug: string, body: { text: string }) =>
     post<{ ok: true; version: PrDescriptionVersion }>(

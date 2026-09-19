@@ -74,9 +74,10 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         .string()
         .describe(
           deps.manualDescriptions
-            ? 'Do not use this. On this deployment the description is written by the operator before a ' +
-                'reviewer reads it, and a body sent here is refused rather than merged with theirs. What ' +
-                'you know about the change goes in the evidence arguments below, as coordinates.'
+            ? 'Do not use this. On this deployment the description is the operator\u2019s \u2014 they write it ' +
+                'against this pull request once it is open, and a body sent here is refused rather than ' +
+                'merged with theirs. What you know about the change goes in the evidence arguments below, ' +
+                'as coordinates.'
             : 'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
                 `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
                 'the change is needed first and what it does after, one line each. No headings, no prose ' +
@@ -128,9 +129,9 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     if (deps.manualDescriptions && given !== '')
       return toolError(
         'open_pr rejected: this deployment writes its own pull-request descriptions. The body is the ' +
-          'operator\u2019s, written before a reviewer reads it, so there is nothing for you to say here \u2014 ' +
-          'drop the body argument and call again. Your account of the change goes in the evidence ' +
-          'arguments, as coordinates.',
+          'operator\u2019s, written against this pull request once it is open, so there is nothing for you ' +
+          'to say here \u2014 drop the body argument and call again. Your account of the change goes in the ' +
+          'evidence arguments, as coordinates.',
       );
     if (!deps.manualDescriptions) {
       const bodyRefusal = prBodyRefusal(given);
@@ -176,16 +177,14 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       issueTitle: target.issueTitle,
       facts,
     });
-    // With `manualDescriptions` on the account above the block is the operator's or
-    // there is none: a part nobody described opens with the reference standing on its
-    // own, which is `07`'s existing answer to an absent body and not a new one. The
-    // agent's `given` cannot reach here — it was refused above.
+    // With `manualDescriptions` on, nothing of the operator's goes above the block
+    // here: they write the description after reading the pull request, so it always
+    // lands as an edit and never at the open. What opens is the evidence and the
+    // reference — `07`'s existing answer to an absent body, not a new one. The
+    // agent's `given` cannot reach here either; it was refused above.
     // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
-    const written = deps.manualDescriptions
-      ? ((target.partRef === null ? null : deps.store.prDescriptions.currentDescription(target.partRef))?.text.trim() ??
-        '')
-      : given;
-    const body = [written, evidenceBlock, reference].filter((part) => part !== '').join('\n\n');
+    const tail = [evidenceBlock, reference].filter((part) => part !== '').join('\n\n');
+    const body = deps.manualDescriptions ? tail : [given, tail].filter((part) => part !== '').join('\n\n');
 
     try {
       const result = await wiring.sink.createPullRequest({
@@ -204,6 +203,12 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
           { prNumber, workItemNumber: target.issueNumber },
           { sink: wiring.sink, store: deps.store, errors: deps.errors },
         );
+        // The tail this body carries, kept so the description written against the
+        // open pull request goes in front of it without the body being read back off
+        // the provider. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+        if (deps.manualDescriptions && target.partRef !== null) {
+          deps.store.prDescriptions.recordPrBody({ originRef: target.partRef, prNumber, tail });
+        }
       }
       return ok({
         opened: result.ok,

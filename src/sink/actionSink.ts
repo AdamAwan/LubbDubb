@@ -40,6 +40,17 @@ export interface PrTitleInput {
   title: string;
 }
 
+/**
+ * A body written onto a pull request that is already open. The description is the
+ * operator's and is written after they have read the pull request, so the body it
+ * composes always lands as an edit — there is no open-time path for it.
+ * → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+ */
+export interface PrBodyInput {
+  prNumber: number;
+  body: string;
+}
+
 export interface PrBaseInput {
   prNumber: number;
   base: string;
@@ -170,6 +181,7 @@ export interface ActionSink {
   linkWorkItem(input: WorkItemLinkInput): Promise<SendResult>;
   createPullRequest(input: PrCreateInput): Promise<SendResult>;
   setPullTitle(input: PrTitleInput): Promise<SendResult>;
+  setPullBody(input: PrBodyInput): Promise<SendResult>;
   setPullBase(input: PrBaseInput): Promise<SendResult>;
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult>;
   requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult>;

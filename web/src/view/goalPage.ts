@@ -412,6 +412,7 @@ function tailStage(page: GoalPageView): GoalStage {
 
 export const GOAL_SECTIONS = [
   'ticket',
+  'prediction',
   'validation',
   'localValidation',
   'remoteValidation',
@@ -428,6 +429,12 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
   const live = livePageChecks(page);
   return {
     ticket: !workStarted(page),
+    /* Open while the prediction is the live question — the plan is at its gate and
+       marking it against what the plan says is the whole of what this pane is for —
+       and again when delivery has landed and the second question is being asked.
+       Between those it is a record of a moment that has passed, and an operator
+       watching the work is reading past it to reach the parts. */
+    prediction: !planUnderWay(page) || outcomeAsked(page),
     /* `live`, never `page.checks`: a superseded row is one the plan has already
        moved past, so a goal whose only started check was superseded has nothing
        live to show and the card opening on it reports work nobody can act on. */
@@ -440,6 +447,22 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
     tail: tailBegun(page),
     record: false,
   };
+}
+
+/**
+ * Whether the plan has been approved and the work is under way. `planning` and
+ * `awaiting_approval` are the two states in which nothing has been agreed yet, so
+ * the prediction is still about a plan the operator is deciding on.
+ *
+ * @public the seam the goal page reads to place the prediction panel
+ */
+export function planUnderWay(page: GoalPageView): boolean {
+  const status = page.plan?.status ?? null;
+  return status !== null && status !== 'planning' && status !== 'awaiting_approval';
+}
+
+function outcomeAsked(page: GoalPageView): boolean {
+  return page.needs.some((need) => need.kind === 'outcome');
 }
 
 function workStarted(page: GoalPageView): boolean {
@@ -486,6 +509,7 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   ticket: 'ticket',
   sequence: 'ticket',
+  prediction: 'plan',
   validation: 'checks',
   localValidation: 'checks',
   remoteValidation: 'checks',

@@ -12,6 +12,7 @@ import { isActiveTask } from './tasks.js';
 import { runsToRecord, type CompletionSignals } from './floor/runs.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { PrNamingDesk } from './pr/prNamingDesk.js';
+import type { PrDescriptionDesk } from './pr/prDescriptionDesk.js';
 import type { PrWatchDesk } from './pr/prWatchDesk.js';
 import type { PrWorkItemDesk } from './pr/prWorkItemDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
@@ -38,6 +39,7 @@ export interface PulseDeps {
   prWatch?: PrWatchDesk;
   prWorkItems?: PrWorkItemDesk;
   naming?: PrNamingDesk;
+  prDescriptions?: PrDescriptionDesk;
   branchReaps?: BranchReapDesk;
   landings?: StackLandingDesk;
   validationAsks?: ValidationAskDesk;
@@ -108,6 +110,7 @@ const ENTRIES = [
     { id: 'prWatch', readWorld: true, run: (d, at) => d.prWatch?.run(at.world) },
     { id: 'prWorkItems', readWorld: true, run: (d, at) => d.prWorkItems?.run(at.world) },
     { id: 'naming', readWorld: true, run: (d, at) => d.naming?.run(at.world) },
+    { id: 'prDescriptions', readWorld: false, run: (d) => d.prDescriptions?.run() },
     { id: 'branchReaps', readWorld: true, run: (d, at) => d.branchReaps?.run(at.world) },
     { id: 'landings', readWorld: false, run: (d, at) => d.landings?.settle(at.world) },
     { id: 'validationAsks', readWorld: false, run: (d) => d.validationAsks?.run() },

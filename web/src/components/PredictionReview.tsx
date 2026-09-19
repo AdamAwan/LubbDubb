@@ -128,6 +128,8 @@ export function PredictionReview({
   outcomeAsked,
   plan,
   parts,
+  open,
+  onToggle,
   now,
 }: {
   issueNumber: number;
@@ -135,6 +137,8 @@ export function PredictionReview({
   outcomeAsked: boolean;
   plan: PlanView | null;
   parts: readonly PlanPart[];
+  open: boolean;
+  onToggle: (open: boolean) => void;
   now: number;
 }): JSX.Element | null {
   const [reading, setReading] = useState<GoalPredictionReading | null>(null);
@@ -180,99 +184,125 @@ export function PredictionReview({
           return body === '' ? [] : [{ label: pane.label, body }];
         });
 
+  const marked = SLOTS.filter(({ key }) => prediction.slots[key] !== null && prediction.planMarks[key] !== null).length;
+  const askedOf = SLOTS.filter(({ key }) => prediction.slots[key] !== null).length;
+
   return (
-    <div className="cn-pmark">
-      <div className="cn-pmark-said">
-        <h4>What you predicted</h4>
-        <p className="cn-pmark-why">
-          You wrote this before the plan was lifted. Mark each line against what the plan actually says — a line you
-          leave alone stays unmarked, which is its own answer and never counted as a miss.
-          {prediction.planMarkedAt !== null && <> Last marked {relTime(prediction.planMarkedAt, now)}.</>}
-        </p>
-        {showOutcome && (
-          <p className="cn-pmark-why cn-pmark-why-two">
-            Delivery has landed, so each line now carries a second, separate question: whether the <em>plan</em> turned
-            out right. It is not the same question as whether you called the plan, and answering one says nothing about
-            the other — either may be left alone.
-            {prediction.outcomeMarkedAt !== null && <> Last answered {relTime(prediction.outcomeMarkedAt, now)}.</>}
-          </p>
+    <div className="cn-pmark-fold">
+      {/* The disclosure is the panel's own, as the work record's is: only this
+          component knows whether there is a prediction to draw at all, and a
+          heading drawn outside it would be an empty card on every goal nobody
+          predicted. The count is drawn closed as well as open, because what a
+          folded record owes its reader is whether anything in it is unanswered.
+          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
+      <h4 className="cn-pmark-hdr">
+        <button type="button" className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
+          <i className="cn-caret">{open ? '\u25be' : '\u25b8'}</i>
+          What you predicted
+        </button>
+        {askedOf > 0 && (
+          <i className="cn-n">
+            {marked}/{askedOf} marked
+          </i>
         )}
-        {SLOTS.map(({ key, question }) => {
-          const said = prediction.slots[key];
-          const mark = prediction.planMarks[key];
-          const outcome = outcomeMarks[key];
-          if (said === null)
-            return (
-              <div className="cn-pmark-row is-skipped" key={key}>
-                <div className="cn-pmark-q">{question}</div>
-                <p className="cn-pmark-skipped">Skipped — nothing was written here, so there is nothing to mark.</p>
-              </div>
-            );
-          const pairing = showOutcome ? pairingOf(mark, outcome) : null;
-          return (
-            <div className={`cn-pmark-row ${mark === null ? 'is-unmarked' : `is-${mark}`}`} key={key}>
-              <div className="cn-pmark-q">{question}</div>
-              <blockquote className="cn-pmark-said-text">{said}</blockquote>
-              <Moment
-                moment="one"
-                ask="Did you call it?"
-                about="about your reading of the system"
-                options={MARKS}
-                state={STATE_LABEL}
-                unanswered="Not marked yet"
-                question={question}
-                mark={mark}
-                onPick={(next) => write(key, next)}
-              />
-              {showOutcome && (
-                <Moment
-                  moment="two"
-                  ask="Was the plan right?"
-                  about="about the plan, not about you"
-                  options={OUTCOME_MARKS}
-                  state={OUTCOME_STATE_LABEL}
-                  unanswered="Not answered yet"
-                  question={question}
-                  mark={outcome}
-                  onPick={(next) => writeOutcome(key, next)}
-                />
-              )}
-              {pairing !== null && <p className={`cn-pmark-pair ${pairing.apart ? 'is-apart' : ''}`}>{pairing.said}</p>}
-            </div>
-          );
-        })}
-      </div>
-      <div className="cn-pmark-plan">
-        <h4>What the plan says</h4>
-        {plan === null && <p className="cn-pmark-skipped">This goal no longer carries a plan to read against.</p>}
-        {plan !== null && (
-          <>
-            <div className="cn-pmark-title">{plan.title}</div>
-            {panes.map((pane) => (
-              <div className="cn-pmark-pane" key={pane.label}>
-                <div className="cn-pmark-pane-label">{pane.label}</div>
-                <div className="cn-pmark-prose">{renderMarkdown(pane.body)}</div>
-              </div>
-            ))}
-            {parts.length > 0 && (
-              <div className="cn-pmark-pane">
-                <div className="cn-pmark-pane-label">The parts</div>
-                <ul className="cn-pmark-parts">
-                  {parts.map((part) => (
-                    <li key={part.id}>
-                      {part.title}
-                      {part.touches.length > 0 && <i className="cn-pmark-touches">{part.touches.join(', ')}</i>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+        {showOutcome && prediction.outcomeMarkedAt === null && <i className="cn-n">outcome unanswered</i>}
+      </h4>
+      {open && (
+        <div className="cn-pmark">
+          <div className="cn-pmark-said">
+            <p className="cn-pmark-why">
+              You wrote this before the plan was lifted. Mark each line against what the plan actually says — a line you
+              leave alone stays unmarked, which is its own answer and never counted as a miss.
+              {prediction.planMarkedAt !== null && <> Last marked {relTime(prediction.planMarkedAt, now)}.</>}
+            </p>
+            {showOutcome && (
+              <p className="cn-pmark-why cn-pmark-why-two">
+                Delivery has landed, so each line now carries a second, separate question: whether the <em>plan</em>{' '}
+                turned out right. It is not the same question as whether you called the plan, and answering one says
+                nothing about the other — either may be left alone.
+                {prediction.outcomeMarkedAt !== null && <> Last answered {relTime(prediction.outcomeMarkedAt, now)}.</>}
+              </p>
             )}
-            {panes.length === 0 && parts.length === 0 && (
-              <p className="cn-pmark-skipped">The plan records no prose and no parts.</p>
+            {SLOTS.map(({ key, question }) => {
+              const said = prediction.slots[key];
+              const mark = prediction.planMarks[key];
+              const outcome = outcomeMarks[key];
+              if (said === null)
+                return (
+                  <div className="cn-pmark-row is-skipped" key={key}>
+                    <div className="cn-pmark-q">{question}</div>
+                    <p className="cn-pmark-skipped">Skipped — nothing was written here, so there is nothing to mark.</p>
+                  </div>
+                );
+              const pairing = showOutcome ? pairingOf(mark, outcome) : null;
+              return (
+                <div className={`cn-pmark-row ${mark === null ? 'is-unmarked' : `is-${mark}`}`} key={key}>
+                  <div className="cn-pmark-q">{question}</div>
+                  <blockquote className="cn-pmark-said-text">{said}</blockquote>
+                  <Moment
+                    moment="one"
+                    ask="Did you call it?"
+                    about="about your reading of the system"
+                    options={MARKS}
+                    state={STATE_LABEL}
+                    unanswered="Not marked yet"
+                    question={question}
+                    mark={mark}
+                    onPick={(next) => write(key, next)}
+                  />
+                  {showOutcome && (
+                    <Moment
+                      moment="two"
+                      ask="Was the plan right?"
+                      about="about the plan, not about you"
+                      options={OUTCOME_MARKS}
+                      state={OUTCOME_STATE_LABEL}
+                      unanswered="Not answered yet"
+                      question={question}
+                      mark={outcome}
+                      onPick={(next) => writeOutcome(key, next)}
+                    />
+                  )}
+                  {pairing !== null && (
+                    <p className={`cn-pmark-pair ${pairing.apart ? 'is-apart' : ''}`}>{pairing.said}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="cn-pmark-plan">
+            <h4>What the plan says</h4>
+            {plan === null && <p className="cn-pmark-skipped">This goal no longer carries a plan to read against.</p>}
+            {plan !== null && (
+              <>
+                <div className="cn-pmark-title">{plan.title}</div>
+                {panes.map((pane) => (
+                  <div className="cn-pmark-pane" key={pane.label}>
+                    <div className="cn-pmark-pane-label">{pane.label}</div>
+                    <div className="cn-pmark-prose">{renderMarkdown(pane.body)}</div>
+                  </div>
+                ))}
+                {parts.length > 0 && (
+                  <div className="cn-pmark-pane">
+                    <div className="cn-pmark-pane-label">The parts</div>
+                    <ul className="cn-pmark-parts">
+                      {parts.map((part) => (
+                        <li key={part.id}>
+                          {part.title}
+                          {part.touches.length > 0 && <i className="cn-pmark-touches">{part.touches.join(', ')}</i>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {panes.length === 0 && parts.length === 0 && (
+                  <p className="cn-pmark-skipped">The plan records no prose and no parts.</p>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

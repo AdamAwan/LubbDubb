@@ -86,6 +86,9 @@ function countingSink(fail = false): ActionSink & { merges: number[] } {
     async setPullTitle() {
       return { ok: true };
     },
+    async setPullBody() {
+      return { ok: true };
+    },
     async setPullBase() {
       return { ok: true };
     },

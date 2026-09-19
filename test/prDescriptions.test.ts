@@ -174,6 +174,60 @@ test('a re-check replaces the reading rather than piling onto it', () => {
   }
 });
 
+test('the goal-level read answers the newest of each part, which is what the board badges from', async () => {
+  const system = systemWith(true);
+  const { app } = await buildApp(system);
+  try {
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:schemas',
+      text: 'The schemas move, and the old paths re-export.',
+      author: 'operator',
+    });
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:validate',
+      text: 'First draft.',
+      author: 'operator',
+    });
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:validate',
+      text: 'Enqueue becomes the one place a payload is checked.',
+      author: 'operator',
+    });
+    // A different goal's part, to prove the prefix is a goal and not a LIKE that
+    // catches #3900 on its way past.
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:3901:part:validate',
+      text: 'Another goal entirely.',
+      author: 'operator',
+    });
+
+    const read = await app.inject({ method: 'GET', url: '/api/goals/390/descriptions' });
+    assert.equal(read.statusCode, 200);
+    const body = read.json() as { parts: Record<string, { text: string; version: number }> };
+    assert.deepEqual(Object.keys(body.parts).sort(), ['schemas', 'validate']);
+    assert.equal(body.parts.validate!.version, 2, 'the newest, never the chain');
+    assert.equal(body.parts.validate!.text, 'Enqueue becomes the one place a payload is checked.');
+
+    const none = await app.inject({ method: 'GET', url: '/api/goals/391/descriptions' });
+    assert.deepEqual(none.json(), { parts: {} }, 'a goal nobody described answers empty, not absent');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('the goal-level read is not mounted where the flag is off, which is how the board learns', async () => {
+  const system = systemWith(false);
+  const { app } = await buildApp(system);
+  try {
+    const read = await app.inject({ method: 'GET', url: '/api/goals/390/descriptions' });
+    assert.equal(read.statusCode, 404);
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
 test('the refusal bounds the field and asserts nothing about its shape', () => {
   // `prBodyRefusal` exists because asking an agent for a shape did not work. A person
   // writing about a change they read is not that party, and a refusal that bounced
@@ -231,15 +285,27 @@ test('the routes are not mounted where the flag is off, which is how the panel l
  * link. The fake provider keeps no body on its pull requests, so the world cannot
  * answer the one question this file is asking.
  */
-function recordingSink(): ActionSink & { opened: { title: string; body: string }[] } {
+type RecordingSink = ActionSink & {
+  opened: { title: string; body: string }[];
+  bodies: { prNumber: number; body: string }[];
+};
+
+function recordingSink(): RecordingSink {
   const opened: { title: string; body: string }[] = [];
-  return new Proxy({} as ActionSink & { opened: { title: string; body: string }[] }, {
+  const bodies: { prNumber: number; body: string }[] = [];
+  return new Proxy({} as RecordingSink, {
     get(_t, prop: string) {
       if (prop === 'opened') return opened;
+      if (prop === 'bodies') return bodies;
       if (prop === 'createPullRequest')
         return async (input: { title: string; body: string }): Promise<SendResult> => {
           opened.push({ title: input.title, body: input.body });
           return { ok: true, ref: String(opened.length) };
+        };
+      if (prop === 'setPullBody')
+        return async (input: { prNumber: number; body: string }): Promise<SendResult> => {
+          bodies.push({ prNumber: input.prNumber, body: input.body });
+          return { ok: true };
         };
       return async (): Promise<SendResult> => ({ ok: true });
     },
@@ -292,10 +358,115 @@ function seedParts(system: System): void {
   );
 }
 
-test('with the flag on the body is the operator\u2019s, and a part nobody described ships none', async () => {
+test('with the flag on nothing of the operator\u2019s ships at the open \u2014 there is nothing to describe yet', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
   const sink = recordingSink();
-  const system = buildSystem(
+  const system = manualSystem(dir, sink);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+
+    // A description written before the pull request exists \u2014 which the cockpit does not
+    // offer, and which must not ship even when the store holds one.
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'A restart replays the whole feed, which is the bug people see.',
+      author: 'operator',
+    });
+
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    assert.doesNotMatch(
+      sink.opened[0]!.body,
+      /A restart replays/,
+      'the open carries the evidence and the reference alone',
+    );
+
+    // The other half of the posture: nothing here holds a pull request up.
+    const bare = await callOpenPr(system, 'issue:182:part:reader', { summary: 'retire the in-memory map' });
+    assert.equal(bare.isError, false, 'a part nobody described still opens');
+
+    // And the agent cannot smuggle one in.
+    const refused = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'something else',
+      body: '- I will describe my own change, thanks.',
+    });
+    assert.equal(refused.isError, true);
+    assert.equal(sink.opened.length, 2, 'the refusal happened before anything left');
+    assert.match(refused.text, /operator/i, 'the refusal says whose the body is, not merely that it was refused');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a description written against the open pull request is put at the top of its body', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    const tail = sink.opened[0]!.body;
+
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'A restart replays the whole feed, which is the bug people see.',
+      author: 'operator',
+    });
+    await system.harness.runCycle('manual');
+
+    assert.equal(sink.bodies.length, 1, 'one push, onto the pull request the part opened');
+    assert.equal(sink.bodies[0]!.prNumber, 1);
+    assert.match(sink.bodies[0]!.body, /^A restart replays the whole feed, which is the bug people see\./);
+    assert.ok(sink.bodies[0]!.body.endsWith(tail), 'in front of the tail the open wrote, never instead of it');
+
+    // Pushed once and only once: a settled version is not re-sent on every pulse.
+    await system.harness.runCycle('manual');
+    assert.equal(sink.bodies.length, 1);
+
+    // A rewrite is a new version, so it is a new push.
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'The cursor is read back at startup, so a restart resumes where it stopped.',
+      author: 'operator',
+    });
+    await system.harness.runCycle('manual');
+    assert.equal(sink.bodies.length, 2);
+    assert.match(sink.bodies[1]!.body, /^The cursor is read back at startup/);
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a part whose pull request never opened is never pushed, however much is written about it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:reader',
+      text: 'Written against a plan, about a pull request that does not exist.',
+      author: 'operator',
+    });
+    await system.harness.runCycle('manual');
+
+    assert.equal(sink.bodies.length, 0, 'the join on the opened-body record is what refuses it');
+  } finally {
+    system.store.close();
+  }
+});
+
+function manualSystem(dir: string, sink: ActionSink): System {
+  return buildSystem(
     loadConfig({
       selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
@@ -310,39 +481,4 @@ test('with the flag on the body is the operator\u2019s, and a part nobody descri
     }),
     { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager(), sink, errorMirror: () => {} },
   );
-  try {
-    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
-    await system.harness.runCycle('manual');
-    seedParts(system);
-
-    system.store.prDescriptions.appendDescription({
-      originRef: 'issue:182:part:cursor',
-      text: 'A restart replays the whole feed, which is the bug people see.',
-      author: 'operator',
-    });
-
-    const described = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
-    assert.equal(described.isError, false, described.text);
-    assert.match(
-      sink.opened[0]!.body,
-      /^A restart replays the whole feed, which is the bug people see\./,
-      'the operator\u2019s words, above the harness block',
-    );
-
-    // The other half of the posture: nothing here holds a pull request up.
-    const bare = await callOpenPr(system, 'issue:182:part:reader', { summary: 'retire the in-memory map' });
-    assert.equal(bare.isError, false, 'a part nobody described still opens');
-    assert.doesNotMatch(sink.opened[1]!.body, /A restart replays/, 'and carries nobody else\u2019s account instead');
-
-    // And the agent cannot smuggle one in.
-    const refused = await callOpenPr(system, 'issue:182:part:cursor', {
-      summary: 'something else',
-      body: '- I will describe my own change, thanks.',
-    });
-    assert.equal(refused.isError, true);
-    assert.equal(sink.opened.length, 2, 'the refusal happened before anything left');
-    assert.match(refused.text, /operator/i, 'the refusal says whose the body is, not merely that it was refused');
-  } finally {
-    system.store.close();
-  }
-});
+}

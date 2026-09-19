@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
-import { api, type PrDescriptionReading } from '../api.js';
+import { useLayoutEffect, useRef, useState, type JSX, type MutableRefObject } from 'react';
+import { api } from '../api.js';
 import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
+import { Ref } from './refs.js';
+import { usePartDescriptions } from './partDescriptions.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -88,60 +90,87 @@ function Checked({ version, now }: { version: PrDescriptionVersion; now: number 
 }
 
 /**
+ * Where to draw the pointer that ties this panel to the card it was opened for, as
+ * a distance from the panel's own left edge.
+ *
+ * Measured rather than computed from a share of the width: the board's columns wrap
+ * on a narrow pane, so which one the chosen card ended up in is a question only the
+ * laid-out page can answer. Null where the card is not on the page, or where the
+ * pointer would land in the panel's corner radius, which reads as a drawing mistake
+ * rather than as a pointer.
+ */
+function usePointerAt(
+  anchor: MutableRefObject<HTMLElement | null>,
+  panel: MutableRefObject<HTMLElement | null>,
+  slug: string,
+): number | null {
+  const [at, setAt] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const measure = (): void => {
+      const card = anchor.current;
+      const box = panel.current;
+      if (card === null || box === null) return setAt(null);
+      const cardAt = card.getBoundingClientRect();
+      const boxAt = box.getBoundingClientRect();
+      const x = cardAt.left + cardAt.width / 2 - boxAt.left;
+      setAt(x < 20 || x > boxAt.width - 20 ? null : x);
+    };
+    measure();
+    const watch = new ResizeObserver(measure);
+    if (anchor.current !== null) watch.observe(anchor.current);
+    if (panel.current !== null) watch.observe(panel.current);
+    return () => watch.disconnect();
+  }, [anchor, panel, slug]);
+  return at;
+}
+
+/**
  * The description an operator writes for one part's pull request, and the offer to
  * have their own Claude Code argue with it.
+ *
+ * Drawn only for a part whose pull request is **open** — a description is a reading
+ * of a change, and before the pull request there is nothing to read. What is written
+ * here is put at the top of that pull request's body on the next pulse.
  *
  * Drawn only where `manualDescriptions` is on, and it learns that the way the
  * criteria card does: the routes are mounted only where the key is on, so a read
  * that does not answer is a deployment with the feature off and the panel is not
  * drawn. The presence of the data decides, never a flag on the payload.
  *
- * Nothing here holds anything up. A part nobody describes opens its pull request
- * with no body above the reference, which is why the empty state says so rather than
- * nagging.
+ * Nothing here holds anything up. A part nobody describes leaves its pull request
+ * carrying the evidence and the reference alone, which is why the empty state says
+ * so rather than nagging.
  */
 export function PrDescription({
   issueNumber,
   slug,
   position,
+  prNumber,
   title,
+  anchor,
   desktopFolder,
   now,
 }: {
   issueNumber: number;
   slug: string;
   position: number;
+  prNumber: number;
   title: string;
+  /** The board card this panel was opened for, which its pointer aims at. */
+  anchor: MutableRefObject<HTMLDivElement | null>;
   desktopFolder: string | null;
   now: number;
 }): JSX.Element | null {
-  const [reading, setReading] = useState<PrDescriptionReading | null>(null);
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
+  const held = usePartDescriptions();
+  const panel = useRef<HTMLElement | null>(null);
+  const pointerAt = usePointerAt(anchor, panel, slug);
 
-  const load = useCallback(async (): Promise<void> => {
-    setReading(await api.getPrDescription(issueNumber, slug));
-  }, [issueNumber, slug]);
+  if (held === null) return null;
 
-  useEffect(() => {
-    let live = true;
-    void api
-      .getPrDescription(issueNumber, slug)
-      .then((answer) => {
-        if (live) setReading(answer);
-      })
-      .catch(() => {
-        if (live) setReading(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [issueNumber, slug]);
-
-  if (reading === null) return null;
-
-  const current = reading.current;
+  const current = held.parts[slug] ?? null;
 
   const submit = async (): Promise<void> => {
     const body = text.trim();
@@ -153,19 +182,29 @@ export function PrDescription({
     await api.writePrDescription(issueNumber, slug, { text: body });
     setText('');
     setWriting(false);
-    await load();
+    await held.reload();
   };
 
   return (
-    <section className="cn-card cn-desc">
+    <section className="cn-card cn-desc is-chosen-panel" ref={panel}>
+      {/* The pointer back up at the card. Drawn only where it has somewhere to point:
+          a panel whose card is off the page keeps the number and the title, which say
+          the same thing in words.
+          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      {pointerAt !== null && <span className="cn-desc-point" style={{ left: `${pointerAt}px` }} />}
       {/* The part is named in the heading because these stack one per part: three
           panels under one title are three panels an operator cannot tell apart. */}
       <h3>
-        <span className="cn-desc-part">{position}</span>
+        <span className="cn-desc-part is-chosen-num">{position}</span>
         What pull request {position} says it does
         <span className="cn-desc-title">{title}</span>
-        {reading.versions.length > 1 && <i className="cn-n">v{reading.versions.length}</i>}
+        {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}
       </h3>
+      {/* The pull request this describes, so the operator can go and read it — which
+          is the whole reason the panel waits for it to be open. */}
+      <div className="cn-refs">
+        <Ref to={`pr:${prNumber}`} />
+      </div>
 
       {/* Only where nobody has written one. On a panel that already carries a
           description the argument for writing it has been made and won, and the same
@@ -173,7 +212,8 @@ export function PrDescription({
       {current === null && !writing && (
         <p className="cn-desc-why">
           A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
-          the agent&rsquo;s. It holds nothing up: leave it and the pull request opens with no description.
+          the agent&rsquo;s. Read the pull request first; what you write goes to the top of its body. It holds nothing
+          up: leave it and the pull request carries the evidence alone.
         </p>
       )}
 

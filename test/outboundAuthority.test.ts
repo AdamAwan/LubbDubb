@@ -94,6 +94,7 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     createIssue: ok,
     createPullRequest: ok,
     setPullTitle: ok,
+    setPullBody: ok,
     setPullBase: ok,
     updatePrBranch: ok,
     requeueCiCheck: ok,

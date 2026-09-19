@@ -522,6 +522,17 @@ class DemoServer {
     return { current: versions[versions.length - 1] ?? null, versions };
   }
 
+  /** Every described part of one goal, by slug — what the plan's parts are badged from. */
+  goalDescriptions(issueNumber: number): Record<string, PrDescriptionVersion> {
+    const prefix = `issue:${issueNumber}:part:`;
+    const out: Record<string, PrDescriptionVersion> = {};
+    for (const [originRef, versions] of this.descriptions) {
+      const current = versions[versions.length - 1];
+      if (originRef.startsWith(prefix) && current !== undefined) out[originRef.slice(prefix.length)] = current;
+    }
+    return out;
+  }
+
   writeDescription(originRef: string, text: string): { ok: true; version: PrDescriptionVersion } {
     const held = this.descriptions.get(originRef) ?? [];
     const version: PrDescriptionVersion = {
@@ -4850,8 +4861,7 @@ export const demoApi = {
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
   writeGoalCriteria: (): Promise<never> =>
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
-  getPrDescription: (number: number, slug: string) =>
-    Promise.resolve(getServer().descriptionReading(`issue:${number}:part:${slug}`)),
+  getGoalDescriptions: (number: number) => Promise.resolve({ parts: getServer().goalDescriptions(number) }),
   writePrDescription: (number: number, slug: string, body: { text: string }) =>
     Promise.resolve().then(() => getServer().writeDescription(`issue:${number}:part:${slug}`, body.text)),
   getTickets: (query: {

@@ -443,9 +443,57 @@ no pane to be the footer of.
 
 ## The description a reviewer reads
 
-One `PrDescription` panel per live part on the goal page, because one part is one pull request. It
-draws nothing where `manualDescriptions` is off — the routes are not mounted there and the read does
-not answer.
+One `PrDescription` panel on the goal page, for **the part in front** — one part is one pull request,
+and the plan's parts are what tell them apart. It draws nothing where `manualDescriptions` is off —
+the routes are not mounted there and the read does not answer.
+
+### One panel, for the part in front
+
+**One panel is drawn, never one per part.** A goal is five parts, and five descriptions stacked under
+one plan is five walls of prose an operator tells apart by counting headings — which is a question the
+board above has already answered.
+
+So the board is where the part is chosen and the panel follows the choice:
+
+- Each part with an open pull request carries its description's standing on its own card —
+  **`needs description`** in amber, or **`described`** — and that badge is the control that brings
+  that part's panel to the front. The badge is **filled** on the part in front: the same words either
+  way, so the fill is what says _this one_ and there is no second vocabulary to learn.
+- **The chosen card is ringed, and every other part recedes.** An outline and a halo
+  (`--cn-chosen-ring`), never a ground — the ground already says which column the part is in, and two
+  grounds on one card is two things claiming the same square. The rest of the board drops to half
+  strength, which is the cheapest way to say _one of these_: nothing is added to the page, it just
+  stops competing with itself. A not-started part is drawn faint already, so the chosen one is pinned
+  back to full strength whichever column it stands in.
+- **The panel points back at the card**, with one accent edge along its top and a pointer that lands
+  under the chosen card. The pointer is **measured**, not a share of the width: the board's columns
+  wrap on a narrow pane, so where that card ended up is a question only the laid-out page can answer,
+  and a fraction would aim at whichever card happened to be there. Where the card is off the page the
+  pointer is not drawn at all — the panel still carries the part's number, filled in the accent, and
+  its title, which say the same thing in words.
+- **The panel is drawn directly under the board**, above the criteria card. A pointer with another
+  card in between points at that one instead.
+- What is in front is the operator's pick if they made one, and otherwise **the part that wants
+  them**: the first nobody has described, falling back to the first that opened. It is never nothing
+  while a pull request is open to describe — an empty space is a feature an operator has to know to go
+  looking for.
+- The pick is `?part=<slug>`, a [place](#the-address-bar) like the pane and the folds, and dropped on
+  the way to another goal for the same reason they are: it is a pick made on one plan.
+
+**One read serves both**, through `PartDescriptionsProvider` — `GET /api/goals/:number/descriptions`,
+above the board and the panel, because they ask the same question of different parts. A read per part
+would be five requests to say what one says, and five answers arriving separately is a board whose
+badges appear one at a time. The provider is also how both learn the feature is off: the route is not
+mounted, the read does not answer, and neither the badges nor the panel are drawn.
+
+**The open pull request is the gate, and it is not cosmetic.** A description is a reading of a
+change, so there is nothing to read before the pull request exists: on a plan still at the approval
+gate the parts may not survive it, and on a dispatched part there is no diff yet. Drawn earlier, the
+panel asks the operator to write from the plan, which is the second-hand account the feature exists
+to remove. → [07](07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one)
+
+The panel names that pull request with a `Ref`, because the first thing it asks is that the operator
+go and read it.
 
 Two decisions worth keeping:
 
@@ -502,6 +550,7 @@ once.
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
+| `part`                               | which part of the plan has its description in front, by slug — absent means the page picks the one that wants the operator, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                   |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -2527,6 +2576,32 @@ stack with the plan **first** — it is what the marks are made against.
 It sits where the gate stood, so predict → reveal → mark reads as one sitting rather than a second
 visit to a different surface. But it is drawn off the record — a prediction exists and the goal is
 revealed — not off the moments after the press, so an operator who closed the tab comes back to it.
+
+#### Where the prediction is drawn
+
+The panel's **position in the plan card is read off the plan's status**, and it carries its own
+disclosure:
+
+- **While the plan is at its gate** (`planning`, `awaiting_approval`) it is drawn **above the parts**
+  and **open**. Marking the prediction against what the plan says is what the pane is for at that
+  moment, and nothing below it can move until the plan is approved anyway.
+- **Once the plan is approved and the work is under way**, it leaves the plan card altogether and is
+  drawn **last on the pane**, below the parts, the description in front, what "done" means and the
+  pull requests — folded away. Everything above it is the work; the prediction is a record of a
+  moment that has passed, and at the foot of the plan card it was still sitting above three cards an
+  operator reads first.
+- **Unless moment two is being asked.** A goal whose delivery has landed has a live question in that
+  panel again, so it opens — still last, where the work it is now a reading of already is.
+
+Folded, the header still says how much of it is unanswered — `2/3 marked`, and `outcome unanswered`
+where moment two is owed — because what a folded record owes its reader is whether anything in it is
+still theirs to do. The disclosure is the panel's **own**, as [the work record's](#the-record-on-the-goal-it-belongs-to) is:
+only it knows whether the goal carries a prediction at all, and a header drawn outside it would be an
+empty card on every goal nobody predicted.
+
+The fold is a `prediction` section like any other, so it is [in the query string](#the-address-bar)
+and survives a reload. What is _not_ in the query string is the position: that is read off the plan,
+which is what is true rather than where the operator is.
 
 **Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a
 dashed edge and the words "Not marked yet" in faint ink — visibly not the solid red edge and filled

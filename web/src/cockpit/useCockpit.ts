@@ -296,6 +296,7 @@ export function useCockpit(): CockpitStatus {
             : [...current.goalShut.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b)),
         })),
       openGoalTab: (tab) => go({ goalTab: tab }),
+      openGoalPart: (slug: string | null) => go({ goalPart: slug }),
       openRemoteSheet: (environment) => go({ sheetEnvironment: environment }),
       ruleRemoteQuery: (issueNumber, environment, rowId, accept) =>
         then(api.ruleRemoteQuery(issueNumber, environment, rowId, accept)),
@@ -432,6 +433,7 @@ export function useCockpit(): CockpitStatus {
       tab: place.tab,
       collapsed: place.collapsed,
       goalTab: place.goalTab,
+      goalPart: place.goalPart,
       goalOpen: place.goalOpen,
       goalShut: place.goalShut,
       configTab: place.configTab,

@@ -870,6 +870,13 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
+  async setPullBody(pullRequestId: number, body: string): Promise<void> {
+    await this.request(this.withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ description: body }),
+    });
+  }
+
   async setPullBase(pullRequestId: number, base: string): Promise<void> {
     await this.request(this.withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {
       method: 'PATCH',

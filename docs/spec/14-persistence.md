@@ -1446,9 +1446,22 @@ four things while most of what a check has to say is none of them. A finding car
 only where it happens to be one. A re-check deletes the rows and writes the new reading — two
 sessions over one text are two readings, and appended they read as one that found twice as much.
 
-The only `UPDATE` in `PrDescriptionStore` stamps `checked_at`, addressed by id and never by "the
-current one", because the operator can edit while their own Claude Code is still reading. A clean
-check stamps it with no findings, which has to stay tellable from a version nobody checked.
+The two `UPDATE`s in `PrDescriptionStore` stamp `checked_at` and `pushed_at`. The first is addressed
+by id and never by "the current one", because the operator can edit while their own Claude Code is
+still reading; a clean check stamps it with no findings, which has to stay tellable from a version
+nobody checked. The second records that a version reached the pull request it describes, and is
+written **after** the send so a push that throws is retried on the next pulse.
+
+`pr_description_bodies` is one row per part, written by `open_pr`: the pull request it opened and the
+tail that body carries — the evidence block and the reference. A description is put in front of that
+tail rather than in front of whatever the pull request currently says, which keeps the provider from
+becoming a second source of truth for a string the harness composed.
+
+**`pushed_at` null means _not pushed_, and every row from before the column reads that way** — which
+needs no backfill only because `unpushedDescriptions` joins `pr_description_bodies`, a table nothing
+before this change ever wrote. That join is what stops an upgrade rewriting the body of every pull
+request the deployment has opened; it is not incidental.
+→ [07](07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one)
 
 It is **not a `WorldEvent`**, the same trap as an arrival, a sheet reading and criteria drift:
 `deliveryHold` expires a standing delivery verdict on any world event matching the goal's issue ref,

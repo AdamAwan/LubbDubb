@@ -1860,8 +1860,12 @@ export function buildDemoState(): DemoSeed {
         touches: [],
         acceptanceMet: [],
         size: null,
-        branch: null,
-        prNumber: null,
+        // PR #414 is open on this branch in the demo world and its CI is failing, so
+        // the part has to carry it: a part reading "not started" beside its own open
+        // pull request is the board disagreeing with the pull-request list below it.
+        // It is also the demo's one part with a pull request and no description.
+        branch: 'issue/390/watcher',
+        prNumber: 414,
         status: 'ready',
         taskId: null,
         createdAt: ago(300),

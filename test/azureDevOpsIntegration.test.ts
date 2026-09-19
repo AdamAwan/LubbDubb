@@ -99,6 +99,7 @@ interface Recorded {
   logReads: Array<{ buildId: number; logId: number }>;
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
+  bodySets: Array<{ id: number; body: string }>;
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
   abandoned: number[];
@@ -132,6 +133,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     logReads: [],
     createdPulls: [],
     titleSets: [],
+    bodySets: [],
     baseSets: [],
     deletedBranches: [],
     abandoned: [],
@@ -152,6 +154,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullTitle(id, title) {
       recorded.titleSets.push({ id, title });
+    },
+    async setPullBody(id, body) {
+      recorded.bodySets.push({ id, body });
     },
     async setPullBase(id, base) {
       recorded.baseSets.push({ id, base });

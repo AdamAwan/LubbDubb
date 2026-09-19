@@ -146,8 +146,9 @@ export interface McpToolDeps {
   checkSets?: boolean;
   permissions?: PermissionDesk;
   /**
-   * `config.manualDescriptions`. On, `open_pr` refuses a `body` argument and ships the
-   * operator's stored description instead — or nothing, for a part nobody described.
+   * `config.manualDescriptions`. On, `open_pr` refuses a `body` argument and opens
+   * with the evidence and the reference alone: the operator writes the description
+   * against the pull request once it is open, and a desk puts it there.
    * Absent is off, which is what every deployment is until somebody turns it on.
    * → docs/spec/07-pull-requests.md#the-operator-writes-the-description
    */

@@ -130,6 +130,12 @@
      theme and still reads as an open question rather than as a verdict. */
   --cn-unmarked-line: color-mix(in srgb, var(--cn-fg-faint) 55%, transparent);
 
+  /* The halo around the one part the pane is showing. Wide and faint rather than a
+     second border: the card already has one saying which column it is in, and two
+     borders one pixel apart is a card that reads as two cards.
+     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  --cn-chosen-ring: color-mix(in srgb, var(--cn-accent) 16%, transparent);
+
   --cn-r: 8px;
   --cn-r-sm: 4px;
   --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -2009,6 +2015,37 @@ a.cn-qbody {
 .cn-part.cn-waiting {
   opacity: 0.55;
 }
+/* The part whose description is in front, and the rest of the board while one is.
+   An outline and a halo rather than a ground, because the ground already says which
+   column the part is in and a second ground would be two things claiming the same
+   square; the others recede so that only one card is at full strength. Written after
+   `.cn-waiting` deliberately — same specificity, so this is the opacity that wins.
+   → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+.cn-part.is-chosen {
+  outline: 1px solid var(--cn-accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--cn-chosen-ring);
+  /* A not-started part is drawn at 0.55, and the one the pane is showing is never
+     the faint one — whichever column it stands in. */
+  opacity: 1;
+}
+.cn-part.is-receded {
+  opacity: 0.5;
+}
+/* The card is a block, so the badge rides at the head of the dependency line it
+   sits above — beside the part's other standing rather than on a row of its own,
+   which on five cards would be five rows saying nothing most of the time. */
+.cn-desc-pick {
+  padding: 0;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.cn-desc-pick.is-on {
+  cursor: default;
+}
+.cn-desc-pick:not(.is-on):hover {
+  filter: brightness(1.15);
+}
 /* What the plan proposed and no longer schedules. Struck through rather than
    merely dimmed: "not started" and "never will be" are different claims, and
    dimming alone says the first. */
@@ -2145,14 +2182,31 @@ a.cn-qbody {
   color: var(--cn-fg-faint);
 }
 
+/* The prediction's own fold. Its position moves — above the parts at the plan's
+   gate, at the foot of the card once the work is under way — so the header carries
+   the rule above and the panel below it either way.
+   → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */
+.cn-pmark-fold {
+  border-top: 1px solid var(--cn-line-soft);
+}
+.cn-pmark-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+
 /* Moment one: the prediction drawn beside the plan it was predicting, with a mark
    per filled slot. → docs/spec/17-cockpit.md */
 .cn-pmark {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 13px;
-  padding: 13px;
-  border-bottom: 1px solid var(--cn-line-soft);
+  padding: 0 13px 13px;
 }
 .cn-pmark h4 {
   margin: 0 0 8px;
@@ -6600,6 +6654,34 @@ button.cn-grow {
   border: 1px solid var(--cn-line);
   border-radius: var(--cn-r-sm);
   padding: 2px 6px;
+}
+/* The part's number, filled, because it is the same number the chosen card carries
+   and the panel is the only place that says which one is in front in words. */
+.cn-desc-part.is-chosen-num {
+  color: var(--cn-bg);
+  background: var(--cn-accent);
+  border-color: var(--cn-accent);
+  font-weight: 700;
+}
+/* The panel the board points at: one accent edge along the top, and the pointer that
+   lands under the chosen card. The edge is what the pointer grows out of — a pointer
+   on a panel with an ordinary top border reads as a stray triangle.
+   → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+.cn-card.cn-desc.is-chosen-panel {
+  position: relative;
+  border-top: 2px solid var(--cn-accent);
+}
+.cn-desc-point {
+  position: absolute;
+  top: -8px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  transform: rotate(45deg);
+  border-radius: 3px 0 0 0;
+  background: var(--cn-panel);
+  border-top: 2px solid var(--cn-accent);
+  border-left: 2px solid var(--cn-accent);
 }
 .cn-desc-title {
   font-weight: 400;

@@ -696,9 +696,9 @@ worth naming as such: how far a change carries if it is wrong is live on all of 
 Behind `manualDescriptions`, off by default. With it off nothing in this section happens: the agent
 writes the body as the two sections above describe, and `open_pr` is unchanged.
 
-With it on, the body is the **operator's**, written before a reviewer reads it, and `open_pr` refuses
-a `body` argument rather than merging the two. The five evidence lists are untouched — those are
-coordinates, and they are answerable only by the agent that made the change.
+With it on, the body is the **operator's**, and `open_pr` refuses a `body` argument rather than
+merging the two. The five evidence lists are untouched — those are coordinates, and they are
+answerable only by the agent that made the change.
 
 The case is not that the operator writes a better body. It is that **writing is the instrument of
 understanding rather than a report of it**: a description you cannot write is a change you have not
@@ -712,11 +712,36 @@ It is also owed to the reviewer. A pull request spends another person's attentio
 is the one spending it; sent with a body written by the thing that made the change, with nobody who
 understood it anywhere in between, that is an ask which costs the asker nothing.
 
+#### It is written against an open pull request, never before one
+
+The description is asked for **only once the part's pull request is open**, and that is the whole
+shape of the feature rather than a detail of where the panel is drawn. A description is a *reading of
+a change*: before the pull request there is no change to read, and asking for one earlier asks the
+operator to write from the same place the agent did — the plan — which is the second-hand account
+this exists to remove. On a plan still at the approval gate it is worse than useless: those parts may
+not survive the approval, so the ask is for prose about pull requests that may never exist.
+
+So the sequence is: `open_pr` opens the pull request carrying **the evidence and the reference
+alone**; the operator reads it; they write the description on the goal page; `PrDescriptionDesk`
+(`src/pr/prDescriptionDesk.ts`) puts it at the top of that pull request's body on the next pulse.
+
+Two things follow, and both are load-bearing:
+
+- **The push is the feature, not the record.** A version written and never pushed is the quiet
+  failure this exists to remove, one surface along — the cockpit would show a described part and the
+  reviewer would meet a body with nothing above the evidence. The stamp (`pr_descriptions.pushed_at`)
+  is written **after** the send, so a push that throws is retried on the next pulse rather than lost.
+- **The body is recomposed, never patched.** `open_pr` records the tail it wrote —
+  the evidence block and the reference — in `pr_description_bodies`, and a description is put in
+  front of *that*, not in front of whatever the body currently says. Reading the body back off the
+  provider would make the provider a second source of truth for a string the harness composed, and a
+  reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
+
 #### It holds nothing up
 
 Not the plan's release, not the dispatch, not the pull request, not the review watch. A part nobody
-described opens its pull request with **no body above the reference**, which is this document's
-existing answer to an absent body rather than a new one.
+described leaves its pull request carrying **the evidence and the reference alone**, which is this
+document's existing answer to an absent body rather than a new one.
 
 And nothing fills the gap — emphatically not the agent. A backstop would reintroduce the account
 written by the thing with the most reason to be wrong about it, _and_ make the gap invisible: the

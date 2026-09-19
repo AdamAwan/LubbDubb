@@ -234,14 +234,24 @@ Silently ignoring a field the caller clearly meant to set is the failure this is
 ### `POST|GET /api/goals/:number/parts/:slug/description`
 
 Both live in `src/server/routes/prDescriptions.ts` and **register nothing where `manualDescriptions`
-is off**, which is how the cockpit panel learns there is nothing to draw: the read does not answer,
-so the presence of the data decides and never a flag on the payload. `goalCriteria` uses the same
-shape.
+is off**, which is how the cockpit learns there is nothing to draw: the read does not answer, so the
+presence of the data decides and never a flag on the payload. `goalCriteria` uses the same shape.
+
+The write is what the panel posts. The read is one part's whole chain, oldest first — the cockpit
+reads the goal-level route below instead, which answers for every part at once.
 
 The write refuses an empty description and one over `PR_DESCRIPTION.maxChars`, and asserts nothing
 else about its shape — the rules over the agent's body are about a party that games shapes, and an
 operator is not that party.
 → [07](07-pull-requests.md#the-field-is-free-and-the-four-questions-are-hints)
+
+### `GET /api/goals/:number/descriptions`
+
+The newest description of every described part of one goal, keyed by the part's slug; a part absent
+has none. It is what the plan board badges each part from, and one read rather than one per part,
+because the board draws all five and only one of them is in front of the operator. Mounted under the
+same flag as the two above, so the badges and the panel learn the same way.
+→ [17](17-cockpit.md#one-panel-for-the-part-in-front)
 
 ### `GET /api/state`
 
