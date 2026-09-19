@@ -616,6 +616,7 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   burn: 'plan',
   escalation: 'plan',
   merge: 'plan',
+  describe: 'plan',
   permission: 'plan',
   plan: 'plan',
   reply: 'plan',

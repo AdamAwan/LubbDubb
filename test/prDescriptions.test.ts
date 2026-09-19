@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -482,3 +483,77 @@ function manualSystem(dir: string, sink: ActionSink): System {
     { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager(), sink, errorMirror: () => {} },
   );
 }
+
+test('an open pull request nobody described is on the wire as an ask, and stops being one when it is written', async () => {
+  const system = systemWith(true);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+
+    assert.deepEqual(
+      buildStateSnapshot(system).undescribedParts,
+      [],
+      'a part with no pull request open has nothing to describe yet',
+    );
+
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    await system.harness.runCycle('manual');
+
+    assert.deepEqual(
+      buildStateSnapshot(system).undescribedParts.map((p) => [p.originRef, p.prNumber]),
+      [['issue:182:part:cursor', 1]],
+      'the open is what raises the ask, and only for the part that opened',
+    );
+
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'A restart replays the whole feed, which is the bug people see.',
+      author: 'operator',
+    });
+
+    assert.deepEqual(buildStateSnapshot(system).undescribedParts, [], 'written is written, pushed or not');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('the ask goes with the pull request, because a merged change is one nobody is going to describe', async () => {
+  const system = systemWith(true);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    await system.harness.runCycle('manual');
+    assert.equal(buildStateSnapshot(system).undescribedParts.length, 1);
+
+    system.connector.inject({ kind: 'pr_closed', prNumber: 1, merged: true });
+    await system.harness.runCycle('manual');
+
+    assert.deepEqual(buildStateSnapshot(system).undescribedParts, [], 'the review it was owed to is over');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('with the flag off the ask does not exist, because the agent wrote the body', async () => {
+  const system = systemWith(false);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'read the cursor back',
+      body: '- The cursor is read back at startup.',
+    });
+    assert.equal(opened.isError, false, opened.text);
+    await system.harness.runCycle('manual');
+
+    assert.deepEqual(buildStateSnapshot(system).undescribedParts, []);
+  } finally {
+    system.store.close();
+  }
+});

@@ -776,6 +776,16 @@ cases — a checkout of the operator's own standing on the branch, or a cap that
 a button that could perform neither is the dead end this cockpit's rules exist to prevent. The band
 draws the thrower's own message instead, which already names the branch, the path and what clears it.
 
+**`describe` is the one kind built from an _absence_, and the server decides it.** Every other row is
+raised by something — an escalation, a bench task, a reading. This one is the parts whose pull request
+is open and which nobody has written a word about, so there is nothing to read it off in the cockpit:
+the described set is a per-goal route the goal page calls, and the rail is drawn over every goal at
+once. `CockpitState.undescribedParts` carries the list, empty on every deployment with
+`manualDescriptions` off, and `buildNeedsYou` draws what it was given rather than subtracting one list
+from another it does not hold. It is `next` and always `yours`: the ask holds nothing up — that is the
+feature — but the pull request it is about is already open and already spending a reviewer's hour.
+→ [07](07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer)
+
 **`assigned` is the one kind that did not come from the harness at all.** Every other row here is
 the fleet saying it is stuck; this one is a pull request a colleague put on the operator, which the
 fleet does not know exists and will never act on. It is read off `attention.assignedToYou`
@@ -843,7 +853,7 @@ operator approves the pull request, which is the same thing said by the provider
 
 **Three urgencies, and the question they answer is _what do I answer first_.** `NeedUrgency`
 (`web/src/view/needsYou.ts`) is `now`, `next` or `later`, and the rail's headings — `Answer now`,
-`Yours to do`, `Whenever` — are that reading rather than the group's. Twenty-three kinds down the two
+`Yours to do`, `Whenever` — are that reading rather than the group's. Twenty-four kinds down the two
 headings the rail used to carry put a build upgrade and an assigned pull request in the same list as
 an agent that cannot proceed, and the operators reading it stopped reading it: the queue was
 _complete_ and, past about a dozen rows, that was the whole of its cost.
@@ -852,7 +862,7 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
 `dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
-`close_out`, `validate`, `bench`, `config_gap`, `supply`. `later` is an ask holding nothing at all —
+`close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`. `later` is an ask holding nothing at all —
 `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
 
 **`limit` is `later` and `blocking` at once, which is the point of having both readings.** An agent is
@@ -865,7 +875,7 @@ _stopped_. Folding one into the other loses whichever reading it was folded into
 it stops more work than most escalations, and an urgency read off the kind alone would file it under
 "whenever". `holding` is the one number the merge already computes for every row, and it is the honest
 measure of what an ask is costing. It is applied in one pass over the finished rows — `NeedDraft` is
-the row as its fourteen sources write it — rather than restated at each push site, where `holding` is
+the row as its fifteen sources write it — rather than restated at each push site, where `holding` is
 not always known.
 
 **The `later` section is folded behind a control that counts it**, not a heading: `Show 6 holding
@@ -902,6 +912,7 @@ within it.
 | `plan`         | Plan           | blue  | `◇`   | A plan to read and decide on.                                 |
 | `reply`        | Reply          | amber | `↵`   | A drafted reply, held until you send it.                      |
 | `merge`        | Merge          | amber | `⊕`   | A merge waiting on your verdict.                              |
+| `describe`     | Describe       | blue  | `✎`   | An open pull request carries nobody's account of itself.      |
 | `shortfall`    | Shortfall      | blue  | `✗`   | Delivered work that did not reach its goal.                   |
 | `intake`       | Intake         | blue  | `◌`   | The appraisal could not say a goal is workable.               |
 | `profile`      | Profile        | blue  | `⊙`   | Which profile a goal runs on.                                 |

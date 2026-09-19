@@ -256,6 +256,20 @@ export interface LocalRunView extends LocalRun {
   freshness: LocalRunFreshness | null;
 }
 
+/**
+ * A part waiting on somebody to say what its pull request does.
+ *
+ * It carries the pull request's number rather than leaving the cockpit to find it on
+ * the part: `plan_parts.pr_number` is a reading of the world filled in by a later
+ * cycle, and the ask is raised off the record `open_pr` wrote at the open.
+ * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
+ */
+export interface UndescribedPart {
+  originRef: string;
+  prNumber: number;
+  openedAt: string;
+}
+
 export interface PlanPartView extends PlanPart {
   depth: number;
   acceptanceCriteria: AcceptanceCriterion[];
@@ -370,6 +384,17 @@ export interface CockpitState {
   localRun: LocalRunView | null;
   localRunTargets: LocalRunTargetView[];
   planParts: PlanPartView[];
+  /**
+   * Parts whose pull request is open and which nobody has described. Empty on every
+   * deployment with `manualDescriptions` off, which is what keeps the ask off a
+   * cockpit where the agent writes the body.
+   *
+   * It is the server's list rather than the cockpit's subtraction because the
+   * described set is not on the wire at all — the goal page reads it per goal, and
+   * the rail is drawn over every goal at once.
+   * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
+   */
+  undescribedParts: UndescribedPart[];
   planAtoms: PlanAtom[];
   planCaveatAnswers: PlanCaveatAnswer[];
   validationChecks: ValidationCheckView[];

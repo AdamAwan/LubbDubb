@@ -1804,6 +1804,7 @@ export function buildDemoState(): DemoSeed {
         rejected: [],
       },
     ],
+    undescribedParts: [],
     planParts: [
       demoPart({
         id: 'plan-390:schemas',

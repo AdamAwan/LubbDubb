@@ -43,6 +43,7 @@ import type {
   LocalValidationView,
   OpenPullRequest,
   PlanPartView,
+  UndescribedPart,
   PlanView,
   PullRequest,
   RemoteReadingView,
@@ -650,10 +651,28 @@ export function buildStateSections(
     };
   };
 
+  /**
+   * Parts with a pull request open and no description written, which is the rail's
+   * ask. Read here rather than derived in the cockpit: the described set is not on
+   * the wire, and `manualDescriptions` decides whether the ask exists at all — with
+   * it off the agent writes the body and there is nothing to ask anybody for.
+   *
+   * Open is the cut the store cannot make, so it is made here against the world's
+   * own list: a pull request that merged or was closed is not one anybody is going
+   * to describe, and an ask that outlived its review is an ask nobody can answer.
+   * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
+   */
+  const undescribedParts = once((): UndescribedPart[] => {
+    if (!config.manualDescriptions) return [];
+    const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+    return store.prDescriptions.undescribedOpenParts().filter((part) => open.has(part.prNumber));
+  });
+
   const plansSection = (): Pick<
     CockpitState,
     | 'plans'
     | 'planParts'
+    | 'undescribedParts'
     | 'planAtoms'
     | 'planCaveatAnswers'
     | 'validationChecks'
@@ -664,6 +683,7 @@ export function buildStateSections(
   > => ({
     plans: wirePlans,
     planParts: wirePlanParts(),
+    undescribedParts: undescribedParts(),
     planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks: validationChecks(),

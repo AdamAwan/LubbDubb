@@ -26,6 +26,7 @@ export type NeedKind =
   | 'plan'
   | 'reply'
   | 'merge'
+  | 'describe'
   | 'shortfall'
   | 'intake'
   | 'profile'
@@ -68,6 +69,11 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   plan: 'now',
   merge: 'now',
   reply: 'next',
+  // It holds nothing up — that is the feature, not an oversight — but the pull
+  // request it is about is already open and already spending a reviewer's hour,
+  // so it is not an ask that keeps. `yours`, never `blocking`: nothing on the
+  // fleet is waiting on it. → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
+  describe: 'next',
   shortfall: 'next',
   intake: 'next',
   profile: 'next',
@@ -93,7 +99,7 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
 /**
  * A row as its source writes it. The tier is derived from the finished row —
  * `holding` is not known where several of these are built — so it is added in
- * one pass at the end rather than restated at each of the fourteen push sites.
+ * one pass at the end rather than restated at each of the fifteen push sites.
  */
 export type NeedDraft = Omit<NeedRow, 'urgency'>;
 
@@ -127,6 +133,44 @@ function assignedPrRows(state: AppState): NeedDraft[] {
       agentLabel: null,
       holding: 0,
       raisedAt: pr.attention?.reviewWaitingSince ?? '',
+    });
+  }
+  return rows;
+}
+
+/**
+ * One ask per part whose pull request is open and which nobody has described.
+ *
+ * The server decides membership — `state.undescribedParts` is empty wherever
+ * `manualDescriptions` is off — so this draws what it is given rather than
+ * subtracting one list from another the cockpit does not hold.
+ * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
+ */
+function undescribedPartRows(state: AppState): NeedDraft[] {
+  const parts = state.planParts ?? [];
+  const rows: NeedDraft[] = [];
+  for (const waiting of state.undescribedParts ?? []) {
+    const slug = /^issue:\d+:part:(.+)$/.exec(waiting.originRef)?.[1] ?? null;
+    const goalRef = goalOf(waiting.originRef, state);
+    const title = parts.find((p) => p.slug === slug)?.title ?? '';
+    rows.push({
+      id: `describe:${waiting.originRef}`,
+      kind: 'describe',
+      group: 'yours',
+      title: askLine(
+        title === ''
+          ? `Nobody has said what PR #${waiting.prNumber} does`
+          : `Nobody has said what PR #${waiting.prNumber} does \u2014 \u201c${oneLine(title)}\u201d`,
+        goalRef,
+        state,
+      ),
+      goalRef,
+      originRef: waiting.originRef,
+      opens: opensAt(goalRef, state),
+      agentId: null,
+      agentLabel: null,
+      holding: 0,
+      raisedAt: waiting.openedAt,
     });
   }
   return rows;
@@ -474,6 +518,7 @@ export function buildNeedsYou(
   rows.push(...updateAskRows(state, nowIso));
   rows.push(...refusedDispatchRows(state));
   rows.push(...assignedPrRows(state));
+  rows.push(...undescribedPartRows(state));
 
   if ((state.recovery ?? []).length > 0) {
     rows.push({

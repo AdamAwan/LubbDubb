@@ -350,6 +350,28 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
+  if (row.kind === 'describe') {
+    const waiting = (view.state.undescribedParts ?? []).find((p) => `describe:${p.originRef}` === row.id);
+    if (waiting === undefined) return null;
+    const part = (view.state.planParts ?? []).find((p) => waiting.originRef.endsWith(`:part:${p.slug}`));
+    return (
+      <>
+        {part !== undefined && (
+          <p>
+            <strong>{part.title}</strong>
+          </p>
+        )}
+        <p className="cn-tick">
+          The pull request is open and carries the agent&rsquo;s evidence and the reference, and nothing else. Nothing
+          fills the gap and nothing is held up by it — the reviewer simply meets a change with nobody&rsquo;s account of
+          it above the coordinates.
+        </p>
+        <div className="cn-refs">
+          <Ref to={`pr:${waiting.prNumber}`} title="Read the change you are describing" />
+        </div>
+      </>
+    );
+  }
   if (row.kind === 'dispatch') {
     const refusal = refusedDispatchFor(view.state, row.id);
     if (!refusal) return null;
