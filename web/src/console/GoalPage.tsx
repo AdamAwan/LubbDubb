@@ -1,4 +1,4 @@
-import { useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX, type MutableRefObject } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, GoalSection, GoalTab, GoalLanding, GoalTabOpening, PartGroup } from '../view/goalPage.js';
@@ -252,12 +252,17 @@ function WorkPaneBody({
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const held = usePartDescriptions();
+  /* The chosen card itself, so the panel can draw its pointer under it. The board's
+     columns wrap on a narrow pane, so where that card ends up is a question only the
+     laid-out page can answer — a share of the width would point at whichever card
+     happened to be there. → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  const chosenRef = useRef<HTMLDivElement | null>(null);
   const describable = page.parts
     .map(({ part }, i) => ({ part, position: i + 1 }))
     .filter((p) => p.part.prNumber !== null);
   /* The operator's pick, or the part that wants them: the first nobody has
      described, and failing that the first that opened. Never none while there is a
-     pull request to describe \u2014 an empty space where the panel was is a feature an
+     pull request to describe — an empty space where the panel was is a feature an
      operator has to know to go looking for. */
   const chosen =
     describable.find((p) => p.part.slug === view.goalPart) ??
@@ -266,7 +271,36 @@ function WorkPaneBody({
     null;
   return (
     <>
-      <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} chosen={chosen?.part.slug ?? null} />
+      <PlanWaves
+        page={page}
+        view={view}
+        actions={actions}
+        fold={folds.prediction}
+        chosen={chosen?.part.slug ?? null}
+        chosenRef={chosenRef}
+      />
+      {/* One panel, for the part in front — never one per part. A goal is five
+          parts, and five descriptions stacked is five walls of prose an operator tells
+          apart by counting headings. Which part a description belongs to is a question
+          the board above already answers, so the board is where the part is chosen and
+          the panel follows the choice.
+
+          Directly under the board, above the criteria card: the panel points back at
+          the card it was opened for, and a pointer with another card in between points
+          at that one instead.
+          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      {chosen !== null && chosen.part.prNumber !== null && (
+        <PrDescription
+          issueNumber={page.issue.number}
+          slug={chosen.part.slug}
+          position={chosen.position}
+          prNumber={chosen.part.prNumber}
+          title={chosen.part.title}
+          anchor={chosenRef}
+          desktopFolder={view.state.config.desktopFolder}
+          now={view.now}
+        />
+      )}
       {/* Below the plan rather than above it: what "done" means is read against the
           shape the fleet proposed, and the card draws nothing at all where the
           criteria routes are not mounted. A part with a task behind it is what
@@ -277,23 +311,6 @@ function WorkPaneBody({
         workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
         now={view.now}
       />
-      {/* One panel, for the part in front \u2014 never one per part. A goal is five parts,
-          and five descriptions stacked is five walls of prose an operator tells apart
-          by counting headings. Which part a description belongs to is a question the
-          board above already answers, so the board is where the part is chosen and
-          the panel follows the choice.
-          \u2192 docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
-      {chosen !== null && chosen.part.prNumber !== null && (
-        <PrDescription
-          issueNumber={page.issue.number}
-          slug={chosen.part.slug}
-          position={chosen.position}
-          prNumber={chosen.part.prNumber}
-          title={chosen.part.title}
-          desktopFolder={view.state.config.desktopFolder}
-          now={view.now}
-        />
-      )}
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
@@ -1038,6 +1055,16 @@ function RemoteValidation({
 type PartPr = { open: true; pr: OpenPullRequest } | { open: false; pr: PullRequest };
 
 const GROUP_ORDER: PartGroup[] = ['merged', 'now', 'held', 'waiting'];
+
+/**
+ * The groups the board actually draws, in order. One definition, because the pane
+ * reads it too: the panel's pointer is aimed at the card the operator chose, and a
+ * second spelling of which columns exist is how that pointer comes to aim at the
+ * wrong one.
+ */
+function liveGroups(page: GoalPageView): PartGroup[] {
+  return GROUP_ORDER.filter((group) => page.parts.some((p) => p.group === group));
+}
 const GROUP_LABEL: Record<PartGroup, string> = {
   merged: 'Merged',
   now: 'Now',
@@ -1051,6 +1078,7 @@ function PlanWaves({
   actions,
   fold,
   chosen,
+  chosenRef,
 }: {
   page: GoalPageView;
   view: CockpitView;
@@ -1058,11 +1086,13 @@ function PlanWaves({
   fold: Fold;
   /** The part whose description is in front, so the board can say which one that is. */
   chosen: string | null;
+  /** Attached to the chosen card, so the panel below can point back at it. */
+  chosenRef: MutableRefObject<HTMLDivElement | null>;
 }): JSX.Element {
-  const groups = GROUP_ORDER.map((group) => ({
+  const groups = liveGroups(page).map((group) => ({
     group,
     parts: page.parts.filter((p) => p.group === group),
-  })).filter((g) => g.parts.length > 0);
+  }));
   const retired = page.retiredParts;
   const plan = page.plan;
   // The gate lifts here the moment the reveal returns, rather than waiting on the
@@ -1156,6 +1186,8 @@ function PlanWaves({
                 agentLive={p.agentLive}
                 pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
                 chosen={chosen === p.part.slug}
+                chosenRef={chosenRef}
+                receded={chosen !== null && chosen !== p.part.slug}
                 now={view.now}
                 actions={actions}
               />
@@ -1174,6 +1206,8 @@ function PlanWaves({
                 agentLive={false}
                 pr={null}
                 chosen={false}
+                chosenRef={chosenRef}
+                receded={chosen !== null}
                 now={view.now}
                 actions={actions}
               />
@@ -1193,6 +1227,8 @@ function Part({
   agentLive,
   pr,
   chosen,
+  chosenRef,
+  receded,
   now,
   actions,
 }: {
@@ -1202,11 +1238,16 @@ function Part({
   agentLive: boolean;
   pr: PartPr | null;
   chosen: boolean;
+  chosenRef: MutableRefObject<HTMLDivElement | null>;
+  receded: boolean;
   now: number;
   actions: CockpitActions;
 }): JSX.Element {
   return (
-    <div className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''}`}>
+    <div
+      ref={chosen ? chosenRef : undefined}
+      className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''} ${receded ? 'is-receded' : ''}`}
+    >
       <b>
         {part.seq} · {part.title}
       </b>

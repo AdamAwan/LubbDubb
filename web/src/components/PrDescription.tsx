@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useLayoutEffect, useRef, useState, type JSX, type MutableRefObject } from 'react';
 import { api } from '../api.js';
 import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
@@ -90,6 +90,41 @@ function Checked({ version, now }: { version: PrDescriptionVersion; now: number 
 }
 
 /**
+ * Where to draw the pointer that ties this panel to the card it was opened for, as
+ * a distance from the panel's own left edge.
+ *
+ * Measured rather than computed from a share of the width: the board's columns wrap
+ * on a narrow pane, so which one the chosen card ended up in is a question only the
+ * laid-out page can answer. Null where the card is not on the page, or where the
+ * pointer would land in the panel's corner radius, which reads as a drawing mistake
+ * rather than as a pointer.
+ */
+function usePointerAt(
+  anchor: MutableRefObject<HTMLElement | null>,
+  panel: MutableRefObject<HTMLElement | null>,
+  slug: string,
+): number | null {
+  const [at, setAt] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const measure = (): void => {
+      const card = anchor.current;
+      const box = panel.current;
+      if (card === null || box === null) return setAt(null);
+      const cardAt = card.getBoundingClientRect();
+      const boxAt = box.getBoundingClientRect();
+      const x = cardAt.left + cardAt.width / 2 - boxAt.left;
+      setAt(x < 20 || x > boxAt.width - 20 ? null : x);
+    };
+    measure();
+    const watch = new ResizeObserver(measure);
+    if (anchor.current !== null) watch.observe(anchor.current);
+    if (panel.current !== null) watch.observe(panel.current);
+    return () => watch.disconnect();
+  }, [anchor, panel, slug]);
+  return at;
+}
+
+/**
  * The description an operator writes for one part's pull request, and the offer to
  * have their own Claude Code argue with it.
  *
@@ -112,6 +147,7 @@ export function PrDescription({
   position,
   prNumber,
   title,
+  anchor,
   desktopFolder,
   now,
 }: {
@@ -120,6 +156,8 @@ export function PrDescription({
   position: number;
   prNumber: number;
   title: string;
+  /** The board card this panel was opened for, which its pointer aims at. */
+  anchor: MutableRefObject<HTMLDivElement | null>;
   desktopFolder: string | null;
   now: number;
 }): JSX.Element | null {
@@ -127,6 +165,8 @@ export function PrDescription({
   const [text, setText] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
   const held = usePartDescriptions();
+  const panel = useRef<HTMLElement | null>(null);
+  const pointerAt = usePointerAt(anchor, panel, slug);
 
   if (held === null) return null;
 
@@ -146,11 +186,16 @@ export function PrDescription({
   };
 
   return (
-    <section className="cn-card cn-desc">
+    <section className="cn-card cn-desc is-chosen-panel" ref={panel}>
+      {/* The pointer back up at the card. Drawn only where it has somewhere to point:
+          a panel whose card is off the page keeps the number and the title, which say
+          the same thing in words.
+          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      {pointerAt !== null && <span className="cn-desc-point" style={{ left: `${pointerAt}px` }} />}
       {/* The part is named in the heading because these stack one per part: three
           panels under one title are three panels an operator cannot tell apart. */}
       <h3>
-        <span className="cn-desc-part">{position}</span>
+        <span className="cn-desc-part is-chosen-num">{position}</span>
         What pull request {position} says it does
         <span className="cn-desc-title">{title}</span>
         {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}

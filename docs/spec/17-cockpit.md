@@ -457,7 +457,22 @@ So the board is where the part is chosen and the panel follows the choice:
 
 - Each part with an open pull request carries its description's standing on its own card —
   **`needs description`** in amber, or **`described`** — and that badge is the control that brings
-  that part's panel to the front. The chosen part is outlined.
+  that part's panel to the front. The badge is **filled** on the part in front: the same words either
+  way, so the fill is what says _this one_ and there is no second vocabulary to learn.
+- **The chosen card is ringed, and every other part recedes.** An outline and a halo
+  (`--cn-chosen-ring`), never a ground — the ground already says which column the part is in, and two
+  grounds on one card is two things claiming the same square. The rest of the board drops to half
+  strength, which is the cheapest way to say _one of these_: nothing is added to the page, it just
+  stops competing with itself. A not-started part is drawn faint already, so the chosen one is pinned
+  back to full strength whichever column it stands in.
+- **The panel points back at the card**, with one accent edge along its top and a pointer that lands
+  under the chosen card. The pointer is **measured**, not a share of the width: the board's columns
+  wrap on a narrow pane, so where that card ended up is a question only the laid-out page can answer,
+  and a fraction would aim at whichever card happened to be there. Where the card is off the page the
+  pointer is not drawn at all — the panel still carries the part's number, filled in the accent, and
+  its title, which say the same thing in words.
+- **The panel is drawn directly under the board**, above the criteria card. A pointer with another
+  card in between points at that one instead.
 - What is in front is the operator's pick if they made one, and otherwise **the part that wants
   them**: the first nobody has described, falling back to the first that opened. It is never nothing
   while a pull request is open to describe — an empty space is a feature an operator has to know to go
@@ -535,7 +550,7 @@ once.
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
-| `part`                               | which part of the plan has its description in front, by slug — absent means the page picks the one that wants the operator, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                  |
+| `part`                               | which part of the plan has its description in front, by slug — absent means the page picks the one that wants the operator, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                   |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -2583,7 +2598,7 @@ only it knows whether the goal carries a prediction at all, and a header drawn o
 empty card on every goal nobody predicted.
 
 The fold is a `prediction` section like any other, so it is [in the query string](#the-address-bar)
-and survives a reload. What is *not* in the query string is the position: that is read off the plan,
+and survives a reload. What is _not_ in the query string is the position: that is read off the plan,
 which is what is true rather than where the operator is.
 
 **Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a

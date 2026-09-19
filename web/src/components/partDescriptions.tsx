@@ -111,7 +111,11 @@ export function PartDescriptionTag({
       }
       onClick={onSelect}
     >
-      <Tag tone={written ? undefined : 'amber'}>{written ? 'described' : 'needs description'}</Tag>
+      {/* Filled where this part is the one in front: the same words either way, so the
+          fill is what says "this one" and nothing new has to be learned. */}
+      <Tag tone={written ? (selected ? 'blue' : undefined) : 'amber'} fill={selected}>
+        {written ? 'described' : 'needs description'}
+      </Tag>
     </button>
   );
 }
