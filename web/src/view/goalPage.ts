@@ -12,6 +12,7 @@ import type {
   EnvironmentGateRelease,
   FeatureSequence,
   GoalEnvironmentReachView,
+  GoalLandingReach,
   GoalWatch,
   GoalWatchView,
   RemoteSheetView,
@@ -62,6 +63,8 @@ export interface GoalPageView {
   checkPlan: ValidationPlanRecord | null;
   checkResources: ValidationResourceView[];
   environments: GoalEnvironmentReachView[];
+  /** Every landing this goal owns, with each environment's verdict on it. */
+  landings: GoalLandingReach[];
   gateHold: string | null;
   gateRelease: EnvironmentGateRelease | null;
   remoteSheets: RemoteSheetView[];
@@ -263,6 +266,7 @@ export function buildGoalPage(
     checkPlan: (state.validationPlans ?? []).find((r) => r.originRef === ref) ?? null,
     checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
     environments: reach?.environments ?? [],
+    landings: reach?.landings ?? [],
     gateHold: reach?.gateHold ?? null,
     gateRelease: reach?.released ?? null,
     remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
@@ -335,7 +339,7 @@ function planStage(page: GoalPageView): GoalStage {
 }
 
 function validationStage(page: GoalPageView): GoalStage {
-  const base = { at: 'validation', label: 'Checks' } as const;
+  const base = { at: 'validation', label: 'Merged' } as const;
   /* A local check plan that is running outranks the set's own count, because it
      is the only thing on the goal that is happening right now — and with the
      header's chip gone this is the one place outside the pane that says so. */
@@ -360,29 +364,63 @@ function validationStage(page: GoalPageView): GoalStage {
 function environmentStage(page: GoalPageView): GoalStage {
   const base = { at: 'environments', label: 'Shipped' } as const;
   const envs = page.environments;
-  /* Held short of an environment outranks how many it has reached, for the same
-     reason a pull request in the operator's court outranks the plan's progress:
-     it is the reading somebody has to do something about. */
-  if (page.gateHold !== null) return { ...base, reading: 'gate held', tone: 'amber', done: null };
   if (envs.length === 0) return { ...base, reading: 'no environments', tone: 'grey', done: null };
+  /* A landing that is an ancestor of nothing — a stacked pull request's squash onto a
+     since-deleted topic branch — is counted in `total` and can never be read as reached,
+     so `reached === total` is unreachable and this goal can never be checked at all. It
+     outranks every other reading here because it is the only one that never resolves on
+     its own. → docs/spec/24-environments.md#what-counts-as-a-landing */
+  if (unreachable(page)) return { ...base, reading: 'can never be checked', tone: 'amber', done: null };
+  if (page.gateHold !== null) return { ...base, reading: 'gate held', tone: 'amber', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
   const furthest = reached[reached.length - 1];
-  const done = (reached.length / envs.length) * 100;
   if (furthest !== undefined) {
     const watch = watchFold(page, furthest.environment);
     return {
       ...base,
       reading: `reached ${furthest.environment}${watch === null ? '' : ` · ${watch.said}`}`,
       tone: watch?.said === 'watch regressed' ? 'amber' : reached.length === envs.length ? 'green' : 'blue',
-      done,
+      /* The only denominator here that cannot grow: the environments are configuration,
+         not plan. `total` below is `landings + unattributed + partsOwed`, so a meter drawn
+         against it moves *backwards* the moment the plan decomposes further. */
+      done: (reached.length / envs.length) * 100,
     };
   }
+  /* Nothing has arrived, so there is nothing to check and nothing failing. A fraction here
+     would read as a part-checked goal; what is true is that the goal is not checkable yet,
+     and what an operator needs is what is still owed before it can be. */
   const partial = envs.find((e) => e.status === 'partial');
   if (partial !== undefined) {
-    return { ...base, reading: `${partial.environment} ${reachCount(partial)}`, tone: 'amber', done };
+    const owed = partial.total - partial.landed;
+    return {
+      ...base,
+      /* Short enough to survive the tab's own width: the row ellipsizes, and a reading
+         cut off mid-word is the reading lost. What it is owed *for* is the card below. */
+      reading: owed === 1 ? '1 landing owed' : `${owed} landings owed`,
+      tone: 'grey',
+      done: null,
+    };
   }
   if (envs.some((e) => e.status === 'unknown')) return { ...base, reading: 'not known', tone: 'grey', done: null };
-  return { ...base, reading: 'not shipped', tone: 'grey', done };
+  return { ...base, reading: 'not shipped', tone: 'grey', done: null };
+}
+
+/**
+ * Every part of this goal has reached an environment. The only state in which a sheet,
+ * a watch or a gate exists: `rollUpReach` answers `reached` only when every landing the
+ * goal owes has been read as present, and `newArrivals` skips everything else.
+ */
+function arrived(page: GoalPageView): boolean {
+  return page.environments.some((e) => e.status === 'reached');
+}
+
+/**
+ * This goal holds a landing no environment can ever contain, so it can never be checked.
+ * Three-valued reach makes `unknown` a probe that could not answer; `unplaced` is the
+ * settled case — a squash that is an ancestor of nothing.
+ */
+function unreachable(page: GoalPageView): boolean {
+  return page.environments.some((e) => e.unplaced > 0);
 }
 
 export function reachCount(env: GoalEnvironmentReachView): string {
@@ -402,7 +440,7 @@ function watchFold(page: GoalPageView, environment: string): { said: string } | 
 }
 
 function tailStage(page: GoalPageView): GoalStage {
-  const base = { at: 'tail', label: 'Close-out' } as const;
+  const base = { at: 'tail', label: 'Done' } as const;
   const { issue } = page;
   if (issue.state !== 'open') return { ...base, reading: issue.state, tone: 'green', done: 100 };
   if (issue.shortfall) return { ...base, reading: 'fell short', tone: 'amber', done: null };
@@ -482,7 +520,7 @@ function tailBegun(page: GoalPageView): boolean {
   return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }
 
-export const GOAL_TABS = ['ticket', 'plan', 'checks', 'shipped', 'closeout'] as const;
+export const GOAL_TABS = ['ask', 'plan', 'merged', 'shipped', 'done'] as const;
 
 export type GoalTab = (typeof GOAL_TABS)[number];
 
@@ -492,11 +530,11 @@ export type GoalTab = (typeof GOAL_TABS)[number];
    an id that disagrees with the word on the control is a rename nobody can grep
    for. → docs/spec/17-cockpit.md#the-panes */
 const GOAL_TAB_LABEL: Record<GoalTab, string> = {
-  ticket: 'Ticket',
+  ask: 'Ask',
   plan: 'Plan',
-  checks: 'Checks',
+  merged: 'Merged',
   shipped: 'Shipped',
-  closeout: 'Close-out',
+  done: 'Done',
 };
 
 /**
@@ -507,16 +545,20 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
  * → docs/spec/17-cockpit.md#the-panes
  */
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
-  ticket: 'ticket',
-  sequence: 'ticket',
+  ticket: 'ask',
+  sequence: 'ask',
   prediction: 'plan',
-  validation: 'checks',
-  localValidation: 'checks',
-  remoteValidation: 'checks',
+  validation: 'merged',
+  localValidation: 'merged',
+  /* A sheet is assembled *for an arrival*, so it belongs with the arrival rather
+     than with the checks that gate a merge. The two never coexist: nothing is
+     sheeted until every part has landed.
+     → docs/spec/24-environments.md#what-counts-as-a-landing */
+  remoteValidation: 'shipped',
   environments: 'shipped',
   signals: 'shipped',
-  tail: 'closeout',
-  record: 'closeout',
+  tail: 'done',
+  record: 'done',
 };
 
 /**
@@ -561,16 +603,18 @@ export interface GoalTabOpening {
  * → docs/spec/17-cockpit.md#which-pane-opens
  */
 export function goalTabOpening(page: GoalPageView): GoalTabOpening {
-  if (settled(page)) return { tab: 'closeout', why: 'this goal is finished — the record is what the page is for now' };
+  if (settled(page)) return { tab: 'done', why: 'this goal is finished — the record is what the page is for now' };
+  if (unreachable(page))
+    return { tab: 'shipped', why: 'a part of this goal can never reach an environment, so it can never be checked' };
   if (page.gateHold !== null) return { tab: 'shipped', why: 'a gate is holding this goal short of an environment' };
   if (page.openPullRequests.some((pr) => pr.attention.status === 'you'))
     return { tab: 'plan', why: 'a pull request is in your court' };
   if (page.issue.validation?.state === 'flagged' || flaggedLocally(page))
-    return { tab: 'checks', why: 'the check plan is not settled' };
-  if (shipped(page)) return { tab: 'shipped', why: 'the work has reached an environment' };
-  if (validationBegun(page)) return { tab: 'checks', why: 'the work is merged and its checks have begun' };
+    return { tab: 'merged', why: 'the check plan is not settled' };
+  if (arrived(page)) return { tab: 'shipped', why: 'every part has reached an environment' };
+  if (validationBegun(page)) return { tab: 'merged', why: 'the work is merged and its checks have begun' };
   if (workStarted(page)) return { tab: 'plan', why: 'there is a plan, a pull request or an agent on this goal' };
-  return { tab: 'ticket', why: 'nothing has been planned yet, so the ask is the page' };
+  return { tab: 'ask', why: 'nothing has been planned yet, so the ask is the page' };
 }
 
 export interface GoalLanding {
@@ -620,13 +664,13 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   permission: 'plan',
   plan: 'plan',
   reply: 'plan',
-  validate: 'checks',
-  validation_plan: 'checks',
+  validate: 'merged',
+  validation_plan: 'merged',
   unwatched: 'shipped',
   watch: 'shipped',
-  close_out: 'closeout',
-  outcome: 'closeout',
-  shortfall: 'closeout',
+  close_out: 'done',
+  outcome: 'done',
+  shortfall: 'done',
   /* About the goal itself, or about the fleet carrying it: neither has a stage
      to be drawn in, so neither carries a dot. */
   config: null,
@@ -668,15 +712,15 @@ interface GoalNavEntry {
  * at from memory. → docs/spec/17-cockpit.md#the-panes
  */
 export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
-  const stages: Record<Exclude<GoalTab, 'ticket'>, GoalStage> = {
+  const stages: Record<Exclude<GoalTab, 'ask'>, GoalStage> = {
     plan: planStage(page),
-    checks: validationStage(page),
+    merged: validationStage(page),
     shipped: environmentStage(page),
-    closeout: tailStage(page),
+    done: tailStage(page),
   };
   return GOAL_TABS.map((tab) => {
     const needsYou = goalPaneAsks(page, tab).length > 0;
-    if (tab === 'ticket') return { tab, label: GOAL_TAB_LABEL.ticket, ...ticketReading(page), needsYou };
+    if (tab === 'ask') return { tab, label: GOAL_TAB_LABEL.ask, ...ticketReading(page), needsYou };
     const stage = stages[tab];
     return { tab, label: GOAL_TAB_LABEL[tab], reading: stage.reading, tone: stage.tone, done: stage.done, needsYou };
   });
@@ -708,4 +752,81 @@ function validationBegun(page: GoalPageView): boolean {
     page.issue.localValidation !== null ||
     page.remoteSheets.length > 0
   );
+}
+
+/**
+ * One cell of the reach matrix. `pending` is *not asked yet* — a part with no pull request,
+ * or a landing no probe has read — and `never` is the settled impossibility of a squash that
+ * is an ancestor of nothing. Neither may fold into `absent`, which is a probe that looked and
+ * did not find it. → docs/spec/24-environments.md#the-three-verdicts
+ */
+export type GoalReachCell = 'reached' | 'absent' | 'unknown' | 'never' | 'pending';
+
+/** One row of the reach matrix: a plan part, or a merge no part claims. */
+export interface GoalReachRow {
+  key: string;
+  kind: 'part' | 'unattributed';
+  title: string;
+  prNumber: number | null;
+  cells: GoalReachCell[];
+  /** This row can never be read as reached, so the goal can never be checked. */
+  unplaced: boolean;
+}
+
+interface GoalReachMatrixView {
+  environments: string[];
+  rows: GoalReachRow[];
+  /** Landings still owed before any check can begin — the AND the rollup takes, said as work. */
+  owed: number;
+}
+
+/**
+ * The goal's parts against the environments, one row each. The counts on
+ * `GoalEnvironmentReachView` are the AND over these rows; this is the same reading with the
+ * rows kept, which is what lets a partial goal say *which* landing is holding it short rather
+ * than only how many are.
+ *
+ * It computes no verdict of its own — every cell is a status the server already shipped, and a
+ * part with no landing is `pending` rather than a guess. → docs/spec/24-environments.md
+ *
+ * @public the seam the Shipped pane's matrix is drawn from
+ */
+export function buildGoalReachMatrix(page: GoalPageView): GoalReachMatrixView {
+  const environments = page.environments.map((e) => e.environment);
+  const byPr = new Map(page.landings.map((l) => [l.prNumber, l]));
+  const claimed = new Set<number>();
+  const rows: GoalReachRow[] = page.parts.map(({ part }) => {
+    const landing = part.prNumber === null ? undefined : byPr.get(part.prNumber);
+    if (landing !== undefined) claimed.add(landing.prNumber);
+    return {
+      key: part.id,
+      kind: 'part' as const,
+      title: part.title,
+      prNumber: part.prNumber,
+      cells: environments.map((name) => cellOf(landing, name)),
+      unplaced: landing?.unplaced === true,
+    };
+  });
+  for (const landing of page.landings) {
+    if (claimed.has(landing.prNumber)) continue;
+    /* A merge counted into `total` by `unattributedMerges` and named by no part. It holds the
+       rollup exactly as a part does, so it is a row here — left as a footnote it would be a
+       thing counted against the goal that appears nowhere on its page. */
+    rows.push({
+      key: `pr:${landing.prNumber}`,
+      kind: 'unattributed',
+      title: 'Merged against this goal, claimed by no part',
+      prNumber: landing.prNumber,
+      cells: environments.map((name) => cellOf(landing, name)),
+      unplaced: landing.unplaced,
+    });
+  }
+  const furthest = page.environments.find((e) => e.status === 'partial' || e.status === 'reached');
+  return { environments, rows, owed: furthest === undefined ? 0 : furthest.total - furthest.landed };
+}
+
+function cellOf(landing: GoalLandingReach | undefined, environment: string): GoalReachCell {
+  if (landing === undefined) return 'pending';
+  if (landing.unplaced) return 'never';
+  return landing.reach[environment] ?? 'pending';
 }

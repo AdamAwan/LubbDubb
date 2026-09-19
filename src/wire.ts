@@ -61,6 +61,7 @@ import type {
   GoalCriteriaDrift,
   GoalPause,
   GoalEnvironmentReach,
+  GoalLandingReach,
   GoalReachStatus,
   HumanTask,
   IssueConclusionVerdict,
@@ -464,6 +465,10 @@ export interface EjectionView extends Ejection {
 export interface GoalReachView {
   goalRef: string;
   environments: GoalEnvironmentReachView[];
+  /** Every landing this goal owns, with what each environment said about it. The rows the
+   *  counts on `environments` are the AND over — shipped so the cockpit can say which
+   *  landing is holding the goal short rather than only how many are. */
+  landings: GoalLandingReach[];
   gateHold: string | null;
   released: EnvironmentGateRelease | null;
 }
@@ -897,6 +902,7 @@ export type {
   GoalCriteriaVersion,
   CriteriaStanding,
   GoalEnvironmentReach,
+  GoalLandingReach,
   GoalPrediction,
   GoalReachStatus,
   GoalReveal,

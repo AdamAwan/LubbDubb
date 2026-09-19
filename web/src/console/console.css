@@ -6749,3 +6749,106 @@ button.cn-grow {
   font-size: 11px;
   color: var(--cn-fg-faint);
 }
+
+/* ── Every part, every environment ──
+   The matrix behind the Shipped pane. A goal is checked as a whole or not at all, so
+   between its first part landing and its last there is nothing to check — and the
+   environment rows below can only say *how many* landings are short. This says which.
+   → docs/spec/24-environments.md */
+
+.cn-reachm-grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+.cn-reachm-grid th,
+.cn-reachm-grid td {
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cn-reachm-grid thead th {
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-reachm-grid tbody th {
+  font-weight: 400;
+  max-width: 340px;
+}
+.cn-reachm-env,
+.cn-reachm-cell {
+  text-align: center;
+  width: 92px;
+}
+/* A cell is a mark, not a word: five states read as a shape at a glance, and the word
+   is on the title and the label for anyone who needs it. */
+.cn-reachm-m {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  border: 1px solid var(--cn-line);
+}
+.cn-reachm-reached {
+  background: var(--cn-green-fill);
+  border-color: var(--cn-green-line);
+  color: var(--cn-green-ink);
+}
+/* Absent and pending are told apart, and neither is a synonym for the other: absent is a
+   probe that looked and did not find it, pending is one that has not been asked. Folding
+   either into the other is the three-verdict rule broken one layer up.
+   → docs/spec/24-environments.md#the-three-verdicts */
+.cn-reachm-absent {
+  background: transparent;
+  border-color: var(--cn-line);
+}
+.cn-reachm-pending {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--cn-line);
+}
+.cn-reachm-unknown {
+  background: var(--cn-amber-bg);
+  border-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
+}
+.cn-reachm-never {
+  background: var(--cn-red-bg);
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-reachm-stranded th,
+.cn-reachm-stranded td {
+  background: var(--cn-red-bg);
+}
+.cn-reachm-said {
+  margin: 10px 0 0 0;
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+
+/* The grid is the one thing on this pane that genuinely needs width. Below the break the
+   marks keep their size and the part titles take what is left, rather than the columns
+   collapsing to the point where two environments read as one. */
+@media (max-width: 900px) {
+  .cn-reachm-grid thead th,
+  .cn-reachm-grid tbody th {
+    font-size: 12px;
+  }
+  .cn-reachm-env,
+  .cn-reachm-cell {
+    width: 56px;
+  }
+  .cn-reachm-grid th,
+  .cn-reachm-grid td {
+    padding: 5px 3px;
+  }
+}

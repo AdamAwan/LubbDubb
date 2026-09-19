@@ -1323,14 +1323,17 @@ export function buildDemoState(): DemoSeed {
     environmentReach: [
       {
         goalRef: 'issue:390',
+        /* `total` is landings + unattributed merges + the code parts still owed, so a goal
+           whose plan is not finished cannot read `reached` on anything: two of this plan's
+           parts are outstanding, which is why both rows below are partial. */
         environments: [
           {
             environment: 'staging',
-            status: 'reached',
+            status: 'partial',
             landed: 2,
-            total: 2,
+            total: 4,
             unplaced: 0,
-            at: '2026-08-19T09:12:00.000Z',
+            at: null,
             opens: ['validate', 'close_out'],
             sheet: 'check plan · 3 checks · 1 blocked',
           },
@@ -1338,11 +1341,25 @@ export function buildDemoState(): DemoSeed {
             environment: 'prod',
             status: 'partial',
             landed: 1,
-            total: 2,
+            total: 4,
             unplaced: 0,
             at: null,
             opens: [],
             sheet: null,
+          },
+        ],
+        landings: [
+          {
+            prNumber: 406,
+            sha: 'c0ffee1',
+            reach: { staging: 'reached', prod: 'reached' },
+            unplaced: false,
+          },
+          {
+            prNumber: 409,
+            sha: 'a11ce22',
+            reach: { staging: 'reached', prod: 'absent' },
+            unplaced: false,
           },
         ],
         gateHold: null,
@@ -1356,7 +1373,7 @@ export function buildDemoState(): DemoSeed {
             status: 'unknown',
             landed: 0,
             total: 1,
-            unplaced: 0,
+            unplaced: 1,
             at: null,
             opens: ['validate', 'close_out'],
             sheet: null,
@@ -1366,10 +1383,23 @@ export function buildDemoState(): DemoSeed {
             status: 'unknown',
             landed: 0,
             total: 1,
-            unplaced: 0,
+            unplaced: 1,
             at: null,
             opens: [],
             sheet: null,
+          },
+        ],
+        landings: [
+          /* A stacked pull request's squash: it went onto the part below it on the stack, a
+             topic branch that has since been deleted, so it is an ancestor of nothing and no
+             probe will ever read it as reached. It is counted in `total` all the same, which
+             makes `reached === total` unreachable and this goal permanently uncheckable — the
+             trap the matrix exists to say out loud. */
+          {
+            prNumber: 401,
+            sha: 'dead10c',
+            reach: {},
+            unplaced: true,
           },
         ],
         gateHold: 'the validation checks and the close-out are waiting for this work to reach staging.',

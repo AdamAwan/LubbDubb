@@ -1526,6 +1526,22 @@ export interface GoalEnvironmentReach {
   opens: EnvironmentGate[];
 }
 
+/**
+ * One landed pull request's reach, environment by environment — the rows the rollup in
+ * {@link GoalEnvironmentReach} is computed from. A goal is checked as a whole or not at
+ * all: `rollUpReach` answers `reached` only when every one of these reads `reached`, so
+ * this is what says *which* landing is holding the goal short, and whether one of them
+ * never can be.
+ */
+export interface GoalLandingReach {
+  prNumber: number;
+  sha: string;
+  /** Environment name to what the probe said. A name absent means no reading was taken. */
+  reach: Record<string, EnvironmentReachStatus>;
+  /** The squash is on no integration branch, so no environment can ever hold it. */
+  unplaced: boolean;
+}
+
 export type EnvironmentGate = 'validate' | 'close_out';
 
 export interface GoalArrival {

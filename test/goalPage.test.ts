@@ -551,7 +551,7 @@ test('a stage with nothing to measure draws no proportion', () => {
 
   const nav = buildGoalNav({ ...page, issue: { ...page.issue, validation: null } });
   const plan = nav.find((t) => t.tab === 'plan')!;
-  const checks = nav.find((t) => t.tab === 'checks')!;
+  const checks = nav.find((t) => t.tab === 'merged')!;
 
   assert.equal(plan.reading, 'not drawn');
   assert.equal(plan.done, null, 'a goal with no plan has no parts outstanding, so nothing to measure');
@@ -597,7 +597,7 @@ test('a tab quotes the parts and the checks rather than re-reading them', () => 
   assert.equal(planTab.done, (1 / 3) * 100);
   assert.equal(planTab.tone, 'blue', 'something is moving and nothing is held');
 
-  const checks = nav.find((t) => t.tab === 'checks')!;
+  const checks = nav.find((t) => t.tab === 'merged')!;
   assert.equal(checks.reading, '1 of 4 done', 'passed plus waived, as the check plan counts them');
   assert.equal(checks.tone, 'amber', 'a check actually failed');
 });
