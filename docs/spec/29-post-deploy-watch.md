@@ -812,11 +812,12 @@ for the same reason the ruling exists — they were never part of the document, 
 adopts nor discards them, and a decision taken off an operator without their seeing it is what the
 approval prevents.
 
-**The goal page's Signals card** draws the declarations themselves — every check on the goal, its
+**The goal page's Signals card** draws the declarations themselves — every declaration on the goal, its
 query, what it expects, and what the dry run read — with the controls that change them
-(`web/src/components/SignalsSection.tsx`, embedded by `web/src/console/GoalPage.tsx`). It sits under
-Validation and above the environments, which is the order the questions are asked in: validation is
-_did we build it_, this is _did it do anything_, and the environment rows below carry what each
+(`web/src/components/SignalsSection.tsx`, embedded by `web/src/console/GoalPage.tsx`). Its count reads in **readings**, never in checks: a windowed reading and a point-in-time check are
+different clocks, and one word for both is how the goal page came to mean four things by "check"
+([17](17-cockpit.md#one-noun-per-thing)). It sits under the checks and above the environments, which is
+the order the questions are asked in: the checks are _did we build it_, this is _did it do anything_, and the environment rows below carry what each
 window has read since. It is not a second copy of the plan sheet's block: the sheet draws a document
 under review at approval time, and this draws a live goal being operated weeks later.
 

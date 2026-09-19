@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import type { OpenPullRequest, ValidationCheckView } from '../web/src/types.js';
 import type { GoalPageView } from '../web/src/view/goalPage.js';
 import {
+  buildGoalNav,
   buildGoalPage,
   goalLanding,
-  goalTabBadges,
   goalTabOpening,
   GOAL_TABS,
   GOAL_TAB_OF,
@@ -72,9 +72,9 @@ test('a goal nobody has planned opens on its ticket', () => {
   assert.match(goalTabOpening(page).why, /planned/);
 });
 
-test('a plan, a pull request or an agent moves the landing to the work', () => {
+test('a plan, a pull request or an agent moves the landing to the plan', () => {
   const page = bare();
-  assert.equal(goalTabOpening({ ...page, openPullRequests: [openPr()] }).tab, 'work');
+  assert.equal(goalTabOpening({ ...page, openPullRequests: [openPr()] }).tab, 'plan');
 });
 
 test('a pull request in the operator’s court outranks a running check', () => {
@@ -86,7 +86,7 @@ test('a pull request in the operator’s court outranks a running check', () => 
     issue: { ...page.issue, localValidation: null },
     openPullRequests: [openPr({ attention: { status: 'you', reasons: ['review'] } })],
   };
-  assert.equal(goalTabOpening(validating).tab, 'work', 'the ask in your own court is what moves the goal');
+  assert.equal(goalTabOpening(validating).tab, 'plan', 'the ask in your own court is what moves the goal');
 });
 
 test('a held gate beats everything but a finished goal', () => {
@@ -96,10 +96,10 @@ test('a held gate beats everything but a finished goal', () => {
     gateHold: 'validate',
     openPullRequests: [openPr({ attention: { status: 'you', reasons: ['review'] } })],
   };
-  assert.equal(goalTabOpening(held).tab, 'shipping');
+  assert.equal(goalTabOpening(held).tab, 'shipped');
 
   const finished: GoalPageView = { ...held, issue: { ...held.issue, state: 'closed' } };
-  assert.equal(goalTabOpening(finished).tab, 'record', 'nothing is left to steer on a shut goal');
+  assert.equal(goalTabOpening(finished).tab, 'closeout', 'nothing is left to steer on a shut goal');
 });
 
 test('a flagged validation plan opens on validation, a clear one does not', () => {
@@ -122,7 +122,7 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
       },
     },
   };
-  assert.equal(goalTabOpening(flagged).tab, 'validation');
+  assert.equal(goalTabOpening(flagged).tab, 'checks');
 
   const clear: GoalPageView = {
     ...flagged,
@@ -142,7 +142,7 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
     },
   };
   assert.equal(clear.issue.validation?.state, 'clear');
-  assert.equal(goalTabOpening(clear).tab, 'work', 'a settled plan is not a reason to be looking at it');
+  assert.equal(goalTabOpening(clear).tab, 'plan', 'a settled plan is not a reason to be looking at it');
 });
 
 test('reaching an environment opens on shipping', () => {
@@ -154,29 +154,43 @@ test('reaching an environment opens on shipping', () => {
       { environment: 'prod', status: 'reached', landed: 2, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
     ],
   };
-  assert.equal(goalTabOpening(shipped).tab, 'shipping');
+  assert.equal(goalTabOpening(shipped).tab, 'shipped');
 });
 
-test('a pane with nothing in it carries no badge, because zero is a count', () => {
-  const badges = goalTabBadges(bare());
-  for (const tab of GOAL_TABS) {
-    assert.equal(badges[tab], null, `${tab} counted something on a goal that has nothing`);
+test('every tab reads something, even on a goal that has nothing', () => {
+  const nav = buildGoalNav(bare());
+  assert.deepEqual(
+    nav.map((e) => e.tab),
+    [...GOAL_TABS],
+    'the row draws every pane in order, whatever the goal has reached',
+  );
+  /* A tab is a stage as well as a way in, so it always says where the goal is on
+     that stage. "no checks" and "not drawn" are readings; a blank tab would be
+     the row saying nothing about a stage the goal simply has not reached. */
+  for (const entry of nav) {
+    assert.ok(entry.reading.length > 0, `${entry.tab} says nothing at all`);
+    assert.equal(entry.done, null, `${entry.tab} drew a meter on a goal with nothing to measure`);
+    assert.equal(entry.needsYou, false, `${entry.tab} claims an ask on a goal that carries none`);
   }
 });
 
-test('the work badge says what wants a person, then what has landed', () => {
+test('the plan tab says what wants a person before it says how far the work got', () => {
   const page = bare();
-  const wants = goalTabBadges({
+  const parts = buildGoalNav(page).find((e) => e.tab === 'plan')!;
+  assert.equal(parts.reading, 'not drawn');
+
+  /* The reading the tab row used to carry and the track did not. Folding the two
+     controls into one is exactly how it would have been lost, so it is asserted
+     against the one control that survived. */
+  const court = buildGoalNav({
     ...page,
     openPullRequests: [openPr({ attention: { status: 'you', reasons: ['review'] } })],
-  }).work;
-  assert.deepEqual(wants, { text: '1 in your court', tone: 'red' });
-
-  const open = goalTabBadges({ ...page, openPullRequests: [openPr()] }).work;
-  assert.deepEqual(open, { text: '1 open', tone: 'blue' });
+  }).find((e) => e.tab === 'plan')!;
+  assert.equal(court.reading, '1 in your court');
+  assert.equal(court.tone, 'amber');
 });
 
-test('the shipping badge says the gate before it says the count', () => {
+test('the shipped tab says the gate before it says the count', () => {
   const page = bare();
   const envs = [
     {
@@ -190,20 +204,30 @@ test('the shipping badge says the gate before it says the count', () => {
       sheet: null,
     },
   ];
-  assert.deepEqual(goalTabBadges({ ...page, environments: envs }).shipping, { text: '1/1', tone: 'green' });
-  assert.deepEqual(goalTabBadges({ ...page, environments: envs, gateHold: 'validate' }).shipping, {
-    text: 'gate held',
-    tone: 'amber',
-  });
+  const reached = buildGoalNav({ ...page, environments: envs }).find((e) => e.tab === 'shipped')!;
+  assert.equal(reached.reading, 'reached prod');
+  assert.equal(reached.tone, 'green');
+
+  const held = buildGoalNav({ ...page, environments: envs, gateHold: 'validate' }).find((e) => e.tab === 'shipped')!;
+  assert.equal(held.reading, 'gate held');
+  assert.equal(held.tone, 'amber');
+});
+
+test('a goal with no environments still draws the shipped tab', () => {
+  /* The row keeps its shape between goals: a control that gains and loses a
+     column cannot be aimed at from memory. */
+  const shipped = buildGoalNav(bare()).find((e) => e.tab === 'shipped')!;
+  assert.equal(shipped.reading, 'no environments');
+  assert.equal(shipped.done, null, 'nothing reached of nothing is not a proportion');
 });
 
 test('the landing is decided on arrival and held, however the goal moves under it', () => {
   const page = bare();
   const reading: GoalPageView = { ...page, openPullRequests: [openPr()] };
-  assert.equal(goalTabOpening(reading).tab, 'work', 'the fixture must land on work for this to say anything');
+  assert.equal(goalTabOpening(reading).tab, 'plan', 'the fixture must land on the plan for this to say anything');
 
   const landed = goalLanding(null, 'issue:1', reading);
-  assert.equal(landed.opening.tab, 'work');
+  assert.equal(landed.opening.tab, 'plan');
 
   /* The goal moves while somebody is reading it: a pull request lands in their court, then the work
      reaches an environment. Both re-answer the rule, and neither is allowed to move the pane —
@@ -213,7 +237,7 @@ test('the landing is decided on arrival and held, however the goal moves under i
     ...reading,
     openPullRequests: [openPr({ attention: { status: 'you', reasons: [] } })],
   };
-  assert.equal(goalLanding(landed, 'issue:1', called).opening.tab, 'work');
+  assert.equal(goalLanding(landed, 'issue:1', called).opening.tab, 'plan');
 
   const shipped: GoalPageView = {
     ...called,
@@ -221,9 +245,9 @@ test('the landing is decided on arrival and held, however the goal moves under i
       { environment: 'prod', status: 'reached', landed: 1, total: 1, unplaced: 0, at: null, opens: [], sheet: null },
     ],
   };
-  assert.equal(goalTabOpening(shipped).tab, 'work', 'the court arm outranks the shipped one');
+  assert.equal(goalTabOpening(shipped).tab, 'plan', 'the court arm outranks the shipped one');
   const still = goalLanding(landed, 'issue:1', shipped);
-  assert.equal(still.opening.tab, 'work');
+  assert.equal(still.opening.tab, 'plan');
   assert.equal(still, landed, 'the held landing is returned as it stands, sentence and all');
 
   /* The next goal is a fresh arrival, and the pick made on this one does not follow the operator to

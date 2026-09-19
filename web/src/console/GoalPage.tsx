@@ -121,10 +121,10 @@ export function GoalPage({
         label="This goal"
       >
         {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
-        {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'shipping' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} />}
+        {tab === 'checks' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'shipped' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'closeout' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
       </TabbedPanel>
       {/* Below the panel, because what it asks is about the goal's place on the
           board rather than about any stage of the work — and because the ask

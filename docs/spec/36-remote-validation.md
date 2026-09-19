@@ -2261,10 +2261,12 @@ dry run, deselect a row, reseed, press go. A row waived through the check's own 
 reason and does not run. **An `unknown` from a query and a `blocked` row say why in words**, and never
 in the vocabulary of a clean one.
 
-**The Environments card's row gains one folded line** — `sheet · 4 rows · 1 failed · 1 blocked`,
+**The Environments card's row gains one folded line** — `check plan · 4 checks · 1 failed · 1 blocked`,
 each clause drawn only where it is non-zero — folded on the **server** off the same rows the card
 above draws. A cockpit that worked it out for itself would be a second opinion drawn beside the
-reading it describes, which is the disagreement the strip's fold exists to prevent. **Built**, as
+reading it describes, which is the disagreement the fold exists to prevent. The line says _check
+plan_ and _checks_ because that is the cockpit's one word for each
+([17](17-cockpit.md#one-noun-per-thing)); what the store calls them is unchanged. **Built**, as
 `sheetFoldLine` (`src/remoteValidation/sheet.ts`) beside `sheetBenchLine`, read in
 `buildEnvironmentReach` off the very `RemoteSheetView`s `buildRemoteSheets` handed the sheet card,
 and shipped on `GoalEnvironmentReachView.sheet`. A row is **blocked** in the fold whichever road it

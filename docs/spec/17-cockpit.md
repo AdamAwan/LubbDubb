@@ -501,7 +501,7 @@ once.
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `pane`                               | which of the goal page's five panes is open, as `work` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
+| `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1087,13 +1087,12 @@ ways, not several asks.
 
 **Except on the goal page, where the rows are already a pane away.** The rule is about _reaching_ the
 work from where the ask is read, and on the rail and in the panel that means drawing it. On the goal
-page it means the opposite: the band sits above the tab row, so a second live copy of the whole sheet
-is the ask drawing the page it is standing on — and pushing that page's own navigation off the screen
-to do it, which is worst on exactly the goals carrying more than one ask. So `NeedsBand` takes
-`checksBelow` there, and the band says how many checks it is about and offers the way to them —
-selecting the Checks pane through `GOAL_TAB_OF` and scrolling to `GOAL_ANCHOR.validation`, the same
-pair the track strip routes through. The rows themselves stay in one place on that surface, and it is
-the place that already owns them. `test/askBodies.test.ts` pins both halves: the band draws no sheet
+page it means the opposite: a second live copy of the whole sheet is the ask drawing the page it is
+standing on. The goal page answers this twice over — the ask is a row there, so no body is drawn at
+all, and `NeedsBand` still takes `checksBelow` for a body drawn on that surface, which says how many
+checks it is about and offers the way to them: selecting the Checks pane through `GOAL_TAB_OF` and
+scrolling to `GOAL_ANCHOR.validation`. The rows themselves stay in one place on that surface, and it is
+the place that already owns them. `test/askBodies.test.ts` pins both halves: the body draws no sheet
 with `checksBelow`, and draws one without it.
 
 The desk's prose stays above the rows. It is the harness's own refreshed statement of what the goal
@@ -1220,23 +1219,28 @@ either settles the row and the next snapshot clears both, with nothing kept in s
 
 Order on the page, top to bottom:
 
-1. **The goal header**, in three rows with fixed roles — what the goal _is_, then what anybody has
-   decided about it, then what you can do to it ([The header](#the-header)).
-   1a. **The track** — the goal's pipeline in one row, each stretch a way to the pane that owns it
-   ([The track](#the-track)).
-2. **The "Needs you" bands** — every open ask on this goal, stacked, answerable in place. Red for
-   asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
-   and the band it opens read the same. **A goal with no ask draws no band at all** — a band that is
-   sometimes furniture stops being read as a demand — and `test/console.test.ts` asserts that from both
-   sides. The band is `NeedsBand` (`web/src/console/NeedsBand.tsx`), its own module rather than the
-   goal page's private component, because the goal page is not the only place an ask is read: the ask
-   panel draws the same band for a row with no goal page. One band, two placements — a second wiring
-   is a second set of verdicts to keep in step.
-3. **The five panes**, and the one of them the goal's own state opens ([The panes](#the-panes)).
+1. **The goal header**, in two rows with fixed roles — what the goal _is_ and what anybody has decided
+   about it on one line, then what you can do to it ([The header](#the-header)).
+2. **The ask rows** — every open ask on this goal, one row each. A row is all one press and opens the
+   ask panel, which is where the whole of an ask already lives. Red for asks blocking an agent, amber
+   for the operator's own, the rail's own split carried over so a row and the ask it opens read the
+   same. **A goal with no ask draws no row at all** — a strip that is sometimes furniture stops being
+   read as a demand.
+3. **The tabbed panel** — the five panes, the one the goal's own state opens, and the tabs that select
+   them ([The panes](#the-panes)).
+4. **The parent band**, where the goal hangs off no Feature ([A goal with no parent
+   Feature](#a-goal-with-no-parent-feature)). It is below the panel because what it asks is about the
+   goal's place on the board rather than about any stage of the work.
 
-Everything above the panes is drawn on every goal whatever pane is open: the header, the track and
-the bands are the reasons the page was opened, and a pane is a thing you have to be on to see. **An ask
-behind a tab is an ask nobody answers**, which is the one regression this arrangement had to avoid.
+**An ask is drawn where the operator will look, and the whole of it one press away.** Both halves are
+load-bearing and the second was learned the hard way. A band behind a tab is an ask nobody answers, so
+the rows are above the tabs; but a band drawn _in full_ there is three hundred pixels of ask between
+the tabs and the pane they name, on exactly the goals carrying more than one — and a navigation whose
+content starts that far below it stops reading as that content's control. So the goal page says there
+is an ask, which kind, and — through the dot on a tab — which stage it is about; `NeedsBand`'s `line`
+draws that row, and pressing it opens the same `needBody` the rail's panel draws. One implementation
+of the ask, two ways to reach it, rather than two asks.
+→ [An ask that asks for work draws the work](#an-ask-that-asks-for-work-draws-the-work)
 
 ### The panes
 
@@ -1249,28 +1253,84 @@ So the cards are grouped behind **five tabs**, declared once in `GOAL_TABS`
 (`web/src/view/goalPage.ts`) with `GOAL_TAB_OF` mapping each foldable section to the pane that holds
 it:
 
-| Pane           | What is behind it                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| **Ticket**     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
-| **Work**       | the plan's waves, the pull requests they carry, who is on the goal now                            |
-| **Validation** | the checks, the local validation run, the remote sheets                                           |
-| **Shipping**   | the environments and the gate, and the signals the work asked production for                      |
-| **Record**     | spend, the tail, and this goal's subtree of the work graph                                        |
+| Pane          | id         | What is behind it                                                                                 |
+| ------------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| **Ticket**    | `ticket`   | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
+| **Plan**      | `plan`     | the plan's waves, the pull requests they carry, who is on the goal now                            |
+| **Checks**    | `checks`   | the goal's checks, and its local and remote check plans                                           |
+| **Shipped**   | `shipped`  | the environments and the gate, and the signals the work asked production for                      |
+| **Close-out** | `closeout` | spend, the tail, and this goal's subtree of the work graph                                        |
 
-**A part and the pull request that carries it are one thing**, which is why Work is one pane and not
+**A tab's id is its label, lower case.** The pane the label says is the pane `?pane=` names and the
+pane `GOAL_TAB_OF` maps a section to. The two drifted once — the row said "Checks" while every id
+under it said `validation` — and an id that disagrees with the word on the control is a rename nobody
+can grep for.
+
+**A part and the pull request that carries it are one thing**, which is why Plan is one pane and not
 two: the plan's parts each name a pull request, the pull request's court chip is what says whether that
 part is moving, and reading either without the other was the split the old page made you scroll across.
 
-**`GOAL_TAB_OF` is the page's map, not the console's.** The track strip routes through it too, so a
-stage of the pipeline and the pane it is drawn in cannot disagree — a stage that scrolled to a card
-behind a pane nobody had opened would be a button that appears to do nothing, which is the dead end
-this spec keeps naming.
+**`GOAL_TAB_OF` is the page's map, not the console's.** A press that names a card and the tab that card
+is drawn behind cannot disagree — a jump that landed on a card behind a pane nobody had opened would be
+a button that appears to do nothing, which is the dead end this spec keeps naming.
 
-**A badge is a reading, and null is a real answer.** `goalTabBadges(page)` gives each tab its own
-count and the tone the strip would give the same reading — `3/4` green on a plan that has landed,
-`2 in your court` red on a pull request waiting on the operator, `gate held` amber on Shipping. A pane
-with nothing in it yet carries **no badge at all**, because a badge reading `0` says a thing was
-counted, which is not what an empty pane means.
+#### The tabs and the panel are one object
+
+`TabbedPanel` (`web/src/console/TabbedPanel.tsx`) draws both. The tabs sit on a bar of their own and
+the selected one is **cut out of the panel below it** — the panel's ground, no bottom edge, its own top
+corners. A row of separate cards above a separate panel reads as two surfaces that happen to be
+stacked, and nothing about that arrangement says the row is what changes what is underneath. The bar is
+a _continuous_ surface rather than a gap between the tabs, because with the page showing through, each
+tab reads as its own card again and the bar it is supposed to sit on does not exist; the tabs are told
+apart by a hairline instead. Unselected tabs take the page's own ground, so the selected one is the tab
+that lifts — a tab lighter than the panel would read as selected wherever the eye landed. A card
+sitting directly on the panel drops its own border and ground, because a box inside a box is the other
+half of what made the two read as separate.
+
+**This replaced two controls that stated one thing.** A track strip read the stages, and a tab row one
+line below badged the same numbers: `3 of 5 done` above `3/5`. A stage is where you go, so the stage is
+the button, and `buildGoalNav` is the one function both halves collapsed into.
+
+**A tab carries a reading, and a reading is never blank.** A tab is a stage as well as a way in, so it
+says where the goal is on that stage — `1/5 parts merged`, `no checks`, `reached staging · watch
+clean`, `not reached`. `buildGoalNav(page)` is what answers, and four rules make it safe to read at the
+top of a page:
+
+- **Every reading is one a card below already draws.** It folds `parts`, `issue.validation`,
+  `environments`, the open pull requests and the tail's own fields; it computes no verdict of its own.
+  A tab that measured something itself would be a second opinion that can disagree with the pane it
+  selects.
+- **What wants a person outranks how far the work got.** A pull request in the operator's court reads
+  `1 in your court` on Plan before the parts do, and a held gate reads `gate held` on Shipped before
+  the count does. Both were readings the tab row's badges carried and the strip did not, and folding
+  two controls into one is exactly how a reading gets lost — so they are stated in the one function
+  both now read from, and `test/goalTabs.test.ts` pins each.
+- **A tab with nothing to measure draws no meter**, and `done` is `number | null` for that reason.
+  Null is a third reading and not a synonym for zero: a goal with no check plan has no checks
+  outstanding, and an empty bar under "no checks" would report every one of them still to run. The
+  same distinction `ValidationVerdict` makes one layer down, and the same one the three reach verdicts
+  make for an environment ([24](24-environments.md#the-three-verdicts)) — which is why Shipped answers
+  `unknown` in its own words before it would ever say "not shipped".
+- **Every tab is drawn on every goal**, Shipped included, which reads `no environments` where none is
+  configured. The row keeps its shape between goals: a control that gains and loses a column cannot be
+  aimed at from memory. The strip this replaced left that stage out, and the row changed width between
+  two goals opened a second apart.
+
+**It carries the post-deploy watch's reading folded off the card** — `reached liveUk · watch clean` —
+rather than computing a second verdict, which is the first rule applied to the newest card. This is
+the one place a watch is reduced to a word, and the reduction is one-directional: `regressed` first,
+then anything not `clean` reads _watch not read_, and only a window whose every check came back clean
+says so. A row with space for one reading must never fold an unread environment into an all-clear.
+→ [29](29-post-deploy-watch.md#in-the-cockpit)
+
+**One dot, where an ask is waiting in that pane.** `GOAL_ASK_TAB` maps every `NeedKind` to the pane it
+belongs to, total over the type so a new kind is placed deliberately, and an ask about the goal as a
+whole — a config gap, a recovery, the fleet parked on a rate limit — maps to null and puts a dot
+nowhere. The dot is the whole of what a band above the navigation used to say, said by the control the
+operator would press anyway.
+
+Each tab takes its hue from a `cn-t-*` tone alias, so it invents no colour and owes no new token —
+green settled, blue moving, amber held or failed, grey not reached.
 
 **The folds live on**, inside the panes. A tab is which reading you are looking at; a fold is how much
 of one card you want ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)). The two
@@ -1282,19 +1342,19 @@ whatever pane it now sits behind.
 `goalTabOpening(page)` answers which pane a goal opens on when nobody has picked one, and the sentence
 that says why — read top to bottom, first answer wins, and **the order is the rule**:
 
-| The goal…                                  | opens on   |
-| ------------------------------------------ | ---------- |
-| is finished, closed or abandoned           | Record     |
-| is held at an environment gate             | Shipping   |
-| has a pull request in the operator's court | Work       |
-| has a flagged validation plan or local run | Validation |
-| has reached an environment                 | Shipping   |
-| has begun its checks                       | Validation |
-| has a plan, a pull request or an agent     | Work       |
-| has none of those                          | Ticket     |
+| The goal…                                  | opens on  |
+| ------------------------------------------ | --------- |
+| is finished, closed or abandoned           | Close-out |
+| is held at an environment gate             | Shipped   |
+| has a pull request in the operator's court | Plan      |
+| has a flagged check plan or local run      | Checks    |
+| has reached an environment                 | Shipped   |
+| has begun its checks                       | Checks    |
+| has a plan, a pull request or an agent     | Plan      |
+| has none of those                          | Ticket    |
 
-Every arm names a state some other surface on this page already draws, so the landing and the track
-never tell two stories. The sentence is not decoration: it rides in the selected tab's title, so
+Every arm names a state some other surface on this page already draws, so the landing and the tab's
+own reading never tell two stories. The sentence is not decoration: it rides in the selected tab's title, so
 "why am I here" is answerable without reading this document.
 
 **It decides the landing only, and the landing is latched to the visit.** `goalTabOpening` is a reading
@@ -1371,10 +1431,10 @@ operator folded away mid-flight would spring open the moment the goal shipped, w
 early slamming shut for the same reason. The operator's word outranks the reading in both directions,
 and the empty pair is still the page as it stands.
 
-**A jump opens what it lands on.** The track's stages and the header's validation chip scroll to a
-card, and a card the goal's progress had folded away — or, now, a card behind a pane nobody had
-selected — made both read as controls that do nothing: the page moved and the reading it moved to was
-not drawn. `buildJump` selects the pane, unfolds the section and scrolls **two** frames later rather
+**A jump opens what it lands on.** An ask that points at the checks it is about scrolls to a card, and
+a card the goal's progress had folded away — or one behind a pane nobody had selected — made the press
+read as a control that does nothing: the page moved and the reading it moved to was not drawn. A jump
+therefore selects the pane, unfolds the section and scrolls, and it scrolls **two** frames later rather
 than one, because the first frame is what paints the pane the tab just selected and an anchor inside a
 pane that has not rendered yet resolves to nothing.
 
@@ -1392,31 +1452,29 @@ away it issues no request at all.
 **Three rows with fixed roles**, rather than one row of everything with the controls floated off its
 end.
 
-1. **What the goal is** — `#390 · Validate job payloads in the catalog`, the item type, and the
-   tracker's workflow state in the operator's own colour. Neither chip is a verdict anybody passed on
-   the work, which is why they are up here and not in the row below.
-2. **What anybody has decided about it** — the appraisal verdict with the appraiser's own summary in its
-   title, the conclusion verdict, and the validation verdict as a settled count (absent when the goal
-   has no checks: "no plan" is a third reading and not a synonym for clear, [20](20-validation.md)).
-   **Each chip is prefixed with what it is a reading of** — `Appraisal ·`, `Harness verdict ·` — or `Your verdict ·`, read off the
-   conclusion's own `by`, because telling an operator their override was the harness's is the same
-   fault pointed the other way —
-   `Validation · 2 of 5 settled` — because the two words the conclusion chip most often reads,
-   "more work", were also the name of a control an operator presses, and a chip that can be read as
-   either is the header's oldest confusion. The prefix is what makes a chip say _judgement_ before it
-   says anything else; the glyph beside it repeats that.
-   Every chip quotes a reading the server already made; nothing here is a second opinion. The
-   validation chip is the one that is a **button**: the checks are on this page, so the reading has
-   somewhere to go, and a verdict you can act on should not be the only chip that does nothing. After
-   the verdicts, one plain run of the measurements — when the run started, the agent count (the same
-   one **On this goal** carries, pull-request dispatches included, [below](#who-is-on-the-goal)), what it
-   has cost — a step fainter, which is the difference between a reading you scan and a judgement you
-   read. A `null` spend draws no reading at all, because nothing was ever measured and `$0.00` would
-   report a goal that cost nothing ([18](18-observability.md#per-goal-spend)).
-3. **What you can do to it**, [below](#the-headers-controls).
+1. **What the goal is, and what anybody has decided about it** — `#390 · Validate job payloads in the
+catalog`, the item type and the tracker's workflow state in the operator's own colour; then the
+   appraisal verdict with the appraiser's own summary in its title, and the conclusion verdict.
+   **Each verdict chip is prefixed with what it is a reading of** — `Appraisal ·`, `Harness verdict ·`
+   — or `Your verdict ·`, read off the conclusion's own `by`, because telling an operator their
+   override was the harness's is the same fault pointed the other way. The two words the conclusion
+   chip most often reads, "more work", were also the name of a control an operator presses, and a chip
+   that can be read as either is the header's oldest confusion; the prefix is what makes a chip say
+   _judgement_ before it says anything else, and the glyph beside it repeats that. Every chip quotes a
+   reading the server already made; nothing here is a second opinion. At the end, one plain run of the
+   measurements — when the run started, the agent count (the same one **On this goal** carries,
+   pull-request dispatches included, [below](#who-is-on-the-goal)), what it has cost — a step fainter,
+   which is the difference between a reading you scan and a judgement you read. A `null` spend draws no
+   reading at all, because nothing was ever measured and `$0.00` would report a goal that cost nothing
+   ([18](18-observability.md#per-goal-spend)).
+2. **What you can do to it**, [below](#the-headers-controls).
 
-**How many parts have merged is deliberately not in row 2 any more.** It is the track's first stage,
-and stating it in both places is how a header and the card it summarises come to disagree.
+**One row, not two, and the header keeps only what nothing below it says.** The identity and the
+verdicts were two rows of small type, and two rows here are two rows the navigation sits below — which
+is what put the tabs nine hundred pixels down the page. What went with the merge is what the tabs now
+say: how many parts have merged (the Plan tab), `Checks · N of M done` (the Checks tab), and the local
+check plan's own chip, whose card is the first thing in the pane it pointed at. Stating any of them
+twice is how a header and the card it summarises come to disagree.
 
 ### The control kit
 
@@ -2019,50 +2077,15 @@ dead end [refs](#links) exists to prevent.
   the route was never asked to end. The flagged-plan note is one more requirement _inside_
   the modal — [below](#saying-the-sentence-a-refusal-asks-for).
 
-### The track
+### The asks, and what draws them
 
-**The goal's pipeline in one row, each stretch a way to the section that owns it.** Plan → Validation →
-Shipped → Close-out, built by `buildGoalStrip` (`web/src/view/goalPage.ts`).
+On the goal page an ask is **one row**, and the whole of it is the ask panel's
+([The panes](#the-panes)). What follows is about that whole — `needBody`, drawn by the panel here and
+by the rail's own panel elsewhere, one implementation either way.
 
-It exists because the answer to _where has this goal got to_ was in four places and none of them was
-one: "2 of 5 parts merged" and "Validation 3/7" in the header, "5 parts" on the plan card, "2/3" per
-environment, four lamps in The tail — three screens apart, in three vocabularies.
-
-Three rules make it safe to put at the top of the page.
-
-- **Every reading is one a card below already draws.** The strip folds `parts`, `issue.validation`,
-  `environments` and the tail's own fields; it computes no verdict of its own. A stage that measured
-  something itself would be a fifth opinion that can disagree with the card it points at, which is the
-  fault it replaces, made bigger and moved to the top.
-- **A stage with nothing to measure draws no bar**, and `done` is `number | null` for that reason. Null
-  is a third reading and not a synonym for zero: a goal with no validation plan has no checks
-  outstanding, and an empty bar under "no checks" would report every one of them still to run. The same
-  distinction `ValidationVerdict` makes one layer down, and the same one the three reach verdicts make
-  for an environment ([24](24-environments.md#the-three-verdicts)) — which is why the Shipped stage
-  answers `unknown` in its own words, before it would ever say "not shipped".
-- **The Shipped stage is absent when no environment is configured**, exactly as the card is. A stage of
-  question marks on a deployment that never set one up is a feature announcing itself as broken.
-- **It carries the post-deploy watch's reading folded off the card** — `reached liveUk · watch clean`
-  — rather than computing a second verdict, which is the first rule applied to the newest card. This
-  is the one place a watch is reduced to a word, and the reduction is one-directional: `regressed`
-  first, then anything not `clean` reads _watch not read_, and only a window whose every check came
-  back clean says so. A row with space for one reading must never fold an unread environment into an
-  all-clear. → [29](29-post-deploy-watch.md#in-the-cockpit)
-
-Each stage takes its hue from a `cn-t-*` tone alias, so it invents no colour and owes no new token —
-green settled, blue moving, amber held or failed, grey not reached.
-
-They are **anchors, not refs**: each jumps to one element on this page, so each is a `<button>` with a
-`scrollIntoView` and not an `<a href="#…">`. The cockpit's address bar is `Place`, and a hash the place
-knows nothing about is a history entry the back button steps through to nowhere. The `ANCHOR` map in
-`GoalPage.tsx` is keyed on `GoalStageAt`, so a stage the strip learns to draw cannot ship without
-somewhere to land — a missing entry is a compile error rather than a control that does nothing.
-
-### The bands
-
-Each band embeds the **shared** component that owns its refusal rules — `EscalationCard` for a
+Each ask embeds the **shared** component that owns its refusal rules — `EscalationCard` for a
 question, a permission or a proposal, `HumanTaskActions` for a bench task or a close-out. The
-goal-profile gate is the one band whose controls live in `NeedsBand` itself — its verdict is two
+goal-profile gate is the one ask whose controls live in `NeedsBand` itself — its verdict is two
 buttons on one write and there is no shared card underneath it — and it is drawn there rather than on
 the goal page for the same reason the others are: the page and the rail's panel then hold one copy of
 the write between them. Embedded, never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
@@ -2170,6 +2193,30 @@ area-path half of `placement` is untouched: a different question, with a differe
 
 ### Validation on the goal
 
+#### One noun per thing
+
+"Check" meant four unrelated things on one page, which is most of why the vocabulary read as confused:
+the goal's own checks, CI on a pull request, a post-deploy watch's readings, and the rows of a remote
+sheet. Two nouns carry the subsystem, and the other two things get their own words:
+
+| Reads                                         | The word     |
+| --------------------------------------------- | ------------ |
+| one thing asserted about the product          | a check      |
+| the set of them a goal runs against one place | a check plan |
+| what a pull request's own pipeline says       | CI           |
+| what a windowed post-deploy watch saw         | a reading    |
+
+So the local run and the remote sheet stop being separate nouns and become check plans, told apart by
+where they run — `Check plan · local`, `Check plan · staging` — and a sheet's rows are checks, because
+that is what they are. `Signals` counts readings, not checks.
+
+**Where the old words survive, they are the store's.** `GOAL_SECTIONS` still names its folds
+`validation`, `localValidation` and `remoteValidation`, and `goal_arrivals.sheeted_at` is still
+`sheeted_at`: those are fold ids and a column, read by nobody outside the code, and renaming a column
+is a migration with none of this change's benefit ([14](14-persistence.md#migrations)). What a person
+reads is the table above. The pane's own id is **not** in that group — it is `checks`, because a tab's
+id is the word on the control ([The panes](#the-panes)).
+
 `ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
 concluded from running each check. **The plan defines the checks; the goal manages them**, and those
 are two jobs. The plan sheet writes them and amends them and still renders them
@@ -2180,10 +2227,9 @@ only from inside the document that proposed it is a control nobody finds.
 The card is **full width, above the two columns and above the plan**. Not in either stack: a check
 draws its `do` and `expect` side by side and carries a row of five verbs, and both are cramped in a
 column. Above the plan because that is the order the page already reads in — what is being asked of
-you, then the work — and running a check is the one thing on the page that is _owed_. Only the needs
-bands outrank it. **The card draws even when the goal has no checks**, the rule every card on this
+you, then the work — and running a check is the one thing on the page that is _owed_. **The card draws even when the goal has no checks**, the rule every card on this
 page follows: a surface that vanishes when quiet is indistinguishable from one that broke, and
-"nobody wrote a validation plan" is the reading most worth having.
+"nobody wrote a check plan" is the reading most worth having.
 
 The section is **embedded, never redrawn** — the bands' rule, for the bands' reason. It owns the five
 verbs and their refusals, and the console passes `buttonClass="cn-btn"` so they wear the console's
