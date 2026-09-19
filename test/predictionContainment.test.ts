@@ -245,6 +245,7 @@ function recordingSink(): { sink: ActionSink; calls: SinkCall[] } {
     linkWorkItem: record('linkWorkItem'),
     createPullRequest: record('createPullRequest'),
     setPullTitle: record('setPullTitle'),
+    setPullBody: record('setPullBody'),
     setPullBase: record('setPullBase'),
     updatePrBranch: record('updatePrBranch'),
     requeueCiCheck: record('requeueCiCheck'),

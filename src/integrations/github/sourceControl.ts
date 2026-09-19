@@ -3,6 +3,7 @@ import type {
   BranchDeleteInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrBodyInput,
   PrCloseInput,
   PrCreateInput,
   PrLabelInput,
@@ -29,6 +30,7 @@ import type {
   PrReplyCapable,
   PrThreadResolveCapable,
   PrTitleCapable,
+  PrBodyCapable,
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
@@ -94,6 +96,7 @@ export class GitHubSourceControlIntegration
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
+    PrBodyCapable,
     PrBaseCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
@@ -291,6 +294,11 @@ export class GitHubSourceControlIntegration
 
   async setPullTitle(input: PrTitleInput): Promise<SendResult> {
     await this.opts.api.setPullTitle(input.prNumber, input.title);
+    return { ok: true };
+  }
+
+  async setPullBody(input: PrBodyInput): Promise<SendResult> {
+    await this.opts.api.setPullBody(input.prNumber, input.body);
     return { ok: true };
   }
 

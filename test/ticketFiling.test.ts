@@ -41,6 +41,7 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
     linkWorkItem: unused,
     createPullRequest: unused,
     setPullTitle: unused,
+    setPullBody: unused,
     setPullBase: unused,
     updatePrBranch: unused,
     deleteBranch: unused,

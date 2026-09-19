@@ -4,6 +4,7 @@ import type {
   CiCheckRequeueInput,
   MergeMethod,
   PrBaseInput,
+  PrBodyInput,
   PrCloseInput,
   PrCreateInput,
   PrLabelInput,
@@ -30,6 +31,7 @@ import type {
   PrReplyCapable,
   PrThreadResolveCapable,
   PrTitleCapable,
+  PrBodyCapable,
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
@@ -75,6 +77,7 @@ export class AzureDevOpsSourceControlIntegration
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
+    PrBodyCapable,
     PrBaseCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
@@ -255,6 +258,11 @@ export class AzureDevOpsSourceControlIntegration
   async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
     const deleted = await this.opts.api.deleteBranch(input.branch);
     return { ok: true, ref: deleted ? input.branch : `${input.branch} (already absent)` };
+  }
+
+  async setPullBody(input: PrBodyInput): Promise<SendResult> {
+    await this.opts.api.setPullBody(input.prNumber, input.body);
+    return { ok: true };
   }
 
   async setPullBase(input: PrBaseInput): Promise<SendResult> {

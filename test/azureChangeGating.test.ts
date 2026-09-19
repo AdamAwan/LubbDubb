@@ -134,6 +134,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     async setWorkItemAreaPath() {},
     createPull: nope,
     async setPullTitle() {},
+    async setPullBody() {},
     async setPullBase() {},
     async abandonPullRequest() {},
     async deleteBranch() {

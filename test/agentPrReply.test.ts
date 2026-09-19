@@ -70,6 +70,7 @@ function countingSink(
     upsertIssueComment: ok,
     createPullRequest: ok,
     setPullTitle: ok,
+    setPullBody: ok,
     setPullBase: ok,
     updatePrBranch: ok,
     requeueCiCheck: ok,

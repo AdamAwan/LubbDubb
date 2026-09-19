@@ -326,6 +326,7 @@ function relationApi(
     linkWorkItemToPull: unused,
     createPull: unused,
     setPullTitle: unused,
+    setPullBody: unused,
     setPullBase: unused,
     abandonPullRequest: unused,
     deleteBranch: unused,

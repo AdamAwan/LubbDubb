@@ -12,6 +12,7 @@ import type {
   IssueCloseInput,
   IssueLabelInput,
   PrBaseInput,
+  PrBodyInput,
   PrBaseUpdateInput,
   PrCloseInput,
   PrCreateInput,
@@ -136,6 +137,15 @@ export class FakeConnector implements Connector, ActionSink, IssueImageSink {
 
   setPullTitle(input: PrTitleInput): Promise<SendResult> {
     return this.composite.setPullTitle(input);
+  }
+
+  setPullBody(input: PrBodyInput): Promise<SendResult> {
+    return this.composite.setPullBody(input);
+  }
+
+  /** @public the seam a test asserts a pushed description through */
+  pullBody(prNumber: number): string | null {
+    return this.github.pullBody(prNumber);
   }
 
   setPullBase(input: PrBaseInput): Promise<SendResult> {

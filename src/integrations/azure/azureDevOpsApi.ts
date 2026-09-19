@@ -67,6 +67,7 @@ export interface AzureDevOpsApi {
   setWorkItemAreaPath(id: number, areaPath: string): Promise<void>;
   createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ pullRequestId: number }>;
   setPullTitle(pullRequestId: number, title: string): Promise<void>;
+  setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;
 }

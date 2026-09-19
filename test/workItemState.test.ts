@@ -81,6 +81,9 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
     async setPullTitle(): Promise<SendResult> {
       return { ok: true };
     },
+    async setPullBody(): Promise<SendResult> {
+      return { ok: true };
+    },
     async setPullBase(): Promise<SendResult> {
       return { ok: true };
     },
@@ -162,6 +165,9 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
       return { ok: true };
     },
     async setPullTitle(): Promise<SendResult> {
+      return { ok: true };
+    },
+    async setPullBody(): Promise<SendResult> {
       return { ok: true };
     },
     async setPullBase(): Promise<SendResult> {

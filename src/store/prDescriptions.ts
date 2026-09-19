@@ -1,8 +1,23 @@
 import { nanoid } from 'nanoid';
 import type { DescriptionFinding, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+
+/**
+ * `pushed_at` is when the version reached the pull request it describes. Null means
+ * the provider has not been told about it, so every row from before this column
+ * existed reads as unpushed — and needs no backfill only because `unpushedDescriptions`
+ * joins `pr_description_bodies`, which nothing before this change ever wrote. That
+ * join is what keeps an upgrade from rewriting the body of every pull request the
+ * deployment has ever opened; it is not an incidental one.
+ */
+export const PR_DESCRIPTION_COLUMNS: ColumnMigrations = {
+  pr_descriptions: {
+    pushed_at: 'TEXT',
+  },
+};
 
 /**
  * The four questions, in the order they are asked and the order every reading of
@@ -127,6 +142,51 @@ export class PrDescriptionStore {
       return { ...this.toVersion(row), checkedAt, findings: [...input.findings] };
     });
     return write();
+  }
+
+  /**
+   * What `open_pr` wrote under this part — the evidence block and the reference — so
+   * a description written afterwards can be put in front of it. Recorded at the open
+   * and never again: the tail is the agent's coordinates and the operator's prose is
+   * the only thing that ever changes above it.
+   */
+  recordPrBody(input: { originRef: string; prNumber: number; tail: string }): void {
+    this.ctx
+      .prep(
+        `INSERT INTO pr_description_bodies (origin_ref, pr_number, tail, opened_at)
+         VALUES (@originRef, @prNumber, @tail, @openedAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET pr_number=excluded.pr_number, tail=excluded.tail`,
+      )
+      .run({ ...input, openedAt: this.ctx.now() });
+  }
+
+  /**
+   * Every part whose newest description has not reached its pull request, with the
+   * body that description composes. Only the newest: a rewrite supersedes what was
+   * pushed before it, and pushing the chain would write four bodies to say the last
+   * one.
+   */
+  unpushedDescriptions(): { id: string; prNumber: number; body: string }[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT d.id AS id, b.pr_number AS pr_number, d.text AS text, b.tail AS tail
+           FROM pr_descriptions d
+           JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
+          WHERE d.pushed_at IS NULL
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
+          ORDER BY d.authored_at ASC`,
+      )
+      .all() as { id: string; pr_number: number; text: string; tail: string }[];
+    return rows.map((r) => ({
+      id: r.id,
+      prNumber: r.pr_number,
+      body: [r.text.trim(), r.tail].filter((part) => part !== '').join('\n\n'),
+    }));
+  }
+
+  /** Records that a version reached its pull request. */
+  markPushed(id: string): void {
+    this.ctx.prep(`UPDATE pr_descriptions SET pushed_at=@pushedAt WHERE id=@id`).run({ id, pushedAt: this.ctx.now() });
   }
 
   private findingsOf(descriptionId: string): DescriptionFinding[] {

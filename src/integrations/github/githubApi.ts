@@ -34,6 +34,7 @@ export interface GitHubApi {
   }>;
   createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ number: number }>;
   setPullTitle(number: number, title: string): Promise<void>;
+  setPullBody(number: number, body: string): Promise<void>;
   setPullBase(number: number, base: string): Promise<void>;
   updatePullBranch(number: number): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;

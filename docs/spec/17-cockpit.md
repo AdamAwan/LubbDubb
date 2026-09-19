@@ -443,9 +443,18 @@ no pane to be the footer of.
 
 ## The description a reviewer reads
 
-One `PrDescription` panel per live part on the goal page, because one part is one pull request. It
-draws nothing where `manualDescriptions` is off — the routes are not mounted there and the read does
-not answer.
+One `PrDescription` panel per part **whose pull request is open**, on the goal page, because one part
+is one pull request. It draws nothing where `manualDescriptions` is off — the routes are not mounted
+there and the read does not answer.
+
+**The open pull request is the gate, and it is not cosmetic.** A description is a reading of a
+change, so there is nothing to read before the pull request exists: on a plan still at the approval
+gate the parts may not survive it, and on a dispatched part there is no diff yet. Drawn earlier, the
+panel asks the operator to write from the plan, which is the second-hand account the feature exists
+to remove. → [07](07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one)
+
+The panel names that pull request with a `Ref`, because the first thing it asks is that the operator
+go and read it.
 
 Two decisions worth keeping:
 

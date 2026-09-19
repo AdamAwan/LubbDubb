@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { api, type PrDescriptionReading } from '../api.js';
 import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
+import { Ref } from './refs.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -91,19 +92,24 @@ function Checked({ version, now }: { version: PrDescriptionVersion; now: number 
  * The description an operator writes for one part's pull request, and the offer to
  * have their own Claude Code argue with it.
  *
+ * Drawn only for a part whose pull request is **open** — a description is a reading
+ * of a change, and before the pull request there is nothing to read. What is written
+ * here is put at the top of that pull request's body on the next pulse.
+ *
  * Drawn only where `manualDescriptions` is on, and it learns that the way the
  * criteria card does: the routes are mounted only where the key is on, so a read
  * that does not answer is a deployment with the feature off and the panel is not
  * drawn. The presence of the data decides, never a flag on the payload.
  *
- * Nothing here holds anything up. A part nobody describes opens its pull request
- * with no body above the reference, which is why the empty state says so rather than
- * nagging.
+ * Nothing here holds anything up. A part nobody describes leaves its pull request
+ * carrying the evidence and the reference alone, which is why the empty state says
+ * so rather than nagging.
  */
 export function PrDescription({
   issueNumber,
   slug,
   position,
+  prNumber,
   title,
   desktopFolder,
   now,
@@ -111,6 +117,7 @@ export function PrDescription({
   issueNumber: number;
   slug: string;
   position: number;
+  prNumber: number;
   title: string;
   desktopFolder: string | null;
   now: number;
@@ -166,6 +173,11 @@ export function PrDescription({
         <span className="cn-desc-title">{title}</span>
         {reading.versions.length > 1 && <i className="cn-n">v{reading.versions.length}</i>}
       </h3>
+      {/* The pull request this describes, so the operator can go and read it — which
+          is the whole reason the panel waits for it to be open. */}
+      <div className="cn-refs">
+        <Ref to={`pr:${prNumber}`} />
+      </div>
 
       {/* Only where nobody has written one. On a panel that already carries a
           description the argument for writing it has been made and won, and the same
@@ -173,7 +185,8 @@ export function PrDescription({
       {current === null && !writing && (
         <p className="cn-desc-why">
           A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
-          the agent&rsquo;s. It holds nothing up: leave it and the pull request opens with no description.
+          the agent&rsquo;s. Read the pull request first; what you write goes to the top of its body. It holds nothing
+          up: leave it and the pull request carries the evidence alone.
         </p>
       )}
 

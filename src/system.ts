@@ -45,6 +45,7 @@ import { McpDesktopServer } from './mcp/desktop.js';
 import { ObstacleDesk, type ObstacleReader } from './obstacles/desk.js';
 import { trackerCoordinates } from './mcp/findings.js';
 import { PrNamingDesk } from './pr/prNamingDesk.js';
+import { PrDescriptionDesk } from './pr/prDescriptionDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { UnwatchedChildDesk } from './features/unwatchedDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
@@ -582,6 +583,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     template: prompts.render('pr-title', {}),
     errors,
   });
+  // Only where the operator writes the description: with `manualDescriptions` off
+  // nothing ever writes a `pr_description_bodies` row, so the desk would read an
+  // empty table on every pulse for ever.
+  const prDescriptions = config.manualDescriptions
+    ? new PrDescriptionDesk({ sink: opts.sink ?? connector, store, errors })
+    : undefined;
+
   const prWatch = new PrWatchDesk({
     sink: opts.sink ?? connector,
     store,
@@ -769,6 +777,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     appraisals,
     areaPaths,
     naming,
+    prDescriptions,
     closeOuts,
     unwatchedChildren,
     validationAsks,

@@ -444,6 +444,10 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.octokit.pulls.update({ ...this.base, pull_number: number, title });
   }
 
+  async setPullBody(number: number, body: string): Promise<void> {
+    await this.octokit.pulls.update({ ...this.base, pull_number: number, body });
+  }
+
   async setPullBase(number: number, base: string): Promise<void> {
     await this.octokit.pulls.update({ ...this.base, pull_number: number, base });
   }

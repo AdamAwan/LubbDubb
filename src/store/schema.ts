@@ -2265,6 +2265,18 @@ CREATE TABLE IF NOT EXISTS pr_description_findings (
   UNIQUE (description_id, seq)
 );
 
+-- The tail open_pr wrote under one part's pull request: the evidence block and the
+-- reference, with nothing of the operator's in front of it. Kept because the
+-- description is written *after* the pull request opens, and putting it in front of
+-- that tail is the whole of the edit — the alternative is reading the body back off
+-- the provider, which is a second source of truth for a string the harness composed.
+CREATE TABLE IF NOT EXISTS pr_description_bodies (
+  origin_ref TEXT PRIMARY KEY,
+  pr_number  INTEGER NOT NULL,
+  tail       TEXT NOT NULL,
+  opened_at  TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);

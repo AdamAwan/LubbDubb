@@ -11,6 +11,7 @@ import type {
   IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
+  PrBodyInput,
   PrBaseUpdateInput,
   PrCloseInput,
   PrCreateInput,
@@ -50,6 +51,7 @@ import {
   isPrReplyCapable,
   isPrThreadResolveCapable,
   isPrTitleCapable,
+  isPrBodyCapable,
   isRefResolvable,
   isTicketHistoryCapable,
   isWorkItemLinkCapable,
@@ -179,6 +181,15 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isPrTitleCapable);
     if (!handler) throw new Error('no integration can retitle PRs (no sourceControl provider is PrTitleCapable)');
     return handler.setPullTitle(input);
+  }
+
+  // Signed like `createPullRequest`'s, because the body being rewritten is the body
+  // that carries the sigil: an edit that dropped it would leave a pull request the
+  // harness opened reading as somebody else's. → docs/spec/07-pull-requests.md
+  async setPullBody(input: PrBodyInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrBodyCapable);
+    if (!handler) throw new Error('no integration can rewrite PR bodies (no sourceControl provider is PrBodyCapable)');
+    return handler.setPullBody({ ...input, body: this.signed(handler, input.body) });
   }
 
   async setPullBase(input: PrBaseInput): Promise<SendResult> {

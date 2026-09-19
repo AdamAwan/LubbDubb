@@ -81,6 +81,7 @@ interface Recorded {
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   createdIssues: Array<{ title: string; body: string; labels: string[]; assignee: string | null }>;
   titleSets: Array<{ number: number; title: string }>;
+  bodySets: Array<{ number: number; body: string }>;
   baseSets: Array<{ number: number; base: string }>;
   branchUpdates: number[];
   deletedBranches: string[];
@@ -104,6 +105,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     createdPulls: [],
     createdIssues: [],
     titleSets: [],
+    bodySets: [],
     baseSets: [],
     branchUpdates: [],
     deletedBranches: [],
@@ -129,6 +131,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async setPullTitle(number, title) {
       recorded.titleSets.push({ number, title });
+    },
+    async setPullBody(number, body) {
+      recorded.bodySets.push({ number, body });
     },
     async setPullBase(number, base) {
       recorded.baseSets.push({ number, base });

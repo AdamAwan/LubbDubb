@@ -20,6 +20,7 @@ import type {
   PrReplyInput,
   PrThreadResolveInput,
   PrTitleInput,
+  PrBodyInput,
   SendResult,
   WorkItemAreaPathInput,
   WorkItemLinkInput,
@@ -120,6 +121,14 @@ export interface PrTitleCapable {
 
 export function isPrTitleCapable(x: Integration): x is Integration & PrTitleCapable {
   return typeof (x as Partial<PrTitleCapable>).setPullTitle === 'function';
+}
+
+export interface PrBodyCapable {
+  setPullBody(input: PrBodyInput): Promise<SendResult>;
+}
+
+export function isPrBodyCapable(x: Integration): x is Integration & PrBodyCapable {
+  return typeof (x as Partial<PrBodyCapable>).setPullBody === 'function';
 }
 
 export interface PrBaseCapable {

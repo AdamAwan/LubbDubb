@@ -238,21 +238,31 @@ function WorkPane({
         workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
         now={view.now}
       />
-      {/* One per live part, because one part is one pull request. Each panel draws
-          nothing where `manualDescriptions` is off — the routes are not mounted
-          there, so the read does not answer and the presence of the data decides.
+      {/* One per part whose pull request is **open**, because a description is a
+          reading of a change and there is nothing to read before then: on a plan
+          still at the approval gate the parts may not survive it, and on a
+          dispatched one there is no diff to describe yet. The position is the
+          part's own, so the numbering does not renumber as earlier parts open.
+          Each panel draws nothing where `manualDescriptions` is off — the routes
+          are not mounted there, so the read does not answer and the presence of
+          the data decides.
           → docs/spec/17-cockpit.md#the-description-a-reviewer-reads */}
-      {page.parts.map(({ part }, i) => (
-        <PrDescription
-          key={part.id}
-          issueNumber={page.issue.number}
-          slug={part.slug}
-          position={i + 1}
-          title={part.title}
-          desktopFolder={view.state.config.desktopFolder}
-          now={view.now}
-        />
-      ))}
+      {page.parts.flatMap(({ part }, i) =>
+        part.prNumber === null
+          ? []
+          : [
+              <PrDescription
+                key={part.id}
+                issueNumber={page.issue.number}
+                slug={part.slug}
+                position={i + 1}
+                prNumber={part.prNumber}
+                title={part.title}
+                desktopFolder={view.state.config.desktopFolder}
+                now={view.now}
+              />,
+            ],
+      )}
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
