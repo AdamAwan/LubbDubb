@@ -1461,87 +1461,104 @@ a.cn-qbody {
   padding-right: 22px;
 }
 
-/* The goal's navigation, and the pane it selects, drawn as ONE shape.
+/* The tabbed panel — the dressing for `web/src/console/TabbedPanel.tsx`.
 
-   It was two controls once — a track strip reading the stages and a tab row one
-   line below badging the same numbers — and two controls stating one thing is
-   what made this page read as cluttered. A stage is where you go, so the stage
-   is the button. What is here on top of that is the join: the selected tab keeps
-   the panel's ground and lays its bottom edge over the panel's top one, so the
-   row reads as the controls for what is below it rather than as a strip of cards
-   that happens to sit above it. → docs/spec/17-cockpit.md#the-panes
+   One object, not two: the tabs sit on a bar of their own and the selected one
+   is cut out of the panel below it — the panel's ground, no bottom edge, its own
+   top corners. A row of separate cards above a separate panel reads as two
+   surfaces that happen to be stacked, and nothing about that says the row is
+   what changes what is underneath.
 
-   `cn-gnav` rather than `cn-strip`, which is gone: the rack's second line uses
-   `--cn-strip-cols` a thousand lines below and the two matched silently once
-   already. A new class name in this sheet is grepped for first.
+   The bar is a *continuous* surface behind the tabs rather than a gap between
+   them: with the page showing through, each tab reads as its own card again and
+   the bar it is supposed to be sitting on does not exist. Unselected tabs are
+   told apart by a hairline, which is what a bar with no gaps leaves room for.
 
-   Flex with a shared bottom rule rather than a grid over a lined ground, because
-   the join needs that rule to be *the panel's* edge — a grid's own gaps cannot
-   be punched through by one cell. Entries share the width and stop shrinking at
-   `min-width`, past which the row scrolls: five tabs wrapping to two lines stop
-   reading as one row of alternatives, and the panel below is what width is for.
+   `cn-tabp` rather than `cn-strip`, which is gone, or `cn-gnav`, which this
+   replaced: the rack's second line uses `--cn-strip-cols` a thousand lines below
+   and the two matched silently once already. A new class name in this sheet is
+   grepped for first.
 
-   Every entry takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias it
-   carries. No colour of its own, and so no new token: a theme moves the nav with
-   everything else it already moves. */
-.cn-gnav {
+   Every tab takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias it
+   carries. No colour of its own, and so no new token: a theme moves the panel
+   with everything else it already moves.
+
+   `.cn button` sets `background: none; border: 0` and outranks a bare class, so
+   every rule here that gives a tab a ground or an edge is scoped `.cn` first.
+   → CLAUDE.md, the control kit's specificity traps */
+.cn-tabp {
+  min-width: 0;
+}
+.cn-tabp-bar {
   display: flex;
   align-items: stretch;
-  gap: 2px;
-  border-bottom: 1px solid var(--cn-line);
+  gap: 1px;
+  /* The hairlines between tabs are this ground showing through the gap, which is
+     why the bar is a line colour and not a panel one. */
+  background: var(--cn-line);
+  border: 1px solid var(--cn-line);
+  border-bottom: 0;
+  border-radius: var(--cn-r) var(--cn-r) 0 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.cn-gnav::-webkit-scrollbar {
+.cn-tabp-bar::-webkit-scrollbar {
   display: none;
 }
-.cn .cn-gnavk {
+.cn .cn-tabp-tab {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
   gap: 4px;
+  /* Past this the row scrolls rather than wrapping: five tabs on two lines stop
+     reading as one row of alternatives, and the panel below is what width is for. */
   min-width: 124px;
-  /* Onto the row's rule, which is the panel's top edge: the selected tab paints
-     over it in the panel's own ground and the two become one surface. */
-  margin-bottom: -1px;
   padding: 9px 13px 10px;
-  background: var(--cn-panel-2);
-  border: 1px solid transparent;
-  border-bottom: 1px solid var(--cn-line);
-  border-radius: var(--cn-r) var(--cn-r) 0 0;
+  /* Darker than the panel, so the selected tab is the one that lifts. The bar is
+     chrome and the panel is the page's own surface; a tab that stood *above* the
+     panel's lightness would read as the selected one wherever the eye landed. */
+  background: var(--cn-bg);
+  border: 0;
+  border-radius: 0;
   text-align: left;
   font: inherit;
   color: inherit;
   cursor: pointer;
 }
-.cn .cn-gnavk:hover {
+.cn .cn-tabp-tab:first-child {
+  border-top-left-radius: var(--cn-r);
+}
+.cn .cn-tabp-tab:last-child {
+  border-top-right-radius: var(--cn-r);
+}
+.cn .cn-tabp-tab:hover {
   background: var(--cn-hover);
 }
-.cn .cn-gnavk.cn-on {
+/* The selected tab is the panel, standing up: same ground, and it keeps the
+   hairline on either side of it so the cut reads as a cut. */
+.cn .cn-tabp-tab.cn-on {
   background: var(--cn-panel);
-  border-color: var(--cn-line);
-  border-bottom-color: var(--cn-panel);
 }
-.cn-gnavl {
+.cn-tabp-name {
   display: flex;
   align-items: center;
   gap: 6px;
   font-family: var(--cn-mono);
   color: var(--cn-fg-faint);
 }
-.cn-gnavk.cn-on .cn-gnavl {
+.cn .cn-tabp-tab.cn-on .cn-tabp-name {
   color: var(--cn-fg);
 }
-/* One dot, drawn where an ask is waiting in that pane. It is what a whole band
-   above the navigation used to say, said by the control you would press anyway
-   — the ask itself is a row at the top of the page. */
-.cn-gnavd {
+/* One dot, where an ask is waiting in that pane. It is what a whole band above
+   the navigation used to say, said by the control you would press anyway — the
+   ask itself is a row at the top of the page. */
+.cn-tabp-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--cn-amber);
 }
-.cn-gnavv {
+.cn-tabp-read {
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1550,9 +1567,28 @@ a.cn-qbody {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The panel the tabs are the controls for. Its top edge is the nav's own rule,
-   so it carries none of its own. */
-.cn-gpanel {
+.cn-tabp-meter {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cn-track);
+  overflow: hidden;
+}
+.cn-tabp-meter i {
+  display: block;
+  height: 100%;
+  background: var(--cn-tone);
+}
+/* A tab with nothing to measure draws no meter at all, rather than an empty one.
+   An empty bar under "no checks" reads as every check outstanding, which is the
+   one thing a null reading exists to keep it from saying. */
+.cn-tabp-meter.cn-none {
+  background: none;
+}
+/* The panel. Its top edge is the bar's own, so it carries none. */
+.cn-tabp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   min-width: 0;
   padding: 14px;
   background: var(--cn-panel);
@@ -1560,55 +1596,31 @@ a.cn-qbody {
   border-top: 0;
   border-radius: 0 0 var(--cn-r) var(--cn-r);
 }
+/* The panel takes focus when a jump lands in it, and a focus ring around the
+   whole page body is furniture: the tab that selected it is the thing that
+   reads as focused. */
+.cn-tabp-body:focus {
+  outline: none;
+}
 /* A card sitting directly on the panel is a section of that one surface, not a
    box on it: its own border and ground would be a box inside a box. Direct
    children only — a card nested inside a component keeps its own edges, which
    are what tell it apart from the card holding it. */
-.cn-gpanel > .cn-gpane > .cn-card {
+.cn-tabp-body > .cn-card {
   border: 0;
   border-radius: 0;
   background: none;
 }
-.cn-gpanel > .cn-gpane > .cn-card + .cn-card {
+.cn-tabp-body > .cn-card + .cn-card {
   padding-top: 12px;
   border-top: 1px solid var(--cn-line-soft);
 }
-/* The asks, a row each, above the navigation. */
+/* The asks, a row each, above the tabs. */
 .cn-asklines {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-}
-.cn-tkb {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--cn-track);
-  overflow: hidden;
-}
-.cn-tkb i {
-  display: block;
-  height: 100%;
-  background: var(--cn-tone);
-}
-/* A stage with nothing to measure draws no track at all, rather than an empty
-   one. An empty bar under "no checks" reads as every check outstanding, which is
-   the one thing a null reading exists to keep it from saying. */
-.cn-tkb.cn-none {
-  background: none;
-}
-
-.cn-gpane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-/* The pane takes focus when a jump lands in it, and a focus ring around the
-   whole page body is furniture: the tab that selected it is the thing that
-   reads as focused. */
-.cn-gpane:focus {
-  outline: none;
 }
 
 /* The orphan warning — a goal hanging off no Feature, said above every card on

@@ -74,6 +74,7 @@ import {
 } from '../view/localValidation.js';
 import { Button } from '../components/button.js';
 import { logUsage } from '../cockpit/usage.js';
+import { TabbedPanel, type PanelTab } from './TabbedPanel.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -107,20 +108,24 @@ export function GoalPage({
           and a row costs the page one line, where a band cost it three hundred.
           → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */}
       <AskLines rows={askLines(page)} view={view} actions={actions} />
-      {/* The navigation, and the pane it selects, drawn as one shape: the tab
-          keeps the panel's ground and drops its bottom edge onto it, so the row
-          reads as the controls for what is below rather than a strip that
-          happens to sit above it. → docs/spec/17-cockpit.md#the-panes */}
-      <GoalNav page={page} tab={tab} chosen={view.goalTab} opening={opening} actions={actions} />
-      <div className="cn-gpanel">
-        <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
-          {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
-          {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
-          {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
-          {tab === 'shipping' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
-          {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
-        </div>
-      </div>
+      {/* The stages are the tabs, and the tabs are cut out of the panel they
+          select: one object, so the row cannot read as a strip that merely sits
+          above the pane. → docs/spec/17-cockpit.md#the-panes */}
+      <TabbedPanel
+        tabs={goalTabs(page, tab, view.goalTab, opening)}
+        selected={tab}
+        onSelect={(id) => {
+          if (id !== tab) logUsage('goal.expand');
+          actions.openGoalTab(id as GoalTab);
+        }}
+        label="This goal"
+      >
+        {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
+        {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'shipping' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+      </TabbedPanel>
       {/* Below the panel, because what it asks is about the goal's place on the
           board rather than about any stage of the work — and because the ask
           itself is already announced as a row at the top. */}
@@ -160,58 +165,29 @@ function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
   return held.current.opening;
 }
 
-function GoalNav({
-  page,
-  tab,
-  chosen,
-  opening,
-  actions,
-}: {
-  page: GoalPageView;
-  tab: GoalTab;
-  chosen: GoalTab | null;
-  opening: GoalTabOpening;
-  actions: CockpitActions;
-}): JSX.Element {
-  return (
-    <div className="cn-gnav" role="tablist" aria-label="This goal">
-      {buildGoalNav(page).map((entry) => (
-        <button
-          key={entry.tab}
-          type="button"
-          role="tab"
-          id={`cn-tab-${entry.tab}`}
-          aria-selected={entry.tab === tab}
-          aria-controls={`cn-pane-${entry.tab}`}
-          className={`cn-gnavk cn-t-${entry.tone} ${entry.tab === tab ? 'cn-on' : ''}`}
-          title={
-            entry.tab === tab && chosen === null
-              ? `Opened here because ${opening.why}`
-              : `${entry.label}: ${entry.reading} — go to it`
-          }
-          onClick={() => {
-            if (entry.tab !== tab) logUsage('goal.expand');
-            actions.openGoalTab(entry.tab);
-          }}
-        >
-          <span className="cn-gnavl">
-            {entry.label}
-            {/* One dot, and only where an ask is actually waiting in that pane.
-                It is the whole of what the ask bands used to say from above the
-                navigation, said by the control you would press anyway. */}
-            {entry.needsYou && <i className="cn-gnavd" title="Something here needs you" />}
-          </span>
-          <span className="cn-gnavv">{entry.reading}</span>
-          {/* Drawn only for a stage with a proportion to draw. An empty bar under
-              "no checks" would report every check outstanding, which is the one
-              thing a null `done` exists to keep it from saying. */}
-          <span className={`cn-tkb ${entry.done === null ? 'cn-none' : ''}`}>
-            {entry.done !== null && <i style={{ width: `${entry.done}%` }} />}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
+/**
+ * The goal's stages as tabs. A stage carries a reading and a meter as well as a
+ * name, because the row is where the goal *is* as much as where you can go — and
+ * a dot where an ask is waiting in that pane, which is the whole of what a band
+ * above the navigation used to say.
+ */
+function goalTabs(page: GoalPageView, tab: GoalTab, chosen: GoalTab | null, opening: GoalTabOpening): PanelTab[] {
+  return buildGoalNav(page).map((entry) => ({
+    id: entry.tab,
+    tone: `cn-t-${entry.tone}`,
+    meter: entry.done,
+    reading: entry.reading,
+    title:
+      entry.tab === tab && chosen === null
+        ? `Opened here because ${opening.why}`
+        : `${entry.label}: ${entry.reading} — go to it`,
+    label: (
+      <>
+        {entry.label}
+        {entry.needsYou && <i className="cn-tabp-dot" title="Something here needs you" />}
+      </>
+    ),
+  }));
 }
 
 function TicketPane({
