@@ -23,17 +23,14 @@ import {
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime, timeLeft } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';
-import { StaleChip, waitedFor } from './GoalPage.js';
+import { StaleChip } from './GoalPage.js';
 import { OverviewSwitch } from './overviews/OverviewSwitch.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
+import { prRow } from './prRow.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { EjectionControls } from '../components/Ejection.js';
-import { CiMark, CiSlot } from '../components/CiMark.js';
-import { CommentsMark } from '../components/CommentsMark.js';
-import { PackMark } from '../components/PackMark.js';
-import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag } from '../components/tag.js';
 
@@ -581,11 +578,9 @@ function trackTitle(track: GoalTrack): string {
 }
 
 function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const { config } = view.state;
   const open = view.state.world.pullRequests;
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
-  const { watchLabel } = config;
   const asking = open.filter(isAsking);
   const answered = open.filter((pr) => isAssigned(pr) && !isAsking(pr));
   const fleet = open.filter((pr) => !isAssigned(pr));
@@ -606,7 +601,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         layout="stacked"
         words="subline"
         rows={ordered.map((pr) => {
-          const row = prRow(pr, view, actions, watchLabel);
+          const row = prRow(pr, view, actions);
           const who = marks ? { who: <Who name={whoAsked(pr)} /> } : {};
           if (!grouped) return { ...row, ...who };
           return { ...row, ...who, group: band(pr, asking.length, answered.length, fleet.length) };
@@ -633,81 +628,6 @@ function band(pr: OpenPullRequest, asking: number, answered: number, fleet: numb
   if (isAsking(pr)) return { key: 'asking', label: 'Assigned to review', note: `${asking}`, tone: 'ask' };
   if (isAssigned(pr)) return { key: 'answered', label: 'Assigned, not waiting on you', note: `${answered}` };
   return { key: 'fleet', label: 'The fleet’s', note: `${fleet}` };
-}
-
-function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {
-  const unwatched = pr.attention.status === 'unwatched';
-  const goal = goalOfPr(view.state, pr.number);
-  const onIt = view.agentOnBranch.get(pr.branch);
-  return {
-    key: String(pr.number),
-    title: pr.title,
-    refs: (
-      <>
-        <Ref to={`pr:${pr.number}`} />
-        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
-      </>
-    ),
-    open: () => actions.selectPr(pr.number),
-    openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
-    facts: unwatched ? undefined : prFacts(pr, view.now),
-    why: unwatched ? null : pr.attention.reasons.join(' '),
-    lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
-    reading: (
-      <>
-        {onIt === undefined ? <CiMark pr={pr} reserve onOpen={() => actions.selectPr(pr.number)} /> : <CiSlot />}
-        {/* The fleet's own reading of the diff; survives an agent taking the
-            chip's place since what was already read doesn't change on a move. */}
-        <ReviewMark review={pr.review} now={view.now} reserve onOpen={() => actions.selectPr(pr.number)} />
-        {/* Whether anybody is waiting on an answer — a verdict, not a fact like
-            an age, so it left the sub-line for its own mark. */}
-        <CommentsMark comments={pr.unresolvedComments} reserve onOpen={() => actions.selectPr(pr.number)} />
-        {/* Whether there is a pack to read — about a document, not the PR itself. */}
-        <PackMark pack={pr.pack} reserve onOpen={() => actions.selectPr(pr.number)} />
-      </>
-    ),
-    toggle: (
-      <AsyncButton
-        className="cn-eye"
-        disabled={watchLabel === ''}
-        onClick={() => actions.setPrWatched(pr.number, unwatched)}
-        title={
-          watchLabel === ''
-            ? 'No watch label configured — the watch gate is off'
-            : unwatched
-              ? `Tag this PR "${watchLabel}" and let the harness work it`
-              : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
-        }
-      >
-        <Eye open={!unwatched} />
-      </AsyncButton>
-    ),
-    spent: unwatched,
-    live: onIt !== undefined,
-  };
-}
-
-function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
-  const facts: { label: string; value: string; alarm?: boolean }[] = [];
-  if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
-  const since = pr.attention.reviewWaitingSince;
-  if (since !== undefined) facts.push({ label: 'waiting', value: waitedFor(since, now) });
-  return facts.length === 0 ? undefined : facts;
-}
-
-function Eye({ open }: { open: boolean }): JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-      <path
-        d="M1 8s2.6-4.2 7-4.2S15 8 15 8s-2.6 4.2-7 4.2S1 8 1 8Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-      />
-      <circle cx="8" cy="8" r="1.9" fill="currentColor" />
-      {!open && <path d="M2.5 13.5 13.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
-    </svg>
-  );
 }
 
 export function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {

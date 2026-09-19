@@ -1277,6 +1277,15 @@ a.cn-qbody {
   color: var(--cn-fg-faint);
   opacity: 0.85;
 }
+/* The agent count carries the glyph the cockpit says "agent" with, and the names
+   behind it are the hover. `help` rather than the arrow, because the reading is
+   not a control — it says there is more to read where the pointer is. */
+.cn-ghagents {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+}
 /* A verdict chip carries the glyph that says whose reading it is, so it lays out
    like a control even though it is not one. */
 .cn-ghverdict {
@@ -2629,6 +2638,63 @@ a.cn-qbody {
   gap: 6px;
   margin: 0 0 6px;
   flex-wrap: wrap;
+}
+
+/* The pull request carrying this part, as the cockpit's one pull-request row.
+   The card is already a row's worth of frame, so the row drops the padding and
+   the rule that separate a list's rows from each other — what is left is the row
+   itself, aligned across the whole board by `PanelRows`' rail. */
+.cn-part .cn-partpr {
+  margin: 0 0 6px;
+  /* The board's rails were measured for a card the width of the page, and the
+     part cards are columns of a wave — at their widths the row's floors add up
+     to more than the card holds and the reference slot hangs off its right
+     edge. So the three rails that are wider than this row ever needs are taken
+     in: the title gives way altogether, because the part's own title is the line
+     directly above and a clipped copy of the pull request's says nothing the
+     reader has not just read; the chip slot carries one word rather than two
+     chips; the reference slot carries one reference rather than a pair, the goal
+     being the page this row is drawn on. */
+  --cn-w-title: 0px;
+  --cn-w-chips: 68px;
+  --cn-w-refs: 96px;
+}
+/* A pull request the plan does not account for, drawn as a part with nothing
+   known about it: the card's own ground, no state border, and the row it carries
+   is the whole of what there is to say. */
+.cn-part.cn-loose {
+  border-color: var(--cn-line);
+}
+.cn-part.cn-loose .cn-partpr {
+  margin-bottom: 4px;
+}
+
+.cn-part .cn-partpr .cn-row,
+.cn-desc-pr .cn-row {
+  padding: 0;
+  border-bottom: 0;
+}
+/* The same cut the rail makes at 900px, made earlier here. The row unstacks as
+   soon as it fits, and with the three rails above taken in it fits at 460 —
+   where the rack needs 900 because its subject is the only thing naming the
+   pull request and must keep a sentence's worth of room. Here the part's own
+   title is the line above, so the subject can be down to a few words without
+   the row saying any less. */
+@container cn-rows (min-width: 460px) {
+  .cn-part .cn-partpr .cn-srow,
+  .cn-desc-pr .cn-srow {
+    grid-template-columns: var(--cn-cols-line);
+    row-gap: 0;
+  }
+  .cn-part .cn-partpr .cn-srow > .cn-rowreads,
+  .cn-desc-pr .cn-srow > .cn-rowreads {
+    display: contents;
+  }
+  .cn-part .cn-partpr .cn-srow > .cn-refs,
+  .cn-desc-pr .cn-srow > .cn-refs {
+    grid-column: auto;
+    grid-row: auto;
+  }
 }
 
 .cn-part .cn-dep {
@@ -6499,13 +6565,31 @@ button.cn-grow {
 .cn-desc > .cn-empty {
   padding: 0 13px 11px;
 }
+/* The pull request's own row, on the card's grid rather than on the panel's
+   padding: the rows this card holds all start at the same left edge. */
+.cn-desc-pr {
+  padding: 0 13px 9px;
+  /* The same rails the part card takes in, and for the same reason: the heading
+     directly above already names the part and its title, so the row's own
+     subject can give way, and it carries one reference and one word. */
+  --cn-w-title: 0px;
+  --cn-w-chips: 68px;
+  --cn-w-refs: 96px;
+}
+.cn-desc-pr .cn-row {
+  padding: 0;
+  border-bottom: 0;
+}
 .cn-desc-current {
   padding: 0 13px 11px;
 }
+/* The words the operator typed, with no rule down their left. The quote bar was a
+   second left edge a few pixels in from the card's own, which reads as the panel
+   being indented rather than as the text being quoted — and nothing else on this
+   card is inset, so there was nothing for it to be quoted *against*. */
 .cn-desc-text {
   margin: 0;
-  padding: 0 0 0 10px;
-  border-left: 3px solid var(--cn-line);
+  padding: 0;
   font-size: 13px;
   line-height: 1.55;
   /* The operator typed paragraphs into a plain field, and the body ships what they

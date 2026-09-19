@@ -215,10 +215,10 @@ test('a part row links the pull request that carries it', () => {
   assert.ok(plan, 'that part must belong to a plan');
 
   const html = render(view({}, plan.originRef));
-  assert.ok(
-    html.includes(`>PR #${withParts.prNumber}<`),
-    'the plan wave named the PR in text and offered no way to it',
-  );
+  /* The part carries the whole pull-request row now, and the row's reference is
+     drawn by `<Ref>` — so what the wave must offer is that reference, not the
+     `PR #<n>` text the dependency line used to repeat beside it. */
+  assert.ok(html.includes(`>PR ${withParts.prNumber}<`), 'the plan wave named the PR in text and offered no way to it');
 });
 
 test('a reference is drawn as a token at rest, and shows a ring when it takes focus', () => {
@@ -294,7 +294,13 @@ test('a pair drawn in a group narrower than it wants gives way from its number, 
     'the rail is a ceiling a narrow card takes back, so the group needs a floor its arms fit in',
   );
 
-  const width = /--cn-w-refs: (\d+)px/.exec(console_);
+  /* Read out of `.cn-rows` itself: a surface whose row needs less than the rail
+     takes it back on its own element (the goal board's part cards carry one
+     reference, not two), and a search of the whole sheet finds whichever of
+     those is written first. What this test is about is the rail every card
+     starts from. */
+  const rails = console_.slice(console_.indexOf('\n.cn-rows {'));
+  const width = /--cn-w-refs: (\d+)px/.exec(rails.slice(0, rails.indexOf('\n}')));
   assert.notEqual(width, null, 'the refs rail must still declare a width');
   assert.ok(
     Number(width?.[1]) >= 176,

@@ -2,13 +2,13 @@ import { useLayoutEffect, useRef, useState, type JSX, type MutableRefObject } fr
 import { api } from '../api.js';
 import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
-import { Ref } from './refs.js';
 import { usePartDescriptions } from './partDescriptions.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
 import { relTime } from './util.js';
 import { Tag } from './tag.js';
+import { PanelRows, type PanelRowModel } from '../console/PanelRow.js';
 
 // → docs/spec/17-cockpit.md#the-description-a-reviewer-reads
 
@@ -145,8 +145,8 @@ export function PrDescription({
   issueNumber,
   slug,
   position,
-  prNumber,
   title,
+  row,
   anchor,
   desktopFolder,
   now,
@@ -154,8 +154,9 @@ export function PrDescription({
   issueNumber: number;
   slug: string;
   position: number;
-  prNumber: number;
   title: string;
+  /** The pull request this describes, as the cockpit's one pull-request row. */
+  row: PanelRowModel | undefined;
   /** The board card this panel was opened for, which its pointer aims at. */
   anchor: MutableRefObject<HTMLDivElement | null>;
   desktopFolder: string | null;
@@ -201,10 +202,15 @@ export function PrDescription({
         {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}
       </h3>
       {/* The pull request this describes, so the operator can go and read it — which
-          is the whole reason the panel waits for it to be open. */}
-      <div className="cn-refs">
-        <Ref to={`pr:${prNumber}`} />
-      </div>
+          is the whole reason the panel waits for it to be open. The row rather than
+          the bare reference: a panel about what a pull request says it does is a
+          strange place to say less about that pull request than its own card on the
+          board does. → docs/spec/17-cockpit.md#a-part-and-its-pull-request */}
+      {row !== undefined && (
+        <div className="cn-desc-pr cn-read-marks">
+          <PanelRows layout="stacked" rows={[row]} />
+        </div>
+      )}
 
       {/* Only where nobody has written one. On a panel that already carries a
           description the argument for writing it has been made and won, and the same
