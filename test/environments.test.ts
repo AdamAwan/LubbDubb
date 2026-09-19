@@ -258,6 +258,63 @@ test('a landing the clone placed off the integration branch leaves the goal’s 
   assert.equal(rows[0]?.unplaced, 1, 'the card says what it could not place rather than reading partial forever');
 });
 
+test('every landing the goal owns is shipped with its own per-environment verdict', () => {
+  const [goal] = allGoalReach({
+    landings: [
+      landing({ prNumber: 1, sha: 'a', onIntegration: true }),
+      landing({ prNumber: 2, sha: 'b', onIntegration: true }),
+    ],
+    readings: [reading({ sha: 'a', environment: 'staging' }), reading({ sha: 'a', environment: 'prod' })],
+    nodes: plannedGoal(),
+    landed: new Set([1, 2]),
+    plans: [],
+    parts: [],
+    environments: ENVS,
+  });
+  assert.deepEqual(
+    goal?.landings,
+    [
+      { prNumber: 1, sha: 'a', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
+      { prNumber: 2, sha: 'b', reach: {}, unplaced: false },
+    ],
+    'the rows the counts are the AND over, so a partial goal can say which landing is short',
+  );
+});
+
+test('an environment with no reading for a landing is absent from its row, never a verdict', () => {
+  const [goal] = allGoalReach({
+    landings: [landing({ prNumber: 1, sha: 'a', onIntegration: true })],
+    readings: [reading({ sha: 'a', environment: 'staging', status: 'absent' })],
+    nodes: plannedGoal(),
+    landed: new Set([1]),
+    plans: [],
+    parts: [],
+    environments: ENVS,
+  });
+  /* `prod` never answered, and a key that is simply missing is what carries that. Defaulted to
+     `absent` here the cockpit would state, in the operator's own words, that the work is not
+     deployed — for a probe that was never run. → docs/spec/24-environments.md#the-three-verdicts */
+  assert.deepEqual(goal?.landings[0]?.reach, { staging: 'absent' });
+});
+
+test('a landing off the integration branch is on its row and out of the count', () => {
+  const [goal] = allGoalReach({
+    landings: [
+      landing({ prNumber: 1, sha: 'a', onIntegration: true }),
+      landing({ prNumber: 2, sha: 'b', onIntegration: false }),
+    ],
+    readings: [reading({ sha: 'a', environment: 'staging' }), reading({ sha: 'a', environment: 'prod' })],
+    nodes: plannedGoal(),
+    landed: new Set([1, 2]),
+    plans: [],
+    parts: [],
+    environments: ENVS,
+  });
+  assert.equal(goal?.environments[0]?.status, 'reached', 'the stacked squash does not hold the goal short');
+  assert.equal(goal?.landings.length, 2, 'it still has a row, because the fraction has to be accountable');
+  assert.equal(goal?.landings[1]?.unplaced, true);
+});
+
 const GATED: EnvironmentConfig[] = [{ name: 'staging', at: 'unused', arrival: { opens: ['validate'] } }];
 
 test('a delivered goal held behind an environment its work never reached is reported, not held quietly', () => {

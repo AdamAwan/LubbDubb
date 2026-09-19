@@ -57,6 +57,7 @@ import {
   ControlSegments,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
+import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
 import { SignalsSection } from '../components/SignalsSection.js';
 import { RemoteValidationSection } from '../components/RemoteValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
@@ -122,11 +123,11 @@ export function GoalPage({
         }}
         label="This goal"
       >
-        {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'checks' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'merged' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'shipped' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'closeout' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'done' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
       </TabbedPanel>
       {/* Below the panel, because what it asks is about the goal's place on the
           board rather than about any stage of the work — and because the ask
@@ -363,7 +364,6 @@ function ValidationPane({
         fold={folds.validation}
       />
       <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
-      <RemoteValidation page={page} view={view} actions={actions} fold={folds.remoteValidation} />
     </>
   );
 }
@@ -381,7 +381,15 @@ function ShippingPane({
 }): JSX.Element {
   return (
     <>
+      {/* Above the environment rows, because while the goal reads partial the rows say
+          only *how many* landings are short and this says *which* — and which is the
+          whole of what an operator can act on. → docs/spec/24-environments.md */}
+      <GoalReachMatrix page={page} />
       <Environments page={page} actions={actions} now={view.now} fold={folds.environments} />
+      {/* A sheet is assembled for an arrival, so it is drawn with the arrival. Nothing is
+          sheeted until every part has landed, so this and the matrix above it are never
+          both the live reading. → docs/spec/36-remote-validation.md */}
+      <RemoteValidation page={page} view={view} actions={actions} fold={folds.remoteValidation} />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
     </>
   );

@@ -2240,12 +2240,19 @@ provider and command I/O is behind these; the tests touch no network and spawn n
 
 → [17](17-cockpit.md). One card, one line on a card that exists, and one new piece of place.
 
-**The card** is `remoteValidation` in `GOAL_SECTIONS`, between `localValidation` and `signals` — its
-own full-width card rather than a band inside the Environments card, `LocalValidationSection`'s
-argument for its reason: this card carries **controls and a press**, and a control buried two levels
-inside a status card is a control nobody finds. Its order in the page is the order the questions are
-asked in: did we build it (Validation), does it work here (this), did it do anything over time
-(Signals), where has it got to (Environments).
+**The card** is `remoteValidation` in `GOAL_SECTIONS` — its own full-width card rather than a band
+inside the Environments card, `LocalValidationSection`'s argument for its reason: this card carries
+**controls and a press**, and a control buried two levels inside a status card is a control nobody
+finds.
+
+**It is drawn behind the Shipped pane, not the Merged one** ([17](17-cockpit.md#the-panes)). A sheet
+is assembled _for an arrival_, and an arrival needs every one of the goal's landings to have been read
+as present ([24](24-environments.md#what-an-arrival-means)) — so a sheet and the merge-time checks can
+never both be the live reading, and a pane holding both names two states that cannot coexist. Behind
+Shipped the card sits under the reach matrix and the Environments rows, which is the order the
+questions are asked in: has every part got there (the matrix), where is it (Environments), does it
+work there (this), did it do anything over time (Signals). The merge-time half of the old pairing —
+`validation` and `localValidation` — stays behind Merged.
 
 **The card is absent entirely where no environment declares a `validate` block**, and absent on a
 goal with no sheet — not an empty card, and not a row of question marks. That is the rule the
