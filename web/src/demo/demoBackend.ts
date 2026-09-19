@@ -4862,8 +4862,6 @@ export const demoApi = {
   writeGoalCriteria: (): Promise<never> =>
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
   getGoalDescriptions: (number: number) => Promise.resolve({ parts: getServer().goalDescriptions(number) }),
-  getPrDescription: (number: number, slug: string) =>
-    Promise.resolve(getServer().descriptionReading(`issue:${number}:part:${slug}`)),
   writePrDescription: (number: number, slug: string, body: { text: string }) =>
     Promise.resolve().then(() => getServer().writeDescription(`issue:${number}:part:${slug}`, body.text)),
   getTickets: (query: {
