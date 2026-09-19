@@ -2537,6 +2537,30 @@ It sits where the gate stood, so predict → reveal → mark reads as one sittin
 visit to a different surface. But it is drawn off the record — a prediction exists and the goal is
 revealed — not off the moments after the press, so an operator who closed the tab comes back to it.
 
+#### Where the prediction is drawn
+
+The panel's **position in the plan card is read off the plan's status**, and it carries its own
+disclosure:
+
+- **While the plan is at its gate** (`planning`, `awaiting_approval`) it is drawn **above the parts**
+  and **open**. Marking the prediction against what the plan says is what the pane is for at that
+  moment, and nothing below it can move until the plan is approved anyway.
+- **Once the plan is approved and the work is under way**, it goes to the **foot of the card**, folded
+  away. The parts are the live thing then, and a full-width two-column record of a moment that has
+  passed is something an operator watching the work reads past on every visit to reach them.
+- **Unless moment two is being asked.** A goal whose delivery has landed has a live question in that
+  panel again, so it opens — at the foot, where the work it is now a reading of already is.
+
+Folded, the header still says how much of it is unanswered — `2/3 marked`, and `outcome unanswered`
+where moment two is owed — because what a folded record owes its reader is whether anything in it is
+still theirs to do. The disclosure is the panel's **own**, as [the work record's](#the-record-on-the-goal-it-belongs-to) is:
+only it knows whether the goal carries a prediction at all, and a header drawn outside it would be an
+empty card on every goal nobody predicted.
+
+The fold is a `prediction` section like any other, so it is [in the query string](#the-address-bar)
+and survives a reload. What is *not* in the query string is the position: that is read off the plan,
+which is what is true rather than where the operator is.
+
 **Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a
 dashed edge and the words "Not marked yet" in faint ink — visibly not the solid red edge and filled
 button of a `missed`. The two must not look alike anywhere, because the aggregate reads them as

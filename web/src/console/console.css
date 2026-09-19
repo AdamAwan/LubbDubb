@@ -2145,14 +2145,31 @@ a.cn-qbody {
   color: var(--cn-fg-faint);
 }
 
+/* The prediction's own fold. Its position moves — above the parts at the plan's
+   gate, at the foot of the card once the work is under way — so the header carries
+   the rule above and the panel below it either way.
+   → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */
+.cn-pmark-fold {
+  border-top: 1px solid var(--cn-line-soft);
+}
+.cn-pmark-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+
 /* Moment one: the prediction drawn beside the plan it was predicting, with a mark
    per filled slot. → docs/spec/17-cockpit.md */
 .cn-pmark {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 13px;
-  padding: 13px;
-  border-bottom: 1px solid var(--cn-line-soft);
+  padding: 0 13px 13px;
 }
 .cn-pmark h4 {
   margin: 0 0 8px;

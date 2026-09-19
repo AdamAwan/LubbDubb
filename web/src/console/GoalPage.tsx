@@ -6,6 +6,7 @@ import type { NeedRow } from '../view/needsYou.js';
 import {
   buildGoalNav,
   goalSectionsOpen,
+  planUnderWay,
   GOAL_ANCHOR,
   goalLanding,
   reachCount,
@@ -121,7 +122,7 @@ export function GoalPage({
         label="This goal"
       >
         {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} />}
+        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'checks' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'shipped' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'closeout' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
@@ -220,14 +221,16 @@ function WorkPane({
   page,
   view,
   actions,
+  folds,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   return (
     <>
-      <PlanWaves page={page} view={view} actions={actions} />
+      <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} />
       {/* Below the plan rather than above it: what "done" means is read against the
           shape the fleet proposed, and the card draws nothing at all where the
           criteria routes are not mounted. A part with a task behind it is what
@@ -1018,10 +1021,12 @@ function PlanWaves({
   page,
   view,
   actions,
+  fold,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
+  fold: Fold;
 }): JSX.Element {
   const groups = GROUP_ORDER.map((group) => ({
     group,
@@ -1039,6 +1044,19 @@ function PlanWaves({
   const prs = new Map<number, PartPr>();
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
+  const underWay = planUnderWay(page);
+  const prediction = (
+    <PredictionReview
+      issueNumber={page.issue.number}
+      revealed={plan !== null && (plan.revealed || lifted)}
+      outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
+      plan={plan}
+      parts={page.parts.map((p) => p.part)}
+      open={fold.open}
+      onToggle={fold.onToggle}
+      now={view.now}
+    />
+  );
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.plan}>
@@ -1077,16 +1095,14 @@ function PlanWaves({
           }}
         />
       )}
-      {!gated && (
-        <PredictionReview
-          issueNumber={page.issue.number}
-          revealed={plan !== null && (plan.revealed || lifted)}
-          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
-          plan={plan}
-          parts={page.parts.map((p) => p.part)}
-          now={view.now}
-        />
-      )}
+      {/* Above the parts while the plan is still at its gate: marking the prediction
+          against what the plan says is what this pane is *for* at that moment, and
+          the parts below it are not going anywhere until it is approved. Once the
+          plan is approved and the work is under way, the parts are the live thing
+          and the prediction is a record of a moment that has passed — so it goes to
+          the foot of the card, folded away by default.
+          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
+      {!gated && !underWay && prediction}
       <div className="cn-waves" hidden={gated}>
         {groups.length === 0 && (
           <p className="cn-empty">
@@ -1132,6 +1148,7 @@ function PlanWaves({
           </div>
         )}
       </div>
+      {!gated && underWay && prediction}
     </section>
   );
 }
