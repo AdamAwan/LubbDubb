@@ -651,3 +651,45 @@ test('urgency ranks the queue, and a watch holding parts is not filed under "whe
 });
 
 const ORDER = ['now', 'next', 'later'];
+
+test('a pull request nobody described is an ask of yours, and never a blocker', () => {
+  const state = stateWith({
+    escalations: [],
+    humanTasks: [],
+    proposals: [],
+    recovery: [],
+    planParts: [part({ slug: 'cursor', title: 'Read the cursor back', prNumber: 41 })],
+    undescribedParts: [{ originRef: 'issue:142:part:cursor', prNumber: 41, openedAt: '2026-01-02T00:00:00.000Z' }],
+  });
+
+  const rows = buildNeedsYou(state);
+  const row = rows.find((r) => r.kind === 'describe');
+
+  assert.ok(row, 'the ask is drawn');
+  assert.equal(row.group, 'yours', 'nothing on the fleet is waiting on it');
+  assert.equal(row.urgency, 'next');
+  assert.equal(row.holding, 0);
+  assert.equal(row.originRef, 'issue:142:part:cursor');
+  assert.equal(row.goalRef, 'issue:142');
+  assert.match(row.title, /#41/);
+  assert.match(row.title, /Read the cursor back/);
+  assert.equal(row.raisedAt, '2026-01-02T00:00:00.000Z', 'it is as old as the pull request, not as old as the part');
+});
+
+test('the ask is the server\u2019s list, so a cockpit given none draws none', () => {
+  const rows = buildNeedsYou(
+    stateWith({
+      escalations: [],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      planParts: [part({ slug: 'cursor', prNumber: 41 })],
+      undescribedParts: [],
+    }),
+  );
+
+  assert.equal(
+    rows.some((r) => r.kind === 'describe'),
+    false,
+  );
+});

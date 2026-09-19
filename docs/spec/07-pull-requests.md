@@ -749,6 +749,31 @@ pull request would read as described when nobody had. Either a person wrote the 
 and the absence is on the page where a reviewer can see it. That is what keeps a skipped description
 from being the quiet failure a required one would only have moved.
 
+#### The rail asks for it, and nothing waits on the answer
+
+Holding nothing up is not the same as being invisible. A description that is only ever offered on the
+goal page is one an operator finds by going and looking, and the parts nobody described are exactly
+the ones nobody went and looked at — the gap is on the pull request where a reviewer can see it, and
+nowhere the person who could close it is.
+
+So a part whose pull request is open and which nobody has described is an ask on the
+[needs rail](17-cockpit.md#the-needs-rail), kind `describe`. It is **`yours` and never `blocking`**:
+nothing on the fleet is waiting on it, no slot is held, and the rail's group means a held slot. It is
+`next` rather than `later` for the one reason that matters here — the pull request is already open and
+already spending a reviewer's hour, so it is not an ask that keeps.
+
+**It is raised off `pr_description_bodies`, never off `plan_parts.pr_number`.** The body record is
+written by `open_pr` itself, so the ask exists the moment the pull request does. The part's `pr_number`
+is a *reading of the world*, filled in by a later cycle that matched the branch: asked there, the ask
+appears whenever the next world read happens to land, and not at all for a part whose branch the
+observer could not match — an ask that silently never appears, which is the failure this whole section
+exists to remove. `PrDescriptionStore.undescribedOpenParts` is the anti-join; `buildStateSnapshot`
+makes the one cut the store cannot, dropping the parts whose pull request has since merged or closed,
+because a change already reviewed is not one anybody is going to describe.
+
+With `manualDescriptions` off the list is empty, and that is the whole of what keeps the ask off a
+deployment where the agent writes the body.
+
 #### The field is free, and the four questions are hints
 
 `descriptionRefusal` (`src/pr/prDescription.ts`) asserts two things: not empty, and under

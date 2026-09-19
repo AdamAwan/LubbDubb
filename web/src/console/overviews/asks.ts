@@ -30,6 +30,7 @@ const TIER_RANK: Record<NeedUrgency, number> = { now: 0, next: 1, later: 2 };
  */
 const STAGE_RANK: Record<NeedKind, number> = {
   merge: 0,
+  describe: 1,
   reply: 1,
   assigned: 1,
   validate: 2,

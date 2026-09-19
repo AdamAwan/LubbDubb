@@ -115,6 +115,31 @@ export class PrDescriptionStore {
     return out;
   }
 
+  /**
+   * Every part whose pull request is open and which nobody has written a word about.
+   *
+   * Anti-joined against `pr_description_bodies` rather than read off the plan, and
+   * that is the whole point: the body record is written by `open_pr` itself, so a
+   * part is asked about the moment its pull request exists. `plan_parts.pr_number`
+   * is a *reading* of the world, filled in by a later cycle observing the branch —
+   * asked there, the ask appears whenever the next world read happens to land, and
+   * not at all on a part whose branch the observer could not match.
+   *
+   * Open is not decided here: the store holds no world. The caller drops the parts
+   * whose pull request has since merged or closed.
+   */
+  undescribedOpenParts(): { originRef: string; prNumber: number; openedAt: string }[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT b.origin_ref AS origin_ref, b.pr_number AS pr_number, b.opened_at AS opened_at
+           FROM pr_description_bodies b
+          WHERE NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = b.origin_ref)
+          ORDER BY b.opened_at ASC`,
+      )
+      .all() as { origin_ref: string; pr_number: number; opened_at: string }[];
+    return rows.map((r) => ({ originRef: r.origin_ref, prNumber: r.pr_number, openedAt: r.opened_at }));
+  }
+
   /** Every version that carries a check, newest first. The aggregate's input. */
   listCheckedDescriptions(): PrDescriptionVersion[] {
     const rows = this.ctx

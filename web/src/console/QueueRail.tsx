@@ -19,6 +19,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   plan: 'Plan',
   reply: 'Reply',
   merge: 'Merge',
+  describe: 'Describe',
   shortfall: 'Shortfall',
   intake: 'Intake',
   profile: 'Profile',
@@ -70,6 +71,7 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   plan: 'blue',
   reply: 'amber',
   merge: 'amber',
+  describe: 'blue',
   shortfall: 'blue',
   intake: 'blue',
   profile: 'blue',
@@ -111,6 +113,7 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   plan: '\u25c7',
   reply: '\u21b5',
   merge: '\u2295',
+  describe: '\u270e',
   shortfall: '\u2717',
   intake: '\u25cc',
   profile: '\u2299',
@@ -140,7 +143,7 @@ const GROUP_LABEL: Record<NeedGroup, string> = {
  * The rail's own headings, which are tiers rather than groups: the operator's
  * question at a glance is *what do I answer first*, and `blocking` / `yours`
  * answers a different one — who is stopped — that each row still carries as its
- * weight. Twenty-three kinds down two headings put a build upgrade beside an
+ * weight. Twenty-four kinds down two headings put a build upgrade beside an
  * agent that cannot proceed.
  */
 const URGENCY_LABEL: Record<NeedUrgency, string> = {
