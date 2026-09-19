@@ -20,6 +20,7 @@ import type {
   ValidationResourceView,
 } from '../types.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
+import { inFlight, localValidationSaid } from './localValidation.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -295,11 +296,11 @@ export function buildGoalTrack(parts: readonly GoalPartView[]): GoalTrack {
   };
 }
 
-export type GoalStageAt = 'plan' | 'validation' | 'environments' | 'tail';
+type GoalStageAt = 'plan' | 'validation' | 'environments' | 'tail';
 
 type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
 
-export interface GoalStage {
+interface GoalStage {
   at: GoalStageAt;
   label: string;
   reading: string;
@@ -334,8 +335,18 @@ function planStage(page: GoalPageView): GoalStage {
 
 function validationStage(page: GoalPageView): GoalStage {
   const base = { at: 'validation', label: 'Checks' } as const;
+  /* A local check plan that is running outranks the set's own count, because it
+     is the only thing on the goal that is happening right now — and with the
+     header's chip gone this is the one place outside the pane that says so. */
+  const local = page.issue.localValidation;
+  if (local !== null && inFlight(local)) {
+    return { ...base, reading: localValidationSaid(local), tone: 'blue', done: null };
+  }
   const v = page.issue.validation;
-  if (v === null || v.total === 0) return { ...base, reading: 'no checks', tone: 'grey', done: null };
+  if (v === null || v.total === 0) {
+    if (flaggedLocally(page)) return { ...base, reading: 'flagged locally', tone: 'amber', done: null };
+    return { ...base, reading: 'no checks', tone: 'grey', done: null };
+  }
   const settled = v.passed + v.waived;
   return {
     ...base,
@@ -447,7 +458,7 @@ export const GOAL_TABS = ['ticket', 'work', 'validation', 'shipping', 'record'] 
 
 export type GoalTab = (typeof GOAL_TABS)[number];
 
-export const GOAL_TAB_LABEL: Record<GoalTab, string> = {
+const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ticket: 'Ticket',
   work: 'Plan',
   validation: 'Checks',
@@ -552,7 +563,7 @@ export function goalLanding(held: GoalLanding | null, ref: string, page: GoalPag
   return { ref, opening: goalTabOpening(page) };
 }
 
-export interface GoalTabBadge {
+interface GoalTabBadge {
   text: string;
   tone: 'green' | 'amber' | 'red' | 'blue' | null;
 }

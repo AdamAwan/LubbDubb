@@ -112,7 +112,7 @@ export function GoalPage({
           the fleet carrying it. Every other ask is drawn in the pane it is about,
           beside the work it asks for. → GOAL_ASK_TAB */}
       {parentAskElsewhere(page).map((row) => (
-        <NeedsBand key={row.id} row={row} view={view} actions={actions} compact />
+        <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
       <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
         <PaneAsks page={page} tab={tab} view={view} actions={actions} />

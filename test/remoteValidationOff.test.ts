@@ -339,7 +339,11 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
       .flatMap((goal) => goal.environments)
       .map((env) => env.sheet)
       .filter((line) => line !== null);
-    assert.deepEqual(folded, ['sheet · 2 rows · 1 blocked'], 'and the fold reaches the Environments card’s own row');
+    assert.deepEqual(
+      folded,
+      ['check plan · 2 checks · 1 blocked'],
+      'and the fold reaches the Environments card’s own row',
+    );
 
     // And the sweep is reachable on the same run: a dispatched run whose agent has gone is settled
     // with a reason, so the `(environment, tenant)` lock is never held for good.
