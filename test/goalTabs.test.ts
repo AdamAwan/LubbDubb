@@ -66,9 +66,9 @@ test('every foldable section is drawn in exactly one pane', () => {
   }
 });
 
-test('a goal nobody has planned opens on its ticket', () => {
+test('a goal nobody has planned opens on the ask', () => {
   const page = bare();
-  assert.equal(goalTabOpening(page).tab, 'ticket');
+  assert.equal(goalTabOpening(page).tab, 'ask');
   assert.match(goalTabOpening(page).why, /planned/);
 });
 
@@ -99,10 +99,10 @@ test('a held gate beats everything but a finished goal', () => {
   assert.equal(goalTabOpening(held).tab, 'shipped');
 
   const finished: GoalPageView = { ...held, issue: { ...held.issue, state: 'closed' } };
-  assert.equal(goalTabOpening(finished).tab, 'closeout', 'nothing is left to steer on a shut goal');
+  assert.equal(goalTabOpening(finished).tab, 'done', 'nothing is left to steer on a shut goal');
 });
 
-test('a flagged validation plan opens on validation, a clear one does not', () => {
+test('a flagged validation plan opens on the merge, a clear one does not', () => {
   const page = bare();
   const flagged: GoalPageView = {
     ...page,
@@ -122,7 +122,7 @@ test('a flagged validation plan opens on validation, a clear one does not', () =
       },
     },
   };
-  assert.equal(goalTabOpening(flagged).tab, 'checks');
+  assert.equal(goalTabOpening(flagged).tab, 'merged');
 
   const clear: GoalPageView = {
     ...flagged,
