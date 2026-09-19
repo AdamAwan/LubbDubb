@@ -1,29 +1,17 @@
 import { useRef, useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type {
-  GoalPageView,
-  GoalSection,
-  GoalStage,
-  GoalStageAt,
-  GoalTab,
-  GoalTabBadge,
-  GoalLanding,
-  GoalTabOpening,
-  PartGroup,
-} from '../view/goalPage.js';
+import type { GoalPageView, GoalSection, GoalTab, GoalLanding, GoalTabOpening, PartGroup } from '../view/goalPage.js';
 import type { NeedRow } from '../view/needsYou.js';
 import {
-  buildGoalStrip,
+  buildGoalNav,
   goalSectionsOpen,
   GOAL_ANCHOR,
-  goalTabBadges,
+  goalBannerAsks,
+  goalPaneAsks,
   goalLanding,
   reachCount,
   GOAL_SECTIONS,
-  GOAL_TABS,
-  GOAL_TAB_LABEL,
-  GOAL_TAB_OF,
 } from '../view/goalPage.js';
 import type {
   Agent,
@@ -75,7 +63,6 @@ import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
-import { scrollToAnchor } from './jump.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
@@ -84,10 +71,8 @@ import {
   inFlight,
   localValidationOffer,
   localValidationSaid,
-  localValidationTone,
   STATUS_WORD,
   validateLocallyQuestion,
-  type LocalValidationTone,
 } from '../view/localValidation.js';
 import { Button } from '../components/button.js';
 import { logUsage } from '../cockpit/usage.js';
@@ -95,30 +80,6 @@ import { logUsage } from '../cockpit/usage.js';
 // → docs/spec/17-cockpit.md
 
 const LOCAL_VALIDATION_ANCHOR = 'cn-local-validation';
-
-const CHIP_TONE: Record<LocalValidationTone, string> = {
-  up: 't-green',
-  busy: 't-amber',
-  bad: 't-red',
-  off: '',
-};
-
-const STAGE_SECTION: Record<GoalStageAt, GoalSection | null> = {
-  plan: null,
-  validation: 'validation',
-  environments: 'environments',
-  tail: 'tail',
-};
-
-/* Which pane each stage of the track lives in. The strip and the tabs are one
-   control — a stage that scrolled to a section behind a closed pane would be a
-   button that appears to do nothing. → docs/spec/17-cockpit.md#the-panes */
-const STAGE_TAB: Record<GoalStageAt, GoalTab> = {
-  plan: 'work',
-  validation: 'validation',
-  environments: 'shipping',
-  tail: 'record',
-};
 
 const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
@@ -132,7 +93,6 @@ export function GoalPage({
   actions: CockpitActions;
 }): JSX.Element {
   const folds = buildFolds(page, view, actions);
-  const jump = buildJump(folds, actions);
   /* The landing is latched to the visit, never re-read from the live snapshot:
      the rule answers once, on arrival at this goal, and the answer is held until
      the operator picks a pane or leaves. The operator's pick beats it and is the
@@ -142,16 +102,20 @@ export function GoalPage({
   const tab = view.goalTab ?? opening.tab;
   return (
     <div className="cn-goal">
-      <Header page={page} view={view} actions={actions} jump={jump} />
+      <Header page={page} view={view} actions={actions} />
+      {/* The navigation, second on the page and above every ask. The strip and
+          the tab row were one control drawn twice; now the stage is the button,
+          and what used to push it below the fold sits under it. */}
+      <GoalNav page={page} tab={tab} chosen={view.goalTab} opening={opening} actions={actions} />
       <OrphanBand issue={page.issue} view={view} actions={actions} />
-      <TrackStrip page={page} jump={jump} />
-      {/* Above the tabs, never inside one: an ask is the reason the page was
-          opened, and a pane is a thing you have to be on to see. */}
+      {/* The banner slot: only the asks that are about the goal itself, or about
+          the fleet carrying it. Every other ask is drawn in the pane it is about,
+          beside the work it asks for. → GOAL_ASK_TAB */}
       {parentAskElsewhere(page).map((row) => (
-        <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow />
+        <NeedsBand key={row.id} row={row} view={view} actions={actions} compact />
       ))}
-      <GoalTabs page={page} tab={tab} chosen={view.goalTab} opening={opening} actions={actions} />
       <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
+        <PaneAsks page={page} tab={tab} view={view} actions={actions} />
         {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
         {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
@@ -159,6 +123,34 @@ export function GoalPage({
         {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * The asks this pane is about, at the top of it. `checksBelow` is the Checks
+ * pane's own exception: the checks the ask names are drawn a few rows further
+ * down, so the ask points at them rather than drawing a second copy.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+function PaneAsks({
+  page,
+  tab,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  tab: GoalTab;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const rows = goalPaneAsks(page, tab);
+  if (rows.length === 0) return null;
+  return (
+    <>
+      {rows.map((row) => (
+        <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow={tab === 'validation'} />
+      ))}
+    </>
   );
 }
 
@@ -173,7 +165,7 @@ function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
   return held.current.opening;
 }
 
-function GoalTabs({
+function GoalNav({
   page,
   tab,
   chosen,
@@ -186,41 +178,45 @@ function GoalTabs({
   opening: GoalTabOpening;
   actions: CockpitActions;
 }): JSX.Element {
-  const badges = goalTabBadges(page);
   return (
-    <div className="cn-gtabs" role="tablist" aria-label="This goal">
-      {GOAL_TABS.map((id) => (
+    <div className="cn-gnav" role="tablist" aria-label="This goal">
+      {buildGoalNav(page).map((entry) => (
         <button
-          key={id}
+          key={entry.tab}
           type="button"
           role="tab"
-          id={`cn-tab-${id}`}
-          aria-selected={id === tab}
-          aria-controls={`cn-pane-${id}`}
-          className={`cn-gtab ${id === tab ? 'cn-on' : ''}`}
+          id={`cn-tab-${entry.tab}`}
+          aria-selected={entry.tab === tab}
+          aria-controls={`cn-pane-${entry.tab}`}
+          className={`cn-gnavk cn-t-${entry.tone} ${entry.tab === tab ? 'cn-on' : ''}`}
           title={
-            id === tab && chosen === null
+            entry.tab === tab && chosen === null
               ? `Opened here because ${opening.why}`
-              : `What this goal's ${GOAL_TAB_LABEL[id].toLowerCase()} says`
+              : `${entry.label}: ${entry.reading} — go to it`
           }
           onClick={() => {
-            if (id !== tab) logUsage('goal.expand');
-            actions.openGoalTab(id);
+            if (entry.tab !== tab) logUsage('goal.expand');
+            actions.openGoalTab(entry.tab);
           }}
         >
-          {GOAL_TAB_LABEL[id]}
-          <Badge badge={badges[id]} />
+          <span className="cn-gnavl">
+            {entry.label}
+            {/* One dot, and only where an ask is actually waiting in that pane.
+                It is the whole of what the ask bands used to say from above the
+                navigation, said by the control you would press anyway. */}
+            {entry.needsYou && <i className="cn-gnavd" title="Something here needs you" />}
+          </span>
+          <span className="cn-gnavv">{entry.reading}</span>
+          {/* Drawn only for a stage with a proportion to draw. An empty bar under
+              "no checks" would report every check outstanding, which is the one
+              thing a null `done` exists to keep it from saying. */}
+          <span className={`cn-tkb ${entry.done === null ? 'cn-none' : ''}`}>
+            {entry.done !== null && <i style={{ width: `${entry.done}%` }} />}
+          </span>
         </button>
       ))}
     </div>
   );
-}
-
-/* Null is drawn as nothing, never as a zero: a badge reading `0` says a thing
-   was counted, which is not what an empty pane means. */
-function Badge({ badge }: { badge: GoalTabBadge | null }): JSX.Element | null {
-  if (badge === null) return null;
-  return <i className={`cn-gtb ${badge.tone === null ? '' : `t-${badge.tone}`}`}>{badge.text}</i>;
 }
 
 function TicketPane({
@@ -396,54 +392,9 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
-/**
- * Going to a reading from somewhere else on the page: select the pane it lives
- * in, unfold its section, then scroll. Two frames rather than one — the first
- * paints the pane the tab just selected, and an anchor inside a pane that has
- * not rendered yet resolves to nothing.
- */
-type GoalJump = (tab: GoalTab, section: GoalSection | null, anchor: string) => void;
-
-function buildJump(folds: Record<GoalSection, Fold>, actions: CockpitActions): GoalJump {
-  return (tab, section, anchor) => {
-    actions.openGoalTab(tab);
-    if (section !== null) folds[section].reveal();
-    scrollToAnchor(anchor);
-  };
-}
-
+/* The goal-wide asks, less the one the orphan band above already draws in full. */
 function parentAskElsewhere(page: GoalPageView): NeedRow[] {
-  return page.needs.filter((row) => !row.id.startsWith('placement:parent:'));
-}
-
-function TrackStrip({ page, jump }: { page: GoalPageView; jump: GoalJump }): JSX.Element {
-  return (
-    <div className="cn-strip">
-      {buildGoalStrip(page).map((stage) => (
-        <Stage key={stage.at} stage={stage} jump={jump} />
-      ))}
-    </div>
-  );
-}
-
-function Stage({ stage, jump }: { stage: GoalStage; jump: GoalJump }): JSX.Element {
-  return (
-    <button
-      type="button"
-      className={`cn-tk cn-t-${stage.tone}`}
-      onClick={() => jump(STAGE_TAB[stage.at], STAGE_SECTION[stage.at], GOAL_ANCHOR[stage.at])}
-      title={`${stage.label}: ${stage.reading} — go to it`}
-    >
-      <span className="cn-tkk">{stage.label}</span>
-      <span className="cn-tkv">{stage.reading}</span>
-      {/* Drawn only for a stage with a proportion to draw. An empty bar under
-          "no checks" would report every check outstanding, which is the one thing
-          a null `done` exists to keep it from saying. */}
-      <span className={`cn-tkb ${stage.done === null ? 'cn-none' : ''}`}>
-        {stage.done !== null && <i style={{ width: `${stage.done}%` }} />}
-      </span>
-    </button>
-  );
+  return goalBannerAsks(page).filter((row) => !row.id.startsWith('placement:parent:'));
 }
 
 function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView; fold: Fold }): JSX.Element {
@@ -487,12 +438,10 @@ function Header({
   page,
   view,
   actions,
-  jump,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
-  jump: GoalJump;
 }): JSX.Element {
   const { issue } = page;
   const { config } = view.state;
@@ -546,20 +495,17 @@ function Header({
             not the tracker's word: this is the chip that says so, and what the
             tracker says instead. */}
         {issue.stale !== undefined && <StaleChip stale={issue.stale} now={view.now} />}
-      </div>
-      {/* The verdicts, and nothing else. The counters that used to share this row —
-          how long it has run, how many agents, what it cost, how many parts had
-          merged — read as noise beside a judgement, and three of the four are now
-          on the track. What is left of them is one plain run at the end, which is
-          the reading nothing else on the page states in one place. */}
-      <div className="cn-ghmeta">
-        {issue.appraisal !== null && (
-          <Tag tone={issue.appraisal.verdict === 'workable' ? 'green' : 'amber'} fill title={issue.appraisal.summary}>
-            <Icon name="scale" size={12} />
-            Appraisal · {issue.appraisal.verdict}
-          </Tag>
-        )}
-        {/* Prefixed with *whose* verdict it is, because the two words this chip
+        {/* The verdicts share the identity's own row. They are judgements about
+            the goal as a whole, so they belong beside its name; and a second row
+            of small type here is a second row the navigation sits below. */}
+        <span className="cn-ghmeta">
+          {issue.appraisal !== null && (
+            <Tag tone={issue.appraisal.verdict === 'workable' ? 'green' : 'amber'} fill title={issue.appraisal.summary}>
+              <Icon name="scale" size={12} />
+              Appraisal · {issue.appraisal.verdict}
+            </Tag>
+          )}
+          {/* Prefixed with *whose* verdict it is, because the two words this chip
             most often reads — "more work" — were also the name of a control an
             operator presses. One is a judgement the goal already carries and the
             other is a thing you do to it; a chip that could be read as either is
@@ -567,62 +513,22 @@ function Header({
             operator's own override says "Your verdict", and calling that one the
             harness's would be the header telling somebody their own decision was
             somebody else's. */}
-        {issue.conclusion.verdict !== 'undeclared' && (
-          <Tag title={issue.conclusion.note}>
-            <Icon name="robot" size={12} />
-            {issue.conclusion.by === 'operator' ? 'Your verdict' : 'Harness verdict'} ·{' '}
-            {issue.conclusion.verdict.replace(/_/g, ' ')}
-          </Tag>
-        )}
-        {/* Whether the goal's validation plan is settled, beside the other
-              verdicts and inside none of them. Absent when there are no checks —
-              a goal nobody wrote a plan for is not "clear", and a chip claiming
-              it was would be the one lie this whole surface exists to prevent.
-              A button rather than the bare chip its neighbours are: the checks are
-              now on this page, so the reading has somewhere to go, and a verdict
-              you can act on should not be the one chip that does nothing. */}
-        {issue.validation !== null && (
-          <button
-            type="button"
-            className={`tag tag-fill tag-button ${issue.validation.state === 'clear' ? 't-green' : 't-amber'}`}
-            onClick={() => jump(GOAL_TAB_OF.validation, 'validation', GOAL_ANCHOR.validation)}
-            title={
-              issue.validation.state === 'clear'
-                ? `All ${issue.validation.total} checks are done — go to them`
-                : `${issue.validation.failed} failed, ${issue.validation.unrun} not run, ${issue.validation.deferred} left for later — go to them`
-            }
-          >
-            <Icon name="flask" size={12} />
-            Checks · {issue.validation.passed + issue.validation.waived} of {issue.validation.total} done
-          </button>
-        )}
-        {/* What the fleet found driving this goal on the operator's own machine,
-            beside the plan's verdict and separate from it: one is a checklist
-            somebody keeps, the other is a run somebody asked for. In flight it is
-            the only thing drawn about the validation, and it says which minute of
-            it we are in — the control above is absent while one is running. */}
-        {issue.localValidation !== null && (
-          <button
-            type="button"
-            className={`tag tag-fill tag-button cn-ghverdict cn-jump ${CHIP_TONE[localValidationTone(issue.localValidation.status)]}`}
-            onClick={() => jump(GOAL_TAB_OF.localValidation, 'localValidation', LOCAL_VALIDATION_ANCHOR)}
-            title={issue.localValidation.summary ?? 'Go to what the local validation found'}
-          >
-            <Icon name="flask" size={12} />
-            Local validation ·{' '}
-            {inFlight(issue.localValidation)
-              ? localValidationSaid(issue.localValidation)
-              : STATUS_WORD[issue.localValidation.status]}
-          </button>
-        )}
-        {/* The measurements, in one run at the end rather than as three more chips.
+          {issue.conclusion.verdict !== 'undeclared' && (
+            <Tag title={issue.conclusion.note}>
+              <Icon name="robot" size={12} />
+              {issue.conclusion.by === 'operator' ? 'Your verdict' : 'Harness verdict'} ·{' '}
+              {issue.conclusion.verdict.replace(/_/g, ' ')}
+            </Tag>
+          )}
+          {/* The measurements, in one run at the end rather than as three more chips.
             `parts merged` is deliberately not among them: it is the track's first
             stage now, and stating it twice is how the header and the plan card
             came to disagree. */}
-        <span className="cn-ghfacts">
-          {issue.run !== undefined && <>started {relTime(issue.run.startedAt, view.now)} · </>}
-          {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}
-          {issue.spend !== null && <> · {fmtUsd(issue.spend.costUsd)}</>}
+          <span className="cn-ghfacts">
+            {issue.run !== undefined && <>started {relTime(issue.run.startedAt, view.now)} · </>}
+            {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}
+            {issue.spend !== null && <> · {fmtUsd(issue.spend.costUsd)}</>}
+          </span>
         </span>
       </div>
       {/* Three captioned groups, drawn through the control kit
@@ -915,7 +821,7 @@ function LocalValidation({
   return (
     <section className="cn-card" id={LOCAL_VALIDATION_ANCHOR}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Local validation" />
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Check plan · local" />
         <i className="cn-n">
           {validation === null
             ? 'never run'
@@ -1040,7 +946,7 @@ function Signals({
       <h3>
         <Disclosure open={fold.open} onToggle={fold.onToggle} label="Signals" />
         <i className="cn-n">
-          {signals.length === 1 ? '1 check' : `${signals.length} checks`}
+          {signals.length === 1 ? '1 reading' : `${signals.length} readings`}
           {pending > 0 && ` · ${pending} awaiting you`}
         </i>
         <span className="cn-more">
@@ -1089,9 +995,9 @@ function RemoteValidation({
   return (
     <section className="cn-card" id="cn-remote-validation">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Does it work here" />
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label={`Check plan · ${open.environment}`} />
         <i className="cn-n">
-          {open.rows.length === 1 ? '1 row' : `${open.rows.length} rows`}
+          {open.rows.length === 1 ? '1 check' : `${open.rows.length} checks`}
           {waiting > 0 && ` · ${waiting} waiting on an approval`}
         </i>
         <span className="cn-more">asked of {open.environment}, where this goal&rsquo;s work has arrived</span>
@@ -1720,7 +1626,7 @@ const WATCH_TONE: Record<WatchCheckVerdict | 'unread', TagTone | undefined> = {
 };
 
 const GATE_SAID: Record<EnvironmentGate, string> = {
-  validate: 'the validation checks',
+  validate: 'the checks',
   close_out: 'the close-out',
 };
 

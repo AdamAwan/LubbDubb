@@ -31,15 +31,45 @@ export function NeedsBand({
   view,
   actions,
   checksBelow = false,
+  compact = false,
 }: {
   row: NeedRow;
   view: CockpitView;
   actions: CockpitActions;
   /** This band is drawn on the goal page, whose Checks pane holds the same rows. */
   checksBelow?: boolean;
+  /**
+   * Draw the ask as one line rather than the whole thing. The goal page's banner
+   * slot sits above the page's content, so a band that draws its own body there
+   * pushes everything the operator came for below the fold — which is what a
+   * merge verdict's text box and a bench task's whole brief were doing. The body
+   * is one press away, in the panel the header already opens.
+   */
+  compact?: boolean;
 }): JSX.Element | null {
   const body = needBody(row, view, actions, checksBelow);
   if (body === null) return null;
+  if (compact) {
+    return (
+      <button
+        type="button"
+        className={`cn-needs-line cn-t-${KIND_TONE[row.kind]}`}
+        onClick={() => actions.openPanel({ ask: row.id })}
+        title="Open this ask"
+      >
+        <span className="cn-sym" aria-hidden="true">
+          {KIND_SYMBOL[row.kind]}
+        </span>
+        <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
+        <span className="cn-needs-what">{oneLine(row.title)}</span>
+        <span className="cn-age">
+          {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
+          {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
+        </span>
+        <span className="cn-open">Open</span>
+      </button>
+    );
+  }
   return (
     <div className={`cn-needs cn-t-${KIND_TONE[row.kind]}`}>
       <header>

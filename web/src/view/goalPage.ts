@@ -19,7 +19,7 @@ import type {
   ValidationPlanRecord,
   ValidationResourceView,
 } from '../types.js';
-import type { NeedRow } from './needsYou.js';
+import type { NeedKind, NeedRow } from './needsYou.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -348,6 +348,7 @@ function validationStage(page: GoalPageView): GoalStage {
 function environmentStage(page: GoalPageView): GoalStage {
   const base = { at: 'environments', label: 'Shipped' } as const;
   const envs = page.environments;
+  if (envs.length === 0) return { ...base, reading: 'no environments', tone: 'grey', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
   const furthest = reached[reached.length - 1];
   const done = (reached.length / envs.length) * 100;
@@ -448,10 +449,10 @@ export type GoalTab = (typeof GOAL_TABS)[number];
 
 export const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ticket: 'Ticket',
-  work: 'Work',
+  work: 'Plan',
   validation: 'Checks',
-  shipping: 'Shipping',
-  record: 'Record',
+  shipping: 'Shipped',
+  record: 'Close-out',
 };
 
 /**
@@ -603,6 +604,104 @@ function shippingBadge(page: GoalPageView): GoalTabBadge | null {
   const reached = envs.filter((e) => e.status === 'reached').length;
   if (reached === 0) return envs.some((e) => e.status === 'partial') ? { text: 'partial', tone: 'amber' } : null;
   return { text: `${reached}/${envs.length}`, tone: reached === envs.length ? 'green' : 'blue' };
+}
+
+/**
+ * Which pane an ask belongs to, or null for one that is about the goal as a
+ * whole rather than any stage of it. Total over {@link NeedKind}, like the
+ * rail's own tables, so a new kind is placed deliberately rather than
+ * inheriting whatever the last one meant.
+ *
+ * The page has one banner slot, under the navigation, and it holds only the
+ * nulls. Everything else is drawn inside the pane it is about, where the work
+ * it asks for already is — an ask redrawn above the navigation is the same
+ * reading twice and pushes the navigation off the screen.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
+  assigned: 'work',
+  bench: 'work',
+  burn: 'work',
+  escalation: 'work',
+  merge: 'work',
+  permission: 'work',
+  plan: 'work',
+  reply: 'work',
+  validate: 'validation',
+  validation_plan: 'validation',
+  unwatched: 'shipping',
+  watch: 'shipping',
+  close_out: 'record',
+  outcome: 'record',
+  shortfall: 'record',
+  /* About the goal itself, or about the fleet carrying it: neither has a stage
+     to be drawn in, so each takes the banner. */
+  config: null,
+  config_gap: null,
+  dispatch: null,
+  intake: null,
+  limit: null,
+  placement: null,
+  profile: null,
+  project_pull: null,
+  recovery: null,
+  supply: null,
+  upgrade: null,
+};
+
+/** The asks that take the banner slot, in the order the rail ranked them. */
+export function goalBannerAsks(page: GoalPageView): NeedRow[] {
+  return page.needs.filter((row) => GOAL_ASK_TAB[row.kind] === null);
+}
+
+/** The asks drawn inside one pane, above what that pane already says. */
+export function goalPaneAsks(page: GoalPageView, tab: GoalTab): NeedRow[] {
+  return page.needs.filter((row) => GOAL_ASK_TAB[row.kind] === tab);
+}
+
+interface GoalNavEntry {
+  tab: GoalTab;
+  label: string;
+  reading: string;
+  tone: GoalStageTone;
+  done: number | null;
+  /** An ask is waiting in this pane, which is what the dot on the entry says. */
+  needsYou: boolean;
+}
+
+/**
+ * The page's one navigation control. It was two — a track strip reading the
+ * stages and a tab row badging the same numbers one line below it — and two
+ * controls stating one thing is why the page read as cluttered. A stage is
+ * where you go, so the stage is the button.
+ *
+ * Every entry is always drawn, including an environment stage for a goal with
+ * no environments: a control that changes shape between goals cannot be aimed
+ * at from memory. → docs/spec/17-cockpit.md#the-panes
+ */
+export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
+  const stages: Record<Exclude<GoalTab, 'ticket'>, GoalStage> = {
+    work: planStage(page),
+    validation: validationStage(page),
+    shipping: environmentStage(page),
+    record: tailStage(page),
+  };
+  return GOAL_TABS.map((tab) => {
+    const needsYou = goalPaneAsks(page, tab).length > 0;
+    if (tab === 'ticket') return { tab, label: GOAL_TAB_LABEL.ticket, ...ticketReading(page), needsYou };
+    const stage = stages[tab];
+    return { tab, label: GOAL_TAB_LABEL[tab], reading: stage.reading, tone: stage.tone, done: stage.done, needsYou };
+  });
+}
+
+/* The ticket is the only entry with no stage behind it: nothing about it
+   progresses, so it reads what was asked for rather than how far it has got. */
+function ticketReading(page: GoalPageView): { reading: string; tone: GoalStageTone; done: number | null } {
+  const instructions = page.issue.instructions.length;
+  if (instructions > 0) {
+    return { reading: instructions === 1 ? '1 instruction' : `${instructions} instructions`, tone: 'blue', done: null };
+  }
+  return { reading: 'as filed', tone: 'grey', done: null };
 }
 
 /* Two decimals under ten dollars and none over: the badge is a glance at what a

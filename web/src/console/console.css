@@ -1315,9 +1315,9 @@ a.cn-qbody {
    segmented control crushed to a sliver. */
 .cn-ctlgrp {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   flex: none;
 }
 .cn-ctlcap {
@@ -1461,28 +1461,34 @@ a.cn-qbody {
   padding-right: 22px;
 }
 
-/* The goal's track: the pipeline in one row, each stretch a way to the section
-   that owns it. `cn-strip` rather than `cn-track`, which the overview's segment
-   bar already owns — and `--cn-track`, the token, is a third thing again.
+/* The goal's navigation: the pipeline in one row, each stage the way into the
+   pane that holds it. It was two controls — a track strip reading the stages and
+   a tab row one line below badging the same numbers — and two controls stating
+   one thing is what made this page read as cluttered. A stage is where you go,
+   so the stage is the button. → docs/spec/17-cockpit.md#the-panes
+
+   `cn-gnav` rather than `cn-strip`, which is gone: the rack's second line uses
+   `--cn-strip-cols` a thousand lines below and the two matched silently once
+   already. A new class name in this sheet is grepped for first.
 
    A grid with a 1px gap over a lined ground rather than borders on the cells,
-   because the strip wraps: `auto-fit` puts four stages on one row on a wide page
-   and two on two rows on a narrow one, and a `border-right` would leave a stray
+   because the nav wraps: `auto-fit` puts five entries on one row on a wide page
+   and fewer per row on a narrow one, and a `border-right` would leave a stray
    line at the end of every row but the last.
 
-   Every stage takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias the
-   stage carries. No colour of its own, and so no new token: a theme moves the
-   strip with everything else it already moves. */
-.cn-strip {
+   Every entry takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias it
+   carries. No colour of its own, and so no new token: a theme moves the nav with
+   everything else it already moves. */
+.cn-gnav {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1px;
   background: var(--cn-line);
   border: 1px solid var(--cn-line);
   border-radius: var(--cn-r);
   overflow: hidden;
 }
-.cn-tk {
+.cn-gnavk {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1495,14 +1501,37 @@ a.cn-qbody {
   color: inherit;
   cursor: pointer;
 }
-.cn-tk:hover {
+.cn-gnavk:hover {
   background: var(--cn-hover);
 }
-.cn-tkk {
+/* Which pane you are on, said twice — a raised ground and a rule under it.
+   Either alone is a coin toss across themes: the ground is nearly invisible on a
+   light one at this contrast, and a rule on its own is easy to miss at a glance
+   on a control this wide. */
+.cn-gnavk.cn-on {
+  background: var(--cn-panel-2);
+  box-shadow: inset 0 -2px 0 0 var(--cn-accent);
+}
+.cn-gnavl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--cn-mono);
   color: var(--cn-fg-faint);
 }
-.cn-tkv {
+.cn-gnavk.cn-on .cn-gnavl {
+  color: var(--cn-fg);
+}
+/* One dot, drawn where an ask is waiting in that pane. It is what a whole band
+   above the navigation used to say; the band itself is still drawn, inside the
+   pane, beside the work it is asking about. */
+.cn-gnavd {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+}
+.cn-gnavv {
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1529,71 +1558,6 @@ a.cn-qbody {
   background: none;
 }
 
-/* The goal's five panes. The strip above says where the goal *is*; this row says
-   which reading you are looking at, and the two are one control — a strip stage
-   selects the pane that holds it. → docs/spec/17-cockpit.md#the-panes
-
-   Scrollable rather than wrapping: five tabs on two lines stop reading as one
-   row of alternatives, and the pane below is what the width is for. */
-.cn-gtabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--cn-line);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.cn-gtabs::-webkit-scrollbar {
-  display: none;
-}
-.cn-gtab {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-  margin-bottom: -1px;
-  padding: 8px 14px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--cn-fg-dim);
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: var(--cn-r) var(--cn-r) 0 0;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.cn-gtab:hover {
-  color: var(--cn-fg);
-  background: var(--cn-hover);
-}
-.cn-gtab.cn-on {
-  color: var(--cn-fg);
-  font-weight: 600;
-  background: var(--cn-panel);
-  border-color: var(--cn-line);
-  border-bottom: 1px solid var(--cn-panel);
-}
-/* The count on a tab's own label. Toneless by default — a badge is a reading,
-   and most readings are not verdicts — and it takes its hue from the `cn-t-*`
-   alias the badge carries, so a theme moves it with everything else. */
-.cn-gtb {
-  font-family: var(--cn-mono);
-  font-size: 10px;
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  padding: 2px 5px;
-  border: 1px solid var(--cn-inert);
-  border-radius: var(--cn-r-sm);
-  color: var(--cn-fg-faint);
-}
-.cn-gtb.cn-t-green,
-.cn-gtb.cn-t-amber,
-.cn-gtb.cn-t-red,
-.cn-gtb.cn-t-blue {
-  color: var(--cn-tone-ink);
-  border-color: var(--cn-tone-line);
-  background: var(--cn-tone-bg);
-}
 .cn-gpane {
   display: flex;
   flex-direction: column;
@@ -6593,4 +6557,52 @@ button.cn-grow {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* An ask in the goal page's banner slot: one line, the whole of it a press that
+   opens the ask in full. The slot sits above everything the operator came to the
+   page for, so a band drawing its own body here — a merge verdict's text box, a
+   bench task's whole brief — pushed the page's content off the screen, which is
+   the complaint this row exists to answer. Only an ask about the goal itself is
+   ever drawn here; the rest are in the pane they are about.
+   → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+.cn-needs-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--cn-fg);
+  background: var(--cn-tone-fill);
+  border: 1px solid var(--cn-tone-line);
+  border-radius: var(--cn-r);
+  cursor: pointer;
+}
+.cn-needs-line:hover {
+  background: var(--cn-hover);
+}
+.cn-needs-kind {
+  flex: none;
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cn-tone-ink);
+}
+.cn-needs-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cn-needs-line .cn-age,
+.cn-needs-line .cn-open {
+  flex: none;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
 }

@@ -1332,7 +1332,7 @@ export function buildDemoState(): DemoSeed {
             unplaced: 0,
             at: '2026-08-19T09:12:00.000Z',
             opens: ['validate', 'close_out'],
-            sheet: 'sheet · 3 rows · 1 blocked',
+            sheet: 'check plan · 3 checks · 1 blocked',
           },
           {
             environment: 'prod',
