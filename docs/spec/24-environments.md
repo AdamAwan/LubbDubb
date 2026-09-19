@@ -835,6 +835,50 @@ set comes from the landings and the work graph, never from the world — a goal 
 interesting to this panel once its ticket has closed, which is precisely when the world stops listing
 it.
 
+### Every part, every environment
+
+Above the environment rows the goal page draws the **reach matrix**: the goal's parts down, the
+configured environments across, one cell per pair. The rows are `GoalReachView.landings` — one
+`GoalLandingReach` per landing, carrying what each environment's probe said about it — folded against
+the plan's parts by `buildGoalReachMatrix` (`web/src/view/goalPage.ts`).
+
+**It exists because a goal is checked as a whole or not at all, and its parts are not.** `rollUpReach`
+answers `reached` only when every landing the goal owes has been read as present, and `newArrivals`
+skips everything else — so between the first part landing and the last there is no arrival, no sheet,
+no watch and no gate. Through all of that the environment rows can say only _how many_ landings are
+short. One part sitting in staging while three are unwritten is the ordinary shape of a multi-part
+goal, and `2/5` does not say which two, nor that the two are not the problem. The matrix says which,
+and the card says the rest in a sentence: _nothing can be checked yet_, and what is owed before the
+first check can exist.
+
+**The counts and the rows are read off the same two lists**, in `src/environments/reach.ts`, so a cell
+and the fraction over it cannot disagree — the first rule of a tab's reading ([17](17-cockpit.md#the-panes)),
+one layer down.
+
+A cell is five-valued, and the two additions to [the three verdicts](#the-three-verdicts) are both
+things that must not fold into `absent`:
+
+| Cell       | What it means                                                                          |
+| ---------- | -------------------------------------------------------------------------------------- |
+| `reached`  | the probe found it                                                                     |
+| `absent`   | the probe looked and the environment does not hold it                                   |
+| `unknown`  | the probe could not say                                                                 |
+| `pending`  | nobody asked — a part with no pull request, or a landing no probe has read yet          |
+| `unplaced` | the clone places this landing on no integration branch ([above](#what-counts-as-a-landing)) |
+
+**An `unplaced` row is an account, never a blocker.** `goalReach` filters `onIntegration !== false`
+_before_ it builds `total`, so a stacked squash is dropped from the denominator rather than held in
+it — that is the repair [above](#what-counts-as-a-landing), and a surface that reads the row as a dead
+end announces a trap the harness has already stepped around. What the row is for is the same thing the
+`N merges not on the integration branch` line is for: the work is real, its commits went somewhere
+else, and a denominator that quietly shrank is a number nobody can account for.
+
+**A merge no part claims gets a row too.** `unattributedMerges` counts it into `total`, so without one
+it is a thing measured against the goal that appears nowhere on the goal's page.
+
+The matrix is absent where no environment is configured, or where the goal has neither parts nor
+landings — the same rule as the card below it.
+
 The goal page draws an **Environments** card under the pull requests, one row per configured
 environment, with the count on every row that is not whole: `0/3` and `2/3` are the difference
 between work that has not started moving and work that is halfway there, and the word alone says

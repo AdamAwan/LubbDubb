@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { OpenPullRequest, ValidationCheckView } from '../web/src/types.js';
+import type { GoalEnvironmentReachView, OpenPullRequest, ValidationCheckView } from '../web/src/types.js';
 import type { GoalPageView } from '../web/src/view/goalPage.js';
 import {
   buildGoalNav,
   buildGoalPage,
+  buildGoalReachMatrix,
   goalLanding,
   goalTabOpening,
   GOAL_TABS,
@@ -255,4 +256,95 @@ test('the landing is decided on arrival and held, however the goal moves under i
   const next = goalLanding(landed, 'issue:2', shipped);
   assert.equal(next.ref, 'issue:2');
   assert.equal(next.opening.tab, goalTabOpening(shipped).tab);
+});
+
+// ── The Shipped stage, and the matrix behind it ──
+// → docs/spec/24-environments.md
+
+function env(over: Partial<GoalEnvironmentReachView> & { environment: string }): GoalEnvironmentReachView {
+  return { status: 'absent', landed: 0, total: 0, unplaced: 0, at: null, opens: [], sheet: null, ...over };
+}
+
+function shipped(page: GoalPageView): { reading: string; done: number | null } {
+  const entry = buildGoalNav(page).find((e) => e.tab === 'shipped')!;
+  return { reading: entry.reading, done: entry.done };
+}
+
+test('a goal short of an environment reads what is owed, and draws no meter', () => {
+  const page = bare();
+  const partial: GoalPageView = {
+    ...page,
+    environments: [env({ environment: 'staging', status: 'partial', landed: 2, total: 5 })],
+  };
+  assert.deepEqual(shipped(partial), { reading: '3 landings owed', done: null });
+});
+
+/* `total` is landings + unattributed merges + the code parts still owed, so decomposing a plan
+   further grows the denominator. A meter against it runs backwards, and worse, it reports a
+   goal as part-way *checked* when nothing about it has been checked at all. */
+test('the Shipped meter is drawn only against the environments, which cannot grow with the plan', () => {
+  const page = bare();
+  const reached: GoalPageView = {
+    ...page,
+    environments: [
+      env({ environment: 'staging', status: 'reached', landed: 5, total: 5, at: '2026-01-01T00:00:00.000Z' }),
+      env({ environment: 'prod', status: 'partial', landed: 3, total: 5 }),
+    ],
+  };
+  assert.equal(shipped(reached).done, 50, 'one of the two environments holds every landing');
+});
+
+test('a landing on no integration branch is not reported as a goal that can never be checked', () => {
+  const page = bare();
+  /* `goalReach` drops it from `total` before counting, so it holds nothing short. Read as a
+     blocker the tab would announce a dead end the harness has already stepped around.
+     → docs/spec/24-environments.md#what-counts-as-a-landing */
+  const stranded: GoalPageView = {
+    ...page,
+    environments: [env({ environment: 'staging', status: 'reached', landed: 1, total: 1, unplaced: 1 })],
+    landings: [{ prNumber: 9, sha: 'dead', reach: {}, unplaced: true }],
+  };
+  assert.match(shipped(stranded).reading, /^reached staging/);
+  assert.equal(goalTabOpening(stranded).tab, 'shipped');
+});
+
+test('the matrix gives a row to every part, and to every merge no part claims', () => {
+  const state = buildDemoState().state;
+  const page = buildGoalPage(state, 'issue:390', [])!;
+  const matrix = buildGoalReachMatrix(page);
+  assert.deepEqual(matrix.environments, ['staging', 'prod']);
+
+  const claimless = matrix.rows.filter((r) => r.kind === 'unattributed');
+  assert.equal(claimless.length, 1, 'a merge counted into total with no row is a number nobody can account for');
+  assert.equal(claimless[0]?.prNumber, 409);
+
+  const parts = matrix.rows.filter((r) => r.kind === 'part');
+  assert.equal(parts.length, page.parts.length, 'every part is drawn, including ones nobody has written');
+});
+
+test('a part with no landing reads pending, which is not the same as absent', () => {
+  const state = buildDemoState().state;
+  const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:390', [])!);
+  const landed = matrix.rows.find((r) => r.prNumber === 406)!;
+  const unwritten = matrix.rows.find((r) => r.prNumber === null)!;
+  assert.deepEqual(landed.cells, ['reached', 'reached']);
+  assert.deepEqual(unwritten.cells, ['pending', 'pending'], 'nobody asked, so nothing may be said');
+});
+
+test('an unplaced landing marks its row and reads unplaced in every environment', () => {
+  const state = buildDemoState().state;
+  const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:376', [])!);
+  const row = matrix.rows.find((r) => r.unplaced)!;
+  assert.ok(row, 'the stranded landing has a row of its own');
+  assert.deepEqual(row.cells, ['unplaced', 'unplaced']);
+});
+
+test('a goal that has landed nothing does not read as one that has arrived', () => {
+  /* `owed` is a fraction of `total`, and a goal with nothing placed has a total of nothing — so
+     `owed === 0` is true both for a goal every landing of which has arrived and for one that has
+     never reached anywhere. Told apart by `arrived` alone, which asks the rollup directly. */
+  const state = buildDemoState().state;
+  const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:376', [])!);
+  assert.equal(matrix.owed, 0);
+  assert.equal(matrix.arrived, false, 'nothing has reached an environment, so no sheet exists to read');
 });

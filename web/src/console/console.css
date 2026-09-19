@@ -6802,7 +6802,7 @@ button.cn-grow {
   border-color: var(--cn-green-line);
   color: var(--cn-green-ink);
 }
-/* Absent and pending are told apart, and neither is a synonym for the other: absent is a
+/* Absent, pending and unplaced are told apart, and neither is a synonym for the other: absent is a
    probe that looked and did not find it, pending is one that has not been asked. Folding
    either into the other is the three-verdict rule broken one layer up.
    → docs/spec/24-environments.md#the-three-verdicts */
@@ -6820,14 +6820,16 @@ button.cn-grow {
   border-color: var(--cn-amber-line);
   color: var(--cn-amber-ink);
 }
-.cn-reachm-never {
-  background: var(--cn-red-bg);
-  border-color: var(--cn-red-line);
-  color: var(--cn-red-ink);
+.cn-reachm-unplaced {
+  background: transparent;
+  border-color: var(--cn-line);
+  color: var(--cn-fg-faint);
 }
+/* An account, not a fault: the row is dropped from the count rather than held against the goal,
+   so it is dimmed rather than reddened. → docs/spec/24-environments.md#what-counts-as-a-landing */
 .cn-reachm-stranded th,
 .cn-reachm-stranded td {
-  background: var(--cn-red-bg);
+  background: color-mix(in srgb, var(--cn-fg) 3%, transparent);
 }
 .cn-reachm-said {
   margin: 10px 0 0 0;

@@ -18,7 +18,7 @@ const CELL_SAID: Record<GoalReachCell, string> = {
   reached: 'reached',
   absent: 'not there',
   unknown: 'the probe could not say',
-  never: 'can never be reached — this landing is an ancestor of nothing',
+  unplaced: 'on no integration branch — dropped from this goal’s count, never probed for',
   pending: 'not asked yet',
 };
 
@@ -26,7 +26,7 @@ const CELL_GLYPH: Record<GoalReachCell, string> = {
   reached: '✓',
   absent: '',
   unknown: '?',
-  never: '✕',
+  unplaced: '–',
   pending: '',
 };
 
@@ -76,7 +76,7 @@ export function GoalReachMatrix({ page }: { page: GoalPageView }): JSX.Element |
       {/* Said out loud rather than left to be read off the grid: a goal short of an environment
           is not part-way checked, it is not checkable, and the difference is the whole reason
           this card is drawn above the rows rather than instead of them. */}
-      <p className="cn-reachm-said">{said(matrix.rows, matrix.owed)}</p>
+      <p className="cn-reachm-said">{said(matrix)}</p>
     </section>
   );
 }
@@ -88,10 +88,21 @@ function heading(rows: readonly GoalReachRow[], owed: number): string {
   return `${parts} ${parts === 1 ? 'part' : 'parts'}${tail}${owed === 0 ? '' : ` · ${owed} owed`}`;
 }
 
-function said(rows: readonly GoalReachRow[], owed: number): string {
-  if (rows.some((r) => r.unplaced))
-    return 'A landing here is an ancestor of nothing, so no environment can ever hold it and this goal can never be checked. Nothing below will resolve it.';
+function said({ rows, owed, arrived }: { rows: readonly GoalReachRow[]; owed: number; arrived: boolean }): string {
+  /* An unplaced landing is not a blocker: `goalReach` drops it from `total` before counting, so
+     what it costs the operator is an account of the fraction rather than an arrival.
+     → docs/spec/24-environments.md#what-counts-as-a-landing */
+  const stranded = rows.filter((r) => r.unplaced).length;
+  const aside =
+    stranded === 0
+      ? ''
+      : ` ${stranded === 1 ? 'One landing is' : `${stranded} landings are`} on no integration branch: dropped from the count above rather than held against it, and re-asked for while the clone keeps saying no.`;
+  /* `arrived` is asked first and separately from `owed`. A goal that has landed nothing at all also
+     owes nothing measurable — `total` is a fraction of nothing — so a fall-through on `owed === 0`
+     alone announces an arrival to a goal that has never reached anywhere. */
+  if (arrived)
+    return `Every landing this goal owes has reached an environment, so the arrival is recorded and the sheet below is what says whether the goal held up.${aside}`;
   if (owed > 0)
-    return `Nothing can be checked yet: no environment holds every part, so no arrival is recorded and no sheet is assembled. ${owed} ${owed === 1 ? 'landing is' : 'landings are'} owed before the first check can exist.`;
-  return 'Every part has reached an environment, so the arrival is recorded and the sheet below is what says whether the goal held up.';
+    return `Nothing can be checked yet: no environment holds every landing, so no arrival is recorded and no sheet is assembled. ${owed} ${owed === 1 ? 'landing is' : 'landings are'} owed before the first check can exist.${aside}`;
+  return `Nothing has reached an environment yet, so there is nothing here to check and nothing failing.${aside}`;
 }

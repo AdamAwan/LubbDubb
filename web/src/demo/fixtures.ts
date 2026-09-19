@@ -1370,9 +1370,9 @@ export function buildDemoState(): DemoSeed {
         environments: [
           {
             environment: 'staging',
-            status: 'unknown',
+            status: 'absent',
             landed: 0,
-            total: 1,
+            total: 0,
             unplaced: 1,
             at: null,
             opens: ['validate', 'close_out'],
@@ -1380,9 +1380,9 @@ export function buildDemoState(): DemoSeed {
           },
           {
             environment: 'prod',
-            status: 'unknown',
+            status: 'absent',
             landed: 0,
-            total: 1,
+            total: 0,
             unplaced: 1,
             at: null,
             opens: [],
@@ -1390,11 +1390,12 @@ export function buildDemoState(): DemoSeed {
           },
         ],
         landings: [
-          /* A stacked pull request's squash: it went onto the part below it on the stack, a
-             topic branch that has since been deleted, so it is an ancestor of nothing and no
-             probe will ever read it as reached. It is counted in `total` all the same, which
-             makes `reached === total` unreachable and this goal permanently uncheckable — the
-             trap the matrix exists to say out loud. */
+          /* A stacked pull request's squash: it went onto the part below it on the stack, a topic
+             branch that has since been deleted, so it is an ancestor of nothing. `goalReach` drops
+             it from `landings` before counting, which is why `total` here is 0 rather than 1 — a
+             fraction of nothing, never a permanent false `partial`. The row is what lets an
+             operator account for the difference.
+             → docs/spec/24-environments.md#what-counts-as-a-landing */
           {
             prNumber: 401,
             sha: 'dead10c',

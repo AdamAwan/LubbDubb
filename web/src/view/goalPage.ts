@@ -365,12 +365,6 @@ function environmentStage(page: GoalPageView): GoalStage {
   const base = { at: 'environments', label: 'Shipped' } as const;
   const envs = page.environments;
   if (envs.length === 0) return { ...base, reading: 'no environments', tone: 'grey', done: null };
-  /* A landing that is an ancestor of nothing — a stacked pull request's squash onto a
-     since-deleted topic branch — is counted in `total` and can never be read as reached,
-     so `reached === total` is unreachable and this goal can never be checked at all. It
-     outranks every other reading here because it is the only one that never resolves on
-     its own. → docs/spec/24-environments.md#what-counts-as-a-landing */
-  if (unreachable(page)) return { ...base, reading: 'can never be checked', tone: 'amber', done: null };
   if (page.gateHold !== null) return { ...base, reading: 'gate held', tone: 'amber', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
   const furthest = reached[reached.length - 1];
@@ -412,15 +406,6 @@ function environmentStage(page: GoalPageView): GoalStage {
  */
 function arrived(page: GoalPageView): boolean {
   return page.environments.some((e) => e.status === 'reached');
-}
-
-/**
- * This goal holds a landing no environment can ever contain, so it can never be checked.
- * Three-valued reach makes `unknown` a probe that could not answer; `unplaced` is the
- * settled case — a squash that is an ancestor of nothing.
- */
-function unreachable(page: GoalPageView): boolean {
-  return page.environments.some((e) => e.unplaced > 0);
 }
 
 export function reachCount(env: GoalEnvironmentReachView): string {
@@ -604,8 +589,6 @@ export interface GoalTabOpening {
  */
 export function goalTabOpening(page: GoalPageView): GoalTabOpening {
   if (settled(page)) return { tab: 'done', why: 'this goal is finished — the record is what the page is for now' };
-  if (unreachable(page))
-    return { tab: 'shipped', why: 'a part of this goal can never reach an environment, so it can never be checked' };
   if (page.gateHold !== null) return { tab: 'shipped', why: 'a gate is holding this goal short of an environment' };
   if (page.openPullRequests.some((pr) => pr.attention.status === 'you'))
     return { tab: 'plan', why: 'a pull request is in your court' };
@@ -755,12 +738,13 @@ function validationBegun(page: GoalPageView): boolean {
 }
 
 /**
- * One cell of the reach matrix. `pending` is *not asked yet* — a part with no pull request,
- * or a landing no probe has read — and `never` is the settled impossibility of a squash that
- * is an ancestor of nothing. Neither may fold into `absent`, which is a probe that looked and
- * did not find it. → docs/spec/24-environments.md#the-three-verdicts
+ * One cell of the reach matrix. `pending` is *not asked yet* — a part with no pull request, or a
+ * landing no probe has read — and `unplaced` is a landing the clone says is on no integration
+ * branch, which is **dropped from the goal's `total`** and never probed for rather than counted
+ * against it. Neither may fold into `absent`, which is a probe that looked and did not find it.
+ * → docs/spec/24-environments.md#the-three-verdicts, [what counts](../../../docs/spec/24-environments.md#what-counts-as-a-landing)
  */
-export type GoalReachCell = 'reached' | 'absent' | 'unknown' | 'never' | 'pending';
+export type GoalReachCell = 'reached' | 'absent' | 'unknown' | 'unplaced' | 'pending';
 
 /** One row of the reach matrix: a plan part, or a merge no part claims. */
 export interface GoalReachRow {
@@ -769,7 +753,7 @@ export interface GoalReachRow {
   title: string;
   prNumber: number | null;
   cells: GoalReachCell[];
-  /** This row can never be read as reached, so the goal can never be checked. */
+  /** On no integration branch: dropped from the goal's count rather than held against it. */
   unplaced: boolean;
 }
 
@@ -778,6 +762,8 @@ interface GoalReachMatrixView {
   rows: GoalReachRow[];
   /** Landings still owed before any check can begin — the AND the rollup takes, said as work. */
   owed: number;
+  /** An environment holds every landing this goal owes, so a sheet exists to read. */
+  arrived: boolean;
 }
 
 /**
@@ -822,11 +808,16 @@ export function buildGoalReachMatrix(page: GoalPageView): GoalReachMatrixView {
     });
   }
   const furthest = page.environments.find((e) => e.status === 'partial' || e.status === 'reached');
-  return { environments, rows, owed: furthest === undefined ? 0 : furthest.total - furthest.landed };
+  return {
+    environments,
+    rows,
+    owed: furthest === undefined ? 0 : furthest.total - furthest.landed,
+    arrived: page.environments.some((e) => e.status === 'reached'),
+  };
 }
 
 function cellOf(landing: GoalLandingReach | undefined, environment: string): GoalReachCell {
   if (landing === undefined) return 'pending';
-  if (landing.unplaced) return 'never';
+  if (landing.unplaced) return 'unplaced';
   return landing.reach[environment] ?? 'pending';
 }

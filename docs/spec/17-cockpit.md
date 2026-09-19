@@ -1322,13 +1322,20 @@ So the cards are grouped behind **five tabs**, declared once in `GOAL_TABS`
 (`web/src/view/goalPage.ts`) with `GOAL_TAB_OF` mapping each foldable section to the pane that holds
 it:
 
-| Pane          | id         | What is behind it                                                                                 |
-| ------------- | ---------- | ------------------------------------------------------------------------------------------------- |
-| **Ticket**    | `ticket`   | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
-| **Plan**      | `plan`     | the plan's waves, the pull requests they carry, who is on the goal now                            |
-| **Checks**    | `checks`   | the goal's checks, and its local and remote check plans                                           |
-| **Shipped**   | `shipped`  | the environments and the gate, and the signals the work asked production for                      |
-| **Close-out** | `closeout` | spend, the tail, and this goal's subtree of the work graph                                        |
+| Pane        | id        | What is behind it                                                                                  |
+| ----------- | --------- | -------------------------------------------------------------------------------------------------- |
+| **Ask**     | `ask`     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind  |
+| **Plan**    | `plan`    | the plan's waves, the pull requests they carry, who is on the goal now                             |
+| **Merged**  | `merged`  | the goal's checks and its local check plan — everything that gates or follows a **merge**          |
+| **Shipped** | `shipped` | the reach matrix, the environments and the gate, the remote sheets, and the signals                |
+| **Done**    | `done`    | spend, the tail, and this goal's subtree of the work graph                                         |
+
+**The five are moments in a goal's life, and that is the whole of why there are five.** A pane that
+names an activity rather than a moment drifts: `Checks` once held both the checks that gate a merge
+_and_ the sheet assembled for an arrival, which never coexist — nothing is sheeted until every part
+has landed ([24](24-environments.md#what-an-arrival-means)) — so one label covered two states that
+cannot both be live. A sheet belongs with the arrival it was assembled for, which is why
+`remoteValidation` sits behind Shipped and `validation` behind Merged.
 
 **A tab's id is its label, lower case.** The pane the label says is the pane `?pane=` names and the
 pane `GOAL_TAB_OF` maps a section to. The two drifted once — the row said "Checks" while every id
@@ -1380,6 +1387,16 @@ top of a page:
   same distinction `ValidationVerdict` makes one layer down, and the same one the three reach verdicts
   make for an environment ([24](24-environments.md#the-three-verdicts)) — which is why Shipped answers
   `unknown` in its own words before it would ever say "not shipped".
+- **A meter is drawn only against a denominator that cannot grow**, and this is the rule the others
+  are read through. `GoalEnvironmentReach.total` is `landings + unattributed merges + the code parts
+  still owed`, so it grows every time a plan decomposes further — a bar against it runs **backwards**
+  while the work goes forwards. Worse, it is a fraction of the wrong question: a goal is checked as a
+  whole or not at all, so between its first part landing and its last it is not part-way checked, it
+  is **not checkable**, and a bar at 57% says the first. Shipped therefore reads what is still owed
+  (`3 landings owed`) with `done: null` until an environment holds every landing, and only then draws
+  a meter — over the **environments**, which are configuration and fixed. Criteria are append-only, so
+  Ask never draws one either; Plan and Merged may, because an approved plan's parts and a settled
+  check plan are both closed sets.
 - **Every tab is drawn on every goal**, Shipped included, which reads `no environments` where none is
   configured. The row keeps its shape between goals: a control that gains and loses a column cannot be
   aimed at from memory. The strip this replaced left that stage out, and the row changed width between
@@ -1411,16 +1428,20 @@ whatever pane it now sits behind.
 `goalTabOpening(page)` answers which pane a goal opens on when nobody has picked one, and the sentence
 that says why — read top to bottom, first answer wins, and **the order is the rule**:
 
-| The goal…                                  | opens on  |
-| ------------------------------------------ | --------- |
-| is finished, closed or abandoned           | Close-out |
-| is held at an environment gate             | Shipped   |
-| has a pull request in the operator's court | Plan      |
-| has a flagged check plan or local run      | Checks    |
-| has reached an environment                 | Shipped   |
-| has begun its checks                       | Checks    |
-| has a plan, a pull request or an agent     | Plan      |
-| has none of those                          | Ticket    |
+| The goal…                                    | opens on |
+| -------------------------------------------- | -------- |
+| is finished, closed or abandoned             | Done     |
+| is held at an environment gate               | Shipped  |
+| has a pull request in the operator's court   | Plan     |
+| has a flagged check plan or local run        | Merged   |
+| has **every** landing in an environment      | Shipped  |
+| has begun its checks                         | Merged   |
+| has a plan, a pull request or an agent       | Plan     |
+| has none of those                            | Ask      |
+
+**The environment arm reads `reached`, never `partial`.** A goal with one part in staging and three
+unwritten has nothing behind Shipped but an account of what is owed, and landing an operator there
+would answer a question they did not ask while a pull request sits in their court.
 
 Every arm names a state some other surface on this page already draws, so the landing and the tab's
 own reading never tell two stories. The sentence is not decoration: it rides in the selected tab's title, so
@@ -2283,8 +2304,10 @@ that is what they are. `Signals` counts readings, not checks.
 `validation`, `localValidation` and `remoteValidation`, and `goal_arrivals.sheeted_at` is still
 `sheeted_at`: those are fold ids and a column, read by nobody outside the code, and renaming a column
 is a migration with none of this change's benefit ([14](14-persistence.md#migrations)). What a person
-reads is the table above. The pane's own id is **not** in that group — it is `checks`, because a tab's
-id is the word on the control ([The panes](#the-panes)).
+reads is the table above. The pane ids are **not** in that group — they are `merged` and `shipped`,
+because a tab's id is the word on the control ([The panes](#the-panes)), and the two folds the old
+`checks` pane held now sit behind different ones: `validation` and `localValidation` behind Merged,
+`remoteValidation` behind Shipped with the arrival that assembled it.
 
 `ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
 concluded from running each check. **The plan defines the checks; the goal manages them**, and those
