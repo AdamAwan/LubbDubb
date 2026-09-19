@@ -497,8 +497,15 @@ gate the parts may not survive it, and on a dispatched part there is no diff yet
 panel asks the operator to write from the plan, which is the second-hand account the feature exists
 to remove. → [07](07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one)
 
-The panel names that pull request with a `Ref`, because the first thing it asks is that the operator
-go and read it.
+The panel draws that pull request as [the pull-request row](#the-pull-request-row), under the heading
+and above the words, because the first thing it asks is that the operator go and read it — and a panel
+about what a pull request says it does is a strange place to say less about that pull request than its
+own card on the board does. A bare `Ref` in the top-right corner is what it was, which answered "where"
+and nothing else.
+
+**The description itself carries no rule down its left.** The quote bar was a second left edge a few
+pixels inside the card's own, which reads as the panel being indented rather than as the text being
+quoted — and nothing else on the card is inset, so there was nothing for it to be quoted _against_.
 
 Two decisions worth keeping:
 
@@ -556,7 +563,7 @@ once.
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
 | `part`                               | which part of the plan has its description in front, by slug — absent means the page picks the one that wants the operator, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                   |
-| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
+| `open`                               | the goal page's reference sections held open, as `record,sequence`                                                                                                                                                                                                                                                                                                                                                                                 |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
 | `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                                                                     |
@@ -1322,13 +1329,13 @@ So the cards are grouped behind **five tabs**, declared once in `GOAL_TABS`
 (`web/src/view/goalPage.ts`) with `GOAL_TAB_OF` mapping each foldable section to the pane that holds
 it:
 
-| Pane        | id        | What is behind it                                                                                  |
-| ----------- | --------- | -------------------------------------------------------------------------------------------------- |
-| **Ask**     | `ask`     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind  |
-| **Plan**    | `plan`    | the plan's waves, the pull requests they carry, who is on the goal now                             |
-| **Merged**  | `merged`  | the goal's checks and its local check plan — everything that gates or follows a **merge**          |
-| **Shipped** | `shipped` | the reach matrix, the environments and the gate, the remote sheets, and the signals                |
-| **Done**    | `done`    | spend, the tail, and this goal's subtree of the work graph                                         |
+| Pane        | id        | What is behind it                                                                                 |
+| ----------- | --------- | ------------------------------------------------------------------------------------------------- |
+| **Ask**     | `ask`     | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind |
+| **Plan**    | `plan`    | the plan's waves, each part wearing the standing of the pull request that carries it              |
+| **Merged**  | `merged`  | the goal's checks and its local check plan — everything that gates or follows a **merge**         |
+| **Shipped** | `shipped` | the reach matrix, the environments and the gate, the remote sheets, and the signals               |
+| **Done**    | `done`    | spend, the tail, and this goal's subtree of the work graph                                        |
 
 **The five are moments in a goal's life, and that is the whole of why there are five.** A pane that
 names an activity rather than a moment drifts: `Checks` once held both the checks that gate a merge
@@ -1389,7 +1396,7 @@ top of a page:
   `unknown` in its own words before it would ever say "not shipped".
 - **A meter is drawn only against a denominator that cannot grow**, and this is the rule the others
   are read through. `GoalEnvironmentReach.total` is `landings + unattributed merges + the code parts
-  still owed`, so it grows every time a plan decomposes further — a bar against it runs **backwards**
+still owed`, so it grows every time a plan decomposes further — a bar against it runs **backwards**
   while the work goes forwards. Worse, it is a fraction of the wrong question: a goal is checked as a
   whole or not at all, so between its first part landing and its last it is not part-way checked, it
   is **not checkable**, and a bar at 57% says the first. Shipped therefore reads what is still owed
@@ -1428,16 +1435,16 @@ whatever pane it now sits behind.
 `goalTabOpening(page)` answers which pane a goal opens on when nobody has picked one, and the sentence
 that says why — read top to bottom, first answer wins, and **the order is the rule**:
 
-| The goal…                                    | opens on |
-| -------------------------------------------- | -------- |
-| is finished, closed or abandoned             | Done     |
-| is held at an environment gate               | Shipped  |
-| has a pull request in the operator's court   | Plan     |
-| has a flagged check plan or local run        | Merged   |
-| has **every** landing in an environment      | Shipped  |
-| has begun its checks                         | Merged   |
-| has a plan, a pull request or an agent       | Plan     |
-| has none of those                            | Ask      |
+| The goal…                                  | opens on |
+| ------------------------------------------ | -------- |
+| is finished, closed or abandoned           | Done     |
+| is held at an environment gate             | Shipped  |
+| has a pull request in the operator's court | Plan     |
+| has a flagged check plan or local run      | Merged   |
+| has **every** landing in an environment    | Shipped  |
+| has begun its checks                       | Merged   |
+| has a plan, a pull request or an agent     | Plan     |
+| has none of those                          | Ask      |
 
 **The environment arm reads `reached`, never `partial`.** A goal with one part in staging and three
 unwritten has nothing behind Shipped but an account of what is owed, and landing an operator there
@@ -1483,7 +1490,6 @@ defaults unlock is the order the questions are asked in:
 
 | Section        | Open from                                                                             |
 | -------------- | ------------------------------------------------------------------------------------- |
-| `ticket`       | until the work starts — a plan, a pull request or an agent folds it                   |
 | `validation`   | the work reaching an environment **and** there being a check, or one anybody ruled on |
 | `signals`      | the same arrival **and** a declared check, or one awaiting the operator               |
 | `environments` | any environment reading that is not `absent`                                          |
@@ -1552,8 +1558,8 @@ catalog`, the item type and the tracker's workflow state in the operator's own c
    that can be read as either is the header's oldest confusion; the prefix is what makes a chip say
    _judgement_ before it says anything else, and the glyph beside it repeats that. Every chip quotes a
    reading the server already made; nothing here is a second opinion. At the end, one plain run of the
-   measurements — when the run started, the agent count (the same one **On this goal** carries,
-   pull-request dispatches included, [below](#who-is-on-the-goal)), what it has cost — a step fainter,
+   measurements — when the run started, the agent count (pull-request dispatches included, and the
+   agents themselves on its tooltip, [below](#who-is-on-the-goal)), what it has cost — a step fainter,
    which is the difference between a reading you scan and a judgement you read. A `null` spend draws no
    reading at all, because nothing was ever measured and `$0.00` would report a goal that cost nothing
    ([18](18-observability.md#per-goal-spend)).
@@ -2718,6 +2724,49 @@ issue ref, so drift written as one would un-park the goal it has just reported o
 
 ### The pull requests and the tail
 
+<a id="a-part-and-its-pull-request"></a>
+<a id="the-pull-request-row"></a>
+
+**There is one pull-request row, and every surface that draws a pull request as a row draws it.**
+`prRow` (`web/src/console/prRow.tsx`) builds it, with `closedPrRow` beside it for one nothing will
+happen on again. The rack on the overview is built from it, and so is each part of a goal's plan. It
+left `Overview.tsx` for a module of its own the moment a second surface wanted it: two readings of one
+pull request side by side is how the same PR comes to wear two sets of marks nobody chose, which is
+the rule `CiMark` is one component for, one layer down. `waitedFor` moved to `components/util.tsx` in
+the same change, because the row reaching back into `GoalPage.tsx` for it would have been a cycle.
+
+**One argument varies.** `{ goal: false }` drops the reference to the goal a pull request is
+delivering: the rack says which goal, and on that goal's own page the reference points at the page the
+reader is already standing on.
+
+**A part wears that row, and there is no second list.** A part and the pull request that carries it
+are one thing ([the panes](#the-panes)), and drawn as two lists the page asked the operator to read
+the same verdicts twice against two different titles — the part's, and the pull request's — and to
+join them by number. So the row is drawn on the part itself (`PartPrRow`), and the dependency line no
+longer repeats the number beside it: two references to one pull request on one card is the card
+disagreeing with itself.
+
+**A pull request no part names is a part with nothing known about it**, in a column of its own at the
+end of the board — _Not in the plan_, one `cn-loose` card each, carrying the row and the sentence that
+says why it is standing alone. A goal delivered **whole** has no parts at all, a pull request can be
+filed before the plan exists, and the provider links some itself, so `ownsPr`'s answer is wider than
+the plan's and the difference is work the board would otherwise not draw. `loosePullRequests` is the
+one place that difference is computed. It was a card below the board first, which was the same reading
+under a second heading — and a goal's pull request with no way to it is the dead end
+[Links](#links) exists to stop. Which pull requests are the goal's does not change; the split is only
+about where each one is drawn.
+
+**The row gives way where the part card is the frame.** The rail's widths are measured for a card the
+width of the page ([the row grammar](#the-row-grammar)), and a wave's column is a third of that: at
+281px the mark and reference columns collapsed to 10px each while the row still measured 354px, and
+what an operator saw was the reference hanging off the card's right edge. So `.cn-part .cn-partpr` and
+`.cn-desc-pr` take in the three rails this row never needs at full width — the subject gives way
+altogether, the chip slot carries one word rather than two chips, the reference slot one reference
+rather than a pair — and they make [the stacked cut](#the-row-grammar)'s container query at **460px**
+rather than the rack's 900px. The subject can give way here because the part's own title, or the
+description panel's heading, is the line directly above it: a clipped copy of the pull request's says
+nothing the reader has not just read, which is exactly what is not true on the rack.
+
 **Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part
 row naming the number, the branch convention (`issue/<n>`, and `issue/<n>/<slug>` for a part whose row
 has not caught up), or `linkedPrNumber` for a PR the provider linked itself. The part rows alone are not
@@ -2727,9 +2776,10 @@ imported — it is a string shape rather than a verdict, and the wire boundary
 ([16](16-http-api.md#the-state-snapshot)) admits only `src/wire.ts` — and `test/goalPage.test.ts` pins
 the pair, including the prefix trap (`issue/1` versus `issue/19`).
 
-Open and closed are both drawn, closed dimmed with `merged` / `closed` on the chip. A merged PR leaves
-the open list, and a goal whose work has landed would otherwise draw an empty card
-([03](03-world-model.md)).
+Open and closed are both drawn, closed dimmed with `merged` / `closed` on the chip — `closedPrRow`,
+which keeps what is still a record (the fleet's reading, and the word for how it ended) and drops what
+is about what happens next (the checks, the court, the watch gate). A merged PR leaves the open list,
+and a goal whose work has landed would otherwise have nothing to draw ([03](03-world-model.md)).
 
 **The closed rows are kept for ever, and they are stale on purpose.** `world.closedPullRequests` is a
 window `closedPrWindowMs` wide, and drawn off it alone a goal's pull requests disappeared from its page
@@ -2751,20 +2801,18 @@ which is where it sat while there was no pull request page to put it on. What th
 one bit that says whether going there is worth it: the [pack mark](31-review-packs.md#on-the-row),
 third in the reading slot, drawn only where there is a pack or one being written.
 
-One number does come back to the row: how many review threads the fleet still owes an answer, as
-_n on us_. It is drawn only when there is one — a chip reading `0` on every settled pull request is
-furniture — and never at all where the provider reports no threads, since a chip there would be a
-claim about a review the harness cannot see ([07](07-pull-requests.md#review-threads)).
+Whether anybody is waiting on an answer is the [comments mark](#the-checks-mark)'s, drawn only where
+there is one — a mark reading `0` on every settled pull request is furniture — and never at all where
+the provider reports no threads, since a mark there would be a claim about a review the harness cannot
+see ([07](07-pull-requests.md#review-threads)).
 
-Beside it, and on the same rule, is the **split chip**: _n concepts_, drawn only where rule
-`pr-split` read the diff and found more than one ([07](07-pull-requests.md#how-wide-a-pull-request-is)).
-A `coherent` verdict draws nothing, and that asymmetry is the point rather than an omission — a
-verdict of "this is one thing" is the question asked and answered, and a chip for it would sit on
-every wide pull request in the fleet saying that nothing happened. The file count is not drawn either:
-a pull request under the budget was never asked about, and one over it that nothing has read yet is a
-number with no reading behind it. The chip's title carries the concepts and the reason, because what
-an operator does about it — accept the amendment, or leave the pull request alone — is decided on
-those and not on the count.
+**Two chips the goal page used to draw beside it are gone with the second list**: _n on us_, which the
+comments mark now answers, and the **split chip** — _n concepts_ off rule `pr-split`
+([07](07-pull-requests.md#how-wide-a-pull-request-is)). There is one row and the split verdict is not
+on it, so on the goal page the verdict is now read on
+[the pull request's own page](#the-pull-request-page) and nowhere else. Putting it back is a slot on
+`prRow`, which puts it on the rack too — a decision about every surface, and that is the right shape
+for it.
 
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
@@ -2775,10 +2823,10 @@ clean bill of health.
 
 `CiMark` is `web/src/components/CiMark.tsx` and every surface draws that one component, since two
 readings of one verdict side by side is how the same PR comes to wear two tones nobody chose.
-`CourtChip` stays in `GoalPage.tsx`: the rack draws the same verdict behind its row marker — the card
-wears no state word ([the state column](#the-row-grammar)) — and this page has no marker to put it
-behind.
-`waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
+`CourtChip` stays in `GoalPage.tsx` for [the pull request page](#the-pull-request-page), which has a
+header to put a verdict word in; on a row the same verdict is the `?` marker's, off `attention.reasons`
+([the row grammar](#the-row-grammar)). `waitedFor` is `components/util.tsx`' — the row states the same
+age as a fact, and the chip and the row must not disagree about it.
 
 **And the row itself carries it.** `PanelRowModel.live` puts a green edge down the row and a slow
 sweep across it — the whole line, rather than one more mark in one more slot. That is the honest shape
@@ -2858,29 +2906,30 @@ page is doing.
 
 ### Who is on the goal
 
-**On this goal** lists the agents this goal has had, live ones lamped and finished ones plain, each a
-way into its drawer.
+**The agent count in the header is the whole of it, and who those agents are is its tooltip.** It was a
+card of its own on the Plan pane, and on almost every goal it read _No agent is on this goal_ — a
+heading, a sentence and a card's worth of ground between the plan and everything below it, saying
+nothing. The count is the fact worth a line on the page; the names, their states, their ages and their
+costs are worth a hover, and `agentsTitle` (`GoalPage.tsx`) writes them in the words the drawer uses
+for the same facts. The reading carries the glyph the cockpit says _agent_ with, so the hover is
+findable without being a control — it is a reading, not a press.
 
 **A pull request is for a goal, so an agent on one is on the goal.** A dispatch names the goal's own
 subtree (`issue:390`, `issue:390:part:writes`, `issue:390:retro`) or it names a pull request
-(`pr:412`) — and a card that read only the first said _no agent is on this goal_ while somebody was
+(`pr:412`) — and a count that read only the first said _no agent is on this goal_ while somebody was
 fixing its build, restarting its review round or retargeting its branch. That is most of the time a
-goal has anybody on it, and it is the one question this card exists to answer. Which pull requests are
-the goal's is `goalOfPr`'s three-way match, the same one the pull-request card is drawn with, so a
-second reading cannot put an agent on a goal the card below it says the PR does not belong to.
+goal has anybody on it, and it is the one question this reading exists to answer. Which pull requests
+are the goal's is `goalOfPr`'s three-way match, the same one the parts and the pull-request card are
+drawn with, so a second reading cannot put an agent on a goal the page says the PR does not belong to.
 
-**The row names that pull request**, as a `<Ref>` beside the name rather than as text: a row that says
-an agent is on something and does not say where is the dead end [Links](#links) exists to stop. It sits
-**beside** the name and never inside it — the row's own click opens the transcript, and one click
-cannot have two destinations — which is why the row is a `div` carrying a `cn-grow` button, the shape
-the fleet card and the backlog row already use.
+**Each agent keeps its own way in on the part it is working.** A tooltip is not a link, so the count
+must not be the only place an agent is named: the part card carries `AgentOnIt` for a live agent and
+_open the agent ↗_ for a finished one ([the plan](#the-plan)), which is the row an operator is reading
+when they want the transcript. The Fleet card and the escalation card are the other two ways in
+([the agent drawer](#the-agent-drawer)).
 
-**The header's agent count is this list's length**, pull-request dispatches included, because it is the
-same question asked in fewer words. What ending the run kills is _not_ read from it — that is the
-`issue:<n>` subtree alone, and the modal states the difference
-([the header's controls](#the-headers-controls)).
-
-→ `test/goalPage.test.ts`
+**What ending the run kills is _not_ read from this count** — that is the `issue:<n>` subtree alone,
+and the modal states the difference ([the header's controls](#the-headers-controls)).
 
 ### Environments
 
@@ -5404,7 +5453,7 @@ that is holding — parked on a question or on the account's limit. One mark wit
 a second mark: an operator counting agents down the page has to tell the two apart without reading,
 and a second glyph would be a second legend. Each opens the transcript. Nobody draws nothing.
 
-The join is the goal page's ("On this goal"): an agent's task origin read through `standsFor`, and a
+The join is the goal page's ([who is on the goal](#who-is-on-the-goal)): an agent's task origin read through `standsFor`, and a
 `pr:<n>` origin attributed to the goal that owns the pull request, so an agent fixing a story's CI is
 on the story.
 
@@ -6780,7 +6829,7 @@ The drawer subscribes to full output on open and unsubscribes on close or switch
 ## The agent drawer
 
 `AgentDrawer` opens over the page for one agent, asked for by `actions.select(id)` from wherever an
-agent is drawn — the Fleet card, a goal page's **On this goal** rows, the escalation card's own way in.
+agent is drawn — the Fleet card, a goal page's part cards, the escalation card's own way in.
 
 **The transcript is polled every five seconds while the run is live, and the poll is the load-bearing
 half of how the pane moves** (issue #639). The socket delivers an agent's output the moment it

@@ -434,7 +434,6 @@ function tailStage(page: GoalPageView): GoalStage {
 }
 
 export const GOAL_SECTIONS = [
-  'ticket',
   'prediction',
   'validation',
   'localValidation',
@@ -451,7 +450,6 @@ export type GoalSection = (typeof GOAL_SECTIONS)[number];
 export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolean> {
   const live = livePageChecks(page);
   return {
-    ticket: !workStarted(page),
     /* Open while the prediction is the live question — the plan is at its gate and
        marking it against what the plan says is the whole of what this pane is for —
        and again when delivery has landed and the second question is being asked.
@@ -530,7 +528,6 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
  * → docs/spec/17-cockpit.md#the-panes
  */
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
-  ticket: 'ask',
   sequence: 'ask',
   prediction: 'plan',
   validation: 'merged',

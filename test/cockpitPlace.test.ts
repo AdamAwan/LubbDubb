@@ -57,7 +57,7 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'insights', insightsWindow: 'all' }),
     at({ tab: 'insights', insightsScope: 'pool' }),
     at({ tab: 'insights', insightsScope: 'pool', insightsView: 'throughput', poolProject: 'acme-api' }),
-    at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['ticket'] }),
+    at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['sequence'] }),
     at({ goal: 'issue:142', sheetEnvironment: 'acceptance' }),
     at({ tab: 'features' }),
     at({ tab: 'features', featureCard: 812 }),
@@ -321,7 +321,7 @@ test('every pane of the goal page round-trips, and the rule\u2019s own landing i
 });
 
 test('a pane and its folds belong to the goal they were picked on, and do not follow you to the next', () => {
-  const reading = at({ goal: 'issue:142', goalTab: 'done', goalOpen: ['ticket'], goalShut: ['signals'] });
+  const reading = at({ goal: 'issue:142', goalTab: 'done', goalOpen: ['sequence'], goalShut: ['signals'] });
 
   const same = goalMove(reading, 'issue:142');
   assert.equal(same.goalTab, undefined, 'staying on the goal leaves the pane the operator picked alone');
@@ -337,8 +337,8 @@ test('a pane and its folds belong to the goal they were picked on, and do not fo
 });
 
 test('a hand-edited fold list drops a section that does not exist', () => {
-  const place = readPlace('?goal=issue:142&open=ticket,nonesuch&shut=signals,nonesuch');
-  assert.deepEqual(place.goalOpen, ['ticket']);
+  const place = readPlace('?goal=issue:142&open=sequence,nonesuch&shut=signals,nonesuch');
+  assert.deepEqual(place.goalOpen, ['sequence']);
   assert.deepEqual(place.goalShut, ['signals']);
 });
 

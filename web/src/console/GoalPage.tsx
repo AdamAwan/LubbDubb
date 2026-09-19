@@ -39,15 +39,14 @@ import { EndRunModal } from '../components/EndRunModal.js';
 import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { Tag, type TagTone } from '../components/tag.js';
-import { fmtUsd, relTime } from '../components/util.js';
+import { fmtUsd, relTime, waitedFor } from '../components/util.js';
 import { Ref, TicketLink } from '../components/refs.js';
 import { waitingOnThis, waitsOn, waveOf, wavesOf } from '../view/sequence.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { Icon } from '../components/icons.js';
-import { CiMark } from '../components/CiMark.js';
-import { PackMark } from '../components/PackMark.js';
-import { ReviewMark } from '../components/ReviewMark.js';
+import { PanelRows, type PanelRowModel } from './PanelRow.js';
+import { closedPrRow, prRow } from './prRow.js';
 import {
   CONTROL_CLASS,
   ControlBar,
@@ -206,7 +205,7 @@ function TicketPane({
 }): JSX.Element {
   return (
     <>
-      <Ticket issue={page.issue} refUrls={view.state.refUrls} fold={folds.ticket} />
+      <Ticket issue={page.issue} refUrls={view.state.refUrls} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <Instructions issue={page.issue} actions={actions} />
@@ -296,8 +295,8 @@ function WorkPaneBody({
           issueNumber={page.issue.number}
           slug={chosen.part.slug}
           position={chosen.position}
-          prNumber={chosen.part.prNumber}
           title={chosen.part.title}
+          row={partPrRow(page, chosen.part.prNumber, view, actions)}
           anchor={chosenRef}
           desktopFolder={view.state.config.desktopFolder}
           now={view.now}
@@ -313,14 +312,6 @@ function WorkPaneBody({
         workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
         now={view.now}
       />
-      <div className="cn-gcols">
-        <div className="cn-stack">
-          <PullRequests page={page} view={view} actions={actions} />
-        </div>
-        <div className="cn-stack">
-          <OnThisGoal page={page} view={view} actions={actions} />
-        </div>
-      </div>
       {/* Last on the pane, once the plan is approved and the work is under way: it is
           a record of a moment that has passed, and everything above it — the parts,
           the description in front, what "done" means, the pull requests — is the work
@@ -582,7 +573,16 @@ function Header({
             came to disagree. */}
           <span className="cn-ghfacts">
             {issue.run !== undefined && <>started {relTime(issue.run.startedAt, view.now)} · </>}
-            {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}
+            {/* Who those agents are, on the reading that counts them. It was a card
+                of its own on the Plan pane, which put a list of agents — almost
+                always none — between the plan and everything below it; the count
+                is the fact worth a line, and the names behind it are worth a
+                hover. Each agent keeps its own way in on the part it is working.
+                → docs/spec/17-cockpit.md#who-is-on-the-goal */}
+            <span className="cn-ghagents" title={agentsTitle(page, view.now)}>
+              <Icon name="robot" size={12} />
+              {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}
+            </span>
             {issue.spend !== null && <> · {fmtUsd(issue.spend.costUsd)}</>}
           </span>
         </span>
@@ -1099,6 +1099,39 @@ const GROUP_LABEL: Record<PartGroup, string> = {
   waiting: 'Not started',
 };
 
+/* The pull requests this goal owns that no part of the plan carries. A goal
+   delivered whole has no parts at all, a pull request can be filed before the
+   plan exists, and the provider links some itself — so `ownsPr`'s answer is
+   wider than the plan's, and the difference is work the board would otherwise
+   not draw at all. → docs/spec/17-cockpit.md#a-part-and-its-pull-request */
+function loosePullRequests(page: GoalPageView): PartPr[] {
+  const carried = new Set(
+    [...page.parts.map((p) => p.part), ...page.retiredParts]
+      .map((part) => part.prNumber)
+      .filter((n): n is number => n !== null),
+  );
+  return [
+    ...page.openPullRequests.filter((pr) => !carried.has(pr.number)).map((pr): PartPr => ({ open: true, pr })),
+    ...page.closedPullRequests.filter((pr) => !carried.has(pr.number)).map((pr): PartPr => ({ open: false, pr })),
+  ];
+}
+
+/* The row for the pull request a part carries, for a surface that holds the
+   number and not the pull request. One builder, so the panel under the board and
+   the part on it cannot disagree about the same pull request.
+   → docs/spec/17-cockpit.md#a-part-and-its-pull-request */
+function partPrRow(
+  page: GoalPageView,
+  prNumber: number,
+  view: CockpitView,
+  actions: CockpitActions,
+): PanelRowModel | undefined {
+  const open = page.openPullRequests.find((pr) => pr.number === prNumber);
+  if (open !== undefined) return prRow(open, view, actions, { goal: false });
+  const closed = page.closedPullRequests.find((pr) => pr.number === prNumber);
+  return closed === undefined ? undefined : closedPrRow(closed, view, actions);
+}
+
 function PlanWaves({
   page,
   view,
@@ -1132,6 +1165,18 @@ function PlanWaves({
   const prs = new Map<number, PartPr>();
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
+  /* Each part draws its pull request in a card of its own, so each would size its
+     own columns and the board's marks would sit at a different x on every part.
+     The rail is every part's row, handed to all of them: one set of columns
+     across the whole board, which is what `PanelRows`' own rail is for.
+     → docs/spec/17-cockpit.md#a-part-and-its-pull-request */
+  const loose = loosePullRequests(page);
+  const prRail = [
+    ...[...page.parts.map((p) => p.part), ...retired]
+      .map((part) => (part.prNumber === null ? null : (prs.get(part.prNumber) ?? null)))
+      .filter((pr): pr is PartPr => pr !== null),
+    ...loose,
+  ].map((pr) => (pr.open ? prRow(pr.pr, view, actions, { goal: false }) : closedPrRow(pr.pr, view, actions)));
   const underWay = planUnderWay(page);
 
   return (
@@ -1213,12 +1258,30 @@ function PlanWaves({
                 chosen={chosen === p.part.slug}
                 chosenRef={chosenRef}
                 receded={chosen !== null && chosen !== p.part.slug}
-                now={view.now}
+                prRail={prRail}
+                view={view}
                 actions={actions}
               />
             ))}
           </div>
         ))}
+        {/* A column of its own, last: these are the goal's work as much as any part
+            is, and left off the board they were a card further down the pane
+            repeating the same row under a different heading. Drawn as parts with
+            nothing known about them rather than as a second list — what the plan
+            does not account for is still what is happening to this goal.
+            → docs/spec/17-cockpit.md#a-part-and-its-pull-request */}
+        {loose.length > 0 && (
+          <div className="cn-col">
+            <div className="cn-coln">Not in the plan</div>
+            {loose.map((pr) => (
+              <div className="cn-part cn-loose" key={pr.pr.number}>
+                <PartPrRow pr={pr} rail={prRail} view={view} actions={actions} />
+                <span className="cn-dep">no part of the plan names this</span>
+              </div>
+            ))}
+          </div>
+        )}
         {retired.length > 0 && (
           <div className="cn-col">
             <div className="cn-coln">Retired</div>
@@ -1229,11 +1292,12 @@ function PlanWaves({
                 group="retired"
                 agentId={null}
                 agentLive={false}
-                pr={null}
+                pr={part.prNumber === null ? null : (prs.get(part.prNumber) ?? null)}
                 chosen={false}
                 chosenRef={chosenRef}
                 receded={chosen !== null}
-                now={view.now}
+                prRail={prRail}
+                view={view}
                 actions={actions}
               />
             ))}
@@ -1253,7 +1317,8 @@ function Part({
   chosen,
   chosenRef,
   receded,
-  now,
+  prRail,
+  view,
   actions,
 }: {
   part: PlanPart;
@@ -1264,7 +1329,8 @@ function Part({
   chosen: boolean;
   chosenRef: MutableRefObject<HTMLDivElement | null>;
   receded: boolean;
-  now: number;
+  prRail: readonly PanelRowModel[];
+  view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
   const held = usePartDescriptions();
@@ -1309,28 +1375,7 @@ function Part({
       )}
       {group === 'held' && part.blockedReason !== null && <p className="cn-why">{part.blockedReason}</p>}
       {part.scope !== '' && <p>{part.scope}</p>}
-      {/* A dead pull request's word is drawn only where it disagrees with the
-          column the part is standing in: "merged" under the Merged heading is the
-          heading again, while a merged PR on a part grouped anywhere else — or a
-          PR closed unmerged — is the one thing the board cannot say for itself. */}
-      {pr !== null && (pr.open || pr.pr.merged !== (group === 'merged')) && (
-        <span className="cn-pstate">
-          {/* The checks are drawn for an open pull request only, which is what the
-              pull-request card does with the same two components: on a dead PR
-              the checks are history, and the card's closed rows carry a word and
-              no chip for exactly that reason. */}
-          {pr.open ? (
-            <>
-              <CiMark pr={pr.pr} />
-              <CourtChip pr={pr.pr} now={now} />
-            </>
-          ) : (
-            <Tag tone={pr.pr.merged ? 'green' : undefined} fill={pr.pr.merged}>
-              {pr.pr.merged ? 'merged' : 'closed'}
-            </Tag>
-          )}
-        </span>
-      )}
+      {pr !== null && <PartPrRow pr={pr} rail={prRail} view={view} actions={actions} />}
       {/* The description's standing, said on the part it belongs to. The card is the
           control that brings it to the front — the board is where the parts are told
           apart, so it is where the one in front is chosen.
@@ -1338,12 +1383,6 @@ function Part({
       <PartDescriptionTag slug={part.slug} prNumber={part.prNumber} />
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
-        {part.prNumber !== null && (
-          <>
-            {' · '}
-            <Ref to={`pr:${part.prNumber}`} label={`PR #${part.prNumber}`} />
-          </>
-        )}
         {/* A live agent gets the chip the whole cockpit says this with; a
             finished one keeps the plain way in, because what it offers is the
             record of what happened here and not a claim that anything still is. */}
@@ -1365,6 +1404,37 @@ function Part({
           </>
         )}
       </span>
+    </div>
+  );
+}
+
+/* The pull request carrying this part, drawn as the one pull-request row the
+   cockpit has — the same `prRow` the overview's rack is built from, so a part
+   and the rack say the same thing about the same pull request in the same
+   shape. A strip of bare marks under the title said all of it and named none of
+   it: the row is what makes "what is happening to this part" readable without
+   first learning six glyphs.
+   → docs/spec/17-cockpit.md#a-part-and-its-pull-request */
+function PartPrRow({
+  pr,
+  rail,
+  view,
+  actions,
+}: {
+  pr: PartPr;
+  rail: readonly PanelRowModel[];
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <div className="cn-partpr cn-read-marks">
+      <PanelRows
+        layout="stacked"
+        rail={rail}
+        /* The goal reference is the page this row is already on, and the rack's
+           own `goal: false` reason applies here twice over. */
+        rows={[pr.open ? prRow(pr.pr, view, actions, { goal: false }) : closedPrRow(pr.pr, view, actions)]}
+      />
     </div>
   );
 }
@@ -1397,119 +1467,20 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
   );
 }
 
-function Ticket({ issue, refUrls, fold }: { issue: Issue; refUrls: Record<string, string>; fold: Fold }): JSX.Element {
+function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, string> }): JSX.Element {
   return (
     <section className="cn-card" id="cn-ticket">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="The ticket" />
+        The ticket
         <span className="cn-more">as it stood at pickup</span>
       </h3>
-      {fold.open && (
-        <div className="cn-tick">
-          {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
-          {renderRichText(issue.body, refUrls)}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function PullRequests({
-  page,
-  view,
-  actions,
-}: {
-  page: GoalPageView;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
-  const open = page.openPullRequests;
-  const closed = page.closedPullRequests;
-  return (
-    <section className="cn-card">
-      <h3>
-        Pull requests
-        <i className="cn-n">
-          {open.length} open · {closed.length} closed
-        </i>
-      </h3>
-      <div className="cn-rows">
-        {open.length === 0 && closed.length === 0 && <p className="cn-empty">No pull request names this goal yet.</p>}
-        {open.map((pr) => (
-          <div className={`cn-row ${pr.attention.status === 'unwatched' ? 'cn-spent' : ''}`} key={pr.number}>
-            <span className="cn-grow">
-              {/* The name is the way onto the pull request's page and the reference
-                  sits beside it, never inside it: one click cannot have two
-                  destinations, and the provider is a different place from the
-                  cockpit's own page for the same pull request.
-                  → docs/spec/17-cockpit.md#links */}
-              <button type="button" className="cn-prlink" onClick={() => actions.selectPr(pr.number)}>
-                #{pr.number} {pr.title}
-              </button>
-              <span className="cn-sub">{pr.branch}</span>
-            </span>
-            <ThreadChip pr={pr} />
-            <SplitChip pr={pr} />
-            {/* The fleet's own reading, left of the checks so the two verdicts
-                read in the order the harness produces them. */}
-            <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
-            <PackMark pack={pr.pack} onOpen={() => actions.selectPr(pr.number)} />
-            <CiMark pr={pr} onOpen={() => actions.selectPr(pr.number)} />
-            <CourtChip pr={pr} now={view.now} />
-            <span className="cn-refs">
-              <Ref to={`pr:${pr.number}`} />
-            </span>
-          </div>
-        ))}
-        {closed.map((pr) => (
-          <div className="cn-row cn-spent" key={pr.number}>
-            <span className="cn-grow">
-              <button type="button" className="cn-prlink" onClick={() => actions.selectPr(pr.number)}>
-                #{pr.number} {pr.title}
-              </button>
-              <span className="cn-sub">{pr.branch}</span>
-            </span>
-            <ThreadChip pr={pr} />
-            {/* The one verdict a dead pull request keeps: what was read is a
-                record, where the other three are about what happens next. */}
-            <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
-            <Tag tone={pr.merged ? 'green' : undefined} fill={pr.merged}>
-              {pr.merged ? 'merged' : 'closed'}
-            </Tag>
-            <span className="cn-refs">
-              <Ref to={`pr:${pr.number}`} />
-            </span>
-          </div>
-        ))}
+      <div className="cn-tick">
+        {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
+        {renderRichText(issue.body, refUrls)}
       </div>
     </section>
   );
 }
-
-// A pull request rule `pr-split` read and found to hold more than one concept.
-// Only the split verdict draws: a coherent one is the question asked and
-// answered, and a chip for it would sit on every wide pull request saying
-// nothing happened. → docs/spec/17-cockpit.md
-function SplitChip({ pr }: { pr: PullRequest }): JSX.Element | null {
-  const split = pr.split;
-  if (split === undefined || split.verdict !== 'split') return null;
-  return (
-    <Tag tone="amber" fill title={`${split.concepts.join(' · ')}\n\n${split.reason}`}>
-      {split.concepts.length} concepts
-    </Tag>
-  );
-}
-
-function ThreadChip({ pr }: { pr: PullRequest }): JSX.Element | null {
-  const waiting = (pr.reviewThreads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened').length;
-  if (waiting === 0) return null;
-  return (
-    <Tag tone="amber" fill title="Review threads the fleet has not answered">
-      {waiting} on us
-    </Tag>
-  );
-}
-
 function Sequence({ page, fold }: { page: GoalPageView; fold: Fold }): JSX.Element | null {
   const sequence = page.sequence;
   const parent = page.issue.parent?.number;
@@ -1828,11 +1799,6 @@ export function StaleChip({ stale, now }: { stale: NonNullable<Issue['stale']>; 
   );
 }
 
-export function waitedFor(sinceIso: string, now: number): string {
-  const hours = Math.floor(Math.max(0, now - Date.parse(sinceIso)) / 3_600_000);
-  return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
-}
-
 export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
   const since = pr.attention.reviewWaitingSince;
   const waited = since !== undefined ? waitedFor(since, now) : null;
@@ -1852,50 +1818,17 @@ export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JS
   );
 }
 
-function OnThisGoal({
-  page,
-  view,
-  actions,
-}: {
-  page: GoalPageView;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
-  return (
-    <section className="cn-card">
-      <h3>
-        On this goal <i className="cn-n">{page.agents.length}</i>
-      </h3>
-      <div className="cn-rows">
-        {page.agents.length === 0 && <p className="cn-empty">No agent is on this goal.</p>}
-        {page.agents.map(({ agent, onPr, title }) => (
-          <div className="cn-row" key={agent.id}>
-            <i
-              className={`cn-lamp ${agent.status === 'waiting' ? 'cn-lamp-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
-            />
-            <button
-              type="button"
-              className="cn-grow"
-              onClick={() => actions.select(agent.id)}
-              title="Open this agent's drawer — its transcript, what it cost, and its controls"
-            >
-              <b className="cn-name">{title ?? agent.id}</b>
-              <span className="cn-sub">
-                {agent.status} · {relTime(agent.startedAt, view.now)}
-                {agent.note !== null && ` · ${agent.note}`}
-              </span>
-            </button>
-            {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
-            {onPr !== null && (
-              <span className="cn-refs">
-                <Ref to={`pr:${onPr}`} label={`PR #${onPr}`} />
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+/* The tooltip behind the header's agent count: one line per agent, in the words
+   the drawer uses for the same facts. → docs/spec/17-cockpit.md#who-is-on-the-goal */
+function agentsTitle(page: GoalPageView, now: number): string {
+  if (page.agents.length === 0) return 'No agent is on this goal.';
+  return page.agents
+    .map(({ agent, onPr, title }) => {
+      const cost = agent.costUsd === null ? '' : ` · ${fmtUsd(agent.costUsd)}`;
+      const pr = onPr === null ? '' : ` · PR #${onPr}`;
+      return `${title ?? agent.id} — ${agent.status} · ${relTime(agent.startedAt, now)}${cost}${pr}`;
+    })
+    .join('\n');
 }
 
 function Spend({ issue }: { issue: Issue }): JSX.Element | null {

@@ -10,7 +10,7 @@ import { Button, ButtonRow } from '../../components/button.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '../QueueRail.js';
 import { needBody } from '../NeedsBand.js';
 import { PICKUP_WORD } from '../Overview.js';
-import { waitedFor } from '../GoalPage.js';
+import { waitedFor } from '../../components/util.js';
 import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';

@@ -216,3 +216,10 @@ export function planIssueOf(originRef: string): number | null {
 export function partOriginOf(issueNumber: number | null, slug: string): string {
   return issueNumber === null ? '' : `issue:${issueNumber}:part:${slug}`;
 }
+
+/* How long a pull request has been waiting on its reviewer, in the one shape
+   every surface says it in. → docs/spec/17-cockpit.md */
+export function waitedFor(sinceIso: string, now: number): string {
+  const hours = Math.floor(Math.max(0, now - Date.parse(sinceIso)) / 3_600_000);
+  return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
+}

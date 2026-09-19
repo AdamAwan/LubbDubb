@@ -1112,16 +1112,11 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
   assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
 });
 
-test('the ticket arrives folded on a goal under way, and opens from the place', () => {
-  const shut = render(goalView(() => {}, goalRef(), [], [], 'ask'));
-  assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
-  assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
+test('the ticket is always drawn, on a goal under way as on a fresh one', () => {
+  const under = render(goalView(() => {}, goalRef(), [], [], 'ask'));
+  assert.ok(under.includes('The ticket'), 'the ticket is named');
+  assert.ok(under.includes('class="cn-tick"'), 'and its body is drawn even once the work has started');
 
-  const open = render(goalView(() => {}, goalRef(), ['ticket'], [], 'ask'));
-  assert.ok(open.includes('class="cn-tick"'), 'the place is what opens it');
-});
-
-test('a goal nobody has planned opens on its ticket, unless the operator folded it', () => {
   const fresh = goalView((s) => {
     s.plans = [];
     s.planParts = [];
@@ -1146,11 +1141,6 @@ test('a goal nobody has planned opens on its ticket, unless the operator folded 
     },
   };
   assert.ok(render(bare).includes('class="cn-tick"'), 'the ticket is the page on a goal with nothing else on it');
-
-  assert.ok(
-    !render({ ...bare, goalShut: new Set(['ticket']) }).includes('class="cn-tick"'),
-    'and the operator folding it outranks that reading',
-  );
 });
 
 test('validation and signals are folded on a goal that has not shipped', () => {
@@ -2054,4 +2044,45 @@ test('the local run panel offers Validate only while the environment is idle', (
     }).includes('Validate #'),
     'nor is an environment still coming up',
   );
+});
+
+/* The plan pane's pull requests. → docs/spec/17-cockpit.md#a-part-and-its-pull-request */
+test('a part wears the row of the pull request carrying it, and no second list repeats it', () => {
+  const html = render(goalView(() => {}, 'issue:390', [], [], 'plan'));
+  assert.ok(html.includes('class="cn-partpr'), 'the part draws the pull request as a row');
+  assert.ok(
+    !/<h3>Pull requests</.test(html),
+    'and the card that listed the same pull requests under a second title is gone',
+  );
+  /* The marks are the row's, which means they are the rack's: one builder, so a
+     part and the overview cannot wear two readings of one pull request. */
+  assert.ok(html.includes('aria-label="Checks'), 'the row carries the checks mark the rack draws');
+  assert.ok(html.includes('aria-label="Fleet review'), 'and the fleet review');
+});
+
+test('a part draws its pull request once — the dependency line no longer repeats the number', () => {
+  const html = render(goalView(() => {}, 'issue:390', [], [], 'plan'));
+  const card = html.slice(html.indexOf('class="cn-part cn-now'));
+  const part = card.slice(0, card.indexOf('</div></div>'));
+  assert.equal(
+    (part.match(/class="ref-pair"/g) ?? []).length,
+    1,
+    'two references to one pull request on one card is the row and the old line disagreeing',
+  );
+});
+
+test('a pull request no part carries is drawn as a part with nothing known about it', () => {
+  const html = render(goalView(() => {}, 'issue:390', [], [], 'plan'));
+  assert.ok(html.includes('Not in the plan'), 'the board carries a column for what the plan does not account for');
+  assert.ok(html.includes('class="cn-part cn-loose"'), 'and each is a card on the board rather than a list below it');
+  assert.ok(html.includes('no part of the plan names this'), 'which says why it is standing on its own');
+});
+
+test('the header counts the agents and carries who they are on its tooltip', () => {
+  const html = render(goalView(() => {}, 'issue:390'));
+  const at = html.indexOf('class="cn-ghagents"');
+  assert.notEqual(at, -1, 'the count is its own reading, with the glyph the cockpit says agent with');
+  const mark = html.slice(at - 120, at + 200);
+  assert.match(mark, /title="[^"]+"/, 'and a tooltip saying who they are');
+  assert.ok(!html.includes('>On this goal'), 'the card that listed them on the Plan pane is gone');
 });
