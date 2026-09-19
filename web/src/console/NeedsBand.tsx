@@ -40,10 +40,10 @@ export function NeedsBand({
   checksBelow?: boolean;
   /**
    * Draw the ask as one row rather than the whole thing, pressing it open in the
-   * ask panel. It is what the goal page gives every ask after the first in a
-   * stack: a second and third band between the navigation and the pane it names
-   * leaves the two reading as unrelated surfaces, which is the one thing putting
-   * the navigation second was for.
+   * ask panel. It is what the goal page gives every ask it carries: a band
+   * between the navigation and the pane it selects leaves the two reading as
+   * unrelated surfaces, and three hundred pixels of band is what put the pane's
+   * own content below the fold.
    * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
    */
   line?: boolean;

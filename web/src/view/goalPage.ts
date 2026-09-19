@@ -623,10 +623,10 @@ function shippingBadge(page: GoalPageView): GoalTabBadge | null {
  * rail's own tables, so a new kind is placed deliberately rather than
  * inheriting whatever the last one meant.
  *
- * The page has one banner slot, under the navigation, and it holds only the
- * nulls. Everything else is drawn inside the pane it is about, where the work
- * it asks for already is — an ask redrawn above the navigation is the same
- * reading twice and pushes the navigation off the screen.
+ * Every ask is drawn the same way — a row above the navigation — so what this
+ * map decides is the dot: an ask with a pane puts one on that pane's nav entry,
+ * and one about the goal as a whole puts none anywhere. The row says there is
+ * something; the dot says which stage it is about.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
 const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
@@ -646,7 +646,7 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   outcome: 'record',
   shortfall: 'record',
   /* About the goal itself, or about the fleet carrying it: neither has a stage
-     to be drawn in, so each takes the banner. */
+     to be drawn in, so neither carries a dot. */
   config: null,
   config_gap: null,
   dispatch: null,
@@ -660,13 +660,8 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   upgrade: null,
 };
 
-/** The asks that take the banner slot, in the order the rail ranked them. */
-export function goalBannerAsks(page: GoalPageView): NeedRow[] {
-  return page.needs.filter((row) => GOAL_ASK_TAB[row.kind] === null);
-}
-
-/** The asks drawn inside one pane, above what that pane already says. */
-export function goalPaneAsks(page: GoalPageView, tab: GoalTab): NeedRow[] {
+/** The asks a pane is about, which is what puts the dot on its nav entry. */
+function goalPaneAsks(page: GoalPageView, tab: GoalTab): NeedRow[] {
   return page.needs.filter((row) => GOAL_ASK_TAB[row.kind] === tab);
 }
 

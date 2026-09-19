@@ -912,48 +912,26 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
 
   const html = decode(render(goalView(gated)));
   assert.ok(html.includes(KIND_LABEL.profile), 'the rail names the kind');
-  assert.ok(html.includes('The goal appraisal wants this run on “deep”'), 'and says what is being asked');
-  assert.ok(html.includes('Use “deep”'), 'the band offers the proposal');
-  assert.ok(html.includes('Leave it unpinned') || /Keep “/.test(html), 'and the way to keep what is standing');
-
-  assert.equal(html.split('Use “deep”').length - 1, 1, 'the gate is drawn once on the goal page');
+  /* The goal page says there is an ask and hands it to the panel: the whole of
+     one — here the proposal and the two ways to answer it — is drawn by
+     `needBody`, asserted in `test/askBodies.test.ts`, and reached by pressing
+     the row. Drawn here as well it is the same reading twice, and it is what put
+     the pane's own content below the fold.
+     → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+  assert.ok(html.includes('cn-needs-line'), 'the ask reaches the goal page as a row');
+  assert.ok(!html.includes('Use “deep”'), 'and not as a second copy of the body');
 });
 
-test('the band on the goal page wears the tone and glyph its rail row does', () => {
+test('the ask row on the goal page wears the tone and glyph its rail row does', () => {
   const ref = goalRef();
   const v = goalView();
   const row = v.needsYou.find((n) => n.goalRef === ref && n.opens === 'goal');
   assert.ok(row, 'the demo goal must carry an ask read on its own page');
 
   const html = render(v);
-  assert.ok(html.includes(`cn-needs cn-t-${KIND_TONE[row.kind]}`), "the band takes the kind's tone");
+  assert.ok(html.includes(`cn-needs-line cn-t-${KIND_TONE[row.kind]}`), "the row takes the kind's tone");
   assert.ok(html.includes(`cn-q cn-t-${KIND_TONE[row.kind]}`), 'and the rail row it came from takes the same one');
   assert.ok(html.includes(KIND_SYMBOL[row.kind]), 'the glyph is drawn on both');
-});
-
-test('the goal page answers with the shared card’s rules rather than its own', () => {
-  const row = view().needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
-  assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
-  const ref = row.goalRef!;
-
-  const withOptions = render(
-    goalView((s) => {
-      const asked = s.escalations.find((e) => e.id === row.id)!;
-      asked.context = { ...asked.context, options: ['Take ours', 'Take theirs'] };
-    }, ref),
-  );
-  assert.match(withOptions, /class="esc-quick"/, 'offered choices stay one click in the band');
-  assert.match(withOptions, />Take theirs</);
-
-  const proposal = render(
-    goalView((s) => {
-      s.escalations = s.escalations.filter((e) => e.id === row.id);
-      s.proposals = [{ ...s.proposals![0]!, id: 'p-band', kind: 'merge', status: 'pending', escalationId: row.id }];
-    }, ref),
-  );
-  assert.match(proposal, /needs your decision/, 'a decision must read as one in the band');
-  assert.match(proposal, />Approve merge</);
-  assert.doesNotMatch(proposal, /placeholder="Your answer…"/, 'a proposal is never answered with free text');
 });
 
 test('a selected goal draws its page instead of the overview', () => {

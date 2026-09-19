@@ -7,8 +7,6 @@ import {
   buildGoalNav,
   goalSectionsOpen,
   GOAL_ANCHOR,
-  goalBannerAsks,
-  goalPaneAsks,
   goalLanding,
   reachCount,
   GOAL_SECTIONS,
@@ -103,81 +101,51 @@ export function GoalPage({
   return (
     <div className="cn-goal">
       <Header page={page} view={view} actions={actions} />
-      {/* The navigation, second on the page and above every ask. The strip and
-          the tab row were one control drawn twice; now the stage is the button,
-          and what used to push it below the fold sits under it. */}
+      {/* Every ask this goal carries, a row each, above the navigation. A row is
+          all one press: the whole of an ask lives in the ask panel already, so
+          what belongs here is that there is one and which stage it is about —
+          and a row costs the page one line, where a band cost it three hundred.
+          → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */}
+      <AskLines rows={askLines(page)} view={view} actions={actions} />
+      {/* The navigation, and the pane it selects, drawn as one shape: the tab
+          keeps the panel's ground and drops its bottom edge onto it, so the row
+          reads as the controls for what is below rather than a strip that
+          happens to sit above it. → docs/spec/17-cockpit.md#the-panes */}
       <GoalNav page={page} tab={tab} chosen={view.goalTab} opening={opening} actions={actions} />
-      <OrphanBand issue={page.issue} view={view} actions={actions} />
-      {/* The banner slot: only the asks that are about the goal itself, or about
-          the fleet carrying it. Every other ask is drawn in the pane it is about,
-          beside the work it asks for. → GOAL_ASK_TAB */}
-      <AskStack rows={parentAskElsewhere(page)} view={view} actions={actions} />
-      <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
-        <PaneAsks page={page} tab={tab} view={view} actions={actions} />
-        {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
-        {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'shipping' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+      <div className="cn-gpanel">
+        <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
+          {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
+          {tab === 'work' && <WorkPane page={page} view={view} actions={actions} />}
+          {tab === 'validation' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
+          {tab === 'shipping' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
+          {tab === 'record' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+        </div>
       </div>
+      {/* Below the panel, because what it asks is about the goal's place on the
+          board rather than about any stage of the work — and because the ask
+          itself is already announced as a row at the top. */}
+      <OrphanBand issue={page.issue} view={view} actions={actions} />
     </div>
   );
 }
 
-/**
- * The asks this pane is about, at the top of it. `checksBelow` is the Checks
- * pane's own exception: the checks the ask names are drawn a few rows further
- * down, so the ask points at them rather than drawing a second copy.
- * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
- */
-function PaneAsks({
-  page,
-  tab,
-  view,
-  actions,
-}: {
-  page: GoalPageView;
-  tab: GoalTab;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element | null {
-  const rows = goalPaneAsks(page, tab);
-  if (rows.length === 0) return null;
-  return <AskStack rows={rows} view={view} actions={actions} checksBelow={tab === 'validation'} />;
-}
-
-/**
- * A run of asks, the first whole and the rest a row each.
- *
- * One band is the reason you are on this pane and answering it in place is the
- * point. Two or three, stacked between the navigation and the pane they name,
- * stop reading as part of that pane at all — which undoes what drawing the
- * navigation second was for. So the stack states what else is waiting and hands
- * each one to the ask panel, which is where the whole of an ask already lives.
- *
- * First is the rail's own first: `page.needs` keeps the order `needsYou` ranked
- * them in, so the one drawn whole is the one the rail would have you answer.
- * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
- */
-function AskStack({
+/** One row per ask, in the order the rail ranked them. */
+function AskLines({
   rows,
   view,
   actions,
-  checksBelow = false,
 }: {
   rows: readonly NeedRow[];
   view: CockpitView;
   actions: CockpitActions;
-  checksBelow?: boolean;
-}): JSX.Element {
-  const [first, ...rest] = rows;
+}): JSX.Element | null {
+  if (rows.length === 0) return null;
   return (
-    <>
-      {first !== undefined && <NeedsBand row={first} view={view} actions={actions} checksBelow={checksBelow} />}
-      {rest.map((row) => (
-        <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow={checksBelow} line />
+    <div className="cn-asklines">
+      {rows.map((row) => (
+        <NeedsBand key={row.id} row={row} view={view} actions={actions} line />
       ))}
-    </>
+    </div>
   );
 }
 
@@ -419,9 +387,9 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
-/* The goal-wide asks, less the one the orphan band above already draws in full. */
-function parentAskElsewhere(page: GoalPageView): NeedRow[] {
-  return goalBannerAsks(page).filter((row) => !row.id.startsWith('placement:parent:'));
+/* Every ask on the goal, less the parent one the band at the foot draws in full. */
+function askLines(page: GoalPageView): NeedRow[] {
+  return page.needs.filter((row) => !row.id.startsWith('placement:parent:'));
 }
 
 function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView; fold: Fold }): JSX.Element {

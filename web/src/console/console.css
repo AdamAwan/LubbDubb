@@ -1461,56 +1461,66 @@ a.cn-qbody {
   padding-right: 22px;
 }
 
-/* The goal's navigation: the pipeline in one row, each stage the way into the
-   pane that holds it. It was two controls — a track strip reading the stages and
-   a tab row one line below badging the same numbers — and two controls stating
-   one thing is what made this page read as cluttered. A stage is where you go,
-   so the stage is the button. → docs/spec/17-cockpit.md#the-panes
+/* The goal's navigation, and the pane it selects, drawn as ONE shape.
+
+   It was two controls once — a track strip reading the stages and a tab row one
+   line below badging the same numbers — and two controls stating one thing is
+   what made this page read as cluttered. A stage is where you go, so the stage
+   is the button. What is here on top of that is the join: the selected tab keeps
+   the panel's ground and lays its bottom edge over the panel's top one, so the
+   row reads as the controls for what is below it rather than as a strip of cards
+   that happens to sit above it. → docs/spec/17-cockpit.md#the-panes
 
    `cn-gnav` rather than `cn-strip`, which is gone: the rack's second line uses
    `--cn-strip-cols` a thousand lines below and the two matched silently once
    already. A new class name in this sheet is grepped for first.
 
-   A grid with a 1px gap over a lined ground rather than borders on the cells,
-   because the nav wraps: `auto-fit` puts five entries on one row on a wide page
-   and fewer per row on a narrow one, and a `border-right` would leave a stray
-   line at the end of every row but the last.
+   Flex with a shared bottom rule rather than a grid over a lined ground, because
+   the join needs that rule to be *the panel's* edge — a grid's own gaps cannot
+   be punched through by one cell. Entries share the width and stop shrinking at
+   `min-width`, past which the row scrolls: five tabs wrapping to two lines stop
+   reading as one row of alternatives, and the panel below is what width is for.
 
    Every entry takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias it
    carries. No colour of its own, and so no new token: a theme moves the nav with
    everything else it already moves. */
 .cn-gnav {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1px;
-  background: var(--cn-line);
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  overflow: hidden;
-}
-.cn-gnavk {
   display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-bottom: 1px solid var(--cn-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cn-gnav::-webkit-scrollbar {
+  display: none;
+}
+.cn .cn-gnavk {
+  display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
-  padding: 9px 12px;
-  background: var(--cn-panel);
-  border: 0;
+  min-width: 124px;
+  /* Onto the row's rule, which is the panel's top edge: the selected tab paints
+     over it in the panel's own ground and the two become one surface. */
+  margin-bottom: -1px;
+  padding: 9px 13px 10px;
+  background: var(--cn-panel-2);
+  border: 1px solid transparent;
+  border-bottom: 1px solid var(--cn-line);
+  border-radius: var(--cn-r) var(--cn-r) 0 0;
   text-align: left;
   font: inherit;
   color: inherit;
   cursor: pointer;
 }
-.cn-gnavk:hover {
+.cn .cn-gnavk:hover {
   background: var(--cn-hover);
 }
-/* Which pane you are on, said twice — a raised ground and a rule under it.
-   Either alone is a coin toss across themes: the ground is nearly invisible on a
-   light one at this contrast, and a rule on its own is easy to miss at a glance
-   on a control this wide. */
-.cn-gnavk.cn-on {
-  background: var(--cn-panel-2);
-  box-shadow: inset 0 -2px 0 0 var(--cn-accent);
+.cn .cn-gnavk.cn-on {
+  background: var(--cn-panel);
+  border-color: var(--cn-line);
+  border-bottom-color: var(--cn-panel);
 }
 .cn-gnavl {
   display: flex;
@@ -1523,8 +1533,8 @@ a.cn-qbody {
   color: var(--cn-fg);
 }
 /* One dot, drawn where an ask is waiting in that pane. It is what a whole band
-   above the navigation used to say; the band itself is still drawn, inside the
-   pane, beside the work it is asking about. */
+   above the navigation used to say, said by the control you would press anyway
+   — the ask itself is a row at the top of the page. */
 .cn-gnavd {
   width: 6px;
   height: 6px;
@@ -1539,6 +1549,36 @@ a.cn-qbody {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* The panel the tabs are the controls for. Its top edge is the nav's own rule,
+   so it carries none of its own. */
+.cn-gpanel {
+  min-width: 0;
+  padding: 14px;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-top: 0;
+  border-radius: 0 0 var(--cn-r) var(--cn-r);
+}
+/* A card sitting directly on the panel is a section of that one surface, not a
+   box on it: its own border and ground would be a box inside a box. Direct
+   children only — a card nested inside a component keeps its own edges, which
+   are what tell it apart from the card holding it. */
+.cn-gpanel > .cn-gpane > .cn-card {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.cn-gpanel > .cn-gpane > .cn-card + .cn-card {
+  padding-top: 12px;
+  border-top: 1px solid var(--cn-line-soft);
+}
+/* The asks, a row each, above the navigation. */
+.cn-asklines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .cn-tkb {
   height: 3px;
@@ -6565,7 +6605,7 @@ button.cn-grow {
    the pane's own content off the screen and leave the navigation reading as
    unrelated to what is below it.
    → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
-.cn-needs-line {
+.cn .cn-needs-line {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -6581,7 +6621,7 @@ button.cn-grow {
   border-radius: var(--cn-r);
   cursor: pointer;
 }
-.cn-needs-line:hover {
+.cn .cn-needs-line:hover {
   background: var(--cn-hover);
 }
 .cn-needs-kind {

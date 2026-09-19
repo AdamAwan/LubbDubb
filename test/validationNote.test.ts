@@ -12,6 +12,7 @@ import type { ValidationVerdict } from '../src/wire.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
+const { needBody } = await import('../web/src/console/NeedsBand.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
@@ -74,7 +75,16 @@ function goalView(mutate: (state: CockpitView['state']) => void): CockpitView {
   });
 }
 
-const render = (v: CockpitView) =>
+/** The close-out ask as the panel draws it, which is where its verbs live. */
+function closeOutAsk(v: CockpitView): string {
+  const row = v.needsYou.find((n) => n.kind === 'close_out');
+  assert.ok(row, 'the demo fixtures must carry an open close-out ask');
+  return renderInRefs(v, needBody(row, v, actions));
+}
+
+const render = (v: CockpitView) => renderInRefs(v, createElement(ConsoleRoot, { view: v, actions }));
+
+const renderInRefs = (v: CockpitView, children: React.ReactNode) =>
   renderToStaticMarkup(
     createElement(RefLinks, {
       refUrls: v.state.refUrls,
@@ -82,7 +92,7 @@ const render = (v: CockpitView) =>
       hasGoal: (r: string) => goalIssue(v.state, r) !== undefined,
       openPr: () => undefined,
       hasPr: (n: number) => hasPrPage(v.state, n),
-      children: createElement(ConsoleRoot, { view: v, actions }),
+      children,
     }),
   );
 
@@ -101,17 +111,17 @@ function goalWith(verdict: ValidationVerdict | null): CockpitView {
 }
 
 test('a close-out on a flagged goal asks for the note before posting, not after the 400', () => {
-  const flagged = render(goalWith(FLAGGED));
+  const flagged = closeOutAsk(goalWith(FLAGGED));
   assert.ok(
     flagged.includes('Done…'),
     'the bench verdict must offer the box the route requires, not a bare Done the route refuses',
   );
 
-  const clear = render(goalWith(CLEAR));
+  const clear = closeOutAsk(goalWith(CLEAR));
   assert.ok(!clear.includes('Done…'), 'a clear plan costs nothing to say, so it stays one click');
   assert.ok(clear.includes('>Done<'), 'and the one click is still there');
 
-  const none = render(goalWith(null));
+  const none = closeOutAsk(goalWith(null));
   assert.ok(!none.includes('Done…'), 'no plan is not a flagged plan');
 });
 
