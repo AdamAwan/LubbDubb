@@ -111,9 +111,7 @@ export function GoalPage({
       {/* The banner slot: only the asks that are about the goal itself, or about
           the fleet carrying it. Every other ask is drawn in the pane it is about,
           beside the work it asks for. → GOAL_ASK_TAB */}
-      {parentAskElsewhere(page).map((row) => (
-        <NeedsBand key={row.id} row={row} view={view} actions={actions} />
-      ))}
+      <AskStack rows={parentAskElsewhere(page)} view={view} actions={actions} />
       <div className="cn-gpane" id={`cn-pane-${tab}`} role="tabpanel" aria-labelledby={`cn-tab-${tab}`} tabIndex={-1}>
         <PaneAsks page={page} tab={tab} view={view} actions={actions} />
         {tab === 'ticket' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
@@ -145,10 +143,39 @@ function PaneAsks({
 }): JSX.Element | null {
   const rows = goalPaneAsks(page, tab);
   if (rows.length === 0) return null;
+  return <AskStack rows={rows} view={view} actions={actions} checksBelow={tab === 'validation'} />;
+}
+
+/**
+ * A run of asks, the first whole and the rest a row each.
+ *
+ * One band is the reason you are on this pane and answering it in place is the
+ * point. Two or three, stacked between the navigation and the pane they name,
+ * stop reading as part of that pane at all — which undoes what drawing the
+ * navigation second was for. So the stack states what else is waiting and hands
+ * each one to the ask panel, which is where the whole of an ask already lives.
+ *
+ * First is the rail's own first: `page.needs` keeps the order `needsYou` ranked
+ * them in, so the one drawn whole is the one the rail would have you answer.
+ * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+ */
+function AskStack({
+  rows,
+  view,
+  actions,
+  checksBelow = false,
+}: {
+  rows: readonly NeedRow[];
+  view: CockpitView;
+  actions: CockpitActions;
+  checksBelow?: boolean;
+}): JSX.Element {
+  const [first, ...rest] = rows;
   return (
     <>
-      {rows.map((row) => (
-        <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow={tab === 'validation'} />
+      {first !== undefined && <NeedsBand row={first} view={view} actions={actions} checksBelow={checksBelow} />}
+      {rest.map((row) => (
+        <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow={checksBelow} line />
       ))}
     </>
   );

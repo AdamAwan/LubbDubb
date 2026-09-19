@@ -6558,3 +6558,50 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* An ask after the first in a stack: one row, the whole of it a press that opens
+   the ask in full. The first band on a pane is the reason you are there and
+   answering it in place is the point; a second and third stacked under it push
+   the pane's own content off the screen and leave the navigation reading as
+   unrelated to what is below it.
+   → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+.cn-needs-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--cn-fg);
+  background: var(--cn-tone-fill);
+  border: 1px solid var(--cn-tone-line);
+  border-radius: var(--cn-r);
+  cursor: pointer;
+}
+.cn-needs-line:hover {
+  background: var(--cn-hover);
+}
+.cn-needs-kind {
+  flex: none;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-tone-ink);
+}
+.cn-needs-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cn-needs-line .cn-age,
+.cn-needs-line .cn-open {
+  flex: none;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}

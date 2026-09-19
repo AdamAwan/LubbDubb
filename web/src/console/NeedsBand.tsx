@@ -31,15 +31,46 @@ export function NeedsBand({
   view,
   actions,
   checksBelow = false,
+  line = false,
 }: {
   row: NeedRow;
   view: CockpitView;
   actions: CockpitActions;
   /** This band is drawn on the goal page, whose Checks pane holds the same rows. */
   checksBelow?: boolean;
+  /**
+   * Draw the ask as one row rather than the whole thing, pressing it open in the
+   * ask panel. It is what the goal page gives every ask after the first in a
+   * stack: a second and third band between the navigation and the pane it names
+   * leaves the two reading as unrelated surfaces, which is the one thing putting
+   * the navigation second was for.
+   * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
+   */
+  line?: boolean;
 }): JSX.Element | null {
   const body = needBody(row, view, actions, checksBelow);
   if (body === null) return null;
+  if (line) {
+    return (
+      <button
+        type="button"
+        className={`cn-needs-line cn-t-${KIND_TONE[row.kind]}`}
+        onClick={() => actions.openPanel({ ask: row.id })}
+        title="Open this ask"
+      >
+        <span className="cn-sym" aria-hidden="true">
+          {KIND_SYMBOL[row.kind]}
+        </span>
+        <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
+        <span className="cn-needs-what">{oneLine(row.title)}</span>
+        <span className="cn-age">
+          {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
+          {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
+        </span>
+        <span className="cn-open">Open</span>
+      </button>
+    );
+  }
   return (
     <div className={`cn-needs cn-t-${KIND_TONE[row.kind]}`}>
       <header>
