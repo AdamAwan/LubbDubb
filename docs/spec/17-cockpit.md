@@ -2585,11 +2585,13 @@ disclosure:
 - **While the plan is at its gate** (`planning`, `awaiting_approval`) it is drawn **above the parts**
   and **open**. Marking the prediction against what the plan says is what the pane is for at that
   moment, and nothing below it can move until the plan is approved anyway.
-- **Once the plan is approved and the work is under way**, it goes to the **foot of the card**, folded
-  away. The parts are the live thing then, and a full-width two-column record of a moment that has
-  passed is something an operator watching the work reads past on every visit to reach them.
+- **Once the plan is approved and the work is under way**, it leaves the plan card altogether and is
+  drawn **last on the pane**, below the parts, the description in front, what "done" means and the
+  pull requests — folded away. Everything above it is the work; the prediction is a record of a
+  moment that has passed, and at the foot of the plan card it was still sitting above three cards an
+  operator reads first.
 - **Unless moment two is being asked.** A goal whose delivery has landed has a live question in that
-  panel again, so it opens — at the foot, where the work it is now a reading of already is.
+  panel again, so it opens — still last, where the work it is now a reading of already is.
 
 Folded, the header still says how much of it is unanswered — `2/3 marked`, and `outcome unanswered`
 where moment two is owed — because what a folded record owes its reader is whether anything in it is

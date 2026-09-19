@@ -257,6 +257,7 @@ function WorkPaneBody({
      laid-out page can answer — a share of the width would point at whichever card
      happened to be there. → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
   const chosenRef = useRef<HTMLDivElement | null>(null);
+  const underWay = planUnderWay(page);
   const describable = page.parts
     .map(({ part }, i) => ({ part, position: i + 1 }))
     .filter((p) => p.part.prNumber !== null);
@@ -319,6 +320,24 @@ function WorkPaneBody({
           <OnThisGoal page={page} view={view} actions={actions} />
         </div>
       </div>
+      {/* Last on the pane, once the plan is approved and the work is under way: it is
+          a record of a moment that has passed, and everything above it — the parts,
+          the description in front, what "done" means, the pull requests — is the work
+          itself. At the plan's gate it is the opposite way round and the plan card
+          draws it above the parts.
+          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
+      {underWay && (
+        <PredictionReview
+          issueNumber={page.issue.number}
+          revealed={page.plan?.revealed ?? false}
+          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
+          plan={page.plan}
+          parts={page.parts.map((p) => p.part)}
+          open={folds.prediction.open}
+          onToggle={folds.prediction.onToggle}
+          now={view.now}
+        />
+      )}
     </>
   );
 }
@@ -1106,18 +1125,6 @@ function PlanWaves({
   for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
   for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
   const underWay = planUnderWay(page);
-  const prediction = (
-    <PredictionReview
-      issueNumber={page.issue.number}
-      revealed={plan !== null && (plan.revealed || lifted)}
-      outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
-      plan={plan}
-      parts={page.parts.map((p) => p.part)}
-      open={fold.open}
-      onToggle={fold.onToggle}
-      now={view.now}
-    />
-  );
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.plan}>
@@ -1156,14 +1163,24 @@ function PlanWaves({
           }}
         />
       )}
-      {/* Above the parts while the plan is still at its gate: marking the prediction
-          against what the plan says is what this pane is *for* at that moment, and
-          the parts below it are not going anywhere until it is approved. Once the
-          plan is approved and the work is under way, the parts are the live thing
-          and the prediction is a record of a moment that has passed — so it goes to
-          the foot of the card, folded away by default.
+      {/* Above the parts, and only while the plan is still at its gate: marking the
+          prediction against what the plan says is what this pane is *for* at that
+          moment, and the parts below it are not going anywhere until it is approved.
+          Once the plan is approved the prediction leaves this card altogether —
+          `WorkPaneBody` draws it at the foot of the pane.
           → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
-      {!gated && !underWay && prediction}
+      {!gated && !underWay && (
+        <PredictionReview
+          issueNumber={page.issue.number}
+          revealed={plan !== null && (plan.revealed || lifted)}
+          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
+          plan={plan}
+          parts={page.parts.map((p) => p.part)}
+          open={fold.open}
+          onToggle={fold.onToggle}
+          now={view.now}
+        />
+      )}
       <div className="cn-waves" hidden={gated}>
         {groups.length === 0 && (
           <p className="cn-empty">
@@ -1215,7 +1232,6 @@ function PlanWaves({
           </div>
         )}
       </div>
-      {!gated && underWay && prediction}
     </section>
   );
 }
