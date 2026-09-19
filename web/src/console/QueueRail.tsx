@@ -580,9 +580,12 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
   /* The count over the heading stays the whole queue, folded rows included: a
      number that moved when a section closed would read as asks going away. */
   const pressing = rows.filter((r) => r.urgency !== 'later').length;
-  /* With nothing pressing there is nothing to protect the operator from, and a
-     rail whose only content is a fold reads as an empty one. */
-  const openLater = showLater || pressing === 0;
+  /* The fold exists to keep asks that hold nothing out of the way of the ones
+     the fleet cannot get past. With no `now` row left there is nothing to keep
+     them out of the way of, so they open on their own — including the case where
+     the rail's only content is the fold. */
+  const answerNow = rows.filter((r) => r.urgency === 'now').length;
+  const openLater = showLater || answerNow === 0;
 
   return (
     <>

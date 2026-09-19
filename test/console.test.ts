@@ -358,6 +358,26 @@ test('the rail carries every ask that holds something, and folds the rest behind
   }
 });
 
+test('the whenever fold opens on its own once no ask is left that the fleet cannot get past', () => {
+  const all = view().needsYou;
+  const later = all.filter((row) => row.urgency === 'later');
+  const mine = all.filter((row) => row.urgency === 'next');
+  assert.ok(later.length > 0 && mine.length > 0, 'the demo fixtures must carry both tiers');
+
+  const shut = decode(render(view({ needsYou: all })));
+  assert.ok(
+    shut.includes(`Show ${later.length} holding nothing`),
+    'with a `now` ask on the rail the whenever pile stays folded',
+  );
+
+  const open = decode(render(view({ needsYou: [...mine, ...later] })));
+  assert.ok(
+    open.includes(`Hide ${later.length} holding nothing`),
+    'with no `now` ask left there is nothing to fold the whenever pile against',
+  );
+  for (const row of later) assert.ok(open.includes(decode(row.title)), `the fold kept ${row.kind} shut`);
+});
+
 test('a row states what it is holding, and a row holding nothing draws no count', () => {
   const rows = [
     {

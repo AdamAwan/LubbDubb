@@ -876,9 +876,13 @@ not always known.
 **The `later` section is folded behind a control that counts it**, not a heading: `Show 6 holding
 nothing`. The count is on the control precisely because a queue may drop nothing silently — an ask
 behind the fold is still an ask, and the number over the rail's own heading stays the whole queue for
-the same reason. The fold opens on its own when nothing is pressing, since a rail whose only content
-is a fold reads as an empty one. Its open/shut state is a `useState` and not a `Place` field: it says
-nothing about where the operator is ([the address bar](#the-address-bar)).
+the same reason. **The fold opens on its own the moment no `now` row is left**, which is the cut it
+was folded against: it keeps asks holding nothing out of the way of what the fleet cannot get past,
+and with that cleared there is nothing to keep them out of the way of. It covers the case a rail whose
+only content is a fold reads as an empty one, and the case where the only thing left is the operator's
+own `next` work — which is exactly when the whenever pile is worth reading. Its open/shut state is a
+`useState` and not a `Place` field: it says nothing about where the operator is
+([the address bar](#the-address-bar)).
 
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate
