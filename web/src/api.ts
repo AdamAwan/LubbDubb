@@ -251,6 +251,12 @@ const realApi = {
   // A part's pull-request description. Both routes are mounted only where
   // `manualDescriptions` is on, so a rejected read is how the panel learns there is
   // nothing to draw — the same shape the criteria card uses one subsystem over.
+  /* The newest description of every described part of one goal, by slug: one read
+     for the board, which badges every part. A part absent has none. */
+  getGoalDescriptions: (number: number) =>
+    authFetch(`/api/goals/${number}/descriptions`).then((r) =>
+      json<{ parts: Record<string, PrDescriptionVersion> }>(r),
+    ),
   getPrDescription: (number: number, slug: string) =>
     authFetch(`/api/goals/${number}/parts/${encodeURIComponent(slug)}/description`).then((r) =>
       json<PrDescriptionReading>(r),

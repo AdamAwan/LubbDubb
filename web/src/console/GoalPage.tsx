@@ -28,6 +28,7 @@ import type {
 import { AsyncButton } from '../components/AsyncButton.js';
 import { GoalCriteria } from '../components/GoalCriteria.js';
 import { PrDescription } from '../components/PrDescription.js';
+import { PartDescriptionsProvider, PartDescriptionTag, usePartDescriptions } from '../components/partDescriptions.js';
 import { PlanRevealGate } from '../components/PlanRevealGate.js';
 import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -228,9 +229,44 @@ function WorkPane({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
+  /* The provider is above the body rather than around each reader because the board
+     and the panel ask the same question of different parts — and a component cannot
+     read a context it renders itself, which is why the body is its own.
+     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  return (
+    <PartDescriptionsProvider issueNumber={page.issue.number}>
+      <WorkPaneBody page={page} view={view} actions={actions} folds={folds} />
+    </PartDescriptionsProvider>
+  );
+}
+
+function WorkPaneBody({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  const held = usePartDescriptions();
+  const describable = page.parts
+    .map(({ part }, i) => ({ part, position: i + 1 }))
+    .filter((p) => p.part.prNumber !== null);
+  /* The operator's pick, or the part that wants them: the first nobody has
+     described, and failing that the first that opened. Never none while there is a
+     pull request to describe \u2014 an empty space where the panel was is a feature an
+     operator has to know to go looking for. */
+  const chosen =
+    describable.find((p) => p.part.slug === view.goalPart) ??
+    describable.find((p) => held !== null && held.parts[p.part.slug] === undefined) ??
+    describable[0] ??
+    null;
   return (
     <>
-      <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} />
+      <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} chosen={chosen?.part.slug ?? null} />
       {/* Below the plan rather than above it: what "done" means is read against the
           shape the fleet proposed, and the card draws nothing at all where the
           criteria routes are not mounted. A part with a task behind it is what
@@ -241,30 +277,22 @@ function WorkPane({
         workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
         now={view.now}
       />
-      {/* One per part whose pull request is **open**, because a description is a
-          reading of a change and there is nothing to read before then: on a plan
-          still at the approval gate the parts may not survive it, and on a
-          dispatched one there is no diff to describe yet. The position is the
-          part's own, so the numbering does not renumber as earlier parts open.
-          Each panel draws nothing where `manualDescriptions` is off — the routes
-          are not mounted there, so the read does not answer and the presence of
-          the data decides.
-          → docs/spec/17-cockpit.md#the-description-a-reviewer-reads */}
-      {page.parts.flatMap(({ part }, i) =>
-        part.prNumber === null
-          ? []
-          : [
-              <PrDescription
-                key={part.id}
-                issueNumber={page.issue.number}
-                slug={part.slug}
-                position={i + 1}
-                prNumber={part.prNumber}
-                title={part.title}
-                desktopFolder={view.state.config.desktopFolder}
-                now={view.now}
-              />,
-            ],
+      {/* One panel, for the part in front \u2014 never one per part. A goal is five parts,
+          and five descriptions stacked is five walls of prose an operator tells apart
+          by counting headings. Which part a description belongs to is a question the
+          board above already answers, so the board is where the part is chosen and
+          the panel follows the choice.
+          \u2192 docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      {chosen !== null && chosen.part.prNumber !== null && (
+        <PrDescription
+          issueNumber={page.issue.number}
+          slug={chosen.part.slug}
+          position={chosen.position}
+          prNumber={chosen.part.prNumber}
+          title={chosen.part.title}
+          desktopFolder={view.state.config.desktopFolder}
+          now={view.now}
+        />
       )}
       <div className="cn-gcols">
         <div className="cn-stack">
@@ -1022,11 +1050,14 @@ function PlanWaves({
   view,
   actions,
   fold,
+  chosen,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
   fold: Fold;
+  /** The part whose description is in front, so the board can say which one that is. */
+  chosen: string | null;
 }): JSX.Element {
   const groups = GROUP_ORDER.map((group) => ({
     group,
@@ -1124,6 +1155,7 @@ function PlanWaves({
                 agentId={p.agentId}
                 agentLive={p.agentLive}
                 pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
+                chosen={chosen === p.part.slug}
                 now={view.now}
                 actions={actions}
               />
@@ -1141,6 +1173,7 @@ function PlanWaves({
                 agentId={null}
                 agentLive={false}
                 pr={null}
+                chosen={false}
                 now={view.now}
                 actions={actions}
               />
@@ -1159,6 +1192,7 @@ function Part({
   agentId,
   agentLive,
   pr,
+  chosen,
   now,
   actions,
 }: {
@@ -1167,11 +1201,12 @@ function Part({
   agentId: string | null;
   agentLive: boolean;
   pr: PartPr | null;
+  chosen: boolean;
   now: number;
   actions: CockpitActions;
 }): JSX.Element {
   return (
-    <div className={`cn-part cn-${group}`}>
+    <div className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''}`}>
       <b>
         {part.seq} · {part.title}
       </b>
@@ -1199,6 +1234,16 @@ function Part({
           )}
         </span>
       )}
+      {/* The description, said on the part it belongs to, and the way to write it:
+          the board is where the parts are told apart, so it is where the one whose
+          description is in front is chosen.
+          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      <PartDescriptionTag
+        slug={part.slug}
+        prNumber={part.prNumber}
+        selected={chosen}
+        onSelect={() => actions.openGoalPart(part.slug)}
+      />
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
         {part.prNumber !== null && (

@@ -443,9 +443,33 @@ no pane to be the footer of.
 
 ## The description a reviewer reads
 
-One `PrDescription` panel per part **whose pull request is open**, on the goal page, because one part
-is one pull request. It draws nothing where `manualDescriptions` is off — the routes are not mounted
-there and the read does not answer.
+One `PrDescription` panel on the goal page, for **the part in front** — one part is one pull request,
+and the plan's parts are what tell them apart. It draws nothing where `manualDescriptions` is off —
+the routes are not mounted there and the read does not answer.
+
+### One panel, for the part in front
+
+**One panel is drawn, never one per part.** A goal is five parts, and five descriptions stacked under
+one plan is five walls of prose an operator tells apart by counting headings — which is a question the
+board above has already answered.
+
+So the board is where the part is chosen and the panel follows the choice:
+
+- Each part with an open pull request carries its description's standing on its own card —
+  **`needs description`** in amber, or **`described`** — and that badge is the control that brings
+  that part's panel to the front. The chosen part is outlined.
+- What is in front is the operator's pick if they made one, and otherwise **the part that wants
+  them**: the first nobody has described, falling back to the first that opened. It is never nothing
+  while a pull request is open to describe — an empty space is a feature an operator has to know to go
+  looking for.
+- The pick is `?part=<slug>`, a [place](#the-address-bar) like the pane and the folds, and dropped on
+  the way to another goal for the same reason they are: it is a pick made on one plan.
+
+**One read serves both**, through `PartDescriptionsProvider` — `GET /api/goals/:number/descriptions`,
+above the board and the panel, because they ask the same question of different parts. A read per part
+would be five requests to say what one says, and five answers arriving separately is a board whose
+badges appear one at a time. The provider is also how both learn the feature is off: the route is not
+mounted, the read does not answer, and neither the badges nor the panel are drawn.
 
 **The open pull request is the gate, and it is not cosmetic.** A description is a reading of a
 change, so there is nothing to read before the pull request exists: on a plan still at the approval
@@ -511,6 +535,7 @@ once.
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
+| `part`                               | which part of the plan has its description in front, by slug — absent means the page picks the one that wants the operator, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                  |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |

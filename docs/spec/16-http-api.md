@@ -243,6 +243,14 @@ else about its shape — the rules over the agent's body are about a party that 
 operator is not that party.
 → [07](07-pull-requests.md#the-field-is-free-and-the-four-questions-are-hints)
 
+### `GET /api/goals/:number/descriptions`
+
+The newest description of every described part of one goal, keyed by the part's slug; a part absent
+has none. It is what the plan board badges each part from, and one read rather than one per part,
+because the board draws all five and only one of them is in front of the operator. Mounted under the
+same flag as the two above, so the badges and the panel learn the same way.
+→ [17](17-cockpit.md#one-panel-for-the-part-in-front)
+
 ### `GET /api/state`
 
 The cockpit snapshot, whole or in named parts. See [_The state snapshot_](#the-state-snapshot) below

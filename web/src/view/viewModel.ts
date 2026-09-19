@@ -55,6 +55,8 @@ export interface CockpitView {
   tab: ConsoleTab;
   collapsedFeatures: ReadonlySet<number>;
   goalTab: GoalTab | null;
+  /** Which part of the plan is in front, by slug, or null for the page's own pick. */
+  goalPart: string | null;
   goalOpen: ReadonlySet<string>;
   goalShut: ReadonlySet<string>;
   configTab: ConfigTab;
@@ -167,6 +169,7 @@ interface ViewInputs {
   tab: ConsoleTab;
   collapsed?: readonly number[];
   goalTab?: GoalTab | null;
+  goalPart?: string | null;
   goalOpen?: readonly string[];
   goalShut?: readonly string[];
   configTab?: ConfigTab;
@@ -260,6 +263,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     sheetEnvironment: input.sheetEnvironment ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),
     goalTab: input.goalTab ?? null,
+    goalPart: input.goalPart ?? null,
     goalOpen: new Set(input.goalOpen ?? []),
     goalShut: new Set(input.goalShut ?? []),
     configTab: input.configTab ?? 'values',

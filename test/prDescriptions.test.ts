@@ -174,6 +174,60 @@ test('a re-check replaces the reading rather than piling onto it', () => {
   }
 });
 
+test('the goal-level read answers the newest of each part, which is what the board badges from', async () => {
+  const system = systemWith(true);
+  const { app } = await buildApp(system);
+  try {
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:schemas',
+      text: 'The schemas move, and the old paths re-export.',
+      author: 'operator',
+    });
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:validate',
+      text: 'First draft.',
+      author: 'operator',
+    });
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:validate',
+      text: 'Enqueue becomes the one place a payload is checked.',
+      author: 'operator',
+    });
+    // A different goal's part, to prove the prefix is a goal and not a LIKE that
+    // catches #3900 on its way past.
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:3901:part:validate',
+      text: 'Another goal entirely.',
+      author: 'operator',
+    });
+
+    const read = await app.inject({ method: 'GET', url: '/api/goals/390/descriptions' });
+    assert.equal(read.statusCode, 200);
+    const body = read.json() as { parts: Record<string, { text: string; version: number }> };
+    assert.deepEqual(Object.keys(body.parts).sort(), ['schemas', 'validate']);
+    assert.equal(body.parts.validate!.version, 2, 'the newest, never the chain');
+    assert.equal(body.parts.validate!.text, 'Enqueue becomes the one place a payload is checked.');
+
+    const none = await app.inject({ method: 'GET', url: '/api/goals/391/descriptions' });
+    assert.deepEqual(none.json(), { parts: {} }, 'a goal nobody described answers empty, not absent');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('the goal-level read is not mounted where the flag is off, which is how the board learns', async () => {
+  const system = systemWith(false);
+  const { app } = await buildApp(system);
+  try {
+    const read = await app.inject({ method: 'GET', url: '/api/goals/390/descriptions' });
+    assert.equal(read.statusCode, 404);
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
 test('the refusal bounds the field and asserts nothing about its shape', () => {
   // `prBodyRefusal` exists because asking an agent for a shape did not work. A person
   // writing about a change they read is not that party, and a refusal that bounced

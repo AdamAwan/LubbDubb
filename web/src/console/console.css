@@ -2009,6 +2009,27 @@ a.cn-qbody {
 .cn-part.cn-waiting {
   opacity: 0.55;
 }
+/* The part whose description is in front. An outline rather than a ground, because
+   the ground already says which column the part is in and a second ground would be
+   two things claiming the same square. → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+.cn-part.is-chosen {
+  outline: 1px solid var(--cn-accent);
+  outline-offset: 1px;
+}
+/* The card is a block, so the badge rides at the head of the dependency line it
+   sits above — beside the part's other standing rather than on a row of its own,
+   which on five cards would be five rows saying nothing most of the time. */
+.cn-desc-pick {
+  padding: 0;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.cn-desc-pick.is-on {
+  cursor: default;
+}
+.cn-desc-pick:not(.is-on):hover {
+  filter: brightness(1.15);
+}
 /* What the plan proposed and no longer schedules. Struck through rather than
    merely dimmed: "not started" and "never will be" are different claims, and
    dimming alone says the first. */

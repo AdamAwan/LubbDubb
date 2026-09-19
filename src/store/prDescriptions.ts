@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { DescriptionFinding, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import { issueOriginRef } from '../issueOrigins.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -92,6 +93,26 @@ export class PrDescriptionStore {
       .prep(`SELECT * FROM pr_descriptions WHERE origin_ref=? ORDER BY version ASC`)
       .all(originRef) as DescriptionRow[];
     return rows.map((r) => this.toVersion(r));
+  }
+
+  /**
+   * The newest version of every part of one goal, keyed by the part's slug. What the
+   * plan's parts are badged from: one read for the goal rather than one per part,
+   * because the board draws every part and only one of them is in front of the
+   * operator. → docs/spec/17-cockpit.md#the-description-a-reviewer-reads
+   */
+  goalDescriptions(issueNumber: number): Record<string, PrDescriptionVersion> {
+    const prefix = `${issueOriginRef('part', issueNumber, '')}`;
+    const rows = this.ctx
+      .prep(
+        `SELECT * FROM pr_descriptions d
+          WHERE d.origin_ref LIKE @prefix || '%'
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)`,
+      )
+      .all({ prefix }) as DescriptionRow[];
+    const out: Record<string, PrDescriptionVersion> = {};
+    for (const row of rows) out[row.origin_ref.slice(prefix.length)] = this.toVersion(row);
+    return out;
   }
 
   /** Every version that carries a check, newest first. The aggregate's input. */

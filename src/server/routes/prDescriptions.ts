@@ -48,6 +48,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  /* One read for the goal, because the plan draws every part and the page badges
+     each with whether it has been described. A panel per part would be five reads
+     and five panels; the board is where the parts are told apart, so it is where
+     the badge belongs. → docs/spec/17-cockpit.md#the-description-a-reviewer-reads */
+  app.get(
+    '/api/goals/:number/descriptions',
+    checked({ params: IssueNumberParams }, async ({ params }) => ({
+      parts: store.prDescriptions.goalDescriptions(params.number),
+    })),
+  );
+
   // Beside the prediction figures, and under their two rules: never keyed by author,
   // and never a bare percentage below the threshold that makes one mean anything.
   // → docs/spec/18-observability.md#how-a-description-stood

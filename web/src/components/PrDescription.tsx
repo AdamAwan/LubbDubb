@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
-import { api, type PrDescriptionReading } from '../api.js';
+import { useState, type JSX } from 'react';
+import { api } from '../api.js';
 import type { DescriptionFindingKind, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
 import { Ref } from './refs.js';
+import { usePartDescriptions } from './partDescriptions.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -122,33 +123,14 @@ export function PrDescription({
   desktopFolder: string | null;
   now: number;
 }): JSX.Element | null {
-  const [reading, setReading] = useState<PrDescriptionReading | null>(null);
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
+  const held = usePartDescriptions();
 
-  const load = useCallback(async (): Promise<void> => {
-    setReading(await api.getPrDescription(issueNumber, slug));
-  }, [issueNumber, slug]);
+  if (held === null) return null;
 
-  useEffect(() => {
-    let live = true;
-    void api
-      .getPrDescription(issueNumber, slug)
-      .then((answer) => {
-        if (live) setReading(answer);
-      })
-      .catch(() => {
-        if (live) setReading(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [issueNumber, slug]);
-
-  if (reading === null) return null;
-
-  const current = reading.current;
+  const current = held.parts[slug] ?? null;
 
   const submit = async (): Promise<void> => {
     const body = text.trim();
@@ -160,7 +142,7 @@ export function PrDescription({
     await api.writePrDescription(issueNumber, slug, { text: body });
     setText('');
     setWriting(false);
-    await load();
+    await held.reload();
   };
 
   return (
@@ -171,7 +153,7 @@ export function PrDescription({
         <span className="cn-desc-part">{position}</span>
         What pull request {position} says it does
         <span className="cn-desc-title">{title}</span>
-        {reading.versions.length > 1 && <i className="cn-n">v{reading.versions.length}</i>}
+        {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}
       </h3>
       {/* The pull request this describes, so the operator can go and read it — which
           is the whole reason the panel waits for it to be open. */}
