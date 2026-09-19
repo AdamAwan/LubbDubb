@@ -339,7 +339,7 @@ function planStage(page: GoalPageView): GoalStage {
 }
 
 function validationStage(page: GoalPageView): GoalStage {
-  const base = { at: 'validation', label: 'Merged' } as const;
+  const base = { at: 'validation', label: 'Checks' } as const;
   /* A local check plan that is running outranks the set's own count, because it
      is the only thing on the goal that is happening right now — and with the
      header's chip gone this is the one place outside the pane that says so. */
@@ -503,7 +503,7 @@ function tailBegun(page: GoalPageView): boolean {
   return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }
 
-export const GOAL_TABS = ['ask', 'plan', 'merged', 'shipped', 'done'] as const;
+export const GOAL_TABS = ['ask', 'plan', 'checks', 'shipped', 'done'] as const;
 
 export type GoalTab = (typeof GOAL_TABS)[number];
 
@@ -515,7 +515,7 @@ export type GoalTab = (typeof GOAL_TABS)[number];
 const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ask: 'Ask',
   plan: 'Plan',
-  merged: 'Merged',
+  checks: 'Checks',
   shipped: 'Shipped',
   done: 'Done',
 };
@@ -530,8 +530,8 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   sequence: 'ask',
   prediction: 'plan',
-  validation: 'merged',
-  localValidation: 'merged',
+  validation: 'checks',
+  localValidation: 'checks',
   /* A sheet is assembled *for an arrival*, so it belongs with the arrival rather
      than with the checks that gate a merge. The two never coexist: nothing is
      sheeted until every part has landed.
@@ -590,9 +590,9 @@ export function goalTabOpening(page: GoalPageView): GoalTabOpening {
   if (page.openPullRequests.some((pr) => pr.attention.status === 'you'))
     return { tab: 'plan', why: 'a pull request is in your court' };
   if (page.issue.validation?.state === 'flagged' || flaggedLocally(page))
-    return { tab: 'merged', why: 'the check plan is not settled' };
+    return { tab: 'checks', why: 'the check plan is not settled' };
   if (arrived(page)) return { tab: 'shipped', why: 'every part has reached an environment' };
-  if (validationBegun(page)) return { tab: 'merged', why: 'the work is merged and its checks have begun' };
+  if (validationBegun(page)) return { tab: 'checks', why: 'the work is merged and its checks have begun' };
   if (workStarted(page)) return { tab: 'plan', why: 'there is a plan, a pull request or an agent on this goal' };
   return { tab: 'ask', why: 'nothing has been planned yet, so the ask is the page' };
 }
@@ -644,8 +644,8 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   permission: 'plan',
   plan: 'plan',
   reply: 'plan',
-  validate: 'merged',
-  validation_plan: 'merged',
+  validate: 'checks',
+  validation_plan: 'checks',
   unwatched: 'shipped',
   watch: 'shipped',
   close_out: 'done',
@@ -694,7 +694,7 @@ interface GoalNavEntry {
 export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
   const stages: Record<Exclude<GoalTab, 'ask'>, GoalStage> = {
     plan: planStage(page),
-    merged: validationStage(page),
+    checks: validationStage(page),
     shipped: environmentStage(page),
     done: tailStage(page),
   };

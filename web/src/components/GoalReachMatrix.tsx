@@ -30,6 +30,13 @@ const CELL_GLYPH: Record<GoalReachCell, string> = {
   pending: '',
 };
 
+/** The matrix's one-line account, without the grid — drawn on Shipped while the grid itself is on Done. */
+export function GoalReachSaid({ page }: { page: GoalPageView }): JSX.Element | null {
+  const matrix = buildGoalReachMatrix(page);
+  if (matrix.environments.length === 0 || matrix.rows.length === 0) return null;
+  return <p className="cn-reachm-said">{said(matrix)}</p>;
+}
+
 export function GoalReachMatrix({ page }: { page: GoalPageView }): JSX.Element | null {
   const matrix = buildGoalReachMatrix(page);
   if (matrix.environments.length === 0 || matrix.rows.length === 0) return null;

@@ -56,7 +56,8 @@ import {
   ControlSegments,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
-import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
+import { GoalReachMatrix, GoalReachSaid } from '../components/GoalReachMatrix.js';
+import { HeadRow } from '../components/panel.js';
 import { SignalsSection } from '../components/SignalsSection.js';
 import { RemoteValidationSection } from '../components/RemoteValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
@@ -124,7 +125,7 @@ export function GoalPage({
       >
         {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'merged' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'checks' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'shipped' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'done' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
       </TabbedPanel>
@@ -370,18 +371,45 @@ function ShippingPane({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
+  /* One environment at a time. The pane's own picker rather than the sheet card's, so the
+     reach row, the watch and the sheet on screen are always the same environment's. */
+  const names = page.environments.map((e) => e.environment);
+  const showing =
+    names.find((n) => n === view.sheetEnvironment) ??
+    names.find((n) => page.environments.find((e) => e.environment === n)?.status === 'reached') ??
+    names[0] ??
+    null;
   return (
     <>
-      {/* Above the environment rows, because while the goal reads partial the rows say
-          only *how many* landings are short and this says *which* — and which is the
-          whole of what an operator can act on. → docs/spec/24-environments.md */}
-      <GoalReachMatrix page={page} />
-      <Environments page={page} actions={actions} now={view.now} fold={folds.environments} />
-      {/* A sheet is assembled for an arrival, so it is drawn with the arrival. Nothing is
-          sheeted until every part has landed, so this and the matrix above it are never
-          both the live reading. → docs/spec/36-remote-validation.md */}
-      <RemoteValidation page={page} view={view} actions={actions} fold={folds.remoteValidation} />
+      {names.length > 0 && (
+        <HeadRow className="cn-envpick">
+          {page.environments.map((env) => (
+            <Button
+              key={env.environment}
+              onClick={() => actions.openRemoteSheet(env.environment)}
+              title={`What this goal reads in ${env.environment}`}
+            >
+              {env.environment}
+              <Tag tone={REACH_TONE[env.status]} fill={env.environment === showing}>
+                {env.status}
+              </Tag>
+            </Button>
+          ))}
+        </HeadRow>
+      )}
+      <Environments page={page} actions={actions} now={view.now} fold={folds.environments} only={showing} />
+      {/* A sheet is assembled for an arrival, so it is drawn with the arrival.
+          → docs/spec/36-remote-validation.md */}
+      <RemoteValidation
+        page={page}
+        view={{ ...view, sheetEnvironment: showing }}
+        actions={actions}
+        fold={folds.remoteValidation}
+      />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
+      {/* The grid itself lives on Done; what it *says* is the line the environment rows
+          above cannot say for themselves. */}
+      <GoalReachSaid page={page} />
     </>
   );
 }
@@ -407,6 +435,8 @@ function RecordPane({
           <Tail issue={page.issue} actions={actions} fold={folds.tail} />
         </div>
       </div>
+      {/* Every part against every environment: the close-out question, drawn with the record. */}
+      <GoalReachMatrix page={page} />
       <Reference page={page} view={view} fold={folds.record} />
     </>
   );
@@ -1046,7 +1076,10 @@ function RemoteValidation({
   const sheets = page.remoteSheets;
   if (sheets.length === 0) return null;
   const showing = view.sheetEnvironment;
-  const open = sheets.find((s) => s.environment === showing) ?? sheets[0]!;
+  /* The pane above picks the environment, so a pick with no sheet draws no sheet — falling
+     back to the first would put another environment's rows under this one's heading. */
+  const open = showing === null ? sheets[0] : sheets.find((s) => s.environment === showing);
+  if (open === undefined) return null;
   const waiting = open.rows.filter((r) => r.awaitingApproval).length;
   return (
     <section className="cn-card" id="cn-remote-validation">
@@ -1062,6 +1095,7 @@ function RemoteValidation({
         <RemoteValidationSection
           sheets={sheets}
           showing={showing}
+          switcher={false}
           onShow={(environment) => actions.openRemoteSheet(environment)}
           controls={{
             onRule: (environment, rowId, accept) =>
@@ -1547,16 +1581,20 @@ function Environments({
   actions,
   now,
   fold,
+  only = null,
 }: {
   page: GoalPageView;
   actions: CockpitActions;
   now: number;
   fold: Fold;
+  /** Draw only this environment's row. The pane above picks it; null draws them all. */
+  only?: string | null;
 }): JSX.Element | null {
   const [releasing, setReleasing] = useState(false);
   if (page.environments.length === 0) return null;
   const number = page.issue.number;
   const reached = page.environments.filter((e) => e.status === 'reached').length;
+  const rows = only == null ? page.environments : page.environments.filter((e) => e.environment === only);
   return (
     <section className="cn-card" id={GOAL_ANCHOR.environments}>
       <h3>
@@ -1570,7 +1608,7 @@ function Environments({
       </h3>
       {fold.open && (
         <div className="cn-rows">
-          {page.environments.map((env) => (
+          {rows.map((env) => (
             <div className="cn-env" key={env.environment}>
               <div className="cn-row">
                 <span className="cn-grow">
