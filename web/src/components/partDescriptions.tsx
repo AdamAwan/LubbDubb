@@ -73,49 +73,32 @@ export function usePartDescriptions(): PartDescriptions | null {
 }
 
 /**
- * A part's description, said on the part itself — and the control that brings that
- * part's panel to the front.
+ * A part's description's standing, said on the part itself.
  *
  * It is drawn on the board rather than in the panel because the board is where the
  * parts are told apart: which one a description belongs to is a question the wave
  * diagram already answers, and five panels stacked under it made an operator answer
- * it again by counting headings.
+ * it again by counting headings. The card itself is the control that brings that
+ * part's panel to the front, so this is a reading and not a button.
  *
  * Nothing is drawn for a part with no pull request open — there is nothing to
  * describe yet — or where the read did not answer.
  * → docs/spec/07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one
  */
-export function PartDescriptionTag({
-  slug,
-  prNumber,
-  selected,
-  onSelect,
-}: {
-  slug: string;
-  prNumber: number | null;
-  selected: boolean;
-  onSelect: () => void;
-}): JSX.Element | null {
+export function PartDescriptionTag({ slug, prNumber }: { slug: string; prNumber: number | null }): JSX.Element | null {
   const held = usePartDescriptions();
   if (held === null || prNumber === null) return null;
   const written = held.parts[slug] !== undefined;
   return (
-    <button
-      type="button"
-      className={`cn-desc-pick ${selected ? 'is-on' : ''}`}
-      aria-pressed={selected}
+    <span
+      className="cn-desc-mark"
       title={
         written
-          ? 'Read what you wrote for this part, or rewrite it'
-          : 'Nobody has said what this pull request does — write it here'
+          ? 'Somebody has said what this pull request does — open the part to read it'
+          : 'Nobody has said what this pull request does — open the part to write it'
       }
-      onClick={onSelect}
     >
-      {/* Filled where this part is the one in front: the same words either way, so the
-          fill is what says "this one" and nothing new has to be learned. */}
-      <Tag tone={written ? (selected ? 'blue' : undefined) : 'amber'} fill={selected}>
-        {written ? 'described' : 'needs description'}
-      </Tag>
-    </button>
+      <Tag tone={written ? undefined : 'amber'}>{written ? 'described' : 'needs description'}</Tag>
+    </span>
   );
 }

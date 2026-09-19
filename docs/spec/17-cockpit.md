@@ -455,10 +455,15 @@ board above has already answered.
 
 So the board is where the part is chosen and the panel follows the choice:
 
-- Each part with an open pull request carries its description's standing on its own card —
-  **`needs description`** in amber, or **`described`** — and that badge is the control that brings
-  that part's panel to the front. The badge is **filled** on the part in front: the same words either
-  way, so the fill is what says _this one_ and there is no second vocabulary to learn.
+- **The part's card is the control**, not a badge on it. Clicking anywhere on a part with an open
+  pull request brings that part's panel to the front, and the card's title carries the same press for
+  a keyboard. A badge was the control once, and it made the operator aim at a word to ask about the
+  part they were already looking at — the panel is _the information about that part_, of which the
+  description is one bit, so the part is what opens it. A control _inside_ the card — the pull
+  request's `Ref`, the way into the agent — is its own press and never also picks the part.
+- Each part with an open pull request still carries its description's standing on its own card —
+  **`needs description`** in amber, or **`described`**. It is a reading, not a button: which part is
+  in front is said by the ring below, so the badge has only one thing left to say.
 - **The chosen card is ringed, and every other part recedes.** An outline and a halo
   (`--cn-chosen-ring`), never a ground — the ground already says which column the part is in, and two
   grounds on one card is two things claiming the same square. The rest of the board drops to half
