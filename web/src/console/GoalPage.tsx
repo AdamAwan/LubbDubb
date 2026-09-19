@@ -1259,14 +1259,46 @@ function Part({
   now: number;
   actions: CockpitActions;
 }): JSX.Element {
+  const held = usePartDescriptions();
+  /* The panel follows this pick, so a part it would never draw is not one to pick:
+     no pull request to read, a retired part the panel's list does not hold, or a
+     deployment where the read did not answer.
+     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  const pickable = held !== null && part.prNumber !== null && group !== 'retired';
+  const pick = (): void => actions.openGoalPart(part.slug);
   return (
     <div
       ref={chosen ? chosenRef : undefined}
-      className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''} ${receded ? 'is-receded' : ''}`}
+      className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''} ${receded ? 'is-receded' : ''} ${
+        pickable ? 'is-pickable' : ''
+      }`}
+      /* The whole card is the way in, and the title carries the same press for a
+         keyboard — a control inside it (the PR reference, the agent) is its own
+         press and must not also pick the part. */
+      onClick={
+        pickable
+          ? (event) => {
+              if ((event.target as HTMLElement).closest('a, button') === null) pick();
+            }
+          : undefined
+      }
     >
-      <b>
-        {part.seq} · {part.title}
-      </b>
+      {pickable ? (
+        <button
+          type="button"
+          className="cn-partpick"
+          title="Show what this part is — its description, and the way to write it"
+          onClick={pick}
+        >
+          <b>
+            {part.seq} · {part.title}
+          </b>
+        </button>
+      ) : (
+        <b>
+          {part.seq} · {part.title}
+        </b>
+      )}
       {group === 'held' && part.blockedReason !== null && <p className="cn-why">{part.blockedReason}</p>}
       {part.scope !== '' && <p>{part.scope}</p>}
       {/* A dead pull request's word is drawn only where it disagrees with the
@@ -1291,16 +1323,11 @@ function Part({
           )}
         </span>
       )}
-      {/* The description, said on the part it belongs to, and the way to write it:
-          the board is where the parts are told apart, so it is where the one whose
-          description is in front is chosen.
+      {/* The description's standing, said on the part it belongs to. The card is the
+          control that brings it to the front — the board is where the parts are told
+          apart, so it is where the one in front is chosen.
           → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
-      <PartDescriptionTag
-        slug={part.slug}
-        prNumber={part.prNumber}
-        selected={chosen}
-        onSelect={() => actions.openGoalPart(part.slug)}
-      />
+      <PartDescriptionTag slug={part.slug} prNumber={part.prNumber} />
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
         {part.prNumber !== null && (

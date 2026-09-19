@@ -2035,16 +2035,26 @@ a.cn-qbody {
 /* The card is a block, so the badge rides at the head of the dependency line it
    sits above — beside the part's other standing rather than on a row of its own,
    which on five cards would be five rows saying nothing most of the time. */
-.cn-desc-pick {
-  padding: 0;
+.cn-desc-mark {
   margin-right: 6px;
+}
+/* The card itself is the way into the part, so the pointer is on the whole of it
+   and the title is the control a keyboard reaches — reset to the card's own type,
+   because a button that looks like one here would outweigh the title it *is*. */
+.cn-part.is-pickable {
   cursor: pointer;
 }
-.cn-desc-pick.is-on {
-  cursor: default;
+.cn-part.is-pickable:not(.is-chosen):hover {
+  border-color: var(--cn-accent);
 }
-.cn-desc-pick:not(.is-on):hover {
-  filter: brightness(1.15);
+.cn-part .cn-partpick {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 /* What the plan proposed and no longer schedules. Struck through rather than
    merely dimmed: "not started" and "never will be" are different claims, and
