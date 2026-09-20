@@ -44,7 +44,7 @@ export function issueAppraisal(s: StageContext): void {
             branch,
           }) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          predecessorNote(issue, ctx.world.issues, s.sequences, s.openPrs),
+          predecessorNote(issue, ctx.world.issues, s.sequences),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

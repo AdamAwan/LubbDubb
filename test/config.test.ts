@@ -13,6 +13,12 @@ test('loadConfig returns sane defaults with no overrides', () => {
   assert.equal(cfg.userId, undefined, 'no identity is assumed — the three "me" gates are off until one is set');
 });
 
+test('stories under a Feature are sequenced by default, and an order is proposed rather than inferred silently', () => {
+  const cfg = loadConfig();
+  assert.equal(cfg.issueSequencing, 'full');
+  assert.equal(cfg.issueSequenceMaxChildren, 40);
+});
+
 test('issue pickup defaults: lubbdubb label prefix, label-encoded priority scheme, medium fallback', () => {
   const cfg = loadConfig();
   assert.equal(cfg.labelPrefix, 'lubbdubb', 'watch/ignore tags derive from the lubbdubb prefix by default');

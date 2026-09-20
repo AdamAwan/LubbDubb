@@ -1,4 +1,4 @@
-import type { FeatureSequence, Issue, PullRequest } from '../types.js';
+import type { FeatureSequence, Issue } from '../types.js';
 import { issueOriginRef } from '../issueOrigins.js';
 import { featureSequenceSubmitOrigin } from './sequence.js';
 import { sequenceReadiness } from './readiness.js';
@@ -96,7 +96,6 @@ export function predecessorNote(
   issue: Issue,
   issues: readonly Issue[],
   sequences: ReadonlyMap<string, FeatureSequence>,
-  openPrs: readonly PullRequest[],
 ): string {
   const parent = issue.parent;
   if (!parent) return '';
@@ -110,7 +109,7 @@ export function predecessorNote(
     standing !== null && standing.status === 'proposed'
       ? standing.edges.map((e) => ({ issue: e.issue, dependsOn: e.dependsOn }))
       : [];
-  const waiting = sequenceReadiness(proposed, { issues, openPrs: [...openPrs] }).get(issue.number)?.on ?? [];
+  const waiting = sequenceReadiness(proposed, { issues }).get(issue.number)?.on ?? [];
 
   const lines =
     waiting.length > 0

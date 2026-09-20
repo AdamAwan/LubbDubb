@@ -372,7 +372,6 @@ export class RuleDispatcher implements Dispatcher {
           ];
     const sequenceWaits = sequenceReadiness(edges, {
       issues: ctx.world.issues,
-      openPrs,
       watched: (issue) => issueWatchGateReason(issue, pickup) === null,
     });
     const sequenceableFeatures =
