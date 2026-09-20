@@ -614,7 +614,7 @@ test('a declined order is not quoted back as something to preserve', () => {
 
 test('a story under a feature with no order is told its siblings may be building what it names', () => {
   const issues = [story(11), story(12), story(13)];
-  const note = predecessorNote(issues[1]!, issues, new Map(), []);
+  const note = predecessorNote(issues[1]!, issues, new Map());
   assert.match(note, /one of 3 open under Feature #500/);
   assert.match(note, /#11, #13/);
   assert.doesNotMatch(note, /#12/, 'it does not name itself as its own sibling');
@@ -627,34 +627,32 @@ test('an unaccepted order names the predecessors it would hold behind, and says 
     issues[1]!,
     issues,
     new Map([['issue:500', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
-    [],
   );
   assert.match(note, /waiting on #11/);
   assert.match(note, /nobody has accepted/);
   assert.match(note, /not in the checkout you are reading/);
 });
 
-test('a predecessor that has pushed a branch is not named — there is nothing left to warn about', () => {
+test('a predecessor with an open pull request is still named — its work has not landed', () => {
   const issues = [story(11), story(12)];
   const note = predecessorNote(
     issues[1]!,
     issues,
     new Map([['issue:500', sequence({ status: 'proposed', answeredBy: null, answeredAt: null })]]),
-    [{ id: 'p7', number: 7, title: 'x', branch: 'issue/11', ciStatus: 'passing', unresolvedComments: [] }],
   );
-  assert.doesNotMatch(note, /waiting on #11/);
-  assert.match(note, /nobody has put them in an order/, 'it falls back to the general reading');
+  assert.match(note, /waiting on #11/);
+  assert.match(note, /not in the checkout you are reading/);
 });
 
 test('an accepted order contributes no note — it is the hold that covers that story', () => {
   const issues = [story(11), story(12)];
-  const note = predecessorNote(issues[1]!, issues, new Map([['issue:500', sequence()]]), []);
+  const note = predecessorNote(issues[1]!, issues, new Map([['issue:500', sequence()]]));
   assert.doesNotMatch(note, /waiting on #11/);
 });
 
 test('a story with no parent, or no open siblings, is told nothing', () => {
-  assert.equal(predecessorNote(story(12, { parent: undefined }), [story(12)], new Map(), []), '');
-  assert.equal(predecessorNote(story(12), [story(12), story(11, { state: 'closed' })], new Map(), []), '');
+  assert.equal(predecessorNote(story(12, { parent: undefined }), [story(12)], new Map()), '');
+  assert.equal(predecessorNote(story(12), [story(12), story(11, { state: 'closed' })], new Map()), '');
 });
 
 test('the appraisal prompt carries the note, appended rather than interpolated', async () => {

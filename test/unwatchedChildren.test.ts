@@ -110,7 +110,7 @@ test('tagging a story does not re-propose the order — the key digests membersh
 
 test('a story waiting on an unwatched one is held, and the hold says waiting will not end it', () => {
   const issues = [feature(), story(12, { dependsOn: [{ ...PARENT, number: 11 }] }), unwatched(11)];
-  const wait = sequenceReadiness(linkEdges(issues), { issues, openPrs: [], watched }).get(12);
+  const wait = sequenceReadiness(linkEdges(issues), { issues, watched }).get(12);
   assert.deepEqual(wait, { on: [11], unworkable: [11] });
   const reason = sequenceHoldReason(wait!);
   assert.match(reason, /#11 carries no watch tag/);
@@ -119,14 +119,14 @@ test('a story waiting on an unwatched one is held, and the hold says waiting wil
 
 test('a watched predecessor holds without the unworkable sentence', () => {
   const issues = [feature(), story(12, { dependsOn: [{ ...PARENT, number: 11 }] }), story(11)];
-  const wait = sequenceReadiness(linkEdges(issues), { issues, openPrs: [], watched }).get(12)!;
+  const wait = sequenceReadiness(linkEdges(issues), { issues, watched }).get(12)!;
   assert.deepEqual(wait, { on: [11], unworkable: [] });
   assert.doesNotMatch(sequenceHoldReason(wait), /watch tag/);
 });
 
 test('a caller that states no watch reading holds exactly as it did before', () => {
   const issues = [feature(), story(12, { dependsOn: [{ ...PARENT, number: 11 }] }), unwatched(11)];
-  assert.deepEqual(sequenceReadiness(linkEdges(issues), { issues, openPrs: [] }).get(12), {
+  assert.deepEqual(sequenceReadiness(linkEdges(issues), { issues }).get(12), {
     on: [11],
     unworkable: [],
   });

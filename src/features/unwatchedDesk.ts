@@ -69,7 +69,6 @@ export class UnwatchedChildDesk {
       const behind = new Set<number>();
       for (const wait of sequenceReadiness(edges, {
         issues: world.issues,
-        openPrs: world.pullRequests,
         watched: this.deps.watched,
       }).values()) {
         for (const number of wait.unworkable) behind.add(number);

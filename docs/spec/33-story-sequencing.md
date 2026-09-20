@@ -5,8 +5,8 @@ waiting for the one it needs.
 
 A Feature is never dispatched at — its children are the work ([06](06-issue-pickup.md#hierarchy)) —
 and watching one tags every descendant beneath it at once. So the click that says "work this feature"
-currently makes eight stories eligible in the same pulse, and the fleet starts whichever the priority
-labels happen to rank first. That is right when the stories are independent and wrong when they are
+makes eight stories eligible in the same pulse until somebody has accepted an order, and the fleet
+starts whichever the priority labels happen to rank first. That is right when the stories are independent and wrong when they are
 not: the story that reads a table starts beside the story that writes it, and the first agent
 invents the schema the second was going to design.
 
@@ -179,20 +179,33 @@ world: for each story, the predecessors it is still waiting on. `linkEdges` besi
 provider's own `Issue.dependsOn` becomes those edges — a self-edge dropped, since it would hold its
 own story for good and there is nothing an operator could do about it from here.
 
-**A predecessor is satisfied when it is settled, or when it is in flight and has pushed a branch** —
-`dependencySatisfied`'s rule exactly (`src/plans/parts.ts`). Waiting for a merge would serialise a
-feature into a queue of one; waiting for a branch lets the successor stack on work already underway,
-which is what makes a four-wave sequence finish in less than four times one story.
+**A predecessor is satisfied when it is settled, and at no point before.** A story whose
+predecessor is still open holds, however far along that predecessor is and whatever it has pushed.
 
-For a **story**, "has pushed a branch" is read as `openPrForIssue` — an open pull request. That is
-the whole of what the dispatcher can see: it reads no git, and a goal's branch announces itself to
-it as a pull request. It errs towards satisfied, which is the direction every uncertainty here errs
-in.
+This is deliberately **not** `dependencySatisfied`'s rule (`src/plans/parts.ts`), which a part is
+held by and which counts a pushed branch as satisfied. The difference is that a part is *based on*
+the branch it waits for — `partBase` bases it there, so the work it depends on is in the checkout it
+is handed. A **story** has no such base: `issue-pickup` names a branch and no base, so
+`codeWorkingDirectory` cuts the worktree from `defaultBranch`
+(`src/executor/actionExecutor.ts`). A predecessor's unmerged branch is therefore not in the
+successor's checkout, and releasing on the push would dispatch the successor against a tree missing
+exactly the thing it waits for — the failure the
+[appraiser's hold](#the-appraiser-is-held-as-well) exists to prevent, one stage later.
+
+So the two rules differ because the two units differ, and the cost is paid knowingly: a sequenced
+feature runs as a queue, one wave landing before the next starts. The overlap the part rule buys is
+only available to something that can stack, and a story cannot. **Giving stories a base on their
+predecessor's branch is the change that would earn the looser rule back**, and it is not built —
+stacked branches bring their own trap, since a stacked squash commit is an ancestor of nothing and
+[counts as no landing](24-environments.md#what-counts-as-a-landing).
+
+"Settled" is `issue.state !== 'open'`, plus a predecessor the world does not hold at all, which errs
+towards satisfied — the direction every uncertainty here errs in.
 
 ### An unwatched predecessor holds
 
 An order covers every story under the Feature, so it can name a predecessor **nothing is going to
-work**: one that is open, has pushed no branch, and carries no watch tag. It holds, exactly as any
+work**: one that is still open and carries no watch tag. It holds, exactly as any
 other unsatisfied predecessor does.
 
 That is a deliberate departure from [fail open](#fail-open), and the only one in this document. The
@@ -253,7 +266,7 @@ the two do not disagree.
 ### A held story is queued, not skipped
 
 `issue-appraisal`, `issue-pickup` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
-what it waits behind — `Held: waits on #593, which has not pushed a branch yet.`, appended to the
+what it waits behind — `Held: waits on #593, which has not landed yet.`, appended to the
 rule's own reason so the row still says what the work _is_ before it says why it is not going out
 (`sequenceHoldReason`). It is a new
 member of `RuleHeld` (`src/dispatcher/admission.ts`), beside `superseded` and `unapproved`.
@@ -311,7 +324,7 @@ Every one of these leaves **every story eligible, in exactly the order it has to
 - an edge naming an issue the world does not hold;
 - a cycle, a self-edge, or an edge naming a story the Feature does not have — all refused at
   ingestion with nothing stored;
-- `issueSequencing` off, which is the default.
+- `issueSequencing` off, which a deployment has to say — the default is `full`.
 
 The one arm that does **not** fail open is a predecessor nothing will work, which holds and says so
 — stated, argued and paid for [above](#an-unwatched-predecessor-holds).
@@ -527,7 +540,7 @@ Waves are derived where they are drawn (`web/src/view/sequence.ts`), from the ed
 
 | Key                        | Default | What it does                                                                                                           |
 | -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `issueSequencing`          | `off`   | `off` — no sequencer, no hold. `links` — honour the tracker's dependency links only. `full` — links and the sequencer. |
+| `issueSequencing`          | `full`  | `off` — no sequencer, no hold. `links` — honour the tracker's dependency links only. `full` — links and the sequencer. |
 | `issueSequenceMaxChildren` | `40`    | Above this a Feature is not sequenced: the prompt would not fit and the order would not be read.                       |
 
 `links` exists as its own level because it is the setting with no inference in it at all. A team
@@ -556,7 +569,8 @@ where the queue's other held reasons are asserted (`test/dispatchPipeline.test.t
 is a statement about the queue and nothing about it needs a worktree or an agent:
 
 - a held story is queued as `held: 'sequenced'` and is **not** dispatched;
-- the same story dispatches once its predecessor pushes a branch, before any merge;
+- the same story is **still held** once its predecessor opens a pull request, and dispatches only
+  when that predecessor closes — the one rule a part's does not share;
 - every fail-open arm above dispatches everything;
 - a flagged or dragged origin dispatches through a hold, and a drag clears **only** that hold;
 - the planner is held by the order too, and says so rather than blaming a cooldown;

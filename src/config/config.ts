@@ -245,7 +245,7 @@ const DEFAULTS: Config = {
   labelPrefix: 'lubbdubb',
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  issueSequencing: 'off',
+  issueSequencing: 'full',
   issueSequenceMaxChildren: DEFAULT_SEQUENCE_MAX_CHILDREN,
   issueStateColours: {},
   issueBoardStates: [],

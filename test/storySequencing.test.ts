@@ -64,40 +64,37 @@ test('a self-edge is dropped rather than holding its own story for good', () => 
 
 test('a story waits on a predecessor that is open and has pushed nothing', () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
-  const waits = sequenceReadiness(linkEdges(issues), { issues, openPrs: [] });
+  const waits = sequenceReadiness(linkEdges(issues), { issues });
   assert.deepEqual(waits.get(12), { on: [11], unworkable: [] });
   assert.equal(waits.get(11), undefined, 'the story nothing waits behind is not held');
 });
 
-test('a predecessor in flight satisfies the edge the moment it has a branch — not a merge', () => {
+test('a predecessor with an open pull request still holds — a story has no base on its branch', () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
-  const waits = sequenceReadiness(linkEdges(issues), { issues, openPrs: [pr(7, 'issue/11')] });
-  assert.equal(waits.get(12), undefined);
+  const waits = sequenceReadiness(linkEdges(issues), { issues });
+  assert.deepEqual(waits.get(12), { on: [11], unworkable: [] });
 });
 
 test('a settled predecessor satisfies the edge', () => {
   const issues = [issue(11, { state: 'closed' }), issue(12, { dependsOn: [relative(11)] })];
-  assert.equal(sequenceReadiness(linkEdges(issues), { issues, openPrs: [] }).get(12), undefined);
+  assert.equal(sequenceReadiness(linkEdges(issues), { issues }).get(12), undefined);
 });
 
 test('an edge naming an issue the world does not hold is ignored, never a hold', () => {
   const issues = [issue(12, { dependsOn: [relative(11)] })];
-  assert.equal(sequenceReadiness(linkEdges(issues), { issues, openPrs: [] }).get(12), undefined);
+  assert.equal(sequenceReadiness(linkEdges(issues), { issues }).get(12), undefined);
 });
 
 test('a story waiting on several names all of them, in order, once each', () => {
   const issues = [issue(9), issue(11), issue(12, { dependsOn: [relative(11), relative(9), relative(11)] })];
-  assert.deepEqual(sequenceReadiness(linkEdges(issues), { issues, openPrs: [] }).get(12), {
+  assert.deepEqual(sequenceReadiness(linkEdges(issues), { issues }).get(12), {
     on: [9, 11],
     unworkable: [],
   });
 });
 
 test('the held reason names what the story waits behind, not the mechanism', () => {
-  assert.equal(
-    sequenceHoldReason({ on: [593], unworkable: [] }),
-    'Held: waits on #593, which has not pushed a branch yet.',
-  );
+  assert.equal(sequenceHoldReason({ on: [593], unworkable: [] }), 'Held: waits on #593, which has not landed yet.');
   assert.match(sequenceHoldReason({ on: [593, 597], unworkable: [] }), /#593, #597, none of which/);
 });
 
@@ -117,15 +114,21 @@ test('a held story is queued with its reason, not dropped', async () => {
   assert.equal(queued(upcoming, 'issue:11')?.status, 'dispatching', 'the story it waits on does');
 });
 
-test('the same story dispatches once its predecessor has a branch, before any merge', async () => {
+test('the same story is still held once its predecessor opens a pull request — it is not based on that branch', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await linksOn().decide(
     ctx(issues, { world: { takenAt: NOW, pullRequests: [pr(7, 'issue/11')], issues } }),
   );
+  assert.equal(queued(upcoming, 'issue:12')?.status, 'sequenced');
+});
+
+test('the same story dispatches once its predecessor closes', async () => {
+  const issues = [issue(11, { state: 'closed' }), issue(12, { dependsOn: [relative(11)] })];
+  const { upcoming } = await linksOn().decide(ctx(issues));
   assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
 });
 
-test('off is the default, and holds nothing', async () => {
+test('a dispatcher given no sequencing policy holds nothing', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await new RuleDispatcher().decide(ctx(issues));
   assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
@@ -186,11 +189,9 @@ test('the appraiser is held by the order too, rather than judging a goal against
   );
 });
 
-test('the appraisal hold clears itself the moment the predecessor pushes a branch', async () => {
-  const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
-  const { upcoming } = await linksOn().decide(
-    ctx(issues, { recentDecisions: [], world: { takenAt: NOW, pullRequests: [pr(7, 'issue/11')], issues } }),
-  );
+test('the appraisal hold clears itself the moment the predecessor closes', async () => {
+  const issues = [issue(11, { state: 'closed' }), issue(12, { dependsOn: [relative(11)] })];
+  const { upcoming } = await linksOn().decide(ctx(issues, { recentDecisions: [] }));
   assert.equal(
     queued(upcoming, 'issue:12:appraisal')?.status,
     'dispatching',
@@ -198,7 +199,7 @@ test('the appraisal hold clears itself the moment the predecessor pushes a branc
   );
 });
 
-test('with sequencing off the appraiser is held by nothing, as it is today', async () => {
+test('with no sequencing policy the appraiser is held by nothing', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await new RuleDispatcher().decide(ctx(issues, { recentDecisions: [] }));
   assert.equal(queued(upcoming, 'issue:12:appraisal')?.status, 'dispatching');
