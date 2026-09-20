@@ -5228,6 +5228,11 @@ the check's own sentences behind the row's marker, drawn verbatim. One panel for
 because two surfaces drawing one check's sentences are two places for them to disagree. Its rows are the
 card's exactly; what changed is that they are opened rather than occupying the overview.
 
+**A grouped environment's row is named `prod · liveEu`, and the panel rolls nothing up.** Health is
+the one reading a [group](24-environments.md#groups) does not fold: its members can be well and
+unwell at the same moment, so there is no AND to take, and a band drawn as one row would have to pick
+one of their words. The band is said on the row so an operator can see which place an outage is in.
+
 Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
 - **Obstacles** — `ObstaclesPage`, a **nav destination rather than a panel**, and the tab that

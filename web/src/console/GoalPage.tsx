@@ -19,6 +19,7 @@ import {
   GOAL_ANCHOR,
   goalLanding,
   goalPanes,
+  reachBands,
   reachCount,
   GOAL_SECTIONS,
 } from '../view/goalPage.js';
@@ -1667,8 +1668,18 @@ function Environments({
   const [releasing, setReleasing] = useState(false);
   if (page.environments.length === 0) return null;
   const number = page.issue.number;
-  const reached = page.environments.filter((e) => e.status === 'reached').length;
+  const bands = reachBands(page);
+  const grouped = new Set(page.groups.flatMap((g) => g.environments));
+  /* Counted in places rather than in commands: three regions of production are one place,
+     and a card reading "1/3 reached" for a group that has arrived nowhere would be counting
+     the configuration instead of the deployment. */
+  const reached = bands.filter((b) => b.status === 'reached').length;
   const rows = only == null ? page.environments : page.environments.filter((e) => e.environment === only);
+  /* A band is drawn only where one of its environments is: the pane that picks a single
+     environment is asking about that one, and a group heading over nothing is a place the
+     card claims to be saying something about. */
+  const shown = new Set(rows.map((e) => e.environment));
+  const groups = page.groups.filter((g) => g.environments.some((name) => shown.has(name)));
   return (
     <section className="cn-card" id={GOAL_ANCHOR.environments}>
       <h3>
@@ -1677,13 +1688,35 @@ function Environments({
             reached" says what the rows would have, and one shut on "2/3" is the
             reason to open it. */}
         <i className="cn-n">
-          {reached}/{page.environments.length} reached
+          {reached}/{bands.length} reached
         </i>
       </h3>
       {fold.open && (
         <div className="cn-rows">
+          {groups.map((group) => (
+            <div className="cn-env cn-env-group" key={`group:${group.group}`}>
+              <div className="cn-row">
+                <span className="cn-grow">
+                  <b className="cn-name">{group.group}</b>
+                  <span className="cn-sub">
+                    {REACH_SAID[group.status]}
+                    {group.opens.length > 0 && ` · opens ${group.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+                    {` · ${group.environments.join(', ')}`}
+                  </span>
+                </span>
+                {group.status !== 'reached' && (
+                  <i className="cn-n">
+                    {group.landed}/{group.total}
+                  </i>
+                )}
+                <Tag tone={REACH_TONE[group.status]} fill={REACH_TONE[group.status] !== undefined}>
+                  {group.status}
+                </Tag>
+              </div>
+            </div>
+          ))}
           {rows.map((env) => (
-            <div className="cn-env" key={env.environment}>
+            <div className={`cn-env${grouped.has(env.environment) ? ' cn-env-member' : ''}`} key={env.environment}>
               <div className="cn-row">
                 <span className="cn-grow">
                   <b className="cn-name">{env.environment}</b>

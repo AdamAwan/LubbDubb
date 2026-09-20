@@ -1749,6 +1749,7 @@ export function buildDemoState(): DemoSeed {
              nothing, so no environment can ever hold it. */
           { prNumber: 416, sha: '5n4p005', reach: {}, unplaced: true },
         ],
+        groups: [],
         gateHold: null,
         released: {
           goalRef: 'issue:395',
@@ -1797,6 +1798,7 @@ export function buildDemoState(): DemoSeed {
             unplaced: false,
           },
         ],
+        groups: [],
         gateHold: null,
         released: null,
       },
@@ -1838,10 +1840,12 @@ export function buildDemoState(): DemoSeed {
             unplaced: true,
           },
         ],
+        groups: [],
         gateHold: 'the validation checks and the close-out are waiting for this work to reach staging.',
         released: null,
       },
     ],
+    environmentGroups: [],
     featureSequences: [],
     goalWatchWindows: [
       {

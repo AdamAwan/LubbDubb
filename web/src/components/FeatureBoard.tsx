@@ -402,11 +402,16 @@ function GoalCard({
   );
 }
 
+/* The board's columns are bands, so a column named by a declared group is answered from the
+   group's own roll-up — the one the server computed off these same rows. Looked up among the
+   environments instead it would find nothing and draw every grouped place as `absent`.
+   → docs/spec/24-environments.md#groups */
 function goalReach(view: CockpitView, goal: number, environments: readonly string[]): FeatureReach[] | null {
   if (environments.length === 0) return null;
   const row = view.state.environmentReach.find((r) => r.goalRef === `issue:${goal}`);
   return environments.map((environment) => {
-    const found = row?.environments.find((e) => e.environment === environment);
+    const found =
+      row?.groups.find((g) => g.group === environment) ?? row?.environments.find((e) => e.environment === environment);
     return {
       environment,
       status: found?.status ?? 'absent',

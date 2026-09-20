@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { optionalText, requiredBoolean } from '../server/validation.js';
 import type { EnvironmentGate, EnvironmentGateRelease, GoalArrival, GoalEnvironmentReach } from '../types.js';
+import { bandOfEnvironment, bandSaid, environmentGroups, type EnvironmentGroup } from './groups.js';
 import type { EnvironmentConfig } from './policy.js';
 
 // → docs/spec/24-environments.md
@@ -44,8 +45,15 @@ export function announceableArrivals(input: {
   landings: readonly { goalRef: string; recordedAt: string }[];
   probeIntervalMs: number;
   now: number;
-}): { arrival: GoalArrival; comment: boolean; workItemState: string | null }[] {
+}): { arrival: GoalArrival; comment: boolean; workItemState: string | null; said: string }[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
+  const bands = bandOfEnvironment(input.environments);
+  const arrivedAt = new Map<string, Set<string>>();
+  for (const a of input.arrivals) {
+    const held = arrivedAt.get(a.goalRef);
+    if (held === undefined) arrivedAt.set(a.goalRef, new Set([a.environment]));
+    else held.add(a.environment);
+  }
   const floor = input.now - input.probeIntervalMs * ANNOUNCE_WINDOW_INTERVALS;
   const startedAsking = new Map<string, number>();
   for (const r of input.readings) {
@@ -61,19 +69,39 @@ export function announceableArrivals(input: {
     const held = landedAt.get(l.goalRef);
     if (held === undefined || at > held) landedAt.set(l.goalRef, at);
   }
-  const out: { arrival: GoalArrival; comment: boolean; workItemState: string | null }[] = [];
+  /* Of the band's arrivals still unsaid, the one that completed it — the latest to be read,
+     and the only one that speaks. Both regions announcing in the pulse they finish together
+     would be the same sentence said twice on one ticket. */
+  const speaker = new Map<string, string>();
+  for (const arrival of input.arrivals) {
+    if (arrival.announcedAt !== null) continue;
+    const band = bands.get(arrival.environment);
+    if (band?.declared !== true) continue;
+    const key = `${arrival.goalRef} ${band.name}`;
+    const held = speaker.get(key);
+    const heldAt = held === undefined ? null : (input.arrivals.find((a) => a.environment === held)?.arrivedAt ?? null);
+    if (heldAt === null || arrival.arrivedAt >= heldAt) speaker.set(key, arrival.environment);
+  }
+  const out: { arrival: GoalArrival; comment: boolean; workItemState: string | null; said: string }[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
     const environment = byName.get(arrival.environment);
+    const band = bands.get(arrival.environment);
     const seen = Date.parse(arrival.arrivedAt);
     const fresh = Number.isFinite(seen) && seen >= floor;
     const established = (startedAsking.get(arrival.environment) ?? input.now) < floor;
     const justLanded = (landedAt.get(arrival.goalRef) ?? -Infinity) >= floor;
-    const watched = fresh && (established || justLanded);
+    /* A group is one place, so it is announced once — when the last of its environments takes
+       the work. The earlier members are marked announced saying nothing, which is what keeps
+       three regions of production from being three comments on one ticket. */
+    const whole = band === undefined || band.environments.every((n) => arrivedAt.get(arrival.goalRef)?.has(n) === true);
+    const speaks = band?.declared !== true || speaker.get(`${arrival.goalRef} ${band.name}`) === arrival.environment;
+    const watched = fresh && whole && speaks && (established || justLanded);
     out.push({
       arrival,
       comment: watched && environment?.arrival?.comment === true,
       workItemState: watched ? (environment?.arrival?.workItemState ?? null) : null,
+      said: band?.declared === true ? band.name : arrival.environment,
     });
   }
   return out;
@@ -89,17 +117,38 @@ export function arrivalComment(input: { environment: string; landings: number; a
   );
 }
 
+/**
+ * A gate is opened by a **band**, never by one of its environments: three regions of production
+ * are one place, so the work has reached production when all three hold it. An ungrouped
+ * environment is a band of one, which is the behaviour before groups existed. Across bands it is
+ * still an OR — two places that each open a gate open it independently.
+ * → docs/spec/24-environments.md#groups
+ */
 export function openedGoals(
   gate: EnvironmentGate,
   environments: EnvironmentConfig[],
   arrivals: readonly GoalArrival[],
   releases: readonly EnvironmentGateRelease[],
 ): ReadonlySet<string> | null {
-  const gating = new Set(environments.filter((e) => e.arrival?.opens?.includes(gate)).map((e) => e.name));
-  if (gating.size === 0) return null;
+  const gating = gatingBands(gate, environments);
+  if (gating.length === 0) return null;
+  const arrivedAt = new Map<string, Set<string>>();
+  for (const arrival of arrivals) {
+    const held = arrivedAt.get(arrival.goalRef);
+    if (held === undefined) arrivedAt.set(arrival.goalRef, new Set([arrival.environment]));
+    else held.add(arrival.environment);
+  }
   const open = new Set(releases.map((r) => r.goalRef));
-  for (const arrival of arrivals) if (gating.has(arrival.environment)) open.add(arrival.goalRef);
+  for (const [goalRef, reached] of arrivedAt)
+    if (gating.some((band) => band.environments.every((name) => reached.has(name)))) open.add(goalRef);
   return open;
+}
+
+/** The bands whose environments open this gate. A group's members agree on `arrival`, so a band
+ *  gates as a whole or not at all — `validateEnvironments` refuses the mixture. */
+function gatingBands(gate: EnvironmentGate, environments: EnvironmentConfig[]): EnvironmentGroup[] {
+  const opens = new Set(environments.filter((e) => e.arrival?.opens?.includes(gate)).map((e) => e.name));
+  return environmentGroups(environments).filter((band) => band.environments.some((name) => opens.has(name)));
 }
 
 export function environmentGateHold(input: {
@@ -114,7 +163,7 @@ export function environmentGateHold(input: {
     const open = openedGoals(gate, input.environments, input.arrivals, input.releases);
     if (open === null || open.has(input.goalRef)) continue;
     waiting.push(GATE_SAID[gate]);
-    for (const env of input.environments) if (env.arrival?.opens?.includes(gate)) names.add(env.name);
+    for (const band of gatingBands(gate, input.environments)) names.add(bandSaid(band));
   }
   if (waiting.length === 0) return null;
   const where = [...names].join(' or ');

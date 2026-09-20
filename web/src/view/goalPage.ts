@@ -13,6 +13,7 @@ import type {
   EnvironmentGateRelease,
   FeatureSequence,
   GoalEnvironmentReachView,
+  GoalGroupReach,
   GoalLandingReach,
   GoalWatch,
   GoalWatchView,
@@ -64,6 +65,8 @@ export interface GoalPageView {
   checkPlan: ValidationPlanRecord | null;
   checkResources: ValidationResourceView[];
   environments: GoalEnvironmentReachView[];
+  /** The declared groups those rows are read in, rolled up on the server. */
+  groups: GoalGroupReach[];
   /** Every landing this goal owns, with each environment's verdict on it. */
   landings: GoalLandingReach[];
   gateHold: string | null;
@@ -296,6 +299,7 @@ export function buildGoalPage(
     checkPlan: (state.validationPlans ?? []).find((r) => r.originRef === ref) ?? null,
     checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
     environments: reach?.environments ?? [],
+    groups: reach?.groups ?? [],
     landings: reach?.landings ?? [],
     gateHold: reach?.gateHold ?? null,
     gateRelease: reach?.released ?? null,
@@ -384,6 +388,58 @@ function validationStage(page: GoalPageView): GoalStage {
 }
 
 /**
+ * One place the goal's work can be. A declared group stands for its members and an
+ * environment in none stands for itself, in the order the environments are configured — so
+ * three regions of production are one reading here rather than three, exactly as they are
+ * one reading to the gate that waits on them.
+ *
+ * It computes no verdict: a group's status is the roll-up the server already shipped.
+ * → docs/spec/24-environments.md#groups
+ *
+ * @public the seam the Environments card and the close-out's reading are drawn from
+ */
+export interface GoalReachBand {
+  name: string;
+  environments: string[];
+  status: GoalEnvironmentReachView['status'];
+  landed: number;
+  total: number;
+  grouped: boolean;
+}
+
+export function reachBands(page: GoalPageView): GoalReachBand[] {
+  const byMember = new Map<string, GoalGroupReach>();
+  for (const group of page.groups) for (const name of group.environments) byMember.set(name, group);
+  const out: GoalReachBand[] = [];
+  const drawn = new Set<string>();
+  for (const env of page.environments) {
+    const group = byMember.get(env.environment);
+    if (group === undefined) {
+      out.push({
+        name: env.environment,
+        environments: [env.environment],
+        status: env.status,
+        landed: env.landed,
+        total: env.total,
+        grouped: false,
+      });
+      continue;
+    }
+    if (drawn.has(group.group)) continue;
+    drawn.add(group.group);
+    out.push({
+      name: group.group,
+      environments: group.environments,
+      status: group.status,
+      landed: group.landed,
+      total: group.total,
+      grouped: true,
+    });
+  }
+  return out;
+}
+
+/**
  * What the close-out is waiting on. It reads the delivery and the tail first — the obligation
  * this tab *is* — and falls back to the reach the close is owed against, because a goal that
  * has arrived nowhere is not a goal whose close-out is outstanding, it is one whose close-out
@@ -400,14 +456,16 @@ function closeStage(page: GoalPageView): GoalStage {
   return reachStage(page);
 }
 
+/* Counted in places rather than in commands: a goal that has reached one region of production
+   has not reached production. → docs/spec/24-environments.md#groups */
 function reachStage(page: GoalPageView): GoalStage {
-  const envs = page.environments;
+  const envs = reachBands(page);
   if (envs.length === 0) return { reading: 'not reached', tone: 'grey', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
   const furthest = reached[reached.length - 1];
   if (furthest !== undefined) {
     return {
-      reading: `reached ${furthest.environment}`,
+      reading: `reached ${furthest.name}`,
       tone: reached.length === envs.length ? 'green' : 'blue',
       /* The only denominator here that cannot grow: the environments are configuration,
          not plan. `total` below is `landings + unattributed + partsOwed`, so a meter drawn

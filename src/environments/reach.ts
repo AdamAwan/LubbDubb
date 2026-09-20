@@ -1,6 +1,7 @@
 import type {
   EnvironmentReading,
   GoalEnvironmentReach,
+  GoalGroupReach,
   GoalLanding,
   GoalLandingReach,
   Plan,
@@ -8,6 +9,7 @@ import type {
   WorkNode,
 } from '../types.js';
 import { partSettled } from '../plans/parts.js';
+import { environmentGroups } from './groups.js';
 import { unattributedMerges } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
 
@@ -53,6 +55,44 @@ export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
 }
 
 /**
+ * The declared groups' rows, rolled up over their members. Only a group somebody declared gets
+ * one: an ungrouped environment is a band of one and already has its own row, and drawing it
+ * twice would be the same reading offered as two.
+ * → docs/spec/24-environments.md#groups
+ */
+function groupReach(
+  environments: readonly EnvironmentConfig[],
+  rows: readonly GoalEnvironmentReach[],
+): GoalGroupReach[] {
+  const byEnvironment = new Map(rows.map((r) => [r.environment, r]));
+  const out: GoalGroupReach[] = [];
+  for (const band of environmentGroups(environments)) {
+    if (!band.declared) continue;
+    const members = band.environments.flatMap((name) => byEnvironment.get(name) ?? []);
+    if (members.length === 0) continue;
+    const reached = members.every((m) => m.status === 'reached');
+    let latest: string | null = null;
+    for (const m of members) if (m.at !== null && (latest === null || m.at > latest)) latest = m.at;
+    out.push({
+      group: band.name,
+      environments: band.environments,
+      status: groupStatus(members),
+      landed: Math.min(...members.map((m) => m.landed)),
+      total: Math.max(...members.map((m) => m.total)),
+      at: reached ? latest : null,
+      opens: members[0]?.opens ?? [],
+    });
+  }
+  return out;
+}
+
+function groupStatus(members: readonly GoalEnvironmentReach[]): GoalGroupReach['status'] {
+  if (members.every((m) => m.status === 'reached')) return 'reached';
+  if (members.some((m) => m.status === 'reached' || m.status === 'partial')) return 'partial';
+  return members.some((m) => m.status === 'unknown') ? 'unknown' : 'absent';
+}
+
+/**
  * The same landings {@link goalReach} counts, one row each, with what every environment's
  * probe said about them. The rollup is the AND across these rows, so a goal short of an
  * environment has this to say which landing is holding it — and an `unplaced` row says the
@@ -80,6 +120,14 @@ function landingReach(input: {
     });
 }
 
+interface GoalReach {
+  goalRef: string;
+  environments: GoalEnvironmentReach[];
+  /** The declared groups' roll-ups over those rows. Empty where no environment declares a group. */
+  groups: GoalGroupReach[];
+  landings: GoalLandingReach[];
+}
+
 export function allGoalReach(input: {
   landings: GoalLanding[];
   readings: EnvironmentReading[];
@@ -89,19 +137,21 @@ export function allGoalReach(input: {
   parts: PlanPart[];
   environments: EnvironmentConfig[];
   held?: ReadonlySet<string>;
-}): { goalRef: string; environments: GoalEnvironmentReach[]; landings: GoalLandingReach[] }[] {
+}): GoalReach[] {
   const goalRefs = new Set(input.landings.map((l) => l.goalRef));
   for (const node of input.nodes) if (node.kind === 'issue') goalRefs.add(node.ref);
   for (const goalRef of input.held ?? []) goalRefs.add(goalRef);
-  const out: { goalRef: string; environments: GoalEnvironmentReach[]; landings: GoalLandingReach[] }[] = [];
+  const out: GoalReach[] = [];
   for (const goalRef of goalRefs) {
     const unattributed = unattributedMerges(goalRef, input.nodes, input.landed);
     if (unattributed === 0 && !input.landings.some((l) => l.goalRef === goalRef) && input.held?.has(goalRef) !== true)
       continue;
     const outstanding = partsOwed(goalRef, input.plans, input.parts);
+    const environments = goalReach({ ...input, goalRef, unattributed, outstanding });
     out.push({
       goalRef,
-      environments: goalReach({ ...input, goalRef, unattributed, outstanding }),
+      environments,
+      groups: groupReach(input.environments, environments),
       landings: landingReach({ ...input, goalRef }),
     });
   }
