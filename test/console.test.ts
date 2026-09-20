@@ -1667,8 +1667,9 @@ test('an ask with no goal page is answered in the ask panel', () => {
 
   const html = render({ ...v, consolePanel: { ask: row.id } });
   assert.ok(html.includes('cn-backdrop'), 'the ask must draw in front of the console');
+  const heads = [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map((m) => m[1] ?? '');
   assert.ok(
-    html.includes(`<h2>${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}</h2>`),
+    heads.some((head) => head.includes(KIND_SYMBOL[row.kind]) && head.includes(KIND_LABEL[row.kind])),
     'the panel names the ask the rail named, under the same glyph',
   );
   assert.ok(html.includes('escalation-prompt'), 'the panel embeds the shared escalation card');
@@ -1683,7 +1684,7 @@ test('the ask panel says what the ask is about, and says so when there is no goa
   const onGoal = v.needsYou.find((n) => n.goalRef !== null);
   assert.ok(onGoal, 'the demo fixtures must carry an ask that names a goal');
   const linked = decode(render({ ...v, consolePanel: { ask: onGoal.id } }));
-  assert.match(linked, /On goal/);
+  assert.match(linked, /read it in context/, 'the panel must say where the ask came from, and offer the way there');
   assert.match(linked, new RegExp(`cn-goto[^<]*>\\s*${onGoal.goalRef!.replace('issue:', '#')}`));
 });
 

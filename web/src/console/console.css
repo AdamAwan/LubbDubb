@@ -2662,15 +2662,21 @@ a.cn-qbody {
    itself, aligned across the whole board by `PanelRows`' rail. */
 .cn-part .cn-partpr {
   margin: 0 0 6px;
-  /* The board's rails were measured for a card the width of the page, and the
-     part cards are columns of a wave — at their widths the row's floors add up
-     to more than the card holds and the reference slot hangs off its right
-     edge. So the three rails that are wider than this row ever needs are taken
-     in: the title gives way altogether, because the part's own title is the line
-     directly above and a clipped copy of the pull request's says nothing the
-     reader has not just read; the chip slot carries one word rather than two
-     chips; the reference slot carries one reference rather than a pair, the goal
-     being the page this row is drawn on. */
+}
+/* The board's rails were measured for a card the width of the page, and the
+   part cards are columns of a wave — at their widths the row's floors add up
+   to more than the card holds and the reference slot hangs off its right
+   edge. So the three rails that are wider than this row ever needs are taken
+   in: the title gives way altogether, because the part's own title is the line
+   directly above and a clipped copy of the pull request's says nothing the
+   reader has not just read; the chip slot carries one word rather than two
+   chips; the reference slot carries one reference rather than a pair, the goal
+   being the page this row is drawn on.
+
+   On `.cn-rows` and not on the card, for the reason `.cn-lamp-mark` gives: the
+   rail's widths are declared on `.cn-rows`, and a token set on an ancestor of
+   the element that declares it loses. */
+.cn-part .cn-partpr .cn-rows {
   --cn-w-title: 0px;
   --cn-w-chips: 68px;
   --cn-w-refs: 96px;
@@ -4318,6 +4324,96 @@ button.cn-grow {
   color: var(--cn-accent);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ---------- one ask, in front ----------
+   The panel the rail opens for a single ask. Everything here is scoped to
+   `.cn-ask`, because the ask arrives as a *card* — the shape the rail needs,
+   drawn among a column of its siblings — and in this panel it is the only thing
+   on the surface. The two shapes want opposite things, and what the card brought
+   with it was a second frame, a second statement of the kind, a second reading of
+   the age, and its own sentence at the same size as the evidence under it.
+   → docs/spec/17-cockpit.md#the-queue-rail--needs-you */
+
+/* Narrower than the panel's own 900px. Nothing in an ask is a table: it is one
+   sentence, the evidence for it and the controls that answer it, all of which
+   are held to a 72ch measure already — so the extra 180px was gutter beside
+   prose, and the head's own line was mostly empty. */
+.cn-panel.cn-ask {
+  width: min(720px, 100%);
+}
+/* The head is chrome, at chrome's size: the kind in the rail's own hue, where
+   the ask came from, its age, and the way out. The eyebrow ramp rather than a
+   size of its own → `Label`. */
+.cn-askhead {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 9px 14px;
+}
+.cn-askhead h2 {
+  margin: 0;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-tone);
+}
+/* In the head's line rather than a bar under it. The subject is one short phrase
+   and it was costing a full-width rule, 18px of padding and a line of its own. */
+.cn-askhead .cn-psub {
+  padding: 0;
+  border: 0;
+}
+.cn-askage {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+.cn-askhead .btn {
+  margin-left: 0;
+}
+
+.cn-askbody {
+  padding: 15px 17px 17px;
+}
+/* One surface. A bordered card inset inside a bordered panel is two frames 14px
+   apart drawing the same edge, and the inner one is the rail's — it says "this
+   is one of several" on a panel showing exactly one. */
+.cn-askbody > .card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* The ask itself: the sentence the operator opened the panel to read, at the
+   size that says so. Held to a shorter measure than the prose under it — a
+   headline that runs the full width reads as a paragraph. */
+.cn-askbody .escalation-prompt,
+.cn-askbody .cn-lede {
+  margin: 0 0 9px;
+  max-width: 54ch;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--cn-fg);
+}
+/* The card's own age, one line below the head's. The head carries it for every
+   kind, including the human tasks that have no card to carry it. */
+.cn-askbody .esc-time {
+  display: none;
+}
+.cn-askbody .card-head {
+  margin-bottom: 9px;
+}
+/* The acts, set off from the reading rather than run on from it: what answers
+   the ask is the last thing on the surface and has room of its own around it.
+   Dismiss keeps its place at the left, furthest from the hand that is reaching
+   for the answer — the rail's rule for the control that answers nothing. */
+.cn-askbody .esc-agent-actions {
+  margin-top: 14px;
+}
+.cn-askbody .esc-dismiss {
+  margin-top: 10px;
+  padding-top: 10px;
 }
 
 /* ---------- backlog ---------- */
@@ -6596,9 +6692,12 @@ button.cn-grow {
    padding: the rows this card holds all start at the same left edge. */
 .cn-desc-pr {
   padding: 0 13px 9px;
-  /* The same rails the part card takes in, and for the same reason: the heading
-     directly above already names the part and its title, so the row's own
-     subject can give way, and it carries one reference and one word. */
+}
+/* The same rails the part card takes in, and for the same reason: the heading
+   directly above already names the part and its title, so the row's own
+   subject can give way, and it carries one reference and one word. On
+   `.cn-rows`, where the rail is declared. */
+.cn-desc-pr .cn-rows {
   --cn-w-title: 0px;
   --cn-w-chips: 68px;
   --cn-w-refs: 96px;

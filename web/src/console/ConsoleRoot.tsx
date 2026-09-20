@@ -4,7 +4,7 @@ import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/action
 import type { NeedRow } from '../view/needsYou.js';
 import type { PrPageView } from '../view/prPage.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
-import { KIND_LABEL, KIND_SYMBOL, QueueRail, subjectLabel } from './QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, QueueRail, holdingLabel, subjectLabel } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
@@ -409,18 +409,69 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
     if (!row) return null;
     const body = needBody(row, view, actions);
     if (body === null) return null;
-    return (
-      <PanelShell title={`${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
-        <AskSubject row={row} actions={actions} />
-        <div className="cn-pbody">{body}</div>
-      </PanelShell>
-    );
+    return <AskShell row={row} view={view} actions={actions} onClose={close} body={body} />;
   }
 
   return (
     <PanelShell title={PANEL_TITLE[panel]} onClose={close}>
       <div className="cn-pbody">{panelBody(panel, view, actions)}</div>
     </PanelShell>
+  );
+}
+
+/**
+ * One ask, alone and in front.
+ *
+ * The head is chrome and says so: the kind, where the ask came from and how old
+ * it is, in one line of small type. It was two stacked bars — a title spelling
+ * `Needs you · Escalation` at the panel's largest size, and a subject line under
+ * it — which spent the top of the surface, and all of its weight, on the category
+ * the operator had just clicked. The ask's own sentence then arrived below them at
+ * body size, indistinguishable from the evidence under it. What the panel is for
+ * is that sentence, so the body leads with it at headline size and the head gives
+ * way. → docs/spec/17-cockpit.md#the-queue-rail--needs-you
+ */
+function AskShell({
+  row,
+  view,
+  actions,
+  onClose,
+  body,
+}: {
+  row: NeedRow;
+  view: CockpitView;
+  actions: CockpitActions;
+  onClose: () => void;
+  body: ReactNode;
+}): JSX.Element {
+  const age = [
+    row.raisedAt === '' ? null : relTime(row.raisedAt, view.now),
+    row.holding > 0 ? holdingLabel(row.holding) : null,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
+  return (
+    <Modal
+      face="panel"
+      className={`cn-ask cn-t-${KIND_TONE[row.kind]}`}
+      label={`Needs you · ${KIND_LABEL[row.kind]}`}
+      onClose={onClose}
+    >
+      <header className="cn-panel-head cn-askhead">
+        <h2>
+          <span className="cn-sym" aria-hidden="true">
+            {KIND_SYMBOL[row.kind]}
+          </span>
+          {KIND_LABEL[row.kind]}
+        </h2>
+        <AskSubject row={row} actions={actions} />
+        {age !== '' && <span className="cn-askage">{age}</span>}
+        <Button ghost size="small" onClick={onClose}>
+          Close
+        </Button>
+      </header>
+      <div className="cn-pbody cn-askbody">{body}</div>
+    </Modal>
   );
 }
 
@@ -433,17 +484,17 @@ function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions })
       actions.selectGoal(ref);
     };
     return (
-      <p className="cn-psub">
-        On goal{' '}
+      <span className="cn-psub">
+        on{' '}
         <button type="button" className="cn-goto" onClick={read}>
           {subject} — read it in context →
         </button>
-      </p>
+      </span>
     );
   }
   const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
   return (
-    <p className="cn-psub cn-noGoal">
+    <span className="cn-psub cn-noGoal">
       No linked goal ·{' '}
       {pr ? (
         <>
@@ -452,7 +503,7 @@ function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions })
       ) : (
         'this ask stands on its own — nothing in the tracker is waiting on it'
       )}
-    </p>
+    </span>
   );
 }
 
