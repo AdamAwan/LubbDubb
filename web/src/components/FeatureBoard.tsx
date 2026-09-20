@@ -22,7 +22,6 @@ import { CommentsMark } from './CommentsMark.js';
 import { PackMark } from './PackMark.js';
 import { ReviewMark } from './ReviewMark.js';
 import { heldByAccepting, waitsOn, wavesOf } from '../view/sequence.js';
-import { summarySection } from '../view/summarySection.js';
 import { fmtUsd, relAge } from './util.js';
 import type {
   FeatureBoardPayload,
@@ -34,13 +33,13 @@ import type {
   FeatureReportRow,
   FeatureRollup,
   FeatureSequence,
-  FeatureSummary,
   GoalReachStatus,
   OpenPullRequest,
 } from '../types.js';
 import { HeadRow, Panel } from './panel.js';
 import { DesktopLink } from './DesktopLink.js';
 import { Tag, type TagTone } from './tag.js';
+import { FeatureAccount, FeatureMarks } from './featureAccount.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -190,6 +189,11 @@ function orderCards(cards: Card[], sort: FeatureSort): Card[] {
   // sort that outranks it hands the operator back the crowded board they paused
   // their way out of.
   const resting = (c: Card): number => (c.kind === 'feature' && c.rollup.paused !== null ? 1 : 0);
+  // And a flagged one rises, for the mirror of that reason: the flag is a standing
+  // instruction about what the fleet works next, so a board that took it and left the
+  // card where it was would be the one surface disagreeing with the queue.
+  // A pause still wins — it is the more deliberate of the two.
+  const first = (c: Card): number => (c.kind === 'feature' && c.rollup.priority !== null ? 0 : 1);
   const counts = (c: Card): FeatureCounts => (c.kind === 'feature' ? c.rollup.counts : countOne(c.row.standing));
   const cost = (c: Card): number | null => (c.kind === 'feature' ? c.rollup.costUsd : c.row.costUsd);
   const latest = (c: Card): string | null =>
@@ -205,7 +209,9 @@ function orderCards(cards: Card[], sort: FeatureSort): Card[] {
     done: (a, b) => desc(share(counts(a)), share(counts(b))),
     spend: (a, b) => desc(cost(a) ?? -1, cost(b) ?? -1),
   };
-  return [...cards].sort((a, b) => resting(a) - resting(b) || by[sort](a, b) || number(a) - number(b));
+  return [...cards].sort(
+    (a, b) => resting(a) - resting(b) || first(a) - first(b) || by[sort](a, b) || number(a) - number(b),
+  );
 }
 
 function share(counts: FeatureCounts): number {
@@ -288,18 +294,13 @@ function FeatureCard({
         open={open}
         actions={actions}
         standing={<Standing feature={feature} view={view} />}
-        account={<Summary summary={feature.summary} />}
+        account={<FeatureAccount summary={feature.summary} />}
         counts={feature.counts}
         reach={<Reach reach={feature.reach} />}
         costUsd={feature.costUsd}
         landings={feature.landings}
         now={view.now}
-        pause={
-          <>
-            <PriorityToggle feature={feature} onChanged={onAnswered} />
-            <PauseToggle feature={feature} onChanged={onAnswered} />
-          </>
-        }
+        pause={<FeatureMarks feature={feature} onChanged={onAnswered} />}
       >
         {feature.paused !== null && (
           <p className="cn-fb-restednote">
@@ -507,58 +508,6 @@ function Brief({
   );
 }
 
-/**
- * The other standing mark, beside the pause and deliberately: they are the two halves
- * of one act. Told a Feature is the priority, an operator flags it and rests the rest,
- * and having to leave the board to do either half is what made them go and find the
- * stories instead. → docs/spec/05-dispatcher.md#marking-a-goal-a-priority
- */
-function PriorityToggle({ feature, onChanged }: { feature: FeatureRollup; onChanged: () => void }): JSX.Element {
-  const flagged = feature.priority !== null;
-  return (
-    <AsyncButton
-      size="small"
-      ghost={!flagged}
-      className="cn-fb-priority"
-      aria-pressed={flagged}
-      title={
-        flagged
-          ? 'The fleet works this Feature and everything under it first. Press to hand the queue back to its natural order.'
-          : 'Work this Feature first: its stories, their parts and their pull requests go to the front of every queue they are in.'
-      }
-      onClick={async () => {
-        await api.setGoalPriority(feature.number, !flagged);
-        onChanged();
-      }}
-    >
-      {flagged ? 'Priority' : 'Prioritise'}
-    </AsyncButton>
-  );
-}
-
-function PauseToggle({ feature, onChanged }: { feature: FeatureRollup; onChanged: () => void }): JSX.Element {
-  const paused = feature.paused !== null;
-  return (
-    <AsyncButton
-      size="small"
-      ghost
-      className="cn-fb-pause"
-      aria-pressed={paused}
-      title={
-        paused
-          ? 'Resume: work under this Feature is picked up again.'
-          : 'Pause: no work under this Feature is picked up, and the card rests until you hover it.'
-      }
-      onClick={async () => {
-        await api.setFeaturePaused(feature.number, !paused);
-        onChanged();
-      }}
-    >
-      {paused ? 'Resume' : 'Pause'}
-    </AsyncButton>
-  );
-}
-
 function Courts({ holds }: { holds: FeatureHolds }): JSX.Element | null {
   const you = holds.you.length;
   const fleet = holds.fleet.length;
@@ -648,45 +597,6 @@ function Movement({ landings, now }: { landings: readonly FeatureLandingRow[]; n
     <span className="cn-fb-move">
       {recent} landed in the last 7 days · last {relAge(newest.at, now)}
     </span>
-  );
-}
-
-function Summary({ summary }: { summary: FeatureSummary | null }): JSX.Element | null {
-  if (summary === null) return null;
-  if (summary.usable === null && summary.blocked === null && summary.remaining === null) return null;
-  return (
-    <div className="cn-fb-summary">
-      <SummaryBlock title="Usable now" body={summary.usable} tone="usable" />
-      <SummaryBlock title="Needs a person" body={summary.blocked} tone="blocked" />
-      <SummaryBlock title="Left to do" body={summary.remaining} tone="remaining" />
-    </div>
-  );
-}
-
-function SummaryBlock({
-  title,
-  body,
-  tone,
-}: {
-  title: string;
-  body: string | null;
-  tone: 'blocked' | 'usable' | 'remaining';
-}): JSX.Element | null {
-  if (body === null) return null;
-  const section = summarySection(body);
-  return (
-    <div className={`cn-fb-sum-block cn-fb-sum-${tone}`}>
-      <h4>{title}</h4>
-      {section.kind === 'prose' ? (
-        <p>{section.text}</p>
-      ) : (
-        <ul>
-          {section.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 

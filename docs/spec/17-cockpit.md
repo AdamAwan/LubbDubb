@@ -5408,7 +5408,10 @@ Feature stays one press away with its own count on it, since the argument for fo
 if choosing which costs a trip back.
 
 **Nothing here is recomputed** — it is the board's own readings in the order somebody sitting down to
-work would want them. The account is the summariser's, the standings are `ticketOutcomes`', the courts
+work would want them. The account is the summariser's, drawn by the **same component the board
+draws** (`FeatureAccount`) rather than a second rendering of it: while there were two, this one left
+the lede out and drew the three fields as unlabelled paragraphs, so the mode meant for one Feature at
+a time was the worse of the two at saying where that Feature is. The standings are `ticketOutcomes`', the courts
 are `featureHolds`', and the controls are `needBody`, so they carry the refusal rules the rail's carry
 rather than being a compact copy of them.
 
@@ -5558,7 +5561,9 @@ and a card-level "do this first" button is an opinion about which hold matters m
 ### The two standing marks
 
 Beside the name, a card carries the two marks an operator sets on a Feature without leaving the
-board: **Prioritise** and **Pause**. They are the two halves of one act — told that a Feature is now
+board: **Prioritise** and **Pause**. They are one component (`web/src/components/featureAccount.tsx`),
+drawn on the board and in [focus mode](#board-or-focus) alike, since focus is the mode for acting on
+one Feature and had neither. They are the two halves of one act — told that a Feature is now
 the priority, an operator flags it and rests what can wait — and they sit together for that reason.
 
 The flag is `POST /api/issues/:number/priority`, the same one the goal page's button sends
@@ -5568,6 +5573,11 @@ tracker with a hierarchy: **a Feature usually has no goal page** — the snapsho
 fleet is working, not their containers — so the control existed and the one surface that lists
 Features could not reach it. An operator who wanted a Feature worked first had to open its stories and
 flag them one at a time, which is the trip this board exists to save.
+
+**A flagged Feature floats and a paused one sinks**, both above whatever sort is chosen. A pause is
+the more deliberate of the two and wins where a Feature carries both. The board taking the flag and
+leaving the card where it was would make this the one surface disagreeing with the queue it just
+rearranged.
 
 **On, the flag is amber; off, it is an ordinary ghost button.** Amber is what wants you and what you
 have told the fleet to want, which is the same axis; and a mark that is not set says nothing, since a

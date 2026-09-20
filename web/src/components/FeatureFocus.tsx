@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import { useState } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { FeatureBoardPayload, FeatureChildRow, FeatureRollup, FeatureSummary } from '../types.js';
+import type { FeatureBoardPayload, FeatureChildRow, FeatureRollup } from '../types.js';
 import type { FeatureHold, FeatureHolds } from '../view/featureHolds.js';
 import type { NeedRow } from '../view/needsYou.js';
 import { featureHolds } from '../view/featureHolds.js';
@@ -11,6 +11,7 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from '../console/Que
 import { Ref } from './refs.js';
 import { Button } from './button.js';
 import { relTime } from './util.js';
+import { FeatureAccount, FeatureMarks } from './featureAccount.js';
 
 // → docs/spec/17-cockpit.md#the-feature-board
 
@@ -75,7 +76,7 @@ export function FeatureFocus({
         ))}
       </nav>
 
-      <Context rollup={picked.rollup} holds={picked.holds} />
+      <Context rollup={picked.rollup} holds={picked.holds} onChanged={onAnswered} />
       <YourMove holds={picked.holds} view={view} actions={actions} onAnswered={onAnswered} />
       <Goals rollup={picked.rollup} holds={picked.holds} actions={actions} />
     </div>
@@ -87,14 +88,32 @@ export function FeatureFocus({
  * reworded. This is the half of the board worth keeping: an ask means very little
  * on its own, and a great deal under the paragraph saying what the work is for.
  */
-function Context({ rollup, holds }: { rollup: FeatureRollup; holds: FeatureHolds }): JSX.Element {
+function Context({
+  rollup,
+  holds,
+  onChanged,
+}: {
+  rollup: FeatureRollup;
+  holds: FeatureHolds;
+  onChanged: () => void;
+}): JSX.Element {
   const c = rollup.counts;
   return (
     <header className="cn-ff-head">
       <h2>
         {rollup.title} <Ref to={`issue:${rollup.number}`} />
+        <span className="cn-ff-marks">
+          <FeatureMarks feature={rollup} onChanged={onChanged} />
+        </span>
       </h2>
-      {rollup.summary === null ? <p className="cn-psub">Not yet summarised.</p> : <Account summary={rollup.summary} />}
+      {rollup.summary === null ? (
+        <p className="cn-psub">Not yet summarised.</p>
+      ) : (
+        <>
+          <p className="cn-ff-lede">{rollup.summary.standing}</p>
+          <FeatureAccount summary={rollup.summary} />
+        </>
+      )}
       <div className="cn-ff-counts">
         <span>
           <b>{c.delivered}</b> delivered
@@ -117,16 +136,6 @@ function Context({ rollup, holds }: { rollup: FeatureRollup; holds: FeatureHolds
         </span>
       </div>
     </header>
-  );
-}
-
-function Account({ summary }: { summary: FeatureSummary }): JSX.Element {
-  return (
-    <div className="cn-ff-account">
-      {summary.usable !== null && <p>{summary.usable}</p>}
-      {summary.blocked !== null && <p className="cn-ff-blocked">{summary.blocked}</p>}
-      {summary.remaining !== null && <p className="cn-psub">{summary.remaining}</p>}
-    </div>
   );
 }
 

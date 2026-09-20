@@ -294,29 +294,54 @@ test('a section is drawn as bullets where it was written as bullets, and as pros
 });
 
 test('the account is on the brief, so a folded card answers “how is this going”', () => {
-  const source = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const account = repoText('web', 'src', 'components', 'featureAccount.tsx');
+  const focus = repoText('web', 'src', 'components', 'FeatureFocus.tsx');
 
   assert.match(
-    source,
-    /account=\{<Summary summary=\{feature\.summary\} \/>\}/,
+    board,
+    /account=\{<FeatureAccount summary=\{feature\.summary\} \/>\}/,
     'the three fields are the brief’s, drawn whether or not the card is open',
   );
 
-  const opened = source.slice(source.indexOf('className="cn-fb-detail"'));
+  const opened = board.slice(board.indexOf('className="cn-fb-detail'));
   assert.doesNotMatch(
     opened,
-    /<Summary\b/,
+    /<FeatureAccount\b/,
     'and are not drawn a second time inside the open card — one account, one place',
   );
 
   for (const field of ['summary.usable', 'summary.blocked', 'summary.remaining']) {
     assert.match(
-      source,
-      new RegExp(`<SummaryBlock title="[^"]+" body=\\{${field.replace('.', '\\.')}\\}`),
+      account,
+      new RegExp(`<AccountBlock title="[^"]+" body=\\{${field.replace('.', '\\.')}\\}`),
       `${field} is a peer block with its own heading, not a footnote under the other two`,
     );
   }
-  assert.doesNotMatch(source, /cn-fb-sum-foot/, 'left-to-do is no longer a footnote');
+  assert.doesNotMatch(account, /cn-fb-sum-foot/, 'left-to-do is no longer a footnote');
+
+  // One account, rendered by one component. While the board and focus mode each had
+  // their own, focus — the mode for one Feature at a time — drew the three fields
+  // unlabelled and left the lede out, and nothing could see that they disagreed.
+  for (const [name, source] of [
+    ['the board', board],
+    ['focus mode', focus],
+  ] as const) {
+    assert.match(source, /<FeatureAccount summary=/, `${name} draws the shared account`);
+    assert.doesNotMatch(source, /function AccountBlock\b/, `${name} does not keep a second copy of it`);
+  }
+  assert.match(
+    focus,
+    /className="cn-ff-lede">\{rollup\.summary\.standing\}/,
+    'focus draws the lede too, which it used to omit',
+  );
+  // `cn-ff-standing` is already the per-child lamp in the lanes below, and a second
+  // meaning for it drew the paragraph four pixels wide.
+  assert.doesNotMatch(
+    focus.slice(0, focus.indexOf('cn-ff-lane')),
+    /cn-ff-standing/,
+    'the lede does not borrow a class name the lanes already own',
+  );
 
   const css = repoText('web', 'src', 'styles.css');
   const at = css.indexOf('\n.cn-fb-summary {');
