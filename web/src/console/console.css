@@ -2662,15 +2662,21 @@ a.cn-qbody {
    itself, aligned across the whole board by `PanelRows`' rail. */
 .cn-part .cn-partpr {
   margin: 0 0 6px;
-  /* The board's rails were measured for a card the width of the page, and the
-     part cards are columns of a wave — at their widths the row's floors add up
-     to more than the card holds and the reference slot hangs off its right
-     edge. So the three rails that are wider than this row ever needs are taken
-     in: the title gives way altogether, because the part's own title is the line
-     directly above and a clipped copy of the pull request's says nothing the
-     reader has not just read; the chip slot carries one word rather than two
-     chips; the reference slot carries one reference rather than a pair, the goal
-     being the page this row is drawn on. */
+}
+/* The board's rails were measured for a card the width of the page, and the
+   part cards are columns of a wave — at their widths the row's floors add up
+   to more than the card holds and the reference slot hangs off its right
+   edge. So the three rails that are wider than this row ever needs are taken
+   in: the title gives way altogether, because the part's own title is the line
+   directly above and a clipped copy of the pull request's says nothing the
+   reader has not just read; the chip slot carries one word rather than two
+   chips; the reference slot carries one reference rather than a pair, the goal
+   being the page this row is drawn on.
+
+   On `.cn-rows` and not on the card, for the reason `.cn-lamp-mark` gives: the
+   rail's widths are declared on `.cn-rows`, and a token set on an ancestor of
+   the element that declares it loses. */
+.cn-part .cn-partpr .cn-rows {
   --cn-w-title: 0px;
   --cn-w-chips: 68px;
   --cn-w-refs: 96px;
@@ -6596,9 +6602,12 @@ button.cn-grow {
    padding: the rows this card holds all start at the same left edge. */
 .cn-desc-pr {
   padding: 0 13px 9px;
-  /* The same rails the part card takes in, and for the same reason: the heading
-     directly above already names the part and its title, so the row's own
-     subject can give way, and it carries one reference and one word. */
+}
+/* The same rails the part card takes in, and for the same reason: the heading
+   directly above already names the part and its title, so the row's own
+   subject can give way, and it carries one reference and one word. On
+   `.cn-rows`, where the rail is declared. */
+.cn-desc-pr .cn-rows {
   --cn-w-title: 0px;
   --cn-w-chips: 68px;
   --cn-w-refs: 96px;
