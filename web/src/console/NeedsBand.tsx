@@ -164,7 +164,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
     const liftAgentId = task.agentId;
     return (
       <>
-        <p>{task.title}</p>
+        <p className="cn-lede">{task.title}</p>
         {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
         {liftTo !== null && liftAgentId !== null && (
           <ButtonRow>
@@ -472,7 +472,7 @@ function ValidateAsk({
 }): JSX.Element {
   return (
     <>
-      <p>{task.title}</p>
+      <p className="cn-lede">{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
       <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
       <HumanTaskActions
@@ -510,7 +510,7 @@ function CloseOutAsk({
 }): JSX.Element {
   return (
     <>
-      <p>{task.title}</p>
+      <p className="cn-lede">{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
       <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
       <HumanTaskActions
@@ -638,7 +638,7 @@ function SupplyAsk({
   const showing = unwatched.slice(0, SUPPLY_SHOWN);
   return (
     <>
-      <p>{task.title}</p>
+      <p className="cn-lede">{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
       {showing.length > 0 && (
         <ul className="cn-ask-supply">
@@ -697,7 +697,7 @@ function WatchFinding({
   const canRaise = issue !== undefined && view.state.config.canFileTickets;
   return (
     <>
-      <p>{task.title}</p>
+      <p className="cn-lede">{task.title}</p>
       {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
       <HumanTaskActions
         task={task}

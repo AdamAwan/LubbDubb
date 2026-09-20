@@ -4326,6 +4326,96 @@ button.cn-grow {
   cursor: pointer;
 }
 
+/* ---------- one ask, in front ----------
+   The panel the rail opens for a single ask. Everything here is scoped to
+   `.cn-ask`, because the ask arrives as a *card* — the shape the rail needs,
+   drawn among a column of its siblings — and in this panel it is the only thing
+   on the surface. The two shapes want opposite things, and what the card brought
+   with it was a second frame, a second statement of the kind, a second reading of
+   the age, and its own sentence at the same size as the evidence under it.
+   → docs/spec/17-cockpit.md#the-queue-rail--needs-you */
+
+/* Narrower than the panel's own 900px. Nothing in an ask is a table: it is one
+   sentence, the evidence for it and the controls that answer it, all of which
+   are held to a 72ch measure already — so the extra 180px was gutter beside
+   prose, and the head's own line was mostly empty. */
+.cn-panel.cn-ask {
+  width: min(720px, 100%);
+}
+/* The head is chrome, at chrome's size: the kind in the rail's own hue, where
+   the ask came from, its age, and the way out. The eyebrow ramp rather than a
+   size of its own → `Label`. */
+.cn-askhead {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 9px 14px;
+}
+.cn-askhead h2 {
+  margin: 0;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-tone);
+}
+/* In the head's line rather than a bar under it. The subject is one short phrase
+   and it was costing a full-width rule, 18px of padding and a line of its own. */
+.cn-askhead .cn-psub {
+  padding: 0;
+  border: 0;
+}
+.cn-askage {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+.cn-askhead .btn {
+  margin-left: 0;
+}
+
+.cn-askbody {
+  padding: 15px 17px 17px;
+}
+/* One surface. A bordered card inset inside a bordered panel is two frames 14px
+   apart drawing the same edge, and the inner one is the rail's — it says "this
+   is one of several" on a panel showing exactly one. */
+.cn-askbody > .card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* The ask itself: the sentence the operator opened the panel to read, at the
+   size that says so. Held to a shorter measure than the prose under it — a
+   headline that runs the full width reads as a paragraph. */
+.cn-askbody .escalation-prompt,
+.cn-askbody .cn-lede {
+  margin: 0 0 9px;
+  max-width: 54ch;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--cn-fg);
+}
+/* The card's own age, one line below the head's. The head carries it for every
+   kind, including the human tasks that have no card to carry it. */
+.cn-askbody .esc-time {
+  display: none;
+}
+.cn-askbody .card-head {
+  margin-bottom: 9px;
+}
+/* The acts, set off from the reading rather than run on from it: what answers
+   the ask is the last thing on the surface and has room of its own around it.
+   Dismiss keeps its place at the left, furthest from the hand that is reaching
+   for the answer — the rail's rule for the control that answers nothing. */
+.cn-askbody .esc-agent-actions {
+  margin-top: 14px;
+}
+.cn-askbody .esc-dismiss {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
 /* ---------- backlog ---------- */
 .cn-backlog {
   max-width: 1100px;
