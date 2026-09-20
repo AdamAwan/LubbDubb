@@ -327,3 +327,17 @@ test('the account is on the brief, so a folded card answers “how is this going
     'auto-fit, because any of the three can be absent and a missing one must leave no dead column',
   );
 });
+
+test('the open card draws no heading over an empty column', () => {
+  const source = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  assert.match(
+    source,
+    /const told = feature\.sequence !== null \|\| feature\.briefing\.delivered\.length > 0;/,
+    'the column is drawn on whether either half of it has anything to say',
+  );
+  assert.match(
+    source,
+    /cn-fb-detail\$\{told \? '' : ' cn-fb-detail-2'\}/,
+    'and the card falls back to the two-column shape without it, rather than leaving a dead track',
+  );
+});

@@ -267,6 +267,11 @@ function FeatureCard({
   const open = view.featureCard === feature.number;
   const attention = wantsYou(feature, view);
   const rested = feature.paused !== null;
+  // Both halves of the first column draw nothing of their own when they have
+  // nothing — so with the account moved onto the brief, the column can be a
+  // heading over empty space. It is the same rule the account's own fields keep:
+  // an absent thing is absent, never an empty heading.
+  const told = feature.sequence !== null || feature.briefing.delivered.length > 0;
   return (
     <Panel
       density="flush"
@@ -300,17 +305,19 @@ function FeatureCard({
         {attention !== null && !rested && <p className="cn-fb-attn">{attention}</p>}
       </Brief>
       {open && (
-        <div className="cn-fb-detail">
-          <div className="cn-fb-col">
-            <h4 className="cn-fb-colhead">Its order, and what landed</h4>
-            <Sequence feature={feature} view={view} onAnswered={onAnswered} />
-            <Delivered
-              rows={feature.briefing.delivered}
-              total={feature.briefing.deliveredTotal}
-              now={view.now}
-              actions={actions}
-            />
-          </div>
+        <div className={`cn-fb-detail${told ? '' : ' cn-fb-detail-2'}`}>
+          {told && (
+            <div className="cn-fb-col">
+              <h4 className="cn-fb-colhead">Its order, and what landed</h4>
+              <Sequence feature={feature} view={view} onAnswered={onAnswered} />
+              <Delivered
+                rows={feature.briefing.delivered}
+                total={feature.briefing.deliveredTotal}
+                now={view.now}
+                actions={actions}
+              />
+            </div>
+          )}
           <div className="cn-fb-col">
             <h4 className="cn-fb-colhead">In the way · grouped by who clears it</h4>
             <Holds holds={holds} now={view.now} actions={actions} />

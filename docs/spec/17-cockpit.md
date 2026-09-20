@@ -5505,7 +5505,11 @@ reference sits beside it in its own group — a reference never goes inside a bu
 
 The open card is three columns from 1200px and one below: **its order, and what landed** (the story
 order when there is one, and what was delivered, in its authors' words), **what is in the way,
-grouped by who clears it**, and **its stories and PRs**. The briefing's other two lists are gone as
+grouped by who clears it**, and **its stories and PRs**. The first column is **drawn only when it has
+something in it** — both halves of it render nothing of their own when they are empty, so with the
+account on the brief it would otherwise be a heading over blank space, which is the one thing the
+[account's own fields](#the-feature-summary) are careful never to be. Without it the card is the
+two-column shape a promoted goal already uses. The briefing's other two lists are gone as
 lists: what is being worked is the presence chips on the brief, and what is blocked is the middle
 column, which knows more than the two kinds the briefing had.
 
