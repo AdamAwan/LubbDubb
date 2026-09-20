@@ -525,13 +525,6 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
   },
   { name: '--link-line', label: 'Reference border', group: 'refs', kind: 'colour', why: 'The edge of a reference box' },
   {
-    name: '--link-fill',
-    label: 'Reference fill',
-    group: 'refs',
-    kind: 'colour',
-    why: 'The ground of a reference that stays in the cockpit',
-  },
-  {
     name: '--tier-common-fill',
     label: 'Common tier ground',
     group: 'tints',

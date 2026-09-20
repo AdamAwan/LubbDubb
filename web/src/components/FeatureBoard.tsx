@@ -283,6 +283,7 @@ function FeatureCard({
         open={open}
         actions={actions}
         standing={<Standing feature={feature} view={view} />}
+        account={<Summary summary={feature.summary} />}
         counts={feature.counts}
         reach={<Reach reach={feature.reach} />}
         costUsd={feature.costUsd}
@@ -301,8 +302,7 @@ function FeatureCard({
       {open && (
         <div className="cn-fb-detail">
           <div className="cn-fb-col">
-            <h4 className="cn-fb-colhead">What the summariser wrote</h4>
-            <Summary summary={feature.summary} />
+            <h4 className="cn-fb-colhead">Its order, and what landed</h4>
             <Sequence feature={feature} view={view} onAnswered={onAnswered} />
             <Delivered
               rows={feature.briefing.delivered}
@@ -430,6 +430,7 @@ function Brief({
   open,
   actions,
   standing,
+  account,
   counts,
   reach,
   costUsd,
@@ -446,6 +447,7 @@ function Brief({
   open: boolean;
   actions: CockpitActions;
   standing: ReactNode;
+  account?: ReactNode;
   counts: FeatureCounts;
   reach: ReactNode;
   costUsd: number | null;
@@ -476,10 +478,10 @@ function Brief({
           {pause}
         </div>
         {standing}
+        {account}
         <div className="cn-fb-grid">
           <div className="cn-fb-progress">
             <Bar counts={counts} />
-            <Counts counts={counts} />
           </div>
           <HeadRow className="cn-fb-where">
             {reach}
@@ -528,8 +530,8 @@ function Courts({ holds }: { holds: FeatureHolds }): JSX.Element | null {
           you {you}
         </Tag>
       )}
-      {fleet > 0 && <Tag fill>fleet {fleet}</Tag>}
-      {world > 0 && <Tag fill>world {world}</Tag>}
+      {fleet > 0 && <span className="cn-fb-court-quiet">fleet {fleet}</span>}
+      {world > 0 && <span className="cn-fb-court-quiet">world {world}</span>}
     </span>
   );
 }
@@ -613,11 +615,9 @@ function Summary({ summary }: { summary: FeatureSummary | null }): JSX.Element |
   if (summary.usable === null && summary.blocked === null && summary.remaining === null) return null;
   return (
     <div className="cn-fb-summary">
-      <div className="cn-fb-sum-pair">
-        <SummaryBlock title="Usable now" body={summary.usable} tone="usable" />
-        <SummaryBlock title="Needs a person" body={summary.blocked} tone="blocked" />
-      </div>
-      {summary.remaining !== null && <p className="cn-fb-sum-foot">Left to do — {summary.remaining}</p>}
+      <SummaryBlock title="Usable now" body={summary.usable} tone="usable" />
+      <SummaryBlock title="Needs a person" body={summary.blocked} tone="blocked" />
+      <SummaryBlock title="Left to do" body={summary.remaining} tone="remaining" />
     </div>
   );
 }
@@ -629,7 +629,7 @@ function SummaryBlock({
 }: {
   title: string;
   body: string | null;
-  tone: 'blocked' | 'usable';
+  tone: 'blocked' | 'usable' | 'remaining';
 }): JSX.Element | null {
   if (body === null) return null;
   const section = summarySection(body);
@@ -1016,21 +1016,6 @@ function barLabel(counts: FeatureCounts): string {
     .filter((s) => counts[s] > 0)
     .map((s) => `${counts[s]} ${STANDING_WORD[s]}`);
   return `${parts.join(', ')} — ${counts.total} in all`;
-}
-
-function Counts({ counts }: { counts: FeatureCounts }): JSX.Element {
-  return (
-    <p className="cn-fb-counts">
-      {(Object.keys(STANDING_WORD) as FeatureChildStanding[])
-        .filter((s) => counts[s] > 0)
-        .map((s) => (
-          <span key={s} className={`cn-fb-count cn-fb-c-${s}`}>
-            <b>{counts[s]}</b> {STANDING_WORD[s]}
-          </span>
-        ))}
-      <span className="cn-fb-count cn-fb-total">{counts.total} in all</span>
-    </p>
-  );
 }
 
 function Reach({ reach }: { reach: readonly FeatureReach[] }): JSX.Element | null {

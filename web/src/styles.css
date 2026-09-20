@@ -88,7 +88,6 @@
      reference has to hold at 12px on four different grounds. These are the values
      to argue about if the treatment lands wrong. */
   --link-line: color-mix(in srgb, var(--blue) 66%, var(--panel-2));
-  --link-fill: color-mix(in srgb, var(--blue) 8%, var(--well));
   --link-ink: #7fb8dc;
   /* The head of a species card on the Pets page, one per rarity. `color-mix` of the
      hue each tier is already drawn in, so a preset that moves `--green` moves the
@@ -1065,10 +1064,19 @@ select:disabled {
   color: var(--link-ink);
 }
 /* The boxed forms. `.ref-goal` is the cockpit's own destination — a goal's page —
-   and is the only filled one: it is the richer place to land and the one no other
-   route from a row that merely mentions the goal reaches. `.ref-out` is the same
-   token, unfilled and dashed, for a ref that leaves; it composes onto `.ext-ref`,
-   so it keeps the arrow and adds the box. */
+   it is the richer place to land and the one no other route from a row that merely
+   mentions the goal reaches. `.ref-out` is the same token, dashed, for a ref that
+   leaves; it composes onto `.ext-ref`, so it keeps the arrow and adds the box.
+
+   **Neither is filled, and that is a rule the whole cockpit keeps: a tinted box
+   means _selected_ and nothing else.** `.ref-goal` used to carry `--link-fill`
+   (a token that went with it), which read as a pressed control on every surface that draws references in a
+   row — and on the feature board, where a card's header carries a ref, a state
+   tag, two court chips and a button, it made a line of six boxes of which the
+   only genuinely toggled one, the sort above it, was the quietest. In/out is
+   carried by the dash and the arrow, which survive a print sheet and an operator
+   who cannot separate the hues; the fill was the one mark of the three that also
+   meant something else. → docs/spec/17-cockpit.md#links */
 .ref-goal.ref-goal,
 .ref-out.ref-out {
   display: inline-flex;
@@ -1081,7 +1089,7 @@ select:disabled {
 .ref-goal.ref-goal {
   font: inherit;
   color: var(--link-ink);
-  background: var(--link-fill);
+  background: none;
 }
 .ref-out.ref-out {
   border-style: dashed;
@@ -1496,11 +1504,10 @@ select:disabled {
     --cn-blue-ink: #1d4e6c;
     --cn-on-accent: #ffffff;
     --cn-on-red: #ffffff;
-    /* A dark-theme reference on white prints as a smudge: the edge disappears, the
-       fill goes muddy and the lettering drops under AA on paper. Restated for the
-       ground it is actually on. */
+    /* A dark-theme reference on white prints as a smudge: the edge disappears and
+       the lettering drops under AA on paper. Restated for the ground it is
+       actually on. */
     --link-line: #7ba3bf;
-    --link-fill: #eaf1f7;
     --link-ink: #1f5b80;
     background: var(--bg);
     color: var(--text);
@@ -8889,6 +8896,18 @@ select:disabled {
   align-items: center;
   gap: 4px;
 }
+/* The chosen order wears the same blue ground the mode toggle beside it wears, and
+   it is selected off `aria-pressed` rather than off the ghost class so the mark and
+   the state cannot drift apart. `Button` gave the pressed one `--panel-2` against
+   the others' transparent, which is the faintest difference on a page whose
+   references and reach chips were, until this change, filled — the two genuinely
+   toggled controls on the board read as the quietest things on it.
+   → docs/spec/17-cockpit.md#the-feature-board */
+.cn-fb-sort .btn[aria-pressed='true'] {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-fg);
+}
 
 /* -- the card and its brief ------------------------------------------------ */
 
@@ -8901,7 +8920,6 @@ select:disabled {
    "read this one first" and the chips say what. */
 .cn-fb-card.cn-fb-wants {
   border-color: var(--cn-amber-line);
-  background: var(--cn-amber-fill);
 }
 /* A goal promoted to stand on its own: dashed, as the tickets tab hatches "no
    feature" — the frame says it answers to no container. */
@@ -8998,7 +9016,18 @@ select:disabled {
 .cn-fb-courts {
   margin-left: auto;
   display: inline-flex;
-  gap: 6px;
+  align-items: baseline;
+  gap: 8px;
+}
+/* Only *your* court is a chip. The fleet's and the world's are counts of work
+   nobody is being asked to do anything about, and drawn as boxes beside the one
+   that is, they made the right-hand end of every card a wall of three equal
+   badges — the eye learns to skip all three, including the one that was asking.
+   → docs/spec/17-cockpit.md#in-the-way-grouped-by-who-clears-it */
+.cn-fb-court-quiet {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
 }
 .cn-fb-standing {
   margin: 0;
@@ -9047,7 +9076,7 @@ select:disabled {
 .cn-fb-move,
 .cn-fb-reading {
   font: 11.5px var(--cn-mono);
-  color: var(--cn-fg-dim);
+  color: var(--cn-fg-faint);
 }
 .cn-fb-never {
   color: var(--cn-fg-faint);
@@ -9058,7 +9087,7 @@ select:disabled {
 
 .cn-fb-bar {
   display: flex;
-  height: 9px;
+  height: 6px;
   border-radius: 3px;
   overflow: hidden;
   background: var(--cn-track);
@@ -9093,34 +9122,6 @@ select:disabled {
     var(--cn-line) 2px,
     var(--cn-line) 5px
   );
-}
-.cn-fb-counts {
-  display: flex;
-  gap: 13px;
-  flex-wrap: wrap;
-  margin: 0;
-  font: 11.5px var(--cn-mono);
-  color: var(--cn-fg-dim);
-  font-variant-numeric: tabular-nums;
-}
-.cn-fb-count b {
-  color: var(--cn-fg);
-  font-weight: 500;
-}
-.cn-fb-total {
-  color: var(--cn-fg-faint);
-}
-.cn-fb-c-delivered b {
-  color: var(--cn-green-ink);
-}
-.cn-fb-c-inFlight b {
-  color: var(--cn-blue-ink);
-}
-.cn-fb-c-fellShort b {
-  color: var(--cn-red-ink);
-}
-.cn-fb-c-unwatched b {
-  color: var(--cn-amber-ink);
 }
 
 .cn-fb-attn {
@@ -9158,25 +9159,25 @@ select:disabled {
   font-style: normal;
   padding: 1px 7px;
   border-radius: var(--cn-r-sm);
-  border: 1px solid var(--cn-line-hi);
+  border: 1px solid var(--cn-line);
   color: var(--cn-fg-faint);
-  background: var(--cn-panel-2);
+  background: none;
 }
+/* The hue lives in the border and the ink, never in a ground — the same rule the
+   references keep one screen over: a tinted box on this card means selected, and a
+   reach chip is not a control at all. → docs/spec/17-cockpit.md#links */
 .cn-fb-r-reached {
   color: var(--cn-green-ink);
   border-color: var(--cn-green-line);
-  background: var(--cn-green-fill);
 }
 .cn-fb-r-partial {
   color: var(--cn-blue-ink);
   border-color: var(--cn-blue-line);
-  background: var(--cn-blue-fill);
 }
 .cn-fb-r-unknown {
   color: var(--cn-amber-ink);
   border-color: var(--cn-amber-line);
   border-style: dashed;
-  background: var(--cn-amber-fill);
 }
 
 /* -- the open card ------------------------------------------------------------ */
@@ -9231,20 +9232,17 @@ select:disabled {
 
 /* -- what the summariser wrote --------------------------------------------- */
 
+/* The three questions somebody asks about a Feature — what can I use, what do you
+   need from me, what is left — beside each other on the brief, where the answer to
+   "how is X going" is actually read. `auto-fit` rather than three tracks because any
+   of them can be absent, and a missing block must not leave a dead column beside the
+   others. → docs/spec/17-cockpit.md#the-feature-summary */
 .cn-fb-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-/* The two questions a reader opens a Feature with — what can I use, what do you
-   need from me — beside each other where the column is wide enough for two and
-   stacked where it is not. `auto-fit` rather than two tracks because either one
-   can be absent, and a missing block must not leave a dead column beside the
-   other. → docs/spec/17-cockpit.md#the-feature-summary */
-.cn-fb-sum-pair {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 9px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 20px;
+  padding: 11px 0 2px;
+  border-top: 1px solid var(--cn-line-soft);
 }
 .cn-fb-sum-block h4 {
   margin: 0 0 3px;
@@ -9304,18 +9302,13 @@ select:disabled {
   background: var(--cn-red-ink);
   opacity: 1;
 }
-/* What is left is a footnote to the two above it, not a third question: it is
-   the one field that is often "nothing", and a heading over one line reads as a
-   section with something in it. */
-.cn-fb-sum-foot {
-  margin: 0;
-  padding-top: 8px;
-  border-top: 1px dashed var(--cn-line);
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--cn-fg-faint);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+/* What is left is the third question and not a footnote to the other two. It is
+   the half of the answer a reader quotes onward — "we have done the back end, the
+   UI is still to tidy" is this field and `usable` together — and drawn small under
+   a dashed rule it was the one an eye scanning the board never reached. Its own
+   heading is neutral: nothing is asserted about whether what is left is a lot. */
+.cn-fb-sum-remaining h4 {
+  color: var(--cn-fg-dim);
 }
 .cn-fb-brief-list h4 {
   margin: 0 0 4px;

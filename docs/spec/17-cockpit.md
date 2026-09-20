@@ -5445,6 +5445,14 @@ erased by it, only outranked: the row carries both.
 **`settled` is its own segment** rather than folded either way. Into `delivered` it overstates the
 Feature; into `queued` it understates it for ever.
 
+**The words live in the bar's own `aria-label` and nowhere else.** `barLabel` writes
+`2 in flight, 1 fell short, 1 queued, 1 not watched — 5 in all`, which is what a screen reader is
+given and what a pointer resting on the bar says; there is no second line of the same six numbers
+spelled out underneath. There was, and it was the reading the [account](#the-feature-summary) took the
+room from: a bar is a comparison across cards, a sentence is an answer, and printing both made the card
+longer without making it say more. The bar is 6px rather than 9 for the same reason — a band that is
+the whole width of the column reads as a heading when it is drawn at the weight of one.
+
 ### Three buckets for a parent link, not two
 
 The mirror's `parent` is three-valued and stays three-valued all the way to the screen: a Feature, a
@@ -5487,19 +5495,27 @@ coming along** — the update a lead gives the product owner, quotable with no c
 operator is the product owner _for_ the harness, so anything in prose here is read by them and quoted
 onward to people with no cockpit in front of them.
 
-So every card **folds to a brief**, and the page opens with every card folded. The brief is four
+So every card **folds to a brief**, and the page opens with every card folded. The brief is five
 lines: the name, with who is on it and what is in the way counted beside it; the standing, quoted
-whole and stamped; the bar and the reach; the movement. One card is open at a time, on `Place`
+whole and stamped; **the account's other three fields** — usable now, needs a person, left to do; the
+bar and the reach; the movement. One card is open at a time, on `Place`
 (`?card=<n>`, [the address bar](#the-address-bar)), so the back button steps out of it and a link
 somebody sends opens on it. **The name is the control** that opens and shuts the card, and the
 reference sits beside it in its own group — a reference never goes inside a button ([links](#links)).
 
-The open card is three columns from 1200px and one below: **what the summariser wrote** (the three
-fields under the standing, the story order when there is one, and what was delivered, in its
-authors' words), **what is in the way, grouped by who clears it**, and **its stories and PRs**. The
-briefing's other two lists are gone as lists: what is being worked is the presence chips on the
-brief, and what is blocked is the middle column, which knows more than the two kinds the briefing
-had.
+The open card is three columns from 1200px and one below: **its order, and what landed** (the story
+order when there is one, and what was delivered, in its authors' words), **what is in the way,
+grouped by who clears it**, and **its stories and PRs**. The briefing's other two lists are gone as
+lists: what is being worked is the presence chips on the brief, and what is blocked is the middle
+column, which knows more than the two kinds the briefing had.
+
+**The account is not in that first column, and putting it there was the board's own worst reading.**
+The page exists to answer _how is the X work going_, the summariser writes the answer into three
+fields, and for as long as those fields sat behind a press the folded card — the thing somebody
+actually looks at when they are asked — offered a bar, six counts and a paragraph, none of which say
+_the back end is done and the UI is not_. The counts were the reading that had to give way for it:
+they were the bar's own six numbers written out beside the bar, so the page said one thing twice and
+the thing it did not say at all was the question it was opened with.
 
 ### In the way, grouped by who clears it
 
@@ -5523,7 +5539,12 @@ are skipped for the same reason: nobody's court.
 The three **counts** on the brief are the lengths of these lists, drawn only when non-zero — a row that
 always shows three chips is one the eye learns to skip, and `world 0` on every card says nothing about
 any of them. Your court is amber, and red where an agent is stopped against it (an escalation or a
-permission — the rail's own split). Fleet and world are neutral: nothing there is asking.
+permission — the rail's own split).
+
+**Only yours is a chip.** Fleet and world are drawn as plain dim mono beside it, because they are
+counts of work nobody is being asked to do anything about, and three boxes of equal weight taught the
+eye to skip all three — including the one that was asking. The distinction is the same one the
+[reference vocabulary](#how-a-reference-is-drawn) keeps: a box is spent on the thing you can act on.
 
 **One control per row, and it is the rail's.** A row that is a needs-you row opens the same ask panel
 the rail opens; anything else opens the page its reference names. No merge or answer button is drawn
@@ -5560,7 +5581,7 @@ which is the default.
 
 ### The feature summary
 
-On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice.
+On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice. All four fields are on the brief, because this is the answer the page exists to give and a card folded shut must still give it.
 
 The board answers every question about a Feature except the one it is opened with. A bar, six counts,
 three lists of holds and a row per child are each true, and a reader assembles _where is this_
@@ -5575,12 +5596,18 @@ so.
 
 #### The layout is the structure, so the prose does not have to be
 
-The lede sits on the brief. The two fields that are a **question the reader is holding** — what can I
-use, and what do you need from me — are drawn beside each other under it, bulleted, one line per
-thing; `remaining` is drawn under both as a single footnote line rather than a third heading, because
-it is the field most often "nothing", and a heading over one line reads as a section with something in
-it. The pair is `repeat(auto-fit, minmax(190px, 1fr))` and not two tracks: either block can be absent,
-and a missing one must not leave a dead column beside the other.
+The lede sits on the brief, and the three fields that are each a **question the reader is holding** —
+what can I use, what do you need from me, what is left — are drawn beside each other under it,
+bulleted, one line per thing. The row is `repeat(auto-fit, minmax(220px, 1fr))` and not three tracks:
+any block can be absent, and a missing one must not leave a dead column beside the others.
+
+**`remaining` is a peer and not a footnote.** It was drawn under the other two as one small line
+below a dashed rule, on the argument that it is the field most often "nothing" and that a heading over
+one line reads as a section with something in it. That is true and it was the wrong trade: `remaining`
+is half of the sentence the whole board is for — _we have done the back end, the UI is still to tidy_
+is `usable` and `remaining` together — and demoted it was the field an eye scanning the board never
+reached. Its heading is deliberately flat: **left to do**, asserting nothing about whether what is left
+is a lot, which is the verdict [this surface refuses](#what-it-deliberately-does-not-draw).
 
 **Blocking is drawn as _needs a person_**, which is the same field renamed at the glass. A reader
 scanning the board is not looking for a status, they are looking for the row with their name on it,
@@ -7705,10 +7732,20 @@ agent rather than the snapshot.
 **One vocabulary of three marks**, in `web/src/styles.css`:
 
 - a **box** means this is a thing you can go to, not a number in a sentence;
-- a **fill** inside the box means the destination is here, in the cockpit (`.ref-goal`, the only filled
-  form — a goal's page, and a pull request's);
+- a **solid** box means the destination is here, in the cockpit (`.ref-goal` — a goal's page, and a
+  pull request's), a **dashed** one that it leaves (`.ref-out`);
 - an **arrow** means it leaves for the provider (`.ext-ref`, and `.ref-out` where that leaves from a
   standalone token).
+
+**No reference is filled, and that is a rule about tint rather than about references.** A tinted ground
+means _selected_, and it means nothing else anywhere in the cockpit. `.ref-goal` carried a blue
+`--link-fill` until it was measured against the surface that draws the most references per square inch:
+a [feature board](#the-feature-board) card's header carries a ref, a state tag, two court counts and a
+button, and with the ref filled that line read as six boxes of which several looked pressed — while the
+sort control above it, the one thing on the board that _is_ selected, was the quietest mark on screen.
+In and out was already carried twice over by the dash and the arrow, both of which survive the print
+sheet and an operator who cannot separate hues; the fill was the one mark of the three that also meant
+something else. The token went with it.
 
 **Where a reference stands decides which of them it wears.** A reference standing on its own — a row's
 `cn-refs` group, a rack entry, a chip — is boxed; a reference _inside prose_ takes the arrow alone,
@@ -7725,11 +7762,10 @@ was given a legend for. **Shape carries it now, not hue or a line weight**, so t
 the print sheet and an operator who cannot separate the colours. Hover keeps its meaning by
 strengthening: the edge goes to full `--blue`, and a dashed one goes solid.
 
-The three values are tokens of their own — `--link-line`, `--link-fill`, `--link-ink` — each restated
-once under `#print-sheet`, since a dark-theme token on white loses its edge, muddies its fill and drops
-its lettering under AA. They are separate from `--blue-line-2` / `--blue-fill`, which mean "border and
-ground of a blue-filled surface" and are set against `--panel`; a reference has to hold at 12px on four
-different grounds. Both classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal`
+The two values are tokens of their own — `--link-line`, `--link-ink` — each restated once under
+`#print-sheet`, since a dark-theme token on white loses its edge and drops its lettering under AA. They
+are separate from `--blue-line-2` / `--blue-fill`, which mean "border and ground of a blue-filled
+surface" and are set against `--panel`; a reference has to hold at 12px on four different grounds. Both classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal`
 is a `<button>` reset to look like a token and has no ring of its own. The treatment lives entirely in
 the shared classes, so every `<Ref>`, `ExtLink`, `refLink` and `linkify` site has it without knowing.
 Controls that already read as controls — `.esc-open`, `.pm-jump`, `.cn-tgl`, the chip anchors — are
@@ -7756,9 +7792,9 @@ screen nowhere an operator looks. The reset is not the thing to fix — the rest
 written against it, and lowering it with `:where(.cn)` restyles 66 of the 70 controls on the overview —
 so the token layer carries the weight to clear it, and `console.css` still names no shared class.
 
-`test/refLinks.test.ts` pins the box, the fill, the arrow, the token count, the focus rule, the doubled
-selectors and the slot's presence on every fleet row, because nothing in a render test can see a
-stylesheet.
+`test/refLinks.test.ts` pins the box, the **absence** of a fill, the arrow, the token count, the focus
+rule, the doubled selectors and the slot's presence on every fleet row, because nothing in a render test
+can see a stylesheet.
 
 **One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
 control is a second destination for one click, so a row that carries both draws its name as the control

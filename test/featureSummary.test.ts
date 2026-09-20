@@ -14,6 +14,7 @@ import type { FeatureSummary, Task } from '../src/types.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
 import { summarySection } from '../web/src/view/summarySection.js';
+import { repoText } from './support/paths.js';
 
 const NOW = '2026-08-27T12:00:00.000Z';
 
@@ -290,4 +291,39 @@ test('a section is drawn as bullets where it was written as bullets, and as pros
     text: 'One thing. And another.',
   });
   assert.deepEqual(summarySection('-   '), { kind: 'prose', text: '-' }, 'a bullet with nothing in it is not a list');
+});
+
+test('the account is on the brief, so a folded card answers “how is this going”', () => {
+  const source = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+
+  assert.match(
+    source,
+    /account=\{<Summary summary=\{feature\.summary\} \/>\}/,
+    'the three fields are the brief’s, drawn whether or not the card is open',
+  );
+
+  const opened = source.slice(source.indexOf('className="cn-fb-detail"'));
+  assert.doesNotMatch(
+    opened,
+    /<Summary\b/,
+    'and are not drawn a second time inside the open card — one account, one place',
+  );
+
+  for (const field of ['summary.usable', 'summary.blocked', 'summary.remaining']) {
+    assert.match(
+      source,
+      new RegExp(`<SummaryBlock title="[^"]+" body=\\{${field.replace('.', '\\.')}\\}`),
+      `${field} is a peer block with its own heading, not a footnote under the other two`,
+    );
+  }
+  assert.doesNotMatch(source, /cn-fb-sum-foot/, 'left-to-do is no longer a footnote');
+
+  const css = repoText('web', 'src', 'styles.css');
+  const at = css.indexOf('\n.cn-fb-summary {');
+  assert.notEqual(at, -1, '.cn-fb-summary must still be a rule in styles.css');
+  assert.match(
+    css.slice(at, css.indexOf('}', at)),
+    /grid-template-columns: repeat\(auto-fit, minmax\(220px, 1fr\)\)/,
+    'auto-fit, because any of the three can be absent and a missing one must leave no dead column',
+  );
 });
