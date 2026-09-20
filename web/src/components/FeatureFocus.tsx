@@ -110,6 +110,7 @@ function Context({
         <p className="cn-psub">Not yet summarised.</p>
       ) : (
         <>
+          {rollup.summary.headline !== null && <p className="cn-ff-headline">{rollup.summary.headline}</p>}
           <p className="cn-ff-lede">{rollup.summary.standing}</p>
           <FeatureAccount summary={rollup.summary} />
         </>

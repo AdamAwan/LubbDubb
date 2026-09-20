@@ -293,6 +293,7 @@ function FeatureCard({
         holds={holds}
         open={open}
         actions={actions}
+        headline={feature.summary?.headline ?? null}
         standing={<Standing feature={feature} view={view} />}
         account={<FeatureAccount summary={feature.summary} />}
         counts={feature.counts}
@@ -442,6 +443,7 @@ function Brief({
   holds,
   open,
   actions,
+  headline,
   standing,
   account,
   counts,
@@ -459,6 +461,7 @@ function Brief({
   holds: FeatureHolds;
   open: boolean;
   actions: CockpitActions;
+  headline?: string | null;
   standing: ReactNode;
   account?: ReactNode;
   counts: FeatureCounts;
@@ -490,6 +493,7 @@ function Brief({
           <Courts holds={holds} />
           {pause}
         </div>
+        {headline !== null && headline !== undefined && <p className="cn-fb-headline">{headline}</p>}
         {standing}
         {account}
         <div className="cn-fb-grid">

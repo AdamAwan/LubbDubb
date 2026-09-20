@@ -1501,6 +1501,7 @@ CREATE TABLE IF NOT EXISTS feature_colors (
 -- pulse and no agent, for ever.
 CREATE TABLE IF NOT EXISTS feature_summaries (
   origin_ref   TEXT PRIMARY KEY,      -- "issue:29857", the container's own
+  headline     TEXT,                  -- how far along, in a few words
   standing     TEXT NOT NULL,         -- the lede: where this Feature is
   usable       TEXT,                  -- what a person can see or use today
   blocked      TEXT,                  -- what is stopping the rest

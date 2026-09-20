@@ -11,7 +11,7 @@ import {
 } from '../src/summaries/featureSummary.js';
 import { buildFeatureBoard } from '../src/features/featureBoard.js';
 import type { FeatureSummary, Task } from '../src/types.js';
-import type { MirroredTicket } from '../src/store/tickets.js';
+import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
 import { summarySection } from '../web/src/view/summarySection.js';
 import { repoText } from './support/paths.js';
@@ -66,6 +66,7 @@ test('a summary needs a lede and nothing else', () => {
   const lean = validateFeatureSummary({ standing: 'Not started.' });
   assert.equal(lean.ok, true);
   assert.deepEqual(lean.ok && lean.input, {
+    headline: null,
     standing: 'Not started.',
     usable: null,
     blocked: null,
@@ -192,6 +193,7 @@ function ticket(over: Partial<MirroredTicket> = {}): MirroredTicket {
 test('the board quotes the summary whole and composes nothing', () => {
   const summary: FeatureSummary = {
     originRef: 'issue:29857',
+    headline: 'Most of the way there',
     standing: 'The main thing works and is on hallway. The per-ORC switch is stuck on a decision.',
     usable: 'On hallway, switching a customer over keeps their candidate pairs.',
     blocked: null,
@@ -246,6 +248,7 @@ test('a second submission revises one row and keeps the date it was first writte
   const store = new Store(':memory:');
   const first = store.tickets.recordFeatureSummary({
     originRef: 'issue:29857',
+    headline: null,
     standing: 'Not started.',
     usable: null,
     blocked: null,
@@ -256,6 +259,7 @@ test('a second submission revises one row and keeps the date it was first writte
   });
   const second = store.tickets.recordFeatureSummary({
     originRef: 'issue:29857',
+    headline: 'On hallway',
     standing: 'On hallway now.',
     usable: 'Switch a customer over and their pairs survive.',
     blocked: null,
@@ -365,4 +369,77 @@ test('the open card draws no heading over an empty column', () => {
     /cn-fb-detail\$\{told \? '' : ' cn-fb-detail-2'\}/,
     'and the card falls back to the two-column shape without it, rather than leaving a dead track',
   );
+});
+
+test('the headline is the agent’s own clause, refused when it stops being one', () => {
+  const base = { standing: 'It works and is on staging. The rest is waiting on a merge.' };
+
+  const none = validateFeatureSummary({ ...base });
+  assert.ok(none.ok && none.input.headline === null, 'leaving it out is an ordinary answer, not a refusal');
+
+  const said = validateFeatureSummary({ ...base, headline: 'Most of the way there — nothing on live yet' });
+  assert.ok(said.ok && said.input.headline === 'Most of the way there — nothing on live yet');
+
+  const long = validateFeatureSummary({ ...base, headline: 'x'.repeat(91) });
+  assert.ok(!long.ok, 'a headline over the cap is refused, never clipped — half of one is a different claim');
+  assert.match(long.ok ? '' : long.error, /90/, 'and the refusal says what the cap is');
+
+  assert.ok(validateFeatureSummary({ ...base, headline: 'x'.repeat(90) }).ok, 'the cap itself is allowed');
+});
+
+test('the headline survives a round trip, and a database from before it reads as absent', () => {
+  const store = new Store(':memory:');
+  const written = store.tickets.recordFeatureSummary({
+    originRef: 'issue:900',
+    headline: 'Done bar the deploy',
+    standing: 'Everything is merged.',
+    usable: null,
+    blocked: null,
+    remaining: null,
+    standingKey: 'k1',
+    agentId: 'a1',
+    taskId: 't1',
+  });
+  assert.equal(written.headline, 'Done bar the deploy');
+  assert.equal(store.tickets.getFeatureSummary('issue:900')?.headline, 'Done bar the deploy');
+
+  // The column is additive on a table that already exists everywhere, so the row a
+  // deployment already holds has to read back as "not written yet" rather than break.
+  // Null means exactly that, which is why it wants no backfill: the next time anything
+  // under the Feature moves, rule `feature-summary` rewrites the row and fills it in.
+  store.tickets.recordFeatureSummary({
+    originRef: 'issue:901',
+    headline: null,
+    standing: 'Written before the field existed.',
+    usable: null,
+    blocked: null,
+    remaining: null,
+    standingKey: 'k2',
+    agentId: 'a1',
+    taskId: 't1',
+  });
+  assert.equal(store.tickets.getFeatureSummary('issue:901')?.headline, null);
+});
+
+test('the column is declared as a migration, because the table predates it', () => {
+  assert.equal(
+    TICKET_COLUMNS.feature_summaries?.headline,
+    'TEXT',
+    'CREATE TABLE IF NOT EXISTS never alters a table that already exists — without this entry the ' +
+      'column is invisible on every database from before it, and every write to it throws',
+  );
+  const schema = repoText('src', 'store', 'schema.ts');
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS feature_summaries \([^)]*headline\s+TEXT/, 'and on a fresh one');
+});
+
+test('the card leads with the headline, and says nothing where there is none', () => {
+  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  assert.match(board, /headline=\{feature\.summary\?\.headline \?\? null\}/, 'the brief is handed it');
+  assert.match(
+    board,
+    /\{headline !== null && headline !== undefined && <p className="cn-fb-headline">/,
+    'an absent headline draws nothing at all, never an empty line',
+  );
+  const focus = repoText('web', 'src', 'components', 'FeatureFocus.tsx');
+  assert.match(focus, /cn-ff-headline/, 'and focus mode leads with it too');
 });

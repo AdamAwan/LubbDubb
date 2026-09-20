@@ -6279,6 +6279,18 @@ button.cn-grow {
 /* The lede, at reading weight, above the three fields — focus drew neither until the
    account became one component. Named for the line and not for `standing`, which on
    this surface is already the per-child lamp in the lanes below. */
+.cn-ff-headline {
+  margin: 0 0 6px;
+  max-width: 78ch;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--cn-fg);
+}
+.cn-ff-headline + .cn-ff-lede {
+  color: var(--cn-fg-dim);
+}
 .cn-ff-lede {
   margin: 0 0 10px;
   max-width: 78ch;

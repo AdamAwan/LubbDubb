@@ -26,6 +26,17 @@ export const featureSummary: ToolFactory = ({ deps, agent, ok }) => ({
     'so write where things are now rather than a history of how they got here.',
   inputSchema: toolSchema(
     z.object({
+      headline: z
+        .string()
+        .optional()
+        .describe(
+          'How far along this is, in a few words — 90 characters at the outside. The half-sentence ' +
+            'somebody repeats when they are asked how the Feature is going: "most of the way there, ' +
+            'nothing on live yet", "barely started", "done bar the deploy". Describe where the work has ' +
+            'got to, which you have read; do not predict where it will get to, which you have not — no ' +
+            'dates, no percentages, no "on track" and no "at risk". Where you cannot tell, leave it out ' +
+            'rather than hedging in it.',
+        ),
       standing: z
         .string()
         .describe(

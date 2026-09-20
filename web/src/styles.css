@@ -9039,6 +9039,25 @@ select:disabled {
   color: var(--cn-fg-faint);
   white-space: nowrap;
 }
+/* The answer to the question the board is opened with, at the size somebody reads
+   first and repeats out loud. It is the agent's own clause, quoted like everything
+   else on the card — a *description* of where the work got to, which is what keeps it
+   on the right side of the verdict this surface refuses.
+   → docs/spec/17-cockpit.md#how-far-along */
+.cn-fb-headline {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+/* With a headline over it the lede is the second line rather than the first, and
+   steps back a shade so the two are not one block of equal type. */
+.cn-fb-headline + .cn-fb-standing {
+  color: var(--cn-fg-dim);
+}
 .cn-fb-standing {
   margin: 0;
   font-size: 13.5px;

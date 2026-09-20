@@ -5618,22 +5618,57 @@ which is the default.
 
 ### The feature summary
 
-On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice. All four fields are on the brief, because this is the answer the page exists to give and a card folded shut must still give it.
+On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice. All five fields are on the brief, because this is the answer the page exists to give and a card folded shut must still give it.
 
 The board answers every question about a Feature except the one it is opened with. A bar, six counts,
 three lists of holds and a row per child are each true, and a reader assembles _where is this_
 out of them themselves — which two readers do differently. The summary is that sentence, said once,
 by somebody who read the whole Feature.
 
-It is four fields, not a document: **where this is** (required), **usable now**, **needs a person**,
-**left to do**. They are four questions, and a reader must not have to find each of them inside a
+It is five fields, not a document: **how far along**, **where this is** (required), **usable now**,
+**needs a person**, **left to do**. They are four questions, and a reader must not have to find each of them inside a
 paragraph. A field the agent left out is drawn as nothing at all, never an empty heading: nothing
 usable yet, nothing blocked and nothing left are ordinary states, and the lede is where an agent says
 so.
 
+#### How far along
+
+The first line of the card, and the reason the rest of it is read. Somebody is asked _how is the X
+work going_ and answers in half a sentence — _most of the way there, nothing on live yet_ — and then,
+if pressed, gives the detail. The four fields under it were the detail with no answer over them: a
+reader assembled the half-sentence themselves out of a paragraph and three lists, and two readers
+assembled different ones.
+
+**It is a description and not a forecast, and that line is the whole of why it is allowed here.** The
+[verdict this surface refuses](#what-it-deliberately-does-not-draw) is the harness asserting a status
+nobody stated — _on track_, _at risk_, a percentage, a date. Every one of those is a claim about next
+week, made by a machine that has read only this week. _Most of the way there_ is a claim about what
+the agent just read, in the agent's own words, quoted and attributable exactly as the other four are.
+The prompt refuses the forecast in as many words and names `headline` as the field most likely to
+tempt one, because the two are a sentence apart.
+
+**90 characters, refused above it rather than clipped** — `standing`'s rule, for a sharper version of
+`standing`'s reason: half a headline is not a shorter headline, it is a different claim.
+
+**It is optional, and a Feature with no honest answer leaves it out.** Not required, deliberately: the
+tool is the one surface an operator's [overridden prompt](05-dispatcher.md#prompt-templates) reaches
+without knowing what changed, and a required field would refuse every submission from every
+deployment whose template predates it — the fleet's accounts stopping dead on exactly the deployments
+that customised most, with nothing red. So an override that never learned about it keeps writing four
+fields, and its cards read as they did.
+
+**A row from before the field is `null`, and that wants no backfill.** Null means _not written yet_,
+which is what the card draws nothing for, and it is not a state anybody needs restored: rule
+`feature-summary` rewrites a Feature's account the moment anything under it moves
+([below](#it-is-rewritten-when-the-feature-moves-and-the-trigger-is-a-comparison)), so a deployment
+fills its own headlines in as its work moves. A backfill would be writing a sentence the harness made
+up into the one field on the board that is supposed to be somebody's own words.
+
 #### The layout is the structure, so the prose does not have to be
 
-The lede sits on the brief, and the three fields that are each a **question the reader is holding** —
+The headline is the brief's first line, at 16px and the only thing on the card set larger than body
+text; the lede follows it a shade dimmer, so the two do not read as one block of equal type. The
+three fields that are each a **question the reader is holding** —
 what can I use, what do you need from me, what is left — are drawn beside each other under it,
 bulleted, one line per thing. The row is `repeat(auto-fit, minmax(220px, 1fr))` and not three tracks:
 any block can be absent, and a missing one must not leave a dead column beside the others.
@@ -5656,13 +5691,13 @@ and each line becomes an item; a section with no marker on any line is drawn as 
 The board is still composing nothing — it is splitting on the lines the agent wrote, and a summary
 written before this shape existed draws exactly as it always did.
 
-**The caps are the surface's, enforced at the tool.** `standing` is 360 characters and refused above
-it; each section is 600 and clipped at a **line boundary**, so what reaches the card is whole bullets
-or nothing. They were 1200 and 2000 — four paragraphs, which made the one piece of prose on the board
+**The caps are the surface's, enforced at the tool.** `headline` is 90 characters and `standing` 360,
+both refused above it; each section is 600 and clipped at a **line boundary**, so what reaches the
+card is whole bullets or nothing. They were 1200 and 2000 — four paragraphs, which made the one piece of prose on the board
 the thing a reader skipped. → [05](05-dispatcher.md#feature-summary--where-a-feature-is)
 
 **It is a quotation like everything else on this card.** The board still composes no sentence: what it
-draws is the four fields as they were submitted, stamped and attributable. That is not the same thing
+draws is the five fields as they were submitted, stamped and attributable. That is not the same thing
 as [the verdict this surface refuses](#what-it-deliberately-does-not-draw) — a status word is the
 harness asserting a policy nobody stated, where this is one agent's account of what it read, and the
 prompt refuses it dates, percentages and _on track_ for exactly that reason.

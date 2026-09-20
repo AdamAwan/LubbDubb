@@ -6,6 +6,8 @@ import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 /* Two sentences of lede and a handful of short bullets under it. The caps were
    1200 and 2000, which is four paragraphs — long enough that the board's one
    piece of prose became the thing a reader skipped. → docs/spec/17-cockpit.md#the-feature-summary */
+/** A headline is repeated out loud, so it is a clause and not a sentence. */
+const MAX_HEADLINE = 90;
 const MAX_STANDING = 360;
 
 const MAX_SECTION = 600;
@@ -31,6 +33,7 @@ export function featureSummarySubmitOrigin(
 }
 
 export interface FeatureSummaryInput {
+  headline: string | null;
   standing: string;
   usable: string | null;
   blocked: string | null;
@@ -58,10 +61,22 @@ export function validateFeatureSummary(
         `and what it is waiting on. The bullets below it carry the detail.`,
     };
   }
+  // Refused above the cap rather than clipped, for `standing`'s reason one field up:
+  // half a headline is not a shorter headline, it is a different claim.
+  const headline = text(args.headline);
+  if (headline !== null && headline.length > MAX_HEADLINE) {
+    return {
+      ok: false,
+      error:
+        `headline is too long (${headline.length} chars, max ${MAX_HEADLINE}). It is the half-sentence somebody ` +
+        `repeats when asked how this is going — "most of the way there, nothing on live yet". The detail is ` +
+        `standing's.`,
+    };
+  }
   const sections = [text(args.usable), text(args.blocked), text(args.remaining)];
   const trimmed = sections.some((s) => s !== null && s.length > MAX_SECTION);
   const [usable = null, blocked = null, remaining = null] = sections.map(clip);
-  return { ok: true, input: { standing, usable, blocked, remaining }, trimmed };
+  return { ok: true, input: { headline, standing, usable, blocked, remaining }, trimmed };
 }
 
 /* Cut at a line boundary where there is one: the sections are drawn as bullets,
