@@ -103,7 +103,10 @@ function stateWith(over: Partial<AppState>): AppState {
     issues: base.world.issues.map((i) => ({ ...i, appraisal: null })),
     pullRequests: unassignedPrs(base),
   };
-  return { ...base, world, build: currentBuild(base), ...over };
+  // The demo carries one undescribed part, so the rail has a `describe` row. These tests each
+  // build the ask they are about and assert the whole list, so the baseline clears it alongside
+  // the appraisals and the reviewer assignments.
+  return { ...base, world, build: currentBuild(base), undescribedParts: [], ...over };
 }
 
 function currentBuild(base: AppState): AppState['build'] {

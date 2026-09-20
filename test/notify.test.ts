@@ -377,6 +377,17 @@ test('notifySnapshot reduces a whole AppState to the four lists', () => {
           .filter((pr) => pr.attention.assignedToYou !== undefined)
           .map((pr) => `assigned:pr:${pr.number}`),
       )
+      .concat((state.undescribedParts ?? []).map((w) => `describe:${w.originRef}`))
+      .concat(
+        state.world.issues
+          .filter((i) => i.appraisal?.awaitingProfileAnswer === true && i.appraisal.proposedProfile !== null)
+          .map((i) => `profile:issue:${i.number}`),
+      )
+      .concat(
+        state.world.issues.flatMap((i) =>
+          (i.appraisal?.placement ?? []).map((ask) => `placement:${ask.field}:issue:${i.number}`),
+        ),
+      )
       .concat(state.build.upgradable ? ['upgrade'] : [])
       .concat(state.build.projectAutoPull && !state.build.projectPull.can ? ['project-pull'] : [])
       .sort(),

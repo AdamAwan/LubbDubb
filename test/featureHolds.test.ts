@@ -266,7 +266,10 @@ test('a waiting agent is holding, a running one working, each joined to its goal
     ],
     'agent-a0 has ended and is not present',
   );
-  assert.equal(agents[0]?.note, 'Cutting the ranked list to the budget before the prompt is built, not after');
+  assert.equal(
+    agents[0]?.note,
+    'Weighting an exact author match above a title one at the boundary, not inside the rank loop',
+  );
 });
 
 test('an agent with no note is named by its task title, and an agent on another goal is left out', () => {
@@ -290,7 +293,7 @@ test('goalPullRequests puts the stack bottom rung first, then the rest, then clo
       [413, true, 1, 2],
       [414, true, 2, 2],
       [406, false, null, null],
-      [388, false, null, null],
+      [397, false, null, null],
     ],
   );
 });

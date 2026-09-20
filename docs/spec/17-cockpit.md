@@ -1111,8 +1111,9 @@ goal did not load" is answering blind.
 several asks or a page scrolled past one. It is the same `needBody`, so it is one ask reachable two
 ways rather than two asks.
 
-**The demo carries no goal-less ask.** Both fixture pull requests under work are owned by a ticket
-(`#388` → PR #412, `#376` → PR #409), so every row in the demo's rail leads to a goal page. The
+**The demo carries no goal-less ask.** Every fixture pull request under work is owned by a ticket
+(`#388` → PR #412, `#376` → PR #409, `#396` → PR #426, `#390` → PRs #413 and #414), so every row in
+the demo's rail leads to a goal page. The
 goal-less reading is still exercised — `test/console.test.ts` builds the orphan rather than fishing
 one out of the fixtures — because what the harness does is not what a demo should teach.
 
@@ -8262,17 +8263,41 @@ its own. Injection lives entirely in the browser fake, reached through `injectDe
 `web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the demo module stays out
 of the production bundle.
 
-**The fixture world is one product, and the product is Markdown Magpie** — a Git-backed Markdown
-knowledge system that indexes documents, answers with citations, clusters the weak answers into gaps and
-publishes improvements as pull requests. Every goal, pull request, plan, claim, transcript and spend
-row in `fixtures.ts` and `demoBackend.ts` is work on that one codebase, with its real file paths and its
-real vocabulary. The theme is load-bearing rather than decorative: an operator meeting the cockpit for
-the first time is trying to follow one story across nine panels, and a fixture set drawn from three
-unrelated products reads to them as a console that is showing them noise. A new fixture joins that story
-or it does not go in — and an old one that does not is a bug to fix rather than a quirk to keep: a goal
-watch reading `Checkout is no slower at p95` on a goal about job payloads, or a parent feature named
-`Payments`, is a leftover from a fixture set this one replaced and reads as a second product bleeding
-through.
+**The fixture world is one product, and the product is Inkwell Books** — a small online bookshop:
+browse and search a catalogue, a basket, checkout and payment, orders, refunds, and one background job
+that emails confirmations. Every goal, pull request, plan, claim, transcript and spend row in
+`fixtures.ts` and `demoBackend.ts` is work on that one codebase, with its real file paths and its real
+vocabulary. The theme is load-bearing rather than decorative: an operator meeting the cockpit for the
+first time is trying to follow one story across nine panels, and a fixture set drawn from three
+unrelated products reads to them as a console that is showing them noise. A bookshop is chosen because
+it needs no explaining and still reaches every surface — screens to look at, an `orders` table to
+assert on, money changing hands, and a worker that can drop a claim. A new fixture joins that story or
+it does not go in — and an old one that does not is a bug to fix rather than a quirk to keep: a goal
+watch reading `Answers cite a renamed heading` on a goal about refunds, or a parent feature named
+`Retrieval and answering`, is a leftover from a fixture set this one replaced and reads as a second
+product bleeding through.
+
+**The rail reads front to back as one pipeline.** The goals are laid out with one parked at each point
+along the workflow, in roughly the order it runs: held at intake (#379), waiting on where it belongs
+(#392) or on which profile it runs (#394), planning (#333 at the gate, #390 with parts in flight), in
+flight (#332, #341, #368, #388, #376, #396, #399), delivered (#364, #395, #398), fell short (#382), and
+closed (#352, #357). Scrolling the rail is meant to teach the loop, so a new fixture goes where its
+stage puts it rather than wherever there is room.
+
+**One ask per goal, with two deliberate exceptions.** A goal carrying four cards reads as a pile rather
+than a situation, and the thing a demo has to teach is what _one_ ask looks like and what answering it
+does. So each goal carries exactly one — `intake` #379, `placement` #392, `profile` #394, `plan` #333,
+`escalation` #368 and #376, `permission` #399, `reply` #388, `describe` #396, `shortfall` #382,
+`validation_plan` #364, `close_out` #398 — and the three goals that carry two do so because the second
+is the point: **#390** carries a merge and a plan step only a person can do, which is the stack and its
+human arm together; **#395** carries its bench row and its outcome marks, which are the two things
+delivery asks for and neither of which holds anything up; and **#333** carries the plan proposal and the
+discussion of that plan, which are one moment and two controls — approving and arguing are the two
+things an operator does at the gate, and a demo showing only the first teaches that the second does not
+exist. The limitation and the judgement are also kept
+apart deliberately, because they are different mechanisms: #359's missing email-provider key is a human
+task nothing can route around, while #368's question about rows with no ISBN is an `answer_question` an
+agent could have got wrong on its own.
 
 **A demo interaction commits.** Where the real cockpit writes, the fake writes to its own world and
 the card stays where it was dropped — `setIssueState` moves the work item for real. A drop that
@@ -8286,9 +8311,10 @@ to their ticket — so `done`, `retained`, `has_pr`, `active`, `container`, `unw
 one issue, with the reason string the real gate would have written. A demo showing eight of them
 teaches an operator that the rest are a bug on the day they first appear. The roll-call is
 stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap
-is 3 with two agents live, so exactly one goal is `eligible` and the rest of the ready ones are
-`blocked` — a world with six eligible goals under a cap of three is one the dispatcher could not have
-produced. Eleven of the thirteen are reachable by clicking, through the Twelve of the thirteen are reachable by clicking — eleven through the tickets tab's watch filter,
+is 5 with four agents out, so exactly one goal is `eligible` — the one Up next is dispatching into the
+last slot — and the rest of the ready ones are `blocked` for want of capacity. A world with six
+eligible goals under a cap of three is one the dispatcher could not have produced. Twelve of the
+thirteen are reachable by clicking — eleven through the tickets tab's watch filter,
 and `retained` from the overview, whose goals-in-flight card lists a retained run beside the live goals
 while work is still on it and the rest behind its `kept` disclosure; `done` is
 carried without being listed anywhere, because no surface lists a closed goal the harness holds no run
@@ -8299,16 +8325,28 @@ A check set is authored once, by a validation planner dispatched _after_ the ass
 `delivered` ([20](20-validation.md#when-the-check-set-is-written)) — so a goal carrying passed and
 failed readings while its plan still waits at the approval gate is a world no pulse could have
 produced, and it is the one contradiction a visitor is guaranteed to notice, because the two
-readings sit on the same masthead. The two showcases are therefore two goals. **#395 is delivered**:
-its plan is `complete`, all four parts are `concluded` behind merged pull requests #420–#423, the
-assessor has parked it, and the ten checks are what the validation planner wrote against that merged
-code. **#333 is at the approval gate**: a three-part plan, `awaiting_approval`, with the proposal, the
-planner's caveats and the two parts held `unapproved` in Up next — and no checks at all, so the goal
-page draws the plan's **hint** in the empty validation section, which is the reading an operator
-actually gets before delivery. Neither goal can demonstrate the other's half, and a fixture that put
-both on one goal was demonstrating a bug.
+readings sit on the same masthead. **Nothing in the fixtures carries a check, a sheet, a watch window
+or an arrival unless every part of its plan has merged and an assessor has answered `delivered`** —
+which is #364, #395 and #398, and no other goal. A goal still planning has nothing to write a check
+against, so `validationChecks`, `remoteSheets`, `goalWatchWindows` and `environmentArrivals` name only
+those three; #390's plan is two parts short of finished and it therefore has none of them, however
+much a sheet would have filled its Validation pane.
 
-**Every state a check can be in has a check in the fixtures.** Goal #395 carries ten, for the reason
+The four showcases are four goals, one per point on that half of the loop. **#333 is at the approval
+gate**: a three-part plan, `awaiting_approval`, with the proposal, the planner's caveats and the two
+parts held `unapproved` in Up next — and no checks at all, so the goal page draws the plan's **hint**
+in the empty validation section, which is the reading an operator actually gets before delivery.
+**#364 is delivered with its set still a proposal**: three checks authored against merged code,
+`authoredAt` stamped and `releasedAt` null, every row `unrun`, and its staging arrival carrying no
+sheet — because `sheetableArrivals` reads the release stamp and not the authoring one
+([36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)). **#395 is
+delivered and released**: its plan is `complete`, all four parts are `concluded` behind merged pull
+requests #419–#422, the assessor has parked it, and its thirteen checks are what the validation
+planner wrote against that merged code and an operator accepted. **#398 is finished with it**: two
+checks, both passed, arrived on staging and prod, and nothing left but the close-out. No one goal can
+demonstrate another's half, and a fixture that put two of them on one goal was demonstrating a bug.
+
+**Every state a check can be in has a check in the fixtures.** Goal #395 carries thirteen, for the reason
 the pickup roll-call carries thirteen: `passed`, `failed`, `waived`, `deferred` and `unrun` are each
 weighted differently on the card ([Validation on the goal](#validation-on-the-goal)), and a weighting
 is not a thing anybody can judge from a demo that only ever shows two of them. The three readings that

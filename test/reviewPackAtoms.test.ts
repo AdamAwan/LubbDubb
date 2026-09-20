@@ -415,7 +415,7 @@ test('the demo serves a review pack, and it is the one whose part declares atoms
   if (reading.kind !== 'pack') return;
   const { pack: demoPack, marks } = reading.payload;
 
-  const carried = ['enqueue-validates', 'drop-route-parsers'];
+  const carried = ['take-payment', 'drop-gateway'];
   assert.deepEqual(
     demoPack.ideas.filter((i) => i.atom !== null).map((i) => i.atom),
     carried,

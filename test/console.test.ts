@@ -844,9 +844,9 @@ test('a thread is drawn with its state, its conversation and where it hangs', ()
   for (const state of ['open', 'answered', 'resolved']) {
     assert.ok(html.includes(`cn-th-${state}`), `the demo's ${state} thread must be drawn as one`);
   }
-  assert.ok(html.includes('the cut alone would drop the tail it needs'), 'a reply is part of the thread');
+  assert.ok(html.includes('the ids alone lose which field matched'), 'a reply is part of the thread');
   assert.match(html, /class="tag t-violet[^"]*"[^>]*>fleet</, 'and a reply the fleet wrote says so');
-  assert.ok(html.includes('src/context/rank.ts'), 'a thread names the place it hangs');
+  assert.ok(html.includes('src/search/rank.ts'), 'a thread names the place it hangs');
 });
 
 test('the pull request page carries the way out to the provider', () => {
@@ -1972,9 +1972,9 @@ test('the local validation chip words each phase of a run in flight', () => {
 
 test('the local validation card draws the findings, the pages and the plan it ran', () => {
   const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'], [], 'validate')));
-  assert.ok(html.includes('A job with no schema is accepted'), 'the finding');
+  assert.ok(html.includes('A declined card empties the basket and shows nothing'), 'the finding');
   assert.ok(html.includes('blocker'), 'and what it is worth');
-  assert.ok(html.includes('http://localhost:5173/jobs/new'), 'the page it was found on');
+  assert.ok(html.includes('http://localhost:5173/checkout'), 'the page it was found on');
   assert.ok(html.includes('The test plan it wrote'), 'the plan, folded');
   assert.ok(html.includes('<details'), 'a browser-owned fold, not a Place');
   assert.ok(html.includes('an agent, in your own dev environment'));
