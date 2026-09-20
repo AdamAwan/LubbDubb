@@ -154,8 +154,13 @@ says the true thing.
 
 `goalPauseOrigin(n)` is the ref (`issue:<n>`) and `pausedIssueNumbers(pauses, issues, containerTypes)`
 (`src/goalPause.ts`) expands the rows into the numbers actually held — the Feature and, through
-`watchCascadeTargets`, every descendant beneath it. A paused ref the world snapshot no longer holds
+`cascadeToChildren`, every descendant beneath it. A paused ref the world snapshot no longer holds
 still pauses itself: the hold works over an aged-out world, exactly as the watch toggle does.
+
+**That cascade is shared with the priority flag** (`src/issueRelations.ts`, over `watchCascadeTargets`),
+and deliberately: a Feature paused and a Feature expedited have to name the same span of work, and for
+as long as they were two pieces of code they named different ones — the pause reached the stories and
+the flag did not. → [05](05-dispatcher.md#a-flag-on-a-container-covers-the-work-under-it)
 
 The gate is `policy.pausedIssues` on `IssuePickupPolicy`, read by `isIssuePickupEligible` and by
 `issuePickupStatus`, which answers with its **own** status word, `paused` — never folded into

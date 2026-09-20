@@ -234,14 +234,18 @@ export class RuleDispatcher implements Dispatcher {
     }
 
     const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
-    const expedited = expeditedOrigins(ctx.goalPriorities ?? [], {
-      openPrs: s.openPrs,
-      issues: ctx.world.issues,
-      plans: ctx.plans ?? [],
-      parts: ctx.planParts ?? [],
-      obstacles: ctx.obstacles ?? [],
-      obstacleBlocks: ctx.obstacleBlocks ?? [],
-    });
+    const expedited = expeditedOrigins(
+      ctx.goalPriorities ?? [],
+      {
+        openPrs: s.openPrs,
+        issues: ctx.world.issues,
+        plans: ctx.plans ?? [],
+        parts: ctx.planParts ?? [],
+        obstacles: ctx.obstacles ?? [],
+        obstacleBlocks: ctx.obstacleBlocks ?? [],
+      },
+      this.pickup.containerTypes,
+    );
     const cleared = s.candidates.map((c) =>
       c.held === 'sequenced' && (expedited(c.origin) || overrideRank.has(c.origin)) ? { ...c, held: undefined } : c,
     );

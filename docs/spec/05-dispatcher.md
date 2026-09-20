@@ -115,8 +115,9 @@ An **unrecognised** suffix is its own answer rather than a silent default — th
 `:plan` slipped through. It is also a role a family may be **declared** with, which is what `summary`
 and `shortfall` carry today: both are read as unrecognised by every consumer, and both are suspected
 defects rather than a decision the vocabulary endorses — `issue:<n>:summary` in particular is a real
-dispatch origin (rule `feature-summary`), so it does not expand under a goal's priority flag and its
-spend files under "other". Declaring the role, rather than leaving the family out of the table, is
+dispatch origin (rule `feature-summary`) whose spend files under "other". It **does** expand under a
+goal's priority flag, which cuts on the role being non-null and so cannot tell `unrecognised` from a
+declared one; this paragraph claimed the opposite until somebody read the predicate. Declaring the role, rather than leaving the family out of the table, is
 what makes that visible instead of invisible.
 
 A role is judged on the **suffix**, never on the id: `issue:<n>:validate-local:` with no id is still
@@ -677,17 +678,44 @@ silently stops applying the moment the goal takes its next step. The flag surviv
 
 It is stored in `goal_priorities` keyed on `issue:<n>` (presence is the whole value — there is no
 rank), reaches the dispatcher as `DispatchContext.goalPriorities`, and is expanded to the origins it
-covers by the pure `expeditedOrigins` (`src/dispatcher/goalPriority.ts`). Two families reach it:
+covers by the pure `expeditedOrigins` (`src/dispatcher/goalPriority.ts`). The flagged numbers are
+widened **once**, at the top, and three families reach it off that widened set:
 
-- **The `issue:<n>` subtree**, through `issueOriginRole` — the pickup root, the parts, the planner,
-  the appraisal, the assessor, the retrospective and the validation checks. Asked through that function
-  rather than by `startsWith` for its own reason: a bare prefix test matches `issue:19:plan` for
-  goal 1.
-- **The pull requests the goal's work opened**, whose origins name the PR and never the goal.
+- **The items under a flagged container**, transitively, through the shared `cascadeToChildren`
+  (`src/issueRelations.ts`) — see [below](#a-flag-on-a-container-covers-the-work-under-it).
+- **The `issue:<n>` subtree** of each, through `issueOriginRole` — the pickup root, the parts, the
+  planner, the appraisal, the assessor, the retrospective and the validation checks. Asked through
+  that function rather than by `startsWith` for its own reason: a bare prefix test matches
+  `issue:19:plan` for goal 1.
+- **The pull requests that work opened**, whose origins name the PR and never the goal.
   Resolved the three ways the cockpit's `goalOfPr` resolves it — a part's own `prNumber`, the issue's
   `linkedPrNumber`, and the branch convention read off `issueBranch`/`partBranch` rather than a
   fourth regex. A PR concern is usually the _last_ thing between a goal and the line, so a priority
   that stopped at the goal's own dispatches would rank everything except the work that finishes it.
+
+### A flag on a container covers the work under it
+
+**The widening is the whole of it, and everything else follows without knowing.** The plans, the
+parts, the obstacles and the pull requests above are each resolved off the set of flagged numbers, so
+expanding that set once — before any of them are computed — is what carries a Feature's flag onto its
+stories' parts and onto the pull requests those stories opened. There is no second rule to keep in
+step.
+
+**It is the same cascade the pause uses, through the same function, and that is the point.** They
+were not. `pausedIssueNumbers` walked `watchCascadeTargets` and the priority flag stopped at the
+number it was given, so on a tracker with a hierarchy the two marks on a Feature meant different
+spans of work: pausing one stopped every story under it, and flagging one moved that Feature's own
+appraisal, plan and summary up the queue while every story under it stayed exactly where it was. The
+operator's single most common instruction — _get this Feature over the line first_ — applied cleanly,
+reported itself applied, and did nothing an agent would ever act on. Nothing was red, because nothing
+had failed.
+
+A **container** is `isContainerIssue`'s answer, off the deployment's `containerTypes`
+([02](02-configuration.md)), which is why `expeditedOrigins` takes them: on a flat tracker nothing is
+a container, every flag covers exactly the goal it names, and this paragraph describes no behaviour at
+all. A flagged number the mirror does not hold is kept as itself rather than dropped — a mark on work
+the harness cannot see is still the operator's instruction, and the subtree of origins under it is
+still theirs to rank.
 
 `rankByPriorityOverride` gives it **the tier above the drag and below `manual-job`**, and within the
 tier the candidates keep their natural order — which is the pipeline's own answer about what that

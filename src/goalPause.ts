@@ -1,6 +1,6 @@
 import type { GoalPause, Issue } from './types.js';
 import { issueOriginNumber, issueOriginRef } from './issueOrigins.js';
-import { watchCascadeTargets } from './issueRelations.js';
+import { cascadeToChildren } from './issueRelations.js';
 
 // → docs/spec/06-issue-pickup.md
 
@@ -13,18 +13,15 @@ export function pausedIssueNumbers(
   issues: readonly Issue[],
   containerTypes: readonly string[] | undefined,
 ): ReadonlySet<number> {
-  const out = new Set<number>();
-  if (pauses.length === 0) return out;
-  const byNumber = new Map(issues.map((i) => [i.number, i]));
-  for (const pause of pauses) {
-    const number = issueOriginNumber('root', pause.originRef);
-    if (number === null) continue;
-    const issue = byNumber.get(number);
-    if (issue === undefined) {
-      out.add(number);
-      continue;
-    }
-    for (const target of watchCascadeTargets(issue, issues, containerTypes)) out.add(target);
+  return cascadeToChildren(markedNumbers(pauses), issues, containerTypes);
+}
+
+/** The issue numbers a list of standing marks names, dropping any whose origin is not a goal root. */
+export function markedNumbers(marks: readonly { originRef: string }[]): number[] {
+  const out: number[] = [];
+  for (const mark of marks) {
+    const number = issueOriginNumber('root', mark.originRef);
+    if (number !== null) out.push(number);
   }
   return out;
 }
