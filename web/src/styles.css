@@ -8973,6 +8973,86 @@ select:disabled {
   color: var(--cn-fg-faint);
   font-size: 12px;
 }
+/* -- one Feature on one line --------------------------------------------------
+   The shape the board takes past `BRIEFS_AT_MOST`. Everything is on one line and the
+   headline takes what is left, so the column that grows is the one that answers the
+   question; the bar, the courts and the reach hold their own widths so a run of rows
+   reads down its columns rather than as ragged sentences.
+   → docs/spec/17-cockpit.md#the-board-at-length */
+.cn-fb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px 7px 0;
+}
+.cn-fb-row .cn-fb-hue {
+  align-self: stretch;
+  margin: -7px 0;
+}
+/* The name and the headline are one control, because they are one sentence: the row
+   opens the card, and a reader who clicks the half they were reading should not find
+   that only the other half was the button. */
+.cn-fb-row-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cn-fb-row-name {
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cn-fg);
+  white-space: nowrap;
+}
+.cn-fb-row-open:hover .cn-fb-row-name {
+  color: var(--cn-blue-ink);
+}
+/* Ellipsised rather than wrapped: a row that grows to fit its longest headline is a
+   list whose rows are different heights, which is the thing this shape exists to
+   stop. The cap at the tool keeps what is cut here to a word or two. */
+.cn-fb-row-said {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-fb-row .cn-fb-bar {
+  flex: none;
+  width: 72px;
+}
+.cn-fb-row .cn-fb-courts {
+  flex: none;
+  margin-left: 0;
+  min-width: 52px;
+  justify-content: flex-end;
+}
+/* A paused Feature rests here too, but by ink alone: the blur the card wears needs a
+   height to be legible as softening rather than as a rendering fault. */
+/* A story that hangs off nothing has no account, and says so where a Feature's
+   headline goes rather than leaving the line half empty. */
+.cn-fb-row-none {
+  font-style: italic;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-row-rested {
+  opacity: 0.5;
+}
+.cn-fb-row-rested:hover,
+.cn-fb-row-rested:focus-within {
+  opacity: 1;
+}
+
 .cn-fb-brief {
   display: flex;
   gap: 12px;

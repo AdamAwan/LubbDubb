@@ -448,6 +448,7 @@ export function useCockpit(): CockpitStatus {
       ticketColumns: place.ticketColumns,
       featureCard: place.featureCard,
       featureSort: place.featureSort,
+      featureDensity: place.featureDensity,
       petsBlended: place.petsBlended,
       overviewShape: place.overview,
       featureMode: place.featureMode,

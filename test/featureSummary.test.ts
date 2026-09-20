@@ -15,6 +15,7 @@ import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
 import { summarySection } from '../web/src/view/summarySection.js';
 import { repoText } from './support/paths.js';
+import { BRIEFS_AT_MOST, drawsRows } from '../web/src/components/FeatureBoard.js';
 
 const NOW = '2026-08-27T12:00:00.000Z';
 
@@ -442,4 +443,37 @@ test('the card leads with the headline, and says nothing where there is none', (
   );
   const focus = repoText('web', 'src', 'components', 'FeatureFocus.tsx');
   assert.match(focus, /cn-ff-headline/, 'and focus mode leads with it too');
+});
+
+test('the board draws briefs while it is short and rows once it is not', () => {
+  // `auto` is a property of the board, not a preference: an operator should not have
+  // to find a setting to be shown a page they can read.
+  assert.equal(drawsRows('auto', BRIEFS_AT_MOST), false, 'a board of eight still reads down');
+  assert.equal(drawsRows('auto', BRIEFS_AT_MOST + 1), true, 'one more and it does not');
+  assert.equal(drawsRows('auto', 0), false, 'an empty board is not a long one');
+
+  // And the operator outranks it in both directions, which is the whole reason the
+  // value is on `Place` rather than computed at the call site.
+  assert.equal(drawsRows('brief', 400), false, 'asked for full, they get full however long it is');
+  assert.equal(drawsRows('rows', 1), true, 'asked for rows, they get rows however short it is');
+});
+
+test('a row says the one thing a scan needs, and the open card is still whole', () => {
+  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+
+  assert.match(
+    board,
+    /rows && view\.featureCard !== card\.rollup\.number \? \(\s*<FeatureRow/,
+    'the card the reader opened is drawn in full even in rows — collapsing it would make the mode useless',
+  );
+  assert.match(
+    board,
+    /rows && view\.featureCard !== card\.row\.number \? \(\s*<GoalRow/,
+    'promoted goals collapse too',
+  );
+
+  const row = board.slice(board.indexOf('function FeatureRow('), board.indexOf('function FeatureCard('));
+  assert.match(row, /cn-fb-row-said/, 'a row carries the headline, which is what makes it an answer');
+  assert.match(row, /<Courts holds=\{holds\} yoursOnly \/>/, 'only your own court survives the line');
+  assert.doesNotMatch(row, /<Reach\b/, 'reach does not — it is detail about a Feature nobody has chosen yet');
 });

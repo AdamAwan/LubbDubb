@@ -5524,6 +5524,40 @@ _the back end is done and the UI is not_. The counts were the reading that had t
 they were the bar's own six numbers written out beside the bar, so the page said one thing twice and
 the thing it did not say at all was the question it was opened with.
 
+### The board at length
+
+A brief runs about a third of a viewport, which is right for a board of five and
+unreadable for one of thirty: three screens of scrolling to find a name, and no way to
+see two Features at once. So the board has a second shape — **rows**, one line each —
+and a control naming both, beside the sort.
+
+**A row is the name and the headline, and almost nothing else.** It keeps the hue, the
+bar, your own court's count and the two marks; it drops the lede, the three fields, the
+reach, the spend, the movement, the stamp and the fleet's and the world's counts. Every
+one of those is detail about a Feature the reader has not chosen yet, and the line they
+were taking is the headline's.
+
+**The row only works because the summariser writes a headline**
+([above](#how-far-along)). A list of names and progress bars says which Features exist
+and nothing whatever about any of them, which is an index and not a board; a list of
+names and half-sentences answers _how is it going_ for thirty Features at once. The
+dense shape was not available until the account had a line short enough to put on one.
+
+**The card the reader opened is drawn in full, in place.** A mode that collapsed the
+one Feature somebody had asked about would be a mode with no use, and `?card=` is
+already a [place](#the-address-bar), so the shape and the opened card travel together in
+a link. A promoted goal collapses to the same row, dashed, with its delivery or
+shortfall quotation where a Feature's headline goes — a board of rows with full cards
+standing up in it reads as a rendering fault rather than as a distinction.
+
+**The default is by size, and the operator outranks it.** `?density=` takes `brief` or
+`rows`, and its absent value is `auto`: briefs at **`BRIEFS_AT_MOST`** cards or fewer
+and rows past it, counting promoted goals, since what makes a page long is its length
+and not what its rows are. Automatic because the right answer here is a property of the
+board rather than a preference — an operator should not have to discover a setting to be
+shown a page they can read — and overridable in **both** directions because the
+threshold is a guess about a reader and the reader is right there.
+
 ### In the way, grouped by who clears it
 
 Three lists, in the order somebody with twenty minutes reads them: **you**, **fleet**, **world**.

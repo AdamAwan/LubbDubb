@@ -5,6 +5,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import {
   FEATURE_MODES,
   FEATURE_SORTS,
+  type FeatureDensity,
   type FeatureMode,
   type FeaturePrFilter,
   type FeatureSort,
@@ -74,6 +75,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
   }
 
   const cards = orderCards(buildCards(board, view), view.featureSort);
+  const rows = drawsRows(view.featureDensity, cards.length);
   const promoted = orphans?.counts.total ?? 0;
   const paused = features.filter((f) => f.paused !== null).length;
 
@@ -95,7 +97,12 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
             {board.backfilling ? ' · still filling' : ''}
           </span>
           <ModeControl mode={view.featureMode} actions={actions} />
-          {view.featureMode === 'board' && <SortControl sort={view.featureSort} actions={actions} />}
+          {view.featureMode === 'board' && (
+            <>
+              <DensityControl density={view.featureDensity} cards={cards.length} actions={actions} />
+              <SortControl sort={view.featureSort} actions={actions} />
+            </>
+          )}
         </div>
 
         {view.featureMode === 'focus' && (
@@ -105,13 +112,24 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
         {view.featureMode === 'board' &&
           cards.map((card) =>
             card.kind === 'feature' ? (
-              <FeatureCard
-                key={`f:${card.rollup.number}`}
-                card={card}
-                view={view}
-                actions={actions}
-                onAnswered={() => void read()}
-              />
+              rows && view.featureCard !== card.rollup.number ? (
+                <FeatureRow
+                  key={`f:${card.rollup.number}`}
+                  card={card}
+                  actions={actions}
+                  onAnswered={() => void read()}
+                />
+              ) : (
+                <FeatureCard
+                  key={`f:${card.rollup.number}`}
+                  card={card}
+                  view={view}
+                  actions={actions}
+                  onAnswered={() => void read()}
+                />
+              )
+            ) : rows && view.featureCard !== card.row.number ? (
+              <GoalRow key={`g:${card.row.number}`} card={card} view={view} actions={actions} />
             ) : (
               <GoalCard
                 key={`g:${card.row.number}`}
@@ -179,6 +197,56 @@ function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitAct
           {m === 'board' ? 'Board' : 'Focus'}
         </button>
       ))}
+    </span>
+  );
+}
+
+/**
+ * Full cards while the board is short enough to read down, one line each past that.
+ * Eight is where a reader stops holding the list in their head: a brief runs about a
+ * viewport-third, so eight is already three screens of scrolling to find a name.
+ *
+ * The threshold counts **every** card, promoted goals included, since what makes the
+ * page long is its length and not what the rows are. → docs/spec/17-cockpit.md#the-board-at-length
+ */
+export const BRIEFS_AT_MOST = 8;
+
+export function drawsRows(density: FeatureDensity, cards: number): boolean {
+  if (density === 'brief') return false;
+  if (density === 'rows') return true;
+  return cards > BRIEFS_AT_MOST;
+}
+
+function DensityControl({
+  density,
+  cards,
+  actions,
+}: {
+  density: FeatureDensity;
+  cards: number;
+  actions: CockpitActions;
+}): JSX.Element {
+  const rows = drawsRows(density, cards);
+  return (
+    <span className="cn-fb-density" role="group" aria-label="How much of each Feature">
+      <Button
+        size="small"
+        ghost={rows}
+        aria-pressed={!rows}
+        title="Every Feature in full — its account, its progress and where it has reached"
+        onClick={() => actions.setFeatureQuery({ featureDensity: 'brief' })}
+      >
+        Full
+      </Button>
+      <Button
+        size="small"
+        ghost={!rows}
+        aria-pressed={rows}
+        title="One line each — the name and how far along it is, with the card you open still drawn in full"
+        onClick={() => actions.setFeatureQuery({ featureDensity: 'rows' })}
+      >
+        Rows
+      </Button>
     </span>
   );
 }
@@ -255,6 +323,53 @@ function SortControl({ sort, actions }: { sort: FeatureSort; actions: CockpitAct
         </Button>
       ))}
     </span>
+  );
+}
+
+/**
+ * One Feature on one line: what it is called, and how far along it is. Nothing else
+ * from the brief survives here except the marks and the two counts that are asks —
+ * everything that went is detail about a Feature the reader has not chosen yet.
+ *
+ * The headline is what makes the row an answer rather than an index entry, which is
+ * why this shape only became possible once the summariser wrote one: a list of names
+ * and bars says which Features exist and nothing about any of them.
+ * → docs/spec/17-cockpit.md#the-board-at-length
+ */
+function FeatureRow({
+  card,
+  actions,
+  onAnswered,
+}: {
+  card: Card & { kind: 'feature' };
+  actions: CockpitActions;
+  onAnswered: () => void;
+}): JSX.Element {
+  const { rollup: feature, holds } = card;
+  const rested = feature.paused !== null;
+  return (
+    <Panel
+      density="flush"
+      className={`cn-fb-row${holds.you.length > 0 && !rested ? ' cn-fb-wants' : ''}${
+        rested ? ' cn-fb-row-rested' : ''
+      }`}
+    >
+      <i className={`cn-fb-hue f${feature.slot}`} aria-hidden="true" />
+      <button
+        type="button"
+        className="cn-fb-row-open"
+        aria-expanded={false}
+        onClick={() => actions.setFeatureQuery({ featureCard: feature.number })}
+      >
+        <span className="cn-fb-row-name">{feature.title}</span>
+        {feature.summary?.headline !== null && feature.summary !== null && (
+          <span className="cn-fb-row-said">{feature.summary.headline}</span>
+        )}
+      </button>
+      <Bar counts={feature.counts} />
+      <Courts holds={holds} yoursOnly />
+      <FeatureMarks feature={feature} onChanged={onAnswered} />
+    </Panel>
   );
 }
 
@@ -340,6 +455,46 @@ function FeatureCard({
           </div>
         </div>
       )}
+    </Panel>
+  );
+}
+
+/**
+ * A promoted goal's row. Same shape as a Feature's, so a board in rows is one list
+ * rather than a list with full cards standing up in it — but dashed and with the
+ * delivery or shortfall quotation where a Feature's headline goes, since a story has
+ * no account of its own and the verdict on it is the nearest thing it has.
+ */
+function GoalRow({
+  card,
+  view,
+  actions,
+}: {
+  card: Card & { kind: 'goal' };
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const { row, holds } = card;
+  const issue = view.state.world.issues.find((i) => i.number === row.number);
+  const said = issue?.delivery?.summary ?? issue?.shortfall?.summary ?? null;
+  return (
+    <Panel density="flush" className={`cn-fb-row cn-fb-promoted${holds.you.length > 0 ? ' cn-fb-wants' : ''}`}>
+      <i className="cn-fb-hue cn-fb-hue-none" aria-hidden="true" />
+      <button
+        type="button"
+        className="cn-fb-row-open"
+        aria-expanded={false}
+        onClick={() => actions.setFeatureQuery({ featureCard: row.number })}
+      >
+        <span className="cn-fb-row-name">{row.title}</span>
+        {said === null ? (
+          <span className="cn-fb-row-said cn-fb-row-none">no Feature</span>
+        ) : (
+          <span className="cn-fb-row-said">“{said}”</span>
+        )}
+      </button>
+      <Bar counts={countOne(row.standing)} />
+      <Courts holds={holds} yoursOnly />
     </Panel>
   );
 }
@@ -512,10 +667,13 @@ function Brief({
   );
 }
 
-function Courts({ holds }: { holds: FeatureHolds }): JSX.Element | null {
+function Courts({ holds, yoursOnly }: { holds: FeatureHolds; yoursOnly?: boolean }): JSX.Element | null {
   const you = holds.you.length;
-  const fleet = holds.fleet.length;
-  const world = holds.world.length;
+  // A row has one line to say what a Feature is, and the fleet's and the world's
+  // counts are the two things on the brief that ask nothing of anybody. They are the
+  // first to go where the space they take is the headline's.
+  const fleet = yoursOnly === true ? 0 : holds.fleet.length;
+  const world = yoursOnly === true ? 0 : holds.world.length;
   if (you + fleet + world === 0) return null;
   return (
     <span className="cn-fb-courts">
