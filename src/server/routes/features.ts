@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { FeatureBoardPayload } from '../../wire.js';
+import { environmentGroups } from '../../environments/groups.js';
 import { allGoalReach } from '../../environments/reach.js';
 import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
 import { buildSpendGoals } from '../../insights/spendInsights.js';
@@ -84,7 +85,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           environments: config.environments,
         }),
         landings: goalLandings,
-        environments: config.environments.map((e) => e.name),
+        environments: environmentGroups(config.environments),
         containerTypes: config.issueContainerTypes,
         watchLabel: watchLabelFor(config.labelPrefix),
         pauses: new Map(store.pauses.listGoalPauses().map((p) => [p.originRef, p])),

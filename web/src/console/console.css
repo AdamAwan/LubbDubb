@@ -2757,6 +2757,17 @@ a.cn-qbody {
 .cn-env > .cn-row {
   border-bottom: 0;
 }
+/* A group is the place; its environments are how the place is made. The band row reads as
+   the heading it is, and its members are indented under it — drawn flat they would be four
+   peers where the gate and the ticket only ever mention one.
+   → docs/spec/24-environments.md#groups */
+.cn-env-group > .cn-row .cn-name {
+  font-weight: 650;
+}
+.cn-env-member {
+  padding-left: 13px;
+  border-left: 2px solid var(--cn-line-soft);
+}
 .cn-watch {
   background: var(--cn-panel-2);
   border-left: 2px solid var(--cn-blue-line);

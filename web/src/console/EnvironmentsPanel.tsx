@@ -10,14 +10,21 @@ import { Tag, type TagTone } from '../components/tag.js';
 export function EnvironmentsPanel({ view }: { view: CockpitView }): JSX.Element {
   const readings = view.state.environmentHealth ?? [];
   if (readings.length === 0) return <p className="cn-empty">No environment declares a health check.</p>;
-  return <PanelRows rows={readings.map((reading) => healthRow(reading, view.now))} />;
+  /* The band each reading is read in, named on the row rather than banded into sections: a
+     group's members can report different words at the same moment, and health has no roll-up
+     — the chip already answers "is something", and this panel answers "what did each of them
+     say". → docs/spec/24-environments.md#groups */
+  const bands = new Map<string, string>();
+  for (const group of view.state.environmentGroups ?? [])
+    for (const name of group.environments) bands.set(name, group.name);
+  return <PanelRows rows={readings.map((reading) => healthRow(reading, bands.get(reading.environment), view.now))} />;
 }
 
-function healthRow(reading: EnvironmentHealthReading, now: number): PanelRowModel {
+function healthRow(reading: EnvironmentHealthReading, band: string | undefined, now: number): PanelRowModel {
   const said = HEALTH_SAID[reading.state];
   return {
     key: reading.environment,
-    title: reading.environment,
+    title: band === undefined ? reading.environment : `${band} · ${reading.environment}`,
     refs: null,
     chips: (
       <Tag tone={healthTone(reading)} fill>

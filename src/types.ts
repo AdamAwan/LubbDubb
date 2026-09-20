@@ -1527,6 +1527,25 @@ export interface GoalEnvironmentReach {
 }
 
 /**
+ * One declared group's roll-up over the {@link GoalEnvironmentReach} rows of its members —
+ * three regions of production read as the one place they are. The laggard governs, exactly as
+ * several commits printed by one environment's `at` do: the group holds the goal's work only
+ * when every environment in it does. Computed on the server off the same rows the per-environment
+ * card draws, so the two cannot disagree. → docs/spec/24-environments.md#groups
+ */
+export interface GoalGroupReach {
+  group: string;
+  environments: string[];
+  status: GoalReachStatus;
+  /** The laggard's count — what the *group* holds, not what its furthest member does. */
+  landed: number;
+  total: number;
+  /** When the last member of the group took it; null until every one of them holds the work. */
+  at: string | null;
+  opens: EnvironmentGate[];
+}
+
+/**
  * One landed pull request's reach, environment by environment — the rows the rollup in
  * {@link GoalEnvironmentReach} is computed from. A goal is checked as a whole or not at
  * all: `rollUpReach` answers `reached` only when every one of these reads `reached`, so

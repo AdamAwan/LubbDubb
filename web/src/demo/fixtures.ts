@@ -1362,6 +1362,7 @@ export function buildDemoState(): DemoSeed {
             unplaced: false,
           },
         ],
+        groups: [],
         gateHold: null,
         released: null,
       },
@@ -1403,10 +1404,12 @@ export function buildDemoState(): DemoSeed {
             unplaced: true,
           },
         ],
+        groups: [],
         gateHold: 'the validation checks and the close-out are waiting for this work to reach staging.',
         released: null,
       },
     ],
+    environmentGroups: [],
     featureSequences: [],
     goalWatchWindows: [
       {

@@ -424,9 +424,9 @@ The decision is pure and lives with the other three categories in `web/src/cockp
       "arrival": { "opens": ["validate", "close_out"], "comment": true },
     },
     { "name": "hallway", "at": "./scripts/deployed-sha.sh hallway", "arrival": { "workItemState": "Worthy" } },
-    { "name": "liveUk", "at": "./scripts/deployed-sha.sh uk", "arrival": { "comment": true } },
-    { "name": "liveEu", "at": "./scripts/deployed-sha.sh eu", "arrival": { "comment": true } },
-    { "name": "liveUs", "at": "git rev-parse origin/production" },
+    { "name": "liveUk", "at": "./scripts/deployed-sha.sh uk", "group": "prod", "arrival": { "comment": true } },
+    { "name": "liveEu", "at": "./scripts/deployed-sha.sh eu", "group": "prod", "arrival": { "comment": true } },
+    { "name": "liveUs", "at": "./scripts/deployed-sha.sh us", "group": "prod", "arrival": { "comment": true } },
   ],
   "environmentProbeIntervalMs": 300000,
   "environmentHealthIntervalMs": 300000,
@@ -453,7 +453,9 @@ because each failure is otherwise silent in the same direction:
   harness does not file. An `"opens": []` reads as a gate and gates nothing, which is the shape most
   likely to be written by somebody who meant one and left it for later;
 - an empty **`arrival.workItemState`**, which names no column. A blank state word would be written to
-  the tracker and refused there, one arrival at a time, on the deployment that meant a real one.
+  the tracker and refused there, one arrival at a time, on the deployment that meant a real one;
+- a **`group`** named after an environment, or one whose members disagree about `arrival`
+  — → [Groups](#groups).
 
 `name` is the display label _and_ the key every reading and arrival is stored against, so renaming an
 environment discards what was known about it rather than migrating it. What re-learning it does is
@@ -469,6 +471,73 @@ which is why it has the same answer.
 environment is asked where it is again. It is also the precision of every "arrived at" the cockpit
 shows, which is why it is not larger: an interval nobody would call fresh makes a timestamp nobody
 should quote.
+
+## Groups
+
+`src/environments/groups.ts`. Three regions of production are three commands and **one place**.
+`group` says so:
+
+```jsonc
+{ "name": "liveEu", "at": "./scripts/deployed-sha.sh eu", "group": "prod", "arrival": { "comment": true } }
+```
+
+Everything that asks _where_ an environment is stays per environment — the probe, the reading, the
+health check, the watch, the validation sheet. What a group changes is everything that asks whether
+the work has **got there**, because that is the question an operator asks about production and not
+about `liveEu`.
+
+A **band** is the unit those readers work in: a declared group, or an environment that declared none
+standing for itself. One shape rather than two, so the grouped case is not a second code path only
+some surfaces learned.
+
+**The laggard governs, and that is the whole of the semantics.** It is the rule the probe already
+uses for an `at` that prints several commits — the landing is in the environment only when it is in
+every service named — read one level up. A band holds a goal's work when every environment in it
+does, so:
+
+- a band's gate **opens on the whole band**. `openedGoals` is an AND inside a band and still an OR
+  across them: two bands that each declare `opens` are two independent ways in, exactly as two
+  environments were before groups existed. → [`opens`](#opens)
+- a band is **said once** on the ticket, by the environment whose arrival completed it, naming the
+  group. The others are stamped `announced_at` saying nothing. Three comments reading "this has
+  reached liveEu / liveUs / liveEu" is the thing an operator wanted one line for.
+- a band rolls up its members' reach into a `GoalGroupReach`, computed on the **server** off the same
+  rows the per-environment card draws — `reached` only when every member is, `partial` when some are,
+  `unknown` when none is and one could not say. A cockpit that worked the roll-up out for itself
+  would be a second opinion drawn beside the readings it describes.
+
+**An arrival is still recorded per environment.** `goal_arrivals` keeps its `(goal, environment)`
+key, and a group is read off those rows rather than stored beside them: membership is configuration,
+and a band written into the table is a band that cannot be changed without a migration. Regrouping
+environments therefore costs nothing — nothing is re-probed and nothing is re-announced, because
+every reading and every arrival is still filed under the name that produced it.
+
+### What validation refuses
+
+Two shapes are refused by `validateEnvironments`, because both are the feature failing in the
+direction nothing goes red:
+
+- **a `group` named after an environment.** A band is drawn and gated under its name, so the two
+  would be one row standing for two different things.
+- **members that disagree about `arrival`.** A group is one place; one member opening a gate the
+  others do not is the gate opening on part of it — which is exactly the reading a group was
+  declared to stop, now written down as configuration that looks deliberate.
+
+### Groups in the cockpit
+
+The Environments card on a goal page draws the band row above its members, indented under it: the
+group's roll-up, what arriving there opens, and the names it is made of. The card's folded count is
+in **places**, not in commands — `1/2 reached` on a deployment with a group of three and a staging,
+not `1/4`. The Feature board draws one reach column per band for the same reason.
+
+The health panel does not roll up: a group's members can be well and unwell at the same moment, and
+health has no AND to take. Each reading keeps its own row, named `prod · liveEu`, and the top bar's
+chip counts readings as it always did. → [Health in the cockpit](#health-in-the-cockpit)
+
+**A group is not a validation target.** A sheet, a watch window and a state query are all assembled
+against one environment, because each of them drives something — a browser, a query, a tenant — that
+belongs to one deployment. Three regions are three sheets, and folding them would be claiming a run
+answered about a place it never reached. → [36](36-remote-validation.md)
 
 ## What an arrival means
 
@@ -515,8 +584,10 @@ Three rules hold it together:
 
 - **Delivery is still required.** A gate adds a condition; it does not replace one. A goal the
   assessor sent back files neither row, gate or no gate.
-- **Any environment that opens it.** Declared on two environments, the gate is satisfied by whichever
-  the goal reaches first — two acceptance environments are two entries, not a ranking.
+- **Any band that opens it.** Declared on two bands, the gate is satisfied by whichever the goal
+  reaches first — two acceptance environments are two entries, not a ranking. Inside a band it is an
+  AND: a gate declared on a group opens when every environment in the group holds the work, and the
+  members must agree about `arrival` for the question to have one answer. → [Groups](#groups)
 - **Nothing declared, nothing changes.** With no environment naming a gate, `openedGoals` returns
   **null** rather than an empty set, and the desks behave exactly as they did. The distinction is
   load-bearing: an empty set would withhold every bench row on every deployment on earth, and would
@@ -577,6 +648,10 @@ Every unannounced arrival goes through the announce pass, and every one comes ou
 `announced_at`, whether or not there was anything to say. That stamp is the whole of how an
 environment that grows `arrival.comment` next month announces its _next_ arrival rather than every one
 already in the table.
+
+An arrival on a **grouped** environment carries one further condition: nothing is said until every
+environment in the band has arrived, and then it is said once, by the arrival that completed the
+band, naming the group. → [Groups](#groups)
 
 **An arrival is announced only if the harness watched it happen**: its confirming reading must be
 within two probe intervals of now. Without that line the first pulse after this ships — or after an

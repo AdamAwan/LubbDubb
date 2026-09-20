@@ -61,6 +61,7 @@ import type {
   GoalCriteriaDrift,
   GoalPause,
   GoalEnvironmentReach,
+  GoalGroupReach,
   GoalLandingReach,
   GoalReachStatus,
   HumanTask,
@@ -414,6 +415,15 @@ export interface CockpitState {
   stacks: Stack[];
   environmentReach: GoalReachView[];
   environmentHealth: EnvironmentHealthReading[];
+  /**
+   * The bands the configured environments are read in — one entry per declared `group`, naming
+   * its members in the order they are configured. Shipped as the list rather than a field on
+   * every row because membership is configuration, not a reading: a group an operator declared
+   * and nothing has landed in yet still has to draw, and two surfaces deriving the band from
+   * rows they happen to hold is two places for it to disagree.
+   * → docs/spec/24-environments.md#groups
+   */
+  environmentGroups: EnvironmentGroupView[];
   goalWatchWindows: GoalWatchView[];
   featureSequences: FeatureSequence[];
   environmentArrivals: GoalArrival[];
@@ -462,9 +472,17 @@ export interface EjectionView extends Ejection {
   neverContacted: boolean;
 }
 
+/** One declared group of environments, drawn as the one place it stands for. */
+interface EnvironmentGroupView {
+  name: string;
+  environments: string[];
+}
+
 export interface GoalReachView {
   goalRef: string;
   environments: GoalEnvironmentReachView[];
+  /** The declared groups, rolled up over the rows above. Empty where none is declared. */
+  groups: GoalGroupReach[];
   /** Every landing this goal owns, with what each environment said about it. The rows the
    *  counts on `environments` are the AND over — shipped so the cockpit can say which
    *  landing is holding the goal short rather than only how many are. */
@@ -902,6 +920,7 @@ export type {
   GoalCriteriaVersion,
   CriteriaStanding,
   GoalEnvironmentReach,
+  GoalGroupReach,
   GoalLandingReach,
   GoalPrediction,
   GoalReachStatus,

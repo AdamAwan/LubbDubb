@@ -1,4 +1,5 @@
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
+import type { EnvironmentGroup } from '../environments/groups.js';
 import { rollUpReach } from '../environments/reach.js';
 import { isContainerType } from '../issueRelations.js';
 import type { MirroredTicket } from '../store/tickets.js';
@@ -49,7 +50,10 @@ interface BuildInput {
   escalations: readonly Escalation[];
   reach: readonly { goalRef: string; environments: GoalEnvironmentReach[] }[];
   landings: readonly GoalLanding[];
-  environments: readonly string[];
+  /** The bands the board draws a reach column for — a declared group, or an environment
+   *  standing alone. A column per environment would draw three regions of production as
+   *  three places. → docs/spec/24-environments.md#groups */
+  environments: readonly EnvironmentGroup[];
   containerTypes: readonly string[] | undefined;
   watchLabel: string;
   pauses?: ReadonlyMap<string, GoalPause>;
@@ -131,7 +135,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
             landings: landingsUnder(orphanRows, landingsByGoal),
           },
     unresolved,
-    environments: [...input.environments],
+    environments: input.environments.map((band) => band.name),
   };
 }
 
@@ -269,23 +273,30 @@ function addCost(total: number | null, cost: number | null): number | null {
   return cost === null ? total : (total ?? 0) + cost;
 }
 
+/**
+ * The band holds a goal when every environment in it does — the laggard governs, exactly as it
+ * does for the gate the band opens. A goal counted `reached` because one region of production
+ * has it is the reading a group exists to stop.
+ */
 function foldReach(
   rows: readonly FeatureChildRow[],
   reachByGoal: ReadonlyMap<string, GoalEnvironmentReach[]>,
-  environments: readonly string[],
+  environments: readonly EnvironmentGroup[],
 ): FeatureReach[] {
-  return environments.map((environment) => {
+  return environments.map((band) => {
     let total = 0;
     let reached = 0;
     let unresolved = 0;
     for (const row of rows) {
-      const found = reachByGoal.get(issueOriginRef('root', row.number))?.find((e) => e.environment === environment);
-      if (found === undefined) continue;
+      const goal = reachByGoal.get(issueOriginRef('root', row.number));
+      const found = band.environments.flatMap((name) => goal?.find((e) => e.environment === name) ?? []);
+      if (found.length === 0) continue;
       total += 1;
-      if (found.status === 'reached') reached += 1;
-      else if (found.status === 'partial' || found.status === 'unknown') unresolved += 1;
+      if (found.every((e) => e.status === 'reached')) reached += 1;
+      else if (found.some((e) => e.status === 'partial' || e.status === 'unknown' || e.status === 'reached'))
+        unresolved += 1;
     }
-    return { environment, status: rollUpReach({ total, reached, unresolved }), goals: reached, total };
+    return { environment: band.name, status: rollUpReach({ total, reached, unresolved }), goals: reached, total };
   });
 }
 

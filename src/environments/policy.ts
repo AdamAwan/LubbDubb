@@ -6,6 +6,7 @@ import { QUERY_URL_TOKENS } from './watchQueryUrl.js';
 export interface EnvironmentConfig {
   name: string;
   at: string;
+  group?: string;
   health?: string;
   arrival?: EnvironmentArrival;
   watch?: EnvironmentWatch;
@@ -78,10 +79,50 @@ export function validateEnvironments(environments: EnvironmentConfig[]): void {
         `${where} ("${env.name}"): "health" must be a non-empty command printing a {"state": …} report, ` +
           'or be left out — with none, this environment is observed for reach and draws no health row.',
       );
+    if (env.group !== undefined && (typeof env.group !== 'string' || env.group.trim() === ''))
+      throw new Error(
+        `${where} ("${env.name}"): "group" must be a non-empty name — the one place these environments are ` +
+          'read as, or be left out, and this environment stands on its own.',
+      );
     validateArrival(env.arrival, `${where} ("${env.name}")`);
     validateWatch(env, `${where} ("${env.name}")`);
     validateValidate(env.validate, `${where} ("${env.name}")`);
   });
+  validateGroups(environments);
+}
+
+/**
+ * A group is one place made of several environments, so the two things that make an arrival
+ * *mean* something have to agree across it — otherwise the group opens a gate the operator
+ * thinks the whole of it guards. Both checks are loud because both failures are silent.
+ * → docs/spec/24-environments.md#groups
+ */
+function validateGroups(environments: EnvironmentConfig[]): void {
+  const names = new Set(environments.map((e) => e.name));
+  const arrivals = new Map<string, { name: string; arrival: string }>();
+  for (const env of environments) {
+    const group = env.group;
+    if (group === undefined) continue;
+    if (names.has(group))
+      throw new Error(
+        `environments ("${env.name}"): "group" is "${group}", which is also an environment's own name. ` +
+          'A band is drawn and gated under its name, so the two would be one row standing for two different ' +
+          'things — name the group something no environment is called.',
+      );
+    const arrival = JSON.stringify(env.arrival ?? null);
+    const first = arrivals.get(group);
+    if (first === undefined) {
+      arrivals.set(group, { name: env.name, arrival });
+      continue;
+    }
+    if (first.arrival !== arrival)
+      throw new Error(
+        `environments ("${env.name}"): group "${group}" is declared by "${first.name}" with a different ` +
+          '"arrival" block. A group arrives when every one of its environments holds the work, so one member ' +
+          'opening a gate the others do not is the gate opening on part of the place — every member of a ' +
+          'group declares the same "arrival".',
+      );
+  }
 }
 
 function validateArrival(arrival: EnvironmentArrival | undefined, where: string): void {

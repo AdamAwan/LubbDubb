@@ -95,6 +95,7 @@ import { watchLabelFor } from '../watchLabels.js';
 import { candidateParents } from '../issueRelations.js';
 import { allGoalReach } from '../environments/reach.js';
 import { environmentGateHold } from '../environments/arrival.js';
+import { environmentGroups } from '../environments/groups.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
@@ -577,6 +578,7 @@ export function buildStateSections(
     | 'environmentReach'
     | 'featureSequences'
     | 'environmentHealth'
+    | 'environmentGroups'
     | 'goalWatchWindows'
     | 'environmentArrivals'
     | 'criteriaDrift'
@@ -616,6 +618,9 @@ export function buildStateSections(
             }),
       featureSequences: store.sequences.listFeatureSequences(),
       environmentHealth: buildEnvironmentHealth(store, environments),
+      environmentGroups: environmentGroups(environments)
+        .filter((band) => band.declared)
+        .map(({ name, environments: members }) => ({ name, environments: members })),
       goalWatchWindows: buildGoalWatchWindows(store, environments, goalWatches),
       environmentArrivals: arrivals.slice(0, 50),
       ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),

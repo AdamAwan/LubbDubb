@@ -149,6 +149,10 @@ test('spend is null where the fleet never ran, and zero only where it ran for no
   assert.equal(spent.features[0]?.costUsd, 3.51);
 });
 
+function band(name: string, ...members: string[]) {
+  return { name, environments: members.length === 0 ? [name] : members, declared: members.length > 0 };
+}
+
 function reachRow(
   number: number,
   status: GoalEnvironmentReach['status'],
@@ -162,28 +166,28 @@ function reachRow(
 test('a Feature’s reach folds its goals’ the way a goal folds its landings', () => {
   const items = [item({ number: 1 }), item({ number: 2 })];
 
-  const all = build({ items, environments: ['prod'], reach: [reachRow(1, 'reached'), reachRow(2, 'reached')] });
+  const all = build({ items, environments: [band('prod')], reach: [reachRow(1, 'reached'), reachRow(2, 'reached')] });
   assert.equal(all.features[0]?.reach[0]?.status, 'reached');
   assert.deepEqual(
     { goals: all.features[0]?.reach[0]?.goals, total: all.features[0]?.reach[0]?.total },
     { goals: 2, total: 2 },
   );
 
-  const some = build({ items, environments: ['prod'], reach: [reachRow(1, 'reached'), reachRow(2, 'absent')] });
+  const some = build({ items, environments: [band('prod')], reach: [reachRow(1, 'reached'), reachRow(2, 'absent')] });
   assert.equal(some.features[0]?.reach[0]?.status, 'partial');
 });
 
 test('unknown never folds to absent, one tier up as much as one tier down', () => {
   const board = build({
     items: [item({ number: 1 }), item({ number: 2 })],
-    environments: ['prod'],
+    environments: [band('prod')],
     reach: [reachRow(1, 'absent'), reachRow(2, 'unknown')],
   });
   assert.equal(board.features[0]?.reach[0]?.status, 'unknown');
 
   const half = build({
     items: [item({ number: 1 }), item({ number: 2 })],
-    environments: ['prod'],
+    environments: [band('prod')],
     reach: [reachRow(1, 'absent'), reachRow(2, 'partial')],
   });
   assert.equal(half.features[0]?.reach[0]?.status, 'unknown');
@@ -192,7 +196,7 @@ test('unknown never folds to absent, one tier up as much as one tier down', () =
 test('a goal with nothing merged is not counted as absent everywhere', () => {
   const board = build({
     items: [item({ number: 1 }), item({ number: 2 })],
-    environments: ['prod'],
+    environments: [band('prod')],
     reach: [reachRow(1, 'reached')],
   });
   assert.deepEqual(board.features[0]?.reach[0], { environment: 'prod', status: 'reached', goals: 1, total: 1 });
