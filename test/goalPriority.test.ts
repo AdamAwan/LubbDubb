@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { expeditedOrigins } from '../src/dispatcher/goalPriority.js';
+import { pausedIssueNumbers } from '../src/goalPause.js';
+import { buildFeatureBoard } from '../src/features/featureBoard.js';
+import type { MirroredTicket } from '../src/store/tickets.js';
+import { issueBranch } from '../src/dispatcher/issuePickup.js';
 import type { Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system.js';
@@ -286,4 +290,121 @@ test('the snapshot ships the flag on the goal it was set against', () => {
   } finally {
     system.store.close();
   }
+});
+
+test('a flag on a Feature reaches the stories under it, and the pause reaches the same ones', () => {
+  const kid = (number: number) => ({
+    number,
+    title: `Issue ${number}`,
+    state: 'open' as const,
+    issueType: 'User Story',
+    workItemState: 'New',
+  });
+  const feature = issue(900, {
+    issueType: 'Feature',
+    children: [kid(390), kid(361)],
+  });
+  const story = issue(390, { issueType: 'User Story', children: [kid(377)] });
+  const grandchild = issue(377, { issueType: 'Task' });
+  const elsewhere = issue(500, { issueType: 'User Story' });
+  const issues = [feature, story, grandchild, issue(361, { issueType: 'User Story' }), elsewhere];
+
+  const covers = expeditedOrigins([{ originRef: 'issue:900', since: 'now' }], { ...emptyWorld, issues }, [
+    'Feature',
+    'Epic',
+  ]);
+
+  for (const origin of ['issue:900', 'issue:390', 'issue:390:plan', 'issue:361', 'issue:377']) {
+    assert.ok(covers(origin), `${origin} is work the flagged Feature is asking for`);
+  }
+  assert.ok(!covers('issue:500'), 'a story under no flagged container is untouched');
+  assert.ok(!covers('issue:5'), 'and so is an unrelated goal');
+
+  // The two marks are one cascade, so a Feature expedited and a Feature paused name
+  // the same span of work. Drifting apart is how the flag came to do nothing.
+  const paused = pausedIssueNumbers([{ originRef: 'issue:900', since: 'now' }], issues, ['Feature', 'Epic']);
+  assert.deepEqual(
+    [...paused].sort((a, b) => a - b),
+    [361, 377, 390, 900],
+  );
+});
+
+test('a flagged Feature expedites the pull requests its stories opened', () => {
+  const kid = (number: number) => ({
+    number,
+    title: `Issue ${number}`,
+    state: 'open' as const,
+    issueType: 'User Story',
+    workItemState: 'New',
+  });
+  const issues = [
+    issue(900, { issueType: 'Feature', children: [kid(390)] }),
+    issue(390, { issueType: 'User Story', linkedPrNumber: 413 }),
+  ];
+  const covers = expeditedOrigins(
+    [{ originRef: 'issue:900', since: 'now' }],
+    { ...emptyWorld, issues, openPrs: [pr(413, issueBranch(390)), pr(999, 'issue/500')] },
+    ['Feature', 'Epic'],
+  );
+  assert.ok(covers('pr:413'), 'a PR concern is usually the last thing between a story and the line');
+  assert.ok(covers('pr:413:ci'), 'including its red build');
+  assert.ok(!covers('pr:999'), 'a pull request under no flagged goal is untouched');
+});
+
+test('a flag on a story is exactly what it was before — nothing cascades off a non-container', () => {
+  const issues = [issue(390, { issueType: 'User Story' }), issue(391, { issueType: 'User Story' })];
+  const covers = expeditedOrigins([{ originRef: 'issue:390', since: 'now' }], { ...emptyWorld, issues }, [
+    'Feature',
+    'Epic',
+  ]);
+  assert.ok(covers('issue:390:part:one'));
+  assert.ok(!covers('issue:391'), 'a sibling is not swept in');
+});
+
+test('a flag on a goal the mirror does not hold still covers its own subtree', () => {
+  const covers = expeditedOrigins([{ originRef: 'issue:12', since: 'now' }], emptyWorld, ['Feature']);
+  assert.ok(covers('issue:12:plan'), 'a mark on work the harness cannot see is still the operator’s instruction');
+});
+
+test('the board carries each Feature’s flag, so the card can draw and set it', () => {
+  const NOW = '2026-09-21T09:00:00.000Z';
+  const ticket = (number: number, parent: number): MirroredTicket => ({
+    number,
+    title: `Item ${number}`,
+    labels: ['lubbdubb-watch'],
+    state: 'open',
+    workItemState: 'Active',
+    url: null,
+    createdAt: NOW,
+    changedAt: NOW,
+    firstSeenAt: NOW,
+    tracking: 'live',
+    issueType: 'User Story',
+    parent: { number: parent, title: `Feature ${parent}` },
+    lastReadAt: null,
+  });
+  const board = buildFeatureBoard({
+    items: [ticket(1, 900), ticket(2, 901)],
+    outcomes: new Map(),
+    costs: new Map(),
+    featureSlots: new Map(),
+    sequences: new Map(),
+    running: new Map(),
+    deliveries: [],
+    shortfalls: [],
+    escalations: [],
+    reach: [],
+    landings: [],
+    environments: [],
+    containerTypes: ['Feature', 'Epic'],
+    watchLabel: 'lubbdubb-watch',
+    summaries: new Map(),
+    standingKeys: new Map(),
+    priorities: new Map([['issue:900', { originRef: 'issue:900', since: NOW }]]),
+  });
+
+  const flagged = board.features.find((f) => f.number === 900);
+  const plain = board.features.find((f) => f.number === 901);
+  assert.equal(flagged?.priority?.since, NOW, 'the flag reaches the card, as the pause already does');
+  assert.equal(plain?.priority, null, 'and an unflagged Feature says so rather than going undefined');
 });

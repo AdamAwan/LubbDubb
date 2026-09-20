@@ -61,6 +61,7 @@ import type {
   GoalAppraisalVerdict,
   GoalCriteriaDrift,
   GoalPause,
+  GoalPriority,
   GoalEnvironmentReach,
   GoalGroupReach,
   GoalLandingReach,
@@ -766,6 +767,7 @@ export interface FeatureRollup {
   landings: FeatureLandingRow[];
   standingKey: string;
   paused: GoalPause | null;
+  priority: GoalPriority | null;
 }
 
 export interface FeatureLandingRow {
@@ -788,6 +790,7 @@ export interface FeatureBoardPayload {
     | 'sequence'
     | 'standingKey'
     | 'paused'
+    | 'priority'
   > | null;
   unresolved: number;
   environments: string[];

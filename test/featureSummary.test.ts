@@ -11,9 +11,11 @@ import {
 } from '../src/summaries/featureSummary.js';
 import { buildFeatureBoard } from '../src/features/featureBoard.js';
 import type { FeatureSummary, Task } from '../src/types.js';
-import type { MirroredTicket } from '../src/store/tickets.js';
+import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
 import { summarySection } from '../web/src/view/summarySection.js';
+import { repoText } from './support/paths.js';
+import { BRIEFS_AT_MOST, drawsRows } from '../web/src/components/FeatureBoard.js';
 
 const NOW = '2026-08-27T12:00:00.000Z';
 
@@ -65,6 +67,7 @@ test('a summary needs a lede and nothing else', () => {
   const lean = validateFeatureSummary({ standing: 'Not started.' });
   assert.equal(lean.ok, true);
   assert.deepEqual(lean.ok && lean.input, {
+    headline: null,
     standing: 'Not started.',
     usable: null,
     blocked: null,
@@ -191,6 +194,7 @@ function ticket(over: Partial<MirroredTicket> = {}): MirroredTicket {
 test('the board quotes the summary whole and composes nothing', () => {
   const summary: FeatureSummary = {
     originRef: 'issue:29857',
+    headline: 'Most of the way there',
     standing: 'The main thing works and is on hallway. The per-ORC switch is stuck on a decision.',
     usable: 'On hallway, switching a customer over keeps their candidate pairs.',
     blocked: null,
@@ -245,6 +249,7 @@ test('a second submission revises one row and keeps the date it was first writte
   const store = new Store(':memory:');
   const first = store.tickets.recordFeatureSummary({
     originRef: 'issue:29857',
+    headline: null,
     standing: 'Not started.',
     usable: null,
     blocked: null,
@@ -255,6 +260,7 @@ test('a second submission revises one row and keeps the date it was first writte
   });
   const second = store.tickets.recordFeatureSummary({
     originRef: 'issue:29857',
+    headline: 'On hallway',
     standing: 'On hallway now.',
     usable: 'Switch a customer over and their pairs survive.',
     blocked: null,
@@ -290,4 +296,184 @@ test('a section is drawn as bullets where it was written as bullets, and as pros
     text: 'One thing. And another.',
   });
   assert.deepEqual(summarySection('-   '), { kind: 'prose', text: '-' }, 'a bullet with nothing in it is not a list');
+});
+
+test('the account is on the brief, so a folded card answers “how is this going”', () => {
+  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const account = repoText('web', 'src', 'components', 'featureAccount.tsx');
+  const focus = repoText('web', 'src', 'components', 'FeatureFocus.tsx');
+
+  assert.match(
+    board,
+    /account=\{<FeatureAccount summary=\{feature\.summary\} \/>\}/,
+    'the three fields are the brief’s, drawn whether or not the card is open',
+  );
+
+  const opened = board.slice(board.indexOf('className="cn-fb-detail'));
+  assert.doesNotMatch(
+    opened,
+    /<FeatureAccount\b/,
+    'and are not drawn a second time inside the open card — one account, one place',
+  );
+
+  for (const field of ['summary.usable', 'summary.blocked', 'summary.remaining']) {
+    assert.match(
+      account,
+      new RegExp(`<AccountBlock title="[^"]+" body=\\{${field.replace('.', '\\.')}\\}`),
+      `${field} is a peer block with its own heading, not a footnote under the other two`,
+    );
+  }
+  assert.doesNotMatch(account, /cn-fb-sum-foot/, 'left-to-do is no longer a footnote');
+
+  // One account, rendered by one component. While the board and focus mode each had
+  // their own, focus — the mode for one Feature at a time — drew the three fields
+  // unlabelled and left the lede out, and nothing could see that they disagreed.
+  for (const [name, source] of [
+    ['the board', board],
+    ['focus mode', focus],
+  ] as const) {
+    assert.match(source, /<FeatureAccount summary=/, `${name} draws the shared account`);
+    assert.doesNotMatch(source, /function AccountBlock\b/, `${name} does not keep a second copy of it`);
+  }
+  assert.match(
+    focus,
+    /className="cn-ff-lede">\{rollup\.summary\.standing\}/,
+    'focus draws the lede too, which it used to omit',
+  );
+  // `cn-ff-standing` is already the per-child lamp in the lanes below, and a second
+  // meaning for it drew the paragraph four pixels wide.
+  assert.doesNotMatch(
+    focus.slice(0, focus.indexOf('cn-ff-lane')),
+    /cn-ff-standing/,
+    'the lede does not borrow a class name the lanes already own',
+  );
+
+  const css = repoText('web', 'src', 'styles.css');
+  const at = css.indexOf('\n.cn-fb-summary {');
+  assert.notEqual(at, -1, '.cn-fb-summary must still be a rule in styles.css');
+  assert.match(
+    css.slice(at, css.indexOf('}', at)),
+    /grid-template-columns: repeat\(auto-fit, minmax\(220px, 1fr\)\)/,
+    'auto-fit, because any of the three can be absent and a missing one must leave no dead column',
+  );
+});
+
+test('the open card draws no heading over an empty column', () => {
+  const source = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  assert.match(
+    source,
+    /const told = feature\.sequence !== null \|\| feature\.briefing\.delivered\.length > 0;/,
+    'the column is drawn on whether either half of it has anything to say',
+  );
+  assert.match(
+    source,
+    /cn-fb-detail\$\{told \? '' : ' cn-fb-detail-2'\}/,
+    'and the card falls back to the two-column shape without it, rather than leaving a dead track',
+  );
+});
+
+test('the headline is the agent’s own clause, refused when it stops being one', () => {
+  const base = { standing: 'It works and is on staging. The rest is waiting on a merge.' };
+
+  const none = validateFeatureSummary({ ...base });
+  assert.ok(none.ok && none.input.headline === null, 'leaving it out is an ordinary answer, not a refusal');
+
+  const said = validateFeatureSummary({ ...base, headline: 'Most of the way there — nothing on live yet' });
+  assert.ok(said.ok && said.input.headline === 'Most of the way there — nothing on live yet');
+
+  const long = validateFeatureSummary({ ...base, headline: 'x'.repeat(91) });
+  assert.ok(!long.ok, 'a headline over the cap is refused, never clipped — half of one is a different claim');
+  assert.match(long.ok ? '' : long.error, /90/, 'and the refusal says what the cap is');
+
+  assert.ok(validateFeatureSummary({ ...base, headline: 'x'.repeat(90) }).ok, 'the cap itself is allowed');
+});
+
+test('the headline survives a round trip, and a database from before it reads as absent', () => {
+  const store = new Store(':memory:');
+  const written = store.tickets.recordFeatureSummary({
+    originRef: 'issue:900',
+    headline: 'Done bar the deploy',
+    standing: 'Everything is merged.',
+    usable: null,
+    blocked: null,
+    remaining: null,
+    standingKey: 'k1',
+    agentId: 'a1',
+    taskId: 't1',
+  });
+  assert.equal(written.headline, 'Done bar the deploy');
+  assert.equal(store.tickets.getFeatureSummary('issue:900')?.headline, 'Done bar the deploy');
+
+  // The column is additive on a table that already exists everywhere, so the row a
+  // deployment already holds has to read back as "not written yet" rather than break.
+  // Null means exactly that, which is why it wants no backfill: the next time anything
+  // under the Feature moves, rule `feature-summary` rewrites the row and fills it in.
+  store.tickets.recordFeatureSummary({
+    originRef: 'issue:901',
+    headline: null,
+    standing: 'Written before the field existed.',
+    usable: null,
+    blocked: null,
+    remaining: null,
+    standingKey: 'k2',
+    agentId: 'a1',
+    taskId: 't1',
+  });
+  assert.equal(store.tickets.getFeatureSummary('issue:901')?.headline, null);
+});
+
+test('the column is declared as a migration, because the table predates it', () => {
+  assert.equal(
+    TICKET_COLUMNS.feature_summaries?.headline,
+    'TEXT',
+    'CREATE TABLE IF NOT EXISTS never alters a table that already exists — without this entry the ' +
+      'column is invisible on every database from before it, and every write to it throws',
+  );
+  const schema = repoText('src', 'store', 'schema.ts');
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS feature_summaries \([^)]*headline\s+TEXT/, 'and on a fresh one');
+});
+
+test('the card leads with the headline, and says nothing where there is none', () => {
+  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  assert.match(board, /headline=\{feature\.summary\?\.headline \?\? null\}/, 'the brief is handed it');
+  assert.match(
+    board,
+    /\{headline !== null && headline !== undefined && <p className="cn-fb-headline">/,
+    'an absent headline draws nothing at all, never an empty line',
+  );
+  const focus = repoText('web', 'src', 'components', 'FeatureFocus.tsx');
+  assert.match(focus, /cn-ff-headline/, 'and focus mode leads with it too');
+});
+
+test('the board draws briefs while it is short and rows once it is not', () => {
+  // `auto` is a property of the board, not a preference: an operator should not have
+  // to find a setting to be shown a page they can read.
+  assert.equal(drawsRows('auto', BRIEFS_AT_MOST), false, 'a board of eight still reads down');
+  assert.equal(drawsRows('auto', BRIEFS_AT_MOST + 1), true, 'one more and it does not');
+  assert.equal(drawsRows('auto', 0), false, 'an empty board is not a long one');
+
+  // And the operator outranks it in both directions, which is the whole reason the
+  // value is on `Place` rather than computed at the call site.
+  assert.equal(drawsRows('brief', 400), false, 'asked for full, they get full however long it is');
+  assert.equal(drawsRows('rows', 1), true, 'asked for rows, they get rows however short it is');
+});
+
+test('a row says the one thing a scan needs, and the open card is still whole', () => {
+  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+
+  assert.match(
+    board,
+    /rows && view\.featureCard !== card\.rollup\.number \? \(\s*<FeatureRow/,
+    'the card the reader opened is drawn in full even in rows — collapsing it would make the mode useless',
+  );
+  assert.match(
+    board,
+    /rows && view\.featureCard !== card\.row\.number \? \(\s*<GoalRow/,
+    'promoted goals collapse too',
+  );
+
+  const row = board.slice(board.indexOf('function FeatureRow('), board.indexOf('function FeatureCard('));
+  assert.match(row, /cn-fb-row-said/, 'a row carries the headline, which is what makes it an answer');
+  assert.match(row, /<Courts holds=\{holds\} yoursOnly \/>/, 'only your own court survives the line');
+  assert.doesNotMatch(row, /<Reach\b/, 'reach does not — it is detail about a Feature nobody has chosen yet');
 });

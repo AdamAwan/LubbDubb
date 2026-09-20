@@ -152,7 +152,7 @@ export interface CockpitActions {
       >
     >,
   ): void;
-  setFeatureQuery(next: Partial<Pick<Place, 'featureCard' | 'featureSort' | 'featurePrs'>>): void;
+  setFeatureQuery(next: Partial<Pick<Place, 'featureCard' | 'featureSort' | 'featureDensity' | 'featurePrs'>>): void;
   /** Which shape the overview draws in — a place, never a useState. */
   setOverviewShape(shape: OverviewShape): void;
   /** Board or one Feature at a time — a place, never a useState. */

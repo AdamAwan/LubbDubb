@@ -236,14 +236,15 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
   );
   assert.match(
     rule('.ref-goal.ref-goal'),
-    /background: var\(--link-fill\)/,
-    'the cockpit’s own destination is the filled one',
+    /background: none/,
+    'no reference is filled — a tinted ground means selected, and a reference is never a selection',
   );
-  assert.match(
+  assert.doesNotMatch(
     css,
-    /\n\.ref-out\.ref-out \{[^}]*border-style: dashed/,
-    'a reference that leaves is unfilled and dashed',
+    /--link-fill\s*[:)]/,
+    'the fill token went with the fill it was the only use of — neither declared nor read',
   );
+  assert.match(css, /\n\.ref-out\.ref-out \{[^}]*border-style: dashed/, 'a reference that leaves is dashed');
 
   assert.match(rule('.ext-ref.ext-ref::before'), /content: '↗'/, 'a reference that leaves says so in prose too');
 
@@ -258,7 +259,7 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
     assert.doesNotMatch(css, single, 'a single-class reference selector loses to the console’s own reset');
   }
 
-  for (const token of ['--link-line:', '--link-fill:', '--link-ink:']) {
+  for (const token of ['--link-line:', '--link-ink:']) {
     assert.equal(css.split(token).length - 1, 2, `${token} is one token, restated once for #print-sheet`);
   }
   assert.match(

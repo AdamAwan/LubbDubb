@@ -5,6 +5,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import {
   FEATURE_MODES,
   FEATURE_SORTS,
+  type FeatureDensity,
   type FeatureMode,
   type FeaturePrFilter,
   type FeatureSort,
@@ -22,7 +23,6 @@ import { CommentsMark } from './CommentsMark.js';
 import { PackMark } from './PackMark.js';
 import { ReviewMark } from './ReviewMark.js';
 import { heldByAccepting, waitsOn, wavesOf } from '../view/sequence.js';
-import { summarySection } from '../view/summarySection.js';
 import { fmtUsd, relAge } from './util.js';
 import type {
   FeatureBoardPayload,
@@ -34,13 +34,13 @@ import type {
   FeatureReportRow,
   FeatureRollup,
   FeatureSequence,
-  FeatureSummary,
   GoalReachStatus,
   OpenPullRequest,
 } from '../types.js';
 import { HeadRow, Panel } from './panel.js';
 import { DesktopLink } from './DesktopLink.js';
 import { Tag, type TagTone } from './tag.js';
+import { FeatureAccount, FeatureMarks } from './featureAccount.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -75,6 +75,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
   }
 
   const cards = orderCards(buildCards(board, view), view.featureSort);
+  const rows = drawsRows(view.featureDensity, cards.length);
   const promoted = orphans?.counts.total ?? 0;
   const paused = features.filter((f) => f.paused !== null).length;
 
@@ -96,7 +97,12 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
             {board.backfilling ? ' · still filling' : ''}
           </span>
           <ModeControl mode={view.featureMode} actions={actions} />
-          {view.featureMode === 'board' && <SortControl sort={view.featureSort} actions={actions} />}
+          {view.featureMode === 'board' && (
+            <>
+              <DensityControl density={view.featureDensity} cards={cards.length} actions={actions} />
+              <SortControl sort={view.featureSort} actions={actions} />
+            </>
+          )}
         </div>
 
         {view.featureMode === 'focus' && (
@@ -106,13 +112,24 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
         {view.featureMode === 'board' &&
           cards.map((card) =>
             card.kind === 'feature' ? (
-              <FeatureCard
-                key={`f:${card.rollup.number}`}
-                card={card}
-                view={view}
-                actions={actions}
-                onAnswered={() => void read()}
-              />
+              rows && view.featureCard !== card.rollup.number ? (
+                <FeatureRow
+                  key={`f:${card.rollup.number}`}
+                  card={card}
+                  actions={actions}
+                  onAnswered={() => void read()}
+                />
+              ) : (
+                <FeatureCard
+                  key={`f:${card.rollup.number}`}
+                  card={card}
+                  view={view}
+                  actions={actions}
+                  onAnswered={() => void read()}
+                />
+              )
+            ) : rows && view.featureCard !== card.row.number ? (
+              <GoalRow key={`g:${card.row.number}`} card={card} view={view} actions={actions} />
             ) : (
               <GoalCard
                 key={`g:${card.row.number}`}
@@ -184,12 +201,67 @@ function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitAct
   );
 }
 
+/**
+ * Full cards while the board is short enough to read down, one line each past that.
+ * Eight is where a reader stops holding the list in their head: a brief runs about a
+ * viewport-third, so eight is already three screens of scrolling to find a name.
+ *
+ * The threshold counts **every** card, promoted goals included, since what makes the
+ * page long is its length and not what the rows are. → docs/spec/17-cockpit.md#the-board-at-length
+ */
+export const BRIEFS_AT_MOST = 8;
+
+export function drawsRows(density: FeatureDensity, cards: number): boolean {
+  if (density === 'brief') return false;
+  if (density === 'rows') return true;
+  return cards > BRIEFS_AT_MOST;
+}
+
+function DensityControl({
+  density,
+  cards,
+  actions,
+}: {
+  density: FeatureDensity;
+  cards: number;
+  actions: CockpitActions;
+}): JSX.Element {
+  const rows = drawsRows(density, cards);
+  return (
+    <span className="cn-fb-density" role="group" aria-label="How much of each Feature">
+      <Button
+        size="small"
+        ghost={rows}
+        aria-pressed={!rows}
+        title="Every Feature in full — its account, its progress and where it has reached"
+        onClick={() => actions.setFeatureQuery({ featureDensity: 'brief' })}
+      >
+        Full
+      </Button>
+      <Button
+        size="small"
+        ghost={!rows}
+        aria-pressed={rows}
+        title="One line each — the name and how far along it is, with the card you open still drawn in full"
+        onClick={() => actions.setFeatureQuery({ featureDensity: 'rows' })}
+      >
+        Rows
+      </Button>
+    </span>
+  );
+}
+
 function orderCards(cards: Card[], sort: FeatureSort): Card[] {
   // A paused Feature sinks under every sort, including the ones that would
   // otherwise pull it back up: resting is the whole point of the button, and a
   // sort that outranks it hands the operator back the crowded board they paused
   // their way out of.
   const resting = (c: Card): number => (c.kind === 'feature' && c.rollup.paused !== null ? 1 : 0);
+  // And a flagged one rises, for the mirror of that reason: the flag is a standing
+  // instruction about what the fleet works next, so a board that took it and left the
+  // card where it was would be the one surface disagreeing with the queue.
+  // A pause still wins — it is the more deliberate of the two.
+  const first = (c: Card): number => (c.kind === 'feature' && c.rollup.priority !== null ? 0 : 1);
   const counts = (c: Card): FeatureCounts => (c.kind === 'feature' ? c.rollup.counts : countOne(c.row.standing));
   const cost = (c: Card): number | null => (c.kind === 'feature' ? c.rollup.costUsd : c.row.costUsd);
   const latest = (c: Card): string | null =>
@@ -205,7 +277,9 @@ function orderCards(cards: Card[], sort: FeatureSort): Card[] {
     done: (a, b) => desc(share(counts(a)), share(counts(b))),
     spend: (a, b) => desc(cost(a) ?? -1, cost(b) ?? -1),
   };
-  return [...cards].sort((a, b) => resting(a) - resting(b) || by[sort](a, b) || number(a) - number(b));
+  return [...cards].sort(
+    (a, b) => resting(a) - resting(b) || first(a) - first(b) || by[sort](a, b) || number(a) - number(b),
+  );
 }
 
 function share(counts: FeatureCounts): number {
@@ -252,6 +326,53 @@ function SortControl({ sort, actions }: { sort: FeatureSort; actions: CockpitAct
   );
 }
 
+/**
+ * One Feature on one line: what it is called, and how far along it is. Nothing else
+ * from the brief survives here except the marks and the two counts that are asks —
+ * everything that went is detail about a Feature the reader has not chosen yet.
+ *
+ * The headline is what makes the row an answer rather than an index entry, which is
+ * why this shape only became possible once the summariser wrote one: a list of names
+ * and bars says which Features exist and nothing about any of them.
+ * → docs/spec/17-cockpit.md#the-board-at-length
+ */
+function FeatureRow({
+  card,
+  actions,
+  onAnswered,
+}: {
+  card: Card & { kind: 'feature' };
+  actions: CockpitActions;
+  onAnswered: () => void;
+}): JSX.Element {
+  const { rollup: feature, holds } = card;
+  const rested = feature.paused !== null;
+  return (
+    <Panel
+      density="flush"
+      className={`cn-fb-row${holds.you.length > 0 && !rested ? ' cn-fb-wants' : ''}${
+        rested ? ' cn-fb-row-rested' : ''
+      }`}
+    >
+      <i className={`cn-fb-hue f${feature.slot}`} aria-hidden="true" />
+      <button
+        type="button"
+        className="cn-fb-row-open"
+        aria-expanded={false}
+        onClick={() => actions.setFeatureQuery({ featureCard: feature.number })}
+      >
+        <span className="cn-fb-row-name">{feature.title}</span>
+        {feature.summary?.headline !== null && feature.summary !== null && (
+          <span className="cn-fb-row-said">{feature.summary.headline}</span>
+        )}
+      </button>
+      <Bar counts={feature.counts} />
+      <Courts holds={holds} yoursOnly />
+      <FeatureMarks feature={feature} onChanged={onAnswered} />
+    </Panel>
+  );
+}
+
 function FeatureCard({
   card,
   view,
@@ -267,6 +388,11 @@ function FeatureCard({
   const open = view.featureCard === feature.number;
   const attention = wantsYou(feature, view);
   const rested = feature.paused !== null;
+  // Both halves of the first column draw nothing of their own when they have
+  // nothing — so with the account moved onto the brief, the column can be a
+  // heading over empty space. It is the same rule the account's own fields keep:
+  // an absent thing is absent, never an empty heading.
+  const told = feature.sequence !== null || feature.briefing.delivered.length > 0;
   return (
     <Panel
       density="flush"
@@ -282,13 +408,15 @@ function FeatureCard({
         holds={holds}
         open={open}
         actions={actions}
+        headline={feature.summary?.headline ?? null}
         standing={<Standing feature={feature} view={view} />}
+        account={<FeatureAccount summary={feature.summary} />}
         counts={feature.counts}
         reach={<Reach reach={feature.reach} />}
         costUsd={feature.costUsd}
         landings={feature.landings}
         now={view.now}
-        pause={<PauseToggle feature={feature} onChanged={onAnswered} />}
+        pause={<FeatureMarks feature={feature} onChanged={onAnswered} />}
       >
         {feature.paused !== null && (
           <p className="cn-fb-restednote">
@@ -299,18 +427,19 @@ function FeatureCard({
         {attention !== null && !rested && <p className="cn-fb-attn">{attention}</p>}
       </Brief>
       {open && (
-        <div className="cn-fb-detail">
-          <div className="cn-fb-col">
-            <h4 className="cn-fb-colhead">What the summariser wrote</h4>
-            <Summary summary={feature.summary} />
-            <Sequence feature={feature} view={view} onAnswered={onAnswered} />
-            <Delivered
-              rows={feature.briefing.delivered}
-              total={feature.briefing.deliveredTotal}
-              now={view.now}
-              actions={actions}
-            />
-          </div>
+        <div className={`cn-fb-detail${told ? '' : ' cn-fb-detail-2'}`}>
+          {told && (
+            <div className="cn-fb-col">
+              <h4 className="cn-fb-colhead">Its order, and what landed</h4>
+              <Sequence feature={feature} view={view} onAnswered={onAnswered} />
+              <Delivered
+                rows={feature.briefing.delivered}
+                total={feature.briefing.deliveredTotal}
+                now={view.now}
+                actions={actions}
+              />
+            </div>
+          )}
           <div className="cn-fb-col">
             <h4 className="cn-fb-colhead">In the way · grouped by who clears it</h4>
             <Holds holds={holds} now={view.now} actions={actions} />
@@ -326,6 +455,46 @@ function FeatureCard({
           </div>
         </div>
       )}
+    </Panel>
+  );
+}
+
+/**
+ * A promoted goal's row. Same shape as a Feature's, so a board in rows is one list
+ * rather than a list with full cards standing up in it — but dashed and with the
+ * delivery or shortfall quotation where a Feature's headline goes, since a story has
+ * no account of its own and the verdict on it is the nearest thing it has.
+ */
+function GoalRow({
+  card,
+  view,
+  actions,
+}: {
+  card: Card & { kind: 'goal' };
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const { row, holds } = card;
+  const issue = view.state.world.issues.find((i) => i.number === row.number);
+  const said = issue?.delivery?.summary ?? issue?.shortfall?.summary ?? null;
+  return (
+    <Panel density="flush" className={`cn-fb-row cn-fb-promoted${holds.you.length > 0 ? ' cn-fb-wants' : ''}`}>
+      <i className="cn-fb-hue cn-fb-hue-none" aria-hidden="true" />
+      <button
+        type="button"
+        className="cn-fb-row-open"
+        aria-expanded={false}
+        onClick={() => actions.setFeatureQuery({ featureCard: row.number })}
+      >
+        <span className="cn-fb-row-name">{row.title}</span>
+        {said === null ? (
+          <span className="cn-fb-row-said cn-fb-row-none">no Feature</span>
+        ) : (
+          <span className="cn-fb-row-said">“{said}”</span>
+        )}
+      </button>
+      <Bar counts={countOne(row.standing)} />
+      <Courts holds={holds} yoursOnly />
     </Panel>
   );
 }
@@ -429,7 +598,9 @@ function Brief({
   holds,
   open,
   actions,
+  headline,
   standing,
+  account,
   counts,
   reach,
   costUsd,
@@ -445,7 +616,9 @@ function Brief({
   holds: FeatureHolds;
   open: boolean;
   actions: CockpitActions;
+  headline?: string | null;
   standing: ReactNode;
+  account?: ReactNode;
   counts: FeatureCounts;
   reach: ReactNode;
   costUsd: number | null;
@@ -475,11 +648,12 @@ function Brief({
           <Courts holds={holds} />
           {pause}
         </div>
+        {headline !== null && headline !== undefined && <p className="cn-fb-headline">{headline}</p>}
         {standing}
+        {account}
         <div className="cn-fb-grid">
           <div className="cn-fb-progress">
             <Bar counts={counts} />
-            <Counts counts={counts} />
           </div>
           <HeadRow className="cn-fb-where">
             {reach}
@@ -493,33 +667,13 @@ function Brief({
   );
 }
 
-function PauseToggle({ feature, onChanged }: { feature: FeatureRollup; onChanged: () => void }): JSX.Element {
-  const paused = feature.paused !== null;
-  return (
-    <AsyncButton
-      size="small"
-      ghost
-      className="cn-fb-pause"
-      aria-pressed={paused}
-      title={
-        paused
-          ? 'Resume: work under this Feature is picked up again.'
-          : 'Pause: no work under this Feature is picked up, and the card rests until you hover it.'
-      }
-      onClick={async () => {
-        await api.setFeaturePaused(feature.number, !paused);
-        onChanged();
-      }}
-    >
-      {paused ? 'Resume' : 'Pause'}
-    </AsyncButton>
-  );
-}
-
-function Courts({ holds }: { holds: FeatureHolds }): JSX.Element | null {
+function Courts({ holds, yoursOnly }: { holds: FeatureHolds; yoursOnly?: boolean }): JSX.Element | null {
   const you = holds.you.length;
-  const fleet = holds.fleet.length;
-  const world = holds.world.length;
+  // A row has one line to say what a Feature is, and the fleet's and the world's
+  // counts are the two things on the brief that ask nothing of anybody. They are the
+  // first to go where the space they take is the headline's.
+  const fleet = yoursOnly === true ? 0 : holds.fleet.length;
+  const world = yoursOnly === true ? 0 : holds.world.length;
   if (you + fleet + world === 0) return null;
   return (
     <span className="cn-fb-courts">
@@ -528,8 +682,8 @@ function Courts({ holds }: { holds: FeatureHolds }): JSX.Element | null {
           you {you}
         </Tag>
       )}
-      {fleet > 0 && <Tag fill>fleet {fleet}</Tag>}
-      {world > 0 && <Tag fill>world {world}</Tag>}
+      {fleet > 0 && <span className="cn-fb-court-quiet">fleet {fleet}</span>}
+      {world > 0 && <span className="cn-fb-court-quiet">world {world}</span>}
     </span>
   );
 }
@@ -605,47 +759,6 @@ function Movement({ landings, now }: { landings: readonly FeatureLandingRow[]; n
     <span className="cn-fb-move">
       {recent} landed in the last 7 days · last {relAge(newest.at, now)}
     </span>
-  );
-}
-
-function Summary({ summary }: { summary: FeatureSummary | null }): JSX.Element | null {
-  if (summary === null) return null;
-  if (summary.usable === null && summary.blocked === null && summary.remaining === null) return null;
-  return (
-    <div className="cn-fb-summary">
-      <div className="cn-fb-sum-pair">
-        <SummaryBlock title="Usable now" body={summary.usable} tone="usable" />
-        <SummaryBlock title="Needs a person" body={summary.blocked} tone="blocked" />
-      </div>
-      {summary.remaining !== null && <p className="cn-fb-sum-foot">Left to do — {summary.remaining}</p>}
-    </div>
-  );
-}
-
-function SummaryBlock({
-  title,
-  body,
-  tone,
-}: {
-  title: string;
-  body: string | null;
-  tone: 'blocked' | 'usable';
-}): JSX.Element | null {
-  if (body === null) return null;
-  const section = summarySection(body);
-  return (
-    <div className={`cn-fb-sum-block cn-fb-sum-${tone}`}>
-      <h4>{title}</h4>
-      {section.kind === 'prose' ? (
-        <p>{section.text}</p>
-      ) : (
-        <ul>
-          {section.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 
@@ -1016,21 +1129,6 @@ function barLabel(counts: FeatureCounts): string {
     .filter((s) => counts[s] > 0)
     .map((s) => `${counts[s]} ${STANDING_WORD[s]}`);
   return `${parts.join(', ')} — ${counts.total} in all`;
-}
-
-function Counts({ counts }: { counts: FeatureCounts }): JSX.Element {
-  return (
-    <p className="cn-fb-counts">
-      {(Object.keys(STANDING_WORD) as FeatureChildStanding[])
-        .filter((s) => counts[s] > 0)
-        .map((s) => (
-          <span key={s} className={`cn-fb-count cn-fb-c-${s}`}>
-            <b>{counts[s]}</b> {STANDING_WORD[s]}
-          </span>
-        ))}
-      <span className="cn-fb-count cn-fb-total">{counts.total} in all</span>
-    </p>
-  );
 }
 
 function Reach({ reach }: { reach: readonly FeatureReach[] }): JSX.Element | null {

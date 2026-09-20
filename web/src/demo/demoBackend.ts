@@ -1088,11 +1088,14 @@ class DemoServer {
   }
 
   async setGoalPriority(issueNumber: number, priority: boolean): Promise<{ ok: true; priority: boolean }> {
+    // One flag, two readings of it: the goal page reads the snapshot's issue, the
+    // feature board reads the board payload, and the demo has to move both or the
+    // control looks broken on whichever surface you are not on.
+    if (priority) DEMO_FEATURE_PRIORITIES.set(issueNumber, new Date().toISOString());
+    else DEMO_FEATURE_PRIORITIES.delete(issueNumber);
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
-    if (issue) {
-      issue.priority = priority ? { since: new Date().toISOString() } : null;
-      this.dirty();
-    }
+    if (issue) issue.priority = priority ? { since: new Date().toISOString() } : null;
+    this.dirty();
     return { ok: true, priority };
   }
 
@@ -5309,6 +5312,7 @@ function demoTickets(query: {
 }
 
 const DEMO_FEATURE_PAUSES = new Map<number, string>();
+const DEMO_FEATURE_PRIORITIES = new Map<number, string>();
 
 function buildDemoFeatureBoard(): FeatureBoardPayload {
   const now = Date.now();
@@ -5549,7 +5553,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     feature: number,
     standingKey: string,
     hoursAgo: number,
-    text: Pick<FeatureSummary, 'standing' | 'usable' | 'blocked' | 'remaining'>,
+    text: Pick<FeatureSummary, 'headline' | 'standing' | 'usable' | 'blocked' | 'remaining'>,
   ): FeatureSummary => ({
     originRef: `issue:${feature}`,
     ...text,
@@ -5568,6 +5572,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     901: {
       reach: reach({ staging: ['partial', 2, 3], prod: ['unknown', 0, 3] }),
       summary: summary(901, 'b7d02c4e19a3', 9, {
+        headline: 'Two of three stories through, most of it on staging',
         standing:
           'Two of three worked stories are through: the homepage shelves rank on last week’s sales, and every ' +
           'refund now writes its ledger entry. Cancelling an order before dispatch fell short of its goal, and ' +
@@ -5583,6 +5588,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     902: {
       reach: reach({}),
       summary: summary(902, 'c93af5d1e6b2', 0.4, {
+        headline: null,
         standing:
           'Nothing under this Feature has landed. One story is being worked: the nightly stock feed is being ' +
           'read and matched on ISBN-13, so stock stops being typed in by hand every morning. The stock sync’s ' +
@@ -5601,6 +5607,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     900: {
       reach: reach({ staging: ['reached', 2, 2], prod: ['partial', 1, 2] }),
       summary: summary(900, 'a41c9e07f2d8', 0.3, {
+        headline: 'Most of the way there — all of it on staging, half on live',
         standing:
           'The new payment provider’s client has landed and every call site points at it; the second of #390’s ' +
           'three parts is approved and waiting on a merge, and the third is written and stacks on it. The ' +
@@ -5622,6 +5629,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       issueType: 'Feature',
       reach: reach({}),
       summary: summary(300, 'd1e4b7a20891', 26, {
+        headline: 'Started, and the first thing built missed its goal',
         standing:
           'Type-ahead suggestions landed and fell short of their goal — they are drawn from titles alone, which ' +
           'the assessor found leaves a customer who knows the author with nothing. Neither of the two stories that ' +
@@ -5665,6 +5673,9 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       standingKey: extra.standingKey,
       paused: ((since) => (since === undefined ? null : { originRef: `issue:${number}`, since }))(
         DEMO_FEATURE_PAUSES.get(number),
+      ),
+      priority: ((since) => (since === undefined ? null : { originRef: `issue:${number}`, since }))(
+        DEMO_FEATURE_PRIORITIES.get(number),
       ),
     };
   });

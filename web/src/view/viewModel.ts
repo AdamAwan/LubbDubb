@@ -24,7 +24,7 @@ import type { GoalPageView, GoalTab } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from '../cockpit/actions.js';
-import type { FeatureMode, FeaturePrFilter, FeatureSort, OverviewShape } from '../cockpit/place.js';
+import type { FeatureDensity, FeatureMode, FeaturePrFilter, FeatureSort, OverviewShape } from '../cockpit/place.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -71,6 +71,7 @@ export interface CockpitView {
   ticketColumns: string[];
   featureCard: number | null;
   featureSort: FeatureSort;
+  featureDensity: FeatureDensity;
   petsBlended: boolean;
   overviewShape: OverviewShape;
   featureMode: FeatureMode;
@@ -184,6 +185,7 @@ interface ViewInputs {
   ticketColumns?: string[];
   featureCard?: number | null;
   featureSort?: FeatureSort;
+  featureDensity?: FeatureDensity;
   petsBlended?: boolean;
   overviewShape?: OverviewShape;
   featureMode?: FeatureMode;
@@ -278,6 +280,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketColumns: input.ticketColumns ?? [],
     featureCard: input.featureCard ?? null,
     featureSort: input.featureSort ?? 'wants-you',
+    featureDensity: input.featureDensity ?? 'auto',
     petsBlended: input.petsBlended ?? false,
     overviewShape: input.overviewShape ?? 'cards',
     featureMode: input.featureMode ?? 'board',

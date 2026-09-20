@@ -6355,21 +6355,44 @@ button.cn-grow {
 }
 
 .cn-ff-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 8px;
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.015em;
 }
-.cn-ff-account {
-  max-width: 78ch;
+/* The marks sit at the far end of the name, off the reading measure below it: this
+   mode is for acting on one Feature, and the two things you can say about the whole
+   of it belong beside the whole of it.
+   → docs/spec/17-cockpit.md#the-two-standing-marks */
+.cn-ff-marks {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
 }
-.cn-ff-account p {
+/* The lede, at reading weight, above the three fields — focus drew neither until the
+   account became one component. Named for the line and not for `standing`, which on
+   this surface is already the per-child lamp in the lanes below. */
+.cn-ff-headline {
   margin: 0 0 6px;
-  color: var(--cn-fg-dim);
-  font-size: 13.5px;
+  max-width: 78ch;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--cn-fg);
 }
-.cn-ff-blocked {
-  color: var(--cn-amber-ink);
+.cn-ff-headline + .cn-ff-lede {
+  color: var(--cn-fg-dim);
+}
+.cn-ff-lede {
+  margin: 0 0 10px;
+  max-width: 78ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--cn-fg);
 }
 .cn-ff-counts {
   display: flex;

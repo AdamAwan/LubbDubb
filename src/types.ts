@@ -723,6 +723,13 @@ export interface ReviewMark {
 
 export interface FeatureSummary {
   originRef: string;
+  /**
+   * How far along, in a few words — the line a reader repeats when somebody asks how
+   * the Feature is going. Null on every row written before the field existed; the
+   * card draws nothing for it, and the next rewrite fills it in.
+   * → docs/spec/17-cockpit.md#how-far-along
+   */
+  headline: string | null;
   standing: string;
   usable: string | null;
   blocked: string | null;

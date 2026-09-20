@@ -5408,7 +5408,10 @@ Feature stays one press away with its own count on it, since the argument for fo
 if choosing which costs a trip back.
 
 **Nothing here is recomputed** — it is the board's own readings in the order somebody sitting down to
-work would want them. The account is the summariser's, the standings are `ticketOutcomes`', the courts
+work would want them. The account is the summariser's, drawn by the **same component the board
+draws** (`FeatureAccount`) rather than a second rendering of it: while there were two, this one left
+the lede out and drew the three fields as unlabelled paragraphs, so the mode meant for one Feature at
+a time was the worse of the two at saying where that Feature is. The standings are `ticketOutcomes`', the courts
 are `featureHolds`', and the controls are `needBody`, so they carry the refusal rules the rail's carry
 rather than being a compact copy of them.
 
@@ -5444,6 +5447,14 @@ erased by it, only outranked: the row carries both.
 
 **`settled` is its own segment** rather than folded either way. Into `delivered` it overstates the
 Feature; into `queued` it understates it for ever.
+
+**The words live in the bar's own `aria-label` and nowhere else.** `barLabel` writes
+`2 in flight, 1 fell short, 1 queued, 1 not watched — 5 in all`, which is what a screen reader is
+given and what a pointer resting on the bar says; there is no second line of the same six numbers
+spelled out underneath. There was, and it was the reading the [account](#the-feature-summary) took the
+room from: a bar is a comparison across cards, a sentence is an answer, and printing both made the card
+longer without making it say more. The bar is 6px rather than 9 for the same reason — a band that is
+the whole width of the column reads as a heading when it is drawn at the weight of one.
 
 ### Three buckets for a parent link, not two
 
@@ -5487,19 +5498,65 @@ coming along** — the update a lead gives the product owner, quotable with no c
 operator is the product owner _for_ the harness, so anything in prose here is read by them and quoted
 onward to people with no cockpit in front of them.
 
-So every card **folds to a brief**, and the page opens with every card folded. The brief is four
+So every card **folds to a brief**, and the page opens with every card folded. The brief is five
 lines: the name, with who is on it and what is in the way counted beside it; the standing, quoted
-whole and stamped; the bar and the reach; the movement. One card is open at a time, on `Place`
+whole and stamped; **the account's other three fields** — usable now, needs a person, left to do; the
+bar and the reach; the movement. One card is open at a time, on `Place`
 (`?card=<n>`, [the address bar](#the-address-bar)), so the back button steps out of it and a link
 somebody sends opens on it. **The name is the control** that opens and shuts the card, and the
 reference sits beside it in its own group — a reference never goes inside a button ([links](#links)).
 
-The open card is three columns from 1200px and one below: **what the summariser wrote** (the three
-fields under the standing, the story order when there is one, and what was delivered, in its
-authors' words), **what is in the way, grouped by who clears it**, and **its stories and PRs**. The
-briefing's other two lists are gone as lists: what is being worked is the presence chips on the
-brief, and what is blocked is the middle column, which knows more than the two kinds the briefing
-had.
+The open card is three columns from 1200px and one below: **its order, and what landed** (the story
+order when there is one, and what was delivered, in its authors' words), **what is in the way,
+grouped by who clears it**, and **its stories and PRs**. The first column is **drawn only when it has
+something in it** — both halves of it render nothing of their own when they are empty, so with the
+account on the brief it would otherwise be a heading over blank space, which is the one thing the
+[account's own fields](#the-feature-summary) are careful never to be. Without it the card is the
+two-column shape a promoted goal already uses. The briefing's other two lists are gone as
+lists: what is being worked is the presence chips on the brief, and what is blocked is the middle
+column, which knows more than the two kinds the briefing had.
+
+**The account is not in that first column, and putting it there was the board's own worst reading.**
+The page exists to answer _how is the X work going_, the summariser writes the answer into three
+fields, and for as long as those fields sat behind a press the folded card — the thing somebody
+actually looks at when they are asked — offered a bar, six counts and a paragraph, none of which say
+_the back end is done and the UI is not_. The counts were the reading that had to give way for it:
+they were the bar's own six numbers written out beside the bar, so the page said one thing twice and
+the thing it did not say at all was the question it was opened with.
+
+### The board at length
+
+A brief runs about a third of a viewport, which is right for a board of five and
+unreadable for one of thirty: three screens of scrolling to find a name, and no way to
+see two Features at once. So the board has a second shape — **rows**, one line each —
+and a control naming both, beside the sort.
+
+**A row is the name and the headline, and almost nothing else.** It keeps the hue, the
+bar, your own court's count and the two marks; it drops the lede, the three fields, the
+reach, the spend, the movement, the stamp and the fleet's and the world's counts. Every
+one of those is detail about a Feature the reader has not chosen yet, and the line they
+were taking is the headline's.
+
+**The row only works because the summariser writes a headline**
+([above](#how-far-along)). A list of names and progress bars says which Features exist
+and nothing whatever about any of them, which is an index and not a board; a list of
+names and half-sentences answers _how is it going_ for thirty Features at once. The
+dense shape was not available until the account had a line short enough to put on one.
+
+**The card the reader opened is drawn in full, in place.** A mode that collapsed the
+one Feature somebody had asked about would be a mode with no use, and `?card=` is
+already a [place](#the-address-bar), so the shape and the opened card travel together in
+a link. A promoted goal collapses to the same row, dashed, with its delivery or
+shortfall quotation where a Feature's headline goes — a board of rows with full cards
+standing up in it reads as a rendering fault rather than as a distinction.
+
+**The default is by size, and the operator outranks it.** `?density=` takes `brief` or
+`rows`, and its absent value is `auto`: briefs at **`BRIEFS_AT_MOST`** cards or fewer
+and rows past it, counting promoted goals, since what makes a page long is its length
+and not what its rows are. Automatic because the right answer here is a property of the
+board rather than a preference — an operator should not have to discover a setting to be
+shown a page they can read — and overridable in **both** directions because the
+threshold is a guess about a reader and the reader is right there.
 
 ### In the way, grouped by who clears it
 
@@ -5523,12 +5580,47 @@ are skipped for the same reason: nobody's court.
 The three **counts** on the brief are the lengths of these lists, drawn only when non-zero — a row that
 always shows three chips is one the eye learns to skip, and `world 0` on every card says nothing about
 any of them. Your court is amber, and red where an agent is stopped against it (an escalation or a
-permission — the rail's own split). Fleet and world are neutral: nothing there is asking.
+permission — the rail's own split).
+
+**Only yours is a chip.** Fleet and world are drawn as plain dim mono beside it, because they are
+counts of work nobody is being asked to do anything about, and three boxes of equal weight taught the
+eye to skip all three — including the one that was asking. The distinction is the same one the
+[reference vocabulary](#how-a-reference-is-drawn) keeps: a box is spent on the thing you can act on.
 
 **One control per row, and it is the rail's.** A row that is a needs-you row opens the same ask panel
 the rail opens; anything else opens the page its reference names. No merge or answer button is drawn
 here that is not already the rail's — a second set of verdict controls is two paths to keep in step,
 and a card-level "do this first" button is an opinion about which hold matters most.
+
+### The two standing marks
+
+Beside the name, a card carries the two marks an operator sets on a Feature without leaving the
+board: **Prioritise** and **Pause**. They are one component (`web/src/components/featureAccount.tsx`),
+drawn on the board and in [focus mode](#board-or-focus) alike, since focus is the mode for acting on
+one Feature and had neither. They are the two halves of one act — told that a Feature is now
+the priority, an operator flags it and rests what can wait — and they sit together for that reason.
+
+The flag is `POST /api/issues/:number/priority`, the same one the goal page's button sends
+([05](05-dispatcher.md#marking-a-goal-a-priority)), and it reaches the card as
+`FeatureRollup.priority` off `goal_priorities`. Drawing it here is what makes it usable at all on a
+tracker with a hierarchy: **a Feature usually has no goal page** — the snapshot carries the goals the
+fleet is working, not their containers — so the control existed and the one surface that lists
+Features could not reach it. An operator who wanted a Feature worked first had to open its stories and
+flag them one at a time, which is the trip this board exists to save.
+
+**A flagged Feature floats and a paused one sinks**, both above whatever sort is chosen. A pause is
+the more deliberate of the two and wins where a Feature carries both. The board taking the flag and
+leaving the card where it was would make this the one surface disagreeing with the queue it just
+rearranged.
+
+**On, the flag is amber; off, it is an ordinary ghost button.** Amber is what wants you and what you
+have told the fleet to want, which is the same axis; and a mark that is not set says nothing, since a
+board of five Features would otherwise draw five controls claiming a state.
+
+What it does **not** do is pause anything else. Flagging one Feature and resting three others are two
+statements with different lifetimes — the flag stands until it is cleared, a pause until it is
+resumed — and a single control that did both would leave an operator guessing which half a later
+press undoes.
 
 ### Who is on it
 
@@ -5560,27 +5652,68 @@ which is the default.
 
 ### The feature summary
 
-On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice.
+On the brief, under the name, a card draws **the one piece of prose on this board**: where the Feature actually is, written by an agent, in its own voice. All five fields are on the brief, because this is the answer the page exists to give and a card folded shut must still give it.
 
 The board answers every question about a Feature except the one it is opened with. A bar, six counts,
 three lists of holds and a row per child are each true, and a reader assembles _where is this_
 out of them themselves — which two readers do differently. The summary is that sentence, said once,
 by somebody who read the whole Feature.
 
-It is four fields, not a document: **where this is** (required), **usable now**, **needs a person**,
-**left to do**. They are four questions, and a reader must not have to find each of them inside a
+It is five fields, not a document: **how far along**, **where this is** (required), **usable now**,
+**needs a person**, **left to do**. They are four questions, and a reader must not have to find each of them inside a
 paragraph. A field the agent left out is drawn as nothing at all, never an empty heading: nothing
 usable yet, nothing blocked and nothing left are ordinary states, and the lede is where an agent says
 so.
 
+#### How far along
+
+The first line of the card, and the reason the rest of it is read. Somebody is asked _how is the X
+work going_ and answers in half a sentence — _most of the way there, nothing on live yet_ — and then,
+if pressed, gives the detail. The four fields under it were the detail with no answer over them: a
+reader assembled the half-sentence themselves out of a paragraph and three lists, and two readers
+assembled different ones.
+
+**It is a description and not a forecast, and that line is the whole of why it is allowed here.** The
+[verdict this surface refuses](#what-it-deliberately-does-not-draw) is the harness asserting a status
+nobody stated — _on track_, _at risk_, a percentage, a date. Every one of those is a claim about next
+week, made by a machine that has read only this week. _Most of the way there_ is a claim about what
+the agent just read, in the agent's own words, quoted and attributable exactly as the other four are.
+The prompt refuses the forecast in as many words and names `headline` as the field most likely to
+tempt one, because the two are a sentence apart.
+
+**90 characters, refused above it rather than clipped** — `standing`'s rule, for a sharper version of
+`standing`'s reason: half a headline is not a shorter headline, it is a different claim.
+
+**It is optional, and a Feature with no honest answer leaves it out.** Not required, deliberately: the
+tool is the one surface an operator's [overridden prompt](05-dispatcher.md#prompt-templates) reaches
+without knowing what changed, and a required field would refuse every submission from every
+deployment whose template predates it — the fleet's accounts stopping dead on exactly the deployments
+that customised most, with nothing red. So an override that never learned about it keeps writing four
+fields, and its cards read as they did.
+
+**A row from before the field is `null`, and that wants no backfill.** Null means _not written yet_,
+which is what the card draws nothing for, and it is not a state anybody needs restored: rule
+`feature-summary` rewrites a Feature's account the moment anything under it moves
+([below](#it-is-rewritten-when-the-feature-moves-and-the-trigger-is-a-comparison)), so a deployment
+fills its own headlines in as its work moves. A backfill would be writing a sentence the harness made
+up into the one field on the board that is supposed to be somebody's own words.
+
 #### The layout is the structure, so the prose does not have to be
 
-The lede sits on the brief. The two fields that are a **question the reader is holding** — what can I
-use, and what do you need from me — are drawn beside each other under it, bulleted, one line per
-thing; `remaining` is drawn under both as a single footnote line rather than a third heading, because
-it is the field most often "nothing", and a heading over one line reads as a section with something in
-it. The pair is `repeat(auto-fit, minmax(190px, 1fr))` and not two tracks: either block can be absent,
-and a missing one must not leave a dead column beside the other.
+The headline is the brief's first line, at 16px and the only thing on the card set larger than body
+text; the lede follows it a shade dimmer, so the two do not read as one block of equal type. The
+three fields that are each a **question the reader is holding** —
+what can I use, what do you need from me, what is left — are drawn beside each other under it,
+bulleted, one line per thing. The row is `repeat(auto-fit, minmax(220px, 1fr))` and not three tracks:
+any block can be absent, and a missing one must not leave a dead column beside the others.
+
+**`remaining` is a peer and not a footnote.** It was drawn under the other two as one small line
+below a dashed rule, on the argument that it is the field most often "nothing" and that a heading over
+one line reads as a section with something in it. That is true and it was the wrong trade: `remaining`
+is half of the sentence the whole board is for — _we have done the back end, the UI is still to tidy_
+is `usable` and `remaining` together — and demoted it was the field an eye scanning the board never
+reached. Its heading is deliberately flat: **left to do**, asserting nothing about whether what is left
+is a lot, which is the verdict [this surface refuses](#what-it-deliberately-does-not-draw).
 
 **Blocking is drawn as _needs a person_**, which is the same field renamed at the glass. A reader
 scanning the board is not looking for a status, they are looking for the row with their name on it,
@@ -5592,13 +5725,13 @@ and each line becomes an item; a section with no marker on any line is drawn as 
 The board is still composing nothing — it is splitting on the lines the agent wrote, and a summary
 written before this shape existed draws exactly as it always did.
 
-**The caps are the surface's, enforced at the tool.** `standing` is 360 characters and refused above
-it; each section is 600 and clipped at a **line boundary**, so what reaches the card is whole bullets
-or nothing. They were 1200 and 2000 — four paragraphs, which made the one piece of prose on the board
+**The caps are the surface's, enforced at the tool.** `headline` is 90 characters and `standing` 360,
+both refused above it; each section is 600 and clipped at a **line boundary**, so what reaches the
+card is whole bullets or nothing. They were 1200 and 2000 — four paragraphs, which made the one piece of prose on the board
 the thing a reader skipped. → [05](05-dispatcher.md#feature-summary--where-a-feature-is)
 
 **It is a quotation like everything else on this card.** The board still composes no sentence: what it
-draws is the four fields as they were submitted, stamped and attributable. That is not the same thing
+draws is the five fields as they were submitted, stamped and attributable. That is not the same thing
 as [the verdict this surface refuses](#what-it-deliberately-does-not-draw) — a status word is the
 harness asserting a policy nobody stated, where this is one agent's account of what it read, and the
 prompt refuses it dates, percentages and _on track_ for exactly that reason.
@@ -7705,10 +7838,20 @@ agent rather than the snapshot.
 **One vocabulary of three marks**, in `web/src/styles.css`:
 
 - a **box** means this is a thing you can go to, not a number in a sentence;
-- a **fill** inside the box means the destination is here, in the cockpit (`.ref-goal`, the only filled
-  form — a goal's page, and a pull request's);
+- a **solid** box means the destination is here, in the cockpit (`.ref-goal` — a goal's page, and a
+  pull request's), a **dashed** one that it leaves (`.ref-out`);
 - an **arrow** means it leaves for the provider (`.ext-ref`, and `.ref-out` where that leaves from a
   standalone token).
+
+**No reference is filled, and that is a rule about tint rather than about references.** A tinted ground
+means _selected_, and it means nothing else anywhere in the cockpit. `.ref-goal` carried a blue
+`--link-fill` until it was measured against the surface that draws the most references per square inch:
+a [feature board](#the-feature-board) card's header carries a ref, a state tag, two court counts and a
+button, and with the ref filled that line read as six boxes of which several looked pressed — while the
+sort control above it, the one thing on the board that _is_ selected, was the quietest mark on screen.
+In and out was already carried twice over by the dash and the arrow, both of which survive the print
+sheet and an operator who cannot separate hues; the fill was the one mark of the three that also meant
+something else. The token went with it.
 
 **Where a reference stands decides which of them it wears.** A reference standing on its own — a row's
 `cn-refs` group, a rack entry, a chip — is boxed; a reference _inside prose_ takes the arrow alone,
@@ -7725,11 +7868,10 @@ was given a legend for. **Shape carries it now, not hue or a line weight**, so t
 the print sheet and an operator who cannot separate the colours. Hover keeps its meaning by
 strengthening: the edge goes to full `--blue`, and a dashed one goes solid.
 
-The three values are tokens of their own — `--link-line`, `--link-fill`, `--link-ink` — each restated
-once under `#print-sheet`, since a dark-theme token on white loses its edge, muddies its fill and drops
-its lettering under AA. They are separate from `--blue-line-2` / `--blue-fill`, which mean "border and
-ground of a blue-filled surface" and are set against `--panel`; a reference has to hold at 12px on four
-different grounds. Both classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal`
+The two values are tokens of their own — `--link-line`, `--link-ink` — each restated once under
+`#print-sheet`, since a dark-theme token on white loses its edge and drops its lettering under AA. They
+are separate from `--blue-line-2` / `--blue-fill`, which mean "border and ground of a blue-filled
+surface" and are set against `--panel`; a reference has to hold at 12px on four different grounds. Both classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal`
 is a `<button>` reset to look like a token and has no ring of its own. The treatment lives entirely in
 the shared classes, so every `<Ref>`, `ExtLink`, `refLink` and `linkify` site has it without knowing.
 Controls that already read as controls — `.esc-open`, `.pm-jump`, `.cn-tgl`, the chip anchors — are
@@ -7756,9 +7898,9 @@ screen nowhere an operator looks. The reset is not the thing to fix — the rest
 written against it, and lowering it with `:where(.cn)` restyles 66 of the 70 controls on the overview —
 so the token layer carries the weight to clear it, and `console.css` still names no shared class.
 
-`test/refLinks.test.ts` pins the box, the fill, the arrow, the token count, the focus rule, the doubled
-selectors and the slot's presence on every fleet row, because nothing in a render test can see a
-stylesheet.
+`test/refLinks.test.ts` pins the box, the **absence** of a fill, the arrow, the token count, the focus
+rule, the doubled selectors and the slot's presence on every fleet row, because nothing in a render test
+can see a stylesheet.
 
 **One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
 control is a second destination for one click, so a row that carries both draws its name as the control

@@ -77,6 +77,40 @@ export function watchCascadeTargets(
   return targets;
 }
 
+/**
+ * The numbers a standing mark on `numbers` covers: each one, and — where it names a
+ * container — every item beneath it, transitively.
+ *
+ * Shared by the two marks that cascade, the **pause** (`src/goalPause.ts`) and the
+ * **priority flag** (`src/dispatcher/goalPriority.ts`), because a Feature paused and
+ * a Feature expedited have to mean the same span of work. They did not: pause
+ * cascaded and priority stopped at the container, so flagging a Feature moved its own
+ * appraisal and plan up the queue and left every story under it exactly where it was —
+ * an operator's "get this over the line first" that looked applied and did nothing.
+ *
+ * A number naming an issue the mirror does not hold is kept as itself rather than
+ * dropped: a mark on work the harness cannot see is still the operator's instruction.
+ * → docs/spec/05-dispatcher.md#marking-a-goal-a-priority, docs/spec/06-issue-pickup.md
+ */
+export function cascadeToChildren(
+  numbers: readonly number[],
+  issues: readonly Issue[],
+  containerTypes: readonly string[] | undefined,
+): ReadonlySet<number> {
+  const out = new Set<number>();
+  if (numbers.length === 0) return out;
+  const byNumber = new Map(issues.map((i) => [i.number, i]));
+  for (const number of numbers) {
+    const issue = byNumber.get(number);
+    if (issue === undefined) {
+      out.add(number);
+      continue;
+    }
+    for (const target of watchCascadeTargets(issue, issues, containerTypes)) out.add(target);
+  }
+  return out;
+}
+
 const PARENT_BODY_LIMIT = 4000;
 
 const CANDIDATE_LIMIT = 12;

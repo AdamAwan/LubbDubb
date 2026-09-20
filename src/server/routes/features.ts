@@ -89,6 +89,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         containerTypes: config.issueContainerTypes,
         watchLabel: watchLabelFor(config.labelPrefix),
         pauses: new Map(store.pauses.listGoalPauses().map((p) => [p.originRef, p])),
+        priorities: new Map(store.priority.listGoalPriorities().map((p) => [p.originRef, p])),
       });
 
       const refUrls: Record<string, string> = {};

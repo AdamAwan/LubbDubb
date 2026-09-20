@@ -1,6 +1,8 @@
 import type { GoalPriority, Issue, ObstacleBlock, ObstacleStanding, Plan, PlanPart, PullRequest } from '../types.js';
 import { issueBranch } from './issuePickup.js';
-import { issueOriginNumber, issueOriginRef, issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
+import { issueOriginRef, issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
+import { markedNumbers } from '../goalPause.js';
+import { cascadeToChildren } from '../issueRelations.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -13,12 +15,17 @@ interface GoalWorld {
   obstacleBlocks?: readonly ObstacleBlock[];
 }
 
-export function expeditedOrigins(goals: readonly GoalPriority[], world: GoalWorld): (originRef: string) => boolean {
-  const numbers: number[] = [];
-  for (const goal of goals) {
-    const number = issueOriginNumber('root', goal.originRef);
-    if (number !== null) numbers.push(number);
-  }
+export function expeditedOrigins(
+  goals: readonly GoalPriority[],
+  world: GoalWorld,
+  containerTypes?: readonly string[],
+): (originRef: string) => boolean {
+  // A flag on a container covers the work under it, transitively — the same span the
+  // pause covers, through the same function, because "get this Feature over the line
+  // first" and "stop this Feature" have to mean the same body of work. Expanded here
+  // and once: the pull requests, the plans, the parts and the obstacles below are all
+  // read off `numbers`, so each of them follows the children without knowing about them.
+  const numbers = [...cascadeToChildren(markedNumbers(goals), world.issues, containerTypes)];
   if (numbers.length === 0) return () => false;
 
   const prNumbers = new Set<number>();

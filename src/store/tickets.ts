@@ -16,7 +16,7 @@ export const TICKET_COLUMNS: ColumnMigrations = {
   },
   tracker_sweep: { restated_at: 'TEXT' },
   feature_colors: {},
-  feature_summaries: {},
+  feature_summaries: { headline: 'TEXT' },
 };
 
 const FEATURE_SLOTS = 12;
@@ -202,6 +202,7 @@ export class TicketStore {
 
   recordFeatureSummary(input: {
     originRef: string;
+    headline: string | null;
     standing: string;
     usable: string | null;
     blocked: string | null;
@@ -216,9 +217,10 @@ export class TicketStore {
     this.ctx
       .prep(
         `INSERT INTO feature_summaries
-           (origin_ref, standing, usable, blocked, remaining, standing_key, agent_id, task_id, created_at, updated_at)
-         VALUES (@originRef, @standing, @usable, @blocked, @remaining, @standingKey, @agentId, @taskId, @createdAt, @updatedAt)
+           (origin_ref, headline, standing, usable, blocked, remaining, standing_key, agent_id, task_id, created_at, updated_at)
+         VALUES (@originRef, @headline, @standing, @usable, @blocked, @remaining, @standingKey, @agentId, @taskId, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET
+           headline=excluded.headline,
            standing=excluded.standing, usable=excluded.usable, blocked=excluded.blocked,
            remaining=excluded.remaining, standing_key=excluded.standing_key, agent_id=excluded.agent_id,
            task_id=excluded.task_id, updated_at=excluded.updated_at`,
@@ -311,6 +313,7 @@ function parseLabels(raw: string): string[] {
 
 interface FeatureSummaryRow {
   origin_ref: string;
+  headline: string | null;
   standing: string;
   usable: string | null;
   blocked: string | null;
@@ -325,6 +328,7 @@ interface FeatureSummaryRow {
 function rowToFeatureSummary(r: FeatureSummaryRow): FeatureSummary {
   return {
     originRef: r.origin_ref,
+    headline: r.headline,
     standing: r.standing,
     usable: r.usable,
     blocked: r.blocked,

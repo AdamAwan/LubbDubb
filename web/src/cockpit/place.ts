@@ -55,6 +55,7 @@ export interface Place {
   ticketColumns: string[];
   featureCard: number | null;
   featureSort: FeatureSort;
+  featureDensity: FeatureDensity;
   featurePrs: FeaturePrFilter;
   /** Whether the Pets page draws the pets that have been blended. */
   petsBlended: boolean;
@@ -84,6 +85,23 @@ const OVERVIEW_WAS: Record<string, OverviewShape> = { next: 'focus' };
  */
 export type FeatureMode = 'board' | 'focus';
 export const FEATURE_MODES: readonly FeatureMode[] = ['board', 'focus'];
+
+/**
+ * How much of each Feature the board draws. `brief` is the full card — the headline,
+ * the lede, the three fields, the bar and the reach. `rows` is one line each: the
+ * name and the headline, which is the whole of what a reader scanning for a Feature
+ * needs, with the card they open still drawn in full.
+ *
+ * `auto` is the absent value and picks by size, because the right answer is a
+ * property of the board rather than a preference: full cards are right for five
+ * Features and unreadable for thirty, and an operator should not have to discover a
+ * setting to be shown a page they can read.
+ * → docs/spec/17-cockpit.md#the-board-at-length
+ */
+export type FeatureDensity = 'auto' | 'brief' | 'rows';
+/** Not exported, on `FEATURE_PRS`' terms: nothing iterates it — the control names the
+ *  two an operator can ask for, and `auto` is the absent third. */
+const FEATURE_DENSITIES: readonly FeatureDensity[] = ['auto', 'brief', 'rows'];
 
 export type FeatureSort = 'wants-you' | 'moved' | 'done' | 'spend';
 export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'done', 'spend'];
@@ -173,6 +191,7 @@ export const NOWHERE: Place = {
   ticketColumns: [],
   featureCard: null,
   featureSort: 'wants-you',
+  featureDensity: 'auto',
   featurePrs: 'open',
   petsBlended: false,
   overview: 'cards',
@@ -266,6 +285,7 @@ export function readPlace(search: string): Place {
     ticketColumns: readStrings(param(query, 'hide')),
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
+    featureDensity: FEATURE_DENSITIES.find((d) => d === param(query, 'density')) ?? 'auto',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
     petsBlended: query.has('blended'),
     overview: readOverview(param(query, 'overview')),
@@ -412,6 +432,7 @@ export function placeQuery(place: Place): string {
   }
   if (place.featureCard !== null) query.set('card', String(place.featureCard));
   if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
+  if (place.featureDensity !== 'auto') query.set('density', place.featureDensity);
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
   if (place.petsBlended) query.set('blended', '1');
   if (place.overview !== 'cards') query.set('overview', place.overview);
