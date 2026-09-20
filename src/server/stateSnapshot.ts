@@ -514,6 +514,15 @@ export function buildStateSections(
     'config' | 'recovery' | 'build' | 'pets' | 'localRun' | 'localRunTargets' | 'planning' | 'dispatchRules'
   > => ({
     config: {
+      /* The declaration, in promotion order, and never a goal's reading of it: the goal page's
+         obligation tabs are the deployment's shape, so a goal that has reached nothing draws the
+         same row as one that has arrived everywhere.
+         → docs/spec/17-cockpit.md#the-panes */
+      environments: config.environments.map((env) => ({
+        name: env.name,
+        opens: [...(env.arrival?.opens ?? [])],
+        watched: env.watch !== undefined,
+      })),
       heartbeatIntervalMs: config.heartbeatIntervalMs,
       maxConcurrentAgents: config.maxConcurrentAgents,
       watchLabel,

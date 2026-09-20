@@ -30,13 +30,6 @@ const CELL_GLYPH: Record<GoalReachCell, string> = {
   pending: '',
 };
 
-/** The matrix's one-line account, without the grid — drawn on Shipped while the grid itself is on Done. */
-export function GoalReachSaid({ page }: { page: GoalPageView }): JSX.Element | null {
-  const matrix = buildGoalReachMatrix(page);
-  if (matrix.environments.length === 0 || matrix.rows.length === 0) return null;
-  return <p className="cn-reachm-said">{said(matrix)}</p>;
-}
-
 export function GoalReachMatrix({ page }: { page: GoalPageView }): JSX.Element | null {
   const matrix = buildGoalReachMatrix(page);
   if (matrix.environments.length === 0 || matrix.rows.length === 0) return null;
@@ -81,8 +74,9 @@ export function GoalReachMatrix({ page }: { page: GoalPageView }): JSX.Element |
         </tbody>
       </table>
       {/* Said out loud rather than left to be read off the grid: a goal short of an environment
-          is not part-way checked, it is not checkable, and the difference is the whole reason
-          this card is drawn above the rows rather than instead of them. */}
+          is not part-way checked, it is not checkable, and the difference is what the grid alone
+          cannot state. Said here and nowhere else on the pane — the Close pane draws this card and
+          not a second copy of the line. */}
       <p className="cn-reachm-said">{said(matrix)}</p>
     </section>
   );

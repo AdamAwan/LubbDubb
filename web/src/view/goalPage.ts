@@ -1,6 +1,7 @@
 import type {
   Agent,
   AppState,
+  CockpitEnvironment,
   GoalAgentsPayload,
   TaskSummary,
   CockpitDecision,
@@ -71,6 +72,35 @@ export interface GoalPageView {
   watches: GoalWatchView[];
   signals: GoalWatch[];
   sequence: FeatureSequence | null;
+  /**
+   * Which environment carries each obligation, from the deployment's own declaration rather
+   * than this goal's reach rows. The tab row is the deployment's shape and must not change
+   * between two goals on it. → docs/spec/17-cockpit.md#the-panes
+   */
+  obligations: GoalObligations;
+}
+
+/** The environments carrying each obligation, in promotion order. Empty where none does. */
+type GoalObligations = Record<ObligationTab, string[]>;
+
+/**
+ * Who owes what, read off the environment list. An environment declares what arriving there
+ * *means* — `arrival.opens` and a `watch` block — and that declaration is the whole of what
+ * places an obligation, so a deployment that validates on test and watches production says so
+ * in its config and nowhere else.
+ *
+ * An environment that carries more than one gate is named on each tab it carries: the tabs are
+ * obligations, and one place can owe several.
+ * → docs/spec/17-cockpit.md#the-panes
+ *
+ * @public the seam the goal page's tab row is derived from
+ */
+export function goalObligations(environments: readonly CockpitEnvironment[]): GoalObligations {
+  return {
+    validate: environments.filter((e) => e.opens.includes('validate')).map((e) => e.name),
+    close: environments.filter((e) => e.opens.includes('close_out')).map((e) => e.name),
+    watch: environments.filter((e) => e.watched).map((e) => e.name),
+  };
 }
 
 function belongsToGoal(candidate: string | null | undefined, ref: string): boolean {
@@ -273,6 +303,7 @@ export function buildGoalPage(
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
     sequence: goalSequence(state, issue),
+    obligations: goalObligations(state.config.environments),
   };
 }
 
@@ -300,38 +331,31 @@ export function buildGoalTrack(parts: readonly GoalPartView[]): GoalTrack {
   };
 }
 
-type GoalStageAt = 'plan' | 'validation' | 'environments' | 'tail';
-
 type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
 
 interface GoalStage {
-  at: GoalStageAt;
-  label: string;
   reading: string;
   tone: GoalStageTone;
   done: number | null;
 }
 
 function planStage(page: GoalPageView): GoalStage {
-  const base = { at: 'plan', label: 'Plan' } as const;
   /* A pull request waiting on the operator outranks how far the plan has got,
      because it is the one reading on this stage that is about them. The tab row
      said it and the track did not, and folding the two into one control is how a
      reading gets lost — so it is said here, where both now read from. */
   const court = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
   if (court > 0) {
-    return { ...base, reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done: null };
+    return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done: null };
   }
-  if (page.plan === null) return { ...base, reading: 'not drawn', tone: 'grey', done: null };
-  if (page.plan.status === 'planning') return { ...base, reading: 'being drawn', tone: 'blue', done: null };
-  if (page.plan.status === 'awaiting_approval')
-    return { ...base, reading: 'waiting on you', tone: 'amber', done: null };
-  if (page.plan.status === 'abandoned') return { ...base, reading: 'abandoned', tone: 'grey', done: null };
+  if (page.plan === null) return { reading: 'not drawn', tone: 'grey', done: null };
+  if (page.plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
+  if (page.plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
+  if (page.plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
 
   const track = buildGoalTrack(page.parts);
-  if (track.total === 0) return { ...base, reading: 'one pull request', tone: 'grey', done: null };
+  if (track.total === 0) return { reading: 'one pull request', tone: 'grey', done: null };
   return {
-    ...base,
     reading: `${track.merged}/${track.total} parts merged`,
     tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
     done: (track.merged / track.total) * 100,
@@ -339,41 +363,52 @@ function planStage(page: GoalPageView): GoalStage {
 }
 
 function validationStage(page: GoalPageView): GoalStage {
-  const base = { at: 'validation', label: 'Checks' } as const;
   /* A local check plan that is running outranks the set's own count, because it
      is the only thing on the goal that is happening right now — and with the
      header's chip gone this is the one place outside the pane that says so. */
   const local = page.issue.localValidation;
   if (local !== null && inFlight(local)) {
-    return { ...base, reading: localValidationSaid(local), tone: 'blue', done: null };
+    return { reading: localValidationSaid(local), tone: 'blue', done: null };
   }
   const v = page.issue.validation;
   if (v === null || v.total === 0) {
-    if (flaggedLocally(page)) return { ...base, reading: 'flagged locally', tone: 'amber', done: null };
-    return { ...base, reading: 'no checks', tone: 'grey', done: null };
+    if (flaggedLocally(page)) return { reading: 'flagged locally', tone: 'amber', done: null };
+    return { reading: 'no checks', tone: 'grey', done: null };
   }
   const settled = v.passed + v.waived;
   return {
-    ...base,
     reading: `${settled} of ${v.total} done`,
     tone: v.state === 'clear' ? 'green' : v.failed > 0 ? 'amber' : 'blue',
     done: (settled / v.total) * 100,
   };
 }
 
-function environmentStage(page: GoalPageView): GoalStage {
-  const base = { at: 'environments', label: 'Shipped' } as const;
+/**
+ * What the close-out is waiting on. It reads the delivery and the tail first — the obligation
+ * this tab *is* — and falls back to the reach the close is owed against, because a goal that
+ * has arrived nowhere is not a goal whose close-out is outstanding, it is one whose close-out
+ * cannot be asked for yet. → docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time
+ */
+function closeStage(page: GoalPageView): GoalStage {
+  const { issue } = page;
+  if (issue.state !== 'open') return { reading: issue.state, tone: 'green', done: 100 };
+  if (issue.shortfall) return { reading: 'fell short', tone: 'amber', done: null };
+  /* What wants a person outranks how far the work got: a held gate is the operator's to
+     release, and nothing is filed while it holds. */
+  if (page.gateHold !== null) return { reading: 'gate held', tone: 'amber', done: null };
+  if (issue.delivery) return { reading: 'delivered, ticket open', tone: 'blue', done: null };
+  return reachStage(page);
+}
+
+function reachStage(page: GoalPageView): GoalStage {
   const envs = page.environments;
-  if (envs.length === 0) return { ...base, reading: 'no environments', tone: 'grey', done: null };
-  if (page.gateHold !== null) return { ...base, reading: 'gate held', tone: 'amber', done: null };
+  if (envs.length === 0) return { reading: 'not reached', tone: 'grey', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
   const furthest = reached[reached.length - 1];
   if (furthest !== undefined) {
-    const watch = watchFold(page, furthest.environment);
     return {
-      ...base,
-      reading: `reached ${furthest.environment}${watch === null ? '' : ` · ${watch.said}`}`,
-      tone: watch?.said === 'watch regressed' ? 'amber' : reached.length === envs.length ? 'green' : 'blue',
+      reading: `reached ${furthest.environment}`,
+      tone: reached.length === envs.length ? 'green' : 'blue',
       /* The only denominator here that cannot grow: the environments are configuration,
          not plan. `total` below is `landings + unattributed + partsOwed`, so a meter drawn
          against it moves *backwards* the moment the plan decomposes further. */
@@ -387,7 +422,6 @@ function environmentStage(page: GoalPageView): GoalStage {
   if (partial !== undefined) {
     const owed = partial.total - partial.landed;
     return {
-      ...base,
       /* Short enough to survive the tab's own width: the row ellipsizes, and a reading
          cut off mid-word is the reading lost. What it is owed *for* is the card below. */
       reading: owed === 1 ? '1 landing owed' : `${owed} landings owed`,
@@ -395,8 +429,30 @@ function environmentStage(page: GoalPageView): GoalStage {
       done: null,
     };
   }
-  if (envs.some((e) => e.status === 'unknown')) return { ...base, reading: 'not known', tone: 'grey', done: null };
-  return { ...base, reading: 'not shipped', tone: 'grey', done: null };
+  if (envs.some((e) => e.status === 'unknown')) return { reading: 'not known', tone: 'grey', done: null };
+  return { reading: 'not shipped', tone: 'grey', done: null };
+}
+
+/**
+ * The Watch tab's reading: the windows this deployment's watched environments opened, each
+ * folded by {@link watchFold} and the worst of them taken. A goal with no window open yet reads
+ * what is true of the signals instead — a window that never opened and one that opened and read
+ * nothing are different answers. → docs/spec/17-cockpit.md#the-panes
+ */
+function watchStage(page: GoalPageView): GoalStage {
+  const windows = page.watches.filter((w) => page.obligations.watch.includes(w.environment));
+  const open = windows.filter((w) => w.checks.length > 0);
+  if (open.length === 0) {
+    const pending = page.signals.filter((s) => !s.live || s.proposal !== null).length;
+    if (pending > 0) return { reading: `${pending} awaiting you`, tone: 'amber', done: null };
+    if (page.signals.length === 0) return { reading: 'no signals', tone: 'grey', done: null };
+    return { reading: 'not opened', tone: 'grey', done: null };
+  }
+  const said = open.map(watchFold);
+  if (said.includes('regressed')) return { reading: 'regressed', tone: 'amber', done: null };
+  if (said.some((s) => s !== 'clean')) return { reading: 'not read', tone: 'blue', done: null };
+  const settled = open.every((w) => w.settledAt !== null);
+  return { reading: settled ? 'clean' : 'clean so far', tone: 'green', done: settled ? 100 : null };
 }
 
 /**
@@ -415,22 +471,17 @@ export function reachCount(env: GoalEnvironmentReachView): string {
   return `${count} · ${env.unplaced} ${merges} not on the integration branch`;
 }
 
-function watchFold(page: GoalPageView, environment: string): { said: string } | null {
-  const window = page.watches.find((w) => w.environment === environment);
-  if (window === undefined || window.checks.length === 0) return null;
+/**
+ * One window's every check, folded to a word. The reduction is one-directional and that is the
+ * whole of the care here: `regressed` first, then anything not `clean` reads *not read*, and only
+ * a window whose every check came back clean says so. A reading with space for one word must never
+ * fold an unread environment into an all-clear. → docs/spec/29-post-deploy-watch.md#in-the-cockpit
+ */
+function watchFold(window: GoalWatchView): 'regressed' | 'not read' | 'clean' {
   const verdicts = window.checks.map((c) => c.reading?.verdict ?? null);
-  if (verdicts.includes('regressed')) return { said: 'watch regressed' };
-  if (verdicts.some((v) => v !== 'clean')) return { said: 'watch not read' };
-  return { said: 'watch clean' };
-}
-
-function tailStage(page: GoalPageView): GoalStage {
-  const base = { at: 'tail', label: 'Done' } as const;
-  const { issue } = page;
-  if (issue.state !== 'open') return { ...base, reading: issue.state, tone: 'green', done: 100 };
-  if (issue.shortfall) return { ...base, reading: 'fell short', tone: 'amber', done: null };
-  if (issue.delivery) return { ...base, reading: 'delivered, ticket open', tone: 'blue', done: null };
-  return { ...base, reading: 'not reached', tone: 'grey', done: null };
+  if (verdicts.includes('regressed')) return 'regressed';
+  if (verdicts.some((v) => v !== 'clean')) return 'not read';
+  return 'clean';
 }
 
 export const GOAL_SECTIONS = [
@@ -503,9 +554,20 @@ function tailBegun(page: GoalPageView): boolean {
   return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }
 
-export const GOAL_TABS = ['ask', 'plan', 'checks', 'shipped', 'done'] as const;
+export const GOAL_TABS = ['ask', 'plan', 'validate', 'close', 'watch'] as const;
 
 export type GoalTab = (typeof GOAL_TABS)[number];
+
+/**
+ * The tabs that are obligations rather than places, in the order they come due. Each names the
+ * environment that carries it, and a deployment that declares none still owes its checks and its
+ * close-out.
+ *
+ * Subtracted from `GOAL_TABS` rather than listed a second time: a tab added to the row is an
+ * obligation unless it is named here, so `GoalObligations` stops compiling until a new one is
+ * placed on one side of that line deliberately. → docs/spec/17-cockpit.md#the-panes
+ */
+export type ObligationTab = Exclude<GoalTab, 'ask' | 'plan'>;
 
 /* A tab's id is its label, lower case: the pane the label says is the pane
    `?pane=` names and the pane `GOAL_TAB_OF` maps a section to. The two drifted
@@ -515,9 +577,9 @@ export type GoalTab = (typeof GOAL_TABS)[number];
 const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ask: 'Ask',
   plan: 'Plan',
-  checks: 'Checks',
-  shipped: 'Shipped',
-  done: 'Done',
+  validate: 'Validate',
+  close: 'Close',
+  watch: 'Watch',
 };
 
 /**
@@ -530,18 +592,45 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   sequence: 'ask',
   prediction: 'plan',
-  validation: 'checks',
-  localValidation: 'checks',
-  /* A sheet is assembled *for an arrival*, so it belongs with the arrival rather
-     than with the checks that gate a merge. The two never coexist: nothing is
-     sheeted until every part has landed.
-     → docs/spec/24-environments.md#what-counts-as-a-landing */
-  remoteValidation: 'shipped',
-  environments: 'shipped',
-  signals: 'shipped',
-  tail: 'done',
-  record: 'done',
+  /* All three are the same obligation seen at three distances: the set of checks,
+     the local run that answers some of them by hand, and the sheet an environment's
+     run answers the rest from — a sheet row carries a check's `sourceId` and writes
+     its outcome back onto that check. One list, so one pane.
+     → docs/spec/36-remote-validation.md */
+  validation: 'validate',
+  localValidation: 'validate',
+  remoteValidation: 'validate',
+  /* Reaching an environment is what the close-out is owed against, and the record an
+     operator reads when closing is beside it rather than a stage of its own. */
+  environments: 'close',
+  tail: 'close',
+  record: 'close',
+  signals: 'watch',
 };
+
+/**
+ * The panes this deployment draws, in order. Every one but `watch` is always drawn — a
+ * deployment with no environments still owes its checks and its close-out, and a row that
+ * gained and lost columns between two goals could not be aimed at from memory. `watch` is
+ * the one obligation nothing owes unless an environment declares a `watch` block, and a tab
+ * for a window that can never open is a stage the goal can never reach.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export function goalPanes(page: GoalPageView): GoalTab[] {
+  return GOAL_TABS.filter((tab) => tab !== 'watch' || page.obligations.watch.length > 0);
+}
+
+/**
+ * The pane a section is actually drawn behind on *this* deployment. `GOAL_TAB_OF` says
+ * where it belongs; this is that answer folded onto a pane the row draws. No card may
+ * vanish because a deployment declared no watch — the signals are still the goal's, and
+ * folded into `close` they land where an operator finishing a goal is already reading.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export function goalPaneOf(page: GoalPageView, section: GoalSection): GoalTab {
+  const tab = GOAL_TAB_OF[section];
+  return goalPanes(page).includes(tab) ? tab : 'close';
+}
 
 /**
  * The pane the prediction card is drawn in — and with it the reveal gate, which
@@ -553,21 +642,40 @@ export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
 export const PREDICTION_PANE: GoalTab = 'plan';
 
 /**
- * The element id each stage of the track scrolls to, beside the pane map for the
- * same reason that map is here: a press that names a card and a press that names
- * the pane the card is drawn in must not be able to disagree.
+ * The element id each jumpable card carries, beside the pane map for the same reason
+ * that map is here: a press that names a card and a press that names the pane the card
+ * is drawn in must not be able to disagree.
  *
- * `plan` is the card the reveal gate stands in, which is why an ask on the rail can
- * name it — the ask is answered there and nowhere else.
+ * Keyed on the **card**, never on the tab: a pane holds several of these — `close` draws
+ * the environments, the tail and the record — and an anchor keyed on the pane could only
+ * name one of them. `plan` is the card the reveal gate stands in, which is why an ask on
+ * the rail can name it: the ask is answered there and nowhere else.
  *
  * @public read by the goal page's own jumps and by the ask that leads to the gate
  */
-export const GOAL_ANCHOR: Record<GoalStageAt, string> = {
+export const GOAL_ANCHOR: Record<'plan' | 'validation' | 'environments' | 'tail', string> = {
   plan: 'cn-plan',
   validation: 'cn-validation',
   environments: 'cn-environments',
   tail: 'cn-tail',
 };
+
+/**
+ * Which environment an obligation pane is showing. The operator's pick when it carries this
+ * obligation — a pick made on one tab must not scope another tab to an environment that does
+ * not owe it — then the furthest one this goal has reached, then the first declared.
+ *
+ * Null where no environment carries the obligation at all, which is the deployment saying
+ * this one is a person's: the pane draws every goal-wide card and nothing environment-scoped.
+ * → docs/spec/17-cockpit.md#the-panes
+ *
+ * @public the seam each obligation pane scopes its cards through
+ */
+export function obligationEnvironment(page: GoalPageView, tab: ObligationTab, picked: string | null): string | null {
+  const names = page.obligations[tab];
+  const reached = page.environments.filter((e) => e.status === 'reached').map((e) => e.environment);
+  return names.find((n) => n === picked) ?? [...names].reverse().find((n) => reached.includes(n)) ?? names[0] ?? null;
+}
 
 export interface GoalTabOpening {
   tab: GoalTab;
@@ -585,14 +693,19 @@ export interface GoalTabOpening {
  * → docs/spec/17-cockpit.md#which-pane-opens
  */
 export function goalTabOpening(page: GoalPageView): GoalTabOpening {
-  if (settled(page)) return { tab: 'done', why: 'this goal is finished — the record is what the page is for now' };
-  if (page.gateHold !== null) return { tab: 'shipped', why: 'a gate is holding this goal short of an environment' };
+  if (settled(page)) return { tab: 'close', why: 'this goal is finished — the record is what the page is for now' };
+  if (page.gateHold !== null) return { tab: 'close', why: 'a gate is holding this goal short of an environment' };
   if (page.openPullRequests.some((pr) => pr.attention.status === 'you'))
     return { tab: 'plan', why: 'a pull request is in your court' };
   if (page.issue.validation?.state === 'flagged' || flaggedLocally(page))
-    return { tab: 'checks', why: 'the check plan is not settled' };
-  if (arrived(page)) return { tab: 'shipped', why: 'every part has reached an environment' };
-  if (validationBegun(page)) return { tab: 'checks', why: 'the work is merged and its checks have begun' };
+    return { tab: 'validate', why: 'the check plan is not settled' };
+  /* An arrival opens two obligations at once, and which of them is live is which one has
+     something in it: the sheet is assembled *by* the arrival, so where there is one the
+     checks are the question and the close-out is waiting on their answer. */
+  if (arrived(page) && validationBegun(page))
+    return { tab: 'validate', why: 'every part has arrived and its checks are what is outstanding' };
+  if (arrived(page)) return { tab: 'close', why: 'every part has reached an environment' };
+  if (validationBegun(page)) return { tab: 'validate', why: 'the work is merged and its checks have begun' };
   if (workStarted(page)) return { tab: 'plan', why: 'there is a plan, a pull request or an agent on this goal' };
   return { tab: 'ask', why: 'nothing has been planned yet, so the ask is the page' };
 }
@@ -644,13 +757,13 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   permission: 'plan',
   plan: 'plan',
   reply: 'plan',
-  validate: 'checks',
-  validation_plan: 'checks',
-  unwatched: 'shipped',
-  watch: 'shipped',
-  close_out: 'done',
-  outcome: 'done',
-  shortfall: 'done',
+  validate: 'validate',
+  validation_plan: 'validate',
+  unwatched: 'watch',
+  watch: 'watch',
+  close_out: 'close',
+  outcome: 'close',
+  shortfall: 'close',
   /* About the goal itself, or about the fleet carrying it: neither has a stage
      to be drawn in, so neither carries a dot. */
   config: null,
@@ -666,9 +779,18 @@ const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   upgrade: null,
 };
 
-/** The asks a pane is about, which is what puts the dot on its nav entry. */
+/**
+ * The asks a pane is about, which is what puts the dot on its nav entry. An ask whose pane
+ * this deployment does not draw folds onto `close` exactly as its cards do — a dot nowhere
+ * would be an ask the row never announces.
+ */
 function goalPaneAsks(page: GoalPageView, tab: GoalTab): NeedRow[] {
-  return page.needs.filter((row) => GOAL_ASK_TAB[row.kind] === tab);
+  const drawn = goalPanes(page);
+  return page.needs.filter((row) => {
+    const of = GOAL_ASK_TAB[row.kind];
+    if (of === null) return false;
+    return (drawn.includes(of) ? of : 'close') === tab;
+  });
 }
 
 interface GoalNavEntry {
@@ -679,6 +801,13 @@ interface GoalNavEntry {
   done: number | null;
   /** An ask is waiting in this pane, which is what the dot on the entry says. */
   needsYou: boolean;
+  /**
+   * The environments that carry this obligation, in promotion order — what the tab is
+   * qualified by. Empty on `ask` and `plan`, which are nobody's obligation, and on an
+   * obligation no environment opens: `validate` and `close` stand unqualified there, which
+   * is the deployment saying the checks and the close-out are a person's.
+   */
+  on: string[];
 }
 
 /**
@@ -694,15 +823,24 @@ interface GoalNavEntry {
 export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
   const stages: Record<Exclude<GoalTab, 'ask'>, GoalStage> = {
     plan: planStage(page),
-    checks: validationStage(page),
-    shipped: environmentStage(page),
-    done: tailStage(page),
+    validate: validationStage(page),
+    close: closeStage(page),
+    watch: watchStage(page),
   };
-  return GOAL_TABS.map((tab) => {
+  return goalPanes(page).map((tab) => {
     const needsYou = goalPaneAsks(page, tab).length > 0;
-    if (tab === 'ask') return { tab, label: GOAL_TAB_LABEL.ask, ...ticketReading(page), needsYou };
+    const on = tab === 'ask' || tab === 'plan' ? [] : page.obligations[tab];
+    if (tab === 'ask') return { tab, label: GOAL_TAB_LABEL.ask, ...ticketReading(page), needsYou, on };
     const stage = stages[tab];
-    return { tab, label: GOAL_TAB_LABEL[tab], reading: stage.reading, tone: stage.tone, done: stage.done, needsYou };
+    return {
+      tab,
+      label: GOAL_TAB_LABEL[tab],
+      reading: stage.reading,
+      tone: stage.tone,
+      done: stage.done,
+      needsYou,
+      on,
+    };
   });
 }
 

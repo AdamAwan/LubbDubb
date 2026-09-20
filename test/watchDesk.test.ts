@@ -139,8 +139,13 @@ test('presence answering zero reads unknown on the glass, in the goal page’s o
   assert.equal(check?.reading?.verdict, 'unknown');
   assert.match(check!.reading!.detail!, /could not read testUk/);
   assert.match(check!.reading!.detail!, /has not run here/);
-  const shipped = buildGoalNav(page!).find((t) => t.tab === 'shipped');
-  assert.equal(shipped?.reading, 'reached testUk · watch not read');
+  /* The one place a watch is reduced to a word, and the reduction is one-directional: a
+     window with an unread check never reads clean. → docs/spec/17-cockpit.md#the-panes */
+  const watch = buildGoalNav(page!).find((t) => t.tab === 'watch');
+  assert.equal(watch?.on.join(), 'testUk', 'the tab names the environment that carries the watch');
+  assert.equal(watch?.reading, 'not read');
+  const shipped = buildGoalNav(page!).find((t) => t.tab === 'close');
+  assert.equal(shipped?.reading, 'reached testUk');
   assert.deepEqual(
     observer.asked.map((a) => a.kind),
     ['presence'],

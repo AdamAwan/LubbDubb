@@ -52,6 +52,7 @@ import type {
   Decision,
   DeliveryAuthor,
   Ejection,
+  EnvironmentGate,
   EnvironmentGateRelease,
   EnvironmentHealthReading,
   ErrorLogEntry,
@@ -338,7 +339,24 @@ interface StackLandingView {
   landed: number;
 }
 
+/**
+ * One environment as the cockpit is told about it: its name, what arriving there opens, and
+ * whether it is watched. The *declaration*, not a goal's reading of it — `GoalEnvironmentReach`
+ * is the reading — because the goal page's obligation tabs are the deployment's shape and must
+ * not change between two goals on it.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export interface CockpitEnvironment {
+  name: string;
+  /** `arrival.opens`, empty where arriving here opens nothing. */
+  opens: EnvironmentGate[];
+  /** The environment declares a `watch` block, so an arrival here opens a watch window. */
+  watched: boolean;
+}
+
 interface CockpitConfig {
+  /** Every environment, in promotion order — the order the obligations come due in. */
+  environments: CockpitEnvironment[];
   ejectionEnabled: boolean;
   heartbeatIntervalMs: number;
   maxConcurrentAgents: number;

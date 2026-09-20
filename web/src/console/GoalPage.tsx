@@ -1,14 +1,24 @@
 import { useRef, useState, type JSX, type MutableRefObject } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalPageView, GoalSection, GoalTab, GoalLanding, GoalTabOpening, PartGroup } from '../view/goalPage.js';
+import type {
+  GoalPageView,
+  GoalSection,
+  GoalTab,
+  GoalLanding,
+  GoalTabOpening,
+  ObligationTab,
+  PartGroup,
+} from '../view/goalPage.js';
 import type { NeedRow } from '../view/needsYou.js';
 import {
   buildGoalNav,
   goalSectionsOpen,
+  obligationEnvironment,
   planUnderWay,
   GOAL_ANCHOR,
   goalLanding,
+  goalPanes,
   reachCount,
   GOAL_SECTIONS,
 } from '../view/goalPage.js';
@@ -56,7 +66,7 @@ import {
   ControlSegments,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
-import { GoalReachMatrix, GoalReachSaid } from '../components/GoalReachMatrix.js';
+import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
 import { HeadRow } from '../components/panel.js';
 import { SignalsSection } from '../components/SignalsSection.js';
 import { RemoteValidationSection } from '../components/RemoteValidationSection.js';
@@ -101,7 +111,11 @@ export function GoalPage({
      only thing read once made.
      → docs/spec/17-cockpit.md#which-pane-opens */
   const opening = useGoalLanding(`issue:${page.issue.number}`, page);
-  const tab = view.goalTab ?? opening.tab;
+  /* A `?pane=` from a deployment that draws that pane, or a bookmark from before it stopped
+     doing so, would otherwise select a tab the row does not carry and leave the panel empty.
+     → docs/spec/17-cockpit.md#the-panes */
+  const picked = view.goalTab !== null && goalPanes(page).includes(view.goalTab) ? view.goalTab : null;
+  const tab = picked ?? opening.tab;
   return (
     <div className="cn-goal">
       <Header page={page} view={view} actions={actions} />
@@ -115,7 +129,7 @@ export function GoalPage({
           select: one object, so the row cannot read as a strip that merely sits
           above the pane. → docs/spec/17-cockpit.md#the-panes */}
       <TabbedPanel
-        tabs={goalTabs(page, tab, view.goalTab, opening)}
+        tabs={goalTabs(page, tab, picked, opening)}
         selected={tab}
         onSelect={(id) => {
           if (id !== tab) logUsage('goal.expand');
@@ -125,9 +139,9 @@ export function GoalPage({
       >
         {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'checks' && <ValidationPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'shipped' && <ShippingPane page={page} view={view} actions={actions} folds={folds} />}
-        {tab === 'done' && <RecordPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'validate' && <ValidatePane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'close' && <ClosePane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'watch' && <WatchPane page={page} view={view} actions={actions} folds={folds} />}
       </TabbedPanel>
       {/* Below the panel, because what it asks is about the goal's place on the
           board rather than about any stage of the work — and because the ask
@@ -187,6 +201,16 @@ function goalTabs(page: GoalPageView, tab: GoalTab, chosen: GoalTab | null, open
     label: (
       <>
         {entry.label}
+        {/* The environment that carries this obligation, on the control that is it. A tab
+            that said only "Validate" would be an obligation with nowhere to be discharged,
+            and which environment owes what is configuration the operator wrote weeks ago.
+            Two of them and the pane itself carries a picker.
+            → docs/spec/17-cockpit.md#the-panes */}
+        {entry.on.length > 0 && (
+          <i className="cn-tabp-on" title={`Carried by ${entry.on.join(' and ')}`}>
+            {entry.on.length === 1 ? entry.on[0] : `${String(entry.on.length)} environments`}
+          </i>
+        )}
         {entry.needsYou && <i className="cn-tabp-dot" title="Something here needs you" />}
       </>
     ),
@@ -335,7 +359,14 @@ function WorkPaneBody({
   );
 }
 
-function ValidationPane({
+/**
+ * What this goal owes in the way of checks: the set, the local run that answers some of them
+ * by hand, and the sheet the environment's own run answers the rest from. One list seen at
+ * three distances rather than three sets of tests — a sheet row carries a check's `sourceId`
+ * and writes its outcome back onto that check.
+ * → docs/spec/17-cockpit.md#the-panes, docs/spec/36-remote-validation.md
+ */
+function ValidatePane({
   page,
   view,
   actions,
@@ -346,8 +377,10 @@ function ValidationPane({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
+  const showing = obligationEnvironment(page, 'validate', view.sheetEnvironment);
   return (
     <>
+      <ObligationPicker page={page} tab="validate" showing={showing} actions={actions} />
       <Validation
         page={page}
         actions={actions}
@@ -356,65 +389,26 @@ function ValidationPane({
         fold={folds.validation}
       />
       <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
-    </>
-  );
-}
-
-function ShippingPane({
-  page,
-  view,
-  actions,
-  folds,
-}: {
-  page: GoalPageView;
-  view: CockpitView;
-  actions: CockpitActions;
-  folds: Record<GoalSection, Fold>;
-}): JSX.Element {
-  /* One environment at a time. The pane's own picker rather than the sheet card's, so the
-     reach row, the watch and the sheet on screen are always the same environment's. */
-  const names = page.environments.map((e) => e.environment);
-  const showing =
-    names.find((n) => n === view.sheetEnvironment) ??
-    names.find((n) => page.environments.find((e) => e.environment === n)?.status === 'reached') ??
-    names[0] ??
-    null;
-  return (
-    <>
-      {names.length > 0 && (
-        <HeadRow className="cn-envpick">
-          {page.environments.map((env) => (
-            <Button
-              key={env.environment}
-              onClick={() => actions.openRemoteSheet(env.environment)}
-              title={`What this goal reads in ${env.environment}`}
-            >
-              {env.environment}
-              <Tag tone={REACH_TONE[env.status]} fill={env.environment === showing}>
-                {env.status}
-              </Tag>
-            </Button>
-          ))}
-        </HeadRow>
-      )}
-      <Environments page={page} actions={actions} now={view.now} fold={folds.environments} only={showing} />
-      {/* A sheet is assembled for an arrival, so it is drawn with the arrival.
-          → docs/spec/36-remote-validation.md */}
+      {/* A sheet is assembled for an arrival and answers rows of the set above it, so it is
+          drawn with the set rather than with the arrival. → docs/spec/36-remote-validation.md */}
       <RemoteValidation
         page={page}
         view={{ ...view, sheetEnvironment: showing }}
         actions={actions}
         fold={folds.remoteValidation}
       />
-      <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
-      {/* The grid itself lives on Done; what it *says* is the line the environment rows
-          above cannot say for themselves. */}
-      <GoalReachSaid page={page} />
     </>
   );
 }
 
-function RecordPane({
+/**
+ * The close-out and what it is owed against: how far the work has reached, every part against
+ * every environment, and the record an operator starts reading when they close — spend, the
+ * tail, and this goal's subtree of the work graph. The record is an archive and not a step,
+ * which is why it folds in here rather than taking a tab of its own.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+function ClosePane({
   page,
   view,
   actions,
@@ -425,8 +419,15 @@ function RecordPane({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
+  const showing = obligationEnvironment(page, 'close', view.sheetEnvironment);
   return (
     <>
+      <ObligationPicker page={page} tab="close" showing={showing} actions={actions} />
+      <Environments page={page} actions={actions} now={view.now} fold={folds.environments} only={showing} />
+      {/* Every part against every environment, unscoped: the rows above are one environment's and
+          this is the question they cannot ask. It says its own account out loud, so there is no
+          second copy of that line on the pane. → docs/spec/24-environments.md */}
+      <GoalReachMatrix page={page} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <Spend issue={page.issue} />
@@ -435,10 +436,83 @@ function RecordPane({
           <Tail issue={page.issue} actions={actions} fold={folds.tail} />
         </div>
       </div>
-      {/* Every part against every environment: the close-out question, drawn with the record. */}
-      <GoalReachMatrix page={page} />
       <Reference page={page} view={view} fold={folds.record} />
     </>
+  );
+}
+
+/**
+ * The post-deploy watch: what this goal declared should be asked of a live environment, and
+ * what the window opened on its arrival has read back. Last, and after the close, because a
+ * watch opens on an arrival in production — which for most deployments happens *after* the
+ * work is closed. → docs/spec/29-post-deploy-watch.md, docs/spec/17-cockpit.md#the-panes
+ */
+function WatchPane({
+  page,
+  view,
+  actions,
+  folds,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
+}): JSX.Element {
+  const showing = obligationEnvironment(page, 'watch', view.sheetEnvironment);
+  const window = page.watches.find((w) => w.environment === showing);
+  return (
+    <>
+      <ObligationPicker page={page} tab="watch" showing={showing} actions={actions} />
+      <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
+      <WatchWindow
+        watch={window}
+        environment={showing}
+        issueNumber={page.issue.number}
+        now={view.now}
+        actions={actions}
+      />
+    </>
+  );
+}
+
+/**
+ * The environments that carry one obligation, where more than one does. One is already named
+ * on the tab, and none is the deployment saying the obligation is a person's — a control with
+ * one choice on it is a control that cannot be wrong, which is a control nobody needs.
+ *
+ * It writes the same `?sheet=` the sheet card has always been picked through, so the pick an
+ * operator makes here is the one the address bar carries.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+function ObligationPicker({
+  page,
+  tab,
+  showing,
+  actions,
+}: {
+  page: GoalPageView;
+  tab: ObligationTab;
+  showing: string | null;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const names = page.obligations[tab];
+  if (names.length < 2) return null;
+  return (
+    <HeadRow className="cn-envpick">
+      {names.map((name) => {
+        const env = page.environments.find((e) => e.environment === name);
+        return (
+          <Button key={name} onClick={() => actions.openRemoteSheet(name)} title={`What this goal reads in ${name}`}>
+            {name}
+            {env !== undefined && (
+              <Tag tone={REACH_TONE[env.status]} fill={name === showing}>
+                {env.status}
+              </Tag>
+            )}
+          </Button>
+        );
+      })}
+    </HeadRow>
   );
 }
 
@@ -1036,7 +1110,7 @@ function Signals({
           {pending > 0 && ` · ${pending} awaiting you`}
         </i>
         <span className="cn-more">
-          asked of production after this ships
+          asked of a live environment after this ships
           {plan !== null && (
             <button type="button" className="cn-linkish" onClick={() => actions.viewPlan(plan.id)}>
               see the plan ↗
@@ -1630,15 +1704,6 @@ function Environments({
                   {env.status}
                 </Tag>
               </div>
-              {/* Inside the environment's own row and not beside it: a watch belongs
-                to an arrival, and the two surfaces drawn as siblings would be free
-                to disagree about which environment a reading came from. */}
-              <Watch
-                watch={page.watches.find((w) => w.environment === env.environment)}
-                issueNumber={number}
-                now={now}
-                actions={actions}
-              />
             </div>
           ))}
         </div>
@@ -1681,18 +1746,59 @@ function Environments({
   );
 }
 
+/**
+ * The window one environment's arrival opened, as a card of its own on the pane that *is*
+ * that obligation. It was drawn inside the environment's own row while the environments and
+ * the watch shared a pane, so that the two surfaces could not disagree about which
+ * environment a reading came from; the heading carries that now — a watch reading is never
+ * drawn without the environment it was read in.
+ * → docs/spec/29-post-deploy-watch.md#in-the-cockpit
+ */
+function WatchWindow({
+  watch,
+  environment,
+  issueNumber,
+  now,
+  actions,
+}: {
+  watch: GoalWatchView | undefined;
+  /** The environment this pane is showing — named even where its window has not opened. */
+  environment: string | null;
+  issueNumber: number;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  if (environment === null) return null;
+  return (
+    <section className="cn-card" id="cn-watch">
+      <h3>
+        Watch · {environment}
+        <span className="cn-more">
+          asked of {environment} for as long as the window this goal&rsquo;s arrival opened
+        </span>
+      </h3>
+      {watch === undefined || watch.checks.length === 0 ? (
+        /* Not an empty list of readings: a window that never opened and one that opened and
+           read nothing are different answers, and only the second is about the work. */
+        <p className="cn-sub">No window has opened here — nothing of this goal has arrived in {environment} yet.</p>
+      ) : (
+        <Watch watch={watch} issueNumber={issueNumber} now={now} actions={actions} />
+      )}
+    </section>
+  );
+}
+
 function Watch({
   watch,
   issueNumber,
   now,
   actions,
 }: {
-  watch: GoalWatchView | undefined;
+  watch: GoalWatchView;
   issueNumber: number;
   now: number;
   actions: CockpitActions;
-}): JSX.Element | null {
-  if (watch === undefined || watch.checks.length === 0) return null;
+}): JSX.Element {
   return (
     <div className="cn-watch">
       <span className="cn-watch-head">

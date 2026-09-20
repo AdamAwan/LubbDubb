@@ -1564,6 +1564,22 @@ a.cn-qbody {
 .cn .cn-tabp-tab.cn-on .cn-tabp-name {
   color: var(--cn-fg);
 }
+/* The environment that carries an obligation, on the tab that is it. Quieter than the
+   name and never instead of it: the tab is the obligation, and the environment is where
+   it is discharged. It takes the name line's own colour so it dims and lifts with the
+   tab, which is what keeps it reading as part of the name rather than as a second badge.
+   → docs/spec/17-cockpit.md#the-panes */
+.cn-tabp-on {
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
 /* One dot, where an ask is waiting in that pane. It is what a whole band above
    the navigation used to say, said by the control you would press anyway — the
    ask itself is a row at the top of the page. */

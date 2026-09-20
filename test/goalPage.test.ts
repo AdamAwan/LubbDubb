@@ -551,7 +551,7 @@ test('a stage with nothing to measure draws no proportion', () => {
 
   const nav = buildGoalNav({ ...page, issue: { ...page.issue, validation: null } });
   const plan = nav.find((t) => t.tab === 'plan')!;
-  const checks = nav.find((t) => t.tab === 'merged')!;
+  const checks = nav.find((t) => t.tab === 'validate')!;
 
   assert.equal(plan.reading, 'not drawn');
   assert.equal(plan.done, null, 'a goal with no plan has no parts outstanding, so nothing to measure');
@@ -597,27 +597,26 @@ test('a tab quotes the parts and the checks rather than re-reading them', () => 
   assert.equal(planTab.done, (1 / 3) * 100);
   assert.equal(planTab.tone, 'blue', 'something is moving and nothing is held');
 
-  const checks = nav.find((t) => t.tab === 'merged')!;
+  const checks = nav.find((t) => t.tab === 'validate')!;
   assert.equal(checks.reading, '1 of 4 done', 'passed plus waived, as the check plan counts them');
   assert.equal(checks.tone, 'amber', 'a check actually failed');
 });
 
-test('the shipped tab is drawn without environments, and never folds unknown into absent', () => {
+test('the close tab is drawn without environments, and never folds unknown into absent', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const bare = buildGoalPage({ ...state, environmentReach: [] }, ref, [])!;
-  /* The tab is drawn and says so, rather than being left out: the row keeps its
-     shape between goals, and "no environments" is the reading that keeps a
-     deployment with none from looking like a feature announcing itself broken. */
-  assert.equal(buildGoalNav(bare).find((t) => t.tab === 'shipped')!.reading, 'no environments');
+  /* The tab is drawn and says so, rather than being left out: the close-out is owed on
+     every deployment, whether or not an environment's arrival is what opens it. */
+  assert.equal(buildGoalNav(bare).find((t) => t.tab === 'close')!.reading, 'not reached');
 
   const unknown = buildGoalNav({
     ...bare,
     environments: [
       { environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
     ],
-  }).find((t) => t.tab === 'shipped')!;
+  }).find((t) => t.tab === 'close')!;
   assert.equal(unknown.reading, 'not known', 'a probe that could not say is not work that has not shipped');
   assert.equal(unknown.done, null);
 });

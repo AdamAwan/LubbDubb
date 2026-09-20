@@ -185,6 +185,15 @@ export function buildDemoState(): DemoSeed {
   const ahead = (mins: number) => new Date(now + mins * 60_000).toISOString();
   const state: AppState = {
     config: {
+      /* The deployment's own shape, which is what the goal page's obligation tabs are derived
+         from: staging carries the checks, the close-out and the watch; prod carries the close-out
+         too, so that tab draws a picker; preview opens nothing and is observed and no more.
+         → docs/spec/17-cockpit.md#the-panes */
+      environments: [
+        { name: 'staging', opens: ['validate', 'close_out'], watched: true },
+        { name: 'prod', opens: ['close_out'], watched: false },
+        { name: 'preview', opens: [], watched: false },
+      ],
       heartbeatIntervalMs: 15_000,
       maxConcurrentAgents: 5,
       watchLabel: 'lubbdubb-watch',
@@ -954,14 +963,16 @@ export function buildDemoState(): DemoSeed {
           spend: demoSpend(395, 9.42, 5),
           validation: {
             state: 'flagged',
-            total: 9,
+            /* The live rows below, tallied: `total` counts every check the goal carries less
+               the superseded one, which the plan has already moved past. */
+            total: 12,
             passed: 3,
             failed: 1,
-            unrun: 3,
+            unrun: 4,
             deferred: 1,
             waived: 1,
-            captured: 0,
-            declined: 0,
+            captured: 1,
+            declined: 1,
           },
         }),
         demoIssue({
