@@ -816,10 +816,11 @@ approval prevents.
 query, what it expects, and what the dry run read — with the controls that change them
 (`web/src/components/SignalsSection.tsx`, embedded by `web/src/console/GoalPage.tsx`). Its count reads in **readings**, never in checks: a windowed reading and a point-in-time check are
 different clocks, and one word for both is how the goal page came to mean four things by "check"
-([17](17-cockpit.md#one-noun-per-thing)). It sits under the checks and above the environments, which is
-the order the questions are asked in: the checks are _did we build it_, this is _did it do anything_, and the environment rows below carry what each
-window has read since. It is not a second copy of the plan sheet's block: the sheet draws a document
-under review at approval time, and this draws a live goal being operated weeks later.
+([17](17-cockpit.md#one-noun-per-thing)). It sits on the **Watch** pane, above the window's own card,
+which is the order the questions are asked in: this is _what should be true of it running_, and the
+card below is _what has been read since_. The pane is the obligation and the two cards are its halves.
+It is not a second copy of the plan sheet's block: the sheet draws a document under review at approval
+time, and this draws a live goal being operated weeks later.
 
 Its rows carry the plan sheet's ruling control unchanged, so an operator who never opens a plan sheet
 still sees an agent's declaration and can accept or decline it. A check the operator wrote says so —
@@ -830,11 +831,21 @@ checks reads null, and an empty card headed _Signals_ is a surface reporting the
 goal that has a plan draws the card with whatever list it has, because the add controls are how a
 list starts.
 
-**The goal page's Environments card** grows a watch block **inside** each environment's row —
-indented, on the well, with a tinted left edge (`web/src/console/GoalPage.tsx`,
-`web/src/console/console.css`). Inside the row and not beside it, because a watch belongs to an
-arrival: drawn as a sibling, the two surfaces would be free to disagree about which environment a
-reading came from, which is the disagreement the strip's fold exists to prevent one layer up.
+**The goal page's Watch card** draws the window one environment's arrival opened, headed
+`Watch · <environment>` (`web/src/console/GoalPage.tsx`, `web/src/console/console.css`). It was drawn
+**inside** that environment's own row on the Environments card while the environments and the watch
+shared a pane, because a watch belongs to an arrival and two surfaces drawn as siblings would be free
+to disagree about which environment a reading came from. The heading carries that guarantee now: the
+environment is in the card's own title and in the tab above it, and a watch reading is never drawn
+without the environment it was read in. The card is on the **Watch** pane, which exists only where
+some environment declares a `watch` block and is named for the environment that declares it
+([17](17-cockpit.md#the-panes)) — so the pane, the tab's qualifier, the card's heading and the
+readings are one environment all the way down.
+
+**A window that has not opened says so, and is not an empty list of readings.** A window that never
+opened and a window that opened and read nothing are different answers, and only the second is about
+the work — the same distinction the unread check makes one level down. The card names the environment
+and says nothing of this goal has arrived there yet.
 
 The block says how long the window has left, or when it settled — and, where somebody extended it,
 that it was extended, since otherwise the card states a window length no configuration would produce.

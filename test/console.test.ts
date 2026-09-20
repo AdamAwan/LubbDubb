@@ -861,14 +861,14 @@ test('a pull request the world has lost is said so, rather than falling through 
 });
 
 test('a goal draws its own durable record, not only the live snapshot', () => {
-  const shut = render(goalView(() => {}, goalRef(), [], [], 'done'));
+  const shut = render(goalView(() => {}, goalRef(), [], [], 'close'));
   assert.ok(shut.includes('The record'), 'the goal page must carry the history the snapshot forgets');
   assert.ok(
     !shut.includes('Reading the record'),
     'folded away it fetches nothing — "on open, never polled" is the disclosure now, not the page',
   );
 
-  const open = render(goalView(() => {}, goalRef(), ['record'], [], 'done'));
+  const open = render(goalView(() => {}, goalRef(), ['record'], [], 'close'));
   assert.ok(open.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
 });
 
@@ -1167,15 +1167,15 @@ test('validation and signals are folded on a goal that has not shipped', () => {
       ],
     },
   };
-  const html = render({ ...nowhere, goalTab: 'merged' });
+  const html = render({ ...nowhere, goalTab: 'validate' });
   assert.ok(html.includes('Checks'), 'the card is named — a surface that vanishes when quiet looks broken');
   assert.ok(!html.includes('cn-vin'), 'and its body is not drawn while there is nothing in it');
   assert.ok(
-    render({ ...nowhere, goalTab: 'shipped' }).includes('0/1 reached'),
+    render({ ...nowhere, goalTab: 'close' }).includes('0/1 reached'),
     'a folded environments card still says how far the work has got',
   );
 
-  const open = render({ ...nowhere, goalTab: 'merged', goalOpen: new Set(['validation']) });
+  const open = render({ ...nowhere, goalTab: 'validate', goalOpen: new Set(['validation']) });
   assert.ok(open.includes('cn-vin'), 'the place is what opens it');
 });
 
@@ -1401,7 +1401,7 @@ test('the theme section draws a preset picker, the token rows and the save bar',
 });
 
 test('a goal with no measured spend draws no spend row rather than $0.00', () => {
-  const v = goalView(() => {}, goalRef(), [], [], 'done');
+  const v = goalView(() => {}, goalRef(), [], [], 'close');
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
 
@@ -1908,7 +1908,7 @@ test('the goal header offers Validate locally only where an agent could run it',
         ref,
         [],
         [],
-        'merged',
+        'validate',
       ),
     ),
   );
@@ -1924,7 +1924,7 @@ test('the goal header offers Validate locally only where an agent could run it',
         ref,
         [],
         [],
-        'merged',
+        'validate',
       ),
     ),
   );
@@ -1971,7 +1971,7 @@ test('the local validation chip words each phase of a run in flight', () => {
 });
 
 test('the local validation card draws the findings, the pages and the plan it ran', () => {
-  const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'], [], 'merged')));
+  const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'], [], 'validate')));
   assert.ok(html.includes('A job with no schema is accepted'), 'the finding');
   assert.ok(html.includes('blocker'), 'and what it is worth');
   assert.ok(html.includes('http://localhost:5173/jobs/new'), 'the page it was found on');
@@ -1992,7 +1992,7 @@ test('a passed local validation reads settled and offers nothing to do', () => {
         'issue:390',
         ['localValidation'],
         [],
-        'merged',
+        'validate',
       ),
     ),
   );
