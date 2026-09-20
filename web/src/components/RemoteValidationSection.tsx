@@ -49,16 +49,19 @@ export function RemoteValidationSection({
   showing,
   onShow,
   controls,
+  switcher = true,
 }: {
   sheets: RemoteSheetView[];
   showing: string | null;
   onShow: (environment: string | null) => void;
   controls: SheetControls;
+  /** False where the surface embedding this already picks the environment. */
+  switcher?: boolean;
 }): JSX.Element {
   const open = sheets.find((s) => s.environment === showing) ?? sheets[0]!;
   return (
     <div className="cn-sig">
-      {sheets.length > 1 && (
+      {switcher && sheets.length > 1 && (
         <HeadRow className="cn-sig-add">
           {sheets.map((sheet) => (
             <Button

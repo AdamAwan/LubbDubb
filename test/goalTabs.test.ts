@@ -67,6 +67,24 @@ test('every foldable section is drawn in exactly one pane', () => {
   }
 });
 
+test('the demo deployment’s tabs are its own environments’ obligations', () => {
+  /* The row is derived from the environment list, and the fixtures declare the shape that
+     exercises it: staging carries the checks, the close-out and the watch; prod carries the
+     close-out too, so that tab draws a picker; preview opens nothing.
+     → docs/spec/17-cockpit.md#the-panes */
+  const nav = buildGoalNav(bare());
+  assert.deepEqual(
+    nav.map((e) => [e.tab, e.on]),
+    [
+      ['ask', []],
+      ['plan', []],
+      ['validate', ['staging']],
+      ['close', ['staging', 'prod']],
+      ['watch', ['staging']],
+    ],
+  );
+});
+
 test('a goal nobody has planned opens on the ask', () => {
   const page = bare();
   assert.equal(goalTabOpening(page).tab, 'ask');
@@ -97,13 +115,13 @@ test('a held gate beats everything but a finished goal', () => {
     gateHold: 'validate',
     openPullRequests: [openPr({ attention: { status: 'you', reasons: ['review'] } })],
   };
-  assert.equal(goalTabOpening(held).tab, 'shipped');
+  assert.equal(goalTabOpening(held).tab, 'close', 'the hold is what the close-out is waiting on');
 
   const finished: GoalPageView = { ...held, issue: { ...held.issue, state: 'closed' } };
-  assert.equal(goalTabOpening(finished).tab, 'done', 'nothing is left to steer on a shut goal');
+  assert.equal(goalTabOpening(finished).tab, 'close', 'nothing is left to steer on a shut goal');
 });
 
-test('a flagged validation plan opens on the merge, a clear one does not', () => {
+test('a flagged validation plan opens on the checks, a clear one does not', () => {
   const page = bare();
   const flagged: GoalPageView = {
     ...page,
@@ -123,7 +141,7 @@ test('a flagged validation plan opens on the merge, a clear one does not', () =>
       },
     },
   };
-  assert.equal(goalTabOpening(flagged).tab, 'merged');
+  assert.equal(goalTabOpening(flagged).tab, 'validate');
 
   const clear: GoalPageView = {
     ...flagged,
@@ -146,7 +164,7 @@ test('a flagged validation plan opens on the merge, a clear one does not', () =>
   assert.equal(goalTabOpening(clear).tab, 'plan', 'a settled plan is not a reason to be looking at it');
 });
 
-test('reaching an environment opens on shipping', () => {
+test('reaching an environment opens on the close-out it is owed against', () => {
   const page = bare();
   const shipped: GoalPageView = {
     ...page,
@@ -155,7 +173,7 @@ test('reaching an environment opens on shipping', () => {
       { environment: 'prod', status: 'reached', landed: 2, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
     ],
   };
-  assert.equal(goalTabOpening(shipped).tab, 'shipped');
+  assert.equal(goalTabOpening(shipped).tab, 'close');
 });
 
 test('every tab reads something, even on a goal that has nothing', () => {
@@ -191,7 +209,7 @@ test('the plan tab says what wants a person before it says how far the work got'
   assert.equal(court.tone, 'amber');
 });
 
-test('the shipped tab says the gate before it says the count', () => {
+test('the close tab says the gate before it says the count', () => {
   const page = bare();
   const envs = [
     {
@@ -205,21 +223,22 @@ test('the shipped tab says the gate before it says the count', () => {
       sheet: null,
     },
   ];
-  const reached = buildGoalNav({ ...page, environments: envs }).find((e) => e.tab === 'shipped')!;
+  const reached = buildGoalNav({ ...page, environments: envs }).find((e) => e.tab === 'close')!;
   assert.equal(reached.reading, 'reached prod');
   assert.equal(reached.tone, 'green');
 
-  const held = buildGoalNav({ ...page, environments: envs, gateHold: 'validate' }).find((e) => e.tab === 'shipped')!;
+  const held = buildGoalNav({ ...page, environments: envs, gateHold: 'validate' }).find((e) => e.tab === 'close')!;
   assert.equal(held.reading, 'gate held');
   assert.equal(held.tone, 'amber');
 });
 
-test('a goal with no environments still draws the shipped tab', () => {
-  /* The row keeps its shape between goals: a control that gains and loses a
-     column cannot be aimed at from memory. */
-  const shipped = buildGoalNav(bare()).find((e) => e.tab === 'shipped')!;
-  assert.equal(shipped.reading, 'no environments');
-  assert.equal(shipped.done, null, 'nothing reached of nothing is not a proportion');
+test('a goal with no environments still draws the close tab', () => {
+  /* Validation and the close-out are owed on every deployment; only the environment that
+     carries them is configuration. A row that gained and lost a column between two goals
+     could not be aimed at from memory. */
+  const close = buildGoalNav(bare()).find((e) => e.tab === 'close')!;
+  assert.equal(close.reading, 'not reached');
+  assert.equal(close.done, null, 'nothing reached of nothing is not a proportion');
 });
 
 test('the landing is decided on arrival and held, however the goal moves under it', () => {
@@ -266,7 +285,7 @@ function env(over: Partial<GoalEnvironmentReachView> & { environment: string }):
 }
 
 function shipped(page: GoalPageView): { reading: string; done: number | null } {
-  const entry = buildGoalNav(page).find((e) => e.tab === 'shipped')!;
+  const entry = buildGoalNav(page).find((e) => e.tab === 'close')!;
   return { reading: entry.reading, done: entry.done };
 }
 
@@ -282,7 +301,7 @@ test('a goal short of an environment reads what is owed, and draws no meter', ()
 /* `total` is landings + unattributed merges + the code parts still owed, so decomposing a plan
    further grows the denominator. A meter against it runs backwards, and worse, it reports a
    goal as part-way *checked* when nothing about it has been checked at all. */
-test('the Shipped meter is drawn only against the environments, which cannot grow with the plan', () => {
+test('the Close meter is drawn only against the environments, which cannot grow with the plan', () => {
   const page = bare();
   const reached: GoalPageView = {
     ...page,
@@ -305,7 +324,7 @@ test('a landing on no integration branch is not reported as a goal that can neve
     landings: [{ prNumber: 9, sha: 'dead', reach: {}, unplaced: true }],
   };
   assert.match(shipped(stranded).reading, /^reached staging/);
-  assert.equal(goalTabOpening(stranded).tab, 'shipped');
+  assert.equal(goalTabOpening(stranded).tab, 'close');
 });
 
 test('the matrix gives a row to every part, and to every merge no part claims', () => {

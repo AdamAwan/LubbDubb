@@ -133,7 +133,7 @@ Local, and batched. Two `git` invocations answer the whole pending set:
 
 The objects are as fresh as the plan reconciler's `git fetch`, floored by `planning.gitFetchIntervalMs`
 ([08](08-planning.md)). The seam itself stays read-only and fetch-free — and on a partial clone that
-takes saying so to git, because otherwise asking about a commit it does not hold *is* a fetch:
+takes saying so to git, because otherwise asking about a commit it does not hold _is_ a fetch:
 every call the observer makes runs with `GIT_NO_LAZY_FETCH=1`
 ([09](09-execution.md#a-read-only-call-never-opens-a-socket)). A probe that could not answer is
 recorded in the error log rather than swallowed, so the reading below is never mute.
@@ -153,7 +153,7 @@ the glass, and the cockpit states in the operator's own words that the work has 
 reason that has nothing to do with shipping.
 
 **A commit this checkout does not hold is the third row, not the second.** `absent` is a commit the
-clone *has* and the head does not reach — a positive statement about deployment. An object never
+clone _has_ and the head does not reach — a positive statement about deployment. An object never
 fetched says nothing about deployment at all, and on a partial clone it is the ordinary case rather
 than the exotic one: the probe declines to fetch it, reads it as not held, and the landing stays
 `unknown` to be asked again next pulse. The two must not be run together, because `absent` is
@@ -912,8 +912,10 @@ it.
 
 ### Every part, every environment
 
-Above the environment rows the goal page draws the **reach matrix**: the goal's parts down, the
-configured environments across, one cell per pair. The rows are `GoalReachView.landings` — one
+Beneath the environment rows the goal page draws the **reach matrix**: the goal's parts down, the
+configured environments across, one cell per pair. Beneath, because the rows above it are scoped to
+the one environment the pane is showing and the matrix is the unscoped picture — the question it
+answers is _where is everything_, which is the one the rows deliberately cannot ask. The rows are `GoalReachView.landings` — one
 `GoalLandingReach` per landing, carrying what each environment's probe said about it — folded against
 the plan's parts by `buildGoalReachMatrix` (`web/src/view/goalPage.ts`).
 
@@ -933,12 +935,12 @@ one layer down.
 A cell is five-valued, and the two additions to [the three verdicts](#the-three-verdicts) are both
 things that must not fold into `absent`:
 
-| Cell       | What it means                                                                          |
-| ---------- | -------------------------------------------------------------------------------------- |
-| `reached`  | the probe found it                                                                     |
-| `absent`   | the probe looked and the environment does not hold it                                   |
-| `unknown`  | the probe could not say                                                                 |
-| `pending`  | nobody asked — a part with no pull request, or a landing no probe has read yet          |
+| Cell       | What it means                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `reached`  | the probe found it                                                                          |
+| `absent`   | the probe looked and the environment does not hold it                                       |
+| `unknown`  | the probe could not say                                                                     |
+| `pending`  | nobody asked — a part with no pull request, or a landing no probe has read yet              |
 | `unplaced` | the clone places this landing on no integration branch ([above](#what-counts-as-a-landing)) |
 
 **An `unplaced` row is an account, never a blocker.** `goalReach` filters `onIntegration !== false`
@@ -967,6 +969,23 @@ than a success one, because half a feature in production is the state most likel
 Each row that opens something says so (`opens the validation checks and the close-out`), on the row
 that would do the opening: an operator reading a held goal asks "waiting for what" exactly once, and
 the answer is configuration they may not remember writing.
+
+**A gate is also what puts the environment's name on a goal-page tab.** `arrival.opens` is read twice
+and means one thing both times: here, as what this environment's arrival _does_, and by
+`goalObligations` as which obligation this environment _carries_ — so the goal page's `validate` and
+`close` tabs each name whichever environment declares that gate, and a `watch` block does the same for
+the `watch` tab ([17](17-cockpit.md#the-panes)). The obligations are the tabs and the environments are
+where they are discharged, which is why a deployment that validates on test and watches production
+gets that row without the cockpit having an opinion, and why two environments opening one gate put a
+picker on that one tab rather than reshaping the row. What `opens` changes is therefore no longer only
+when a gate lifts: it is also **where on the page** the work behind that gate is read, and an
+environment whose `opens` is edited moves a tab's name with it.
+
+The gate's own hold is drawn on `close` and nowhere else, whichever gate is held. The hold is the
+operator's to release and the release control stands beside the environment rows, so sending them to
+the gate's own tab would be sending them away from the control. The tab says `gate held` before it
+says the delivery or the count, because what wants a person outranks how far the work got
+([17](17-cockpit.md#the-panes)).
 
 **A hold is drawn, because nothing else would draw it.** `GoalReachView.gateHold` is non-null only for
 a goal that is delivered and gated right now, and the card states it in a sentence with the release

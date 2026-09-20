@@ -2245,14 +2245,15 @@ inside the Environments card, `LocalValidationSection`'s argument for its reason
 **controls and a press**, and a control buried two levels inside a status card is a control nobody
 finds.
 
-**It is drawn behind the Shipped pane, not the Merged one** ([17](17-cockpit.md#the-panes)). A sheet
-is assembled _for an arrival_, and an arrival needs every one of the goal's landings to have been read
-as present ([24](24-environments.md#what-an-arrival-means)) — so a sheet and the merge-time checks can
-never both be the live reading, and a pane holding both names two states that cannot coexist. Behind
-Shipped the card sits under the reach matrix and the Environments rows, which is the order the
-questions are asked in: has every part got there (the matrix), where is it (Environments), does it
-work there (this), did it do anything over time (Signals). The merge-time half of the old pairing —
-`validation` and `localValidation` — stays behind Merged.
+**It is drawn behind the Validate pane, beneath the check set and the local run**
+([17](17-cockpit.md#the-panes)). The three are one obligation seen at three distances rather than
+three sets of tests: a `check` row on a sheet carries a check's `sourceId`, and the run's outcome is
+written back onto that check as `resultBy: 'spec'`. A pane that held the set and a pane that held the
+sheet would be one list drawn twice, with an operator asked which copy to believe. The order on the
+pane is the order the questions are asked in: what must be true (the set), what a person or a local
+run answered by hand (the local plan), and what the environment's own run answered (this). The tab is
+qualified by whichever environment declares `arrival.opens: 'validate'` — which is the same
+environment this sheet is put to.
 
 **The card is absent entirely where no environment declares a `validate` block**, and absent on a
 goal with no sheet — not an empty card, and not a row of question marks. That is the rule the

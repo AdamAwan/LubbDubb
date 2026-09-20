@@ -18,6 +18,7 @@ export type {
   CiPolicyDescription,
   CiRuleDescription,
   CiSubject,
+  CockpitEnvironment,
   CockpitDecision,
   Decision,
   DispatchRule,
