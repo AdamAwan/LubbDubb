@@ -119,9 +119,9 @@ interface Conn {
 
 const CHATTER = [
   'reading changed files …',
-  'npm test -w packages/retrieval',
+  'npm test -w packages/search',
   '  ✓ 128 passing',
-  'editing packages/retrieval/src/index.ts',
+  'editing packages/search/src/index.ts',
   'git add -A && git commit -m "wip"',
   'running npm run typecheck …',
   '  build ok · typecheck ok · lint ok',
@@ -214,14 +214,14 @@ const VALIDATION_STEPS: readonly ((row: LocalValidationView) => Partial<LocalVal
     plan: [
       '## What changed',
       '',
-      'The catalogue now accepts a per-item schema, and the job form posts one. Three things to drive:',
+      'Checkout takes card payment through the new provider rather than the old gateway. Three things to drive:',
       '',
-      '1. **A job with a schema is accepted.** Open /jobs/new, fill the form with a valid schema and submit.',
-      '   A pass is a 201 and the job listed with its schema on /jobs.',
-      '2. **A job with no schema is refused.** Submit the same form with the schema field empty.',
-      '   A pass is the form staying put with a message naming the field.',
-      '3. **An existing job still opens.** Open a job created before this change from /jobs.',
-      '   A pass is the detail page rendering with no schema section rather than an error.',
+      '1. **A card payment goes through.** Put a book in the basket and pay with the test card.',
+      '   A pass is the order page opening with the charge on it.',
+      '2. **A declined card is refused cleanly.** Pay the same basket with the decline-test card.',
+      '   A pass is the checkout page staying put, naming the decline, with the basket intact.',
+      '3. **An older order still opens.** Open an order taken through the old gateway.',
+      '   A pass is the order page rendering with its original payment reference rather than an error.',
     ].join('\n'),
   }),
   () => ({ phase: 'driving' }),
@@ -230,31 +230,31 @@ const VALIDATION_STEPS: readonly ((row: LocalValidationView) => Partial<LocalVal
     phase: null,
     endedAt: new Date().toISOString(),
     summary:
-      'Steps 1 and 3 pass: a job with a schema is accepted and listed, and a job from before the change opens ' +
-      'with no schema section. Step 2 does not — the form accepts an empty schema and the API takes it, so the ' +
-      'validation this change exists to add is not applied on the path a person actually uses.',
+      'Steps 1 and 3 pass: a test card is charged and the order is written, and an order taken through the old ' +
+      'gateway still opens with its original reference. Step 2 does not — a declined card leaves the customer on ' +
+      'a blank page with the basket emptied, so the decline path this change has to keep working is worse than ' +
+      'it was.',
     findings: [
       {
-        title: 'A job with no schema is accepted',
+        title: 'A declined card empties the basket and shows nothing',
         detail:
-          'Opened /jobs/new, filled in title and payload, left the schema field empty and submitted. Expected the ' +
-          'form to stay put naming the field; the request went out and came back 201, and the job is listed with ' +
-          'an empty schema.',
+          'Paid with the decline-test card. Expected the checkout page to stay put naming the decline; got a blank ' +
+          'page at /checkout/complete and an empty basket, so the customer cannot retry without starting again.',
         severity: 'blocker',
-        url: 'http://localhost:5173/jobs/new',
+        url: 'http://localhost:5173/checkout',
         screenshot: null,
       },
       {
-        title: 'The validation message reads "undefined"',
+        title: 'The decline message reads "undefined"',
         detail:
-          'Submitting a malformed schema does refuse it, but the message under the field reads "undefined" rather ' +
-          'than saying what is wrong with it.',
+          'An expired card is refused, but the message under the card field reads "undefined" rather than saying ' +
+          'what the provider said was wrong with it.',
         severity: 'nit',
-        url: 'http://localhost:5173/jobs/new',
+        url: 'http://localhost:5173/checkout',
         screenshot: null,
       },
     ],
-    visited: ['http://localhost:5173/jobs/new', 'http://localhost:5173/jobs'],
+    visited: ['http://localhost:5173/checkout', 'http://localhost:5173/orders'],
     screenshots: [],
     files: [],
   }),
@@ -264,8 +264,8 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'starting the containers',
     lines: toolLines('09:41:12', 'Bash', 'docker compose up -d', '09:41:38', [
-      'Container markdown-magpie-postgres  Started',
-      'Container markdown-magpie-redis     Started',
+      'Container inkwell-books-postgres  Started',
+      'Container inkwell-books-redis     Started',
     ]),
   },
   {
@@ -279,7 +279,7 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
     phase: 'seeding the sample data',
     lines: [
       'The compose file brings the database up empty, so it needs seeding before the app has anything to draw.',
-      ...toolLines('09:42:21', 'Bash', 'npm run seed', '09:42:44', ['seeded 240 documents across 18 repositories']),
+      ...toolLines('09:42:21', 'Bash', 'npm run seed', '09:42:44', ['seeded 1,240 books across 42 publishers']),
     ],
   },
   {
@@ -317,9 +317,9 @@ const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'taking the containers down',
     lines: toolLines('10:02:15', 'Bash', 'docker compose down', '10:02:39', [
-      'Container markdown-magpie-postgres  Removed',
-      'Container markdown-magpie-redis     Removed',
-      'Network markdown-magpie_default     Removed',
+      'Container inkwell-books-postgres  Removed',
+      'Container inkwell-books-redis     Removed',
+      'Network inkwell-books_default     Removed',
     ]),
   },
 ];
@@ -351,31 +351,31 @@ const ago = (mins: number): string => new Date(Date.now() - mins * 60_000).toISO
  */
 const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] = [
   [
-    'issue:390:part:schemas',
+    'issue:390:part:client',
     [
       {
         id: 'desc-demo-1',
-        originRef: 'issue:390:part:schemas',
+        originRef: 'issue:390:part:client',
         version: 1,
         supersedes: null,
         text:
-          'Payload schemas are declared in four places today and they have already drifted apart once. This ' +
-          'moves every one of them into the jobs catalog, and the old paths re-export so nothing importing ' +
-          'them has to change.\n\nNothing here validates anything yet — that is the next part. If this is ' +
-          'wrong the blast radius is every job type at once, because there is no longer a second copy to ' +
-          'fall back on.',
+          'The old gateway is called from four places and each one builds its request a little differently. ' +
+          'This adds one client for the new provider that covers every call the gateway carries, and leaves ' +
+          'the call sites pointing at it.\n\nNothing here charges a customer yet — that is the next part. If ' +
+          'this is wrong the blast radius is every payment at once, because there is no longer a second path ' +
+          'to fall back on.',
         author: DEMO_OPERATOR,
         authoredAt: ago(240),
         checkedAt: ago(236),
         findings: [
           {
             kind: 'contradicted',
-            note: 'The old paths do not re-export — packages/jobs/src/index.ts:12 drops four of them, so three callers outside this package stop compiling.',
+            note: 'The call sites do not all point at it — packages/payments/src/index.ts:12 still exports the old gateway, and three callers outside this package use it.',
             question: null,
           },
           {
             kind: 'gap',
-            note: 'The migration that backfills job_catalog has already run on anything that booted this build, so a revert leaves the rows behind — packages/jobs/migrations/014_catalog.sql:1',
+            note: 'The migration that backfills payment_provider has already run on anything that booted this build, so a revert leaves the rows behind — packages/payments/migrations/014_provider.sql:1',
             question: 'undone',
           },
         ],
@@ -383,18 +383,18 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
     ],
   ],
   [
-    'issue:390:part:validate',
+    'issue:390:part:payment',
     [
       {
         id: 'desc-demo-2',
-        originRef: 'issue:390:part:validate',
+        originRef: 'issue:390:part:payment',
         version: 1,
         supersedes: null,
         text:
-          'Four routes each parse the job payload their own way, so four of them can disagree with the ' +
-          'catalog. This makes the enqueue the one place a payload is checked, and deletes the parsers the ' +
-          'routes carried.\n\nAn enqueue that the catalog rejects now throws before the row is written, ' +
-          'which is the behaviour change a reviewer should look hardest at.',
+          'Four routes each build their own charge request, so four of them can disagree with the provider. ' +
+          'This makes checkout the one place a card is charged, and deletes the request builders the routes ' +
+          'carried.\n\nA charge the provider declines now keeps the customer on the checkout page rather than ' +
+          'writing the order, which is the behaviour change a reviewer should look hardest at.',
         author: DEMO_OPERATOR,
         authoredAt: ago(20),
         checkedAt: null,
@@ -413,10 +413,10 @@ class DemoServer {
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
   private lines: string[] = [
-    'Bringing #390 up on this machine — the compose file first, then the app.',
+    'Bringing #390 up on this machine — the compose file first, then the shop.',
     ...toolLines('09:12:04', 'Bash', 'docker compose up -d', '09:12:31', [
-      'Container markdown-magpie-postgres  Started',
-      'Container markdown-magpie-redis     Started',
+      'Container inkwell-books-postgres  Started',
+      'Container inkwell-books-redis     Started',
     ]),
     ...toolLines('09:12:32', 'Bash', 'npm run dev -- --host', '09:12:34', ['VITE ready in 1180 ms']),
     'Up on http://localhost:5173. Nothing needed that the instruction did not mention.',
@@ -1610,7 +1610,7 @@ class DemoServer {
       id: `run-${String(this.state.localRun === null ? 2 : Number(this.state.localRun.id.split('-')[1] ?? 1) + 1)}`,
       originRef: `issue:${String(issue)}`,
       ref: ref ?? facts?.ref ?? 'main',
-      dir: '/Users/you/code/markdown-magpie/.lubbdubb/local-run',
+      dir: '/Users/you/code/inkwell-books/.lubbdubb/local-run',
       commit: DEMO_TIP,
       pid: 48000 + issue,
       status: 'starting',
@@ -2402,7 +2402,7 @@ class DemoServer {
     if (this.deskBeats < 2) return;
     held.state = 'passed';
     held.resultNote =
-      'Copied the download URL, flipped one character of the signature and requested it: 403, and the snapshot was not served.';
+      'Refunded an order paid with the always-decline card: the provider refused it, and the ledger has no entry for it.';
     held.resultBy = 'desktop';
     held.resultAt = new Date().toISOString();
     held.claimedBy = null;
@@ -2451,41 +2451,41 @@ const DEMO_REVIEW_PACK: ReviewPack = {
   schema: 1,
   prNumber: 413,
   headSha: DEMO_PACK_HEAD,
-  headline: 'Every job is now checked against the catalog before its row is written.',
+  headline: 'Every card is now charged through the new provider, and a decline writes no order.',
   summary: [
-    '- The **enqueue** asks the catalog, so a bad payload never reaches the queue.',
-    '- The four routes **stop parsing** payloads of their own.',
+    '- **Checkout** asks the provider before the order is written, so a declined card never becomes an order.',
+    '- The four routes **stop building** charge requests of their own.',
     '- The retry count moved too, and **the plan did not ask for that** — idea 02.',
   ].join('\n'),
   estimatedMinutes: 9,
-  order: ['idea_enqueue', 'idea_retries', 'idea_routes', 'plumbing'],
+  order: ['idea_charge', 'idea_retries', 'idea_routes', 'plumbing'],
   witnessed: true,
   fake: 'nothing',
   ideas: [
     {
-      id: 'idea_enqueue',
-      atom: 'enqueue-validates',
-      claim: 'Every enqueue path validates its payload against the catalog before writing a row.',
-      title: 'A job is checked before it is queued, not after',
+      id: 'idea_charge',
+      atom: 'take-payment',
+      claim: 'Every checkout path charges through the provider client before the order row is written.',
+      title: 'The card is charged before the order exists, not after',
       cue: 'Read: this is the guarantee the whole change exists to make.',
       attention: 'read',
-      coverage: ['an unknown job type is refused by name', 'a valid payload still enqueues'],
+      coverage: ['a declined card writes no order', 'an accepted card still writes one'],
       anchors: [
         {
           kind: 'hunk',
-          range: { path: 'apps/api/src/jobs/enqueue.ts', start: 18, end: 27 },
+          range: { path: 'apps/api/src/checkout/pay.ts', start: 18, end: 27 },
           code: [
-            ' export async function enqueue(type: JobType, payload: unknown) {',
-            '+  const schema = catalog.schemaFor(type);',
-            '+  const parsed = schema.parse(payload);',
-            '-  return db.jobs.insert({ type, payload });',
-            '+  return db.jobs.insert({ type, payload: parsed });',
+            ' export async function pay(basket: Basket, card: CardInput) {',
+            '+  const charge = await provider.charge(basket.total, card);',
+            '+  if (!charge.ok) throw new PaymentDeclined(charge.reason);',
+            '-  return db.orders.insert({ basket, card });',
+            '+  return db.orders.insert({ basket, chargeRef: charge.ref });',
             ' }',
           ],
-          gist: 'The catalog is asked here, and the parsed payload is what gets stored.',
+          gist: 'The provider is asked here, and its reference is what gets stored.',
           note: {
             by: 'witness',
-            text: 'Chose to throw rather than to drop the job: a queue that silently loses work is worse than one that fails loudly.',
+            text: 'Chose to throw rather than to write the order and reconcile later: an order nobody paid for is worse than a checkout that fails loudly.',
             entryId: 'scr_kf20a7',
             at: DEMO_PAD_AT,
           },
@@ -2494,13 +2494,13 @@ const DEMO_REVIEW_PACK: ReviewPack = {
         },
         {
           kind: 'region',
-          range: { path: 'apps/watcher/src/worker-loop.ts', start: 64, end: 69 },
+          range: { path: 'apps/api/src/features/refunds/issue.ts', start: 64, end: 69 },
           code: [
-            '  const job = await claimNextJob();',
-            '  // No validation here — the row was checked at enqueue.',
-            '  await runners[job.type](job.payload);',
+            '  const order = await loadOrder(id);',
+            '  // Still the old gateway — the refund move is part 3.',
+            '  await gateway.refund(order.gatewayRef, amount);',
           ],
-          gist: 'Should the watcher have changed too? No — part 3 does that, and it is not in this diff.',
+          gist: 'Should refunds have changed too? No — part 3 does that, and it is not in this diff.',
           note: null,
           caption: 'unchanged, and deliberately',
           mark: null,
@@ -2508,32 +2508,32 @@ const DEMO_REVIEW_PACK: ReviewPack = {
       ],
       claims: [
         {
-          text: 'Every enqueue path goes through this function.',
+          text: 'Every checkout path goes through this function.',
           provenance: { kind: 'inferred' },
           verdict: 'false',
           evidence:
-            'Three callers reach `db.jobs.insert` directly: apps/api/src/features/reindex/backfill.ts:88, apps/api/src/admin/replay.ts:41, and the seed script.',
+            'Three callers reach `db.orders.insert` directly: apps/api/src/features/orders/phone.ts:88, apps/api/src/admin/replay.ts:41, and the seed script.',
           finding: {
-            headline: 'The backfill still inserts jobs without asking the catalog.',
-            body: 'The claim is what the change rests on, and it is not true of `backfill.ts`, which builds its rows and calls `db.jobs.insert` itself. A reindex can still queue a payload the catalog would refuse, which is the exact failure this pull request exists to close.\n\nIt is one call site and the fix is the same two lines, but it is a decision rather than a nit: taking the backfill through `enqueue` also takes it through the rate limit, which it deliberately skips today.',
+            headline: 'A phone order still writes the order without charging the card.',
+            body: 'The claim is what the change rests on, and it is not true of `phone.ts`, which builds its row and calls `db.orders.insert` itself. A shop-floor phone order can still be written against a card the provider would decline, which is the exact failure this pull request exists to close.\n\nIt is one call site and the fix is the same two lines, but it is a decision rather than a nit: taking phone orders through `pay` also takes them through the fraud check, which they deliberately skip today.',
             step: 1,
             counter: {
-              range: { path: 'apps/api/src/features/reindex/backfill.ts', start: 86, end: 90 },
+              range: { path: 'apps/api/src/features/orders/phone.ts', start: 86, end: 90 },
               code: [
-                '  for (const doc of batch) {',
-                '    await db.jobs.insert({ type: "index", payload: { docId: doc.id } });',
+                '  for (const line of lines) {',
+                '    await db.orders.insert({ basket, takenBy: staffId });',
                 '  }',
               ],
-              caption: 'the path that skips the check',
+              caption: 'the path that skips the charge',
             },
           },
         },
         {
-          text: 'The catalog throws by name on an unknown job type.',
+          text: 'The client throws by name on a declined card.',
           provenance: { kind: 'witnessed', entryId: 'scr_kf20a7' },
           verdict: 'true',
           evidence:
-            'packages/jobs/src/catalog.ts:31 throws `UnknownJobType(type)`; the test at test/catalog.test.ts:22 covers it.',
+            'packages/payments/src/provider.ts:31 throws `PaymentDeclined(reason)`; the test at test/provider.test.ts:22 covers it.',
           finding: null,
         },
       ],
@@ -2541,25 +2541,25 @@ const DEMO_REVIEW_PACK: ReviewPack = {
     {
       id: 'idea_retries',
       atom: null,
-      claim: 'A failed job is retried three times rather than five, and the backoff is now exponential.',
+      claim: 'A failed charge is retried three times rather than five, and the backoff is now exponential.',
       title: 'Retries went from five to three, with a longer wait',
-      cue: 'Split: nobody asked for this, and it decides on its own how the queue behaves under load.',
+      cue: 'Split: nobody asked for this, and it decides on its own what a customer sees on a slow provider.',
       attention: 'split',
       coverage: [],
       anchors: [
         {
           kind: 'hunk',
-          range: { path: 'apps/api/src/jobs/enqueue.ts', start: 41, end: 45 },
+          range: { path: 'apps/api/src/checkout/pay.ts', start: 41, end: 45 },
           code: [
             '-  attempts: 5,',
             '-  backoffMs: 30_000,',
             '+  attempts: 3,',
             '+  backoffMs: (n: number) => 30_000 * 2 ** n,',
           ],
-          gist: 'The retry policy changed in the same commit as the validation.',
+          gist: 'The retry policy changed in the same commit as the charge.',
           note: {
             by: 'author',
-            text: 'Nothing in the plan or the pad mentions retries. It may be right — a payload the catalog refuses will never succeed on a retry — but it is a separate decision and it is not stated anywhere.',
+            text: 'Nothing in the plan or the pad mentions retries. It may be right — a card the provider declines will never succeed on a retry — but it is a separate decision and it is not stated anywhere.',
           },
           caption: 'not asked for',
           mark: 'key',
@@ -2567,33 +2567,33 @@ const DEMO_REVIEW_PACK: ReviewPack = {
       ],
       claims: [
         {
-          text: 'No job type depends on more than three attempts.',
+          text: 'No payment method depends on more than three attempts.',
           provenance: { kind: 'inferred' },
           verdict: 'cant_tell',
           evidence:
-            'Nothing in the repository states an attempt budget per type; the only evidence either way is production data this checkout has no access to.',
+            'Nothing in the repository states an attempt budget per method; the only evidence either way is production data this checkout has no access to.',
           finding: null,
         },
       ],
     },
     {
       id: 'idea_routes',
-      atom: 'drop-route-parsers',
-      claim: 'No route parses a payload shape of its own; each hands the body to the enqueue.',
-      title: 'Four routes stop having opinions about payloads',
+      atom: 'drop-gateway',
+      claim: 'No route builds a charge request of its own; each hands the basket to checkout.',
+      title: 'Four routes stop having opinions about charges',
       cue: 'Decide: three of the four are mechanical, and the fourth changes what a client is sent.',
       attention: 'decide',
-      coverage: ['each route still rejects a malformed body', 'the error body keeps its shape'],
+      coverage: ['each route still rejects a malformed basket', 'the error body keeps its shape'],
       anchors: [
         {
           kind: 'hunk',
-          range: { path: 'apps/api/src/features/jobs/index.route.ts', start: 12, end: 16 },
+          range: { path: 'apps/api/src/features/payments/card.route.ts', start: 12, end: 16 },
           code: [
-            '-  const body = IndexPayload.parse(await req.json());',
-            '-  await enqueue("index", body);',
-            '+  await enqueue("index", await req.json());',
+            '-  const req = buildGatewayCharge(await req.json());',
+            '-  await gateway.charge(req);',
+            '+  await pay(basket, await req.json());',
           ],
-          gist: 'The route hands the body over unparsed; one of four, all identical.',
+          gist: 'The route hands the card over unbuilt; one of four, all identical.',
           note: null,
           caption: 'one of four',
           mark: null,
@@ -2605,7 +2605,7 @@ const DEMO_REVIEW_PACK: ReviewPack = {
           provenance: { kind: 'disputed', entryId: 'scr_kf31b2' },
           verdict: 'true',
           evidence:
-            'The pad says the search route returned a bare string; it does not — apps/api/src/features/jobs/search.route.ts:19 has used the shared error body since #341.',
+            'The pad says the gift-card route returned a bare string; it does not — apps/api/src/features/payments/giftcard.route.ts:19 has used the shared error body since #341.',
           finding: null,
         },
       ],
@@ -2621,13 +2621,13 @@ const DEMO_REVIEW_PACK: ReviewPack = {
       anchors: [
         {
           kind: 'hunk',
-          range: { path: 'apps/api/src/jobs/enqueue.ts', start: 1, end: 4 },
+          range: { path: 'apps/api/src/checkout/pay.ts', start: 1, end: 4 },
           code: [
             '-import { db } from "../db.js";',
-            '+import { catalog } from "@magpie/jobs";',
+            '+import { provider } from "@inkwell/payments";',
             '+import { db } from "../db.js";',
           ],
-          gist: 'The import the catalog needs, in the order the linter wants.',
+          gist: 'The import the client needs, in the order the linter wants.',
           note: null,
           caption: 'imports',
           mark: null,
@@ -2659,36 +2659,36 @@ const DEMO_PR_PAD = [
   {
     id: 'scr_kf20a7',
     padRef: 'pr:413',
-    authorOriginRef: 'issue:390:part:validate',
+    authorOriginRef: 'issue:390:part:payment',
     agentId: 'agent_h72kd',
-    taskId: 'task-413-validate',
-    topic: 'enqueue',
-    note: 'The catalog lookup goes at enqueue, not in the watcher. By the time the watcher reads a row the bad job is already queued, and the queue is what a person ends up cleaning out by hand.',
+    taskId: 'task-413-payment',
+    topic: 'charge',
+    note: 'The charge goes before the order row, not after. By the time the order is written the customer has been told it worked, and an order nobody paid for is what a person ends up unpicking by hand.',
     decision: {
-      chose: 'Throw at enqueue when the catalog refuses the payload.',
-      because: 'A caller that gets an error can fix its request; a job that vanishes quietly cannot be found.',
+      chose: 'Throw at checkout when the provider declines the card.',
+      because: 'A customer who gets an error can try another card; an order nobody paid for cannot be found.',
       rejected: [
         {
-          alternative: 'Drop the job and log it.',
-          because: 'A queue that silently loses work is worse than one that fails loudly.',
+          alternative: 'Write the order and reconcile unpaid ones nightly.',
+          because: 'A shop that ships against a declined card is worse than one that fails loudly at the till.',
         },
         {
-          alternative: 'Validate in the watcher, where the payload is actually read.',
-          because: 'The row is already written by then, and nothing tells the caller.',
+          alternative: 'Charge from the refund path, where the reference is already loaded.',
+          because: 'The order is already written by then, and nothing tells the customer.',
         },
       ],
-      paths: ['apps/api/src/jobs/enqueue.ts'],
+      paths: ['apps/api/src/checkout/pay.ts'],
     },
     createdAt: DEMO_PAD_AT,
   },
   {
     id: 'scr_kf31b2',
     padRef: 'pr:413',
-    authorOriginRef: 'issue:390:part:validate',
+    authorOriginRef: 'issue:390:part:payment',
     agentId: 'agent_h72kd',
-    taskId: 'task-413-validate',
+    taskId: 'task-413-payment',
     topic: 'routes',
-    note: 'Careful with the four routes: the search one returns a bare string on a 400 rather than the shared error body, so deleting its parser changes what a client sees.',
+    note: 'Careful with the four routes: the gift-card one returns a bare string on a 400 rather than the shared error body, so deleting its request builder changes what a client sees.',
     decision: null,
     createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
   },
@@ -2769,7 +2769,7 @@ const DEMO_RETROSPECTIVE = {
   document: [
     '## What shipped',
     '',
-    'PR #410 documents why a maintenance job needs two watchers — the orchestrator blocks in an API callback while the API waits on the AI jobs it enqueued — and the console now warns when only one watcher is connected. Nothing was left outstanding.',
+    'PR #410 ranks each homepage shelf on the trailing-seven-day sales rollup, and a shelf with no sales this week keeps its curated order rather than drawing empty. Nothing was left outstanding.',
     '',
     '## How the run went',
     '',
@@ -2794,22 +2794,22 @@ const DEMO_SCRATCHPAD = [
     authorOriginRef: 'issue:364',
     agentId: 'agent-4',
     taskId: 'task-4',
-    topic: 'deadlock',
-    note: 'The starvation is not "the queue is busy": a maintenance orchestrator holds its watcher while it blocks in the API callback, and the follow-up AI jobs it enqueued can only be claimed by a *second* watcher. With one watcher it waits for itself. The docs have to say that, not "run more watchers if it feels slow".',
+    topic: 'empty-shelf',
+    note: 'An empty shelf is not "no books": the rollup has no row at all for a category that sold nothing, so the join drops the shelf and the homepage renders a gap where a shelf used to be. Ranking has to fall back to the curated order, not to nothing.',
     decision: {
-      chose: 'Release the watcher before the orchestrator blocks in the API callback.',
-      because: 'The claim path needs the watcher, and the callback holds it for the whole round-trip.',
+      chose: 'Fall back to the shelf’s curated order when the rollup has no row.',
+      because: 'A shelf that disappears reads as a broken page; one in its old order reads as a quiet week.',
       rejected: [
         {
-          alternative: 'Raise the worker count so a second claimer is usually free.',
-          because: 'Hides the deadlock behind capacity; it comes back under load.',
+          alternative: 'Write a zero row per shelf per day in the rollup job.',
+          because: 'Right, and it is the rollup job’s change rather than this one — filed as a follow-up.',
         },
         {
-          alternative: 'Move the follow-up jobs onto their own queue.',
-          because: 'Two queues to drain, and the ordering guarantee between them is what the feature is.',
+          alternative: 'Hide a shelf with no sales.',
+          because: 'The homepage layout is fixed; a missing shelf moves everything below it.',
         },
       ],
-      paths: ['src/maintenance/orchestrator.ts'],
+      paths: ['src/homepage/shelves.ts'],
     },
     createdAt: new Date(Date.now() - 9_000_000).toISOString(),
   },
@@ -2827,7 +2827,7 @@ const DEMO_SCRATCHPAD = [
   {
     id: 'scr_demo3',
     padRef: 'issue:364',
-    authorOriginRef: 'issue:364:part:docs',
+    authorOriginRef: 'issue:364:part:shelves',
     agentId: 'agent-6',
     taskId: 'task-6',
     topic: 'ci',
@@ -2842,7 +2842,7 @@ const DEMO_SCRATCHPAD = [
     agentId: 'agent-7',
     taskId: 'task-7',
     topic: null,
-    note: 'PR #410 covers the deadlock and the one-watcher warning. Nothing outstanding that I can see.',
+    note: 'PR #410 covers the ranking and the empty-shelf fallback. Nothing outstanding that I can see.',
     decision: null,
     createdAt: new Date(Date.now() - 4_200_000).toISOString(),
   },
@@ -2860,7 +2860,7 @@ const DEMO_GOAL_SEEDS: {
 }[] = [
   {
     issueNumber: 390,
-    title: 'Validate job payloads in the catalog, not in each runner',
+    title: 'Move checkout to the new payment provider',
     agents: 7,
     outcome: null,
     open: true,
@@ -2870,7 +2870,7 @@ const DEMO_GOAL_SEEDS: {
   },
   {
     issueNumber: 364,
-    title: 'Document the two-watcher requirement for maintenance jobs',
+    title: 'Order the homepage shelves by last week’s sales',
     agents: 4,
     outcome: 'delivered',
     localRuns: 0,
@@ -2879,7 +2879,7 @@ const DEMO_GOAL_SEEDS: {
   },
   {
     issueNumber: 382,
-    title: 'Gap clustering merges unrelated questions into one gap',
+    title: 'Let a customer cancel an order before it is dispatched',
     agents: 3,
     outcome: 'fell short',
     localRuns: 1,
@@ -2959,8 +2959,8 @@ const DEMO_RUNS: {
   {
     id: 'agent-d1',
     kind: 'agent',
-    title: 'Validate every payload at enqueue',
-    originRef: 'issue:390:part:validate',
+    title: 'Take the card payment through the new provider',
+    originRef: 'issue:390:part:payment',
     phase: 'build',
     costUsd: 4.12,
     turns: 61,
@@ -2969,7 +2969,7 @@ const DEMO_RUNS: {
   {
     id: 'agent-d2',
     kind: 'agent',
-    title: 'Plan the jobs-catalog move',
+    title: 'Plan the payment provider move',
     originRef: 'issue:390:plan',
     phase: 'deliberation',
     costUsd: 2.7,
@@ -2979,8 +2979,8 @@ const DEMO_RUNS: {
   {
     id: 'agent-d3',
     kind: 'agent',
-    title: 'Route the watcher’s intake through the catalog',
-    originRef: 'issue:390:part:watcher',
+    title: 'Move refunds onto the new provider',
+    originRef: 'issue:390:part:refunds',
     phase: 'build',
     costUsd: 2.44,
     turns: 38,
@@ -2999,8 +2999,8 @@ const DEMO_RUNS: {
   {
     id: 'agent-d5',
     kind: 'agent',
-    title: 'Document the two-watcher requirement',
-    originRef: 'issue:364:part:docs',
+    title: 'Order the homepage shelves by sales',
+    originRef: 'issue:364:part:shelves',
     phase: 'build',
     costUsd: 1.86,
     turns: 27,
@@ -3029,7 +3029,7 @@ const DEMO_RUNS: {
   {
     id: 'run-390-b',
     kind: 'local',
-    title: 'Local run · issue/390/validate',
+    title: 'Local run · issue/390/payment',
     originRef: 'issue:390',
     phase: 'local',
     costUsd: 0.52,
@@ -3039,7 +3039,7 @@ const DEMO_RUNS: {
   {
     id: 'agent-d8',
     kind: 'agent',
-    title: 'Sweep docs/ for links that no longer resolve',
+    title: 'Sweep the catalogue for books with no cover image',
     originRef: 'job:demo-1',
     phase: 'job',
     costUsd: 0.96,
@@ -4722,8 +4722,8 @@ async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; re
   return { nodes, refUrls };
 }
 
-const DEMO_REPO_ROOT = '/Users/you/code/markdown-magpie';
-const DEMO_ORIGIN = 'git@github.com:example/markdown-magpie.git';
+const DEMO_REPO_ROOT = '/Users/you/code/inkwell-books';
+const DEMO_ORIGIN = 'git@github.com:example/inkwell-books.git';
 
 let demoSetupWritten = true;
 
@@ -4744,7 +4744,7 @@ function demoSetupReading(): SetupPayload {
       id: 'pointed',
       label: 'Pointed at real work',
       verdict: 'ok',
-      detail: 'issues via github, source control via github — example/markdown-magpie',
+      detail: 'issues via github, source control via github — example/inkwell-books',
     },
     { id: 'credential', label: 'Credential', verdict: 'ok', detail: 'GITHUB_TOKEN present' },
     { id: 'identity', label: 'Who you are', verdict: 'ok', detail: 'userId is you' },
@@ -4752,7 +4752,7 @@ function demoSetupReading(): SetupPayload {
       id: 'watch',
       label: 'Something to work',
       verdict: 'ok',
-      detail: '11 of the 17 open item(s) carry lubbdubb-watch, so the fleet has work to pick up.',
+      detail: '19 of the 21 open item(s) carry lubbdubb-watch, so the fleet has work to pick up.',
     },
     { id: 'agent', label: 'Agent runtime', verdict: 'ok', detail: 'stream · 2.1.4' },
     {
@@ -4802,7 +4802,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
     repoRootIsSelf: false,
     originUrl: DEMO_ORIGIN,
     isRepo: true,
-    target: { provider: 'github', parts: ['example', 'markdown-magpie'], url: DEMO_ORIGIN },
+    target: { provider: 'github', parts: ['example', 'inkwell-books'], url: DEMO_ORIGIN },
     defaultBranch: { name: 'main', commit: '4f2a91c8e0d3b7a15c9f2e6d40b81a7c3e5f9d02' },
     identity: {
       email: answers.email,
@@ -4815,7 +4815,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
       file: `${DEMO_REPO_ROOT}/lubbdubb.project.json`,
       keys: ['ci', 'environments', 'issuePickupStates', 'labelPrefix'],
     },
-    watch: { label: 'magpie-watch', fromProject: true },
+    watch: { label: 'inkwell-watch', fromProject: true },
     writes: {
       repoRoot: DEMO_REPO_ROOT,
       agentMode: 'stream',
@@ -4825,7 +4825,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
       'integrations.sourceControl': 'github',
       'integrations.issues': 'github',
       'github.owner': 'example',
-      'github.repo': 'markdown-magpie',
+      'github.repo': 'inkwell-books',
     },
   };
 }
@@ -5157,19 +5157,43 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
 const DEMO_STATE_MOVES = new Map<number, string>();
 
 const DEMO_FEATURES = [
-  { number: 900, title: 'Retrieval and answering' },
-  { number: 901, title: 'Indexing and ingestion' },
-  { number: 902, title: 'Platform hygiene' },
-  { number: 300, title: 'Source-grounded document patrols' },
-  { number: 903, title: 'Search and console polish' },
+  { number: 900, title: 'Checkout and payments' },
+  { number: 901, title: 'Orders and the shop front' },
+  { number: 902, title: 'Catalogue and stock' },
+  { number: 300, title: 'Finding a book' },
+  { number: 903, title: 'Shop-floor tools' },
 ];
 
+/**
+ * Every goal the board can draw, pinned to the Feature its work actually belongs under.
+ * The modulo fallback below is only for numbers the fixtures never name — relied on for
+ * one they do, it files a stock-feed spike under Checkout and payments.
+ */
 const DEMO_PARENTS = new Map<number, number | null>([
+  [331, 300],
   [332, 300],
   [333, 300],
+  [336, 300],
+  [388, 300],
   [341, null],
-  [395, 903],
+  [345, 902],
+  [348, 902],
+  [355, 901],
+  [359, 902],
+  [361, 900],
+  [364, 901],
+  [368, 902],
+  [373, 902],
+  [376, 900],
   [379, 903],
+  [382, 901],
+  [390, 900],
+  [392, 900],
+  [394, 903],
+  [395, 901],
+  [396, 903],
+  [398, 901],
+  [399, 903],
 ]);
 
 const demoFeatureOf = (n: number): { number: number; title: string } | null => {
@@ -5331,50 +5355,53 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     ticket(390, 'queued'),
     ticket(364, 'delivered'),
     ticket(382, 'fellShort'),
-    ticket(331, 'fellShort', { title: 'Give each source-grounded job a read-only workspace' }),
+    ticket(331, 'fellShort', { title: 'Suggest titles as the customer types' }),
     ...DEMO_UNTRIAGED.map((seed) => ticket(seed.number, 'unwatched')),
-    goal(376, 'Read GitHub review decisions as proposal approval', 'inFlight', {
+    goal(376, 'Apply discount codes at checkout', 'inFlight', {
       issueType: 'Bug',
       costUsd: 0.31,
       changedAt: iso(4 / 60),
     }),
-    goal(388, 'Cap the retrieval context at the token budget before ranking', 'inFlight', {
+    goal(388, 'Search by author as well as title', 'inFlight', {
       costUsd: 0.84,
       changedAt: iso(8 / 60),
     }),
-    goal(368, 'Retry transient 502s from the embeddings endpoint', 'inFlight', {
+    goal(368, 'Import the distributor’s nightly stock feed', 'inFlight', {
       issueType: 'Bug',
       costUsd: 0.27,
       changedAt: iso(6 / 60),
     }),
-    goal(332, 'Give HTTP providers a bounded file-tool loop', 'inFlight', {
+    goal(332, 'Filter search results by format and price', 'inFlight', {
       issueType: 'User Story',
       costUsd: 0.52,
       changedAt: iso(23 / 60),
     }),
-    goal(333, 'Verify a document against its sources before correcting it', 'queued', {
+    goal(333, 'Let customers save books for later', 'queued', {
       issueType: 'User Story',
       changedAt: iso(20),
     }),
-    goal(345, 'The watcher drops its claim when the API restarts mid-job', 'queued', {
+    goal(345, 'The stock sync drops its claim when the shop restarts mid-run', 'queued', {
       issueType: 'Bug',
       workItemState: 'Ready',
       costUsd: 3.08,
       changedAt: iso(80 / 60),
     }),
-    goal(359, 'Embedding backfill times out on the 40k-section repository', 'queued', {
+    goal(359, 'Send order confirmations through the new email provider', 'queued', {
       issueType: 'Bug',
       workItemState: 'Ready',
       costUsd: 7.36,
       changedAt: iso(30),
     }),
-    goal(341, 'Answers cite a heading the section splitter renamed', 'queued', { issueType: 'Bug', changedAt: iso(1) }),
-    goal(395, 'Snapshot downloads 401 in the review console', 'delivered', {
+    goal(341, 'The book page shows the first edition’s cover for a reissue', 'queued', {
+      issueType: 'Bug',
+      changedAt: iso(1),
+    }),
+    goal(395, 'Every refund writes a ledger entry', 'delivered', {
       workItemState: 'Active',
       costUsd: 9.42,
       changedAt: iso(200 / 60),
     }),
-    goal(379, 'Make retrieval smarter', 'queued', { workItemState: 'New', changedAt: iso(52) }),
+    goal(379, 'Make checkout better', 'queued', { workItemState: 'New', changedAt: iso(52) }),
   ];
 
   const since = new Map<number, string>([
@@ -5386,14 +5413,18 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
   const delivered = new Map<number, Omit<FeatureReportRow, 'number' | 'title'>>([
     [
       364,
-      { summary: 'PR #410 landed the deadlock note and the console warning with it.', by: 'assessor', at: iso(1.5) },
+      {
+        summary: 'PR #410 landed the shelf ranking and the nightly sales rollup it reads.',
+        by: 'assessor',
+        at: iso(1.5),
+      },
     ],
     [
       395,
       {
         summary:
-          'All four parts merged. A download link opens in a new tab with auth on and with auth off, and a ' +
-          'tampered capability is refused.',
+          'All four parts merged. A refund writes its ledger entry in the same transaction, a partial refund ' +
+          'writes one for the amount refunded, and a refund that fails at the provider writes none.',
         by: 'assessor',
         at: iso(200 / 60),
       },
@@ -5404,7 +5435,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       376,
       {
         kind: 'question',
-        summary: 'Rebase hit a conflict in review-decision.ts — resolve which side wins?',
+        summary: 'Rebase hit a conflict in pricing.ts — resolve which side wins?',
         since: iso(2 / 60),
       },
     ],
@@ -5413,8 +5444,8 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       {
         kind: 'question',
         summary:
-          'The embeddings SDK already retries once on its own — bound our retry at three attempts on top of it, ' +
-          'or turn the SDK’s off and own the whole policy?',
+          'Forty rows in last night’s feed have no ISBN-13 at all — skip them and import the rest, or fail ' +
+          'the whole run?',
         since: iso(6 / 60),
       },
     ],
@@ -5423,8 +5454,8 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       {
         kind: 'fellShort',
         summary:
-          'The threshold was raised and the two example questions now cluster apart — but the goal asks for ' +
-          'clusters that are “about one thing”, and no threshold decides that.',
+          'A Cancel button is on the order page and it works — but the goal asks for cancellation “while it ' +
+          'is still cancellable”, and nothing in the shop knows when that is.',
         since: iso(4 / 60),
       },
     ],
@@ -5433,8 +5464,8 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       {
         kind: 'fellShort',
         summary:
-          'The workspace is read-only as asked, but it is a fresh clone per job — a 40k-section repository ' +
-          'takes four minutes to check out before the patrol reads a line.',
+          'Suggestions appear as asked, but they are drawn from titles alone — a customer typing an author’s ' +
+          'name still gets nothing until they have typed a book.',
         since: iso(74),
       },
     ],
@@ -5444,8 +5475,8 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     { goal: 364, prNumber: 410, at: iso(52 / 60) },
     { goal: 382, prNumber: 405, at: iso(3) },
     { goal: 345, prNumber: 401, at: iso(3 * 24) },
-    { goal: 331, prNumber: 396, at: iso(74) },
-    { goal: 345, prNumber: 397, at: iso(9 * 24) },
+    { goal: 331, prNumber: 391, at: iso(74) },
+    { goal: 345, prNumber: 389, at: iso(9 * 24) },
   ];
 
   const newestFirst = (a: string, b: string) => b.localeCompare(a);
@@ -5538,18 +5569,14 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       reach: reach({ staging: ['partial', 2, 3], prod: ['unknown', 0, 3] }),
       summary: summary(901, 'b7d02c4e19a3', 9, {
         standing:
-          'Two of three worked stories are through: the two-watcher requirement is documented and the console ' +
-          'warns on one watcher, and the gap-cluster threshold has been raised so the two questions from the ticket ' +
-          'cluster apart. The review-decision mapping and the context budget are unstarted, and two items have ' +
-          'not been opted in.',
+          'Two of three worked stories are through: the homepage shelves rank on last week’s sales, and every ' +
+          'refund now writes its ledger entry. Cancelling an order before dispatch fell short of its goal, and ' +
+          'two items have not been opted in.',
         usable:
-          'On staging, architecture.md carries the deadlock section and the review console warns when a single ' +
-          'watcher is configured.',
+          'On staging, the homepage leads on what actually sold last week rather than on the launch-day order, ' +
+          'and the finance page’s refund total comes from the ledger rather than from the orders table.',
         blocked: null,
-        remaining:
-          'Map a GitHub review decision of APPROVED onto the proposal’s own approval state (#376), cut the ' +
-          'retrieval context to the budget (#388), and have the threshold change assessed against what the ticket ' +
-          'actually asks for.',
+        remaining: 'Say what “still cancellable” means (#382), and run the five checks #395 still owes.',
       }),
       standingKey: '5e88f1a3c07d',
     },
@@ -5557,13 +5584,17 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       reach: reach({}),
       summary: summary(902, 'c93af5d1e6b2', 0.4, {
         standing:
-          'Nothing under this Feature has landed. One story is being worked: the embeddings client is getting a ' +
-          'bounded retry on a 502, so an incremental index run no longer aborts whole-sale on one bad response.',
+          'Nothing under this Feature has landed. One story is being worked: the nightly stock feed is being ' +
+          'read and matched on ISBN-13, so stock stops being typed in by hand every morning. The stock sync’s ' +
+          'claim bug has been fixed twice at the wrong layer and is sitting out its cooldown.',
         usable: null,
         blocked:
-          'The retry work is parked on a question — the embeddings SDK already retries once, and the agent wants a ' +
-          'call on whether to stack a second policy on top of it.',
-        remaining: 'The retry itself, and the link sweep over docs/ has not been opted in.',
+          'The import is parked on a question — forty rows in last night’s feed carry no ISBN-13, and the agent ' +
+          'wants a call on whether a partial import is better than none. #345 waits on the operator’s note ' +
+          'being taken up: both attempts patched the importer, and the claim is the shop process’s to release.',
+        remaining:
+          'The import itself, taking #345 up in the shop process, and two items that have never been read by ' +
+          'the fleet.',
       }),
       standingKey: 'c93af5d1e6b2',
     },
@@ -5571,18 +5602,18 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       reach: reach({ staging: ['reached', 2, 2], prod: ['partial', 1, 2] }),
       summary: summary(900, 'a41c9e07f2d8', 0.3, {
         standing:
-          'The catalog now owns every payload schema and the runners read it rather than re-parsing; the second of ' +
-          '#390’s three parts is approved and waiting on a merge, and the third is written and stacks on it. The ' +
-          'watcher’s claim bug has been fixed twice at the wrong layer and is sitting out its cooldown.',
+          'The new payment provider’s client has landed and every call site points at it; the second of #390’s ' +
+          'three parts is approved and waiting on a merge, and the third is written and stacks on it. The ' +
+          'discount-code fix is open and behind its base.',
         usable:
-          'On staging, a job posted through the form is validated against the catalog’s schema — the first part ' +
-          'landed there this morning.',
+          'On staging, the checkout page talks to the new provider’s client — the first part landed there this ' +
+          'morning, though nothing is charged through it yet.',
         blocked:
-          'Nothing stopped. #345 waits on the operator’s note being taken up: both attempts patched the watcher, ' +
-          'and the claim is the API’s to release.',
+          'Nothing stopped. #376 is parked on a rebase conflict in the pricing code, which needs a call on which ' +
+          'side wins.',
         remaining:
-          'Merge #413, get #414 green, and take #345 up at the API. One item under this Feature has never been ' +
-          'read by the fleet.',
+          'Merge #413, get #414 green, and land the discount-code fix. One item under this Feature has never ' +
+          'been read by the fleet.',
       }),
       standingKey: 'a41c9e07f2d8',
     },
@@ -5592,16 +5623,16 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       reach: reach({}),
       summary: summary(300, 'd1e4b7a20891', 26, {
         standing:
-          'The read-only workspace landed and fell short of its goal — it checks out a fresh clone per job, which ' +
-          'the assessor found too slow on the larger repositories. Neither of the two stories that build on it has ' +
-          'started.',
+          'Type-ahead suggestions landed and fell short of their goal — they are drawn from titles alone, which ' +
+          'the assessor found leaves a customer who knows the author with nothing. Neither of the two stories that ' +
+          'build on it has finished.',
         usable:
-          'A patrol run against a local checkout reads the source files rather than a pasted sample — on the ' +
-          'maintainer’s machine only; nothing is deployed.',
+          'Typing the first words of a title brings the book up without a full search — on the maintainer’s ' +
+          'machine only; nothing is deployed.',
         blocked: null,
         remaining:
-          'HTTP providers still have no file tools (#332), and the patrol still corrects from a single read rather ' +
-          'than verifying first (#333).',
+          'Results still cannot be narrowed by format or price (#332), and a customer still has nowhere to keep ' +
+          'a book they are not ready to buy (#333).',
       }),
       standingKey: '0f6c3a9e75b4',
     },
@@ -5665,31 +5696,31 @@ const DEMO_UNTRIAGED: {
 }[] = [
   {
     number: 336,
-    title: 'An answer cites the same section twice when two headings match',
+    title: 'The same book appears twice in search when it has two editions',
     hoursAgo: 5,
     issueType: 'Bug',
   },
   {
     number: 348,
-    title: 'Spike: stream the Markdown parser instead of reading whole files',
+    title: 'Spike: stream the stock feed instead of reading the whole file',
     hoursAgo: 30,
     issueType: 'Tech Debt',
   },
   {
     number: 355,
-    title: 'Sweep docs/ for links that no longer resolve',
+    title: 'Let a customer collect an order from the shop',
     hoursAgo: 72,
     issueType: 'User Story',
   },
   {
     number: 361,
-    title: 'Index a repository over SSH as well as HTTPS',
+    title: 'Take Apple Pay as well as a card',
     hoursAgo: 96,
     issueType: 'Capability',
   },
   {
     number: 373,
-    title: 'Retire the legacy citation-anchor table',
+    title: 'Retire the legacy ISBN-10 lookup table',
     hoursAgo: 200,
     issueType: 'Task',
   },

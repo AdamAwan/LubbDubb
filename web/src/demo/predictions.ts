@@ -25,7 +25,7 @@ type Seed = readonly [issue: number, written: string, plan: string, outcome: str
  * A snapshot carries the plans of work that is live; the prediction record is over
  * everything the gate was ever put to, so fourteen reveals beside three plans is
  * what a deployment some months in actually looks like. The numbers below 300 are
- * Magpie work that closed before this snapshot's window — the same product, earlier.
+ * Inkwell work that closed before this snapshot's window — the same shop, earlier.
  *
  * The shape of the seed is chosen so the panel is worth reading: `locus`, `cause`
  * and `hard` clear the ten-goal threshold and draw a rate, `surprise` does not and
@@ -58,24 +58,24 @@ const DECLINED: readonly number[] = [371, 271];
  * check.
  */
 const HISTORIC: Readonly<Record<PredictionSlot, string>> = {
-  locus: 'Somewhere in the indexer, not the answerer.',
+  locus: 'Somewhere in the basket, not the catalogue.',
   cause: 'A cheap guard in the wrong layer — the fix belongs one call earlier.',
   hard: 'Deciding what the old rows mean once the shape changes.',
-  surprise: 'If it turned out to be the queue rather than the index.',
+  surprise: 'If it turned out to be the stock feed rather than the shop.',
 };
 
 /** The two goals a visitor can actually open, which is where slot text is read. */
 const WRITTEN: Readonly<Record<number, Partial<Record<PredictionSlot, string>>>> = {
   395: {
-    locus: 'The signing step in the download route — the console is fine, the URL it is handed is not.',
-    cause: 'The snapshot bucket is signed with the review console’s own credentials, which expired.',
-    hard: 'Proving it is the credential and not a permissions change on the bucket.',
-    surprise: 'If it turned out to be the console sending no auth header at all.',
+    locus: 'The refund path — the order and the provider are both updated there, and nothing else is.',
+    cause: 'The ledger is written overnight from the orders table, which cannot tell a refund from an unpaid order.',
+    hard: 'Proving the two agree, when the only place they are compared is a month-end spreadsheet.',
+    surprise: 'If it turned out the nightly job had been double-counting refunds all along.',
   },
   390: {
-    locus: 'The runners — each one validates its own payload today, so the schemas live beside them.',
-    cause: 'There is no one place a payload shape is declared, so the API and the watcher disagree.',
-    hard: 'Moving the schemas without changing a single payload shape on the way.',
+    locus: 'The four checkout routes — each one builds its own charge request today.',
+    cause: 'There is no one place a card is charged, so the routes and the refund path disagree.',
+    hard: 'Moving the charge without changing what a customer is charged on the way.',
   },
 };
 

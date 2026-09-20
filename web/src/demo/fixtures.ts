@@ -22,7 +22,7 @@ import type {
  * deployment this is the signed `/validation-captures/run/...` URL the server mints for the row.
  * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
  */
-const DEMO_CAPTURE = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NDAnIGhlaWdodD0nMzYwJz48cmVjdCB3aWR0aD0nNjQwJyBoZWlnaHQ9JzM2MCcgZmlsbD0nI2Y0ZjVmNycvPjxyZWN0IHg9JzAnIHk9JzAnIHdpZHRoPSc2NDAnIGhlaWdodD0nNDQnIGZpbGw9JyMxZjI5MzMnLz48dGV4dCB4PScxOCcgeT0nMjknIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxNScgZmlsbD0nI2ZmZmZmZic+Tm9ydGh3aW5kIOKAlCBvcmRlciBjb25maXJtZWQ8L3RleHQ+PHJlY3QgeD0nMjQnIHk9JzcyJyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzcyJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTA0JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTgnIGZpbGw9JyMxZjI5MzMnPk9yZGVyIDQ4MjEzIGlzIGNvbmZpcm1lZDwvdGV4dD48dGV4dCB4PSc0NCcgeT0nMTI4JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPkEgcmVjZWlwdCBpcyBvbiBpdHMgd2F5IHRvIHNhbUBleGFtcGxlLmNvbTwvdGV4dD48cmVjdCB4PScyNCcgeT0nMTY0JyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzE1MCcgZmlsbD0nI2ZmZmZmZicgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzE5MicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjNjE3MDdkJz4yIMOXIFN0b25ld2FyZSBtdWc8L3RleHQ+PHRleHQgeD0nNTIwJyB5PScxOTInIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzFmMjkzMyc+wqMyNC4wMDwvdGV4dD48dGV4dCB4PSc0NCcgeT0nMjIwJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPjEgw5cgQ2FzdCBpcm9uIHBhbjwvdGV4dD48dGV4dCB4PSc1MjAnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjMWYyOTMzJz7CozU4LjAwPC90ZXh0PjxsaW5lIHgxPSc0NCcgeTE9JzI0NCcgeDI9JzU5NicgeTI9JzI0NCcgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz5Ub3RhbDwvdGV4dD48dGV4dCB4PSc1MTQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz7CozgyLjAwPC90ZXh0Pjx0ZXh0IHg9JzI0JyB5PSczNDAnIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMScgZmlsbD0nIzg3OTVhMSc+c3RhZ2luZyDCtyB2YWxpZGF0aW9uLWN1c3RvbWVyLTE8L3RleHQ+PC9zdmc+`;
+const DEMO_CAPTURE = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NDAnIGhlaWdodD0nMzYwJz48cmVjdCB3aWR0aD0nNjQwJyBoZWlnaHQ9JzM2MCcgZmlsbD0nI2Y0ZjVmNycvPjxyZWN0IHg9JzAnIHk9JzAnIHdpZHRoPSc2NDAnIGhlaWdodD0nNDQnIGZpbGw9JyMxZjI5MzMnLz48dGV4dCB4PScxOCcgeT0nMjknIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxNScgZmlsbD0nI2ZmZmZmZic+SW5rd2VsbCBCb29rcyAmIzgyMTI7IHJlZnVuZCBpc3N1ZWQ8L3RleHQ+PHJlY3QgeD0nMjQnIHk9JzcyJyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzcyJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTA0JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTgnIGZpbGw9JyMxZjI5MzMnPk9yZGVyIDQ4MjEzIGhhcyBiZWVuIHJlZnVuZGVkPC90ZXh0Pjx0ZXh0IHg9JzQ0JyB5PScxMjgnIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzYxNzA3ZCc+JiMxNjM7MjQuOTkgaXMgb24gaXRzIHdheSBiYWNrIHRvIHRoZSBjYXJkIGVuZGluZyA0NDExPC90ZXh0PjxyZWN0IHg9JzI0JyB5PScxNjQnIHdpZHRoPSc1OTInIGhlaWdodD0nMTUwJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTkyJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPjEgJiMyMTU7IFBpcmFuZXNpICYjODIxMjsgU3VzYW5uYSBDbGFya2U8L3RleHQ+PHRleHQgeD0nNTIwJyB5PScxOTInIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzFmMjkzMyc+JiMxNjM7MTYuOTk8L3RleHQ+PHRleHQgeD0nNDQnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjNjE3MDdkJz5SZXR1cm4gcG9zdGFnZTwvdGV4dD48dGV4dCB4PSc1MjAnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjMWYyOTMzJz4mIzE2Mzs4LjAwPC90ZXh0PjxsaW5lIHgxPSc0NCcgeTE9JzI0NCcgeDI9JzU5NicgeTI9JzI0NCcgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz5SZWZ1bmRlZDwvdGV4dD48dGV4dCB4PSc1MDgnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz4mIzE2MzsyNC45OTwvdGV4dD48dGV4dCB4PScyNCcgeT0nMzQwJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTEnIGZpbGw9JyM4Nzk1YTEnPnN0YWdpbmcgJiMxODM7IHZhbGlkYXRpb24tY3VzdG9tZXItMTwvdGV4dD48L3N2Zz4K`;
 
 interface DemoSeed {
   state: AppState;
@@ -179,6 +179,28 @@ function demoPart(seed: PartSeed): PlanPartView {
   };
 }
 
+/**
+ * The demo world is one project — **Inkwell Books**, a small online bookshop: browse and search a
+ * catalogue, a basket, checkout and payment, orders, refunds, and one background job that emails
+ * confirmations. One domain, so nothing has to be learnt before the cockpit makes sense.
+ *
+ * The goals below are laid out as **one pipeline with a goal parked at each point along it**, in
+ * roughly the order the workflow runs: held at intake, planning, at the plan gate, in flight, in
+ * review, delivered, validated, closed. Scrolling the rail is meant to teach the loop.
+ *
+ * Two invariants the fixture is built to keep, because breaking either teaches an operator something
+ * false about the harness:
+ *
+ * - **No goal carries a validation check until every part of its plan has merged and an assessor has
+ *   answered `delivered`.** Checks are authored late, against merged code, and a goal still planning
+ *   has nothing to write them against. So `validationChecks`, `remoteSheets`, `goalWatchWindows` and
+ *   `environmentArrivals` name only #364, #395 and #398. → docs/spec/20-validation.md#when-the-check-set-is-written
+ * - **One ask per goal**, with two deliberate exceptions where a second thing is the point: #390
+ *   carries a merge and a person's plan step, and #395 carries its bench row and its outcome marks.
+ *   A goal with four cards on it reads as a pile rather than a situation.
+ *
+ * → docs/spec/17-cockpit.md#demo-mode
+ */
 export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
@@ -200,7 +222,7 @@ export function buildDemoState(): DemoSeed {
       containerTypes: ['Feature', 'Epic'],
       featureBoard: true,
       canPlaceWorkItem: true,
-      desktopFolder: '/Users/you/code/markdown-magpie',
+      desktopFolder: '/Users/you/code/inkwell-books',
       ejectionEnabled: true,
       localRunConfigured: true,
       localValidationBrowserConfigured: true,
@@ -221,7 +243,7 @@ export function buildDemoState(): DemoSeed {
       canFileTickets: false,
       areaPaths: [],
     },
-    control: { cap: 3, paused: false },
+    control: { cap: 5, paused: false },
     planning: {
       maxConcurrentPartsPerIssue: 2,
       gitFetchIntervalMs: 60_000,
@@ -234,14 +256,14 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-412',
           number: 412,
-          title: 'Cut the ranked section list down to the token budget',
-          branch: 'feature/context-budget',
+          title: 'Index author names alongside titles',
+          branch: 'feature/author-search',
           ciStatus: 'failing',
           unresolvedComments: [
             {
               id: 'c-1',
               author: 'reviewer',
-              body: 'Can the budget be per-flow rather than one global number? Our runbook flow needs a bigger window than the FAQ one.',
+              body: 'Should an author search match a contributor — a translator, an illustrator — or only the credited author?',
               handled: false,
             },
           ],
@@ -249,35 +271,35 @@ export function buildDemoState(): DemoSeed {
             {
               id: 'c-1',
               author: 'reviewer',
-              body: 'Can the budget be per-flow rather than one global number? Our runbook flow needs a bigger window than the FAQ one.',
+              body: 'Should an author search match a contributor — a translator, an illustrator — or only the credited author?',
               state: 'open',
               replies: [],
-              path: 'src/context/budget.ts',
+              path: 'src/search/authors.ts',
               line: 88,
             },
             {
               id: 'c-3',
               author: 'reviewer',
-              body: 'Why is the ranker reading the budget at all? It only needs the cut.',
+              body: 'Why does the ranker read the author index at all? It only needs the matched ids.',
               state: 'answered',
               replies: [
                 {
                   id: 'c-3-r1',
                   author: 'lubbdubb',
-                  body: 'It reads it to size the section window before ranking — the cut alone would drop the tail it needs.',
+                  body: 'It reads it to weight an exact author match above a title one — the ids alone lose which field matched.',
                   ours: true,
                 },
               ],
-              path: 'src/context/rank.ts',
+              path: 'src/search/rank.ts',
               line: 140,
             },
             {
               id: 'c-4',
               author: 'maintainer',
-              body: 'Assert the budget is honoured at the boundary, not inside the loop.',
+              body: 'Assert the accent folding at the boundary, not inside the loop.',
               state: 'resolved',
               replies: [{ id: 'c-4-r1', author: 'lubbdubb', body: 'Moved the assertion out.', ours: true }],
-              path: 'test/budget.test.ts',
+              path: 'test/search.test.ts',
               line: 31,
             },
           ],
@@ -292,12 +314,12 @@ export function buildDemoState(): DemoSeed {
             status: 'findings',
             addressed: false,
             mode: 'deep',
-            routeReason: 'Touches the ranker and the budget together, and the cut is what every answer is built from.',
-            summary: 'Trims the ranked section list to a global token budget before the answer is composed.',
+            routeReason: 'Touches the search index and the ranker together, and search is the front door of the shop.',
+            summary: 'Indexes author names alongside titles and weights an exact author match above a title match.',
             findings: [
-              'The budget is read inside the rank loop, so a section that ties is dropped or kept by list order.',
-              'A flow whose sections all exceed the budget composes an answer from nothing, with no error.',
-              'No test covers a budget smaller than one section.',
+              'The author index is read inside the rank loop, so two books by the same author tie on list order.',
+              'A search with no title match at all composes a results page from nothing, with no empty state.',
+              'No test covers an author name with an accent in it.',
             ],
             reviewedAt: ago(12),
             routedAt: ago(38),
@@ -309,18 +331,20 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-411',
           number: 411,
-          title: 'Reuse section embeddings across incremental index runs',
-          branch: 'feature/embed-cache',
+          title: 'Reuse book cover thumbnails across catalogue rebuilds',
+          branch: 'feature/cover-cache',
           ciStatus: 'passing',
           unresolvedComments: [],
           reviewThreads: [
             {
               id: 'c-5',
               author: 'reviewer',
-              body: 'Does the cache survive a re-index of one section?',
+              body: 'Does the cache survive a reissue getting a new cover?',
               state: 'resolved',
-              replies: [{ id: 'c-5-r1', author: 'lubbdubb', body: 'Yes — the key is the section digest.', ours: true }],
-              path: 'src/index/embedCache.ts',
+              replies: [
+                { id: 'c-5-r1', author: 'lubbdubb', body: 'Yes — the key is the cover image digest.', ours: true },
+              ],
+              path: 'src/catalogue/coverCache.ts',
               line: 24,
             },
           ],
@@ -335,8 +359,8 @@ export function buildDemoState(): DemoSeed {
             status: 'clear',
             addressed: false,
             mode: 'quick',
-            routeReason: 'One module, one cache key, and the embed path is covered end to end.',
-            summary: 'Keys cached embeddings on the section digest so an unchanged section is not re-embedded.',
+            routeReason: 'One module, one cache key, and the cover path is covered end to end.',
+            summary: 'Keys cached thumbnails on the cover image digest so an unchanged cover is not re-rendered.',
             findings: [],
             reviewedAt: ago(41),
             routedAt: ago(55),
@@ -348,8 +372,8 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-409',
           number: 409,
-          title: 'Read GitHub review decisions as proposal approval',
-          branch: 'feature/review-decision',
+          title: 'Price the order with the discount code applied',
+          branch: 'feature/discount-codes',
           ciStatus: 'passing',
           unresolvedComments: [
             { id: 'c-2', author: 'maintainer', body: 'Rebase on main — this is behind.', handled: false },
@@ -375,7 +399,7 @@ export function buildDemoState(): DemoSeed {
             status: 'routed',
             addressed: false,
             mode: 'deep',
-            routeReason: 'Changes what counts as approval, which is the gate in front of every merge.',
+            routeReason: 'Changes what a customer is charged, which is the one number nobody may get wrong.',
             summary: null,
             findings: [],
             reviewedAt: null,
@@ -388,8 +412,8 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-408',
           number: 408,
-          title: 'Cache the tokenizer between index runs',
-          branch: 'feature/tokenizer-cache',
+          title: 'Retire the ISBN-10 lookup path',
+          branch: 'feature/isbn-13-only',
           ciStatus: 'passing',
           unresolvedComments: [],
           approved: false,
@@ -420,8 +444,8 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-413',
           number: 413,
-          title: '#390 [2/3] refactor(jobs): validate every payload through the catalog',
-          branch: 'issue/390/validate',
+          title: '#390 [2/3] feat(checkout): take card payment through the new provider',
+          branch: 'issue/390/payment',
           headSha: 'c7d41e02a9b6538f14ac0d7b2e95f83610d4ab27',
           ciStatus: 'passing',
           unresolvedComments: [],
@@ -441,7 +465,7 @@ export function buildDemoState(): DemoSeed {
             status: 'skipped',
             addressed: false,
             mode: null,
-            routeReason: 'Mechanical: every call site moves to the catalog’s own validator, no behaviour of its own.',
+            routeReason: 'Mechanical: every call site moves to the new provider’s client, no behaviour of its own.',
             summary: null,
             findings: [],
             reviewedAt: null,
@@ -454,13 +478,13 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-414',
           number: 414,
-          title: '#390 [3/3] refactor(jobs): route the watcher’s intake through the catalog',
-          branch: 'issue/390/watcher',
+          title: '#390 [3/3] feat(checkout): move refunds onto the new provider',
+          branch: 'issue/390/refunds',
           ciStatus: 'failing',
           unresolvedComments: [],
           approved: false,
           mergeable: true,
-          baseBranch: 'issue/390/validate',
+          baseBranch: 'issue/390/payment',
           mergeableState: 'unknown',
           merged: false,
           health: { blocked: true, reasons: ['CI failing on base PR #413'] },
@@ -480,10 +504,38 @@ export function buildDemoState(): DemoSeed {
           },
         }),
         demoPr({
+          id: 'pr-426',
+          number: 426,
+          title: 'Fold the admin console header into one bar',
+          branch: 'issue/396',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          health: { blocked: true, reasons: ['not approved'] },
+          attention: { status: 'you', reasons: ['nobody has said what this pull request does'] },
+          review: {
+            status: 'deciding',
+            addressed: false,
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
+        }),
+        demoPr({
           id: 'pr-407',
           number: 407,
-          title: 'Spike: replace pg-boss with a LISTEN/NOTIFY worker loop',
-          branch: 'spike/listen-notify',
+          title: 'Spike: replace the nightly stock feed with a webhook',
+          branch: 'spike/stock-webhook',
           ciStatus: 'failing',
           unresolvedComments: [],
           approved: false,
@@ -501,8 +553,8 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-415',
           number: 415,
-          title: 'Retry the reconciliation sweep on a 429',
-          branch: 'feature/sweep-retry',
+          title: 'Retry the shipping-rate lookup on a 429',
+          branch: 'feature/shipping-retry',
           author: 'Priya Raman',
           viewerAssignment: 'reviewer-optional',
           viewerAuthored: false,
@@ -517,16 +569,16 @@ export function buildDemoState(): DemoSeed {
               body: 'Is a flat 3 retries right here, or should it back off until the window the 429 names?',
               state: 'open',
               replies: [],
-              path: 'src/sweep/reconcile.ts',
+              path: 'src/shipping/rates.ts',
               line: 88,
             },
             {
               id: 'thread-415-2',
               author: 'Tom Beck',
-              body: 'This swallows the 429 body — we lose the Retry-After the provider sends.',
+              body: 'This swallows the 429 body — we lose the Retry-After the courier sends.',
               state: 'open',
               replies: [],
-              path: 'src/sweep/http.ts',
+              path: 'src/shipping/http.ts',
               line: 41,
             },
             {
@@ -535,7 +587,7 @@ export function buildDemoState(): DemoSeed {
               body: 'Renamed, thanks.',
               state: 'resolved',
               replies: [],
-              path: 'src/sweep/http.ts',
+              path: 'src/shipping/http.ts',
               line: 12,
             },
           ],
@@ -559,8 +611,8 @@ export function buildDemoState(): DemoSeed {
         demoPr({
           id: 'pr-417',
           number: 417,
-          title: 'Drop the retired tenant columns from the reseed',
-          branch: 'feature/reseed-columns',
+          title: 'Drop the retired VAT band columns from the seed',
+          branch: 'feature/vat-columns',
           author: 'Tom Beck',
           viewerAssignment: 'reviewer-required',
           viewerAuthored: false,
@@ -588,8 +640,8 @@ export function buildDemoState(): DemoSeed {
         {
           id: 'pr-410',
           number: 410,
-          title: 'Verify gap closure on merge instead of resolving blindly',
-          branch: 'feature/verify-gap-closure',
+          title: 'Rank each homepage shelf on the weekly sales rollup',
+          branch: 'feature/shelf-order',
           ciStatus: 'unknown',
           unresolvedComments: [],
           baseBranch: 'main',
@@ -600,11 +652,11 @@ export function buildDemoState(): DemoSeed {
             status: 'findings',
             addressed: true,
             mode: 'deep',
-            routeReason: 'Changes when a gap is considered closed, which nothing downstream re-checks.',
-            summary: 'Verifies the gap has no weak answers left before resolving it on merge.',
+            routeReason: 'Changes what every visitor sees first, and nothing downstream re-checks the ordering.',
+            summary: 'Ranks each homepage shelf by units sold over the trailing seven days.',
             findings: [
-              'A gap with no answers at all resolves as closed, since "no weak answers" is vacuously true.',
-              'The re-check reads the answers the merge replaced, one poll behind.',
+              'A shelf with no sales at all orders as if every book tied, so it draws in insertion order.',
+              'The ranking reads the sales rollup one nightly job behind.',
             ],
             reviewedAt: ago(70),
             routedAt: ago(96),
@@ -616,8 +668,8 @@ export function buildDemoState(): DemoSeed {
         {
           id: 'pr-406',
           number: 406,
-          title: '#390 [1/3] refactor(jobs): move every payload schema into the catalog',
-          branch: 'issue/390/schemas',
+          title: '#390 [1/3] feat(checkout): add the new payment provider client',
+          branch: 'issue/390/client',
           ciStatus: 'unknown',
           unresolvedComments: [],
           baseBranch: 'main',
@@ -628,8 +680,8 @@ export function buildDemoState(): DemoSeed {
         {
           id: 'pr-405',
           number: 405,
-          title: 'Raise the gap-cluster similarity threshold to 0.81',
-          branch: 'issue/382/threshold',
+          title: 'Let a customer cancel an order from the order page',
+          branch: 'issue/382/cancel',
           ciStatus: 'unknown',
           unresolvedComments: [],
           baseBranch: 'main',
@@ -638,10 +690,10 @@ export function buildDemoState(): DemoSeed {
           closedAt: ago(180),
         },
         {
-          id: 'pr-408',
-          number: 408,
-          title: 'Screen-scrape the watcher log for job outcomes',
-          branch: 'spike/log-scrape',
+          id: 'pr-404',
+          number: 404,
+          title: 'Scrape the courier’s tracking page for delivery states',
+          branch: 'spike/tracking-scrape',
           ciStatus: 'unknown',
           unresolvedComments: [],
           baseBranch: 'main',
@@ -653,18 +705,19 @@ export function buildDemoState(): DemoSeed {
       // The pickup roll-call: every one of `issuePickupStatus`'s thirteen answers is carried by a
       // goal here, so no operator meets one of them for the first time as a suspected bug.
       //   container #300 · planning #333 (at the approval gate) and #390 (parts in flight) ·
-      //   active #332 #368 · eligible #341 · has_pr #376 #388 · delivered #364 #395 ·
-      //   appraisal #379 · blocked #382 · cooldown #345 · escalated #359 · unwatched #366 #371 ·
-      //   done #352 · retained #357, which lives in `retainedRuns` below.
-      // The arithmetic has to hold too: the cap is 3 with two agents live, so exactly one goal is
-      // `eligible` and the ready rest are `blocked`.
+      //   active #332 #368 · eligible #341 · has_pr #376 #388 #396 · delivered #364 #395 #398 ·
+      //   appraisal #379 #392 #394 #399 · blocked #382 · cooldown #345 · escalated #359 ·
+      //   unwatched #366 #371 · done #352 · retained #357, which lives in `retainedRuns` below.
+      // The arithmetic has to hold too: the cap is 5 with four agents out, so exactly one goal is
+      // `eligible` — #341, which Up next is dispatching into the last slot — and the ready rest are
+      // `blocked` for want of capacity.
       // → docs/spec/17-cockpit.md#demo-mode
       issues: [
         demoIssue({
           id: 'iss-300',
           number: 300,
-          title: 'Source-grounded document patrols',
-          body: 'A patrol reads the documents it maintains against the code they describe, rather than against a sample of file content pasted into a prompt. Success is a patrol that can open any file in a read-only checkout of the source repository, and a correction that cites the line it was drawn from.',
+          title: 'Finding a book',
+          body: 'A customer who knows roughly what they want should reach it in one search rather than three. Success is a search that matches a title, an author or a series, results a customer can narrow without losing their place, and a way to keep a book they are not ready to buy.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           issueType: 'Feature',
@@ -673,21 +726,21 @@ export function buildDemoState(): DemoSeed {
           children: [
             {
               number: 331,
-              title: 'Give each source-grounded job a read-only workspace',
+              title: 'Suggest titles as the customer types',
               issueType: 'User Story',
               workItemState: 'Closed',
               state: 'closed',
             },
             {
               number: 332,
-              title: 'Give HTTP providers a bounded file-tool loop',
+              title: 'Filter search results by format and price',
               issueType: 'User Story',
               workItemState: 'Active',
               state: 'open',
             },
             {
               number: 333,
-              title: 'Verify a document against its sources before correcting it',
+              title: 'Let customers save books for later',
               issueType: 'User Story',
               workItemState: 'Active',
               state: 'open',
@@ -703,31 +756,31 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-333',
           number: 333,
-          title: 'Verify a document against its sources before correcting it',
-          body: 'The patrol currently drafts a correction from one read. Split it: `verify_document` reports what the document gets wrong, and `correct_document` only runs when there is something to correct.',
+          title: 'Let customers save books for later',
+          body: 'A customer who is not ready to buy has nowhere to put a book, so they leave the basket full and it expires. Give them a list of their own: add from the book page and from search results, and see it from the account menu.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           issueType: 'User Story',
           workItemState: 'Active',
           parent: {
             number: 300,
-            title: 'Source-grounded document patrols',
+            title: 'Finding a book',
             issueType: 'Feature',
             workItemState: 'Active',
             state: 'open',
-            body: 'A patrol reads the documents it maintains against the code they describe, rather than against a sample of file content pasted into a prompt. Success is a patrol that can open any file in a read-only checkout of the source repository, and a correction that cites the line it was drawn from.',
+            body: 'A customer who knows roughly what they want should reach it in one search rather than three. Success is a search that matches a title, an author or a series, results a customer can narrow without losing their place, and a way to keep a book they are not ready to buy.',
           },
           siblings: [
             {
               number: 331,
-              title: 'Give each source-grounded job a read-only workspace',
+              title: 'Suggest titles as the customer types',
               issueType: 'User Story',
               workItemState: 'Closed',
               state: 'closed',
             },
             {
               number: 332,
-              title: 'Give HTTP providers a bounded file-tool loop',
+              title: 'Filter search results by format and price',
               issueType: 'User Story',
               workItemState: 'Active',
               state: 'open',
@@ -739,28 +792,28 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-332',
           number: 332,
-          title: 'Give HTTP providers a bounded file-tool loop',
-          body: 'A CLI provider walks the checkout with its own tools. An HTTP provider has none, so it needs `list_dir` / `read_file` / `grep` offered as tools with a hard call ceiling.',
+          title: 'Filter search results by format and price',
+          body: 'A search for a popular author returns hardback, paperback, ebook and audio in one undifferentiated list. Add facets for format and price band, applied without losing the customer’s place in the results.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           issueType: 'User Story',
           workItemState: 'Active',
           parent: {
             number: 300,
-            title: 'Source-grounded document patrols',
+            title: 'Finding a book',
             issueType: 'Feature',
             workItemState: 'Active',
             state: 'open',
-            body: 'A patrol reads the documents it maintains against the code they describe, rather than against a sample of file content pasted into a prompt.',
+            body: 'A customer who knows roughly what they want should reach it in one search rather than three.',
           },
           linkedPrNumber: null,
-          pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
+          pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
         }),
         demoIssue({
           id: 'iss-341',
           number: 341,
-          title: 'Answers cite a heading the section splitter renamed',
-          body: 'Sectioning lower-cases and de-duplicates heading anchors, but the citation is built from the raw heading text — so every citation into a document with two "Configuration" headings points at the wrong one.',
+          title: 'The book page shows the first edition’s cover for a reissue',
+          body: 'A reissued title keeps its original ISBN-13 but gets a new cover, and the book page reads the cover from the first edition row — so every reissue in the catalogue draws the wrong jacket.',
           labels: ['bug', 'lubbdubb-watch'],
           state: 'open',
           issueType: 'Bug',
@@ -772,9 +825,9 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-368',
           number: 368,
-          title: 'Retry transient 502s from the embeddings endpoint',
-          body: 'An incremental index run aborts whole-sale on one 502 from the embeddings provider, leaving the index half-written. Wrap the batch call in a bounded retry.',
-          labels: ['bug', 'priority:high', 'lubbdubb-watch'],
+          title: 'Import the distributor’s nightly stock feed',
+          body: 'Stock levels are typed in by hand every morning. The distributor publishes a nightly CSV; read it, match on ISBN-13 and update stock before the shop opens.',
+          labels: ['priority:high', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
@@ -783,8 +836,8 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-388',
           number: 388,
-          title: 'Cap the retrieval context at the token budget before ranking',
-          body: 'A question that matches forty sections sends all forty to the provider; the request is rejected or silently truncated at the far end. Cut the ranked list to the budget before the prompt is built.',
+          title: 'Search by author as well as title',
+          body: 'Searching an author’s name returns nothing unless the name happens to appear in a title, so a customer who knows the author and not the book cannot find it at all.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: 412,
@@ -793,31 +846,42 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-376',
           number: 376,
-          title: 'Read GitHub review decisions as proposal approval',
-          body: 'The publisher reports every proposal as unreviewed: a GitHub review decision of APPROVED is never mapped onto the proposal’s own approval state, so a reviewed proposal sits in the console forever.',
+          title: 'Apply discount codes at checkout',
+          body: 'A promotion code is accepted at the basket and then silently ignored when the order is priced, so the customer is charged full price after being shown a discount.',
           labels: ['bug', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: 409,
           pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #409'] },
         }),
         demoIssue({
+          id: 'iss-396',
+          number: 396,
+          title: 'Rebuild the admin console header',
+          body: 'The shop-floor admin console header is three stacked bars with the same links in two of them. Fold it into one, and put the shop switcher where staff actually look for it.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: 426,
+          pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #426'] },
+          spend: demoSpend(396, 1.12, 1),
+        }),
+        demoIssue({
           id: 'iss-364',
           number: 364,
-          title: 'Document the two-watcher requirement for maintenance jobs',
-          body: 'A maintenance job blocks in an API callback while the API waits on the AI jobs it enqueued, so a single watcher self-starves. Nothing says so outside a code comment.',
-          labels: ['docs', 'lubbdubb-watch'],
+          title: 'Order the homepage shelves by last week’s sales',
+          body: 'Every homepage shelf is hand-ordered and nobody has touched it since launch, so the front page still leads on titles that stopped selling in spring. Rank each shelf by units sold over the trailing seven days.',
+          labels: ['lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: 410,
           pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
           delivery: {
-            summary: 'PR #410 landed the deadlock note and the console warning with it.',
+            summary: 'PR #410 landed the shelf ranking and the nightly sales rollup it reads.',
             by: 'assessor',
             decidedAt: ago(90),
           },
           conclusion: {
             verdict: 'done' as const,
             by: 'agent' as const,
-            note: 'architecture.md gained the section; the console warns on one watcher.',
+            note: 'Every shelf ranks on the trailing-seven-day rollup; an empty shelf falls back to curated order.',
             at: ago(95),
           },
           validation: {
@@ -842,9 +906,9 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-390',
           number: 390,
-          title: 'Validate job payloads in the catalog, not in each runner',
-          body: 'Too big for one PR: every runner re-parses its own payload, so the schema move has to land before anything validates against it.',
-          labels: ['refactor', 'lubbdubb-watch'],
+          title: 'Move checkout to the new payment provider',
+          body: 'Too big for one PR: the provider client has to land before anything can take a payment through it, and refunds cannot move until payments have.',
+          labels: ['lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: 413,
           pickup: { eligible: false, status: 'planning', reasons: ['1/5 parts done'] },
@@ -853,7 +917,7 @@ export function buildDemoState(): DemoSeed {
             id: 'lv-390-1',
             originRef: 'issue:390',
             runId: 'run-1',
-            ref: 'issue/390/catalog-schema',
+            ref: 'issue/390/payment',
             commit: '8b052b9977c1e4f0a2d6b3c5e8f1a4d7b0c3e6f9',
             status: 'failed',
             requestedAt: ago(41),
@@ -865,37 +929,38 @@ export function buildDemoState(): DemoSeed {
             plan: [
               '## What changed',
               '',
-              'The catalogue now owns the payload schema and the runners read it rather than re-parsing.',
+              'Checkout takes card payment through the new provider’s client rather than the old gateway.',
               '',
-              '1. **A job with a schema is accepted.** Post one through the form and check it lists.',
-              '2. **A job with no schema is refused.** The same form with the field empty.',
-              '3. **A job from before the change still opens.** Nothing on the detail page should assume a schema.',
+              '1. **A card payment goes through.** Put a book in the basket and pay with the test card.',
+              '2. **A declined card is refused cleanly.** The same flow with the decline-test card.',
+              '3. **An order from before the change still opens.** Nothing on the order page should assume the new provider.',
             ].join('\n'),
             summary:
-              'Steps 1 and 3 pass — a job with a schema is accepted and listed, and one created before the change ' +
-              'opens with no schema section. Step 2 does not: the form accepts an empty schema and the API takes ' +
-              'it, so the validation this goal exists to add is not applied on the path a person actually uses.',
+              'Steps 1 and 3 pass — a test card is charged and the order is written, and an order taken through the ' +
+              'old gateway still opens with its original payment reference. Step 2 does not: a declined card leaves ' +
+              'the customer on a blank page and the basket emptied, so the decline path this goal has to keep ' +
+              'working is worse than it was.',
             findings: [
               {
-                title: 'A job with no schema is accepted',
+                title: 'A declined card empties the basket and shows nothing',
                 detail:
-                  'Opened /jobs/new, filled in title and payload, left the schema empty and submitted. Expected the ' +
-                  'form to stay put naming the field; it came back 201 and the job is listed with an empty schema.',
+                  'Paid with the decline-test card. Expected the checkout page to stay put naming the decline; got a ' +
+                  'blank page at /checkout/complete and an empty basket, so the customer cannot retry.',
                 severity: 'blocker',
-                url: 'http://localhost:5173/jobs/new',
+                url: 'http://localhost:5173/checkout',
                 screenshot: null,
               },
               {
-                title: 'The validation message reads “undefined”',
+                title: 'The decline message reads “undefined”',
                 detail:
-                  'A malformed schema is refused, but the message under the field says “undefined” rather than what ' +
-                  'is wrong with it.',
+                  'An expired card is refused, but the message under the card field says “undefined” rather than what ' +
+                  'the provider said was wrong with it.',
                 severity: 'nit',
-                url: 'http://localhost:5173/jobs/new',
+                url: 'http://localhost:5173/checkout',
                 screenshot: null,
               },
             ],
-            visited: ['http://localhost:5173/jobs/new', 'http://localhost:5173/jobs'],
+            visited: ['http://localhost:5173/checkout', 'http://localhost:5173/orders'],
             screenshots: [],
             files: [],
             note: null,
@@ -904,59 +969,17 @@ export function buildDemoState(): DemoSeed {
           },
         }),
         demoIssue({
-          id: 'iss-371',
-          number: 371,
-          title: 'Mirror new knowledge gaps into a Slack channel',
-          body: 'Nice-to-have: post a message when a gap cluster crosses the drafting threshold.',
-          labels: ['idea'],
-          state: 'open',
-          linkedPrNumber: null,
-          pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
-        }),
-        demoIssue({
-          id: 'iss-379',
-          number: 379,
-          title: 'Make retrieval smarter',
-          body: 'Search brings back the wrong sections sometimes.',
-          labels: ['lubbdubb-watch'],
-          state: 'open',
-          linkedPrNumber: null,
-          pickup: {
-            eligible: false,
-            status: 'appraisal',
-            reasons: ['the goal appraisal could not act on this goal'],
-          },
-          appraisal: {
-            verdict: 'unclear',
-            summary:
-              'Nothing here names which question came back wrong, or what the right sections would have been. ' +
-              'Retrieval is keyword search, vector search and an RRF fold over both — which of the three is ' +
-              'bringing back the wrong thing, and for which question?',
-            missing: [
-              'Which question came back wrong — the field name or the step where it happened?',
-              'What should the right sections have been? A sample of one good record.',
-            ],
-            by: 'appraiser',
-            proposedProfile: null,
-            awaitingProfileAnswer: false,
-            placement: [],
-            parentSettledAt: null,
-            decidedAt: ago(52),
-            commentRef: 'issue:379:comment:8402',
-          },
-        }),
-        demoIssue({
           id: 'iss-395',
           number: 395,
-          title: 'Snapshot downloads 401 in the review console',
-          body: 'Every snapshot download link 401s — the fix touches the auth guard, the route, and the payload the console reads.',
-          labels: ['refactor', 'lubbdubb-watch'],
+          title: 'Every refund writes a ledger entry',
+          body: 'A refund updates the order and the payment provider and nothing else, so the finance export and the shop’s own ledger disagree by however much was refunded that month.',
+          labels: ['lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
           delivery: {
             summary:
-              'All four parts merged. A download link opens in a new tab with auth on and with auth off, and a tampered capability is refused.',
+              'All four parts merged. A refund writes its ledger entry in the same transaction, a partial refund writes one for the amount refunded, and a refund that fails at the provider writes none.',
             by: 'assessor',
             decidedAt: ago(200),
           },
@@ -976,11 +999,182 @@ export function buildDemoState(): DemoSeed {
           },
         }),
         demoIssue({
+          id: 'iss-398',
+          number: 398,
+          title: 'Halve the book page’s image weight',
+          body: 'A book page ships four megabytes of cover art — the full-resolution jacket at four sizes — so the page is unusable on a phone on mobile data. Serve the right size for the viewport.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
+          delivery: {
+            summary: 'A book page now ships 380KB of cover art on a phone and 1.1MB on a desktop, down from 4.1MB.',
+            by: 'assessor',
+            decidedAt: ago(70),
+          },
+          conclusion: {
+            verdict: 'done' as const,
+            by: 'assessor' as const,
+            note: 'Covers are served at four widths from one source image, picked by the viewport.',
+            at: ago(70),
+          },
+          validation: {
+            state: 'clear',
+            total: 2,
+            passed: 2,
+            failed: 0,
+            unrun: 0,
+            deferred: 0,
+            captured: 0,
+            declined: 0,
+            waived: 0,
+          },
+          spend: demoSpend(398, 2.61, 2),
+        }),
+        demoIssue({
+          id: 'iss-371',
+          number: 371,
+          title: 'Post new five-star reviews to a Slack channel',
+          body: 'Nice-to-have: put a message in #shop-floor when a book gets a five-star review.',
+          labels: ['idea'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
+        }),
+        demoIssue({
+          id: 'iss-379',
+          number: 379,
+          title: 'Make checkout better',
+          body: 'Too many people drop out at checkout.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'appraisal',
+            reasons: ['the goal appraisal could not act on this goal'],
+          },
+          appraisal: {
+            verdict: 'unclear',
+            summary:
+              'Nothing here names where people drop out, or what better would look like. Checkout is four steps — ' +
+              'basket, delivery, payment, confirm — and the funnel numbers exist. Which step loses them, and ' +
+              'what would count as fixed?',
+            missing: [
+              'Which of the four checkout steps loses them — the funnel report has this.',
+              'What would count as better? A number, or one journey that should work and does not.',
+            ],
+            by: 'appraiser',
+            proposedProfile: null,
+            awaitingProfileAnswer: false,
+            placement: [],
+            parentSettledAt: null,
+            decidedAt: ago(52),
+            commentRef: 'issue:379:comment:8402',
+          },
+        }),
+        demoIssue({
+          id: 'iss-392',
+          number: 392,
+          title: 'Sell and redeem gift cards',
+          body: 'Buy a gift card for an amount, send the code by email, and redeem it against an order — in full or in part, with the balance kept for next time.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          issueType: 'User Story',
+          workItemState: 'New',
+          parent: null,
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'appraisal',
+            reasons: ['the goal appraisal is waiting on where this work belongs'],
+          },
+          // The placement ask: a story on no team's board. The appraiser read the goal, found it
+          // workable, and stopped on the one thing it cannot decide — which Feature owns it.
+          // → docs/spec/17-cockpit.md
+          appraisal: {
+            verdict: 'workable',
+            summary:
+              'Clear enough to plan: the amount, the code, the email and the partial redemption are all named, and ' +
+              'the balance rule says what happens to the remainder. What it has no answer for is where it belongs — ' +
+              'a gift card is money taken now and goods given later, which is checkout’s business and not the ' +
+              'catalogue’s.',
+            missing: [],
+            by: 'appraiser',
+            proposedProfile: null,
+            awaitingProfileAnswer: false,
+            placement: [{ field: 'parent', proposedParent: 301, proposedAreaPath: null }],
+            parentSettledAt: null,
+            decidedAt: ago(26),
+            commentRef: 'issue:392:comment:8510',
+          },
+        }),
+        demoIssue({
+          id: 'iss-394',
+          number: 394,
+          title: 'Rebuild the basket on the new component library',
+          body: 'The basket is the last page still on the old component set, so it is the only page that does not respond to the theme and the only one with its own button styles. Rebuild it against the new library, behaviour unchanged.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'appraisal',
+            reasons: ['the goal appraisal is waiting on which profile this runs on'],
+          },
+          // The profile ask. The appraiser read the goal, judged the shape expensive to get wrong,
+          // and asks to spend more on it than the default would.
+          appraisal: {
+            verdict: 'workable',
+            summary:
+              'Workable, and bigger than it looks. "Behaviour unchanged" is the whole difficulty: the basket holds ' +
+              'the quantity stepper, the stock warning, the promotion field and the delivery estimate, and three of ' +
+              'those have no equivalent in the new library yet. I would rather reason this one out than pattern-match it.',
+            missing: [],
+            by: 'appraiser',
+            proposedProfile: 'deep',
+            awaitingProfileAnswer: true,
+            placement: [],
+            parentSettledAt: null,
+            decidedAt: ago(34),
+            commentRef: 'issue:394:comment:8506',
+          },
+        }),
+        demoIssue({
+          id: 'iss-399',
+          number: 399,
+          title: 'Anonymise customer emails in the analytics export',
+          body: 'The nightly analytics export carries the customer’s email address on every order row, into a warehouse a dozen people can query. Hash it, and keep the plain address in the shop database where it belongs.',
+          labels: ['priority:high', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'appraisal',
+            reasons: ['an agent is waiting on a tool it may not use'],
+          },
+          appraisal: {
+            verdict: 'workable',
+            summary:
+              'Clear: hash the address on the way out, leave the shop database alone. The export is one job and one ' +
+              'query, and the warehouse schema already has a column wide enough for a digest.',
+            missing: [],
+            by: 'appraiser',
+            proposedProfile: null,
+            awaitingProfileAnswer: false,
+            placement: [],
+            parentSettledAt: null,
+            decidedAt: ago(20),
+            commentRef: 'issue:399:comment:8516',
+          },
+          spend: demoSpend(399, 0.41, 1),
+        }),
+        demoIssue({
           id: 'iss-382',
           number: 382,
-          title: 'Gap clustering merges unrelated questions into one gap',
-          body: 'Two questions about different documents land in the same cluster whenever they share a common noun, so the drafted proposal answers neither.',
-          labels: ['bug', 'lubbdubb-watch'],
+          title: 'Let a customer cancel an order before it is dispatched',
+          body: 'A customer who orders the wrong book has to email the shop and hope somebody reads it before the parcel goes out. Let them cancel it themselves while it is still cancellable.',
+          labels: ['lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: 405,
           pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
@@ -988,8 +1182,8 @@ export function buildDemoState(): DemoSeed {
             cause: 'goal',
             partSlug: null,
             summary:
-              'The threshold was raised and the two example questions now cluster apart — but the goal asks for ' +
-              'clusters that are “about one thing”, and no threshold decides that.',
+              'A Cancel button is on the order page and it works — but the goal asks for cancellation "while it is ' +
+              'still cancellable", and nothing in the shop knows when that is.',
             by: 'assessor',
             decidedAt: ago(4),
           },
@@ -998,8 +1192,8 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-345',
           number: 345,
-          title: 'The watcher drops its claim when the API restarts mid-job',
-          body: 'A job claimed by a watcher stays claimed after an API restart, so it is neither retried nor completed until the visibility timeout expires twenty minutes later.',
+          title: 'The stock sync drops its claim when the shop restarts mid-run',
+          body: 'A stock file claimed by the importer stays claimed after a restart, so it is neither retried nor finished until the claim expires twenty minutes later — and the shop opens with yesterday’s stock.',
           labels: ['bug', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
@@ -1007,7 +1201,7 @@ export function buildDemoState(): DemoSeed {
           conclusion: {
             verdict: 'more_work' as const,
             by: 'operator' as const,
-            note: 'Both attempts fixed the symptom in the watcher. The claim is the API’s to release.',
+            note: 'Both attempts fixed the symptom in the importer. The claim is the shop process’s to release.',
             at: ago(80),
           },
           spend: demoSpend(345, 3.08, 2),
@@ -1015,9 +1209,9 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-359',
           number: 359,
-          title: 'Embedding backfill times out on the 40k-section repository',
-          body: 'A first index of the platform handbook never finishes: the backfill embeds every section in one transaction and the statement times out at 40k rows.',
-          labels: ['bug', 'priority:high', 'lubbdubb-watch'],
+          title: 'Send order confirmations through the new email provider',
+          body: 'The old provider is being switched off at the end of the month. Move the order confirmation and the dispatch notice onto the new one.',
+          labels: ['priority:high', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
           pickup: {
@@ -1030,8 +1224,8 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-352',
           number: 352,
-          title: 'Publish to a local-git destination without polling for a pull request',
-          body: 'A `file://` destination has no pull requests to poll, so the PR-poll schedule must never be offered for one.',
+          title: 'Show stock levels on the book page',
+          body: 'A customer cannot tell whether a book is in the shop, in the warehouse or out of print until they try to buy it.',
           labels: ['lubbdubb-watch'],
           state: 'closed',
           linkedPrNumber: null,
@@ -1040,8 +1234,8 @@ export function buildDemoState(): DemoSeed {
         demoIssue({
           id: 'iss-366',
           number: 366,
-          title: 'Rewrite the review console in Svelte',
-          body: 'The console is Next.js with Emotion. This proposes starting again.',
+          title: 'Rewrite the shop front in Svelte',
+          body: 'The shop is Next.js with Emotion. This proposes starting again.',
           labels: [],
           state: 'open',
           linkedPrNumber: null,
@@ -1055,7 +1249,21 @@ export function buildDemoState(): DemoSeed {
       parentCandidates: [
         {
           number: 300,
-          title: 'Source-grounded document patrols',
+          title: 'Finding a book',
+          issueType: 'Feature',
+          workItemState: 'Active',
+          state: 'open' as const,
+        },
+        {
+          number: 301,
+          title: 'Checkout and payments',
+          issueType: 'Feature',
+          workItemState: 'Active',
+          state: 'open' as const,
+        },
+        {
+          number: 302,
+          title: 'After the order',
           issueType: 'Feature',
           workItemState: 'Active',
           state: 'open' as const,
@@ -1067,10 +1275,10 @@ export function buildDemoState(): DemoSeed {
         id: 'task-a1',
         kind: 'code',
         title: 'Fix failing CI on PR #412',
-        branch: 'feature/context-budget',
+        branch: 'feature/author-search',
         originRef: 'pr:412',
-        originTitle: 'Cap the retrieval context at the token budget before ranking',
-        originSummary: 'PR #412 on branch feature/context-budget · CI failing',
+        originTitle: 'Search by author as well as title',
+        originSummary: 'PR #412 on branch feature/author-search · CI failing',
         dispatchReason: 'PR #412 has failing CI and no agent is on it.',
         status: 'running',
         agentId: 'agent-a1',
@@ -1081,10 +1289,10 @@ export function buildDemoState(): DemoSeed {
         id: 'task-a2',
         kind: 'code',
         title: 'Rebase PR #409 on main',
-        branch: 'feature/review-decision',
+        branch: 'feature/discount-codes',
         originRef: 'pr:409',
-        originTitle: 'Read GitHub review decisions as proposal approval',
-        originSummary: 'PR #409 on branch feature/review-decision · behind main',
+        originTitle: 'Apply discount codes at checkout',
+        originSummary: 'PR #409 on branch feature/discount-codes · behind main',
         dispatchReason: 'PR #409 is behind main and no agent is on it.',
         status: 'running',
         agentId: 'agent-a2',
@@ -1092,28 +1300,13 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(2),
       },
       {
-        id: 'task-a3',
-        kind: 'code',
-        title: 'Give HTTP providers a bounded file-tool loop (#332)',
-        branch: 'issue/332',
-        originRef: 'issue:332',
-        originTitle: 'Give HTTP providers a bounded file-tool loop',
-        originSummary:
-          'An HTTP provider has no tools of its own, so it needs list_dir / read_file / grep with a ceiling.',
-        dispatchReason: 'Open issue #332 has no linked PR and no agent is on it.',
-        status: 'running',
-        agentId: 'agent-a3',
-        createdAt: ago(23),
-        updatedAt: ago(5),
-      },
-      {
         id: 'task-a4',
         kind: 'code',
-        title: 'Retry transient 502s from the embeddings endpoint (#368)',
+        title: 'Import the distributor’s nightly stock feed (#368)',
         branch: 'issue/368',
         originRef: 'issue:368',
-        originTitle: 'Retry transient 502s from the embeddings endpoint',
-        originSummary: 'An incremental index run aborts whole-sale on one 502 from the embeddings provider.',
+        originTitle: 'Import the distributor’s nightly stock feed',
+        originSummary: 'Read the distributor’s nightly CSV, match on ISBN-13 and update stock before the shop opens.',
         dispatchReason: 'Open issue #368 has no linked PR and no agent is on it.',
         status: 'running',
         agentId: 'agent-a4',
@@ -1121,14 +1314,28 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(6),
       },
       {
+        id: 'task-a5',
+        kind: 'code',
+        title: 'Anonymise customer emails in the analytics export (#399)',
+        branch: 'issue/399',
+        originRef: 'issue:399',
+        originTitle: 'Anonymise customer emails in the analytics export',
+        originSummary: 'Hash the customer email on the way into the nightly analytics export.',
+        dispatchReason: 'Open issue #399 has no linked PR and no agent is on it.',
+        status: 'waiting',
+        agentId: 'agent-a5',
+        createdAt: ago(20),
+        updatedAt: ago(3),
+      },
+      {
         id: 'task-a0',
         kind: 'code',
-        title: 'Document the two-watcher requirement (#364)',
-        branch: 'feature/verify-gap-closure',
+        title: 'Order the homepage shelves by last week’s sales (#364)',
+        branch: 'feature/shelf-order',
         originRef: 'issue:364',
-        originTitle: 'Document the two-watcher requirement for maintenance jobs',
+        originTitle: 'Order the homepage shelves by last week’s sales',
         originSummary:
-          'A maintenance job blocks in an API callback while its follow-up AI jobs queue; one watcher self-starves.',
+          'Every homepage shelf is hand-ordered and nobody has touched it since launch; rank each one by units sold.',
         dispatchReason: 'Open issue #364 has no linked PR and no agent is on it.',
         status: 'done',
         agentId: 'agent-a0',
@@ -1140,28 +1347,32 @@ export function buildDemoState(): DemoSeed {
       {
         ref: 'stack:413',
         issueNumber: 390,
-        issueTitle: 'Validate job payloads in the catalog, not in each runner',
+        issueTitle: 'Move checkout to the new payment provider',
         planId: 'plan-390',
         rungs: [
           {
             prNumber: 413,
-            title: '#390 [2/3] refactor(jobs): validate every payload through the catalog',
-            branch: 'issue/390/validate',
+            title: '#390 [2/3] feat(checkout): take card payment through the new provider',
+            branch: 'issue/390/payment',
             base: 'main',
             position: 1,
-            partSlug: 'validate',
+            partSlug: 'payment',
           },
           {
             prNumber: 414,
-            title: '#390 [3/3] refactor(jobs): route the watcher’s intake through the catalog',
-            branch: 'issue/390/watcher',
-            base: 'issue/390/validate',
+            title: '#390 [3/3] feat(checkout): move refunds onto the new provider',
+            branch: 'issue/390/refunds',
+            base: 'issue/390/payment',
             position: 2,
-            partSlug: 'watcher',
+            partSlug: 'refunds',
           },
         ],
       },
     ],
+    /* Sheets exist only where a check set exists, and a check set exists only on a goal every part of
+       which has merged and been assessed `delivered`. That is #395 and #398 — and not #364, whose set
+       is authored but unreleased, because `sheetableArrivals` reads the release stamp.
+       → docs/spec/36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking */
     remoteSheets: [
       {
         goalRef: 'issue:395',
@@ -1196,11 +1407,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'check:download-opens-in-a-new-tab',
+            rowId: 'check:refund-writes-a-ledger-entry',
             kind: 'check' as const,
             seq: 1,
-            title: 'A snapshot download opens in a new tab with auth on',
-            sourceId: 'download-opens-in-a-new-tab',
+            title: 'A full refund writes one ledger entry for the amount',
+            sourceId: 'refund-writes-a-ledger-entry',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1209,7 +1420,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              rowId: 'check:download-opens-in-a-new-tab',
+              rowId: 'check:refund-writes-a-ledger-entry',
               runId: 'run-395-staging-2',
               outcome: 'passed' as const,
               capture: null,
@@ -1224,18 +1435,18 @@ export function buildDemoState(): DemoSeed {
               durationMs: 18_400,
               taskId: 'task-395-run',
               agentId: 'agent-395-run',
-              artefacts: 'https://ci.example.com/runs/395-staging-2#snapshots',
+              artefacts: 'https://ci.example.com/runs/395-staging-2#refunds',
               readAt: ago(3),
             },
           },
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'check:pruned-snapshot-mints-nothing',
+            rowId: 'check:failed-refund-writes-nothing',
             kind: 'check' as const,
             seq: 2,
-            title: 'A pruned snapshot mints no capability',
-            sourceId: 'pruned-snapshot-mints-nothing',
+            title: 'A refund the provider refuses writes no ledger entry',
+            sourceId: 'failed-refund-writes-nothing',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1244,7 +1455,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              rowId: 'check:pruned-snapshot-mints-nothing',
+              rowId: 'check:failed-refund-writes-nothing',
               runId: 'run-395-staging-2',
               outcome: 'failed' as const,
               capture: null,
@@ -1252,8 +1463,8 @@ export function buildDemoState(): DemoSeed {
               rows: null,
               value: null,
               detail:
-                'The row still mints a capability and still draws the link; requesting it 404s from the file ' +
-                'layer. The listing never checks the file is there.',
+                'The ledger entry is written before the provider is called, so a refused refund leaves one behind. ' +
+                'The order is untouched and the ledger says money went back.',
               startedSha: '5n4p004',
               endedSha: '5n4p004',
               executed: 2,
@@ -1261,18 +1472,18 @@ export function buildDemoState(): DemoSeed {
               durationMs: 9_200,
               taskId: 'task-395-run',
               agentId: 'agent-395-run',
-              artefacts: 'https://ci.example.com/runs/395-staging-2#prune',
+              artefacts: 'https://ci.example.com/runs/395-staging-2#refused',
               readAt: ago(3),
             },
           },
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'check:listing-reads-at-1280',
+            rowId: 'check:refund-screen-reads-at-1280',
             kind: 'check' as const,
             seq: 3,
-            title: 'The snapshot listing reads legibly at 1280',
-            sourceId: 'listing-reads-at-1280',
+            title: 'The refund confirmation reads legibly at 1280',
+            sourceId: 'refund-screen-reads-at-1280',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1281,10 +1492,10 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              rowId: 'check:listing-reads-at-1280',
+              rowId: 'check:refund-screen-reads-at-1280',
               runId: 'run-395-staging-2',
               outcome: 'captured' as const,
-              capture: 'capture-listing-reads-at-1280.png',
+              capture: 'capture-refund-screen-reads-at-1280.png',
               captureUrl: DEMO_CAPTURE,
               rows: null,
               value: null,
@@ -1303,11 +1514,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'state:capability-never-persisted',
+            rowId: 'state:no-refund-without-a-ledger-entry',
             kind: 'state' as const,
             seq: 4,
-            title: 'No capability is ever written to the snapshot table',
-            sourceId: 'capability-never-persisted',
+            title: 'No refund row is left without its ledger entry',
+            sourceId: 'no-refund-without-a-ledger-entry',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1316,7 +1527,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              rowId: 'state:capability-never-persisted',
+              rowId: 'state:no-refund-without-a-ledger-entry',
               runId: null,
               outcome: 'passed' as const,
               capture: null,
@@ -1338,11 +1549,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'state:orphan-snapshot-rows',
+            rowId: 'state:ledger-nets-to-the-refund-total',
             kind: 'state' as const,
             seq: 5,
-            title: 'No snapshot row points at a file that is gone',
-            sourceId: 'orphan-snapshot-rows',
+            title: 'The ledger’s refund total matches the provider’s',
+            sourceId: 'ledger-nets-to-the-refund-total',
             selected: true,
             blockedReason:
               'this query is waiting for an operator to read it and accept it against staging. Consent to a ' +
@@ -1355,11 +1566,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'measure:listing-p95',
+            rowId: 'measure:refund-p95',
             kind: 'measure' as const,
             seq: 6,
-            title: 'The snapshot listing is no slower at p95',
-            sourceId: 'listing-p95',
+            title: 'Issuing a refund is no slower at p95',
+            sourceId: 'refund-p95',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1368,14 +1579,15 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              rowId: 'measure:listing-p95',
+              rowId: 'measure:refund-p95',
               runId: 'run-395-staging-2',
               outcome: 'failed' as const,
               capture: null,
               captureUrl: null,
               rows: null,
               value: 1240,
-              detail: 'Baseline 410ms; the bar is 900ms. Signing every row on the way out costs about 800ms.',
+              detail:
+                'Baseline 410ms; the bar is 900ms. Writing the ledger entry in the same transaction costs about 800ms.',
               startedSha: '5n4p004',
               endedSha: '5n4p004',
               executed: null,
@@ -1390,11 +1602,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'signal:no-capability-in-logs',
+            rowId: 'signal:no-unbalanced-ledger-writes',
             kind: 'signal' as const,
             seq: 7,
-            title: 'No capability is written to the access log',
-            sourceId: 'no-capability-in-logs',
+            title: 'No unbalanced ledger write is logged',
+            sourceId: 'no-unbalanced-ledger-writes',
             selected: true,
             blockedReason:
               'the log sink has not answered since the retention change, so nothing can be read here. A signal ' +
@@ -1407,11 +1619,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'check:downloads-work-in-safari',
+            rowId: 'check:refunds-work-in-safari',
             kind: 'check' as const,
             seq: 8,
-            title: 'Downloads work in Safari',
-            sourceId: 'downloads-work-in-safari',
+            title: 'A refund can be issued from Safari',
+            sourceId: 'refunds-work-in-safari',
             selected: false,
             blockedReason: null,
             awaitingApproval: false,
@@ -1456,11 +1668,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'prod',
-            rowId: 'check:download-opens-in-a-new-tab',
+            rowId: 'check:refund-writes-a-ledger-entry',
             kind: 'check' as const,
             seq: 1,
-            title: 'A snapshot download opens in a new tab with auth on',
-            sourceId: 'download-opens-in-a-new-tab',
+            title: 'A full refund writes one ledger entry for the amount',
+            sourceId: 'refund-writes-a-ledger-entry',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1471,11 +1683,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'prod',
-            rowId: 'state:capability-never-persisted',
+            rowId: 'state:no-refund-without-a-ledger-entry',
             kind: 'state' as const,
             seq: 2,
-            title: 'No capability is ever written to the snapshot table',
-            sourceId: 'capability-never-persisted',
+            title: 'No refund row is left without its ledger entry',
+            sourceId: 'no-refund-without-a-ledger-entry',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
@@ -1484,7 +1696,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'prod',
-              rowId: 'state:capability-never-persisted',
+              rowId: 'state:no-refund-without-a-ledger-entry',
               runId: null,
               outcome: 'passed' as const,
               capture: null,
@@ -1506,11 +1718,11 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'prod',
-            rowId: 'check:tampered-capability-refused',
+            rowId: 'check:partial-refund-writes-the-part',
             kind: 'check' as const,
             seq: 3,
-            title: 'A tampered capability is refused',
-            sourceId: 'tampered-capability-refused',
+            title: 'A partial refund writes an entry for the amount refunded',
+            sourceId: 'partial-refund-writes-the-part',
             selected: true,
             blockedReason:
               'the fourth part of this plan has not reached prod, so this row would be read against code that is not here yet.',
@@ -1522,143 +1734,112 @@ export function buildDemoState(): DemoSeed {
         ],
       },
       {
-        goalRef: 'issue:390',
+        goalRef: 'issue:398',
         environment: 'staging',
-        assembledAt: '2026-08-19T09:12:06.000Z',
+        assembledAt: ago(66),
         run: {
-          id: 'run-390-staging',
-          goalRef: 'issue:390',
+          id: 'run-398-staging-1',
+          goalRef: 'issue:398',
           environment: 'staging',
           tenant: 'validation-customer-1',
           status: 'ended' as const,
-          startedSha: 'c0ffee1',
-          endedSha: 'c0ffee1',
-          startedAt: '2026-08-19T09:20:00.000Z',
-          endedAt: '2026-08-19T09:20:41.000Z',
+          startedSha: '7c1b330',
+          endedSha: '7c1b330',
+          startedAt: ago(65),
+          endedAt: ago(64),
           note: null,
-          taskId: null,
-          reportPath: null,
-          listingPath: null,
-          artefacts: null,
+          taskId: 'task-398-run',
+          reportPath: '.lubbdubb/validation/issue-398/staging/report.json',
+          listingPath: '.lubbdubb/validation/issue-398/staging/listing.json',
+          artefacts: 'https://ci.example.com/runs/398-staging-1',
         },
         tenant: {
           tenant: 'validation-customer-1',
-          reseededAt: '2026-08-12T08:00:00.000Z',
-          ageMs: 7 * 86_400_000,
-          freshnessMs: 7 * 86_400_000,
+          reseededAt: ago(60 * 5),
+          ageMs: 5 * 3_600_000,
+          freshnessMs: 24 * 3_600_000,
           stale: false,
           blockedReason: null,
           reseedable: true,
         },
         rows: [
           {
-            goalRef: 'issue:390',
+            goalRef: 'issue:398',
             environment: 'staging',
-            rowId: 'check:orders-still-place',
+            rowId: 'check:phone-page-under-a-megabyte',
             kind: 'check' as const,
             seq: 1,
-            title: 'An order still places end to end',
-            sourceId: 'orders-still-place',
+            title: 'A book page on a phone ships under a megabyte of images',
+            sourceId: 'phone-page-under-a-megabyte',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
-            matched: null,
-            idleReason: null,
-            reading: null,
-          },
-          {
-            goalRef: 'issue:390',
-            environment: 'staging',
-            rowId: 'state:orders-carry-a-channel',
-            kind: 'state' as const,
-            seq: 2,
-            title: 'Every order written since the change carries a channel',
-            sourceId: 'orders-carry-a-channel',
-            selected: true,
-            blockedReason: null,
-            awaitingApproval: false,
-            matched: null,
+            matched: 2,
             idleReason: null,
             reading: {
-              goalRef: 'issue:390',
+              goalRef: 'issue:398',
               environment: 'staging',
-              rowId: 'state:orders-carry-a-channel',
-              runId: null,
+              rowId: 'check:phone-page-under-a-megabyte',
+              runId: 'run-398-staging-1',
               outcome: 'passed' as const,
               capture: null,
               captureUrl: null,
-              rows: 0,
+              rows: null,
               value: null,
-              detail: null,
-              startedSha: null,
-              endedSha: null,
-              executed: null,
-              retries: null,
-              durationMs: null,
-              taskId: null,
-              agentId: null,
-              artefacts: null,
-              readAt: '2026-08-19T09:12:07.000Z',
+              detail: '380KB of cover art at 390px wide, down from 4.1MB.',
+              startedSha: '7c1b330',
+              endedSha: '7c1b330',
+              executed: 2,
+              retries: 0,
+              durationMs: 7_400,
+              taskId: 'task-398-run',
+              agentId: 'agent-398-run',
+              artefacts: 'https://ci.example.com/runs/398-staging-1#phone',
+              readAt: ago(64),
             },
           },
           {
-            goalRef: 'issue:390',
+            goalRef: 'issue:398',
             environment: 'staging',
-            rowId: 'state:refunds-net-to-zero',
-            kind: 'state' as const,
-            seq: 3,
-            title: 'No refund row is left without its ledger entry',
-            sourceId: 'refunds-net-to-zero',
-            selected: true,
-            blockedReason:
-              'this query is waiting for an operator to read it and accept it against staging. Consent to a place is not transferable, so an approval written on another environment does not carry here.',
-            awaitingApproval: true,
-            matched: null,
-            idleReason: null,
-            reading: null,
-          },
-          {
-            goalRef: 'issue:390',
-            environment: 'staging',
-            rowId: 'check:confirmation-reads',
+            rowId: 'check:cover-is-not-visibly-worse',
             kind: 'check' as const,
-            seq: 4,
-            title: 'The confirmation screen reads legibly at 1280',
-            sourceId: 'confirmation-reads',
+            seq: 2,
+            title: 'The cover is not visibly worse on a desktop',
+            sourceId: 'cover-is-not-visibly-worse',
             selected: true,
             blockedReason: null,
             awaitingApproval: false,
-            matched: null,
+            matched: 1,
             idleReason: null,
             reading: {
-              goalRef: 'issue:390',
+              goalRef: 'issue:398',
               environment: 'staging',
-              rowId: 'check:confirmation-reads',
-              runId: 'run-staging-1',
-              outcome: 'captured' as const,
-              capture: 'capture-confirmation-reads-run-staging-1.png',
-              captureUrl: DEMO_CAPTURE,
+              rowId: 'check:cover-is-not-visibly-worse',
+              runId: 'run-398-staging-1',
+              outcome: 'passed' as const,
+              capture: null,
+              captureUrl: null,
               rows: null,
               value: null,
-              detail:
-                'A screen was handed back for somebody to look at. This is not written onto the goal’s own ' +
-                'check: it already reads `passed`, recorded by a person who carried the steps out, and a ' +
-                'reading somebody took is theirs. The sheet keeps this one instead.',
-              startedSha: null,
-              endedSha: null,
-              executed: null,
-              retries: null,
-              durationMs: 41_000,
-              taskId: null,
-              agentId: null,
+              detail: 'Read side by side against the old page at 1440. No visible difference in the jacket.',
+              startedSha: '7c1b330',
+              endedSha: '7c1b330',
+              executed: 1,
+              retries: 0,
+              durationMs: 5_100,
+              taskId: 'task-398-run',
+              agentId: 'agent-398-run',
               artefacts: null,
-              readAt: '2026-08-19T09:20:38.000Z',
+              readAt: ago(64),
             },
           },
         ],
       },
     ],
     stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    /* An arrival is only ever recorded for a goal whose work has landed, which on this fixture is
+       the three delivered goals. #364's arrival is stamped but unannounced because its check set is
+       still a proposal. → docs/spec/24-environments.md#what-an-arrival-means */
     environmentArrivals: [
       {
         goalRef: 'issue:395',
@@ -1677,12 +1858,28 @@ export function buildDemoState(): DemoSeed {
         sheetedAt: ago(2),
       },
       {
-        goalRef: 'issue:390',
+        goalRef: 'issue:398',
         environment: 'staging',
-        arrivedAt: '2026-08-19T09:12:00.000Z',
-        announcedAt: '2026-08-19T09:12:04.000Z',
-        watchedAt: '2026-08-19T09:12:04.000Z',
-        sheetedAt: '2026-08-19T09:12:04.000Z',
+        arrivedAt: ago(66),
+        announcedAt: ago(66),
+        watchedAt: ago(66),
+        sheetedAt: ago(66),
+      },
+      {
+        goalRef: 'issue:398',
+        environment: 'prod',
+        arrivedAt: ago(20),
+        announcedAt: ago(20),
+        watchedAt: null,
+        sheetedAt: ago(20),
+      },
+      {
+        goalRef: 'issue:364',
+        environment: 'staging',
+        arrivedAt: ago(52),
+        announcedAt: ago(52),
+        watchedAt: null,
+        sheetedAt: ago(52),
       },
     ],
     environmentHealth: [
@@ -1692,17 +1889,17 @@ export function buildDemoState(): DemoSeed {
         tier: null,
         reasons: [],
         detail: null,
-        observedAt: '2026-08-19T09:14:00.000Z',
-        changedAt: '2026-08-17T22:40:00.000Z',
+        observedAt: ago(4),
+        changedAt: ago(60 * 33),
       },
       {
         environment: 'prod',
         state: 'unhealthy',
         tier: 'orange',
-        reasons: ['Pipeline failing', 'Solr down'],
+        reasons: ['Pipeline failing', 'Search cluster degraded'],
         detail: null,
-        observedAt: '2026-08-19T09:14:00.000Z',
-        changedAt: '2026-08-19T08:05:00.000Z',
+        observedAt: ago(4),
+        changedAt: ago(65),
       },
     ],
     environmentReach: [
@@ -1741,13 +1938,13 @@ export function buildDemoState(): DemoSeed {
           },
         ],
         landings: [
-          { prNumber: 411, sha: '5n4p001', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
-          { prNumber: 412, sha: '5n4p002', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
-          { prNumber: 414, sha: '5n4p003', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
-          { prNumber: 415, sha: '5n4p004', reach: { staging: 'reached', prod: 'absent' }, unplaced: false },
+          { prNumber: 419, sha: '5n4p001', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
+          { prNumber: 420, sha: '5n4p002', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
+          { prNumber: 421, sha: '5n4p003', reach: { staging: 'reached', prod: 'reached' }, unplaced: false },
+          { prNumber: 422, sha: '5n4p004', reach: { staging: 'reached', prod: 'absent' }, unplaced: false },
           /* A stacked squash onto a topic branch that has since been deleted: an ancestor of
              nothing, so no environment can ever hold it. */
-          { prNumber: 416, sha: '5n4p005', reach: {}, unplaced: true },
+          { prNumber: 423, sha: '5n4p005', reach: {}, unplaced: true },
         ],
         groups: [],
         gateHold: null,
@@ -1758,10 +1955,80 @@ export function buildDemoState(): DemoSeed {
         },
       },
       {
+        goalRef: 'issue:398',
+        environments: [
+          {
+            environment: 'staging',
+            status: 'reached',
+            landed: 1,
+            total: 1,
+            unplaced: 0,
+            at: ago(66),
+            opens: ['validate', 'close_out'],
+            sheet: 'check plan · 2 checks · both passed',
+          },
+          {
+            environment: 'prod',
+            status: 'reached',
+            landed: 1,
+            total: 1,
+            unplaced: 0,
+            at: ago(20),
+            opens: ['close_out'],
+            sheet: null,
+          },
+          {
+            environment: 'preview',
+            status: 'unknown',
+            landed: 0,
+            total: 1,
+            unplaced: 0,
+            at: null,
+            opens: [],
+            sheet: null,
+          },
+        ],
+        landings: [{ prNumber: 424, sha: '7c1b330', reach: { staging: 'reached', prod: 'reached' }, unplaced: false }],
+        gateHold: null,
+        released: null,
+      },
+      {
+        goalRef: 'issue:364',
+        environments: [
+          {
+            environment: 'staging',
+            status: 'reached',
+            landed: 1,
+            total: 1,
+            unplaced: 0,
+            at: ago(52),
+            opens: ['validate', 'close_out'],
+            /* No sheet: the check set is authored and still a proposal, and `sheetableArrivals`
+               reads the release stamp rather than the authoring one.
+               → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */
+            sheet: null,
+          },
+          {
+            environment: 'prod',
+            status: 'absent',
+            landed: 0,
+            total: 1,
+            unplaced: 0,
+            at: null,
+            opens: ['close_out'],
+            sheet: null,
+          },
+        ],
+        landings: [{ prNumber: 410, sha: 'b3a9f01', reach: { staging: 'reached', prod: 'absent' }, unplaced: false }],
+        gateHold: null,
+        released: null,
+      },
+      {
         goalRef: 'issue:390',
         /* `total` is landings + unattributed merges + the code parts still owed, so a goal
            whose plan is not finished cannot read `reached` on anything: two of this plan's
-           parts are outstanding, which is why both rows below are partial. */
+           parts are outstanding, which is why both rows below are partial. No sheet on either,
+           because nothing has assessed this goal delivered and so no check set exists. */
         environments: [
           {
             environment: 'staging',
@@ -1771,7 +2038,7 @@ export function buildDemoState(): DemoSeed {
             unplaced: 0,
             at: null,
             opens: ['validate', 'close_out'],
-            sheet: 'check plan · 3 checks · 1 blocked',
+            sheet: null,
           },
           {
             environment: 'prod',
@@ -1791,8 +2058,12 @@ export function buildDemoState(): DemoSeed {
             reach: { staging: 'reached', prod: 'reached' },
             unplaced: false,
           },
+          /* The abandoned spike: merged onto one of this goal's branches, claimed by no part of the
+             plan, and counted into `total` anyway — so the matrix owes it a row. A number in the
+             fraction with nothing to point at is a number nobody can account for.
+             → docs/spec/24-environments.md#every-part-every-environment */
           {
-            prNumber: 409,
+            prNumber: 397,
             sha: 'a11ce22',
             reach: { staging: 'reached', prod: 'absent' },
             unplaced: false,
@@ -1847,6 +2118,8 @@ export function buildDemoState(): DemoSeed {
     ],
     environmentGroups: [],
     featureSequences: [],
+    /* A watch window opens on an arrival, so these too belong only to delivered goals. #395's has one
+       regressed reading, which is what `hum-6` is asked beside. */
     goalWatchWindows: [
       {
         goalRef: 'issue:395',
@@ -1857,8 +2130,8 @@ export function buildDemoState(): DemoSeed {
         extendedAt: ago(3),
         checks: [
           {
-            checkId: 'no-401s-on-download',
-            title: 'Snapshot downloads stop 401ing',
+            checkId: 'no-unbalanced-ledger-writes',
+            title: 'No refund is written without its ledger entry',
             kind: 'signal',
             tolerate: 0,
             expectUnder: null,
@@ -1869,7 +2142,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              checkId: 'no-401s-on-download',
+              checkId: 'no-unbalanced-ledger-writes',
               readAt: ago(0.4),
               verdict: 'clean',
               rows: 0,
@@ -1878,8 +2151,8 @@ export function buildDemoState(): DemoSeed {
             },
           },
           {
-            checkId: 'listing-p95',
-            title: 'The snapshot listing is no slower at p95',
+            checkId: 'refund-p95',
+            title: 'Issuing a refund is no slower at p95',
             kind: 'measure',
             tolerate: 0,
             expectUnder: 900,
@@ -1890,17 +2163,17 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              checkId: 'listing-p95',
+              checkId: 'refund-p95',
               readAt: ago(0.4),
               verdict: 'regressed',
               rows: null,
               value: 1240,
-              detail: 'Signing every row on the way out costs about 800ms on a sixty-row page.',
+              detail: 'Writing the ledger entry in the same transaction costs about 800ms on a multi-line order.',
             },
           },
           {
-            checkId: 'no-capability-in-logs',
-            title: 'No capability is written to the access log',
+            checkId: 'no-refund-retries',
+            title: 'Nobody is retrying a refund by hand',
             kind: 'signal',
             tolerate: 0,
             expectUnder: null,
@@ -1911,7 +2184,7 @@ export function buildDemoState(): DemoSeed {
             reading: {
               goalRef: 'issue:395',
               environment: 'staging',
-              checkId: 'no-capability-in-logs',
+              checkId: 'no-refund-retries',
               readAt: ago(0.4),
               verdict: 'unknown',
               rows: null,
@@ -1924,16 +2197,37 @@ export function buildDemoState(): DemoSeed {
         ],
       },
       {
-        goalRef: 'issue:390',
+        goalRef: 'issue:398',
         environment: 'staging',
-        openedAt: '2026-08-19T09:12:00.000Z',
-        settlesAt: '2026-08-21T09:12:00.000Z',
+        openedAt: ago(66),
+        settlesAt: ahead(60 * 30),
         settledAt: null,
         extendedAt: null,
         checks: [
           {
-            checkId: 'no-payload-rejections',
-            title: 'Runners stop rejecting their own job payloads',
+            checkId: 'book-page-weight',
+            title: 'A book page ships less than it did',
+            kind: 'measure',
+            tolerate: 0,
+            expectUnder: 1_200,
+            expectOver: null,
+            expectBaseline: true,
+            unit: 'KB',
+            baselineValue: 4_100,
+            reading: {
+              goalRef: 'issue:398',
+              environment: 'staging',
+              checkId: 'book-page-weight',
+              readAt: ago(0.5),
+              verdict: 'clean',
+              rows: null,
+              value: 380,
+              detail: null,
+            },
+          },
+          {
+            checkId: 'no-missing-cover-renders',
+            title: 'No cover fails to render at a requested width',
             kind: 'signal',
             tolerate: 0,
             expectUnder: null,
@@ -1942,58 +2236,14 @@ export function buildDemoState(): DemoSeed {
             unit: null,
             baselineValue: null,
             reading: {
-              goalRef: 'issue:390',
+              goalRef: 'issue:398',
               environment: 'staging',
-              checkId: 'no-payload-rejections',
+              checkId: 'no-missing-cover-renders',
               readAt: ago(0.5),
               verdict: 'clean',
               rows: 0,
               value: null,
               detail: null,
-            },
-          },
-          {
-            checkId: 'job-claim-p95',
-            title: 'Claiming a job is no slower at p95',
-            kind: 'measure',
-            tolerate: 0,
-            expectUnder: null,
-            expectOver: null,
-            expectBaseline: true,
-            unit: 'ms',
-            baselineValue: 8400,
-            reading: {
-              goalRef: 'issue:390',
-              environment: 'staging',
-              checkId: 'job-claim-p95',
-              readAt: ago(0.5),
-              verdict: 'clean',
-              rows: null,
-              value: 310,
-              detail: null,
-            },
-          },
-          {
-            checkId: 'catalog-queue-depth',
-            title: 'The catalog’s job queue stops backing up',
-            kind: 'signal',
-            tolerate: 0,
-            expectUnder: null,
-            expectOver: null,
-            expectBaseline: false,
-            unit: null,
-            baselineValue: null,
-            reading: {
-              goalRef: 'issue:390',
-              environment: 'staging',
-              checkId: 'catalog-queue-depth',
-              readAt: ago(0.5),
-              verdict: 'unknown',
-              rows: null,
-              value: null,
-              detail:
-                'the watch could not read staging — the code path this check is about has not run here, so its ' +
-                'presence query matched nothing. A signal cannot report clean while its presence query is silent.',
             },
           },
         ],
@@ -2002,8 +2252,8 @@ export function buildDemoState(): DemoSeed {
     localRun: {
       id: 'run-1',
       originRef: 'issue:390',
-      ref: 'issue/390/validate',
-      dir: '/Users/you/code/markdown-magpie/.lubbdubb/local-run',
+      ref: 'issue/390/payment',
+      dir: '/Users/you/code/inkwell-books/.lubbdubb/local-run',
       commit: '8b052b99c4d1e7f2a3b6c9d0e1f2a3b4c5d6e7f8',
       pid: 48211,
       status: 'running',
@@ -2014,9 +2264,9 @@ export function buildDemoState(): DemoSeed {
         declared: { url: 'http://localhost:5173', host: 'localhost', port: 5173, answering: true },
         listening: [5173, 5432, 9229],
       },
-      freshness: { checkedAt: ago(0), behindTip: 2, base: { ref: 'issue/390/schema', behind: 0 } },
+      freshness: { checkedAt: ago(0), behindTip: 2, base: { ref: 'issue/390/client', behind: 0 } },
       url: 'http://localhost:5173',
-      note: 'Up on :5173. Seeded the sample corpus — the instruction did not mention that step.',
+      note: 'Up on :5173. Seeded the sample catalogue — the instruction did not mention that step.',
       startedAt: ago(18),
       endedAt: null,
       interruptedAt: null,
@@ -2049,7 +2299,7 @@ export function buildDemoState(): DemoSeed {
           beatsToNextStage: 10_400,
           originKind: 'escalation',
           originRef: 'esc_9f2a',
-          originLabel: 'Should the rate-limit park apply to review agents too?',
+          originLabel: 'Should a gift card count towards free delivery?',
           hatchedAt: ago(4_320),
           openedAt: ago(4_320),
           placed: true,
@@ -2072,7 +2322,7 @@ export function buildDemoState(): DemoSeed {
           beatsToNextStage: null,
           originKind: 'human-task',
           originRef: 'htk_31c',
-          originLabel: 'Issue a deploy key for the staging cluster',
+          originLabel: 'Issue a deploy key for the staging shop',
           hatchedAt: ago(2_880),
           openedAt: ago(2_880),
           placed: true,
@@ -2135,26 +2385,26 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'plan-390',
         originRef: 'issue:390',
-        title: 'Validate job payloads in the catalog, not in each runner',
+        title: 'Move checkout to the new payment provider',
         status: 'active',
         diagnosis: null,
         approach: null,
-        reason: 'The schemas have to move into the catalog before anything can validate against them.',
+        reason: 'The provider client has to exist before anything can take a payment through it.',
         risks:
-          'The catalog has to describe every payload the queue carries today, or a job type nobody moved fails to enqueue at runtime instead of at build time.',
-        outOfScope: 'Changing any payload shape — this only moves where they are declared.',
+          'The client has to cover every call the old gateway carries today, or a path nobody moved fails at checkout in front of a customer instead of at build time.',
+        outOfScope: 'Changing what a customer is charged — this only moves who charges them.',
         alternatives: null,
         openQuestions: null,
         verification: null,
         evidence: [],
         document:
-          '# Validate job payloads in the catalog\n\n' +
-          'Three parts, stacked: the schemas move first, then the API validates at enqueue, then the watcher ' +
-          'validates at intake. Enqueue has to land before intake, or there is a window in which the watcher ' +
-          'refuses payloads the API is still happily writing.\n\n' +
+          '# Moving checkout onto the new payment provider\n\n' +
+          'Three parts, stacked: the client lands first, then card payment goes through it, then refunds. ' +
+          'Payment has to land before refunds, or there is a window in which a refund is issued against a charge ' +
+          'the new provider has never heard of.\n\n' +
           '## Why three PRs\n\n' +
-          'Each part is independently reviewable and each one leaves the queue working — the schema move alone ' +
-          'is a no-op re-export; the enqueue part alone tightens what may be written without changing what is read.',
+          'Each part is independently reviewable and each one leaves the shop taking money — the client alone is ' +
+          'unreferenced; the payment part alone changes who takes the charge without touching what comes back.',
         statusCommentRef: 'issue:390:comment:8391',
         revealed: true,
         revealedAt: null,
@@ -2164,60 +2414,57 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'plan-333',
         originRef: 'issue:333',
-        title: 'Verify a document against its sources before correcting it',
+        title: 'Let customers save books for later',
         status: 'awaiting_approval',
         diagnosis:
-          'A patrol reads a document once and writes a correction from that single read, so the model is asked to spot the error and fix it in the same breath. When it is wrong about the error it is confidently wrong about the fix, and nothing downstream can tell the two apart: the proposal carries a diff and no account of what it thought was broken.',
+          'A customer who is not ready to buy has nowhere to put a book, so they use the basket as one: they add it, leave, and the basket expires overnight with the book in it. The shop then reads that as an abandoned basket and emails them about an order they never meant to place. Two features are wearing one data structure, and the basket is the wrong one for both.',
         approach:
-          'Split the read from the write. `verify_document` reports findings — a claim the document makes, the source line it disagrees with, and nothing else. `correct_document` runs only on a document that came back with findings, and is handed them as its input. A document that verifies clean never reaches a writer at all.',
+          'Give the list its own table and its own reads. A saved book is a customer and an edition and nothing else — no quantity, no price, no expiry — so it cannot drift into being a basket. Add from the book page and from a search result, and read it from the account menu. The basket is left exactly as it is.',
         reason:
-          'The verifier is a pure reporter with no callers, so it lands and is judged on its own findings before anything writes from them.',
+          'The list has no callers until something can add to it, so it lands and is judged on its own shape first.',
         risks:
-          '**Two model calls per document.** Every patrol pass costs a verify as well as a correct, and most documents verify clean — the saving is real only if the clean path stops before the writer. **Finding drift.** The corrector is handed findings from a read that may be a minute old; a document edited in between is corrected against a source it no longer matches.',
+          '**A signed-out customer.** Adding to a list needs somebody to attach it to, and the book page is the most common place a signed-out customer stands. I have written it as a prompt to sign in, which loses the click. **Editions, not works.** A saved paperback whose paperback goes out of print is a saved row pointing at nothing buyable; the list has to draw that rather than 404.',
         outOfScope:
-          '- Ranking findings by severity. A finding is a finding here; whether some are worth ignoring is a judgement nothing in this goal makes.\n- The patrol schedule, which stays as it is.\n- Correcting anything outside the document under patrol.',
+          '- Price-drop or back-in-stock emails about a saved book. Worth doing and a goal of its own.\n- Sharing a list, or making one public.\n- Anything about the basket, which this deliberately does not touch.',
         alternatives:
-          '**Keep one call and ask for findings alongside the diff.** Cheaper, and it was the first thing I wrote. Rejected because a model asked for both hands back a diff and a justification of that diff — the finding stops being a reading of the document and becomes a description of the edit.\n\n' +
-          '**Verify against the index rather than the source.** Faster, and wrong for the same reason the goal exists: the index is built from the documents, so a document that disagrees with the code agrees with itself.',
+          '**A flag on the basket line.** Cheapest, and the first thing I wrote. Rejected because it keeps both features on one structure — the expiry sweep then has to know which lines it may take, and every read of the basket grows a filter it can forget.\n\n' +
+          '**Cookie-only, no account needed.** Works for a signed-out customer and loses the list on a new device, which is most of what a saved list is for.',
         openQuestions:
-          'What should a patrol do with a document whose findings it cannot resolve — an assertion about code that no longer exists anywhere? I have written it as a finding with no correction, which leaves the document untouched and the finding on the record. Filing it as a ticket is the other reading and I have not taken it.',
+          'What should the list do with an edition that has gone out of print — drop the row, or keep it and draw it as unavailable? I have written it as kept and drawn, because a customer who saved it has a reason to know it is gone. Dropping it silently is the other reading and I have not taken it.',
         verification:
-          'Worth checking end to end on a document that is wrong in a way the code makes obvious: the patrol should report the claim and the line it disagrees with before it writes anything, and a document that is already correct should come back with no proposal at all rather than a no-op diff.',
+          'Worth doing end to end as a customer: save a book from a search result, sign out, sign back in and find it still there — and check the basket is untouched by all of it.',
         evidence: [
           {
-            path: 'src/patrol/correct.ts',
+            path: 'src/basket/lines.ts',
             line: 63,
-            note: 'the single call that reads and writes together — the prompt asks for a diff and gets a rationale for it',
+            note: 'the basket line, which is the structure a saved book would otherwise borrow',
           },
           {
-            path: 'src/patrol/tools.ts',
+            path: 'src/basket/expire.ts',
             line: 21,
-            note: 'the file-tool loop a verifier would read the sources through',
+            note: 'the overnight expiry sweep — what turns a saved book into an abandoned-basket email today',
           },
           {
-            path: 'src/proposals/draft.ts',
+            path: 'src/account/menu.tsx',
             line: 104,
-            note: 'the proposal is drafted straight from the diff, with nowhere to carry a finding',
+            note: 'the account menu, which has nowhere to put a list',
           },
         ],
         document:
-          '# Splitting the patrol’s read from its write\n\n' +
-          'A patrol reads a document once and writes a correction from that single read. The model is asked ' +
-          'to spot the error and fix it in the same breath.\n\n' +
+          '# Giving a saved book somewhere of its own to live\n\n' +
+          'A customer who is not ready to buy has nowhere to put a book, so they use the basket as one.\n\n' +
           '## Why that is the wrong shape\n\n' +
-          'When the model is wrong about the error it is confidently wrong about the fix, and nothing ' +
-          'downstream can tell the two apart: the proposal carries a diff and no account of what it thought ' +
-          'was broken.\n\n' +
-          '> Asking for findings alongside the diff in one call was the first thing I wrote. A model asked ' +
-          'for both hands back a diff and a justification of that diff — the finding stops being a reading of ' +
-          'the document and becomes a description of the edit.\n\n' +
+          'The basket expires overnight, and the expiry sweep reads what is left as an abandoned order — so the ' +
+          'shop emails a customer about a purchase they never intended to make.\n\n' +
+          '> A flag on the basket line was the first thing I wrote. It keeps both features on one structure, and ' +
+          'then every read of the basket grows a filter it can forget.\n\n' +
           '## Why three pull requests\n\n' +
-          '1. The verifier is a pure reporter with no callers.\n' +
-          '2. The gate is the only part that changes what a patrol pass does.\n' +
-          '3. Carrying the finding onto the proposal touches the console as well as the drafter.\n\n' +
+          '1. The list is a table and a pair of reads with no callers.\n' +
+          '2. The add controls are the only part that changes what a customer can do.\n' +
+          '3. The account page touches navigation as well as the list.\n\n' +
           '## The one thing I am unsure about\n\n' +
-          'A claim about code that no longer exists anywhere cannot be corrected. I leave the document ' +
-          'untouched with the finding on the record; filing a ticket is the other reading.',
+          'An edition that goes out of print leaves a saved row pointing at nothing buyable. I keep it and draw ' +
+          'it as unavailable; dropping it silently is the other reading.',
         statusCommentRef: 'issue:333:comment:8471',
         revealed: true,
         revealedAt: null,
@@ -2225,62 +2472,84 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(14),
       },
       {
+        id: 'plan-396',
+        originRef: 'issue:396',
+        title: 'Rebuild the admin console header',
+        status: 'active',
+        diagnosis: null,
+        approach: null,
+        reason: 'One component and the links it carries — there is nothing here to stage.',
+        risks: null,
+        outOfScope: 'Anything below the header, including the navigation rail it sits above.',
+        alternatives: null,
+        openQuestions: null,
+        verification: null,
+        evidence: [],
+        document: null,
+        statusCommentRef: null,
+        revealed: true,
+        revealedAt: null,
+        createdAt: ago(40),
+        updatedAt: ago(30),
+      },
+      {
         id: 'plan-395',
         originRef: 'issue:395',
-        title: 'Snapshot downloads 401 in the review console',
+        title: 'Every refund writes a ledger entry',
         status: 'complete',
         diagnosis:
-          'Every snapshot download 401s, and not because the guard is wrong: `/snapshots/:id/download` sits **inside** the `/api` prefix the console guards with an Auth0 bearer token, and clicking a download link is a top-level browser navigation — which cannot carry an `Authorization` header. The route has never been reachable the way it is reached.',
+          'A refund updates the order and calls the payment provider, and that is the whole of it. The ledger is written by the nightly finance job from the **orders** table, and a refunded order looks to that job exactly like an order that was never fully paid — so the money going back is never recorded as money going back. The shop and the provider disagree by however much was refunded that month, every month.',
         approach:
-          'Move `/snapshots/:id/download` out from behind the prefix guard and gate it on a short-lived signed capability instead, minted into the snapshot list beside each row. The URL carries its own proof, so a plain navigation works and nothing else moves outside the guard.',
+          'Write the ledger entry where the refund happens, in the same transaction as the order update, and stop the nightly job inferring refunds at all. The entry carries the provider’s refund reference, so the two can be reconciled by anyone who doubts either.',
         reason:
-          'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
+          'The ledger writer has to exist before the refund path can call it, and the nightly job cannot stop inferring until something else is recording.',
         risks:
-          '**Guard window.** Moving `/snapshots` outside the `/api` prefix means part 2 briefly serves snapshots with no guard at all — the capability check has to land in the same PR, not a later one. **Two modes.** With `AUTH_ENABLED` off there is no signing key, so the route serves with no capability at all, and only one of those two modes is covered by the tests today. **Payload churn.** Part 3 widens the snapshot list payload, which the console reads on every render; a field added there is a field the console has to tolerate the absence of on an older API.',
+          '**The transaction boundary.** The provider call is a network round trip and the ledger write is local; putting both inside one transaction means a provider timeout rolls back a refund that may in fact have gone through. Part 2 writes after the provider answers, which is the other failure and the cheaper one. **Double counting.** For one deploy the nightly job and the refund path are both writing, so part 3 has to land in the same week or the ledger counts every refund twice. **Historic refunds.** Nothing back-fills entries for refunds already issued; the ledger starts being right from the deploy, not from the beginning.',
         outOfScope:
-          '- Capability revocation. Named as a rejected alternative in the write-up — it needs a store of its own and nothing here creates one.\n- Any change to the console’s Auth0 session.\n- The snapshot retention window, which stays at 30 days.',
+          '- Back-filling ledger entries for refunds already issued. Named as a risk, and its own goal.\n- The finance export format, which is unchanged.\n- Partial refunds of delivery charges, which the shop does not do.',
         alternatives:
-          '**Allow-list the route inside the prefix guard.** One line, and the fix I would have shipped a year ago. Rejected because one exception is a line and the second one is a policy: the guard stops being readable as "everything under `/api` is authenticated" the moment anything under it is not.\n\n' +
-          '**Fetch the snapshot with the bearer token and hand the browser a blob URL.** Works, and keeps the route where it is — but the row stops being a link, so it cannot be opened in a new tab, bookmarked or sent to anyone. That is most of what a download link is for.\n\n' +
-          '**A cookie scoped to `/snapshots`.** Rejected on the two-modes problem below: with `AUTH_ENABLED` off there is nothing to put in it, so the cookie path needs the same unauthenticated arm the capability path needs, and it costs a `SameSite` argument as well.',
+          '**Keep the nightly job and teach it about refunds.** One query, and the fix I would have shipped a year ago. Rejected because the job can only infer from the order row, and an order refunded and then re-charged is indistinguishable from one refunded twice.\n\n' +
+          '**Write the entry from a provider webhook.** Most correct, in that the provider is the authority on whether money moved — and it needs an endpoint, a signature check and a replay store, none of which exist. Worth doing later; too much to carry here.\n\n' +
+          '**Write the entry before calling the provider, and delete it on failure.** Rejected on the delete: a process that dies between the two leaves exactly the phantom entry this goal exists to remove.',
         openQuestions:
-          'With `AUTH_ENABLED` off there is no signing key, so the route has to serve with no capability at all — and I am not certain that arm should exist rather than the route simply 404ing. I have written it as "serves everything", which is what the operator running with auth off has already chosen, but it is the one decision here I would want argued with.\n\n' +
-          'Second, smaller: I assumed the capability rides in the query string. A path segment would keep it out of proxy logs. I have no evidence anyone proxies this.',
+          'A refund the provider accepts and then reverses days later leaves a ledger entry with nothing behind it, and I have no way to hear about that without the webhook. I have left it, which means the ledger can be wrong in one direction for a case nobody has seen yet.\n\n' +
+          'Second, smaller: I assumed a partial refund writes one entry for the amount refunded rather than one per order line. Per line is more useful to finance and nobody asked for it.',
         verification:
-          'Open a snapshot download link in the console with `AUTH_ENABLED` on, in a new tab, and get the file rather than a 401 — that is the whole bug, and it is not reproducible from a test that can set a header.',
+          'Worth issuing a real refund on staging and reading both sides: the order, and the ledger entry beside it with the provider’s reference on it. Then a refund the provider refuses — there should be no entry at all, and that is the case the old code got wrong in the other direction.',
         evidence: [
           {
-            path: 'apps/api/src/app.ts',
+            path: 'apps/api/src/features/refunds/issue.ts',
             line: 96,
-            note: 'the prefix guard: the auth hook over `/api`, which `/snapshots/:id/download` sits under',
+            note: 'the refund path: order update, provider call, and nothing else',
           },
           {
-            path: 'apps/api/src/features/snapshots/routes.ts',
+            path: 'apps/api/src/jobs/nightly-ledger.ts',
             line: 41,
-            note: 'the download route, registered inside the guarded prefix',
+            note: 'the nightly job, inferring the ledger from the orders table',
           },
           {
-            path: 'apps/web/src/app/snapshots/page.tsx',
+            path: 'apps/web/src/app/finance/page.tsx',
             line: 128,
-            note: 'the row is an `<a href>` — a navigation, so no Authorization header',
+            note: 'the finance page, which is where the disagreement is first visible',
           },
         ],
         document:
-          '# Serving snapshot downloads outside the authenticated /api prefix\n\n' +
-          'Every snapshot download link in the console currently 401s. This is not a bug in the guard — it is a ' +
-          'structural consequence of where the route lives.\n\n' +
+          '# Recording a refund where the refund happens\n\n' +
+          'A refund updates the order and calls the provider. The ledger is written overnight from the orders ' +
+          'table, and a refunded order looks to that job like an order that was never fully paid.\n\n' +
           '## Why it is broken\n\n' +
-          'Clicking a download link is a top-level browser navigation, and a navigation cannot carry the ' +
-          '`Authorization` header the console attaches to every `fetch`.\n\n' +
-          '> Allow-listing the route inside the prefix guard is the tempting fix and the one to avoid. One ' +
-          'exception is one line; the second one is a policy.\n\n' +
-          '## Why three pull requests\n\n' +
-          '1. The signer is a pure predicate with no callers.\n' +
-          '2. The route change is the only part that alters who can reach what.\n' +
-          '3. The payload change touches the console as well as the API.\n\n' +
+          'The nightly job can only infer, and an order refunded and then re-charged is indistinguishable from ' +
+          'one refunded twice.\n\n' +
+          '> Writing the entry before calling the provider and deleting it on failure is the tempting fix. A ' +
+          'process that dies between the two leaves exactly the phantom entry this goal exists to remove.\n\n' +
+          '## Why four pull requests\n\n' +
+          '1. The ledger writer is a pure function with no callers.\n' +
+          '2. The refund path is the only part that changes when money is recorded.\n' +
+          '3. The nightly job has to stop inferring in the same week, or every refund counts twice.\n' +
+          '4. The existing refunds spec asserts the old behaviour and has to be amended by the same change.\n\n' +
           '## The one thing I am unsure about\n\n' +
-          'With `AUTH_ENABLED` off there is no signing key, so the route must serve with no capability at all. ' +
-          'That means two modes and only one of them is covered by the tests.',
+          'A refund the provider reverses days later leaves an entry with nothing behind it, and without a ' +
+          'webhook there is no way to hear about it.',
         statusCommentRef: 'issue:395:comment:8455',
         revealed: true,
         revealedAt: null,
@@ -2291,82 +2560,85 @@ export function buildDemoState(): DemoSeed {
     planCaveatAnswers: [],
     planAtoms: [
       {
-        id: 'plan-390:catalog-module',
+        id: 'plan-390:provider-client',
         planId: 'plan-390',
-        slug: 'catalog-module',
+        slug: 'provider-client',
         seq: 1,
-        title: 'A catalog module that names every job type',
-        intent: 'One place a payload schema can be looked up from, so the enqueue path has something to ask.',
-        touches: ['packages/jobs/src/catalog.ts'],
-        acceptance: 'Every job type resolves to a schema, and an unknown one throws by name.',
+        title: 'A client for the new payment provider',
+        intent: 'One place a charge, a capture and a refund can be asked for, so checkout has something to call.',
+        touches: ['packages/payments/src/provider.ts'],
+        acceptance: 'Every call the old gateway carries has an equivalent, and an unknown one throws by name.',
         dependsOn: [],
         rejected: [
           {
-            route: 'Keep the schemas where they are and export a lookup map from each module.',
-            because: 'The map and the modules can disagree, and nothing would notice which one the enqueue read.',
+            route: 'Call the provider’s SDK directly from checkout.',
+            because: 'The SDK and the old gateway would then both be reachable, and nothing says which one charged.',
           },
         ],
       },
       {
-        id: 'plan-390:move-schemas',
+        id: 'plan-390:port-calls',
         planId: 'plan-390',
-        slug: 'move-schemas',
+        slug: 'port-calls',
         seq: 2,
-        title: 'Move the existing schemas into the catalog',
-        intent: 'The move is behaviour-free: everything still imports them from where it did.',
-        touches: ['packages/jobs/src/'],
-        acceptance: 'No caller changed, and the old paths still re-export.',
-        dependsOn: ['catalog-module'],
+        title: 'Point the existing call sites at the client',
+        intent: 'The move is behaviour-free: everything still charges the same amount the same way.',
+        touches: ['packages/payments/src/'],
+        acceptance: 'No caller talks to the old gateway directly, and the amounts are unchanged.',
+        dependsOn: ['provider-client'],
         rejected: [],
       },
       {
-        id: 'plan-390:enqueue-validates',
+        id: 'plan-390:take-payment',
         planId: 'plan-390',
-        slug: 'enqueue-validates',
+        slug: 'take-payment',
         seq: 3,
-        title: 'Validate the payload at enqueue, against the catalog',
-        intent: 'The one place every job is created is the one place worth checking it.',
-        touches: ['apps/api/src/jobs/enqueue.ts'],
-        acceptance: 'An enqueue with a payload the catalog rejects throws before the row is written.',
-        dependsOn: ['catalog-module'],
+        title: 'Take the card payment through the client',
+        intent: 'The one place every order is paid for is the one place worth moving first.',
+        touches: ['apps/api/src/checkout/pay.ts'],
+        acceptance: 'A checkout charges through the new provider, and a decline keeps the customer on the page.',
+        dependsOn: ['provider-client'],
         rejected: [
           {
-            route: 'Validate in the watcher, where the payload is actually read.',
-            because: 'The bad row is already written by then, and the queue is what a person has to clean up.',
+            route: 'Move refunds first, since they are lower volume.',
+            because: 'A refund against a charge the new provider never took is a support ticket, not a lower risk.',
           },
         ],
       },
       {
-        id: 'plan-390:drop-route-parsers',
+        id: 'plan-390:drop-gateway',
         planId: 'plan-390',
-        slug: 'drop-route-parsers',
+        slug: 'drop-gateway',
         seq: 4,
-        title: 'Delete the payload parsers the four routes each carried',
-        intent: 'Four parsers that can disagree with the catalog are four ways to enqueue something invalid.',
-        touches: ['apps/api/src/features/jobs/'],
-        acceptance: 'No route parses a payload shape of its own; each hands the body to the enqueue.',
-        dependsOn: ['enqueue-validates'],
+        title: 'Delete the four call sites the old gateway still had',
+        intent: 'Two providers that can each take a charge are two ways to charge a customer twice.',
+        touches: ['apps/api/src/features/payments/'],
+        acceptance: 'No route reaches the old gateway; each hands the charge to the client.',
+        dependsOn: ['take-payment'],
         rejected: [],
       },
     ],
-    undescribedParts: [],
+    /* The one part whose pull request is open and which nobody has described. `manualDescriptions` is
+       on for this deployment, so the rail asks — and the ask holds nothing up, which is the feature.
+       → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer */
+    undescribedParts: [{ originRef: 'issue:396:part:header', prNumber: 426, openedAt: ago(30) }],
     planParts: [
       demoPart({
-        id: 'plan-390:schemas',
-        atoms: ['catalog-module', 'move-schemas'],
+        id: 'plan-390:client',
+        atoms: ['provider-client', 'port-calls'],
         planId: 'plan-390',
-        slug: 'schemas',
+        slug: 'client',
         seq: 1,
-        title: 'Move every payload schema into the jobs catalog',
-        scope: 'packages/jobs/src/',
+        title: 'Add the new payment provider’s client',
+        scope: 'packages/payments/src/',
         dependsOn: [],
         rationale:
-          'The move has to be reviewable on its own — it changes nothing behaviourally until the enqueue part lands.',
-        acceptance: 'Every job type’s payload schema is declared in the catalog and re-exported from where it was.',
+          'The client has to be reviewable on its own — it changes nothing behaviourally until the payment part lands.',
+        acceptance: 'Every call the old gateway carries has an equivalent on the client, and nothing calls it yet.',
         touches: [],
         acceptanceMet: [],
         size: null,
-        branch: 'issue/390/schemas',
+        branch: 'issue/390/client',
         prNumber: 406,
         status: 'merged',
         taskId: null,
@@ -2374,17 +2646,17 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(30),
       }),
       demoPart({
-        id: 'plan-390:validate',
-        atoms: ['enqueue-validates', 'drop-route-parsers'],
+        id: 'plan-390:payment',
+        atoms: ['take-payment', 'drop-gateway'],
         planId: 'plan-390',
-        slug: 'validate',
+        slug: 'payment',
         seq: 2,
-        title: 'Validate every payload at enqueue through the catalog',
-        scope: 'apps/api/src/features/jobs/, apps/api/src/jobs/',
-        dependsOn: ['schemas'],
-        rationale: 'Enqueue is safe to tighten first — nothing downstream depends on the watcher also having moved.',
-        acceptance: 'Every enqueue path validates against the catalog; no route parses a payload shape of its own.',
-        branch: 'issue/390/validate',
+        title: 'Take the card payment through the new provider',
+        scope: 'apps/api/src/checkout/, apps/api/src/features/payments/',
+        dependsOn: ['client'],
+        rationale: 'Payment is safe to move first — nothing about a refund depends on the refund path having moved.',
+        acceptance: 'Every charge goes through the client; no route reaches the old gateway.',
+        branch: 'issue/390/payment',
         prNumber: 413,
         status: 'in_review',
         taskId: null,
@@ -2392,16 +2664,16 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(6),
       }),
       demoPart({
-        id: 'plan-390:watcher',
+        id: 'plan-390:refunds',
         planId: 'plan-390',
-        slug: 'watcher',
+        slug: 'refunds',
         seq: 3,
-        title: 'Route the watcher’s job intake through the catalog',
-        scope: 'apps/watcher/src/worker-loop.ts, apps/watcher/src/runners/',
-        dependsOn: ['validate'],
+        title: 'Move refunds onto the new provider',
+        scope: 'apps/api/src/features/refunds/, packages/payments/src/refund.ts',
+        dependsOn: ['payment'],
         rationale:
-          'Intake goes last — enqueue has to be proven out first, or a rejected job is indistinguishable from a bad write.',
-        acceptance: 'Every runner receives a payload the catalog parsed; no runner re-parses one itself.',
+          'Refunds go last — payment has to be proven out first, or a refund is issued against a charge the new provider never took.',
+        acceptance: 'Every refund is issued through the client, against the charge reference the client returned.',
         profile: 'deep',
         touches: [],
         acceptanceMet: [],
@@ -2409,8 +2681,7 @@ export function buildDemoState(): DemoSeed {
         // PR #414 is open on this branch in the demo world and its CI is failing, so
         // the part has to carry it: a part reading "not started" beside its own open
         // pull request is the board disagreeing with the pull-request list below it.
-        // It is also the demo's one part with a pull request and no description.
-        branch: 'issue/390/watcher',
+        branch: 'issue/390/refunds',
         prNumber: 414,
         status: 'ready',
         taskId: null,
@@ -2422,12 +2693,12 @@ export function buildDemoState(): DemoSeed {
         planId: 'plan-390',
         slug: 'cutover',
         seq: 4,
-        title: 'Re-point the staging watchers at the new queue names',
-        scope: 'the hosting dashboard — no agent has an account for it',
-        dependsOn: ['watcher'],
+        title: 'Switch the staging shop’s provider keys over',
+        scope: 'the payment provider’s own dashboard — no agent has an account for it',
+        dependsOn: ['refunds'],
         expectedKind: 'human',
-        rationale: 'Nobody gave the fleet dashboard credentials, and nobody should.',
-        acceptance: 'Both staging watchers claim jobs from the catalog’s queue names.',
+        rationale: 'Nobody gave the fleet a merchant account, and nobody should.',
+        acceptance: 'The staging shop charges and refunds against the new provider’s test keys.',
         touches: [],
         acceptanceMet: [],
         size: null,
@@ -2443,11 +2714,11 @@ export function buildDemoState(): DemoSeed {
         planId: 'plan-390',
         slug: 'soak',
         seq: 5,
-        title: 'Assert on a staging queue soak run',
-        scope: 'scripts/queue-e2e.mjs',
+        title: 'Assert on a staging checkout soak run',
+        scope: 'scripts/checkout-e2e.mjs',
         dependsOn: ['cutover'],
         rationale: 'The only part that can prove the cutover worked, and it cannot start before it has.',
-        acceptance: 'A queue end-to-end run against staging completes every job type once.',
+        acceptance: 'A checkout end-to-end run against staging charges, captures and refunds once each.',
         touches: [],
         acceptanceMet: [],
         size: null,
@@ -2459,20 +2730,20 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(6),
       }),
       demoPart({
-        id: 'plan-333:verify',
+        id: 'plan-333:list',
         planId: 'plan-333',
-        slug: 'verify',
+        slug: 'list',
         seq: 1,
-        title: 'Add verify_document, which reports and never writes',
-        scope: 'The verifier tool and the finding it returns. Nothing calls it yet.',
+        title: 'Add the saved-books list, which nothing writes to yet',
+        scope: 'The table, and the pair of reads over it. Nothing adds to it.',
         dependsOn: [],
         rationale:
-          'A pure reporter with no callers — judged on the findings it returns, in isolation from anything that acts on them.',
+          'A structure with no callers — judged on its own shape, in isolation from anything that puts a book in it.',
         acceptance:
-          '- A document that contradicts its source comes back with a finding naming the claim and the source line.\n' +
-          '- A document that agrees with its source comes back with no findings.\n' +
-          '- The tool has no write path at all.',
-        touches: ['src/patrol/verify.ts', 'src/patrol/finding.ts'],
+          '- A saved book is a customer and an edition, with no quantity, price or expiry.\n' +
+          '- Saving the same edition twice leaves one row.\n' +
+          '- A saved edition that has gone out of print still reads, marked unavailable.',
+        touches: ['src/saved/list.ts', 'src/saved/schema.ts'],
         acceptanceMet: [],
         size: 'm',
         depth: 0,
@@ -2484,20 +2755,20 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(14),
       }),
       demoPart({
-        id: 'plan-333:gate',
+        id: 'plan-333:add',
         planId: 'plan-333',
-        slug: 'gate',
+        slug: 'add',
         seq: 2,
-        title: 'Run correct_document only on a document that came back with findings',
-        scope: 'Where the patrol decides to write, and what it hands the writer.',
-        dependsOn: ['verify'],
+        title: 'Save a book from the book page and from a search result',
+        scope: 'Where a customer can save, and what happens when they are signed out.',
+        dependsOn: ['list'],
         rationale:
-          'This is the only part that changes what a patrol pass does, so it stays separate from the verifier it reads.',
+          'This is the only part that changes what a customer can do, so it stays separate from the list it writes to.',
         acceptance:
-          '- A document verified clean produces no proposal and no diff.\n' +
-          '- A document with findings reaches the corrector with those findings as its input.\n' +
-          '- A patrol pass over an unchanged corpus writes nothing.',
-        touches: ['src/patrol/correct.ts', 'src/patrol/pass.ts'],
+          '- A signed-in customer saves from the book page and from a search result.\n' +
+          '- A signed-out customer is asked to sign in and lands back on the book they were saving.\n' +
+          '- Nothing about the basket changes.',
+        touches: ['src/book/page.tsx', 'src/search/result.tsx'],
         acceptanceMet: [],
         size: 'm',
         depth: 1,
@@ -2509,18 +2780,18 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(14),
       }),
       demoPart({
-        id: 'plan-333:cite',
+        id: 'plan-333:account',
         planId: 'plan-333',
-        slug: 'cite',
+        slug: 'account',
         seq: 3,
-        title: 'Carry the finding’s source line onto the proposal',
-        scope: 'The proposal payload and the console row that draws it.',
-        dependsOn: ['gate'],
-        rationale: 'Touches the console as well as the drafter, so it waits until there is a finding to carry.',
+        title: 'Show the list from the account menu',
+        scope: 'The account menu and the page the list draws on.',
+        dependsOn: ['add'],
+        rationale: 'Touches navigation as well as the list, so it waits until there is a list with books in it.',
         acceptance:
-          '- Every proposal drafted from a finding cites the file and line it was drawn from.\n' +
-          '- A proposal with no finding behind it is not drafted at all.',
-        touches: ['src/proposals/draft.ts', 'apps/web/src/app/proposals/row.tsx'],
+          '- The account menu leads to the list, and says how many books are on it.\n' +
+          '- An unavailable edition draws as unavailable rather than 404ing.',
+        touches: ['src/account/menu.tsx', 'src/account/saved.tsx'],
         acceptanceMet: [],
         size: 's',
         depth: 2,
@@ -2532,364 +2803,398 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(14),
       }),
       demoPart({
-        id: 'plan-395:signer',
-        planId: 'plan-395',
-        slug: 'signer',
+        id: 'plan-396:header',
+        planId: 'plan-396',
+        slug: 'header',
         seq: 1,
-        title: 'Add the download capability signer',
-        scope: 'The signing and verification of a short-lived capability, and nothing that calls it.',
+        title: 'Fold the admin console header into one bar',
+        scope: 'The console header and the shop switcher in it.',
         dependsOn: [],
-        rationale: 'A pure sign/verify predicate with no callers yet — reviewable in isolation from the route change.',
+        rationale: 'One part: it is one component and the links it carries.',
         acceptance:
-          '- A capability minted for a snapshot id verifies, and one for another id does not.\n' +
-          '- An expired capability is refused.\n' +
-          '- A tampered payload is refused.',
-        touches: ['apps/api/src/features/snapshots/download-capability.ts'],
+          '- One bar, with every link that was in the three.\n' + '- The shop switcher is in the bar, not in a menu.',
+        touches: ['apps/admin/src/Header.tsx'],
+        acceptanceMet: [],
+        size: 's',
+        depth: 0,
+        branch: 'issue/396',
+        prNumber: 426,
+        status: 'in_review',
+        taskId: null,
+        createdAt: ago(40),
+        updatedAt: ago(30),
+      }),
+      demoPart({
+        id: 'plan-395:writer',
+        planId: 'plan-395',
+        slug: 'writer',
+        seq: 1,
+        title: 'Add the ledger entry writer',
+        scope: 'Writing one balanced ledger entry from a refund, and nothing that calls it.',
+        dependsOn: [],
+        rationale: 'A pure writer with no callers yet — reviewable in isolation from the refund path.',
+        acceptance:
+          '- An entry written for a refund balances against the charge it refunds.\n' +
+          '- An entry carries the provider’s refund reference.\n' +
+          '- A zero-amount refund writes nothing.',
+        touches: ['apps/api/src/features/ledger/writeRefundEntry.ts'],
         acceptanceMet: [
-          'A capability minted for a snapshot id verifies, and one for another id does not.',
-          'An expired capability is refused.',
-          'A tampered payload is refused.',
+          'An entry written for a refund balances against the charge it refunds.',
+          'An entry carries the provider’s refund reference.',
+          'A zero-amount refund writes nothing.',
         ],
         size: 's',
         depth: 0,
-        branch: 'issue/395/signer',
-        prNumber: 420,
+        branch: 'issue/395/writer',
+        prNumber: 419,
         status: 'concluded',
         taskId: null,
         createdAt: ago(3600),
         updatedAt: ago(900),
       }),
       demoPart({
-        id: 'plan-395:route',
+        id: 'plan-395:refund-path',
         planId: 'plan-395',
-        slug: 'route',
+        slug: 'refund-path',
         seq: 2,
-        title: 'Move the download route outside /api and require the capability',
-        scope: 'Where the snapshot download route is registered, and the guard it sits behind.',
-        dependsOn: ['signer'],
-        rationale: 'This is the only part that changes who can reach what, so it stays separate from the pure signer.',
+        title: 'Write the entry from the refund path, after the provider answers',
+        scope: 'Where a refund is issued, and when the ledger entry is written relative to the provider call.',
+        dependsOn: ['writer'],
+        rationale:
+          'This is the only part that changes when money is recorded, so it stays separate from the pure writer.',
         acceptance:
-          '- `/snapshots/:id/download` serves only with a valid capability.\n' +
-          '- Every route still under `/api` 401s without a bearer token.\n' +
-          '- With `AUTH_ENABLED` off the route serves with no capability at all.',
-        touches: ['apps/api/src/app.ts', 'apps/api/src/features/snapshots/routes.ts'],
+          '- A refund the provider accepts writes one entry, in the same transaction as the order update.\n' +
+          '- A refund the provider refuses writes none.\n' +
+          '- A partial refund writes an entry for the amount refunded.',
+        touches: ['apps/api/src/features/refunds/issue.ts'],
         acceptanceMet: [
-          '`/snapshots/:id/download` serves only with a valid capability.',
-          'Every route still under `/api` 401s without a bearer token.',
-          'With `AUTH_ENABLED` off the route serves with no capability at all.',
+          'A refund the provider accepts writes one entry, in the same transaction as the order update.',
+          'A refund the provider refuses writes none.',
+          'A partial refund writes an entry for the amount refunded.',
         ],
         size: 'm',
         depth: 1,
-        branch: 'issue/395/route',
-        prNumber: 421,
+        branch: 'issue/395/refund-path',
+        prNumber: 420,
         status: 'concluded',
         taskId: null,
         createdAt: ago(3400),
         updatedAt: ago(640),
       }),
       demoPart({
-        id: 'plan-395:mint',
+        id: 'plan-395:nightly',
         planId: 'plan-395',
-        slug: 'mint',
+        slug: 'nightly',
         seq: 3,
-        title: 'Mint capabilities into the snapshot list',
-        scope: 'The snapshot list payload that mints a capability per row, and the console row that opens it.',
-        dependsOn: ['signer', 'route'],
+        title: 'Stop the nightly job inferring refunds from the orders table',
+        scope: 'The nightly finance job, and the finance page that reads what it writes.',
+        dependsOn: ['writer', 'refund-path'],
         rationale:
-          'Touches the console as well as the API, so it waits until both the signer and the route it points at exist.',
+          'Touches the finance page as well as the job, and cannot land before something else is recording refunds.',
         acceptance:
-          '- Every snapshot row in the console opens in a new tab without a 401.\n' +
-          '- The payload carries a capability per row, and none for a snapshot whose file has been pruned.',
-        touches: ['apps/api/src/features/snapshots/list.ts', 'apps/web/src/app/snapshots/page.tsx'],
+          '- The nightly job writes no refund entry of its own.\n' +
+          '- The finance page’s refund total comes from the ledger, not from the orders table.',
+        touches: ['apps/api/src/jobs/nightly-ledger.ts', 'apps/web/src/app/finance/page.tsx'],
         acceptanceMet: [
-          'Every snapshot row in the console opens in a new tab without a 401.',
-          'The payload carries a capability per row, and none for a snapshot whose file has been pruned.',
+          'The nightly job writes no refund entry of its own.',
+          'The finance page’s refund total comes from the ledger, not from the orders table.',
         ],
         size: 'm',
         depth: 2,
-        branch: 'issue/395/mint',
-        prNumber: 422,
+        branch: 'issue/395/nightly',
+        prNumber: 421,
         status: 'concluded',
         taskId: null,
         createdAt: ago(3100),
         updatedAt: ago(420),
       }),
       demoPart({
-        id: 'plan-395:e2e-download',
+        id: 'plan-395:e2e-refund',
         planId: 'plan-395',
-        slug: 'e2e-download',
+        slug: 'e2e-refund',
         seq: 4,
-        title: 'Amend the snapshots area to open a download in a new tab',
-        scope: 'The snapshots browser spec, which asserts today that a download link 401s.',
-        dependsOn: ['mint'],
-        coverage: 'Snapshots',
+        title: 'Amend the refunds area to assert the ledger entry',
+        scope: 'The refunds browser spec, which asserts today that a refund writes nothing but the order.',
+        dependsOn: ['nightly'],
+        coverage: 'Refunds',
         rationale:
           'The existing spec describes the behaviour this goal is changing, so it is amended in the same change and by the same reviewer.',
         acceptance:
-          '- The snapshots spec opens a download in a new tab and asserts the file arrives.\n' +
-          '- No spec still asserts the 401.',
-        touches: ['apps/e2e/specs/snapshots.spec.ts'],
+          '- The refunds spec issues a refund and asserts the ledger entry beside the order.\n' +
+          '- No spec still asserts that a refund writes only the order.',
+        touches: ['apps/e2e/specs/refunds.spec.ts'],
         acceptanceMet: [
-          'The snapshots spec opens a download in a new tab and asserts the file arrives.',
-          'No spec still asserts the 401.',
+          'The refunds spec issues a refund and asserts the ledger entry beside the order.',
+          'No spec still asserts that a refund writes only the order.',
         ],
         size: 's',
         depth: 3,
-        branch: 'issue/395/e2e-download',
-        prNumber: 423,
+        branch: 'issue/395/e2e-refund',
+        prNumber: 422,
         status: 'concluded',
         taskId: null,
         createdAt: ago(2900),
         updatedAt: ago(210),
       }),
     ],
+    /* Both halves of the gate. #395's set was authored and released, so the bench draws it and the
+       sheet assembles from it. #364's was authored against merged code and is **still a proposal** —
+       nothing dispatches off it and no sheet assembles until the card in "Needs you" is answered.
+       #398's was authored, released and every row has passed.
+       → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */
     validationPlans: [
       {
         originRef: 'issue:395',
-        hint: 'Somebody should download a snapshot with auth on and with auth off, and try a tampered link.',
-        note: 'The hint asked for three journeys; the tampered link is two checks here, because a signature the signer refuses and one it has expired fail in different places.',
+        hint: 'Somebody should issue a full refund and a partial one, and one the provider refuses.',
+        note: 'The hint asked for three journeys; the refused refund is two checks here, because a provider that declines and one that times out leave the ledger in different states.',
         emptyReason: null,
         authoredAt: ago(12),
         releasedAt: ago(11),
       },
-      // The other half of the gate: a set written against the delivered code and still a proposal.
-      // Nothing dispatches off it and no sheet assembles from it until the card in "Needs you" is
-      // answered. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
       {
         originRef: 'issue:364',
-        hint: 'Worth checking that a single watcher actually warns, and that the note says what the console says.',
+        hint: 'Worth checking that a shelf with no sales still draws something, and that the order matches the report.',
         note:
-          'The hint asked for the console warning and the note to agree; they do, so that is check B rather than ' +
-          'two. Where I went a different way: the deadlock itself is not reachable from outside, so C reads the ' +
-          'audit rows instead of trying to provoke it.',
+          'The hint asked for the empty shelf and the ordering to agree with the sales report; they do, so that is ' +
+          'check B rather than two. Where I went a different way: the nightly rollup is not reachable from a ' +
+          'browser, so C reads the rollup rows instead of trying to provoke a day with no sales.',
         emptyReason: null,
         authoredAt: ago(18),
         releasedAt: null,
       },
+      {
+        originRef: 'issue:398',
+        hint: 'Worth loading a book page on a phone and reading what it actually ships.',
+        note: 'Two checks: the weight, and whether the cover looks worse for it. Nothing else about this change is observable.',
+        emptyReason: null,
+        authoredAt: ago(68),
+        releasedAt: ago(67),
+      },
     ],
     validationChecks: [
       demoCheck({
-        id: 'download-opens-in-a-new-tab',
+        id: 'refund-writes-a-ledger-entry',
         createdAt: ago(12),
         updatedAt: ago(12),
         letter: 'A',
         seq: 1,
-        title: 'A snapshot download opens in a new tab with auth on',
-        do: 'Run the console with `AUTH_ENABLED`, open /snapshots, and middle-click a download link.',
-        expect: 'The file downloads. No 401, and no bearer token anywhere in the URL bar.',
-        covers: ['route', 'e2e-download'],
-        steps: [demoStep({ kind: 'suite', do: 'Run the Snapshots area of the browser suite.', area: 'Snapshots' })],
+        title: 'A full refund writes one ledger entry for the amount',
+        do: 'Refund an order in full from the admin console, then open the ledger for that day.',
+        expect: 'One entry, for the order total, carrying the provider’s refund reference.',
+        covers: ['refund-path', 'e2e-refund'],
+        steps: [demoStep({ kind: 'suite', do: 'Run the Refunds area of the browser suite.', area: 'Refunds' })],
         state: 'passed',
-        resultNote: 'Opened last night’s handbook snapshot in a new tab — served straight through.',
+        resultNote: 'Refunded order 48213 in full — one entry, £24.99, reference matches the provider’s.',
         resultBy: 'operator',
         resultAt: ago(2),
       }),
       demoCheck({
-        id: 'auth-off-still-serves',
+        id: 'partial-refund-writes-the-part',
         createdAt: ago(12),
         updatedAt: ago(12),
         letter: 'B',
         seq: 2,
-        title: 'With auth off, snapshot downloads still serve',
-        do: 'Set `AUTH_ENABLED` to false, restart the API, and open the same link.',
-        expect: 'The file downloads with no capability in the URL at all.',
-        covers: ['route'],
+        title: 'A partial refund writes an entry for the amount refunded',
+        do: 'Refund one line of a three-line order and open the ledger.',
+        expect: 'One entry, for that line’s price, not the order total.',
+        covers: ['refund-path'],
         amendedAt: ago(3),
         amendNote:
-          'The agent sent back to fix check G amended the plan: the unsigned path now redirects rather ' +
-          'than serving inline, so "no capability in the URL" was no longer the thing to look at.',
+          'The agent sent back to fix check G amended the plan: a partial refund now writes the line’s price ' +
+          'plus its share of delivery, so "that line’s price" was no longer the thing to look at.',
         revision: {
-          title: 'With auth off, snapshot downloads still serve',
-          do: 'Set `AUTH_ENABLED` to false, restart the API, and open the same link.',
-          expect: 'The file downloads after one redirect.',
+          title: 'A partial refund writes an entry for the amount refunded',
+          do: 'Refund one line of a three-line order and open the ledger.',
+          expect: 'One entry, for that line’s price plus its share of the delivery charge.',
           state: 'passed',
-          note: 'Redirected once and downloaded, as expected.',
+          note: 'Refunded the middle line: £8.99 plus £1.00 of delivery, as expected.',
         },
       }),
       demoCheck({
-        id: 'tampered-capability-refused',
+        id: 'failed-refund-writes-nothing',
         createdAt: ago(12),
         updatedAt: ago(12),
         letter: 'C',
         seq: 3,
-        title: 'A tampered capability is refused',
-        do: 'Copy a download URL, change one character of the signature, and request it.',
-        expect: 'A 403, and the snapshot is not served.',
-        covers: ['signer'],
+        title: 'A refund the provider refuses writes no ledger entry',
+        do: 'Refund an order paid with the always-decline test card, then open the ledger.',
+        expect: 'No entry at all, and the order still reads as paid.',
+        covers: ['writer'],
         fleetCandidate: true,
         candidateWhy: 'a plain HTTP request against a running API; needs no login and no browser',
         claimedBy: 'desktop (studio)',
         claimedAt: ago(9),
       }),
       demoCheck({
-        id: 'expired-capability-refused',
+        id: 'timed-out-refund-writes-nothing',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'D',
         seq: 4,
-        title: 'An expired capability is refused',
-        do: 'Mint a capability with a one-second lifetime, wait, and request the snapshot.',
-        expect: 'A 403 naming expiry, and the snapshot is not served.',
-        covers: ['signer'],
+        title: 'A refund that times out at the provider writes no ledger entry',
+        do: 'Point the client at the provider’s timeout sandbox and refund an order.',
+        expect: 'No entry, and an error the console can show.',
+        covers: ['writer'],
         fleetCandidate: true,
-        candidateWhy: 'clock arithmetic and one request; nothing interactive',
+        candidateWhy: 'one request against a sandbox endpoint; nothing interactive',
         actor: 'fleet',
         state: 'passed',
-        resultNote: 'Minted a 1s capability, slept 2s, requested it: 403 "capability expired". Snapshot not served.',
+        resultNote: 'Refunded against the timeout sandbox: the call gave up at 10s, no entry written, order untouched.',
         resultBy: 'agent',
         resultAt: ago(1),
       }),
       demoCheck({
-        id: 'download-reachable-on-mobile',
+        id: 'refund-button-reachable-on-mobile',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'E',
         seq: 5,
-        title: 'The download link is reachable on a narrow viewport',
-        do: 'Open /snapshots at 380px wide and tap a download link.',
-        expect: 'The link is hittable and the file downloads.',
-        covers: ['route'],
+        title: 'The refund control is reachable on a narrow viewport',
+        do: 'Open an order in the admin console at 380px wide and tap Refund.',
+        expect: 'The control is hittable and the confirmation sheet opens.',
+        covers: ['refund-path'],
         handbackNote: 'An agent could not run this check: it needs a browser at a set viewport, and I have none.',
       }),
       demoCheck({
-        id: 'proposal-sheet-scrolls-on-a-phone',
+        id: 'ledger-page-scrolls-on-a-phone',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'F',
         seq: 6,
-        title: 'The proposal review sheet scrolls cleanly on a phone',
-        do: 'Open a proposal with a nine-file diff at 380px wide and scroll to the review controls.',
-        expect: 'No horizontal scroll, and every hunk header is readable.',
-        covers: ['route'],
+        title: 'The ledger page scrolls cleanly on a phone',
+        do: 'Open a day with forty entries at 380px wide and scroll to the totals.',
+        expect: 'No horizontal scroll, and every amount is readable.',
+        covers: ['nightly'],
         state: 'passed',
-        resultNote: 'Drove it at 380px in Chrome: no horizontal overflow, every hunk header legible.',
+        resultNote: 'Drove it at 380px in Chrome: no horizontal overflow, every amount legible.',
         resultBy: 'desktop',
         resultAt: ago(1),
       }),
       demoCheck({
-        id: 'pruned-snapshot-mints-nothing',
+        id: 'nightly-job-writes-no-refunds',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'G',
         seq: 7,
-        title: 'A pruned snapshot mints no capability',
-        do: 'Prune a snapshot’s file on disk, reload /snapshots, and look at the row that is left.',
-        expect: 'The row draws with no download link at all, rather than a link that 404s.',
-        covers: ['mint'],
+        title: 'The nightly job writes no refund entry of its own',
+        do: 'Refund an order, let the nightly job run, and count the entries for it.',
+        expect: 'One entry, written by the refund. Not two.',
+        covers: ['nightly'],
         state: 'failed',
         resultNote:
-          'The row still mints a capability and still draws the link — clicking it 404s from the file layer. ' +
-          'The list never checks the file is there.',
+          'Two entries. The nightly job still infers a refund from the order row, so every refund is counted ' +
+          'twice until the job stops. The finance total for yesterday is double.',
         resultBy: 'operator',
         resultAt: ago(1),
       }),
       demoCheck({
-        id: 'survives-a-key-rotation',
+        id: 'reversed-refund-is-noticed',
         createdAt: ago(12),
         updatedAt: ago(2),
         letter: 'H',
         seq: 8,
-        title: 'A download survives a signer key rotation',
-        do: 'Mint a capability, rotate the signing key, and request the snapshot with the capability from before.',
-        expect: 'A 403 naming the key, and a fresh page load mints one that works.',
-        covers: ['signer'],
+        title: 'A refund the provider reverses later is noticed',
+        do: 'Issue a refund, reverse it in the provider’s dashboard, and read the ledger.',
+        expect: 'The entry is reversed too, or something says the two disagree.',
+        covers: ['writer'],
         state: 'deferred',
         resultNote:
-          'The signer verifies a capability against one key and there is no rotation path to exercise yet — ' +
-          'adding one is its own goal, and nobody has filed it.',
-        deferUntil: 'a key-rotation path exists',
+          'Nothing here hears about a reversal — that needs the provider webhook, which is its own goal and ' +
+          'nobody has filed it. Named as an open question on the plan.',
+        deferUntil: 'the provider webhook exists',
         resultBy: 'operator',
         resultAt: ago(2),
       }),
       demoCheck({
-        id: 'downloads-work-in-safari',
+        id: 'refunds-work-in-safari',
         createdAt: ago(12),
         updatedAt: ago(2),
         letter: 'I',
         seq: 9,
-        title: 'Downloads work in Safari',
-        do: 'Open /snapshots in Safari and click a download link.',
-        expect: 'The file downloads without the tab being blocked as a popup.',
-        covers: ['route'],
+        title: 'A refund can be issued from Safari',
+        do: 'Open the admin console in Safari and refund an order.',
+        expect: 'The refund goes through and the confirmation sheet closes.',
+        covers: ['refund-path'],
         state: 'waived',
-        resultNote: 'Nobody here has a Mac this week. The console is Chrome-only internally, so this is not the bar.',
+        resultNote:
+          'Nobody here has a Mac this week. The console is Chrome-only for shop staff, so this is not the bar.',
         resultBy: 'operator',
         resultAt: ago(2),
       }),
       demoCheck({
-        id: 'bearer-token-never-in-a-url',
+        id: 'no-card-number-in-the-ledger',
         createdAt: ago(12),
         updatedAt: ago(3),
         letter: 'J',
         seq: 10,
-        title: 'No bearer token ever appears in a URL',
-        do: 'Watch the network tab through a whole download and grep the URLs for the token.',
-        expect: 'No request carries the bearer token as a query parameter.',
-        covers: ['signer'],
+        title: 'No card number ever appears in a ledger entry',
+        do: 'Refund an order and read every column of the entry it wrote.',
+        expect: 'The provider’s reference, and no card detail of any kind.',
+        covers: ['writer'],
         supersededReason:
-          'Folded into check A when the capability replaced the token: there is no longer a token that could be ' +
-          'put in a URL, so this checked for the absence of something that cannot exist.',
+          'Folded into check A when the entry stopped carrying a payment blob at all: there is no longer a field ' +
+          'a card number could be in, so this checked for the absence of something that cannot exist.',
       }),
       demoCheck({
-        id: 'listing-reads-at-1280',
+        id: 'refund-screen-reads-at-1280',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'K',
         seq: 11,
-        title: 'The snapshot listing reads legibly at 1280',
-        do: 'Open /snapshots at 1280 wide with a dozen rows and take the page in.',
-        expect: 'Every row’s name, size and download control is readable without horizontal scroll.',
-        covers: ['route'],
-        uses: ['a seeded snapshot set', 'the review console login'],
+        title: 'The refund confirmation reads legibly at 1280',
+        do: 'Refund a two-line order at 1280 wide and take the confirmation screen in.',
+        expect: 'Every line, the amount refunded and the card it went back to are readable without horizontal scroll.',
+        covers: ['refund-path'],
+        uses: ['a seeded order set', 'the admin console login'],
         steps: [
-          demoStep({ kind: 'browser', do: 'Open /snapshots at 1280 with the seeded set', actor: 'fleet' }),
-          demoStep({ kind: 'screenshot', do: 'The listing as it draws', actor: 'fleet' }),
+          demoStep({ kind: 'browser', do: 'Refund a seeded two-line order at 1280', actor: 'fleet' }),
+          demoStep({ kind: 'screenshot', do: 'The confirmation as it draws', actor: 'fleet' }),
         ],
         fleetCandidate: true,
         candidateWhy: 'drives the console and takes a picture; asserts nothing on its own',
         actor: 'fleet',
         state: 'captured',
-        capture: 'capture-listing-reads-at-1280.png',
+        capture: 'capture-refund-screen-reads-at-1280.png',
         captureUrl: DEMO_CAPTURE,
         resultNote: 'A screen was taken and nobody has looked at it yet. A screenshot asserts nothing.',
         resultBy: 'agent',
         resultAt: ago(1),
       }),
       demoCheck({
-        id: 'listing-paginates-past-fifty',
+        id: 'ledger-paginates-past-fifty',
         createdAt: ago(12),
         updatedAt: ago(4),
         letter: 'L',
         seq: 12,
-        title: 'The listing paginates past fifty snapshots',
-        do: 'Seed sixty snapshots and page to the end of the list.',
+        title: 'The ledger paginates past fifty entries',
+        do: 'Seed sixty entries for one day and page to the end.',
         expect: 'Every page loads and the last one is reachable.',
-        covers: ['route'],
+        covers: ['nightly'],
         state: 'declined',
         resultNote:
           'Declined with the rest of the set: pagination is not this goal’s change, and the check was written ' +
-          'against the listing rather than against the download path the goal is about.',
+          'against the ledger page rather than against the refund path the goal is about.',
         resultBy: 'operator',
         resultAt: ago(4),
       }),
       demoCheck({
-        id: 'signed-downloads-do-not-slow-the-listing',
+        id: 'ledger-write-does-not-slow-a-refund',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'M',
         seq: 13,
-        title: 'Signing every row does not slow the listing',
-        do: 'Load /snapshots with sixty rows and read the p95 of the listing endpoint.',
-        expect: 'p95 is no worse than the baseline from before capabilities.',
-        covers: ['route', 'signer'],
-        uses: ['a staging tenant with sixty snapshots'],
+        title: 'Writing the entry does not slow a refund',
+        do: 'Refund sixty orders and read the p95 of the refund endpoint.',
+        expect: 'p95 is no worse than the baseline from before the ledger write.',
+        covers: ['refund-path', 'writer'],
+        uses: ['a staging tenant with sixty refundable orders'],
         steps: [
-          demoStep({ kind: 'suite', do: 'Run the Snapshots area of the browser suite.', area: 'Snapshots' }),
-          demoStep({ kind: 'measure', do: 'Read the p95 of GET /api/snapshots', actor: 'fleet' }),
-          demoStep({ kind: 'signal', do: 'No 5xx from the signer while the suite runs', actor: 'fleet' }),
+          demoStep({ kind: 'suite', do: 'Run the Refunds area of the browser suite.', area: 'Refunds' }),
+          demoStep({ kind: 'measure', do: 'Read the p95 of POST /api/refunds', actor: 'fleet' }),
+          demoStep({ kind: 'signal', do: 'No 5xx from the ledger writer while the suite runs', actor: 'fleet' }),
           demoStep({
             kind: 'manual',
-            do: 'Sanity-read the numbers against the pre-capability baseline',
+            do: 'Sanity-read the numbers against the pre-ledger baseline',
             when: 'deferred',
             why: 'the baseline lives in a spreadsheet nobody has moved yet',
           }),
@@ -2903,72 +3208,111 @@ export function buildDemoState(): DemoSeed {
       // work yet. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
       demoCheck({
         originRef: 'issue:364',
-        id: 'one-watcher-warns',
+        id: 'empty-shelf-still-draws',
         createdAt: ago(18),
         updatedAt: ago(18),
         letter: 'A',
         seq: 1,
-        title: 'A deployment with one watcher warns on the console',
-        do: 'Bring the stack up with `WATCHERS=1` and open the console.',
-        expect: 'The warning names the watcher count and links the deadlock note.',
-        covers: ['docs', 'console-warning'],
+        title: 'A shelf with no sales still draws something',
+        do: 'Point a shelf at a category with no sales this week and open the homepage.',
+        expect: 'The shelf draws in its curated order rather than empty.',
+        covers: ['shelf-order'],
         steps: [
-          demoStep({ kind: 'browser', do: 'Open the console with one watcher configured', actor: 'fleet' }),
-          demoStep({ kind: 'screenshot', do: 'The warning as it draws', actor: 'fleet' }),
+          demoStep({ kind: 'browser', do: 'Open the homepage with a zero-sales shelf configured', actor: 'fleet' }),
+          demoStep({ kind: 'screenshot', do: 'The shelf as it draws', actor: 'fleet' }),
         ],
         fleetCandidate: true,
-        candidateWhy: 'drives the console and reads a banner; writes nothing',
+        candidateWhy: 'drives the shop front and reads a shelf; writes nothing',
       }),
       demoCheck({
         originRef: 'issue:364',
-        id: 'note-and-console-agree',
+        id: 'order-matches-the-sales-report',
         createdAt: ago(18),
         updatedAt: ago(18),
         letter: 'B',
         seq: 2,
-        title: 'The architecture note and the console warning say the same thing',
-        do: 'Read the deadlock section against the warning text.',
-        expect: 'Both say two watchers, and neither describes a retry that does not exist.',
-        covers: ['docs'],
+        title: 'A shelf’s order matches the sales report',
+        do: 'Read the fiction shelf against last week’s sales report.',
+        expect: 'Same books, same order, and neither claims a sale the other does not.',
+        covers: ['shelf-order'],
         steps: [demoStep({ kind: 'manual', do: 'Read the two side by side', when: 'deferred' })],
       }),
       demoCheck({
         originRef: 'issue:364',
-        id: 'audit-rows-for-a-starved-job',
+        id: 'rollup-rows-for-a-quiet-day',
         createdAt: ago(18),
         updatedAt: ago(18),
         letter: 'C',
         seq: 3,
-        title: 'A starved maintenance job is recorded once, not per retry',
-        do: 'Read the audit rows for the job the single watcher starved.',
-        expect: 'One row per starved job, with the watcher count on it.',
-        covers: ['console-warning'],
+        title: 'A day with no sales writes one rollup row, not none',
+        do: 'Read the rollup rows for the quietest day of last week.',
+        expect: 'One row per shelf, with a zero on it — not a missing row.',
+        covers: ['shelf-order'],
         steps: [
           demoStep({
             kind: 'state',
-            do: 'Count `job_audit` rows for the starved job',
+            do: 'Count `shelf_sales_rollup` rows for the quietest day',
             actor: 'fleet',
             why: null,
           }),
         ],
       }),
+      // Issue #398's set: released, run, and every row passed. This is what a goal looks like once
+      // validation is behind it and the only thing left is the close-out.
+      demoCheck({
+        originRef: 'issue:398',
+        id: 'phone-page-under-a-megabyte',
+        createdAt: ago(68),
+        updatedAt: ago(64),
+        letter: 'A',
+        seq: 1,
+        title: 'A book page on a phone ships under a megabyte of images',
+        do: 'Load a book page at 390px wide and total the image bytes.',
+        expect: 'Under a megabyte, from over four before.',
+        covers: ['covers'],
+        steps: [demoStep({ kind: 'measure', do: 'Total the image transfer at 390px', actor: 'fleet' })],
+        fleetCandidate: true,
+        candidateWhy: 'loads a page and adds up the network panel',
+        actor: 'fleet',
+        state: 'passed',
+        resultNote: '380KB at 390px, down from 4.1MB.',
+        resultBy: 'agent',
+        resultAt: ago(64),
+      }),
+      demoCheck({
+        originRef: 'issue:398',
+        id: 'cover-is-not-visibly-worse',
+        createdAt: ago(68),
+        updatedAt: ago(64),
+        letter: 'B',
+        seq: 2,
+        title: 'The cover is not visibly worse on a desktop',
+        do: 'Open the same book page at 1440 beside the old one and look at the jacket.',
+        expect: 'No visible difference — no soft text on the spine, no banding in a flat colour.',
+        covers: ['covers'],
+        steps: [demoStep({ kind: 'manual', do: 'Read the two jackets side by side' })],
+        state: 'passed',
+        resultNote: 'Read them side by side at 1440. Indistinguishable, including the spine text.',
+        resultBy: 'operator',
+        resultAt: ago(64),
+      }),
     ],
     validationResources: [
       {
         originRef: 'issue:395',
-        name: 'a seeded snapshot set',
+        name: 'a seeded order set',
         kind: 'fixture',
-        note: 'Twelve snapshots across three handbooks, so the listing has something to draw.',
+        note: 'Twelve refundable orders across three customers, so the ledger has something to draw.',
         provided: true,
         humanTaskId: null,
-        path: '.lubbdubb/validation/issue-395/snapshots.seed.json',
+        path: '.lubbdubb/validation/issue-395/orders.seed.json',
         present: true,
       },
       {
         originRef: 'issue:395',
-        name: 'the review console login',
+        name: 'the admin console login',
         kind: 'access',
-        note: 'A reader account on staging. Nobody has put one in the validation directory yet.',
+        note: 'A shop-manager account on staging. Nobody has put one in the validation directory yet.',
         provided: false,
         humanTaskId: 'task-395-login',
         path: '.lubbdubb/validation/issue-395/console-login.json',
@@ -2976,7 +3320,7 @@ export function buildDemoState(): DemoSeed {
       },
       {
         originRef: 'issue:395',
-        name: 'a staging tenant with sixty snapshots',
+        name: 'a staging tenant with sixty refundable orders',
         kind: 'data',
         note: null,
         provided: true,
@@ -2988,15 +3332,16 @@ export function buildDemoState(): DemoSeed {
     stateQueries: [
       {
         originRef: 'issue:395',
-        id: 'capability-never-persisted',
+        id: 'no-refund-without-a-ledger-entry',
         seq: 1,
-        title: 'No capability is ever written to the snapshot table',
-        query: 'select id, created_at from snapshots where download_capability is not null',
-        presence: 'select id from snapshots order by created_at desc limit 50',
-        why: 'A capability is minted per request and must never be stored — one that is stored outlives its expiry.',
+        title: 'No refund row is left without its ledger entry',
+        query:
+          'select r.id, r.created_at from refunds r left join ledger_entries l on l.refund_id = r.id where l.id is null',
+        presence: 'select id from refunds order by created_at desc limit 50',
+        why: 'The whole goal: a refund with no entry behind it is the disagreement this work exists to end.',
         digest: 'sha256:4f21c0',
         authored: 'agent',
-        dryRunEnvironment: 'liveUk',
+        dryRunEnvironment: 'staging',
         dryRunAt: ago(2),
         dryRunVerdict: 'zero',
         dryRunPresence: 'fires',
@@ -3008,19 +3353,19 @@ export function buildDemoState(): DemoSeed {
     goalWatches: [
       {
         originRef: 'issue:395',
-        id: 'snapshot-download-401s',
+        id: 'unbalanced-ledger-writes',
         seq: 1,
         kind: 'signal',
-        title: 'Snapshot downloads stop 401ing',
-        query: "traces | where message has 'snapshot download rejected' | where timestamp > ago(24h)",
-        presence: "traces | where operation_Name == 'GET /snapshots/{id}/download' | where timestamp > ago(24h)",
+        title: 'No refund is written without its ledger entry',
+        query: "traces | where message has 'refund written without ledger entry' | where timestamp > ago(24h)",
+        presence: "traces | where operation_Name == 'POST /api/refunds' | where timestamp > ago(24h)",
         tolerate: 0,
         expectUnder: null,
         expectOver: null,
         expectBaseline: false,
         unit: null,
-        why: 'The ticket is a 401 nobody can reproduce locally; production is the only place it shows.',
-        dryRunEnvironment: 'liveUk',
+        why: 'The ticket is a month-end disagreement nobody can reproduce; production is the only place it shows.',
+        dryRunEnvironment: 'prod',
         dryRunAt: ago(12),
         dryRunVerdict: 'fires',
         dryRunPresence: 'fires',
@@ -3034,18 +3379,18 @@ export function buildDemoState(): DemoSeed {
       },
       {
         originRef: 'issue:395',
-        id: 'snapshot-download-p95',
+        id: 'refund-p95',
         seq: 2,
         kind: 'measure',
-        title: 'Snapshot downloads are no slower than they were',
-        query: "requests | where name == 'GET /snapshots/{id}/download' | summarize value = percentile(duration, 95)",
+        title: 'Issuing a refund is no slower than it was',
+        query: "requests | where name == 'POST /api/refunds' | summarize value = percentile(duration, 95)",
         presence: null,
         tolerate: 0,
         expectUnder: null,
         expectOver: null,
         expectBaseline: true,
         unit: 'ms',
-        why: 'The fix re-reads the blob header; if that costs anything it shows here first.',
+        why: 'The fix writes the ledger entry inside the refund transaction; if that costs anything it shows here first.',
         dryRunEnvironment: null,
         dryRunAt: null,
         dryRunVerdict: null,
@@ -3059,23 +3404,22 @@ export function buildDemoState(): DemoSeed {
         proposal: {
           at: ago(2),
           note:
-            'I added the blob-header read on the download path, so p95 is the number that would move if it ' +
+            'I put the ledger write inside the refund transaction, so p95 is the number that would move if it ' +
             'costs anything. Nothing existed to compare against before, which is why this is a baseline rather ' +
             'than a threshold.',
           declaration: {
-            id: 'snapshot-download-p95',
+            id: 'refund-p95',
             seq: 2,
             kind: 'measure',
-            title: 'Snapshot downloads are no slower than they were',
-            query:
-              "requests | where name == 'GET /snapshots/{id}/download' | summarize value = percentile(duration, 95)",
+            title: 'Issuing a refund is no slower than it was',
+            query: "requests | where name == 'POST /api/refunds' | summarize value = percentile(duration, 95)",
             presence: null,
             tolerate: 0,
             expectUnder: null,
             expectOver: null,
             expectBaseline: true,
             unit: 'ms',
-            why: 'The fix re-reads the blob header; if that costs anything it shows here first.',
+            why: 'The fix writes the ledger entry inside the refund transaction; if that costs anything it shows here first.',
           },
         },
       },
@@ -3084,9 +3428,9 @@ export function buildDemoState(): DemoSeed {
     schedules: [
       {
         id: 'sch-1',
-        title: 'Sweep docs/ for links that no longer resolve',
+        title: 'Sweep the catalogue for books with no cover image',
         prompt:
-          'Check every relative link and code path referenced under docs/ still exists, fix the ones that moved and open a PR.',
+          'Find every edition in the catalogue with no cover image or a cover that 404s, fill the ones the distributor has art for, and open a PR.',
         kind: 'code',
         cron: '0 9 * * 1',
         enabled: true,
@@ -3188,19 +3532,19 @@ export function buildDemoState(): DemoSeed {
             sha: '5d9e0c4',
             author: 'lubbdubb',
             authoredAt: ago(52),
-            subject: 'Merge PR #406 — Cap the retrieval context at the token budget',
+            subject: 'Merge PR #410 — Order the homepage shelves by last week’s sales',
           },
           {
             sha: 'a4c71b8',
             author: 'Priya Raman',
             authoredAt: ago(3 * 60),
-            subject: 'Hotfix: stop the indexer retrying a 404 forever',
+            subject: 'Hotfix: stop the stock importer retrying a 404 forever',
           },
           {
             sha: '90ffd22',
             author: 'lubbdubb',
             authoredAt: ago(5 * 60),
-            subject: 'Merge PR #390 — Validate job payloads in the catalog',
+            subject: 'Merge PR #406 — Add the new payment provider’s client',
           },
         ],
         dirty: false,
@@ -3219,10 +3563,10 @@ export function buildDemoState(): DemoSeed {
     },
     archivedPullRequests: [
       {
-        id: 'pr-420',
-        number: 420,
-        title: '#395 [1/4] feat(snapshots): add the download capability signer',
-        branch: 'issue/395/signer',
+        id: 'pr-419',
+        number: 419,
+        title: '#395 [1/4] feat(ledger): add the refund ledger entry writer',
+        branch: 'issue/395/writer',
         ciStatus: 'passing',
         unresolvedComments: [],
         baseBranch: 'main',
@@ -3231,10 +3575,10 @@ export function buildDemoState(): DemoSeed {
         closedAt: ago(900),
       },
       {
-        id: 'pr-421',
-        number: 421,
-        title: '#395 [2/4] feat(snapshots): move the download route outside /api and require the capability',
-        branch: 'issue/395/route',
+        id: 'pr-420',
+        number: 420,
+        title: '#395 [2/4] feat(refunds): write the ledger entry from the refund path',
+        branch: 'issue/395/refund-path',
         ciStatus: 'passing',
         unresolvedComments: [],
         baseBranch: 'main',
@@ -3243,10 +3587,10 @@ export function buildDemoState(): DemoSeed {
         closedAt: ago(640),
       },
       {
-        id: 'pr-422',
-        number: 422,
-        title: '#395 [3/4] feat(snapshots): mint capabilities into the snapshot list',
-        branch: 'issue/395/mint',
+        id: 'pr-421',
+        number: 421,
+        title: '#395 [3/4] refactor(finance): stop the nightly job inferring refunds',
+        branch: 'issue/395/nightly',
         ciStatus: 'passing',
         unresolvedComments: [],
         baseBranch: 'main',
@@ -3255,10 +3599,10 @@ export function buildDemoState(): DemoSeed {
         closedAt: ago(420),
       },
       {
-        id: 'pr-423',
-        number: 423,
-        title: '#395 [4/4] test(snapshots): open a download in a new tab',
-        branch: 'issue/395/e2e-download',
+        id: 'pr-422',
+        number: 422,
+        title: '#395 [4/4] test(refunds): assert the ledger entry beside the order',
+        branch: 'issue/395/e2e-refund',
         ciStatus: 'passing',
         unresolvedComments: [],
         baseBranch: 'main',
@@ -3267,10 +3611,37 @@ export function buildDemoState(): DemoSeed {
         closedAt: ago(210),
       },
       {
-        id: 'pr-388',
-        number: 388,
-        title: 'Carry the validation bench behind one desk',
-        branch: 'issue/390/bench',
+        id: 'pr-424',
+        number: 424,
+        title: 'Serve book covers at the width the viewport asked for',
+        branch: 'issue/398/covers',
+        ciStatus: 'passing',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(72),
+      },
+      // A merged pull request on one of this goal's branches that no part of the plan claims — an
+      // abandoned spike, kept because the Plan board has to be able to say "not in the plan" about
+      // something. → docs/spec/17-cockpit.md
+      {
+        id: 'pr-397',
+        number: 397,
+        title: 'Spike: take payment through the provider’s hosted page',
+        branch: 'issue/390/hosted-page',
+        ciStatus: 'unknown',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(60 * 24 * 12),
+      },
+      {
+        id: 'pr-393',
+        number: 393,
+        title: 'Draw the stock level on the book page',
+        branch: 'issue/352/stock-levels',
         ciStatus: 'unknown',
         unresolvedComments: [],
         baseBranch: 'main',
@@ -3283,8 +3654,8 @@ export function buildDemoState(): DemoSeed {
       demoIssue({
         id: 'iss-357',
         number: 357,
-        title: 'The reconciler re-opens gaps that a merge already closed',
-        body: 'Merging a proposal resolves its gap, and the next reconciliation pass re-opens it because the questions are still logged against the old document path.',
+        title: 'The basket page 500s when it is empty',
+        body: 'An empty basket renders the delivery estimate from the first line, and there is no first line, so the page 500s instead of saying the basket is empty.',
         labels: ['bug', 'lubbdubb-watch'],
         state: 'closed',
         workItemState: 'Doing',
@@ -3294,7 +3665,7 @@ export function buildDemoState(): DemoSeed {
         conclusion: {
           verdict: 'done' as const,
           by: 'assessor' as const,
-          note: 'Reconciliation keys on the proposal id now, not the path.',
+          note: 'An empty basket draws its own empty state and the estimate is not read at all.',
           at: ago(120),
         },
         spend: demoSpend(357, 5.51, 3),
@@ -3318,8 +3689,8 @@ export function buildDemoState(): DemoSeed {
             agentId: 'agent-a2',
             taskId: 'task-a2',
             originRef: 'pr:409',
-            originTitle: 'Read GitHub review decisions as proposal approval',
-            branch: 'feature/review-decision',
+            originTitle: 'Apply discount codes at checkout',
+            branch: 'feature/discount-codes',
             status: 'waiting',
             at: ago(2),
           },
@@ -3327,8 +3698,8 @@ export function buildDemoState(): DemoSeed {
             agentId: 'agent-a1',
             taskId: 'task-a1',
             originRef: 'pr:412',
-            originTitle: 'Cap the retrieval context at the token budget before ranking',
-            branch: 'feature/context-budget',
+            originTitle: 'Search by author as well as title',
+            branch: 'feature/author-search',
             status: 'running',
             at: ago(6),
           },
@@ -3339,13 +3710,13 @@ export function buildDemoState(): DemoSeed {
     humanTasks: [
       {
         id: 'hum-1',
-        title: 'Re-point the staging watchers at the new queue names',
+        title: 'Switch the staging shop’s payment provider keys over',
         detail:
-          'Hosting dashboard → the two `magpie-watcher` services → Environment.\n\n' +
-          '- Set `JOB_QUEUE_PREFIX` to the catalog’s\n' +
-          '- Redeploy both, then check the console reports two watchers connected\n\n' +
-          'Done when both staging watchers claim jobs from the catalog’s queue names. Nobody gave the fleet ' +
-          'dashboard credentials, and nobody should.',
+          'Payment provider dashboard → the `inkwell-staging` account → API keys.\n\n' +
+          '- Put the test publishable and secret keys into the staging shop’s environment\n' +
+          '- Redeploy, then take one test-card order and refund it\n\n' +
+          'Done when the staging shop charges and refunds against the new provider’s test keys. Nobody gave the ' +
+          'fleet a merchant account, and nobody should.',
         originRef: 'issue:390:part:cutover',
         partId: 'plan-390:cutover',
         kind: 'ask',
@@ -3358,12 +3729,39 @@ export function buildDemoState(): DemoSeed {
         resolvedAt: null,
         dismissedAt: null,
       },
+      // The limitation the fleet cannot get past on its own: a credential only a person can create.
+      // It is not the same ask as the judgement question on #368 below — that one an agent could have
+      // answered wrongly, this one it cannot answer at all. → docs/spec/13-jobs-and-tickets.md#human-tasks
+      {
+        id: 'hum-7',
+        title: 'Create an API key for the new email provider',
+        detail:
+          'Three attempts on this have each got as far as the send and stopped there: there is no ' +
+          '`EMAIL_PROVIDER_KEY` in any environment, and signing up for one needs a card and a domain ' +
+          'verification.\n\n' +
+          '- Create a sending account for `inkwell.example`\n' +
+          '- Verify the domain (the DNS records go in the shop’s zone)\n' +
+          '- Put the key in staging and prod as `EMAIL_PROVIDER_KEY`\n\n' +
+          'Nothing on this goal can move until it exists, and no agent can create one.',
+        originRef: 'issue:359',
+        partId: null,
+        kind: 'ask',
+        agentId: null,
+        taskId: null,
+        status: 'open',
+        createdAt: ago(46),
+        updatedAt: ago(46),
+        resolution: null,
+        resolvedAt: null,
+        dismissedAt: null,
+      },
       {
         id: 'hum-2',
-        title: 'Judge whether the truncated-context notice reads as an error on a real phone',
+        title: 'Judge whether the “no exact match” line reads as an error on a real phone',
         detail:
-          'When the budget cuts the context I show "answered from 8 of 23 sections". I can render it and ' +
-          'diff the DOM, but not judge whether that reads as a warning at 375px. Screenshot attached to the PR.',
+          'When an author search falls back to a fuzzy match I show "no exact match for Ali Smith — showing ' +
+          'close names". I can render it and diff the DOM, but not judge whether that reads as a failure at ' +
+          '375px. Screenshot attached to the PR.',
         originRef: 'pr:412',
         partId: null,
         kind: 'ask',
@@ -3386,7 +3784,7 @@ export function buildDemoState(): DemoSeed {
         agentId: 'agent-a0',
         taskId: 'task-a0',
         status: 'declined',
-        resolution: 'Not until the catalog migration lands — rotating now stops the publisher mid-flight.',
+        resolution: 'Not until the payment provider move lands — rotating now stops the deploy mid-flight.',
         createdAt: ago(72),
         updatedAt: ago(52),
         resolvedAt: ago(52),
@@ -3399,7 +3797,7 @@ export function buildDemoState(): DemoSeed {
         id: 'hum-5',
         title: 'Run the checks for issue #395',
         detail:
-          '**Snapshot downloads 401 in the review console** is delivered. Five of its nine checks are still to ' +
+          '**Every refund writes a ledger entry** is delivered. Five of its nine checks are still to ' +
           'run — they are below. Record what you saw on each, with a note.\n\n' +
           'Nothing is blocked by this: checks gate no dispatch, no merge and no close — what they change is ' +
           'what closing this goal looks like.',
@@ -3424,7 +3822,7 @@ export function buildDemoState(): DemoSeed {
         title: 'Say how the plan for #395 turned out',
         detail:
           'You predicted this one before you read its plan, and you marked the plan against it. ' +
-          '**Snapshot downloads 401 in the review console** has since been delivered, so each line now carries a ' +
+          '**Every refund writes a ledger entry** has since been delivered, so each line now carries a ' +
           'second question: whether the *plan* turned out right. It is not the same question, and either may be ' +
           'left alone.',
         originRef: 'issue:395',
@@ -3439,16 +3837,20 @@ export function buildDemoState(): DemoSeed {
         resolvedAt: null,
         dismissedAt: null,
       },
+      // The close-out, on the one goal that has nothing else left: delivered, validated, arrived on
+      // staging and prod, and still open in the tracker. Asked after the validation rather than
+      // beside it. → docs/spec/13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out
       {
         id: 'hum-4',
-        title: 'Close issue #364 in the tracker',
+        title: 'Close issue #398 in the tracker',
         detail:
-          'The assessor marked **Document the two-watcher requirement for maintenance jobs** delivered — ' +
-          '"PR #410 landed the deadlock note and the console warning with it."\n\n' +
+          'The assessor marked **Halve the book page’s image weight** delivered — "a book page now ships ' +
+          '380KB of cover art on a phone and 1.1MB on a desktop, down from 4.1MB." Both its checks passed and ' +
+          'it has reached staging and prod.\n\n' +
           'The item is still open in the tracker. **Mark as closed** here does it and settles this ' +
           'row with it — or close it in the tracker yourself and this settles itself on the next ' +
           'pulse, or mark it done here, or decline it and say why.',
-        originRef: 'issue:364',
+        originRef: 'issue:398',
         partId: null,
         kind: 'close_out',
         agentId: null,
@@ -3466,7 +3868,7 @@ export function buildDemoState(): DemoSeed {
         id: 'agent-a1',
         taskId: 'task-a1',
         status: 'running',
-        cwd: '/work/magpie-412',
+        cwd: '/work/inkwell-412',
         pid: 4821,
         waitingReason: null,
         sessionId: null,
@@ -3479,7 +3881,7 @@ export function buildDemoState(): DemoSeed {
         cacheCreationTokens: 24_000,
         numTurns: 3,
         steps: null,
-        note: 'Cutting the ranked list to the budget before the prompt is built, not after',
+        note: 'Weighting an exact author match above a title one at the boundary, not inside the rank loop',
         notedAt: ago(3),
         resumedAt: null,
         resumeAttempts: 0,
@@ -3488,9 +3890,9 @@ export function buildDemoState(): DemoSeed {
         id: 'agent-a2',
         taskId: 'task-a2',
         status: 'waiting',
-        cwd: '/work/magpie-409',
+        cwd: '/work/inkwell-409',
         pid: 4899,
-        waitingReason: 'Rebase hit a conflict in review-decision.ts — resolve which side wins?',
+        waitingReason: 'Rebase hit a conflict in pricing.ts — resolve which side wins?',
         sessionId: null,
         startedAt: ago(4),
         endedAt: null,
@@ -3507,35 +3909,13 @@ export function buildDemoState(): DemoSeed {
         resumeAttempts: 0,
       },
       {
-        id: 'agent-a3',
-        taskId: 'task-a3',
-        status: 'running',
-        cwd: '/work/magpie-332',
-        pid: 5012,
-        waitingReason: null,
-        sessionId: null,
-        startedAt: ago(23),
-        endedAt: null,
-        costUsd: 0.52,
-        inputTokens: 236_000,
-        outputTokens: 11_800,
-        cacheReadTokens: 190_000,
-        cacheCreationTokens: 14_000,
-        numTurns: 4,
-        steps: null,
-        note: 'Offering list_dir / read_file / grep as tools; the call ceiling is per job, not per turn',
-        notedAt: ago(5),
-        resumedAt: null,
-        resumeAttempts: 0,
-      },
-      {
         id: 'agent-a4',
         taskId: 'task-a4',
         status: 'waiting',
-        cwd: '/work/magpie-368',
+        cwd: '/work/inkwell-368',
         pid: 5077,
         waitingReason:
-          'The embeddings SDK already retries once on its own — bound our retry at three attempts on top of it, or turn the SDK’s off and own the whole policy?',
+          'Forty rows in last night’s feed have no ISBN-13 at all — skip them and import the rest, or fail the whole run?',
         sessionId: null,
         startedAt: ago(35),
         endedAt: null,
@@ -3546,8 +3926,30 @@ export function buildDemoState(): DemoSeed {
         cacheCreationTokens: 8_100,
         numTurns: 2,
         steps: null,
-        note: 'Found the SDK’s own retry — asking before stacking a second one on it',
+        note: 'Found rows with no ISBN — asking before deciding what a partial import means',
         notedAt: ago(6),
+        resumedAt: null,
+        resumeAttempts: 0,
+      },
+      {
+        id: 'agent-a5',
+        taskId: 'task-a5',
+        status: 'waiting',
+        cwd: '/work/inkwell-399',
+        pid: 5140,
+        waitingReason: 'Wants to run `psql` against the warehouse to check the digest column is wide enough.',
+        sessionId: null,
+        startedAt: ago(20),
+        endedAt: null,
+        costUsd: 0.41,
+        inputTokens: 92_000,
+        outputTokens: 4_100,
+        cacheReadTokens: 71_000,
+        cacheCreationTokens: 6_300,
+        numTurns: 2,
+        steps: null,
+        note: 'The warehouse column is varchar(64) in the migration but nobody has checked what is deployed',
+        notedAt: ago(3),
         resumedAt: null,
         resumeAttempts: 0,
       },
@@ -3555,7 +3957,7 @@ export function buildDemoState(): DemoSeed {
         id: 'agent-a0',
         taskId: 'task-a0',
         status: 'done',
-        cwd: '/work/magpie-364',
+        cwd: '/work/inkwell-364',
         pid: null,
         waitingReason: null,
         sessionId: null,
@@ -3579,15 +3981,15 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'ej-1',
         originRef: 'issue:364',
-        branch: 'issue/364/two-watchers',
+        branch: 'issue/364/shelf-order',
         worktreePath: '/repo/wt/issue-364',
         agentId: 'agent-ej',
         taskId: 'task-ej',
         sessionId: 'sess-ej',
-        reason: 'It is rewriting the job runner instead of documenting what it already does.',
+        reason: 'It is rewriting the sales rollup instead of reading the one that already exists.',
         ejectedAt: ago(12),
         lastSeenAt: ago(3),
-        lastNote: 'Reverting the runner change; the page it was meant to write is still empty.',
+        lastNote: 'Reverting the rollup change; the shelf ordering it was meant to write is still untouched.',
         settledAt: null,
         outcome: null,
         settleNote: null,
@@ -3606,11 +4008,11 @@ export function buildDemoState(): DemoSeed {
         status: 'pending',
         action: {
           type: 'reply_on_pr',
-          reason: 'reviewer asked whether the budget is per-flow',
+          reason: 'reviewer asked whether an author search matches contributors',
           prNumber: 412,
           commentId: 'c-1',
           draft:
-            'Good call — the budget is read per flow now (`contextTokenBudget` on the flow config, falling back to the global `RETRIEVAL_CONTEXT_TOKENS`), so the runbook flow can keep its bigger window. Pushed as a fixup.',
+            'Credited authors only for now — the contributor rows carry a role (`translator`, `illustrator`, `editor`) and folding them in makes "Ali Smith" match every book she has ever written an introduction for. Happy to add a role filter as its own change if that turns out to be what people want.',
         },
         note: null,
         decidedBy: null,
@@ -3633,19 +4035,19 @@ export function buildDemoState(): DemoSeed {
               id: 'open-questions',
               label: 'Open questions — approving decides them the planner’s way',
               detail:
-                'What should a patrol do with a document whose findings it cannot resolve — an assertion about ' +
-                'code that no longer exists anywhere? I have written it as a finding with no correction, which ' +
-                'leaves the document untouched and the finding on the record. Filing it as a ticket is the other ' +
-                'reading and I have not taken it.',
+                'What should the list do with an edition that has gone out of print — drop the row, or keep it ' +
+                'and draw it as unavailable? I have written it as kept and drawn, because a customer who saved ' +
+                'it has a reason to know it is gone. Dropping it silently is the other reading and I have not ' +
+                'taken it.',
             },
             {
               id: 'risks',
               label: 'Risks the planner named',
               detail:
-                '**Two model calls per document.** Every patrol pass costs a verify as well as a correct, and ' +
-                'most documents verify clean — the saving is real only if the clean path stops before the writer. ' +
-                '**Finding drift.** The corrector is handed findings from a read that may be a minute old; a ' +
-                'document edited in between is corrected against a source it no longer matches.',
+                '**A signed-out customer.** Adding to a list needs somebody to attach it to, and the book page ' +
+                'is the most common place a signed-out customer stands. I have written it as a prompt to sign ' +
+                'in, which loses the click. **Editions, not works.** A saved paperback whose paperback goes out ' +
+                'of print is a saved row pointing at nothing buyable; the list has to draw that rather than 404.',
             },
           ],
         },
@@ -3668,28 +4070,33 @@ export function buildDemoState(): DemoSeed {
           issueNumber: 364,
           checks: 3,
           note:
-            'The hint asked for the console warning and the note to agree; they do, so that is check B rather than ' +
-            'two. Where I went a different way: the deadlock itself is not reachable from outside, so C reads the ' +
-            'audit rows instead of trying to provoke it.',
-          hint: 'Worth checking that a single watcher actually warns, and that the note says what the console says.',
+            'The hint asked for the empty shelf and the ordering to agree with the sales report; they do, so that ' +
+            'is check B rather than two. Where I went a different way: the nightly rollup is not reachable from a ' +
+            'browser, so C reads the rollup rows instead of trying to provoke a day with no sales.',
+          hint: 'Worth checking that a shelf with no sales still draws something, and that the order matches the report.',
           set: [
             {
               letter: 'A',
-              title: 'A deployment with one watcher warns on the console',
-              expect: 'The warning names the watcher count and links the deadlock note.',
+              title: 'A shelf with no sales still draws something',
+              expect: 'The shelf draws in its curated order rather than empty.',
               steps: [
-                { kind: 'browser', do: 'Open the console with one watcher configured', actor: 'fleet', why: null },
-                { kind: 'screenshot', do: 'The warning as it draws', actor: 'fleet', why: null },
+                {
+                  kind: 'browser',
+                  do: 'Open the homepage with a zero-sales shelf configured',
+                  actor: 'fleet',
+                  why: null,
+                },
+                { kind: 'screenshot', do: 'The shelf as it draws', actor: 'fleet', why: null },
               ],
               fleetCandidate: true,
-              candidateWhy: 'drives the console and reads a banner; writes nothing',
+              candidateWhy: 'drives the shop front and reads a shelf; writes nothing',
               fleetBlocked: false,
               carriesQuery: false,
             },
             {
               letter: 'B',
-              title: 'The architecture note and the console warning say the same thing',
-              expect: 'Both say two watchers, and neither describes a retry that does not exist.',
+              title: 'A shelf’s order matches the sales report',
+              expect: 'Same books, same order, and neither claims a sale the other does not.',
               steps: [{ kind: 'manual', do: 'Read the two side by side', actor: 'human', why: null }],
               fleetCandidate: false,
               candidateWhy: null,
@@ -3698,9 +4105,11 @@ export function buildDemoState(): DemoSeed {
             },
             {
               letter: 'C',
-              title: 'A starved maintenance job is recorded once, not per retry',
-              expect: 'One row per starved job, with the watcher count on it.',
-              steps: [{ kind: 'state', do: 'Count job_audit rows for the starved job', actor: 'fleet', why: null }],
+              title: 'A day with no sales writes one rollup row, not none',
+              expect: 'One row per shelf, with a zero on it — not a missing row.',
+              steps: [
+                { kind: 'state', do: 'Count shelf_sales_rollup rows for the quietest day', actor: 'fleet', why: null },
+              ],
               fleetCandidate: true,
               candidateWhy: 'reads live data and nothing else',
               fleetBlocked: false,
@@ -3733,8 +4142,8 @@ export function buildDemoState(): DemoSeed {
         type: 'approve_change',
         status: 'open',
         prompt:
-          '3 check(s) written against the delivered code for issue #364 ("Document the two-watcher requirement for ' +
-          'maintenance jobs"), and nothing runs them until you accept.\n\n' +
+          '3 check(s) written against the delivered code for issue #364 ("Order the homepage shelves by last ' +
+          'week’s sales"), and nothing runs them until you accept.\n\n' +
           'Accepting releases them — the bench draws them and a check you hand to the fleet can be dispatched. ' +
           'Rejecting sends it back to be written again; say what is wrong and the next planner is given your ' +
           'words.',
@@ -3743,9 +4152,9 @@ export function buildDemoState(): DemoSeed {
           issueNumber: 364,
           detailFrom: 'What the planner says',
           detail:
-            'The hint asked for the console warning and the note to agree; they do, so that is check B rather ' +
-            'than two. Where I went a different way: the deadlock itself is not reachable from outside, so C ' +
-            'reads the audit rows instead of trying to provoke it.',
+            'The hint asked for the empty shelf and the ordering to agree with the sales report; they do, so ' +
+            'that is check B rather than two. Where I went a different way: the nightly rollup is not reachable ' +
+            'from a browser, so C reads the rollup rows instead of trying to provoke a day with no sales.',
         },
         agentId: null,
         taskId: null,
@@ -3758,14 +4167,14 @@ export function buildDemoState(): DemoSeed {
         type: 'review_reply',
         status: 'open',
         prompt:
-          'Draft reply for PR #412:\n\nGood call — the budget is read per flow now (`contextTokenBudget` on the flow config, falling back to the global `RETRIEVAL_CONTEXT_TOKENS`), so the runbook flow can keep its bigger window. Pushed as a fixup.',
+          'Draft reply for PR #412:\n\nCredited authors only for now — the contributor rows carry a role (`translator`, `illustrator`, `editor`) and folding them in makes "Ali Smith" match every book she has ever written an introduction for.',
         context: {
           taskTitle: 'Fix failing CI on PR #412',
           originRef: 'pr:412',
           prNumber: 412,
           commentId: 'c-1',
           draft:
-            'Good call — the budget is read per flow now (`contextTokenBudget` on the flow config, falling back to the global `RETRIEVAL_CONTEXT_TOKENS`), so the runbook flow can keep its bigger window. Pushed as a fixup.',
+            'Credited authors only for now — the contributor rows carry a role (`translator`, `illustrator`, `editor`) and folding them in makes "Ali Smith" match every book she has ever written an introduction for. Happy to add a role filter as its own change if that turns out to be what people want.',
           confidence: 0.62,
         },
         agentId: 'agent-a1',
@@ -3779,24 +4188,23 @@ export function buildDemoState(): DemoSeed {
         type: 'approve_change',
         status: 'open',
         prompt:
-          'There is a plan for issue #333 ("Verify a document against its sources before correcting it") and ' +
+          'There is a plan for issue #333 ("Let customers save books for later") and ' +
           'nothing is scheduled until you approve it — 3 pull requests of work.\n\n' +
-          'Why this shape: the verifier is judged on its findings before anything writes from them; one PR ' +
-          'would put the reader and the writer in the same review.',
+          'Why this shape: the list is judged on its own shape before anything writes to it; one PR ' +
+          'would put the structure and the controls in the same review.',
         context: {
           originRef: 'issue:333',
           planId: 'plan-333',
           detailFrom: 'What the plan says',
           detail:
             "**What's wrong**\n\n" +
-            'A patrol reads a document once and writes a correction from that single read, so the model spots ' +
-            'the error and fixes it in the same breath. When it is wrong about the error it is confidently ' +
-            'wrong about the fix, and the proposal carries a diff with no account of what it thought was ' +
-            'broken.\n\n' +
+            'A customer who is not ready to buy has nowhere to put a book, so they use the basket as one. The ' +
+            'basket expires overnight and the sweep reads what is left as an abandoned order — so the shop ' +
+            'emails them about a purchase they never intended to make.\n\n' +
             "**What we'll do**\n\n" +
-            'Split the read from the write. `verify_document` reports findings and never writes; ' +
-            '`correct_document` runs only on a document that came back with findings, and is handed them as ' +
-            'its input. A document that verifies clean never reaches a writer at all.',
+            'Give the list its own table and its own reads. A saved book is a customer and an edition and ' +
+            'nothing else — no quantity, no price, no expiry — so it cannot drift into being a basket. The ' +
+            'basket is left exactly as it is.',
         },
         agentId: null,
         taskId: null,
@@ -3814,22 +4222,20 @@ export function buildDemoState(): DemoSeed {
           originRef: 'issue:333',
           questions: [
             {
-              question: 'Verify every document every pass, or only changed ones?',
+              question: 'Should the list hold a work or an edition?',
               detail:
-                'A verify call on a document nothing has touched since the last clean pass buys nothing, and ' +
-                'the plan runs one anyway. Skipping them halves the cost and misses a document whose sources ' +
-                'moved under it.',
-              options: ['Verify every pass', 'Only changed documents'],
+                'The plan saves an edition, so a customer who saved the hardback sees nothing when the paperback ' +
+                'arrives. Saving the work shows them the paperback and loses which one they actually wanted.',
+              options: ['Save the edition', 'Save the work'],
             },
             {
-              question: 'An unresolvable finding — leave it, or file it?',
+              question: 'An out-of-print edition — drop it, or keep it?',
               detail:
-                'A claim about code that no longer exists anywhere cannot be corrected. The plan leaves the ' +
-                'document untouched with the finding on the record; filing a ticket puts it in front of ' +
-                'somebody and costs a tracker item per patrol pass.',
-              options: ['Leave it on the record', 'File a ticket'],
+                'The plan keeps the row and draws it as unavailable. Dropping it silently is tidier and loses the ' +
+                'one piece of information a customer who saved it would want.',
+              options: ['Keep and mark unavailable', 'Drop the row'],
             },
-            { question: 'Should a finding cite the source line, or the whole hunk?' },
+            { question: 'Should the account menu show the count, or just the link?' },
           ],
         },
         agentId: null,
@@ -3842,11 +4248,11 @@ export function buildDemoState(): DemoSeed {
         id: 'esc-1',
         type: 'answer_question',
         status: 'open',
-        prompt: 'Rebase hit a conflict in review-decision.ts — resolve which side wins?',
+        prompt: 'Rebase hit a conflict in pricing.ts — resolve which side wins?',
         context: {
           taskTitle: 'Rebase PR #409 on main',
           originRef: 'pr:409',
-          recentOutput: 'CONFLICT (content): Merge conflict in packages/git/src/review-decision.ts',
+          recentOutput: 'CONFLICT (content): Merge conflict in packages/orders/src/pricing.ts',
           prNumber: 409,
         },
         agentId: 'agent-a2',
@@ -3860,11 +4266,12 @@ export function buildDemoState(): DemoSeed {
         type: 'answer_question',
         status: 'open',
         prompt:
-          'The embeddings SDK already retries once on its own — bound our retry at three attempts on top of it, or turn the SDK’s off and own the whole policy?',
+          'Forty rows in last night’s feed have no ISBN-13 at all — skip them and import the rest, or fail the whole run?',
         context: {
-          taskTitle: 'Retry transient 502s from the embeddings endpoint (#368)',
+          taskTitle: 'Import the distributor’s nightly stock feed (#368)',
           originRef: 'issue:368',
-          recentOutput: 'packages/index/src/embed.ts:41  client = new EmbeddingsClient({ maxRetries: 1 })',
+          recentOutput:
+            'packages/stock/src/import.ts:41  rows.filter((r) => r.isbn13 !== null)  // 40 of 8,412 dropped',
         },
         agentId: 'agent-a4',
         taskId: 'task-a4',
@@ -3872,12 +4279,35 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(6),
         answeredAt: null,
       },
+      // The third shape a person's answer takes: not a judgement and not a missing credential, but a
+      // tool the agent is not allowed to reach for. → docs/spec/17-cockpit.md
+      {
+        id: 'esc-9',
+        type: 'answer_question',
+        status: 'open',
+        prompt: 'May I run `psql` against the warehouse to check the digest column is wide enough?',
+        context: {
+          taskTitle: 'Anonymise customer emails in the analytics export (#399)',
+          originRef: 'issue:399',
+          permission: {
+            toolName: 'Bash(psql)',
+            summary:
+              'read the warehouse’s `orders_export` schema — the migration says varchar(64) and nobody has ' +
+              'checked what is deployed',
+          },
+        },
+        agentId: 'agent-a5',
+        taskId: 'task-a5',
+        response: null,
+        createdAt: ago(3),
+        answeredAt: null,
+      },
       {
         id: 'esc-7',
         type: 'approve_change',
         status: 'open',
         prompt:
-          'PR #413 ("#390 [2/3] refactor(jobs): validate every payload through the catalog") is approved, green and ' +
+          'PR #413 ("#390 [2/3] feat(checkout): take card payment through the new provider") is approved, green and ' +
           'clean against main — merge it?',
         context: {
           originRef: 'pr:413',
@@ -3894,29 +4324,30 @@ export function buildDemoState(): DemoSeed {
         type: 'resolve_ambiguity',
         status: 'open',
         prompt:
-          'An assessment of issue #382 ("Gap clustering merges unrelated questions") found the work done and ' +
-          'the goal still not reached, and the issue itself to be what is wrong — no planner and no agent can ' +
-          'fix a goal, so nothing has been dispatched and nothing will be.',
+          'An assessment of issue #382 ("Let a customer cancel an order before it is dispatched") found the work ' +
+          'done and the goal still not reached, and the issue itself to be what is wrong — no planner and no ' +
+          'agent can fix a goal, so nothing has been dispatched and nothing will be.',
         context: {
-          taskTitle: 'Gap clustering merges unrelated questions into one gap',
+          taskTitle: 'Let a customer cancel an order before it is dispatched',
           originRef: 'issue:382:shortfall',
           issueNumber: 382,
           detailFrom: 'What the assessor found',
           detail:
-            '**The threshold moved and the two example questions now cluster apart. The goal asks for ' +
-            'clusters that are about one thing, and no threshold decides that.**\n\n' +
+            '**A Cancel button is on the order page and it works. The goal asks for cancellation "while it is ' +
+            'still cancellable", and nothing in the shop knows when that is.**\n\n' +
             '## Present\n\n' +
-            'PR #405 raised the cosine threshold from 0.72 to 0.81 and added the two questions from the ' +
-            'issue as a regression test. They cluster apart. The test passes.\n\n' +
+            'PR #405 added Cancel to the order page and a `cancelled` order state, and wired the refund. An ' +
+            'order can be cancelled at any point up to the moment somebody marks it dispatched.\n\n' +
             '## Missing\n\n' +
-            '- Three other pairs in the same corpus still merge at 0.81, and lowering it far enough to split ' +
-            'them splits the pairs that *should* merge.\n' +
-            '- Nothing in the clusterer reads what a question is *about* — only how its embedding sits ' +
-            'against another’s. A threshold is the wrong instrument for the stated goal.\n\n' +
+            '- The warehouse picks and packs for two hours before anything is marked dispatched, so a customer ' +
+            'can cancel an order that is already in a box. Three did last week.\n' +
+            '- Nothing in the shop records when picking starts. `dispatched_at` is the only timestamp, and it ' +
+            'is written when the courier label prints.\n\n' +
             '## Why the goal, and not the plan\n\n' +
-            'The part delivered exactly the scope it declared. The issue asks for clusters that are "about ' +
-            'one thing"; a planner handed this back would tune the same number again. Someone has to say ' +
-            'whether that means topic labelling, a second pass over the cluster, or simply a better number.',
+            'The part delivered exactly the scope it declared. The issue asks for cancellation "while it is ' +
+            'still cancellable"; a planner handed this back would wire the same button to the same timestamp. ' +
+            'Someone has to say whether cancellable means before picking, before the label, or before the van — ' +
+            'and if it is before picking, the warehouse system has to start telling us.',
         },
         agentId: null,
         taskId: null,
@@ -3929,7 +4360,7 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'dec-4',
         cycleId: 'cycle-103',
-        action: { type: 'reply_on_pr', reason: 'reviewer asked for a per-flow budget on #412' },
+        action: { type: 'reply_on_pr', reason: 'reviewer asked about contributor matching on #412' },
         subjectRef: 'pr:412',
         outcome: 'executed',
         detail: 'Drafted a reply and escalated for approval (confidence 0.62 below threshold)',
@@ -3943,7 +4374,7 @@ export function buildDemoState(): DemoSeed {
         action: { type: 'dispatch_code_agent', reason: 'PR #412 CI is failing' },
         subjectRef: 'pr:412:ci',
         outcome: 'executed',
-        detail: 'Dispatched agent onto feature/context-budget',
+        detail: 'Dispatched agent onto feature/author-search',
         rule: 'pr-ci-failing',
         admission: null,
         createdAt: ago(8),
@@ -3979,7 +4410,7 @@ export function buildDemoState(): DemoSeed {
       reservoir: 4,
       reservoirContainers: 1,
       held: 2,
-      latent: { plans: 0, profiles: 0, escalated: 0, parts: 0 },
+      latent: { plans: 0, profiles: 1, escalated: 1, parts: 0 },
       debt: 2,
       medianLeadMinutes: 40,
       medianHeldMinutes: 95,
@@ -4005,39 +4436,39 @@ export function buildDemoState(): DemoSeed {
           profileSource: 'rule',
         },
         {
-          origin: 'issue:390:part:watcher',
+          origin: 'issue:390:part:refunds',
           rule: 'plan-part',
-          title: 'Issue #390 part: Route the watcher’s job intake through the catalog',
+          title: 'Issue #390 part: Move refunds onto the new provider',
           kind: 'code',
-          branch: 'issue/390/watcher',
+          branch: 'issue/390/refunds',
           status: 'capped',
           reason:
-            'Part "watcher" of issue #390 is ready and stacks on issue/390/validate. Held: issue #390 is already at its 2-part concurrency cap.',
+            'Part "refunds" of issue #390 is ready and stacks on issue/390/payment. Held: issue #390 is already at its 2-part concurrency cap.',
           profile: 'fast',
           profileSource: 'pin',
           override: 'fast',
         },
         {
-          origin: 'issue:333:part:verify',
+          origin: 'issue:333:part:list',
           rule: 'plan-part',
-          title: 'Issue #333 part: Add verify_document, which reports and never writes',
+          title: 'Issue #333 part: Add the saved-books list, which nothing writes to yet',
           kind: 'code',
-          branch: 'issue/333/verify',
+          branch: 'issue/333/list',
           status: 'unapproved',
           reason:
-            'Part "verify" of issue #333 is ready and has no agent. Held: the plan for issue #333 is awaiting your approval — nothing is scheduled until you accept it.',
+            'Part "list" of issue #333 is ready and has no agent. Held: the plan for issue #333 is awaiting your approval — nothing is scheduled until you accept it.',
           profile: 'deep',
           profileSource: 'pin',
         },
         {
-          origin: 'issue:333:part:gate',
+          origin: 'issue:333:part:add',
           rule: 'plan-part',
-          title: 'Issue #333 part: Run correct_document only on a document that came back with findings',
+          title: 'Issue #333 part: Save a book from the book page and from a search result',
           kind: 'code',
-          branch: 'issue/333/gate',
+          branch: 'issue/333/add',
           status: 'unapproved',
           reason:
-            'Part "gate" of issue #333 is ready and stacks on issue/333/verify. Held: the plan for issue #333 is awaiting your approval — nothing is scheduled until you accept it.',
+            'Part "add" of issue #333 is ready and stacks on issue/333/list. Held: the plan for issue #333 is awaiting your approval — nothing is scheduled until you accept it.',
           profile: 'standard',
           profileSource: 'default',
         },
@@ -4048,7 +4479,7 @@ export function buildDemoState(): DemoSeed {
         id: 'err-2',
         source: 'agent',
         message: 'Agent agent-a0 failed (task task-a0), exit code 1',
-        detail: 'npm test\n✗ retrieval › the context fits the budget\nProcess exited with code 1',
+        detail: 'npm test\n✗ shelves › a shelf with no sales keeps its curated order\nProcess exited with code 1',
         createdAt: ago(11),
       },
       {
@@ -4067,53 +4498,75 @@ export function buildDemoState(): DemoSeed {
       { id: 'we-1', kind: 'pr_merged', ref: 'pr:406', summary: 'PR #406 merged', createdAt: ago(30) },
     ],
     refUrls: {
-      '#412': 'https://github.com/example/markdown-magpie/pull/412',
-      '#411': 'https://github.com/example/markdown-magpie/pull/411',
-      '#409': 'https://github.com/example/markdown-magpie/pull/409',
-      '#413': 'https://github.com/example/markdown-magpie/pull/413',
-      '#410': 'https://github.com/example/markdown-magpie/pull/410',
-      '#406': 'https://github.com/example/markdown-magpie/pull/406',
-      '#405': 'https://github.com/example/markdown-magpie/pull/405',
-      '#407': 'https://github.com/example/markdown-magpie/pull/407',
-      '#408': 'https://github.com/example/markdown-magpie/pull/408',
-      '#414': 'https://github.com/example/markdown-magpie/pull/414',
-      '#415': 'https://github.com/example/markdown-magpie/pull/415',
-      '#300': 'https://github.com/example/markdown-magpie/issues/300',
-      '#332': 'https://github.com/example/markdown-magpie/issues/332',
-      '#333': 'https://github.com/example/markdown-magpie/issues/333',
-      '#341': 'https://github.com/example/markdown-magpie/issues/341',
-      '#345': 'https://github.com/example/markdown-magpie/issues/345',
-      '#352': 'https://github.com/example/markdown-magpie/issues/352',
-      '#357': 'https://github.com/example/markdown-magpie/issues/357',
-      '#359': 'https://github.com/example/markdown-magpie/issues/359',
-      '#364': 'https://github.com/example/markdown-magpie/issues/364',
-      '#368': 'https://github.com/example/markdown-magpie/issues/368',
-      '#371': 'https://github.com/example/markdown-magpie/issues/371',
-      '#379': 'https://github.com/example/markdown-magpie/issues/379',
-      '#382': 'https://github.com/example/markdown-magpie/issues/382',
-      '#388': 'https://github.com/example/markdown-magpie/issues/388',
-      '#390': 'https://github.com/example/markdown-magpie/issues/390',
-      '#395': 'https://github.com/example/markdown-magpie/issues/395',
-      '#366': 'https://github.com/example/markdown-magpie/issues/366',
-      '#376': 'https://github.com/example/markdown-magpie/issues/376',
-      'issue:390:comment:8391': 'https://github.com/example/markdown-magpie/issues/390#issuecomment-8391',
-      'issue:379:comment:8402': 'https://github.com/example/markdown-magpie/issues/379#issuecomment-8402',
-      'issue:341': 'https://github.com/example/markdown-magpie/issues/341',
-      'issue:352': 'https://github.com/example/markdown-magpie/issues/352',
-      'issue:364': 'https://github.com/example/markdown-magpie/issues/364',
-      'issue:371': 'https://github.com/example/markdown-magpie/issues/371',
-      'issue:379': 'https://github.com/example/markdown-magpie/issues/379',
-      'issue:382': 'https://github.com/example/markdown-magpie/issues/382',
-      'issue:390': 'https://github.com/example/markdown-magpie/issues/390',
-      'issue:395': 'https://github.com/example/markdown-magpie/issues/395',
-      'issue:390:part:watcher': 'https://github.com/example/markdown-magpie/issues/390',
-      'issue:333': 'https://github.com/example/markdown-magpie/issues/333',
-      'issue:333:part:gate': 'https://github.com/example/markdown-magpie/issues/333',
-      'issue:333:part:verify': 'https://github.com/example/markdown-magpie/issues/333',
-      'pr:409': 'https://github.com/example/markdown-magpie/pull/409',
-      'pr:411': 'https://github.com/example/markdown-magpie/pull/411',
-      'pr:412': 'https://github.com/example/markdown-magpie/pull/412',
-      'pr:412:ci': 'https://github.com/example/markdown-magpie/pull/412/checks',
+      '#405': 'https://github.com/example/inkwell-books/pull/405',
+      '#406': 'https://github.com/example/inkwell-books/pull/406',
+      '#407': 'https://github.com/example/inkwell-books/pull/407',
+      '#408': 'https://github.com/example/inkwell-books/pull/408',
+      '#409': 'https://github.com/example/inkwell-books/pull/409',
+      '#410': 'https://github.com/example/inkwell-books/pull/410',
+      '#411': 'https://github.com/example/inkwell-books/pull/411',
+      '#412': 'https://github.com/example/inkwell-books/pull/412',
+      '#413': 'https://github.com/example/inkwell-books/pull/413',
+      '#414': 'https://github.com/example/inkwell-books/pull/414',
+      '#415': 'https://github.com/example/inkwell-books/pull/415',
+      '#417': 'https://github.com/example/inkwell-books/pull/417',
+      '#426': 'https://github.com/example/inkwell-books/pull/426',
+      '#300': 'https://github.com/example/inkwell-books/issues/300',
+      '#332': 'https://github.com/example/inkwell-books/issues/332',
+      '#333': 'https://github.com/example/inkwell-books/issues/333',
+      '#341': 'https://github.com/example/inkwell-books/issues/341',
+      '#345': 'https://github.com/example/inkwell-books/issues/345',
+      '#352': 'https://github.com/example/inkwell-books/issues/352',
+      '#357': 'https://github.com/example/inkwell-books/issues/357',
+      '#359': 'https://github.com/example/inkwell-books/issues/359',
+      '#364': 'https://github.com/example/inkwell-books/issues/364',
+      '#366': 'https://github.com/example/inkwell-books/issues/366',
+      '#368': 'https://github.com/example/inkwell-books/issues/368',
+      '#371': 'https://github.com/example/inkwell-books/issues/371',
+      '#376': 'https://github.com/example/inkwell-books/issues/376',
+      '#379': 'https://github.com/example/inkwell-books/issues/379',
+      '#382': 'https://github.com/example/inkwell-books/issues/382',
+      '#388': 'https://github.com/example/inkwell-books/issues/388',
+      '#390': 'https://github.com/example/inkwell-books/issues/390',
+      '#392': 'https://github.com/example/inkwell-books/issues/392',
+      '#394': 'https://github.com/example/inkwell-books/issues/394',
+      '#395': 'https://github.com/example/inkwell-books/issues/395',
+      '#396': 'https://github.com/example/inkwell-books/issues/396',
+      '#398': 'https://github.com/example/inkwell-books/issues/398',
+      '#399': 'https://github.com/example/inkwell-books/issues/399',
+      'issue:332': 'https://github.com/example/inkwell-books/issues/332',
+      'issue:333': 'https://github.com/example/inkwell-books/issues/333',
+      'issue:341': 'https://github.com/example/inkwell-books/issues/341',
+      'issue:352': 'https://github.com/example/inkwell-books/issues/352',
+      'issue:359': 'https://github.com/example/inkwell-books/issues/359',
+      'issue:364': 'https://github.com/example/inkwell-books/issues/364',
+      'issue:368': 'https://github.com/example/inkwell-books/issues/368',
+      'issue:371': 'https://github.com/example/inkwell-books/issues/371',
+      'issue:376': 'https://github.com/example/inkwell-books/issues/376',
+      'issue:379': 'https://github.com/example/inkwell-books/issues/379',
+      'issue:382': 'https://github.com/example/inkwell-books/issues/382',
+      'issue:390': 'https://github.com/example/inkwell-books/issues/390',
+      'issue:392': 'https://github.com/example/inkwell-books/issues/392',
+      'issue:394': 'https://github.com/example/inkwell-books/issues/394',
+      'issue:395': 'https://github.com/example/inkwell-books/issues/395',
+      'issue:396': 'https://github.com/example/inkwell-books/issues/396',
+      'issue:398': 'https://github.com/example/inkwell-books/issues/398',
+      'issue:399': 'https://github.com/example/inkwell-books/issues/399',
+      'issue:333:part:list': 'https://github.com/example/inkwell-books/issues/333',
+      'issue:333:part:add': 'https://github.com/example/inkwell-books/issues/333',
+      'issue:390:part:refunds': 'https://github.com/example/inkwell-books/issues/390',
+      'issue:396:part:header': 'https://github.com/example/inkwell-books/issues/396',
+      'issue:390:comment:8391': 'https://github.com/example/inkwell-books/issues/390#issuecomment-8391',
+      'issue:379:comment:8402': 'https://github.com/example/inkwell-books/issues/379#issuecomment-8402',
+      'issue:392:comment:8510': 'https://github.com/example/inkwell-books/issues/392#issuecomment-8510',
+      'issue:394:comment:8506': 'https://github.com/example/inkwell-books/issues/394#issuecomment-8506',
+      'issue:399:comment:8516': 'https://github.com/example/inkwell-books/issues/399#issuecomment-8516',
+      'pr:409': 'https://github.com/example/inkwell-books/pull/409',
+      'pr:411': 'https://github.com/example/inkwell-books/pull/411',
+      'pr:412': 'https://github.com/example/inkwell-books/pull/412',
+      'pr:413': 'https://github.com/example/inkwell-books/pull/413',
+      'pr:426': 'https://github.com/example/inkwell-books/pull/426',
+      'pr:412:ci': 'https://github.com/example/inkwell-books/pull/412/checks',
     },
     dispatchRules: {
       'pr-ci-failing': {
@@ -4179,68 +4632,68 @@ export function buildDemoState(): DemoSeed {
 
   const transcripts: Record<string, string> = {
     'agent-a1': [
-      'Reading feature/context-budget — the failing case is a question that matches every section.\n',
-      '\x1b[2m[10:14:02]\x1b[0m \x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/retrieval\x1b[0m\n',
+      'Reading feature/author-search — the failing case is an author whose name is also a title word.\n',
+      '\x1b[2m[10:14:02]\x1b[0m \x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/search\x1b[0m\n',
       '\n',
       '\x1b[31m  ↳ error\x1b[0m\x1b[2m [10:14:51]\x1b[0m\x1b[2m · 5 lines\x1b[0m\n',
-      '  ✗ retrieval › the context fits the budget\n',
-      '    Expected 8000, got 21440\n',
-      '    at index.test.ts:118\n',
+      '  ✗ search › an exact author match ranks above a title match\n',
+      '    Expected "Ali Smith — Autumn", got "The Smith of Wootton Major"\n',
+      '    at search.test.ts:118\n',
       '  \n',
       '  1 failing, 82 passing\n',
-      'So the cut is applied after the prompt is assembled, not before. Let me read the fold.\n',
-      '\x1b[2m[10:15:07]\x1b[0m \x1b[36m⚙ Read\x1b[0m \x1b[2mpackages/retrieval/src/index.ts\x1b[0m\n',
+      'So the author weighting is applied inside the rank loop, not at the boundary. Let me read the fold.\n',
+      '\x1b[2m[10:15:07]\x1b[0m \x1b[36m⚙ Read\x1b[0m \x1b[2mpackages/search/src/rank.ts\x1b[0m\n',
       '\n',
       '\x1b[90m  ↳ result\x1b[0m\x1b[2m [10:15:08]\x1b[0m\x1b[2m · 18 lines\x1b[0m\n',
-      '  30	  const chosen = ranked.slice(0, topK);\n',
-      '  31	  const chosen = ranked.slice(0, topK);\n',
-      '  32	  const chosen = ranked.slice(0, topK);\n',
-      '  33	  const chosen = ranked.slice(0, topK);\n',
-      '  34	  const chosen = ranked.slice(0, topK);\n',
-      '  35	  const chosen = ranked.slice(0, topK);\n',
-      '  36	  const chosen = ranked.slice(0, topK);\n',
-      '  37	  const chosen = ranked.slice(0, topK);\n',
-      '  38	  const chosen = ranked.slice(0, topK);\n',
-      '  39	  const chosen = ranked.slice(0, topK);\n',
-      '  40	  const chosen = ranked.slice(0, topK);\n',
-      '  41	  const chosen = ranked.slice(0, topK);\n',
-      '  42	  const chosen = ranked.slice(0, topK);\n',
-      '  43	  const chosen = ranked.slice(0, topK);\n',
-      '  44	  const chosen = ranked.slice(0, topK);\n',
-      '  45	  const chosen = ranked.slice(0, topK);\n',
-      '  46	  const chosen = ranked.slice(0, topK);\n',
-      '  47	  const chosen = ranked.slice(0, topK);\n',
-      '`topK` counts sections, not tokens — a section can be 4k on its own. Patching.\n',
+      '  30	  const chosen = scored.slice(0, topK);\n',
+      '  31	  const chosen = scored.slice(0, topK);\n',
+      '  32	  const chosen = scored.slice(0, topK);\n',
+      '  33	  const chosen = scored.slice(0, topK);\n',
+      '  34	  const chosen = scored.slice(0, topK);\n',
+      '  35	  const chosen = scored.slice(0, topK);\n',
+      '  36	  const chosen = scored.slice(0, topK);\n',
+      '  37	  const chosen = scored.slice(0, topK);\n',
+      '  38	  const chosen = scored.slice(0, topK);\n',
+      '  39	  const chosen = scored.slice(0, topK);\n',
+      '  40	  const chosen = scored.slice(0, topK);\n',
+      '  41	  const chosen = scored.slice(0, topK);\n',
+      '  42	  const chosen = scored.slice(0, topK);\n',
+      '  43	  const chosen = scored.slice(0, topK);\n',
+      '  44	  const chosen = scored.slice(0, topK);\n',
+      '  45	  const chosen = scored.slice(0, topK);\n',
+      '  46	  const chosen = scored.slice(0, topK);\n',
+      '  47	  const chosen = scored.slice(0, topK);\n',
+      '`topK` cuts before the author weight is added, so an exact author match can be cut. Patching.\n',
     ].join(''),
     'agent-a2': [
       '$ claude --resume rebase-409',
       'git fetch origin main',
       'git rebase origin/main',
-      'CONFLICT (content): Merge conflict in packages/git/src/review-decision.ts',
-      'Both sides changed reviewDecisionToApproval. Need a human call.',
-      '@@LUBBDUBB_WAITING: which mapping wins?@@',
-    ].join('\n'),
-    'agent-a3': [
-      '$ claude implement-332',
-      'Reading packages/providers/src/http.ts — the provider gets a prompt and nothing else.',
-      'Adding list_dir / read_file / grep as tools on the HTTP provider, with a per-job call ceiling.',
-      'npm test -w packages/providers … 3 new, all green so far',
+      'CONFLICT (content): Merge conflict in packages/orders/src/pricing.ts',
+      'Both sides changed how the line total is rounded. Need a human call.',
+      '@@LUBBDUBB_WAITING: which rounding wins?@@',
     ].join('\n'),
     'agent-a4': [
       '$ claude implement-368',
-      'Reading packages/index/src/embed.ts — the batch call aborts the whole run on one 502.',
-      'The EmbeddingsClient is built with maxRetries: 1, so the SDK already retries once.',
-      '@@LUBBDUBB_WAITING: bound our retry on top of the SDK’s, or own the whole policy?@@',
+      'Reading last night’s feed — 8,412 rows, and 40 of them have an empty ISBN-13 column.',
+      'Those 40 are all one publisher, and they do have an ISBN-10.',
+      '@@LUBBDUBB_WAITING: skip the 40 and import the rest, or fail the run?@@',
+    ].join('\n'),
+    'agent-a5': [
+      '$ claude implement-399',
+      'The export writes `customer_email` straight through. Hashing it is one line.',
+      'The warehouse column is varchar(64) in the migration — a sha256 hex is 64, so it just fits.',
+      'I would rather check what is actually deployed than trust the migration.',
+      '@@LUBBDUBB_WAITING: may I run psql against the warehouse?@@',
     ].join('\n'),
     'agent-a0': [
       '$ claude implement-364',
-      'Added "Why maintenance jobs need two watchers" to docs/architecture.md',
+      'Ranked each homepage shelf on the trailing-seven-day sales rollup',
       'npm run build && npm test … all green',
       'git push && opened PR #410',
       '@@LUBBDUBB_DONE@@',
     ].join('\n'),
   };
-
   const stale = (status: PlanPart['status']): boolean =>
     status === 'merged' || status === 'retired' || status === 'concluded';
   const allPrs: PullRequest[] = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
@@ -4376,39 +4829,39 @@ export function demoPlanHistory(planId: string): PlanHistory {
       seq: 1,
       at: at(4320),
       narrative: narrative({
-        reason: 'The signer has to exist before the route can verify one, and the guard change touches every route.',
-        approach: 'Sign a short-lived capability into the download URL and move the route out from behind the guard.',
+        reason: 'The writer has to exist before the refund path can call it, and the nightly job touches finance.',
+        approach: 'Write the ledger entry from the refund path and stop the nightly job inferring one.',
       }),
       parts: [
         part({
-          slug: 'signer',
+          slug: 'writer',
           seq: 1,
-          title: 'Add the download capability signer',
-          touches: ['apps/api/src/features/snapshots/download-capability.ts'],
+          title: 'Add the ledger entry writer',
+          touches: ['apps/api/src/features/ledger/writeRefundEntry.ts'],
           size: 's',
         }),
         part({
-          slug: 'route',
+          slug: 'refund-path',
           seq: 2,
-          title: 'Move the download route outside /api',
-          touches: ['apps/api/src/app.ts'],
-          dependsOn: ['signer'],
+          title: 'Write the entry from the refund path',
+          touches: ['apps/api/src/features/refunds/issue.ts'],
+          dependsOn: ['writer'],
           size: 'm',
         }),
         part({
-          slug: 'mint',
+          slug: 'nightly',
           seq: 3,
-          title: 'Mint capabilities into the snapshot list',
-          touches: ['apps/api/src/features/snapshots/list.ts'],
-          dependsOn: ['route'],
+          title: 'Stop the nightly job inferring refunds',
+          touches: ['apps/api/src/jobs/nightly-ledger.ts'],
+          dependsOn: ['refund-path'],
           size: 's',
         }),
         part({
-          slug: 'rows',
+          slug: 'finance-page',
           seq: 4,
-          title: 'Point the console’s snapshot rows at the minted URL',
-          touches: ['apps/web/src/app/snapshots/page.tsx'],
-          dependsOn: ['mint'],
+          title: 'Point the finance page at the ledger',
+          touches: ['apps/web/src/app/finance/page.tsx'],
+          dependsOn: ['nightly'],
           size: 's',
         }),
       ],
@@ -4420,33 +4873,33 @@ export function demoPlanHistory(planId: string): PlanHistory {
       at: at(4200),
       narrative: narrative({
         reason:
-          'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
+          'The ledger writer has to exist before the refund path can call it, and the nightly job cannot stop inferring until something else is recording.',
         approach:
-          'Move `/snapshots/:id/download` out from behind the prefix guard and gate it on a short-lived signed capability instead.',
-        openQuestions: 'Whether the unauthenticated arm should serve everything or 404.',
+          'Write the ledger entry where the refund happens, after the provider answers, and stop the nightly job inferring refunds at all.',
+        openQuestions: 'Whether the entry is written before or after the provider call.',
       }),
       parts: [
         part({
-          slug: 'signer',
+          slug: 'writer',
           seq: 1,
-          title: 'Add the download capability signer',
-          touches: ['apps/api/src/features/snapshots/download-capability.ts'],
+          title: 'Add the ledger entry writer',
+          touches: ['apps/api/src/features/ledger/writeRefundEntry.ts'],
           size: 's',
         }),
         part({
-          slug: 'route',
+          slug: 'refund-path',
           seq: 2,
-          title: 'Move the download route outside /api and require the capability',
-          touches: ['apps/api/src/app.ts', 'apps/api/src/features/snapshots/routes.ts'],
-          dependsOn: ['signer'],
+          title: 'Write the entry from the refund path, after the provider answers',
+          touches: ['apps/api/src/features/refunds/issue.ts'],
+          dependsOn: ['writer'],
           size: 'm',
         }),
         part({
-          slug: 'mint',
+          slug: 'nightly',
           seq: 3,
-          title: 'Mint capabilities into the snapshot list',
-          touches: ['apps/api/src/features/snapshots/list.ts', 'apps/web/src/app/snapshots/page.tsx'],
-          dependsOn: ['signer', 'route'],
+          title: 'Stop the nightly job inferring refunds from the orders table',
+          touches: ['apps/api/src/jobs/nightly-ledger.ts', 'apps/web/src/app/finance/page.tsx'],
+          dependsOn: ['writer', 'refund-path'],
           size: 'm',
         }),
       ],
@@ -4459,42 +4912,42 @@ export function demoPlanHistory(planId: string): PlanHistory {
       seq: 2,
       againstSeq: 1,
       parts: [
-        { slug: 'signer', kind: 'unchanged', title: 'Add the download capability signer', fields: [] },
+        { slug: 'writer', kind: 'unchanged', title: 'Add the ledger entry writer', fields: [] },
         {
-          slug: 'route',
+          slug: 'refund-path',
           kind: 'changed',
-          title: 'Move the download route outside /api and require the capability',
+          title: 'Write the entry from the refund path, after the provider answers',
           fields: [
             {
               field: 'title',
-              from: 'Move the download route outside /api',
-              to: 'Move the download route outside /api and require the capability',
-            },
-            {
-              field: 'touches',
-              from: 'apps/api/src/app.ts',
-              to: 'apps/api/src/app.ts, apps/api/src/features/snapshots/routes.ts',
+              from: 'Write the entry from the refund path',
+              to: 'Write the entry from the refund path, after the provider answers',
             },
           ],
         },
         {
-          slug: 'mint',
+          slug: 'nightly',
           kind: 'changed',
-          title: 'Mint capabilities into the snapshot list',
+          title: 'Stop the nightly job inferring refunds from the orders table',
           fields: [
             {
-              field: 'touches',
-              from: 'apps/api/src/features/snapshots/list.ts',
-              to: 'apps/api/src/features/snapshots/list.ts, apps/web/src/app/snapshots/page.tsx',
+              field: 'title',
+              from: 'Stop the nightly job inferring refunds',
+              to: 'Stop the nightly job inferring refunds from the orders table',
             },
-            { field: 'dependsOn', from: 'route', to: 'route, signer' },
+            {
+              field: 'touches',
+              from: 'apps/api/src/jobs/nightly-ledger.ts',
+              to: 'apps/api/src/jobs/nightly-ledger.ts, apps/web/src/app/finance/page.tsx',
+            },
+            { field: 'dependsOn', from: 'refund-path', to: 'writer, refund-path' },
             { field: 'size', from: 's', to: 'm' },
           ],
         },
         {
-          slug: 'rows',
+          slug: 'finance-page',
           kind: 'dropped',
-          title: 'Point the console’s snapshot rows at the minted URL',
+          title: 'Point the finance page at the ledger',
           fields: [],
         },
       ],

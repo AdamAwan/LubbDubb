@@ -335,7 +335,7 @@ test('the matrix gives a row to every part, and to every merge no part claims', 
 
   const claimless = matrix.rows.filter((r) => r.kind === 'unattributed');
   assert.equal(claimless.length, 1, 'a merge counted into total with no row is a number nobody can account for');
-  assert.equal(claimless[0]?.prNumber, 409);
+  assert.equal(claimless[0]?.prNumber, 397);
 
   const parts = matrix.rows.filter((r) => r.kind === 'part');
   assert.equal(parts.length, page.parts.length, 'every part is drawn, including ones nobody has written');

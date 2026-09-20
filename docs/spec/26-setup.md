@@ -438,7 +438,7 @@ that snapshot is built from.
 
 ## In the demo
 
-The Pages demo ([19](19-development.md)) runs the flow end to end against `example/markdown-magpie`,
+The Pages demo ([19](19-development.md)) runs the flow end to end against `example/inkwell-books`,
 the repository its scripted world is already built on, with the config file held as a text buffer in
 memory. That is a narrower fabrication than the demo's usual refusal implies: what it declines to
 invent is the _running_ config, which `describeRunningConfig` resolves server-side and a copy of which
