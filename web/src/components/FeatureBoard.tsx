@@ -294,7 +294,12 @@ function FeatureCard({
         costUsd={feature.costUsd}
         landings={feature.landings}
         now={view.now}
-        pause={<PauseToggle feature={feature} onChanged={onAnswered} />}
+        pause={
+          <>
+            <PriorityToggle feature={feature} onChanged={onAnswered} />
+            <PauseToggle feature={feature} onChanged={onAnswered} />
+          </>
+        }
       >
         {feature.paused !== null && (
           <p className="cn-fb-restednote">
@@ -499,6 +504,35 @@ function Brief({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * The other standing mark, beside the pause and deliberately: they are the two halves
+ * of one act. Told a Feature is the priority, an operator flags it and rests the rest,
+ * and having to leave the board to do either half is what made them go and find the
+ * stories instead. → docs/spec/05-dispatcher.md#marking-a-goal-a-priority
+ */
+function PriorityToggle({ feature, onChanged }: { feature: FeatureRollup; onChanged: () => void }): JSX.Element {
+  const flagged = feature.priority !== null;
+  return (
+    <AsyncButton
+      size="small"
+      ghost={!flagged}
+      className="cn-fb-priority"
+      aria-pressed={flagged}
+      title={
+        flagged
+          ? 'The fleet works this Feature and everything under it first. Press to hand the queue back to its natural order.'
+          : 'Work this Feature first: its stories, their parts and their pull requests go to the front of every queue they are in.'
+      }
+      onClick={async () => {
+        await api.setGoalPriority(feature.number, !flagged);
+        onChanged();
+      }}
+    >
+      {flagged ? 'Priority' : 'Prioritise'}
+    </AsyncButton>
   );
 }
 

@@ -7,6 +7,8 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { expeditedOrigins } from '../src/dispatcher/goalPriority.js';
 import { pausedIssueNumbers } from '../src/goalPause.js';
+import { buildFeatureBoard } from '../src/features/featureBoard.js';
+import type { MirroredTicket } from '../src/store/tickets.js';
 import { issueBranch } from '../src/dispatcher/issuePickup.js';
 import type { Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { loadConfig } from '../src/config/config.js';
@@ -362,4 +364,47 @@ test('a flag on a story is exactly what it was before — nothing cascades off a
 test('a flag on a goal the mirror does not hold still covers its own subtree', () => {
   const covers = expeditedOrigins([{ originRef: 'issue:12', since: 'now' }], emptyWorld, ['Feature']);
   assert.ok(covers('issue:12:plan'), 'a mark on work the harness cannot see is still the operator’s instruction');
+});
+
+test('the board carries each Feature’s flag, so the card can draw and set it', () => {
+  const NOW = '2026-09-21T09:00:00.000Z';
+  const ticket = (number: number, parent: number): MirroredTicket => ({
+    number,
+    title: `Item ${number}`,
+    labels: ['lubbdubb-watch'],
+    state: 'open',
+    workItemState: 'Active',
+    url: null,
+    createdAt: NOW,
+    changedAt: NOW,
+    firstSeenAt: NOW,
+    tracking: 'live',
+    issueType: 'User Story',
+    parent: { number: parent, title: `Feature ${parent}` },
+    lastReadAt: null,
+  });
+  const board = buildFeatureBoard({
+    items: [ticket(1, 900), ticket(2, 901)],
+    outcomes: new Map(),
+    costs: new Map(),
+    featureSlots: new Map(),
+    sequences: new Map(),
+    running: new Map(),
+    deliveries: [],
+    shortfalls: [],
+    escalations: [],
+    reach: [],
+    landings: [],
+    environments: [],
+    containerTypes: ['Feature', 'Epic'],
+    watchLabel: 'lubbdubb-watch',
+    summaries: new Map(),
+    standingKeys: new Map(),
+    priorities: new Map([['issue:900', { originRef: 'issue:900', since: NOW }]]),
+  });
+
+  const flagged = board.features.find((f) => f.number === 900);
+  const plain = board.features.find((f) => f.number === 901);
+  assert.equal(flagged?.priority?.since, NOW, 'the flag reaches the card, as the pause already does');
+  assert.equal(plain?.priority, null, 'and an unflagged Feature says so rather than going undefined');
 });

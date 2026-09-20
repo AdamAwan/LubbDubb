@@ -8896,6 +8896,16 @@ select:disabled {
   align-items: center;
   gap: 4px;
 }
+/* The flag is the one control on a card that is *on* rather than available, so it takes
+   the same amber the court chip beside it takes — what wants you, and what you have told
+   the fleet to want. Off, it is an ordinary ghost button and says nothing.
+   → docs/spec/05-dispatcher.md#marking-a-goal-a-priority */
+.cn-fb-priority[aria-pressed='true'] {
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
+}
+
 /* The chosen order wears the same blue ground the mode toggle beside it wears, and
    it is selected off `aria-pressed` rather than off the ghost class so the mark and
    the state cannot drift apart. `Button` gave the pressed one `--panel-2` against

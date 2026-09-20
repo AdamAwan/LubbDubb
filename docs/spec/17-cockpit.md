@@ -5555,6 +5555,29 @@ the rail opens; anything else opens the page its reference names. No merge or an
 here that is not already the rail's — a second set of verdict controls is two paths to keep in step,
 and a card-level "do this first" button is an opinion about which hold matters most.
 
+### The two standing marks
+
+Beside the name, a card carries the two marks an operator sets on a Feature without leaving the
+board: **Prioritise** and **Pause**. They are the two halves of one act — told that a Feature is now
+the priority, an operator flags it and rests what can wait — and they sit together for that reason.
+
+The flag is `POST /api/issues/:number/priority`, the same one the goal page's button sends
+([05](05-dispatcher.md#marking-a-goal-a-priority)), and it reaches the card as
+`FeatureRollup.priority` off `goal_priorities`. Drawing it here is what makes it usable at all on a
+tracker with a hierarchy: **a Feature usually has no goal page** — the snapshot carries the goals the
+fleet is working, not their containers — so the control existed and the one surface that lists
+Features could not reach it. An operator who wanted a Feature worked first had to open its stories and
+flag them one at a time, which is the trip this board exists to save.
+
+**On, the flag is amber; off, it is an ordinary ghost button.** Amber is what wants you and what you
+have told the fleet to want, which is the same axis; and a mark that is not set says nothing, since a
+board of five Features would otherwise draw five controls claiming a state.
+
+What it does **not** do is pause anything else. Flagging one Feature and resting three others are two
+statements with different lifetimes — the flag stands until it is cleared, a pause until it is
+resumed — and a single control that did both would leave an operator guessing which half a later
+press undoes.
+
 ### Who is on it
 
 One `AgentOnIt` per live agent under the card's goals, on the brief beside the name: the pulsing green

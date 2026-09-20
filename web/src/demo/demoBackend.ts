@@ -1088,11 +1088,14 @@ class DemoServer {
   }
 
   async setGoalPriority(issueNumber: number, priority: boolean): Promise<{ ok: true; priority: boolean }> {
+    // One flag, two readings of it: the goal page reads the snapshot's issue, the
+    // feature board reads the board payload, and the demo has to move both or the
+    // control looks broken on whichever surface you are not on.
+    if (priority) DEMO_FEATURE_PRIORITIES.set(issueNumber, new Date().toISOString());
+    else DEMO_FEATURE_PRIORITIES.delete(issueNumber);
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
-    if (issue) {
-      issue.priority = priority ? { since: new Date().toISOString() } : null;
-      this.dirty();
-    }
+    if (issue) issue.priority = priority ? { since: new Date().toISOString() } : null;
+    this.dirty();
     return { ok: true, priority };
   }
 
@@ -5309,6 +5312,7 @@ function demoTickets(query: {
 }
 
 const DEMO_FEATURE_PAUSES = new Map<number, string>();
+const DEMO_FEATURE_PRIORITIES = new Map<number, string>();
 
 function buildDemoFeatureBoard(): FeatureBoardPayload {
   const now = Date.now();
@@ -5665,6 +5669,9 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       standingKey: extra.standingKey,
       paused: ((since) => (since === undefined ? null : { originRef: `issue:${number}`, since }))(
         DEMO_FEATURE_PAUSES.get(number),
+      ),
+      priority: ((since) => (since === undefined ? null : { originRef: `issue:${number}`, since }))(
+        DEMO_FEATURE_PRIORITIES.get(number),
       ),
     };
   });

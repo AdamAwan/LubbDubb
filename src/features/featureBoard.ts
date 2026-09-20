@@ -10,6 +10,7 @@ import type {
   GoalEnvironmentReach,
   GoalLanding,
   GoalPause,
+  GoalPriority,
   IssueDelivery,
   IssueShortfall,
 } from '../types.js';
@@ -57,6 +58,7 @@ interface BuildInput {
   containerTypes: readonly string[] | undefined;
   watchLabel: string;
   pauses?: ReadonlyMap<string, GoalPause>;
+  priorities?: ReadonlyMap<string, GoalPriority>;
 }
 
 export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 'backfilling' | 'refUrls'> {
@@ -118,6 +120,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       landings: landingsUnder(group.rows, landingsByGoal),
       standingKey: input.standingKeys.get(number) ?? '',
       paused: input.pauses?.get(issueOriginRef('root', number)) ?? null,
+      priority: input.priorities?.get(issueOriginRef('root', number)) ?? null,
     });
   }
 
