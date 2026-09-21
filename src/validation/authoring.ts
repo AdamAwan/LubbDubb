@@ -224,7 +224,7 @@ before them, and prose in a \`do\` cannot say that to anything but a reader.
 | kind | what it does |
 | --- | --- |
 | \`browser\` | Drives the application — navigate, upload, click, wait. |
-| \`suite\` | Runs a named \`area\` of the project's own browser suite, named as the suite names it in the repository you are standing in. **This is the only thing that gives a check an area**, and an area is what lets the browser half run at all. |
+| \`suite\` | Runs a named \`area\` of the project's own browser suite, named as the **runner selects on it** and not as a config file names the project or group. **This is the only thing that gives a check an area**, and an area is what lets the browser half run at all. |
 | \`screenshot\` | Captures the screen for somebody to look at. |
 | \`state\` | Reads the deployed store. |
 | \`signal\` | Reads logs and error records. |
@@ -232,7 +232,7 @@ before them, and prose in a \`do\` cannot say that to anything but a reader.
 | \`manual\` | Something only a person can do. |
 
 **A \`suite\` step also takes \`expects\`: the concrete spec names you expect that area to run**, named as
-the suite names them in the repository you are standing in, exactly as the area is. Write them down — it is the only thing that can catch a spec
+the runner selects on them, exactly as the area is. Write them down — it is the only thing that can catch a spec
 **deleted or renamed** since you wrote the check: the area goes on running whatever it now holds, and
 the count of what it holds moves down with the deletion, so a name nobody wrote down simply goes
 missing and the row reports a pass for coverage that no longer exists. Both the area and these names
@@ -266,8 +266,17 @@ that is what most checks have always been.
 /**
  * What the deployment can drive, fleet-wide rather than per goal, so it is folded once and handed to
  * the rule. It names no areas: nothing pre-resolves one at plan time any more, and a `suite` step's
- * area is named as the suite names it in the repository the planner is standing in and resolved
- * against the deployed commit's own listing when the run happens.
+ * area is resolved against the deployed commit's own listing when the run happens.
+ *
+ * What it does carry is the **`listSelectors` command itself**, for the planner to invoke in the
+ * checkout it is standing in. A listing and a cached area are different things: a stored string that
+ * resolves later can be stale invisibly, which is why the cache went; a command the planner runs now,
+ * with run-time resolution untouched, is vocabulary rather than an answer — the pre-flight still has
+ * the last word, so a listing taken here cannot produce a false pass. Without it the planner names an
+ * area with no vocabulary at all, and a repository that names things twice — a runner selecting on
+ * tags while its config file carries human-readable project names — gives it two honest readings and
+ * no way to tell which the runner will accept.
+ * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
  *
  * Empty where nothing declares a `validate` block — a deployment with no configured environment
  * still authors a check set, and every check on it is a person's.
@@ -281,7 +290,7 @@ export function validationPlanNote(
       tenant?: string;
       tenantEnv?: string;
       ensureTenant?: string;
-      browser?: { runner: string };
+      browser?: { runner: string; listSelectors?: string };
       state?: { run: string };
     };
   }[],
@@ -308,14 +317,64 @@ export function validationPlanNote(
           : ''),
     );
   }
+  lines.push('', ...areaVocabulary(configured));
   lines.push(
-    '',
-    'Name a `suite` area as the suite names it in the repository you are standing in. It is resolved against ' +
-      'the deployed commit’s own listing when the run happens, and a name that does not resolve blocks the row ' +
-      'with both lists side by side. Where nothing above can carry a check, the check is a person’s, which is ' +
-      'the ordinary case and not a lesser answer.\n',
+    'Where nothing above can carry a check, the check is a person’s, which is the ordinary case and not a ' +
+      'lesser answer.\n',
   );
   return lines.join('\n');
+}
+
+/**
+ * The vocabulary a `suite` area is written in, and the command that prints it where one is declared.
+ *
+ * It is **advisory on every arm**, which is what keeps restoring it from restoring the cache that
+ * went with it. The planner stands in a checkout of the default branch rather than the deployed
+ * commit, so what the command prints here describes a neighbouring build — good enough to tell a tag
+ * from a config file's project name, and never an answer. Nothing is stored, nothing is resolved, and
+ * the run's own listing against the deployed commit decides. A command that will not run is therefore
+ * not a blocked plan: it degrades to prose, which is what every check written before this was.
+ * → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
+ */
+function areaVocabulary(
+  configured: readonly { name: string; validate?: { browser?: { listSelectors?: string } } }[],
+): string[] {
+  const listings = configured
+    .map((env) => ({ name: env.name, command: env.validate?.browser?.listSelectors }))
+    .filter((entry): entry is { name: string; command: string } => (entry.command ?? '').trim() !== '');
+  const lines = [
+    'A `suite` area is named **as the runner selects on it** — the identifier its own listing prints. That ' +
+      'is often not what a test-framework config file calls the project, the group or the suite, and it is ' +
+      'never a spec file path or a directory: a repository that names the same journey twice gives you two ' +
+      'honest readings, and only the one the runner selects on can ever match. The same goes for a step’s ' +
+      '`expects`, one level down.\n',
+  ];
+  if (listings.length === 0) {
+    lines.push(
+      'No environment here declares a command that prints that listing, so write the area as the suite names ' +
+        'it in the repository you are standing in and say in the check’s `do` which suite you read it off.\n',
+    );
+  } else {
+    lines.push(
+      'Before you write one, ask the runner what it offers, in the checkout you are standing in:\n',
+      ...listings.map((entry) => `- **${entry.name}** — \`${entry.command}\``),
+      '',
+      'What it prints is **the vocabulary and not the answer**. You are standing in the default branch and ' +
+        'not in the commit an environment is running, so read it for the *shape* of the names — and where a ' +
+        'goal added an area that has not deployed yet, write the name the new spec will be selected by rather ' +
+        'than the nearest one on this list.\n',
+      '**If it will not run, write the area anyway and carry on.** No install, no credentials, too slow, an ' +
+        'error you cannot read — none of those is a reason to leave a `suite` step out, defer a check or say ' +
+        'anything in the note about it. Name the area as the suite names it in the repository, exactly as ' +
+        'every check written before this list existed was named.\n',
+    );
+  }
+  lines.push(
+    'Whatever you write is resolved against the deployed commit’s own listing when the run happens, and a ' +
+      'name that does not resolve blocks the row with both lists side by side. That is the check on this, ' +
+      'and it does not move.\n',
+  );
+  return lines;
 }
 
 const MAX_CHECKS = 40;

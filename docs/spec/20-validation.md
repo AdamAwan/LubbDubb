@@ -269,13 +269,13 @@ makes leaving it off safe.
 
 Off, three things do not happen and nothing else changes:
 
-| On the flag                                                | Off the flag (unchanged)                               |
-| ---------------------------------------------------------- | ------------------------------------------------------ |
-| Rule `validation-plan` dispatches a planner                 | The bench, and every check already on it                |
-| Rule `validation-plan-approval` proposes an authored set    | The hand-over, and rule `validate-check` running one    |
-| The assessor's `issue-assess` fold asking for a set         | `validation_amend`, correcting a check that exists      |
-| `validation_plan`, which refuses with the flag named        | The desktop channel, a claim, a reading, a sheet        |
-| `assess_issue`'s own answer asking for the set              | A **plan-time** set a plan document declared, ingested as ever |
+| On the flag                                              | Off the flag (unchanged)                                       |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| Rule `validation-plan` dispatches a planner              | The bench, and every check already on it                       |
+| Rule `validation-plan-approval` proposes an authored set | The hand-over, and rule `validate-check` running one           |
+| The assessor's `issue-assess` fold asking for a set      | `validation_amend`, correcting a check that exists             |
+| `validation_plan`, which refuses with the flag named     | The desktop channel, a claim, a reading, a sheet               |
+| `assess_issue`'s own answer asking for the set           | A **plan-time** set a plan document declared, ingested as ever |
 
 The last column is the point. The flag withholds no reading and deletes no row: a goal that already
 has a set keeps it, an operator who hands a check to the fleet still gets an agent on it, and a plan
@@ -546,20 +546,20 @@ it is a property of the decomposition. Databases written under the old key are r
 one at boot, `id` and `letter` untouched
 ([14](14-persistence.md#rebuilding-a-table-whose-key-changed)).
 
-| Field            | What it is                                                                                                                                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                                                                                                                                                 |
-| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                                                                                                                                     |
-| `title`          | One line, the headline.                                                                                                                                                                                                                           |
-| `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                            |
+| Field            | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Author-chosen kebab-case slug. **The merge key** — an amendment merges on it, so it must survive.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `letter`         | `A`, `B`, `C`… — the human-typeable handle. Assigned at ingestion. See below.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `title`          | One line, the headline.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                                                                                                                                                                                                                                                                              |
 | `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. It is also where the **area** a remote run selects the check by lives, and the spec names that area is expected to run: both are read off a `suite` step (`stepArea`, `stepExpects`) and the check carries no field for either, because one fact with two homes drifts. → [The test plan](#the-test-plan), [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
-| `expect`         | What a pass looks like, markdown. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy. Asked for as grouped bullets and drawn as markdown — [How the note and the `expect` are written](#how-the-note-and-the-expect-are-written).                                                                                                                              |
-| `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                    |
-| `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                            |
-| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                               |
-| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                      |
-| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                  |
-| `state`          | Below.                                                                                                                                                                                                                                            |
+| `expect`         | What a pass looks like, markdown. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy. Asked for as grouped bullets and drawn as markdown — [How the note and the `expect` are written](#how-the-note-and-the-expect-are-written).                                                                                                                                                                                                                          |
+| `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `state`          | Below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ### States
 
@@ -574,7 +574,7 @@ from any of them.
 | `waived`   | An operator decided it does not need running.                                                                                                                                                                                                                                                                                                                                             |
 | `deferred` | It is waiting on something named, with `deferUntil` where the deferral said when.                                                                                                                                                                                                                                                                                                         |
 | `captured` | A `screenshot` step took the picture and it is on the row, waiting to be looked at. It asserts nothing, and a person's reading is what makes it passed or failed. Written by either channel that can take one — the goal's own validation sheet, and the `validate-check` dispatch where the fleet can reach the screen. → [36](36-remote-validation.md#a-screen-from-the-sheets-own-run) |
-| `declined` | The operator struck this row out of the set at the accept gate, with their reason. Settled: never assembled, never dispatched for, owed to nobody — and never clear. → [Declining a single row](#declining-a-single-row) |
+| `declined` | The operator struck this row out of the set at the accept gate, with their reason. Settled: never assembled, never dispatched for, owed to nobody — and never clear. → [Declining a single row](#declining-a-single-row)                                                                                                                                                                  |
 
 **`captured` and `declined` are values on the existing column and need no `ALTER TABLE`**, exactly as
 `result_by` gained `agent`, `desktop` and `spec`. `checkStateOf` narrows anything it does not
@@ -634,20 +634,24 @@ ordering is the point: a database or log reading whose subject is _what
 the browser steps just did_ is meaningless taken before them, and prose in a `do` cannot express that
 to anything but a reader.
 
-| Step kind    | What it does                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `browser`    | Drives the application — navigate, upload, click, wait.                                           |
+| Step kind    | What it does                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `browser`    | Drives the application — navigate, upload, click, wait.                                                             |
 | `suite`      | Runs a named area of the project's own browser suite. **This step is the check's area**, and carries its `expects`. |
-| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`.              |
-| `state`      | Reads the deployed store through the environment's `state.run`.                                   |
-| `signal`     | Reads logs and error records.                                                                     |
-| `measure`    | Reads a metric.                                                                                   |
-| `manual`     | A person does something the fleet cannot.                                                         |
+| `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`.                                |
+| `state`      | Reads the deployed store through the environment's `state.run`.                                                     |
+| `signal`     | Reads logs and error records.                                                                                       |
+| `measure`    | Reads a metric.                                                                                                     |
+| `manual`     | A person does something the fleet cannot.                                                                           |
 
-**A `suite` step's `area` is named as the suite names it in the repository the planner is standing in**,
-and is resolved against the deployed commit's own listing when the run happens: a name that does not
-resolve blocks the row with both lists side by side. Nothing pre-resolves it against a listing at plan
-time ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
+**A `suite` step's `area` is named as the runner selects on it — the identifier its own listing
+prints**, which is often not what a test-framework config file calls the project or the group and never
+a spec file path. It is resolved against the deployed commit's own listing when the run happens: a name
+that does not resolve blocks the row with both lists side by side. The note the planner is handed names
+each environment's `listSelectors` command for it to invoke in the checkout it is standing in, as
+vocabulary and never as an answer — nothing pre-resolves the string at plan time, and a listing that
+cannot be taken leaves the planner writing prose exactly as before
+([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
 
 **A `suite` step also carries `expects`: the concrete spec names the planner expects that area to
 run**, named the same way the area is, and optional on it. It is the only
@@ -1669,8 +1673,7 @@ cause is not a typo but an amendment landing between the sheet being drawn and t
 A decline is **not** one of these routes. It is not a reading somebody records on a goal they are
 working; it is part of the answer to an ask, so it rides on `POST /api/proposals/:id/accept` as
 `declined: [{letter, reason}]` and is written by the press that releases the rest of the set
-([16](16-http-api.md), [Declining a single row](#declining-a-single-row)). A reasonless entry is a
-400. `reset` above is its undo, like every other reading's.
+([16](16-http-api.md), [Declining a single row](#declining-a-single-row)). A reasonless entry is a 400. `reset` above is its undo, like every other reading's.
 
 **No route here runs a cycle.** Nothing schedules work, so a pulse per checkbox would be the cost of
 saying nothing.

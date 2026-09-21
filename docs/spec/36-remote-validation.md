@@ -412,26 +412,48 @@ inheritance coming back through a side door.
 
 The join is two things, and **which of them the exact string is picked at** is the whole of the design.
 
-**A `suite` step carries it, and the planner names it as the suite names it.** The listing is read
+**A `suite` step carries it, and the planner names it as the runner selects on it.** The listing is read
 against the string **exactly**, so an area described in prose — _amend the checkout area to accept the
 new confirmation step_, against a runner offering `Checkout Tests` — can never match, and reconciling
 the two fuzzily would be the harness guessing which area an author meant, which is what this design
 refuses everywhere else. So both the schema description
 (`validationStepsSchema`, `src/validation/checkDocument.ts`) and the note the planner is handed
-(`validationPlanNote`, `src/validation/authoring.ts`) ask for the area **as the suite names it in the
-repository the planner is standing in**, and say where the name is resolved: against the deployed
-commit's own listing, when the run happens, with a name that does not resolve blocking the row and
-both lists drawn side by side. That is the same sentence in both places, which is
+(`validationPlanNote`, `src/validation/authoring.ts`) ask for the area **as the runner selects on it —
+the identifier its own listing prints**, which is often not what a test-framework config file calls the
+project or the group and never a spec file path; and they say where the name is resolved: against the
+deployed commit's own listing, when the run happens, with a name that does not resolve blocking the row
+and both lists drawn side by side. That is the same sentence in both places, which is
 [20](20-validation.md#the-test-plan)'s rule about a field the schema and the note both describe.
 
-**Nothing pre-resolves it, and no list is offered to pick from.** The planner used to be shown a cached
+Naming the _kind_ of identifier is what the guidance can do for free. A repository that names the same
+journey twice — a runner selecting on tags while its config file carries human-readable project or group
+names — gives a planner asked for "the name the suite uses" two honest readings and no way to choose,
+and picking the wrong one is the predictable outcome rather than a careless error.
+
+**Nothing pre-resolves it, and no list is stored to pick from.** The planner used to be shown a cached
 listing and told to copy from it. The listing was taken in the _harness's_ clone at whatever commit it
 stood on, which is a guess about a commit the environment is not running — answered properly one press
 later, by the run's own listing in a checkout pinned to the deployed commit
 ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)). So the cache
-is gone and the note offers no areas. What is lost is a refusal at plan submission the run's listing
+is gone and the note names no area. What is lost is a refusal at plan submission the run's listing
 makes anyway; what is gained is that nothing in the tree pre-resolves a string against a listing
 nobody will run against.
+
+**The command is not the cache, and the planner is given the command.** `validationPlanNote` names each
+environment's `validate.browser.listSelectors` and asks the planner to invoke it **in the checkout it is
+standing in**, before it writes a `suite` step. The two are different things and only one of them can go
+stale in a way that matters: a stored string resolves later against a listing nobody took, while a
+command run now, with run-time resolution untouched, is vocabulary — the pre-flight still has the last
+word, so nothing read here can produce a false pass. The note says so in as many words, because a
+planner that read the listing as authoritative would write the nearest name on it for an area this goal
+has only just added, which is the one thing the listing genuinely cannot know.
+
+**Every arm of it is advisory, and a listing that will not come degrades to prose.** No install, no
+credentials, a command that hangs, an environment that declares none: the note tells the planner to name
+the area anyway, and that none of those is a reason to leave a `suite` step out, defer a check or say
+anything about it in the set's note. Today's behaviour — free text, resolved at run time — is the floor
+this falls back to and not a failure, so a planner is never blocked on a command the harness never runs
+and never sees the output of.
 
 `stepArea` reads the first such step wherever an area is wanted, and nothing copies it: an author that
 moves the step, or drops it, moves the area with it rather than leaving a selector the runner no longer

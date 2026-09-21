@@ -56,7 +56,7 @@ const ValidationStepSchema = z
     if (step.area !== undefined && step.kind !== 'suite')
       add(`"area" belongs to a "suite" step — a ${step.kind} step runs no named area of the suite`, 'area');
     if (step.kind === 'suite' && step.area === undefined)
-      add('a "suite" step names the area it runs, as the suite names it in this repository', 'area');
+      add('a "suite" step names the area it runs, as the runner selects on it — not as a config file names it', 'area');
     // The same string the pre-flight compares character for character, one level down; and the same
     // rule about a second author, for the same reason.
     if (step.expects !== undefined && step.kind !== 'suite')
@@ -97,8 +97,10 @@ export const validationStepsSchema = z
       area: z
         .string()
         .describe(
-          'A "suite" step only, and required on one: the area to run, named exactly as the suite names ' +
-            'it in the repository you are standing in. It is resolved against the deployed commit’s own ' +
+          'A "suite" step only, and required on one: the area to run, named exactly as the **runner ' +
+            'selects on it** — the identifier its own listing prints, which is often not what a ' +
+            'test-framework config file calls the project or group, and never a spec file path. It is ' +
+            'resolved against the deployed commit’s own ' +
             'listing when the run happens, and a name that does not resolve blocks the row with both ' +
             'lists side by side. It is also what gives the check its area.',
         )
@@ -107,7 +109,7 @@ export const validationStepsSchema = z
         .array(z.string())
         .describe(
           'A "suite" step only, and optional on one: the **concrete spec names** you expect that area to ' +
-            'run, named as the suite names them in the repository you are standing in. Writing them down ' +
+            'run, named as the runner selects on them, exactly as the area is. Writing them down ' +
             'is the only thing that can catch a ' +
             'spec that has been **deleted or renamed** since — the area still runs whatever it now holds, ' +
             'and the count moves with it, so a name you did not write down goes missing in silence. They ' +
