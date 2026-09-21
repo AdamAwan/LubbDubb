@@ -2111,13 +2111,12 @@ kit](#the-control-kit) rather than as class strings.
 | --------------- | ------------------------------------------------------ |
 | Run state       | Working / Done / Abandon… — one segmented control      |
 | Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
-| Check the work  | Validate locally                                       |
 | Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
 
-_Check the work_ is one control and still its own group, because it is the only one here whose effect
-is on **the operator's own machine** rather than on the tracker or on the queue. The whole group is
-absent when there is nothing to press — a caption over nothing is furniture — and the card below says
-which of the three reasons it is. → [32](32-local-validation.md#the-cockpit)
+There was a fourth group, _Check the work_, holding the local run's press. It is now on the runner
+panel that draws what a press produced, a pane below ([The validate pane](#the-validate-pane)): the
+header is for what steers the goal, and an operator deciding whether to run reads the last run first —
+which was a page away from the button. → [32](32-local-validation.md#the-cockpit)
 
 The row was nine controls at one weight that **wrapped**, so no control had a stable position and no
 muscle memory could form. Grouping was the first fix; the captions are the second, and they are the
@@ -2382,9 +2381,14 @@ sheet. Two nouns carry the subsystem, and the other two things get their own wor
 | what a pull request's own pipeline says       | CI           |
 | what a windowed post-deploy watch saw         | a reading    |
 
-So the local run and the remote sheet stop being separate nouns and become check plans, told apart by
-where they run — `Check plan · local`, `Check plan · staging` — and a sheet's rows are checks, because
+So the local run and the remote sheet stop being separate nouns: they are **runners**, told apart by
+where they run — `Runs on your machine`, `Runs on staging` — and a sheet's rows are checks, because
 that is what they are. `Signals` counts readings, not checks.
+
+They were called `Check plan · local` and `Check plan · staging` until the pane was banded, and the
+name was the whole trouble: three cards headed as plans of checks read as three sets of tests, the
+first of which asked for answers by hand and the second of which answers none of them at all. What a
+runner panel holds is _runs_. → [The validate pane](#the-validate-pane)
 
 **Where the old words survive, they are the store's.** `GOAL_SECTIONS` still names its folds
 `validation`, `localValidation` and `remoteValidation`, and `goal_arrivals.sheeted_at` is still
@@ -2394,6 +2398,89 @@ reads is the table above. The pane ids are **not** in that group — they are `v
 `watch`, because a tab's id is the word on the control ([The panes](#the-panes)). All three of those
 folds sit behind **Validate**: a sheet row carries a check's `sourceId` and writes its outcome back
 onto that check, so the set, the local run and the sheet are one list seen at three distances.
+
+#### The validate pane
+
+**One list of checks, and a panel per runner.** The pane draws `Checks` first, full width, and below
+it one panel for each runner the deployment has — the machine in front of the operator, then each
+environment the goal has a sheet for. A check appears once, in `Checks`; a run appears once, in its
+runner's panel; each names the other. A runner panel never re-lists the checks, which is what three
+cards of the same shape were doing to a reader.
+
+**The list bands on where an answer is coming from**, and on nothing else: _a run is on them_, _no run
+yet_, _only you can answer_, and what is answered. `checkStandings` (`web/src/view/validatePane.ts`)
+is the one place that decides, and it reads the sheet's own folds — a row's `blockedReason` and
+`idleReason` — rather than working out for itself which rows a press would touch, the same refusal
+those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)). _Only you can answer_
+is therefore the **residue**: nobody offered a run. It is not the cockpit's reading of whether the
+fleet could carry the check's first step — that is `fleetCanStart`, three-valued and the server's
+([20](20-validation.md#who-carries-a-step)) — and a second opinion on it drawn beside the sheet's own
+is exactly what this pane had too much of.
+
+**A banded row says as little as the band leaves unsaid.** The runner rides the _heading_ — once,
+and only where every check under it names the same one — because five rows reading "staging can take
+it" is the same fact five times. The state is drawn only where it is **not** what the band implies:
+nothing on an `unrun` check under _no run yet_, nothing on a `passed` one under _answered_, and the
+odd ones — failed, later, dropped, needs a look — in the state's own hue. What is left is quiet text
+rather than a chip: a chip is a box, a border and a shout, and twelve rows carrying two each is the
+noise the banding was for. All of it is on the row at full weight the moment it is opened.
+
+**A run carries a set of checks, so a press is per runner and never per check.** The machine has one
+dev environment and a remote run holds the lock on `(environment, tenant)`
+([36](36-remote-validation.md#uniqueness-is-environment-tenant-enforced-in-sql)), so two runs cannot
+proceed at once: a press takes every check that runner can answer and a second press queues behind the
+first. A per-check run button would be offering a run that cannot be had.
+
+**Every press is on the run strip, above the list.** One line per runner — the machine, then each
+environment with a sheet — carrying that runner's press, or, where there is none, the reason in its
+place: no branch to run, nothing configured, a run already going. It is above the checks because that
+is the order the question arrives in — _is there a run that would answer some of this, before I start
+answering by hand_ — which is precisely the order the pane had backwards.
+
+The strip is **the only place a run starts**. The panels below read what a run did, so the local
+press left the goal header's `Check the work` group and the sheet's gate no longer draws its own
+start button (`press={false}`): a press offered in two places is two controls for one act. What stays
+on the panels is everything about a run rather than the starting of one — calling a live run off,
+reseeding the tenant, ruling on a row.
+
+#### Which checks a press will carry
+
+**The box on a check row is the sheet's own `selected`.** It is drawn where the environment the pane
+is showing holds a readable row for that check, and it writes back through `selectRemoteRow` — the
+sheet's own route. There is no cockpit-side selection anywhere: two surfaces that both decided what a
+press carries would be free to disagree, and the one an operator is reading would be the one that is
+not the store.
+
+A check with no row on the shown environment gets **no box at all**, not an unticked one — a box that
+wrote nothing is the second opinion this pane exists to remove — and the gutter it would sit in is
+held open so the titles stay a column. Where the pane is showing no environment the box is the row of
+the one sheet that holds it, and where two do there is none: a box would then mean an environment
+without saying which. Each panel's own rows still carry their selection, as they always did. A row a
+run is already carrying draws its box **disabled** — what that run carries is settled.
+
+**The strip counts rows, and says what the number is made of.** A press re-reads every selected row
+on the sheet — the `state` queries and `measure` rows beside the check rows, and the checks already
+answered — so the gate's number is always larger than the ticks below it, and calling it _checks_
+made the strip read as a miscount of the bands under it. The press carries `pressableRows`, the
+gate's own count ([36](36-remote-validation.md#a-row-no-press-can-read)), and the sentence beside it
+carries `pressBreakdown`: _3 checks ticked below · 2 queries and measures of its own_. The arithmetic
+is said because an operator who ticked three boxes and read _Run 5 rows_ would otherwise be reading a
+number nothing on the page explains.
+
+**Where a tenant is stale, the strip says what that costs.** A tenant accumulates the residue of
+every run that used it, so past the window the environment declares, a red row may be that residue
+rather than the code ([36](36-remote-validation.md#tenants)) — which is why the answer is reseed
+first, press after. The strip says exactly that, in the line where the press is; the reseed control
+itself stays on the panel, where the tenant's name and age are.
+
+The environment panel draws its **gate** — the tenant, the commit the last run pinned, the cancel and
+the reseed — and folds its rows behind one summary line. The rows keep every control they have: approving a query and
+leaving a row out are per-row decisions and are still taken there. What they stop doing is standing in
+for the check list above them.
+
+**The local run still answers no check**, and the panel says so beside its press rather than on any
+check ([32](32-local-validation.md)). It is an exploratory run against work in flight, and an operator
+who pressed it expecting the set above to be answered has to learn that where they pressed.
 
 `ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
 concluded from running each check. **The plan defines the checks; the goal manages them**, and those

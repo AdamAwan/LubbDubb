@@ -52,6 +52,8 @@ export function RemoteValidationSection({
   onShow,
   controls,
   switcher = true,
+  foldRows = false,
+  press = true,
 }: {
   sheets: RemoteSheetView[];
   showing: string | null;
@@ -59,6 +61,22 @@ export function RemoteValidationSection({
   controls: SheetControls;
   /** False where the surface embedding this already picks the environment. */
   switcher?: boolean;
+  /**
+   * Fold the rows behind a summary, leaving the gate — the run and the press — as what the panel
+   * draws. True on the goal page, where the checks these rows answer are the panel above and a
+   * second list of them beside it is what made the pane read as three sets of tests. The rows keep
+   * every control they have: approving a query and leaving a row out are per-row decisions, and
+   * they are still taken here. → docs/spec/17-cockpit.md#the-validate-pane
+   */
+  foldRows?: boolean;
+  /**
+   * Draw the gate's start button. False on the goal page, where the pane's run strip carries every
+   * runner's press on one line above the checks: a press offered here as well would be two controls
+   * for one act. Calling a live run off, reseeding the tenant and ruling on a row stay here — they
+   * are about the run and the sheet rather than about starting one.
+   * → docs/spec/17-cockpit.md#the-validate-pane
+   */
+  press?: boolean;
 }): JSX.Element {
   const open = sheets.find((s) => s.environment === showing) ?? sheets[0]!;
   return (
@@ -77,10 +95,21 @@ export function RemoteValidationSection({
           ))}
         </HeadRow>
       )}
-      <Gate sheet={open} controls={controls} />
-      {open.rows.map((row) => (
-        <SheetRow key={row.rowId} row={row} controls={controls} />
-      ))}
+      <Gate sheet={open} controls={controls} press={press} />
+      {foldRows ? (
+        <details className="cn-sheet-fold">
+          <summary>
+            {open.rows.length === 1
+              ? 'the 1 row this press carries'
+              : `the ${String(open.rows.length)} rows this press carries`}
+          </summary>
+          {open.rows.map((row) => (
+            <SheetRow key={row.rowId} row={row} controls={controls} />
+          ))}
+        </details>
+      ) : (
+        open.rows.map((row) => <SheetRow key={row.rowId} row={row} controls={controls} />)
+      )}
       <div className="cn-sig-add">
         <span className="cn-sub">
           Assembled when this goal&rsquo;s work arrived in {open.environment}. No row here deploys, promotes or writes:
@@ -98,7 +127,15 @@ export function RemoteValidationSection({
  * The gate: what an operator reads at the moment they decide to press. The tenant's age is drawn
  * here because this is where they can act on it — reseed first, then press.
  */
-function Gate({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetControls }): JSX.Element {
+function Gate({
+  sheet,
+  controls,
+  press,
+}: {
+  sheet: RemoteSheetView;
+  controls: SheetControls;
+  press: boolean;
+}): JSX.Element {
   const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
   // What a press will actually read or dispatch for, which is not the same as what is selected: a
   // blocked row is skipped, and a row the server folded an `idleReason` onto names no instrument to
@@ -116,12 +153,14 @@ function Gate({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetCont
         {live ? (
           <AsyncButton onClick={() => controls.onCancel(sheet.environment)}>Call this run off</AsyncButton>
         ) : (
-          <AsyncButton
-            onClick={() => controls.onPress(sheet.environment)}
-            title={`Re-read every selected row against the commit ${sheet.environment} stands at right now`}
-          >
-            {pressable === 1 ? 'Run 1 row' : `Run ${pressable} rows`}
-          </AsyncButton>
+          press && (
+            <AsyncButton
+              onClick={() => controls.onPress(sheet.environment)}
+              title={`Re-read every selected row against the commit ${sheet.environment} stands at right now`}
+            >
+              {pressable === 1 ? 'Run 1 row' : `Run ${pressable} rows`}
+            </AsyncButton>
+          )
         )}
         {sheet.tenant.reseedable &&
           preparing(sheet.tenant) === null &&

@@ -7094,3 +7094,71 @@ button.cn-grow {
     padding: 5px 3px;
   }
 }
+
+/* The press on a runner panel, with the sentence that says what the run is for.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-runpress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line-soft);
+  border-radius: 6px;
+}
+.cn-runpress .cn-sub {
+  flex-basis: 100%;
+  min-width: 0;
+}
+/* The sheet's rows, folded behind the run they belong to on the goal page: the checks they answer
+   are the panel above. → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-sheet-fold > summary {
+  padding: 7px 10px;
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+}
+.cn-sheet-fold[open] > summary {
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+
+/* The pane's run strip: one line per runner that could take a check, above the list they answer,
+   and the one place a run is started. → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-runstrip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--cn-line-soft);
+  border: 1px solid var(--cn-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cn-runstrip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 7px 10px;
+  background: var(--cn-panel);
+}
+.cn-runstrip-who {
+  min-width: 11ch;
+  font-weight: 600;
+  color: var(--cn-fg-dim);
+}
+.cn-runstrip .cn-sub {
+  min-width: 0;
+}
+.cn-runstrip .launch-error {
+  margin: 0;
+  padding: 7px 10px;
+  background: var(--cn-panel);
+}
+.cn-runstrip-stale {
+  flex-basis: 100%;
+  color: var(--cn-amber-ink);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}

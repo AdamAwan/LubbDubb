@@ -11898,6 +11898,47 @@ button.pk.pk {
   color: var(--muted);
   cursor: pointer;
 }
+/* The goal page's banded list: a label per band, then its checks as lines. No meter and nothing
+   open until a row is clicked — the card header already carries the count, and a check drawn open
+   is three hundred pixels of one answer above the list it belongs to.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.vq-band {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.vq-band > .lb {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+}
+.vq-band-n {
+  font-style: normal;
+  color: var(--muted);
+  opacity: 0.75;
+}
+/* What a banded line says beyond its title: quiet text, never a chip. A chip is a box, a border and
+   a shout, and a list of twelve rows carrying two each is what the pane was rebuilt to stop.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.vq-said {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.vq-said.failed {
+  color: var(--red);
+}
+.vq-said.captured {
+  color: var(--cn-captured);
+}
+.vq-said.deferred,
+.vq-said.declined {
+  color: var(--amber);
+}
+.vq-band-note {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--amber);
+}
 .vq-line {
   display: flex;
   align-items: center;
@@ -11914,6 +11955,38 @@ button.pk.pk {
 }
 .vq-line:hover {
   background: var(--panel-2);
+}
+/* Banded, the line is a row rather than one control: the box writes the sheet's selection and the
+   rest of the line opens the check, so the two cannot be one button.
+   → docs/spec/17-cockpit.md#which-checks-a-press-will-carry */
+.vq-line-open {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vq-box {
+  flex: none;
+  margin: 0;
+  cursor: pointer;
+}
+.vq-box:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+/* The gutter a box would sit in, held open on the rows that have none, so the titles line up and a
+   band of them reads as a column rather than as a ragged edge. */
+.vq-box-none {
+  flex: none;
+  width: 13px;
 }
 .vq-line.unrun {
   border-left-color: var(--amber);

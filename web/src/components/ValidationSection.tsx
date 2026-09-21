@@ -15,6 +15,7 @@ import { Button } from './button.js';
 import type { ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
+import { BAND_HEADING, type CheckBand, type CheckStanding } from '../view/validatePane.js';
 import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
@@ -85,6 +86,8 @@ export function ValidationSection({
   resources,
   refUrls,
   desktopFolder,
+  standings,
+  onSelect,
   look = { ghost: true, size: 'small' },
   onResult,
   onWaive,
@@ -97,6 +100,18 @@ export function ValidationSection({
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
   desktopFolder: string;
+  /**
+   * Where each check's answer is coming from, from the goal page. Absent on the surfaces that draw
+   * the set without the runners beside it — the needs band and the plan sheet — where a band saying
+   * *no run yet* would name runners those surfaces do not show.
+   * → docs/spec/17-cockpit.md#the-validate-pane
+   */
+  standings?: Map<string, CheckStanding>;
+  /**
+   * Put a check's sheet row into the next press, or take it out. The goal page hands the sheet's own
+   * route; the surfaces that draw the set without the runners hand nothing, and draw no boxes.
+   */
+  onSelect?: (environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown;
   look?: ButtonLook;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -131,6 +146,104 @@ export function ValidationSection({
   const release = (): void => setFocus(null);
 
   if (checks.length === 0) return <EmptySet plan={plan} />;
+
+  /* The goal page's presentation: one flat list, banded by where each check's answer is coming
+     from, nothing expanded until an operator opens a row. The queue below — a meter, one check
+     open, the rest as lines — is what the needs band and the plan sheet still draw, where the set
+     is read without the runners beside it. Two presentations of one set, because the two surfaces
+     are asked different questions. → docs/spec/17-cockpit.md#the-validate-pane */
+  if (standings !== undefined) {
+    const opened = live.find((c) => c.id === focus) ?? null;
+    return (
+      <>
+        {plan?.authoredAt == null && (
+          <p className="vq-band-note">
+            Written before the code existed, so no check carries a test plan and no runner can take one. A fresh set is
+            written against the delivered code.
+          </p>
+        )}
+        {plan?.authoredAt != null && plan.releasedAt == null && (
+          <p className="vq-band-note">
+            Nothing in the fleet reads this set as work until you accept it in “Needs you”.
+          </p>
+        )}
+        {ALL_BANDS.map((band) => {
+          const inBand = live.filter((check) => standings.get(check.id)?.band === band);
+          if (inBand.length === 0) return null;
+          return (
+            <div className="vq-band" key={band}>
+              <span className="lb lb-sm">
+                {BAND_HEADING[band]} <i className="vq-band-n">{inBand.length}</i>
+                {/* Which runner, once on the heading rather than on every row under it: in a band
+                    of five, five copies of “staging can take it” is the reading nobody needed
+                    five times. → docs/spec/17-cockpit.md#the-validate-pane */}
+                {band !== 'yours' && runners(inBand, standings) !== null && (
+                  <i className="vq-band-n"> · {runners(inBand, standings)}</i>
+                )}
+              </span>
+              {inBand.map((check) =>
+                opened?.id === check.id ? (
+                  <CheckBlock
+                    key={check.id}
+                    check={check}
+                    resources={check.uses.flatMap((name) => {
+                      const found = byName.get(name);
+                      return found ? [found] : [];
+                    })}
+                    refUrls={refUrls}
+                    look={look}
+                    issueNumber={issueNumber}
+                    desktopFolder={desktopFolder}
+                    onResult={async (result, note) => {
+                      await onResult(check.id, result, note);
+                      release();
+                    }}
+                    onWaive={(reason) => onWaive(check.id, reason)}
+                    onReset={() => onReset(check.id)}
+                    onHandover={(to) => onHandover(check.id, to)}
+                  />
+                ) : (
+                  <CheckLine
+                    key={check.id}
+                    check={check}
+                    standing={standings.get(check.id)}
+                    onOpen={() => setFocus(check.id)}
+                    onSelect={onSelect}
+                  />
+                ),
+              )}
+            </div>
+          );
+        })}
+        {(plan?.note != null || resources.length > 0 || withdrawn.length > 0) && (
+          <details className="vq-about">
+            <summary>About these checks</summary>
+            {plan?.note != null && <div className="pm-vnote">{plan.note}</div>}
+            {resources.length > 0 && (
+              <div className="pm-vres">
+                {resources.map((resource) => (
+                  <Tag key={resource.name} tone={isMissingFile(resource) ? 'amber' : undefined} title={resource.path}>
+                    {resource.name}
+                    {resource.kind !== null && <i className="k">{resource.kind}</i>}
+                    {isMissingFile(resource) && <i className="k">missing</i>}
+                  </Tag>
+                ))}
+              </div>
+            )}
+            {withdrawn.map((check) => (
+              <div key={check.id} className="pm-vrow gone">
+                <span className="pm-vletter">{check.letter}</span>
+                <div>
+                  <div className="pm-vtitle">{check.title}</div>
+                  <div className="muted small">{check.supersededReason}</div>
+                </div>
+              </div>
+            ))}
+          </details>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -235,11 +348,21 @@ ${resource.note}`
           onHandover={(to) => onHandover(check.id, to)}
         />
       ))}
+      {/* Still to run, in the bands the pane's runner panels answer from: a run is on them, a press
+          would take them, or nobody offered and they are a person's. One list of checks, banded by
+          where its answers come from — never a second list per runner.
+          → docs/spec/17-cockpit.md#the-validate-pane */}
       {!all && rest.owed.length > 0 && (
         <div className="vq-rest">
           <span className="lb lb-sm">Still to run</span>
           {rest.owed.map((check) => (
-            <CheckLine key={check.id} check={check} onOpen={() => setFocus(check.id)} />
+            <CheckLine
+              key={check.id}
+              check={check}
+              standing={undefined}
+              onOpen={() => setFocus(check.id)}
+              onSelect={undefined}
+            />
           ))}
         </div>
       )}
@@ -247,7 +370,13 @@ ${resource.note}`
         <details className="vq-rest vq-done">
           <summary>{rest.done.length} done</summary>
           {rest.done.map((check) => (
-            <CheckLine key={check.id} check={check} onOpen={() => setFocus(check.id)} />
+            <CheckLine
+              key={check.id}
+              check={check}
+              standing={undefined}
+              onOpen={() => setFocus(check.id)}
+              onSelect={undefined}
+            />
           ))}
         </details>
       )}
@@ -359,6 +488,22 @@ export function ValidationDigest({
 /** Work still owed. `passed` and `waived` are the two states that settle a check; everything else —
  *  unrun, captured, failed, deferred, declined — is something somebody still has to answer.
  *  → docs/spec/20-validation.md#states */
+/**
+ * The runners named by a band's checks, said once on its heading. Null where they do not agree —
+ * two environments across one band is a fact about the rows and belongs on them, not on a heading
+ * that would then be wrong for half of what is under it.
+ */
+function runners(checks: readonly ValidationCheckView[], standings: Map<string, CheckStanding>): string | null {
+  const said = new Set(checks.map((check) => standings.get(check.id)?.label ?? ''));
+  return said.size === 1 ? ([...said][0] ?? null) : null;
+}
+
+/** The order the owed bands are read in: what is moving, what could move, what is waiting on a person. */
+const BANDS: CheckBand[] = ['running', 'open', 'yours'];
+
+/** The same order with what is settled at the end, which is the whole list on the goal page. */
+const ALL_BANDS: CheckBand[] = [...BANDS, 'answered'];
+
 function isOwed(check: ValidationCheckView): boolean {
   return check.state !== 'passed' && check.state !== 'waived';
 }
@@ -370,14 +515,94 @@ function isOwed(check: ValidationCheckView): boolean {
  * an operator needs to see that there are four left and what they are about — and none of the rest
  * of a check helps with that. → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
  */
-function CheckLine({ check, onOpen }: { check: ValidationCheckView; onOpen: () => void }): JSX.Element {
+/**
+ * What a band already implies about the state of a check in it. A row that says it again is a chip
+ * carrying no news, and a list of twelve of them is twelve boxes of shouting between the reader and
+ * the two rows that are actually odd. → docs/spec/17-cockpit.md#the-validate-pane
+ */
+const BAND_IMPLIES: Record<CheckBand, ValidationCheckState | null> = {
+  running: null,
+  open: 'unrun',
+  yours: 'unrun',
+  answered: 'passed',
+};
+
+/**
+ * A check the sheet is not currently answering: one line, and a way to make it the one it is.
+ *
+ * It carries the letter, the title and the state and nothing else. The set has to stay countable —
+ * an operator needs to see that there are four left and what they are about — and none of the rest
+ * of a check helps with that. → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
+ *
+ * **Banded, it says less.** The queue draws chips because its lines sit under one heading and have
+ * to carry their own state; a banded line sits under a heading that already said where its answer is
+ * coming from, so the state is drawn only where it is *not* what the band implies, and everything it
+ * draws is quiet text rather than a bordered chip. All of it is on the row at full weight the moment
+ * it is opened.
+ */
+function CheckLine({
+  check,
+  standing,
+  onOpen,
+  onSelect,
+}: {
+  check: ValidationCheckView;
+  standing: CheckStanding | undefined;
+  onOpen: () => void;
+  onSelect: ((environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown) | undefined;
+}): JSX.Element {
+  const aside =
+    check.amendedAt !== null
+      ? 'changed'
+      : check.handbackNote !== null
+        ? 'back with you'
+        : check.actor === 'fleet'
+          ? 'with the fleet'
+          : null;
+  if (standing !== undefined) {
+    const odd = BAND_IMPLIES[standing.band] === check.state ? null : CHECK_STATE_WORDS[check.state];
+    const row = standing.row;
+    return (
+      <div className={`vq-line ${check.state}`}>
+        {/* The sheet's own `selected`, drawn where the checks are read and written back through the
+            sheet's own route: what a press will carry has one answer, not a cockpit's and a
+            store's. A row a run is already on is settled, so its box is not a question.
+            → docs/spec/17-cockpit.md#which-checks-a-press-will-carry */}
+        {row !== null && onSelect !== undefined ? (
+          <input
+            type="checkbox"
+            className="vq-box"
+            checked={row.selected}
+            disabled={row.live}
+            aria-label={`Carry “${check.title}” in ${row.environment}’s next run`}
+            title={
+              row.live
+                ? `A run on ${row.environment} is carrying it now`
+                : row.awaitingApproval
+                  ? `In ${row.environment}’s next run — but its query needs approving before a press can read it`
+                  : row.selected
+                    ? `In ${row.environment}’s next run. Untick to leave it out — you will answer it another way`
+                    : `Left out of ${row.environment}’s next run. Tick to put it back`
+            }
+            onChange={(e) => void onSelect(row.environment, row.rowId, e.target.checked)}
+          />
+        ) : (
+          <span className="vq-box-none" aria-hidden />
+        )}
+        <button className="vq-line-open" onClick={onOpen}>
+          <span className="pm-vletter">{check.letter}</span>
+          <span className="vq-line-title">{check.title}</span>
+          {aside !== null && <span className="vq-said">{aside}</span>}
+          {odd !== null && <span className={`vq-said ${check.state}`}>{odd}</span>}
+        </button>
+      </div>
+    );
+  }
   return (
     <button className={`vq-line ${check.state}`} onClick={onOpen}>
       <span className="pm-vletter">{check.letter}</span>
       <span className="vq-line-title">{check.title}</span>
-      {check.amendedAt !== null && <Tag tone="amber">changed</Tag>}
-      {check.handbackNote !== null && <Tag tone="amber">back with you</Tag>}
-      {check.actor === 'fleet' && <Tag tone="amber">with the fleet</Tag>}
+      {aside !== null && <Tag tone="amber">{aside}</Tag>}
       <Tag tone={stateTone(check.state)}>{CHECK_STATE_WORDS[check.state]}</Tag>
     </button>
   );

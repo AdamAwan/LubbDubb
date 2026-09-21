@@ -242,6 +242,7 @@ export type {
   ProposedCheck,
   ValidationCheck,
   ValidationCheckActor,
+  ValidationCheckResultBy,
   ValidationCheckState,
   ValidationCheckView,
   ValidationPlanRecord,
