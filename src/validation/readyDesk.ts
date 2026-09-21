@@ -57,6 +57,42 @@ export class ValidationReadyDesk {
     }
   }
 
+  /**
+   * Settle this goal's open `validate` row at the press that answered its last check, rather than at
+   * the next pulse.
+   *
+   * The pulse arm below already settles it — but between the reading and the tick the operator is
+   * looking straight at the ask they have just finished, which reads as a row that ignores its own
+   * answers. The rule is the pass's, not a second copy of it: the same
+   * {@link validationReadyPass} over this one goal, and only its `settle` arm is applied — filing
+   * and reopening stay with the pulse, which is the arm that has the world to word a row from.
+   *
+   * @public called by the validation routes on every recorded reading, and by nothing else
+   */
+  settleAnswered(originRef: string): boolean {
+    const open = this.store.humanTasks.listHumanTasksOfKind('validate').filter((task) => task.originRef === originRef);
+    if (!open.some((task) => task.status === 'open')) return false;
+    const delivery = this.store.verdicts.listDeliveries().find((d) => d.originRef === originRef);
+    if (delivery === undefined) return false;
+    const steps = validationReadyPass({
+      issues: [],
+      deliveries: [delivery],
+      shortfalls: this.store.verdicts.listShortfalls(),
+      existing: open,
+      checks: this.checksByOrigin([originRef]),
+      sheetRows: this.sheetRowsByOrigin(),
+      opened: null,
+      watchCleared: null,
+    });
+    let settled = false;
+    for (const step of steps) {
+      if (step.kind !== 'settle') continue;
+      this.store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
+      settled = true;
+    }
+    return settled;
+  }
+
   private sheetRowsByOrigin(): Map<string, RemoteSheetRow[]> {
     const out = new Map<string, RemoteSheetRow[]>();
     if (!this.environments.some((e) => e.validate !== undefined)) return out;

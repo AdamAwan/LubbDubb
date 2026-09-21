@@ -8,7 +8,18 @@ import { issueOrigin } from '../../plans/planning.js';
 // → docs/spec/16-http-api.md
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store } = system;
+  const { store, validationReady } = system;
+
+  /*
+     The reading that answers a goal's last check settles its `validate` bench row here, rather than
+     leaving it to the pulse that would have settled it a tick later: the operator recording that
+     reading is looking straight at the ask, and a row that outlives its own answers reads as one
+     nothing is watching. Same rule, same pass — `settleAnswered` applies the desk's `settle` arm over
+     this one goal. → docs/spec/20-validation.md#saying-so-on-the-bench
+  */
+  const settled = (originRef: string): void => {
+    validationReady.settleAnswered(originRef);
+  };
 
   const requiredNote = (field: string, what: string): z.ZodType<string, z.ZodTypeDef, unknown> => {
     const message = `${field} is required — ${what}`;
@@ -28,7 +39,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     },
   ): ReturnType<typeof store.validation.recordValidationResult> => {
     const next = store.validation.recordValidationResult(originRef, checkId, input);
-    if (next) hub.broadcast({ type: 'world:changed' });
+    if (next) {
+      settled(originRef);
+      hub.broadcast({ type: 'world:changed' });
+    }
     return next;
   };
 
@@ -103,6 +117,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }
       const next = store.validation.setValidationActor(issueOrigin(params.number), params.checkId, body.to);
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
+      settled(issueOrigin(params.number));
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, check: next };
     }),
