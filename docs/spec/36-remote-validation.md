@@ -1094,6 +1094,74 @@ The two operator acts on a tenant are one route,
 demand it runs `ensureTenant` first, and where it declares a `reseed` it runs that, stamping
 `remote_tenants` with whatever the project's own command named. Neither ever runs per arrival.
 
+### Reseeding is destructive, and the gate says so
+
+A `reseed` is the one control on this card that **changes a live deployment**, and what it changes it
+does not change back: the project's own command wipes the tenant to seeded fixture data, taking the
+uploads, records and arranged situations a person may have spent a morning on. Nothing in the harness
+undoes it, and nothing outside the project's command knows what it took.
+
+So the control is **not a one-click action**. Three things carry the warning, and each of them is load
+bearing:
+
+- It is a `ConfirmButton` — armed by the first click, fired by the second — never an `AsyncButton`. A
+  press control and a wipe control sitting side by side as the same shape is the whole failure: an
+  operator reaching for _run the rows_ and landing one button over has destroyed their test site by
+  the time they read the label.
+- **The confirm names the tenant**, because the tenant is what is destroyed and an environment has
+  several names ([One environment has several names](#one-environment-has-several-names)). "Confirm"
+  alone asks an operator to confirm a sentence they have not been shown.
+- **The sentence is drawn in words at the gate**, not only in a tooltip. A tooltip is not read by
+  somebody who already knows what the button does — which describes exactly the operator who is about
+  to find out they did not.
+
+### What the gate shows while it runs
+
+The tenant commands run for **tens of minutes** — that is the whole reason `tenantTimeoutMs` is an
+hour. So the press cannot be a request that waits on them: no proxy holds a connection open that long,
+a reload loses it, and an operator who pressed reseed and then refreshed has destroyed their tenant
+with nothing on screen to say so. A spinner on a button is the same failure one layer up — it lives in
+one tab and dies with it.
+
+So the press **opens a record and returns**, and the record is what the gate draws. `beginPrepareTenant`
+(`src/remoteValidation/run.ts`) writes a row to `remote_tenant_prepares`, starts the commands, and
+settles the row when they answer; the route returns immediately and broadcasts again on settle. The
+gate reads the row, so the state survives a reload, shows in a second browser, and is the same thing
+every operator sees.
+
+**One row per environment, keyed on the environment alone.** Not on the tenant: an `ensureTenant`
+environment has no tenant name until its own command answers, and the harness invents none while it
+waits ([Tenants](#tenants)).
+
+**`finishedAt` null is _still running_**, and that is the only test anything makes. While it is null
+the gate draws how long it has been going and says the command keeps running if the page is closed,
+and **the reseed control is not drawn at all** — a second press over one tenant is the clash the
+record exists to refuse, and a `beginTenantPrepare` that finds an open row returns null so the route
+answers 409 rather than queueing behind a command it cannot see.
+
+**`ok` is three-valued on a finished row, and the third value is load bearing.** True is done, false is
+the failure in the words the operator is told, and **null is _the harness restarted while this was
+running_** — which is neither. The command ran on somebody else's machine and outlived this process,
+so what it did is not knowable from here, and the row says exactly that. `closeOrphanedTenantPrepares`
+runs at boot in `src/system.ts`: a preparation left open is a reseed the gate draws as running since
+last week, refusing every later press for ever, with nothing red.
+
+**The outcome's detail is shown, never discarded.** On an `ensureTenant` environment it carries the
+name the project's own command provisioned, which is the one place that name is ever learned.
+
+**An environment that declares only `ensureTenant` gets none of it**, and the control is labelled
+_Provision the tenant_ rather than _Reseed_. Provisioning is idempotent and destroys nothing; warning
+about a wipe that will not happen teaches an operator that this card's warnings are noise, which is
+how the one that matters stops being read. That distinction is `RemoteTenantView.destructive`
+(`validate.reseed !== undefined`), folded on the **server** beside `reseedable` — a cockpit that
+worked out for itself whether a command destroys anything would be a second opinion about the blast
+radius of somebody else's script.
+
+The card's own footer is held to the same line. It reads _no **row** here deploys, promotes or
+writes_ — every query is read-only — and where a destructive reseed is available it says so in the
+same breath. An unqualified "nothing here writes" beside a button that wipes a tenant is worse than no
+reassurance at all.
+
 ### Persistent tenants drift, and drift looks exactly like a real failure
 
 That is the cost of the literal-name model this document prefers. A standing validation customer
@@ -2319,7 +2387,10 @@ a domain type from `src/types.ts` or `extends` it — never a re-declaration and
 **gate**: the tenant and its age against the declared freshness window, the commit the last run
 pinned, a live run or an abandoned one's reason in words, and the four controls — accept a query
 against this environment on the evidence of what it returned, deselect a row or take it back, reseed
-the tenant, and press go. Below it, every row with its kind, its outcome and, where nothing was
+the tenant, and press go. The reseed control is a **two-click confirm naming the tenant it destroys**,
+with the sentence drawn in words beside it, and is labelled _Provision the tenant_ with no warning at
+all where the environment declares only an `ensureTenant`
+([Reseeding is destructive](#reseeding-is-destructive-and-the-gate-says-so)). Below it, every row with its kind, its outcome and, where nothing was
 learned, **why in words** — including whose reading a run's own did **not** replace, which is where
 an operator finds out the sheet holds a finding the goal's check does not, and including the row's
 `idleReason` where a press will read nothing on it at all

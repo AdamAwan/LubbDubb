@@ -203,6 +203,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
+  // A tenant preparation the last process died inside of. The command ran somewhere else and outlived
+  // this one, so it is closed saying what is true — that what it did is not knowable from here — never
+  // left in flight, which would draw a reseed running since last week and refuse every later press.
+  // → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+  store.remoteValidation.closeOrphanedTenantPrepares();
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
   const ingressInbox = new IngressInbox();

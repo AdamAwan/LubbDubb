@@ -170,6 +170,68 @@ export class RemoteRunDesk {
    *
    * @public the seam the reseed route runs the environment's own commands through
    */
+  /**
+   * The gate's own entry point. `prepareTenant` awaits commands that run for **tens of minutes**, so
+   * an HTTP request that waited on it would be a request no proxy keeps open and no reload survives —
+   * an operator who pressed reseed and then refreshed would have destroyed their tenant with nothing
+   * on screen to say so. This opens the record first, returns, and settles it when the commands
+   * answer; the gate reads the record, so the press survives a reload and a second browser.
+   *
+   * @public the seam the reseed route starts a preparation through
+   */
+  beginPrepareTenant(
+    environmentName: string,
+    onSettled: () => void = () => {},
+  ): { started: boolean; detail: string; standing: TenantStanding } {
+    const environment = this.deps.environments.find((e) => e.name === environmentName);
+    const standing = (): TenantStanding =>
+      environment === undefined
+        ? absent()
+        : resolveTenant({
+            environment,
+            stamped: this.deps.store.remoteValidation.listRemoteTenants(),
+            now: this.now(),
+            env: this.deps.env,
+          }).standing;
+
+    const opened = this.deps.store.remoteValidation.beginTenantPrepare(environmentName);
+    if (opened === null)
+      return {
+        started: false,
+        detail: `a tenant preparation is already running against "${environmentName}". Wait for it rather than starting a second one over the same tenant.`,
+        standing: standing(),
+      };
+
+    void this.prepareTenant(environmentName)
+      .then((outcome) => {
+        this.deps.store.remoteValidation.finishTenantPrepare({
+          environment: environmentName,
+          tenant: outcome.standing.tenant,
+          ok: outcome.ok,
+          detail: outcome.detail,
+        });
+      })
+      .catch((err: unknown) => {
+        // Never a swallowed catch: the operator is told, and the harness records it.
+        // → docs/spec/18-observability.md
+        this.deps.errors?.record({
+          source: 'cycle',
+          message: `the tenant commands for ${environmentName} threw: ${(err as Error).message}`,
+        });
+        this.deps.store.remoteValidation.finishTenantPrepare({
+          environment: environmentName,
+          tenant: standing().tenant,
+          ok: false,
+          detail: `the tenant commands threw — ${err instanceof Error ? err.message : String(err)}`,
+        });
+      })
+      .finally(() => {
+        onSettled();
+      });
+
+    return { started: true, detail: 'the environment’s own tenant commands are running.', standing: standing() };
+  }
+
   async prepareTenant(environmentName: string): Promise<{ ok: boolean; detail: string; standing: TenantStanding }> {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     const validate = environment?.validate;

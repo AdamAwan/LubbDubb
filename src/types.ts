@@ -1838,6 +1838,26 @@ export interface RemoteRunBrief {
 }
 
 /** When an environment's tenant was last provisioned and last reseeded. */
+/**
+ * The tenant preparation running right now against an environment, or the last one that ran. One row
+ * per environment, because the commands are slow enough — tens of minutes — that an operator who
+ * pressed and saw nothing cannot tell a job still running from one that died.
+ *
+ * `finishedAt` null is **still running**. `ok` is three-valued and the third value is load bearing:
+ * null on a finished row is *the harness restarted while this was going*, which is not a failure and
+ * not a success — the command outlived this process and what it did is not knowable from here.
+ * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+ */
+export interface TenantPreparation {
+  environment: string;
+  /** The name the commands settled on. Null while it runs, and on an `ensureTenant` that named none. */
+  tenant: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  ok: boolean | null;
+  detail: string | null;
+}
+
 export interface RemoteTenant {
   environment: string;
   tenant: string;

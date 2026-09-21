@@ -2928,6 +2928,13 @@ a.cn-qbody {
   background: var(--cn-panel-2);
   border-bottom: 1px solid var(--cn-line-soft);
 }
+/* Full-width beneath the gate's controls: the sentence belongs to the reseed
+   button, and a warning wrapped into a column beside it is a warning read after
+   the press. → docs/spec/36-remote-validation.md#reseeding-is-destructive-and-the-gate-says-so */
+.cn-sheet-warn {
+  flex-basis: 100%;
+  color: var(--cn-amber-ink);
+}
 .cn-sig-body,
 .cn-sig-form {
   min-width: 0;

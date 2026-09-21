@@ -209,6 +209,7 @@ export type {
   StateSection,
   StateQuery,
   TaskSummary,
+  TenantPreparation,
   FeatureBlockRow,
   FeatureBoardPayload,
   FeatureBriefing,

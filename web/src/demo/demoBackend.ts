@@ -1236,11 +1236,39 @@ class DemoServer {
     return Promise.resolve({ ok: true });
   }
 
+  /**
+   * The demo runs the real shape: the press opens the record and returns, and the commands settle it
+   * later. A demo that reseeded instantly would be the one surface where this control looks like a
+   * thing that finishes while you watch, which is the belief the record exists to correct.
+   */
   reseedRemoteTenant(issueNumber: number, environment: string): Promise<{ ok: true }> {
     const sheet = this.remoteSheet(issueNumber, environment);
-    if (sheet !== undefined && sheet.tenant.tenant !== null) {
-      sheet.tenant = { ...sheet.tenant, reseededAt: new Date().toISOString(), ageMs: 0, stale: false };
+    if (sheet !== undefined && sheet.tenant.preparation?.finishedAt === undefined) return Promise.resolve({ ok: true });
+    if (sheet !== undefined) {
+      const startedAt = new Date().toISOString();
+      sheet.tenant = {
+        ...sheet.tenant,
+        preparation: { environment, tenant: null, startedAt, finishedAt: null, ok: null, detail: null },
+      };
       this.dirty();
+      setTimeout(() => {
+        const name = sheet.tenant.tenant;
+        sheet.tenant = {
+          ...sheet.tenant,
+          reseededAt: new Date().toISOString(),
+          ageMs: 0,
+          stale: false,
+          preparation: {
+            environment,
+            tenant: name,
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            ok: true,
+            detail: `\`${name ?? 'the tenant'}\` is reseeded.`,
+          },
+        };
+        this.dirty();
+      }, 6000);
     }
     return Promise.resolve({ ok: true });
   }

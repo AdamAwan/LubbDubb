@@ -1402,6 +1402,8 @@ export function buildDemoState(): DemoSeed {
           stale: true,
           blockedReason: null,
           reseedable: true,
+          destructive: true,
+          preparation: null,
         },
         rows: [
           {
@@ -1663,6 +1665,8 @@ export function buildDemoState(): DemoSeed {
           stale: false,
           blockedReason: 'prod’s tenant is never reseeded from here — the read-only account is all a run gets.',
           reseedable: false,
+          destructive: false,
+          preparation: null,
         },
         rows: [
           {
@@ -1761,6 +1765,8 @@ export function buildDemoState(): DemoSeed {
           stale: false,
           blockedReason: null,
           reseedable: true,
+          destructive: true,
+          preparation: null,
         },
         rows: [
           {
