@@ -139,6 +139,7 @@ export interface System {
   watch: WatchDryRunner;
   stateQueries: StateQueryDesk;
   remoteValidation: RemoteValidationDesk;
+  validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
@@ -996,6 +997,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watch: watchDryRun,
     stateQueries,
     remoteValidation,
+    validationReady,
     remoteRuns,
     remoteReadings,
     remoteListings,

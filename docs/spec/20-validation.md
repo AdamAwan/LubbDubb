@@ -951,6 +951,17 @@ nothing is left for a person, on the close-out's asymmetry: these are rows the h
 pulse, so asking the operator to tick off a second copy of what they have just recorded is asking
 them to tell it something it can see.
 
+**It settles at the press, not at the next pulse.** The reading that answers the last check owed to a
+person is recorded by an operator looking straight at this row — on the ask panel the checks are
+drawn inside — so a row that outlives its own answers by a tick reads as an alert nothing is
+watching, and at a long pulse interval reads as one that is simply stuck. The write routes therefore
+call `ValidationReadyDesk.settleAnswered(originRef)` before they broadcast, and it runs the same
+`validationReadyPass` over that one goal and applies **only its `settle` arm**: filing and reopening
+stay with the pulse, which is the arm that has the world to word a row from. It is the pulse's rule
+read a moment earlier, never a second copy of it — a settlement written out by hand here would be
+free to disagree with the one the next pulse computes, which is the bench row and the obligation
+beneath it contradicting each other, with nothing red.
+
 **Clearing the delivery retracts the row, and re-delivering brings it back.** The second half is what
 makes the first honest, and it does not happen by itself: `recordHumanTask` dedups on the title
 regardless of status and `validateTitle` is stable, so a re-file would fold onto the declined row and
