@@ -1044,6 +1044,7 @@ export type {
   ProposedCheck,
   ValidationCheck,
   ValidationCheckActor,
+  ValidationCheckResultBy,
   ValidationCheckState,
   ValidationPlanRecord,
   ValidationResource,

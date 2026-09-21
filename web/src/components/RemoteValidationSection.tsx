@@ -52,6 +52,7 @@ export function RemoteValidationSection({
   onShow,
   controls,
   switcher = true,
+  foldRows = false,
 }: {
   sheets: RemoteSheetView[];
   showing: string | null;
@@ -59,6 +60,14 @@ export function RemoteValidationSection({
   controls: SheetControls;
   /** False where the surface embedding this already picks the environment. */
   switcher?: boolean;
+  /**
+   * Fold the rows behind a summary, leaving the gate — the run and the press — as what the panel
+   * draws. True on the goal page, where the checks these rows answer are the panel above and a
+   * second list of them beside it is what made the pane read as three sets of tests. The rows keep
+   * every control they have: approving a query and leaving a row out are per-row decisions, and
+   * they are still taken here. → docs/spec/17-cockpit.md#the-validate-pane
+   */
+  foldRows?: boolean;
 }): JSX.Element {
   const open = sheets.find((s) => s.environment === showing) ?? sheets[0]!;
   return (
@@ -78,9 +87,20 @@ export function RemoteValidationSection({
         </HeadRow>
       )}
       <Gate sheet={open} controls={controls} />
-      {open.rows.map((row) => (
-        <SheetRow key={row.rowId} row={row} controls={controls} />
-      ))}
+      {foldRows ? (
+        <details className="cn-sheet-fold">
+          <summary>
+            {open.rows.length === 1
+              ? 'the 1 row this press carries'
+              : `the ${String(open.rows.length)} rows this press carries`}
+          </summary>
+          {open.rows.map((row) => (
+            <SheetRow key={row.rowId} row={row} controls={controls} />
+          ))}
+        </details>
+      ) : (
+        open.rows.map((row) => <SheetRow key={row.rowId} row={row} controls={controls} />)
+      )}
       <div className="cn-sig-add">
         <span className="cn-sub">
           Assembled when this goal&rsquo;s work arrived in {open.environment}. No row here deploys, promotes or writes:

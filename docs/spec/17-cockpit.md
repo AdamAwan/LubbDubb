@@ -2111,13 +2111,12 @@ kit](#the-control-kit) rather than as class strings.
 | --------------- | ------------------------------------------------------ |
 | Run state       | Working / Done / Abandon… — one segmented control      |
 | Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
-| Check the work  | Validate locally                                       |
 | Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
 
-_Check the work_ is one control and still its own group, because it is the only one here whose effect
-is on **the operator's own machine** rather than on the tracker or on the queue. The whole group is
-absent when there is nothing to press — a caption over nothing is furniture — and the card below says
-which of the three reasons it is. → [32](32-local-validation.md#the-cockpit)
+There was a fourth group, _Check the work_, holding the local run's press. It is now on the runner
+panel that draws what a press produced, a pane below ([The validate pane](#the-validate-pane)): the
+header is for what steers the goal, and an operator deciding whether to run reads the last run first —
+which was a page away from the button. → [32](32-local-validation.md#the-cockpit)
 
 The row was nine controls at one weight that **wrapped**, so no control had a stable position and no
 muscle memory could form. Grouping was the first fix; the captions are the second, and they are the
@@ -2382,9 +2381,14 @@ sheet. Two nouns carry the subsystem, and the other two things get their own wor
 | what a pull request's own pipeline says       | CI           |
 | what a windowed post-deploy watch saw         | a reading    |
 
-So the local run and the remote sheet stop being separate nouns and become check plans, told apart by
-where they run — `Check plan · local`, `Check plan · staging` — and a sheet's rows are checks, because
+So the local run and the remote sheet stop being separate nouns: they are **runners**, told apart by
+where they run — `Runs on your machine`, `Runs on staging` — and a sheet's rows are checks, because
 that is what they are. `Signals` counts readings, not checks.
+
+They were called `Check plan · local` and `Check plan · staging` until the pane was banded, and the
+name was the whole trouble: three cards headed as plans of checks read as three sets of tests, the
+first of which asked for answers by hand and the second of which answers none of them at all. What a
+runner panel holds is _runs_. → [The validate pane](#the-validate-pane)
 
 **Where the old words survive, they are the store's.** `GOAL_SECTIONS` still names its folds
 `validation`, `localValidation` and `remoteValidation`, and `goal_arrivals.sheeted_at` is still
@@ -2394,6 +2398,45 @@ reads is the table above. The pane ids are **not** in that group — they are `v
 `watch`, because a tab's id is the word on the control ([The panes](#the-panes)). All three of those
 folds sit behind **Validate**: a sheet row carries a check's `sourceId` and writes its outcome back
 onto that check, so the set, the local run and the sheet are one list seen at three distances.
+
+#### The validate pane
+
+**One list of checks, and a panel per runner.** The pane draws `Checks` first, full width, and below
+it one panel for each runner the deployment has — the machine in front of the operator, then each
+environment the goal has a sheet for. A check appears once, in `Checks`; a run appears once, in its
+runner's panel; each names the other. A runner panel never re-lists the checks, which is what three
+cards of the same shape were doing to a reader.
+
+**The list bands on where an answer is coming from**, and on nothing else: _a run is on them_, _no run
+yet_, _only you can answer_, and what is answered. `checkStandings` (`web/src/view/validatePane.ts`)
+is the one place that decides, and it reads the sheet's own folds — a row's `blockedReason` and
+`idleReason` — rather than working out for itself which rows a press would touch, the same refusal
+those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)). _Only you can answer_
+is therefore the **residue**: nobody offered a run. It is not the cockpit's reading of whether the
+fleet could carry the check's first step — that is `fleetCanStart`, three-valued and the server's
+([20](20-validation.md#who-carries-a-step)) — and a second opinion on it drawn beside the sheet's own
+is exactly what this pane had too much of. The band label carries the runner's name only where it
+names one; in the last two bands the heading and the state chip already say it.
+
+**A run carries a set of checks, so the press lives on the runner's panel.** The machine has one dev
+environment and a remote run holds the lock on `(environment, tenant)`
+([36](36-remote-validation.md#uniqueness-is-environment-tenant-enforced-in-sql)), so two runs cannot
+proceed at once: a press takes every check that runner can answer and a second press queues behind the
+first. That is why there is no per-check run button anywhere on the pane — a control that offered one
+would be offering a run that cannot be had.
+
+The local press moved here from the goal header's `Check the work` group. An operator deciding whether
+to run reads the last run first, and the two were a page apart; the refusal — no branch to run, a run
+already in flight — is drawn once, on the press bar, and the report below it is handed none.
+
+The environment panel draws its **gate** — the tenant, the commit the last run pinned, the press — and
+folds its rows behind one summary line. The rows keep every control they have: approving a query and
+leaving a row out are per-row decisions and are still taken there. What they stop doing is standing in
+for the check list above them.
+
+**The local run still answers no check**, and the panel says so beside its press rather than on any
+check ([32](32-local-validation.md)). It is an exploratory run against work in flight, and an operator
+who pressed it expecting the set above to be answered has to learn that where they pressed.
 
 `ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
 concluded from running each check. **The plan defines the checks; the goal manages them**, and those

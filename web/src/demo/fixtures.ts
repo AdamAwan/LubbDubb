@@ -997,6 +997,42 @@ export function buildDemoState(): DemoSeed {
             captured: 1,
             declined: 1,
           },
+          /* This goal carries all three of the Validate pane's panels at once: the check set, a run
+             on the machine in front of the operator, and the sheet its arrival in staging
+             assembled. The pane's whole shape is only readable where all three are on one goal. */
+          localValidation: {
+            id: 'lv-395-1',
+            originRef: 'issue:395',
+            runId: 'run-1',
+            ref: 'issue/395/ledger',
+            commit: '5n4p0049c1e4f0a2d6b3c5e8f1a4d7b0c3e6f912',
+            status: 'passed',
+            requestedAt: ago(95),
+            dispatchedAt: ago(94),
+            endedAt: ago(82),
+            taskId: 'task-395-lv',
+            fixTaskId: null,
+            phase: null,
+            plan: [
+              '## What changed',
+              '',
+              'A refund writes its ledger entry in the same transaction as the refund itself.',
+              '',
+              '1. **A full refund writes one entry.** Refund an order from the admin console.',
+              '2. **The entry survives a restart.** Restart the app and reopen the ledger.',
+            ].join('\n'),
+            summary:
+              'Both steps pass against the dev environment: refunding order 48213 wrote one entry for £24.99, ' +
+              'and it is still there after a restart. This run answers no check on the sheet — it drove work ' +
+              'in flight on this machine.',
+            note: null,
+            findings: [],
+            files: [],
+            visited: [],
+            screenshots: [],
+            agent: { id: 'agent-395-lv', status: 'done' },
+            fixAgent: null,
+          },
         }),
         demoIssue({
           id: 'iss-398',

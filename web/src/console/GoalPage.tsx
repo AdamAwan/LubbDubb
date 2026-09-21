@@ -67,6 +67,7 @@ import {
   ControlSegments,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
+import { checkStandings, pressableChecks } from '../view/validatePane.js';
 import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
 import { HeadRow } from '../components/panel.js';
 import { SignalsSection } from '../components/SignalsSection.js';
@@ -361,11 +362,12 @@ function WorkPaneBody({
 }
 
 /**
- * What this goal owes in the way of checks: the set, the local run that answers some of them
- * by hand, and the sheet the environment's own run answers the rest from. One list seen at
- * three distances rather than three sets of tests — a sheet row carries a check's `sourceId`
- * and writes its outcome back onto that check.
- * → docs/spec/17-cockpit.md#the-panes, docs/spec/36-remote-validation.md
+ * What this goal owes in the way of checks, in two kinds of panel. **Checks** is the only list of
+ * checks there is, banded by where each one's answer is coming from. Below it, one panel per
+ * runner — the machine in front of the operator, then each environment the goal has a sheet for —
+ * and each of those draws *runs*: a press, and what the last few carried. A runner panel never
+ * re-lists the checks, which is what made three cards read as three sets of tests.
+ * → docs/spec/17-cockpit.md#the-validate-pane, docs/spec/36-remote-validation.md
  */
 function ValidatePane({
   page,
@@ -389,6 +391,10 @@ function ValidatePane({
         desktopFolder={view.state.config.desktopFolder}
         fold={folds.validation}
       />
+      {/* The runners, below the list they answer. Each one is a panel of its own runs — the press
+          and what the last few carried — because a run is the unit of work here: one environment,
+          one tenant, one dev environment, so a press takes a set of checks and a second press
+          queues behind it. → docs/spec/17-cockpit.md#the-validate-pane */}
       <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
       {/* A sheet is assembled for an arrival and answers rows of the set above it, so it is
           drawn with the set rather than with the arrival. → docs/spec/36-remote-validation.md */}
@@ -603,24 +609,6 @@ function Header({
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
   const [endingRun, setEndingRun] = useState(false);
-  const [validating, setValidating] = useState<'swap' | 'refresh' | null>(null);
-  const [validateRefusal, setValidateRefusal] = useState<string | null>(null);
-  const run = view.state.localRun;
-  const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
-  const offer = localValidationOffer(issue, target, config.localRunConfigured);
-  const runTitle =
-    run === null
-      ? null
-      : (view.state.world.issues.find((i) => `issue:${String(i.number)}` === run.originRef)?.title ?? null);
-  const onValidate = async (): Promise<void> => {
-    const question = validateLocallyQuestion(issue.number, run);
-    if (question !== null) {
-      setValidating(question);
-      return;
-    }
-    setValidateRefusal(null);
-    await actions.validateLocally(issue.number);
-  };
   const owed = issue.validation !== null && issue.validation.state === 'flagged' ? issue.validation : null;
   const standing = issue.instructions.length;
   const live = page.agents.filter((a) => a.onPr === null && LIVE_AGENT.has(a.agent.status)).length;
@@ -826,42 +814,6 @@ function Header({
             onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
           />
         </ControlGroup>
-        {/* Checking the work, which is neither steering it nor leaving the page:
-            it asks the fleet to bring this goal up on the operator's own machine
-            and drive it. Its own group because it is the only control here whose
-            effect is on *this machine* rather than on the tracker or the queue —
-            and the whole group is absent when there is nothing to press, since a
-            caption over nothing is furniture. */}
-        {offer.offered && (
-          <ControlGroup caption="Check the work" icon="flask" divider>
-            {/* An `AsyncButton` rather than a `ControlButton`, and that is not a
-                styling choice: the post behind it starts a dev environment and runs
-                a cycle, so it is seconds of work, and a control that looked
-                unpressed for those seconds got pressed again. This one disables
-                itself while the request is in flight, says so, and lands the
-                route's own refusal in its title — which is also what retires the
-                separate refusal line this header used to draw. */}
-            <AsyncButton
-              className={`${CONTROL_CLASS} primary`}
-              onClick={onValidate}
-              onRefused={setValidateRefusal}
-              pendingLabel={
-                <>
-                  <Icon name="flask" />
-                  Starting…
-                </>
-              }
-              title="Bring this goal's code up in your dev environment and send one agent to write a test plan, drive the running application through it, and report here. Asks first if something else is running."
-            >
-              <Icon name="flask" />
-              {/* The label carries whether this has been done before. A goal that
-                  has been validated and one that never has are different states,
-                  and the chip beside it says the verdict but not that the button is
-                  the thing that produced it. */}
-              {issue.localValidation === null ? 'Validate locally' : 'Validate locally again'}
-            </AsyncButton>
-          </ControlGroup>
-        )}
         {/* The three controls whose effect is not on this goal: two destinations,
             and the one that starts a second ticket about it. Grouping them is what
             answers "how is filing a bug different from giving instructions" —
@@ -900,11 +852,6 @@ function Header({
           )}
         </ControlGroup>
       </ControlBar>
-      {validateRefusal !== null && (
-        <p className="launch-error" role="alert">
-          {validateRefusal}
-        </p>
-      )}
       {instructing && (
         <InstructionModal
           issueNumber={issue.number}
@@ -923,18 +870,6 @@ function Header({
           instructions={standing}
           onSubmit={(note) => actions.dismissRun(issue.number, note)}
           onClose={() => setEndingRun(false)}
-        />
-      )}
-      {validating !== null && run !== null && (
-        <ValidateLocallyModal
-          mode={validating}
-          issueNumber={issue.number}
-          issueTitle={issue.title}
-          targetRef={target?.target.ref ?? null}
-          run={run}
-          runTitle={runTitle}
-          onSubmit={(opts) => actions.validateLocally(issue.number, opts)}
-          onClose={() => setValidating(null)}
         />
       )}
       {raisingBug && (
@@ -975,14 +910,33 @@ function LocalValidation({
 }): JSX.Element {
   const { issue } = page;
   const validation = issue.localValidation;
+  const run = view.state.localRun;
   const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
   const offer = localValidationOffer(issue, target, view.state.config.localRunConfigured);
   const liveAgents = new Set(page.agents.filter((a) => LIVE_AGENT.has(a.agent.status)).map((a) => a.agent.id));
+  const [validating, setValidating] = useState<'swap' | 'refresh' | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const runTitle =
+    run === null
+      ? null
+      : (view.state.world.issues.find((i) => `issue:${String(i.number)}` === run.originRef)?.title ?? null);
+  /* The press asks first where a live run is on another goal or has fallen behind the branch:
+     what it starts is the machine's *one* dev environment, so the question is which goal gets it.
+     → docs/spec/23-local-runs.md */
+  const onValidate = async (): Promise<void> => {
+    const question = validateLocallyQuestion(issue.number, run);
+    if (question !== null) {
+      setValidating(question);
+      return;
+    }
+    setRefusal(null);
+    await actions.validateLocally(issue.number);
+  };
 
   return (
     <section className="cn-card" id={LOCAL_VALIDATION_ANCHOR}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Check plan · local" />
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Runs on your machine" />
         <i className="cn-n">
           {validation === null
             ? 'never run'
@@ -991,22 +945,73 @@ function LocalValidation({
               : STATUS_WORD[validation.status]}
         </i>
         {/* What tells this apart from the card above it, on the card itself: that
-            one is a person's checklist, this is an agent's run at the machine in
-            front of them. Without the sentence the two read as the same feature
-            drawn twice. */}
-        <span className="cn-more">an agent, in your own dev environment</span>
+            one is the check set, this is an agent's run at the machine in front of
+            them. Without the sentence the two read as the same feature drawn twice. */}
+        <span className="cn-more">one agent, in your own dev environment</span>
       </h3>
       {fold.open && (
         <div className="cn-vin">
+          {/* The press sits on the panel that shows what a press produced, rather than in the
+              header above every pane: an operator deciding to run reads the last run first.
+              → docs/spec/17-cockpit.md#the-validate-pane */}
+          <div className="cn-runpress">
+            {offer.offered ? (
+              <AsyncButton
+                className={`${CONTROL_CLASS} primary`}
+                onClick={onValidate}
+                onRefused={setRefusal}
+                pendingLabel={
+                  <>
+                    <Icon name="flask" />
+                    Starting…
+                  </>
+                }
+                title="Bring this goal's code up in your dev environment and send one agent to write a test plan, drive the running application through it, and report here. Asks first if something else is running."
+              >
+                <Icon name="flask" />
+                {validation === null ? 'Run it here' : 'Run it here again'}
+              </AsyncButton>
+            ) : (
+              <span className="cn-sub">{offer.why}</span>
+            )}
+            {/* Said beside the press and not on any check: this run writes no reading on the set
+                above, and an operator who pressed it expecting checks to be answered has to learn
+                that here. Only where there is a press — under a refusal it is a second grey line
+                about a button that is not there. → docs/spec/32-local-validation.md */}
+            {offer.offered && (
+              <span className="cn-sub">
+                An exploratory run against work in flight — it writes no reading on the checks above.
+              </span>
+            )}
+          </div>
+          {refusal !== null && (
+            <p className="launch-error" role="alert">
+              {refusal}
+            </p>
+          )}
+          {/* The refusal is drawn once, on the press bar above, so the report is handed none: two
+              copies of *why you cannot press it* on one panel is what the pane had everywhere. */}
           <LocalValidationReport
             validation={validation}
-            why={offer.offered ? null : offer.why}
+            why={null}
             issueNumber={issue.number}
             liveAgents={liveAgents}
             refUrls={view.state.refUrls}
             now={view.now}
             actions={actions}
           />
+          {validating !== null && run !== null && (
+            <ValidateLocallyModal
+              mode={validating}
+              issueNumber={issue.number}
+              issueTitle={issue.title}
+              targetRef={target?.target.ref ?? null}
+              run={run}
+              runTitle={runTitle}
+              onSubmit={(opts) => actions.validateLocally(issue.number, opts)}
+              onClose={() => setValidating(null)}
+            />
+          )}
         </div>
       )}
     </section>
@@ -1029,6 +1034,10 @@ function Validation({
   const { issue, plan, checks } = page;
   const live = checks.filter((c) => c.supersededReason === null);
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
+  /* Where each check's answer is coming from. Computed once here and handed down, because the
+     bands the list groups on and the runner panels below it are two readings of one fact.
+     → docs/spec/17-cockpit.md#the-validate-pane */
+  const standings = checkStandings(checks, page.remoteSheets);
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.validation}>
@@ -1074,6 +1083,7 @@ function Validation({
             resources={page.checkResources}
             refUrls={refUrls}
             desktopFolder={desktopFolder}
+            standings={standings}
             look={{ tone: 'secondary' }}
             onResult={(checkId, result, note) =>
               actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
@@ -1156,21 +1166,25 @@ function RemoteValidation({
   const open = showing === null ? sheets[0] : sheets.find((s) => s.environment === showing);
   if (open === undefined) return null;
   const waiting = open.rows.filter((r) => r.awaitingApproval).length;
+  /* The same count the gate's own button carries, said on the header so an operator scanning the
+     pane knows a press is waiting without opening it. → docs/spec/36-remote-validation.md */
+  const pressable = pressableChecks(open);
   return (
     <section className="cn-card" id="cn-remote-validation">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label={`Check plan · ${open.environment}`} />
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label={`Runs on ${open.environment}`} />
         <i className="cn-n">
-          {open.rows.length === 1 ? '1 check' : `${open.rows.length} checks`}
+          {pressable === 1 ? '1 check a press would carry' : `${pressable} checks a press would carry`}
           {waiting > 0 && ` · ${waiting} waiting on an approval`}
         </i>
-        <span className="cn-more">asked of {open.environment}, where this goal&rsquo;s work has arrived</span>
+        <span className="cn-more">where this goal&rsquo;s work has arrived</span>
       </h3>
       {fold.open && (
         <RemoteValidationSection
           sheets={sheets}
           showing={showing}
           switcher={false}
+          foldRows
           onShow={(environment) => actions.openRemoteSheet(environment)}
           controls={{
             onRule: (environment, rowId, accept) =>

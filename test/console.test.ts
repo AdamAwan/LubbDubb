@@ -1893,11 +1893,16 @@ test('the chip is absent while every environment is well, and while none declare
   );
 });
 
-test('the goal header offers Validate locally only where an agent could run it', () => {
+test('the runner panel offers the local press only where an agent could run it', () => {
   const ref = 'issue:390';
-  const offered = render(goalView(() => undefined, ref));
-  assert.ok(offered.includes('Validate locally'), 'a runnable, configured goal with nothing in flight');
-  assert.ok(offered.includes('Check the work'), 'the group caption is what explains the control under it');
+  const offered = decode(render(goalView(() => undefined, ref, ['localValidation'], [], 'validate')));
+  assert.ok(offered.includes('Run it here'), 'a runnable, configured goal with nothing in flight');
+  assert.ok(offered.includes('Runs on your machine'), 'the panel a press belongs to is named for runs, not for a plan');
+  assert.ok(
+    offered.includes('writes no reading on the checks above'),
+    'what the run does not do is said beside the press, where the expectation is formed',
+  );
+  assert.ok(!offered.includes('Check the work'), 'the header group the press used to sit in is gone');
 
   const noBranch = decode(
     render(
@@ -1907,14 +1912,14 @@ test('the goal header offers Validate locally only where an agent could run it',
           if (target) target.runnable = false;
         },
         ref,
-        [],
+        ['localValidation'],
         [],
         'validate',
       ),
     ),
   );
-  assert.ok(!noBranch.includes('Validate locally'));
-  assert.ok(noBranch.includes('no branch of its own'), 'the card says why the control is not there');
+  assert.ok(!noBranch.includes('Run it here'));
+  assert.ok(noBranch.includes('no branch of its own'), 'the press bar says why there is no control');
 
   const unconfigured = decode(
     render(
@@ -1923,25 +1928,31 @@ test('the goal header offers Validate locally only where an agent could run it',
           state.config.localRunConfigured = false;
         },
         ref,
-        [],
+        ['localValidation'],
         [],
         'validate',
       ),
     ),
   );
-  assert.ok(!unconfigured.includes('Validate locally'));
+  assert.ok(!unconfigured.includes('Run it here'));
   assert.ok(unconfigured.includes('localRun.instruction'), 'and names the field that would fix it');
 
   const inFlight = decode(
     render(
-      goalView((state) => {
-        const goal = state.world.issues.find((i) => i.number === 390);
-        if (goal?.localValidation)
-          goal.localValidation = { ...goal.localValidation, status: 'dispatched', phase: 'driving' };
-      }, ref),
+      goalView(
+        (state) => {
+          const goal = state.world.issues.find((i) => i.number === 390);
+          if (goal?.localValidation)
+            goal.localValidation = { ...goal.localValidation, status: 'dispatched', phase: 'driving' };
+        },
+        ref,
+        ['localValidation'],
+        [],
+        'validate',
+      ),
     ),
   );
-  assert.ok(!inFlight.includes('Validate locally'));
+  assert.ok(!inFlight.includes('Run it here'));
   assert.ok(inFlight.includes('running the plan'), 'the chip says which minute of it we are in');
 });
 
@@ -1978,7 +1989,7 @@ test('the local validation card draws the findings, the pages and the plan it ra
   assert.ok(html.includes('http://localhost:5173/checkout'), 'the page it was found on');
   assert.ok(html.includes('The test plan it wrote'), 'the plan, folded');
   assert.ok(html.includes('<details'), 'a browser-owned fold, not a Place');
-  assert.ok(html.includes('an agent, in your own dev environment'));
+  assert.ok(html.includes('one agent, in your own dev environment'), 'the panel says what a run here is');
 });
 
 test('a passed local validation reads settled and offers nothing to do', () => {

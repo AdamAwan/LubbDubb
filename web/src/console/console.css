@@ -7094,3 +7094,31 @@ button.cn-grow {
     padding: 5px 3px;
   }
 }
+
+/* The press on a runner panel, with the sentence that says what the run is for.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-runpress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line-soft);
+  border-radius: 6px;
+}
+.cn-runpress .cn-sub {
+  flex-basis: 100%;
+  min-width: 0;
+}
+/* The sheet's rows, folded behind the run they belong to on the goal page: the checks they answer
+   are the panel above. → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-sheet-fold > summary {
+  padding: 7px 10px;
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+}
+.cn-sheet-fold[open] > summary {
+  border-bottom: 1px solid var(--cn-line-soft);
+}

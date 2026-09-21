@@ -11898,6 +11898,29 @@ button.pk.pk {
   color: var(--muted);
   cursor: pointer;
 }
+/* The goal page's banded list: a label per band, then its checks as lines. No meter and nothing
+   open until a row is clicked — the card header already carries the count, and a check drawn open
+   is three hundred pixels of one answer above the list it belongs to.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.vq-band {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.vq-band > .lb {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+}
+.vq-band-n {
+  font-style: normal;
+  color: var(--muted);
+  opacity: 0.75;
+}
+.vq-band-note {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--amber);
+}
 .vq-line {
   display: flex;
   align-items: center;

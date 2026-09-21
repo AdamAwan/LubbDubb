@@ -36,19 +36,19 @@ operator actually hits, and its reason has to be readable afterwards.
   and silence. It dispatches no fix, because it carries no finding about the code. The catalogue path
   called the same verdict `handback` until this was settled, and answers that word with a refusal
   naming this one ([20](20-validation.md#validation_report)); what stayed `handback` there is the
-  *record* a check has gone back to a person, which is a different fact from a verdict.
+  _record_ a check has gone back to a person, which is a different fact from a verdict.
 - **`abandoned`** is the harness's answer rather than the agent's: the environment went away, the
   agent ended without reporting, or the operator called it off. The note says which.
 
 **One column carries both the lifecycle and the verdict, and that is the shape the row wants.** A
-local validation *is* a run: it is opened by one press, ends exactly once, and never runs again, so
+local validation _is_ a run: it is opened by one press, ends exactly once, and never runs again, so
 `pending`/`dispatched` and `passed`/`failed`/`blocked` are values of one state machine and no pair of
 them can be true together. `remote_runs.status` is the same shape for the same reason
 ([36](36-remote-validation.md#a-runs-status-vocabulary)). What `validation_checks` separates is
 separate because its unit of account differs: a check is a **catalogue row** that outlives any number
 of readings, so its `state` is the current reading and its claim and hand-over columns are about the
 attempt in flight. Splitting this column would buy no expressible state, and would cost a nullable
-verdict column whose null means *not ended yet* — a meaning-bearing null, so a migration with a
+verdict column whose null means _not ended yet_ — a meaning-bearing null, so a migration with a
 backfill ([14](14-persistence.md#when-a-null-means-something)) — plus every query, the wire type and
 the cockpit's word and tone maps rewritten around it.
 
@@ -281,11 +281,19 @@ answerable by editing a text box and pressing the button again.
 
 **A control, a chip and a card**, all on the goal page ([17](17-cockpit.md)).
 
-The control is **Validate locally**, in its own `Check the work` group between _Steer the work_ and
-_Leave this page_ — the only control there whose effect is on the operator's own machine. The whole
-group is absent when there is nothing to press, and the card says which of the three reasons it is:
-nothing configured to start the project, no branch of its own, or one already running. Nothing is
-ever drawn disabled, [23](23-local-runs.md#the-cockpit)'s rule.
+The control is **Run it here**, on the card itself — the press bar at the top of `Runs on your
+machine`, on the goal's Validate pane ([17](17-cockpit.md#the-validate-pane)). It sat in a
+`Check the work` group in the goal header until the pane was banded, which put it a page away from the
+report it produces; an operator deciding whether to run reads the last run first. Where there is
+nothing to press the bar says which of the three reasons it is — nothing configured to start the
+project, no branch of its own, or one already running — and says it **once**, in place of the control,
+rather than in the bar and again on the report below it. Nothing is ever drawn disabled,
+[23](23-local-runs.md#the-cockpit)'s rule.
+
+Beside the press, the panel says what the run is and is not: an exploratory run against work in
+flight, which writes no reading on the checks above it. That sentence belongs at the press because
+that is where the expectation is formed — a run pressed from a pane headed by a check set is pressed
+by somebody who may think it answers one.
 
 The chip sits beside the plan's validation verdict and inside neither: one is a checklist somebody
 keeps, the other is a run somebody asked for. While one is in flight it replaces the control and says
@@ -294,11 +302,13 @@ environment`, `running the plan`. Those words come off a `phase` **folded on the
 is a fold of three facts in three places and a cockpit that worked it out would be a second opinion
 drawn beside the row it describes.
 
-The card is `localValidation` in `GOAL_SECTIONS`, under Validation and above Signals — its own card
-rather than a band inside that one, which is the cheaper shape and the wrong one: that card is a
-checklist against the _delivered_ goal and folds until the work ships, and a report an operator asked
-for two minutes ago would be hidden on exactly the unshipped goal they asked about. It opens when
-there is a row and folds when there is not.
+The card is `localValidation` in `GOAL_SECTIONS` — the fold id is the store's word; what a person
+reads is **Runs on your machine**, on the Validate pane, below the check set and beside the other
+runners ([17](17-cockpit.md#the-validate-pane)). Its own card rather than a band inside the check
+set, which is the cheaper shape and the wrong one: that card is a checklist against the _delivered_
+goal and folds until the work ships, and a report an operator asked for two minutes ago would be
+hidden on exactly the unshipped goal they asked about. It opens when there is a row and folds when
+there is not.
 
 It draws the status and its lamp, the ref and short commit, doors to the validator and the fix agent,
 Call it off while one is in flight, the summary, the findings with their severities and pages, the
