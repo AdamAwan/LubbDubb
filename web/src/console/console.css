@@ -7122,3 +7122,36 @@ button.cn-grow {
 .cn-sheet-fold[open] > summary {
   border-bottom: 1px solid var(--cn-line-soft);
 }
+
+/* The pane's run strip: one line per runner that could take a check, above the list they answer,
+   and the one place a run is started. → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-runstrip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--cn-line-soft);
+  border: 1px solid var(--cn-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cn-runstrip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 7px 10px;
+  background: var(--cn-panel);
+}
+.cn-runstrip-who {
+  min-width: 11ch;
+  font-weight: 600;
+  color: var(--cn-fg-dim);
+}
+.cn-runstrip .cn-sub {
+  min-width: 0;
+}
+.cn-runstrip .launch-error {
+  margin: 0;
+  padding: 7px 10px;
+  background: var(--cn-panel);
+}

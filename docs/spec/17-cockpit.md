@@ -2418,19 +2418,29 @@ fleet could carry the check's first step — that is `fleetCanStart`, three-valu
 is exactly what this pane had too much of. The band label carries the runner's name only where it
 names one; in the last two bands the heading and the state chip already say it.
 
-**A run carries a set of checks, so the press lives on the runner's panel.** The machine has one dev
-environment and a remote run holds the lock on `(environment, tenant)`
+**A run carries a set of checks, so a press is per runner and never per check.** The machine has one
+dev environment and a remote run holds the lock on `(environment, tenant)`
 ([36](36-remote-validation.md#uniqueness-is-environment-tenant-enforced-in-sql)), so two runs cannot
 proceed at once: a press takes every check that runner can answer and a second press queues behind the
-first. That is why there is no per-check run button anywhere on the pane — a control that offered one
-would be offering a run that cannot be had.
+first. A per-check run button would be offering a run that cannot be had.
 
-The local press moved here from the goal header's `Check the work` group. An operator deciding whether
-to run reads the last run first, and the two were a page apart; the refusal — no branch to run, a run
-already in flight — is drawn once, on the press bar, and the report below it is handed none.
+**Every press is on the run strip, above the list.** One line per runner — the machine, then each
+environment with a sheet — carrying that runner's press, or, where there is none, the reason in its
+place: no branch to run, nothing configured, a run already going. It is above the checks because that
+is the order the question arrives in — _is there a run that would answer some of this, before I start
+answering by hand_ — which is precisely the order the pane had backwards.
 
-The environment panel draws its **gate** — the tenant, the commit the last run pinned, the press — and
-folds its rows behind one summary line. The rows keep every control they have: approving a query and
+The strip is **the only place a run starts**. The panels below read what a run did, so the local
+press left the goal header's `Check the work` group and the sheet's gate no longer draws its own
+start button (`press={false}`): a press offered in two places is two controls for one act. What stays
+on the panels is everything about a run rather than the starting of one — calling a live run off,
+reseeding the tenant, ruling on a row.
+
+The strip counts what a press would carry with the gate's own count, `pressableChecks`, and never one
+of its own ([36](36-remote-validation.md#a-row-no-press-can-read)).
+
+The environment panel draws its **gate** — the tenant, the commit the last run pinned, the cancel and
+the reseed — and folds its rows behind one summary line. The rows keep every control they have: approving a query and
 leaving a row out are per-row decisions and are still taken there. What they stop doing is standing in
 for the check list above them.
 

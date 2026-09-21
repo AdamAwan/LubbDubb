@@ -1893,15 +1893,16 @@ test('the chip is absent while every environment is well, and while none declare
   );
 });
 
-test('the runner panel offers the local press only where an agent could run it', () => {
+test('the run strip offers the local press only where an agent could run it', () => {
   const ref = 'issue:390';
   const offered = decode(render(goalView(() => undefined, ref, ['localValidation'], [], 'validate')));
   assert.ok(offered.includes('Run it here'), 'a runnable, configured goal with nothing in flight');
-  assert.ok(offered.includes('Runs on your machine'), 'the panel a press belongs to is named for runs, not for a plan');
+  assert.ok(offered.includes('Runs on your machine'), 'the panel a press is read on is named for runs, not for a plan');
   assert.ok(
-    offered.includes('writes no reading on the checks above'),
+    offered.includes('it answers no check'),
     'what the run does not do is said beside the press, where the expectation is formed',
   );
+  assert.ok(offered.includes('your machine'), 'the strip names the runner the press belongs to');
   assert.ok(!offered.includes('Check the work'), 'the header group the press used to sit in is gone');
 
   const noBranch = decode(
@@ -1919,7 +1920,7 @@ test('the runner panel offers the local press only where an agent could run it',
     ),
   );
   assert.ok(!noBranch.includes('Run it here'));
-  assert.ok(noBranch.includes('no branch of its own'), 'the press bar says why there is no control');
+  assert.ok(noBranch.includes('no branch of its own'), 'the strip says why there is no control, in its place');
 
   const unconfigured = decode(
     render(

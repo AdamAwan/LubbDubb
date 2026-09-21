@@ -281,19 +281,18 @@ answerable by editing a text box and pressing the button again.
 
 **A control, a chip and a card**, all on the goal page ([17](17-cockpit.md)).
 
-The control is **Run it here**, on the card itself — the press bar at the top of `Runs on your
-machine`, on the goal's Validate pane ([17](17-cockpit.md#the-validate-pane)). It sat in a
-`Check the work` group in the goal header until the pane was banded, which put it a page away from the
-report it produces; an operator deciding whether to run reads the last run first. Where there is
-nothing to press the bar says which of the three reasons it is — nothing configured to start the
-project, no branch of its own, or one already running — and says it **once**, in place of the control,
-rather than in the bar and again on the report below it. Nothing is ever drawn disabled,
-[23](23-local-runs.md#the-cockpit)'s rule.
+The control is **Run it here**, on the **run strip** at the top of the goal's Validate pane, on the
+`your machine` line beside every environment that could take a check
+([17](17-cockpit.md#the-validate-pane)). It sat in a `Check the work` group in the goal header until
+the pane was banded; the strip is where a run is started, and the panel below is where it is read.
+Where there is nothing to press the line says which of the three reasons it is — nothing configured to
+start the project, no branch of its own, or one already running — **in place of** the control rather
+than beside it. Nothing is ever drawn disabled, [23](23-local-runs.md#the-cockpit)'s rule.
 
-Beside the press, the panel says what the run is and is not: an exploratory run against work in
-flight, which writes no reading on the checks above it. That sentence belongs at the press because
-that is where the expectation is formed — a run pressed from a pane headed by a check set is pressed
-by somebody who may think it answers one.
+Beside the press, the strip says what the run is and is not: an exploratory run against work in
+flight, which answers no check. That sentence belongs at the press because that is where the
+expectation is formed — a run started from a pane headed by a check set is started by somebody who may
+think it answers one — and the panel's own subtitle says it again where the report is read.
 
 The chip sits beside the plan's validation verdict and inside neither: one is a checklist somebody
 keeps, the other is a run somebody asked for. While one is in flight it replaces the control and says
