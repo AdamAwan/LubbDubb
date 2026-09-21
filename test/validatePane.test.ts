@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkStandings, pressableRows, unanswered } from '../web/src/view/validatePane.js';
+import { checkStandings, pressBreakdown, pressableRows } from '../web/src/view/validatePane.js';
 import type { RemoteSheetRowView, RemoteSheetView, ValidationCheckView } from '../src/wire.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
@@ -159,20 +159,41 @@ test('the pressable count is the gate’s own, and it counts rows rather than ch
   assert.equal(pressableRows(s), 1);
 });
 
-test('what is still unanswered is counted off the standings, never off the sheet a second time', () => {
-  /* A press re-reads every selected row, answered ones and queries included, so the gate's count is
-     always the larger number. The one an operator is asking about is how many checks here have no
-     answer yet, and it comes from the bands so the two can never disagree. */
+test('the press says what its number is made of, because it is bigger than the ticks above it', () => {
+  /* The sheet carries queries and measures that have no check to tick, and a press re-reads the
+     checks already answered — so "Run 5 rows" over three ticked boxes needs its arithmetic said. */
   const s = sheet({
     rows: [
       row({ rowId: 'r1', sourceId: 'c1' }),
       row({ rowId: 'r2', sourceId: 'c2' }),
       row({ rowId: 'q1', kind: 'state', sourceId: 'q1' }),
+      row({ rowId: 'm1', kind: 'measure', sourceId: 'm1' }),
     ],
   });
-  const standings = checkStandings([check({ id: 'c1' }), check({ id: 'c2', state: 'passed', resultBy: 'spec' })], [s]);
-  assert.equal(pressableRows(s), 3, 'the press reads three rows');
-  assert.equal(unanswered('staging', standings), 1, 'but only one check there is still owed an answer');
+  assert.equal(pressableRows(s), 4);
+  assert.deepEqual(pressBreakdown(s), { checks: 2, own: 2 });
+});
+
+test('a check carries the box of the environment the pane is showing, and none where it holds no row', () => {
+  /* One answer about what a press will carry: the box writes the sheet's own `selected` through the
+     sheet's own route. Where the shown environment has no readable row for the check there is no
+     box at all — a box that wrote nothing would be the second opinion this pane is built against. */
+  const staging = sheet({ rows: [row({ sourceId: 'c1', selected: false })] });
+  const prod = sheet({ environment: 'prod', rows: [row({ environment: 'prod', sourceId: 'c1' })] });
+  const shown = checkStandings([check()], [staging, prod], 'staging');
+  assert.deepEqual(shown.get('c1')?.row, {
+    environment: 'staging',
+    rowId: 'check:c1',
+    selected: false,
+    live: false,
+    awaitingApproval: false,
+  });
+  assert.equal(checkStandings([check()], [prod], 'staging').get('c1')?.row, null, 'no row there, no box');
+  assert.equal(
+    checkStandings([check()], [staging, prod]).get('c1')?.row,
+    null,
+    'and none where two environments hold one and the pane is showing neither',
+  );
 });
 
 function reading(): NonNullable<RemoteSheetRowView['reading']> {

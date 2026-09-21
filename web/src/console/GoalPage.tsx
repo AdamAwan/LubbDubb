@@ -67,7 +67,7 @@ import {
   ControlSegments,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
-import { checkStandings, pressableRows, unanswered, type CheckStanding } from '../view/validatePane.js';
+import { checkStandings, pressBreakdown, pressableRows, type CheckStanding } from '../view/validatePane.js';
 import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
 import { HeadRow } from '../components/panel.js';
 import { SignalsSection } from '../components/SignalsSection.js';
@@ -381,7 +381,9 @@ function ValidatePane({
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const showing = obligationEnvironment(page, 'validate', view.sheetEnvironment);
-  const standings = checkStandings(page.checks, page.remoteSheets);
+  /* Boxes write the selection of the environment the pane is showing — the same one the panel
+     below draws, which is what makes the box and the rows under it one answer. */
+  const standings = checkStandings(page.checks, page.remoteSheets, showing);
   return (
     <>
       <ObligationPicker page={page} tab="validate" showing={showing} actions={actions} />
@@ -389,7 +391,7 @@ function ValidatePane({
           answer some of it. The standings are computed once, here, and handed to both halves: the
           bands and the strip's count of what is still unanswered are one reading, and two of them
           would be free to disagree. → docs/spec/17-cockpit.md#the-validate-pane */}
-      <RunStrip page={page} view={view} actions={actions} standings={standings} />
+      <RunStrip page={page} view={view} actions={actions} />
       <Validation
         page={page}
         standings={standings}
@@ -968,12 +970,10 @@ function RunStrip({
   page,
   view,
   actions,
-  standings,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
-  standings: Map<string, CheckStanding>;
 }): JSX.Element | null {
   const { issue } = page;
   const run = view.state.localRun;
@@ -1035,7 +1035,7 @@ function RunStrip({
           unanswered there. → docs/spec/36-remote-validation.md#a-row-no-press-can-read */}
       {page.remoteSheets.map((sheet) => {
         const rows = pressableRows(sheet);
-        const owed = unanswered(sheet.environment, standings);
+        const made = pressBreakdown(sheet);
         const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
         return (
           <div className="cn-runstrip-row" key={sheet.environment}>
@@ -1052,9 +1052,13 @@ function RunStrip({
                 >
                   {rows === 1 ? 'Run 1 row' : `Run ${String(rows)} rows`}
                 </AsyncButton>
+                {/* What the number is made of, because it is bigger than the ticks above it: the
+                    sheet carries queries and measures that have no check to tick, and a press
+                    re-reads the checks already answered. */}
                 <span className="cn-sub">
-                  every selected row re-read, answered ones included
-                  {owed > 0 && ` · ${String(owed)} check${owed === 1 ? '' : 's'} here have no answer yet`}
+                  {made.checks === 1 ? '1 check ticked above' : `${String(made.checks)} checks ticked above`}
+                  {made.own > 0 &&
+                    ` · ${String(made.own)} ${made.own === 1 ? 'query or measure' : 'queries and measures'} of its own`}
                 </span>
                 {/* What staleness means, where it can be acted on. A tenant accumulates the residue
                     of every run that used it, so past the window the environment declares a red row
@@ -1156,6 +1160,9 @@ function Validation({
             refUrls={refUrls}
             desktopFolder={desktopFolder}
             standings={standings}
+            onSelect={(environment, rowId, selected) =>
+              actions.selectRemoteRow(issue.number, environment, rowId, selected)
+            }
             look={{ tone: 'secondary' }}
             onResult={(checkId, result, note) =>
               actions.setValidation(issue.number, checkId, { kind: 'result', result, note })

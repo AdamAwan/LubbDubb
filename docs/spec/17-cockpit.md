@@ -2443,13 +2443,29 @@ start button (`press={false}`): a press offered in two places is two controls fo
 on the panels is everything about a run rather than the starting of one — calling a live run off,
 reseeding the tenant, ruling on a row.
 
-**The strip counts rows, and says separately how many checks are owed.** A press re-reads every
-selected row on the sheet — the `state` queries and `measure` rows beside the check rows, and the
-checks already answered — so the gate's number is always larger than the list's, and calling it
-_checks_ made the strip read as a miscount of the bands under it. The press carries `pressableRows`,
-the gate's own count ([36](36-remote-validation.md#a-row-no-press-can-read)); the sentence beside it
-carries `unanswered`, counted off the same standings the bands are drawn from so the two can never
-disagree.
+#### Which checks a press will carry
+
+**The box on a check row is the sheet's own `selected`.** It is drawn where the environment the pane
+is showing holds a readable row for that check, and it writes back through `selectRemoteRow` — the
+sheet's own route. There is no cockpit-side selection anywhere: two surfaces that both decided what a
+press carries would be free to disagree, and the one an operator is reading would be the one that is
+not the store.
+
+A check with no row on the shown environment gets **no box at all**, not an unticked one — a box that
+wrote nothing is the second opinion this pane exists to remove — and the gutter it would sit in is
+held open so the titles stay a column. Where the pane is showing no environment the box is the row of
+the one sheet that holds it, and where two do there is none: a box would then mean an environment
+without saying which. Each panel's own rows still carry their selection, as they always did. A row a
+run is already carrying draws its box **disabled** — what that run carries is settled.
+
+**The strip counts rows, and says what the number is made of.** A press re-reads every selected row
+on the sheet — the `state` queries and `measure` rows beside the check rows, and the checks already
+answered — so the gate's number is always larger than the ticks above it, and calling it _checks_
+made the strip read as a miscount of the bands under it. The press carries `pressableRows`, the
+gate's own count ([36](36-remote-validation.md#a-row-no-press-can-read)), and the sentence beside it
+carries `pressBreakdown`: _3 checks ticked above · 2 queries and measures of its own_. The arithmetic
+is said because an operator who ticked three boxes and read _Run 5 rows_ would otherwise be reading a
+number nothing on the page explains.
 
 **Where a tenant is stale, the strip says what that costs.** A tenant accumulates the residue of
 every run that used it, so past the window the environment declares, a red row may be that residue

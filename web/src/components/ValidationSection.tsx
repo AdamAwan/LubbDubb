@@ -87,6 +87,7 @@ export function ValidationSection({
   refUrls,
   desktopFolder,
   standings,
+  onSelect,
   look = { ghost: true, size: 'small' },
   onResult,
   onWaive,
@@ -106,6 +107,11 @@ export function ValidationSection({
    * → docs/spec/17-cockpit.md#the-validate-pane
    */
   standings?: Map<string, CheckStanding>;
+  /**
+   * Put a check's sheet row into the next press, or take it out. The goal page hands the sheet's own
+   * route; the surfaces that draw the set without the runners hand nothing, and draw no boxes.
+   */
+  onSelect?: (environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown;
   look?: ButtonLook;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -202,6 +208,7 @@ export function ValidationSection({
                     check={check}
                     standing={standings.get(check.id)}
                     onOpen={() => setFocus(check.id)}
+                    onSelect={onSelect}
                   />
                 ),
               )}
@@ -349,7 +356,13 @@ ${resource.note}`
         <div className="vq-rest">
           <span className="lb lb-sm">Still to run</span>
           {rest.owed.map((check) => (
-            <CheckLine key={check.id} check={check} standing={undefined} onOpen={() => setFocus(check.id)} />
+            <CheckLine
+              key={check.id}
+              check={check}
+              standing={undefined}
+              onOpen={() => setFocus(check.id)}
+              onSelect={undefined}
+            />
           ))}
         </div>
       )}
@@ -357,7 +370,13 @@ ${resource.note}`
         <details className="vq-rest vq-done">
           <summary>{rest.done.length} done</summary>
           {rest.done.map((check) => (
-            <CheckLine key={check.id} check={check} standing={undefined} onOpen={() => setFocus(check.id)} />
+            <CheckLine
+              key={check.id}
+              check={check}
+              standing={undefined}
+              onOpen={() => setFocus(check.id)}
+              onSelect={undefined}
+            />
           ))}
         </details>
       )}
@@ -525,10 +544,12 @@ function CheckLine({
   check,
   standing,
   onOpen,
+  onSelect,
 }: {
   check: ValidationCheckView;
   standing: CheckStanding | undefined;
   onOpen: () => void;
+  onSelect: ((environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown) | undefined;
 }): JSX.Element {
   const aside =
     check.amendedAt !== null
@@ -540,13 +561,41 @@ function CheckLine({
           : null;
   if (standing !== undefined) {
     const odd = BAND_IMPLIES[standing.band] === check.state ? null : CHECK_STATE_WORDS[check.state];
+    const row = standing.row;
     return (
-      <button className={`vq-line ${check.state}`} onClick={onOpen}>
-        <span className="pm-vletter">{check.letter}</span>
-        <span className="vq-line-title">{check.title}</span>
-        {aside !== null && <span className="vq-said">{aside}</span>}
-        {odd !== null && <span className={`vq-said ${check.state}`}>{odd}</span>}
-      </button>
+      <div className={`vq-line ${check.state}`}>
+        {/* The sheet's own `selected`, drawn where the checks are read and written back through the
+            sheet's own route: what a press will carry has one answer, not a cockpit's and a
+            store's. A row a run is already on is settled, so its box is not a question.
+            → docs/spec/17-cockpit.md#which-checks-a-press-will-carry */}
+        {row !== null && onSelect !== undefined ? (
+          <input
+            type="checkbox"
+            className="vq-box"
+            checked={row.selected}
+            disabled={row.live}
+            aria-label={`Carry “${check.title}” in ${row.environment}’s next run`}
+            title={
+              row.live
+                ? `A run on ${row.environment} is carrying it now`
+                : row.awaitingApproval
+                  ? `In ${row.environment}’s next run — but its query needs approving before a press can read it`
+                  : row.selected
+                    ? `In ${row.environment}’s next run. Untick to leave it out — you will answer it another way`
+                    : `Left out of ${row.environment}’s next run. Tick to put it back`
+            }
+            onChange={(e) => void onSelect(row.environment, row.rowId, e.target.checked)}
+          />
+        ) : (
+          <span className="vq-box-none" aria-hidden />
+        )}
+        <button className="vq-line-open" onClick={onOpen}>
+          <span className="pm-vletter">{check.letter}</span>
+          <span className="vq-line-title">{check.title}</span>
+          {aside !== null && <span className="vq-said">{aside}</span>}
+          {odd !== null && <span className={`vq-said ${check.state}`}>{odd}</span>}
+        </button>
+      </div>
     );
   }
   return (

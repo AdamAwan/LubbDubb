@@ -18,6 +18,25 @@ export interface CheckStanding {
   band: CheckBand;
   /** What the pane draws beside the check: the run that is on it, or the runners that could take it. */
   label: string;
+  /**
+   * The sheet row a press would read this check through, on the environment the pane is showing.
+   * It carries the **sheet's own** `selected` — the pane draws a box for it and writes back through
+   * `selectRemoteRow`, so what a press will carry has one answer and not two. Null where that
+   * environment holds no readable row for the check; where the pane is showing none, the row of the
+   * one sheet that holds it, and null where two do — a box would then mean an environment without
+   * saying which, and each panel's own rows still carry theirs.
+   */
+  row: CheckRow | null;
+}
+
+interface CheckRow {
+  environment: string;
+  rowId: string;
+  selected: boolean;
+  /** A run is on it now, so what it carries is settled and the box is not a question any more. */
+  live: boolean;
+  /** Its query has not been approved, so a press reads nothing here whatever the box says. */
+  awaitingApproval: boolean;
 }
 
 export const BAND_HEADING: Record<CheckBand, string> = {
@@ -36,8 +55,33 @@ function live(sheet: RemoteSheetView): boolean {
  * Whether a press against this sheet would read this check's row. Read off `blockedReason` and
  * `idleReason`, both folded on the server beside the row they describe, and never worked out here.
  */
+function readableRow(sheet: RemoteSheetView, checkId: string): RemoteSheetView['rows'][number] | undefined {
+  return sheet.rows.find((row) => row.sourceId === checkId && row.blockedReason === null && row.idleReason === null);
+}
+
 function readable(sheet: RemoteSheetView, checkId: string): boolean {
-  return sheet.rows.some((row) => row.sourceId === checkId && row.blockedReason === null && row.idleReason === null);
+  return readableRow(sheet, checkId) !== undefined;
+}
+
+/** The row a press would read this check through on the shown environment, or null. */
+function boxRow(
+  sheets: readonly RemoteSheetView[],
+  checkId: string,
+  showing: string | null | undefined,
+): CheckRow | null {
+  const holding = sheets.filter((sheet) => readable(sheet, checkId));
+  const sheet =
+    showing == null ? (holding.length === 1 ? holding[0] : undefined) : holding.find((s) => s.environment === showing);
+  if (sheet === undefined) return null;
+  const row = readableRow(sheet, checkId);
+  if (row === undefined) return null;
+  return {
+    environment: sheet.environment,
+    rowId: row.rowId,
+    selected: row.selected,
+    live: live(sheet),
+    awaitingApproval: row.awaitingApproval,
+  };
 }
 
 /**
@@ -48,25 +92,28 @@ function readable(sheet: RemoteSheetView, checkId: string): boolean {
 export function checkStandings(
   checks: readonly ValidationCheckView[],
   sheets: readonly RemoteSheetView[],
+  /** The environment the pane is showing, whose selection the boxes write. */
+  showing?: string | null,
 ): Map<string, CheckStanding> {
   const standings = new Map<string, CheckStanding>();
   for (const check of checks) {
     if (check.supersededReason !== null) continue;
+    const row = boxRow(sheets, check.id, showing);
     if (check.state === 'passed' || check.state === 'waived') {
-      standings.set(check.id, { band: 'answered', label: answeredBy(check, sheets) });
+      standings.set(check.id, { band: 'answered', label: answeredBy(check, sheets), row });
       continue;
     }
     const onIt = sheets.filter((sheet) => live(sheet) && readable(sheet, check.id));
     if (onIt.length > 0) {
-      standings.set(check.id, { band: 'running', label: `a run on ${onIt.map((s) => s.environment).join(', ')}` });
+      standings.set(check.id, { band: 'running', label: `a run on ${onIt.map((s) => s.environment).join(', ')}`, row });
       continue;
     }
     const could = sheets.filter((sheet) => readable(sheet, check.id)).map((sheet) => sheet.environment);
     if (could.length > 0) {
-      standings.set(check.id, { band: 'open', label: `${could.join(' or ')} can take it` });
+      standings.set(check.id, { band: 'open', label: `${could.join(' or ')} can take it`, row });
       continue;
     }
-    standings.set(check.id, { band: 'yours', label: 'no run offers to take this' });
+    standings.set(check.id, { band: 'yours', label: 'no run offers to take this', row });
   }
   return standings;
 }
@@ -104,10 +151,13 @@ export function pressableRows(sheet: RemoteSheetView): number {
 }
 
 /**
- * How many of this environment's checks have no answer yet, read off the same standings the bands
- * are drawn from. It is the number an operator is actually asking about when they read a press, and
- * it is deliberately *not* derived from the sheet a second time.
+ * What a press is made of: the ticked checks an operator can see in the list above, and the rows the
+ * sheet carries of its own — the `state` queries and `measure` rows, which have no check to tick.
+ * Said because the two numbers differ and the difference is the whole of the question *why does it
+ * say five when I ticked three*.
  */
-export function unanswered(environment: string, standings: Map<string, CheckStanding>): number {
-  return [...standings.values()].filter((s) => s.band === 'open' && s.label.includes(environment)).length;
+export function pressBreakdown(sheet: RemoteSheetView): { checks: number; own: number } {
+  const rows = sheet.rows.filter((row) => row.selected && row.blockedReason === null && row.idleReason === null);
+  const checks = rows.filter((row) => row.kind === 'check').length;
+  return { checks, own: rows.length - checks };
 }
