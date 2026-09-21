@@ -507,6 +507,72 @@ test('the environment note lists what each environment can drive, and the areas 
   assert.match(note, /No tenant is configured/, 'and a run that writes is told it has nowhere to write');
 });
 
+// → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
+test('the note hands the planner the listing command, as vocabulary and never as an answer', () => {
+  const note = validationPlanNote([
+    {
+      name: 'acceptance',
+      validate: {
+        permits: ['check'],
+        tenant: 'acme',
+        browser: { runner: 'npm run e2e', listSelectors: 'npm run e2e -- --project=validation --list' },
+      },
+    },
+  ]);
+  assert.match(
+    note,
+    /npm run e2e -- --project=validation --list/,
+    'the command the deployment already declares reaches the one planner that writes a `suite` step',
+  );
+  assert.match(note, /in the checkout you are standing in/, 'and it is the planner that invokes it, here');
+  assert.match(
+    note,
+    /vocabulary and not the answer/,
+    'never as the answer: the run takes its own listing against the deployed commit, which still decides',
+  );
+  assert.match(
+    note,
+    /resolved against the deployed commit/,
+    'so run-time resolution is said to be untouched — a listing read here cannot produce a false pass',
+  );
+  assert.match(
+    note,
+    /\*\*as the runner selects on it\*\*/,
+    'and the kind of identifier is named, which is the half of this that needs no command at all',
+  );
+});
+
+// → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
+test('a listing that cannot be taken degrades to prose, and never to a blocked plan', () => {
+  const withCommand = validationPlanNote([
+    {
+      name: 'acceptance',
+      validate: { permits: ['check'], browser: { runner: 'npm run e2e', listSelectors: 'npm run e2e -- --list' } },
+    },
+  ]);
+  assert.match(
+    withCommand,
+    /If it will not run, write the area anyway/,
+    'a command that will not run is today’s behaviour, which is the floor and not a failure',
+  );
+  assert.match(
+    withCommand,
+    /none of those is a reason to leave a `suite` step out, defer a check/,
+    'and it is told in as many words that none of those is a reason to drop the step',
+  );
+
+  const withoutCommand = validationPlanNote([
+    { name: 'acceptance', validate: { permits: ['check'], browser: { runner: 'npm run e2e' } } },
+  ]);
+  assert.match(
+    withoutCommand,
+    /No environment here declares a command/,
+    'an environment declaring no listing command still authors checks, on the wording alone',
+  );
+  assert.match(withoutCommand, /\*\*as the runner selects on it\*\*/, 'which is the sharpening, list or no list');
+  assert.doesNotMatch(withoutCommand, /npm run e2e -- --list/, 'and no other environment’s command leaks in');
+});
+
 // → docs/spec/20-validation.md#saying-nothing-was-worth-running
 test('the planner’s account reaches the cockpit, because an empty set has no row to carry it', async () => {
   const system = build();
