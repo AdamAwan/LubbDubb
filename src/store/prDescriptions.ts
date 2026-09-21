@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { DescriptionFinding, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 import { issueOriginRef } from '../issueOrigins.js';
+import { composeDescribedBody } from '../pr/prDescription.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -226,7 +227,7 @@ export class PrDescriptionStore {
     return rows.map((r) => ({
       id: r.id,
       prNumber: r.pr_number,
-      body: [r.text.trim(), r.tail].filter((part) => part !== '').join('\n\n'),
+      body: composeDescribedBody(r.text, r.tail),
     }));
   }
 

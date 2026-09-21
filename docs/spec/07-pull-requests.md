@@ -736,6 +736,13 @@ Two things follow, and both are load-bearing:
   front of *that*, not in front of whatever the body currently says. Reading the body back off the
   provider would make the provider a second source of truth for a string the harness composed, and a
   reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
+- **The two halves are marked, never run together.** `composeDescribedBody`
+  (`src/pr/prDescription.ts`) puts a horizontal rule and a line of attribution between the
+  operator's text and the tail. Both halves are prose in one body, and joined by a blank line alone
+  they read as one voice — which takes back the only thing the description was for, that a person
+  and not the thing that made the change is answering for it. A reviewer weighs an account by who
+  wrote it, so the body has to say. Either half being empty leaves the other alone: a mark with
+  nothing on one side of it labels an author who wrote nothing.
 
 #### It holds nothing up
 
