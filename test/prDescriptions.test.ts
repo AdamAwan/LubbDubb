@@ -10,7 +10,12 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { descriptionRefusal, descriptionStanding, PR_DESCRIPTION } from '../src/pr/prDescription.js';
+import {
+  composeDescribedBody,
+  descriptionRefusal,
+  descriptionStanding,
+  PR_DESCRIPTION,
+} from '../src/pr/prDescription.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -556,4 +561,18 @@ test('with the flag off the ask does not exist, because the agent wrote the body
   } finally {
     system.store.close();
   }
+});
+
+test('the two authors of a described body are separated, so a reviewer knows who wrote what', () => {
+  const body = composeDescribedBody('  The cursor is read back at startup.  ', '**Asked for**\n1. a → b');
+
+  const rule = body.indexOf('\n---\n');
+  assert.ok(rule > 0, 'a rule sits between the operator\u2019s prose and the agent\u2019s record');
+  assert.ok(body.slice(0, rule).includes('read back at startup'), 'the operator is above it');
+  assert.ok(body.slice(rule).includes('**Asked for**'), 'the agent is below it');
+  assert.match(body.slice(rule), /Above this line .*operator/, 'and the mark says which side is whose');
+
+  // A mark with nothing on one side of it labels an author who wrote nothing.
+  assert.equal(composeDescribedBody('', 'tail only'), 'tail only');
+  assert.equal(composeDescribedBody('head only', '   '), 'head only');
 });
