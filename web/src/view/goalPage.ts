@@ -5,6 +5,7 @@ import type {
   GoalAgentsPayload,
   TaskSummary,
   CockpitDecision,
+  Escalation,
   Issue,
   OpenPullRequest,
   PlanPart,
@@ -589,6 +590,33 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
 export function planUnderWay(page: GoalPageView): boolean {
   const status = page.plan?.status ?? null;
   return status !== null && status !== 'planning' && status !== 'awaiting_approval';
+}
+
+/**
+ * The ask carrying this goal's plan verdict, while the plan has been read and is
+ * still waiting on one — or null wherever there is nothing to decide here.
+ *
+ * It is read off the plan's own status and the escalation's `planId` rather than
+ * off the row's kind alone, because a `plan` ask is also what a *change* to a
+ * running plan is raised as, and that one is not the end of this sitting.
+ *
+ * `revealed` is a condition and not decoration: the verdict routes refuse a plan
+ * nobody has revealed, so drawing the ask under the gate would put four answers
+ * that each end in a refusal directly beneath the press that leads to the gate.
+ * → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read
+ *
+ * @public the seam the goal page reads to draw the verdict beside the plan
+ */
+export function planVerdictAsk(page: GoalPageView, escalations: readonly Escalation[]): NeedRow | null {
+  const plan = page.plan;
+  if (plan === null || plan.status !== 'awaiting_approval' || !plan.revealed) return null;
+  return (
+    page.needs.find((row) => {
+      if (row.kind !== 'plan') return false;
+      const planId = escalations.find((e) => e.id === row.id)?.context.planId;
+      return typeof planId === 'string' && planId === plan.id;
+    }) ?? null
+  );
 }
 
 function outcomeAsked(page: GoalPageView): boolean {

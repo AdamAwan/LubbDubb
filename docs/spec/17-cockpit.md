@@ -2743,6 +2743,34 @@ nothing to mark. The third option is labelled **"Plan is silent"** rather than a
 _I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
 a real answer, not a way of declining to give one.
 
+### The verdict, where the plan was read
+
+Predict → reveal → mark ends in a decision, and the decision is what lets the fleet start. So while
+the plan has been revealed and is still `awaiting_approval`, **the plan card draws the plan's own
+approval ask in full**, directly under the prediction panel and above the waves: the summary the ask
+carries, the caveats it holds, the way into the full sheet, and **Approve** and **Refuse** beside
+them. Without it the sitting the gate opened ended with nothing to press — the verdict was a line at
+the top of the page, and the operator who had just marked four slots against the plan had to scroll
+back past everything they had read to give one.
+
+**It is the ask itself, not a second spelling of it.** The card is the same `NeedsBand` body the rail
+and the ask panel draw, so the caveat acknowledgements, a `validation_plan`'s rows and every refusal
+the routes can give are the ask's own. A verdict control written again on the plan card is a second
+implementation of the one decision on this page that cannot be taken twice.
+
+**It is drawn only on a plan that has been revealed.** Under the gate the verdict routes refuse
+approving, refusing and backing out alike ([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)),
+so a card drawn there would be four answers that each end in a refusal, sitting directly beneath the
+one press that leads to the gate. It is the ask for **this plan** — read off the escalation's
+`planId` and the plan's status, never off the row's kind, which a change to a running plan is raised
+under too.
+
+**While it is drawn, the ask leaves the lines at the top of the page** — but only on the pane that
+draws it. A one-line row saying go and find an ask, above a card already asking it, is the same ask
+twice; on every other pane the card is not in front of the operator and the row is the only thing
+that says the plan is waiting. The pane's own dot is unchanged, because what needs the operator has
+not moved.
+
 ### Moment two, beside moment one
 
 Where moment two has been asked, each filled slot draws **both** marks, and the card's whole job is

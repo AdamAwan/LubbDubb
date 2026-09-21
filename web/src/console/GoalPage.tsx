@@ -16,6 +16,7 @@ import {
   goalSectionsOpen,
   obligationEnvironment,
   planUnderWay,
+  planVerdictAsk,
   GOAL_ANCHOR,
   goalLanding,
   goalPanes,
@@ -125,7 +126,7 @@ export function GoalPage({
           what belongs here is that there is one and which stage it is about —
           and a row costs the page one line, where a band cost it three hundred.
           → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */}
-      <AskLines rows={askLines(page)} view={view} actions={actions} />
+      <AskLines rows={askLines(page, view, tab)} view={view} actions={actions} />
       {/* The stages are the tabs, and the tabs are cut out of the panel they
           select: one object, so the row cannot read as a strip that merely sits
           above the pane. → docs/spec/17-cockpit.md#the-panes */}
@@ -544,9 +545,18 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
-/* Every ask on the goal, less the parent one the band at the foot draws in full. */
-function askLines(page: GoalPageView): NeedRow[] {
-  return page.needs.filter((row) => !row.id.startsWith('placement:parent:'));
+/*
+ * Every ask on the goal, less the two drawn in full somewhere on the page: the
+ * parent one the band at the foot carries, and — on the pane that draws it — the
+ * plan's verdict, which the plan card asks for under the prediction. A line saying
+ * go and find an ask, above a card that is already asking it, is the same ask
+ * twice. On every other pane the line stays: the card is not in front of the
+ * operator there, and the row is the only thing that says the plan is waiting.
+ * → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read
+ */
+function askLines(page: GoalPageView, view: CockpitView, tab: GoalTab): NeedRow[] {
+  const drawn = tab === 'plan' ? planVerdictAsk(page, view.state.escalations) : null;
+  return page.needs.filter((row) => !row.id.startsWith('placement:parent:') && row.id !== drawn?.id);
 }
 
 function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView; fold: Fold }): JSX.Element {
@@ -1287,6 +1297,7 @@ function PlanWaves({
     ...loose,
   ].map((pr) => (pr.open ? prRow(pr.pr, view, actions, { goal: false }) : closedPrRow(pr.pr, view, actions)));
   const underWay = planUnderWay(page);
+  const verdict = planVerdictAsk(page, view.state.escalations);
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.plan}>
@@ -1342,6 +1353,18 @@ function PlanWaves({
           onToggle={fold.onToggle}
           now={view.now}
         />
+      )}
+      {/* Under the prediction, and only while the plan is read and undecided: the
+          sitting the gate opened ends in a verdict, and an operator who has just
+          marked their prediction against the plan had to go back up the page to
+          give one. The ask itself is drawn — not a second spelling of it — so the
+          caveats, the check set and every refusal the routes can give are the
+          rail's own.
+          → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read */}
+      {!gated && verdict !== null && (
+        <div className="cn-plan-verdict">
+          <NeedsBand row={verdict} view={view} actions={actions} />
+        </div>
       )}
       <div className="cn-waves" hidden={gated}>
         {groups.length === 0 && (

@@ -944,7 +944,11 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
 
 test('the ask row on the goal page wears the tone and glyph its rail row does', () => {
   const ref = goalRef();
-  const v = goalView();
+  /* Read on a pane other than the plan's: there the goal's plan ask is drawn in
+     full under the prediction and leaves the lines, which is the one row the
+     demo goal carries.
+     → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read */
+  const v = goalView(() => {}, ref, [], [], 'ask');
   const row = v.needsYou.find((n) => n.goalRef === ref && n.opens === 'goal');
   assert.ok(row, 'the demo goal must carry an ask read on its own page');
 
@@ -952,6 +956,28 @@ test('the ask row on the goal page wears the tone and glyph its rail row does', 
   assert.ok(html.includes(`cn-needs-line cn-t-${KIND_TONE[row.kind]}`), "the row takes the kind's tone");
   assert.ok(html.includes(`cn-q cn-t-${KIND_TONE[row.kind]}`), 'and the rail row it came from takes the same one');
   assert.ok(html.includes(KIND_SYMBOL[row.kind]), 'the glyph is drawn on both');
+});
+
+test('the plan’s verdict is asked on the plan card, and not as a line as well', () => {
+  const ref = goalRef();
+  const plan = goalView(() => {}, ref, [], [], 'plan');
+  const row = plan.needsYou.find((n) => n.goalRef === ref && n.kind === 'plan');
+  assert.ok(row, 'the demo goal must carry a plan ask');
+
+  const lines = (html: string): number => html.split('cn-needs-line').length - 1;
+  const html = render(plan);
+  assert.ok(html.includes('cn-plan-verdict'), 'the ask is drawn in full where the plan is read');
+
+  /* Every other pane draws no plan card, so the row is the only thing there that
+     says a verdict is waiting — and that is the one row the plan pane drops. */
+  const elsewhere = render(goalView(() => {}, ref, [], [], 'ask'));
+  assert.ok(!elsewhere.includes('cn-plan-verdict'), 'no plan card where the plan is not drawn');
+  assert.equal(
+    lines(html),
+    lines(elsewhere) - 1,
+    'the verdict leaves the lines where the card asks it — a row saying go and find an ask, above the card already asking it, is the same ask twice',
+  );
+  assert.ok(lines(html) > 0 || lines(elsewhere) === 1, 'every other ask keeps its row');
 });
 
 test('a selected goal draws its page instead of the overview', () => {

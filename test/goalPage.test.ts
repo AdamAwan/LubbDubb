@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type {
   Agent,
   CockpitDecision,
+  Escalation,
   OpenPullRequest,
   PlanView,
   PlanPart,
@@ -11,7 +12,15 @@ import type {
   TaskSummary,
 } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
-import { buildGoalPage, buildGoalNav, buildGoalTrack, goalSectionsOpen, standsFor } from '../web/src/view/goalPage.js';
+import {
+  buildGoalPage,
+  buildGoalNav,
+  buildGoalTrack,
+  goalSectionsOpen,
+  planVerdictAsk,
+  standsFor,
+} from '../web/src/view/goalPage.js';
+import type { NeedRow } from '../web/src/view/needsYou.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -759,4 +768,69 @@ test('standsFor reads a job origin through to the work it is redoing', () => {
   assert.equal(standsFor(withJobs, 'issue:41'), 'issue:41', 'every other origin is its own answer');
   assert.equal(standsFor(withJobs, null), null);
   assert.match(standsFor(withJobs, 'job:c1') ?? '', /^job:c[12]$/, 'a cycle ends at the bound rather than spinning');
+});
+
+function planAsk(over: Partial<NeedRow>): NeedRow {
+  return {
+    id: 'e:1',
+    kind: 'plan',
+    group: 'blocking',
+    urgency: 'now',
+    title: 'Plan ready',
+    goalRef: null,
+    originRef: null,
+    opens: 'goal',
+    agentId: null,
+    agentLabel: null,
+    holding: 0,
+    raisedAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function planEscalation(id: string, planId: string): Escalation {
+  return {
+    id,
+    type: 'approve_change',
+    status: 'open',
+    prompt: 'A plan is ready',
+    context: { planId },
+    agentId: null,
+    taskId: null,
+    response: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    answeredAt: null,
+  };
+}
+
+test('the plan’s verdict is asked beside the plan once it is revealed and still undecided', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
+  const waiting: GoalPageView = {
+    ...base,
+    plan: { ...base.plan!, status: 'awaiting_approval', revealed: true },
+    needs: [planAsk({})],
+  };
+  const escalations = [planEscalation('e:1', 'p')];
+
+  assert.equal(planVerdictAsk(waiting, escalations)?.id, 'e:1');
+
+  const withheld: GoalPageView = { ...waiting, plan: { ...waiting.plan!, revealed: false } };
+  assert.equal(
+    planVerdictAsk(withheld, escalations),
+    null,
+    'under the gate every verdict is refused server-side, so the ask is not drawn there',
+  );
+
+  const approved: GoalPageView = { ...waiting, plan: { ...waiting.plan!, status: 'active' } };
+  assert.equal(planVerdictAsk(approved, escalations), null, 'a plan under way is not waiting on a verdict');
+
+  const amendment: GoalPageView = { ...waiting, needs: [planAsk({ id: 'e:2' })] };
+  assert.equal(
+    planVerdictAsk(amendment, [planEscalation('e:2', 'other')]),
+    null,
+    'a `plan` ask about another plan — a change to a running one — is not this plan’s verdict',
+  );
 });

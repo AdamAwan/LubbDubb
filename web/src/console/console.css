@@ -1710,6 +1710,12 @@ a.cn-qbody {
   color: var(--cn-fg-faint);
 }
 
+/* The plan's verdict where the plan is read: the band's own box, given room off
+   the prediction above it and the board below. */
+.cn-plan-verdict {
+  margin: 14px 0;
+}
+
 /* Same four tone properties as the rail row, and that is the whole of why a band
    and the row that opened it read as one ask. No weight split here: see
    `NeedsBand`. */
