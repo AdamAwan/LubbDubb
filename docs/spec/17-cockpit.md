@@ -2255,9 +2255,44 @@ dead end [refs](#links) exists to prevent.
 
 ### The asks, and what draws them
 
-On the goal page an ask is **one row**, and the whole of it is the ask panel's
-([The panes](#the-panes)). What follows is about that whole — `needBody`, drawn by the panel here and
-by the rail's own panel elsewhere, one implementation either way.
+On the goal page an ask is drawn **in full in the pane it is about**, and as **one row** above the
+navigation everywhere else ([an ask is the loudest thing on its page](#an-ask-is-the-loudest-thing-on-its-page));
+the whole of it is also the ask panel's ([The panes](#the-panes)). What follows is about that whole —
+`needBody`, drawn by the pane, by the panel here and by the rail's own panel elsewhere, one
+implementation every way.
+
+#### An ask is the loudest thing on its page
+
+A page whose only waiting thing is a 13px tinted strip at the top, over a pane whose own primary
+button is filled and three times its size, has the weight exactly backwards: the pane's primary is
+never the control anybody is waiting on, and the row is. So the goal page draws its asks two ways,
+and `splitGoalAsks` decides which:
+
+- **The ask the open pane is about is drawn in full, as the pane's first card** — the same
+  `NeedsBand` body the rail and the ask panel draw, with its own verbs on it. The pane it belongs to
+  is read from the same `GOAL_ASK_TAB` that puts the dot on the tab, so the card and the dot cannot
+  disagree. `checksBelow` still holds where the pane below owns the rows
+  ([an ask that asks for work draws the work](#an-ask-that-asks-for-work-draws-the-work)).
+- **Every other ask stays a row**, and the row carries its own weight: a left rule in the kind's hue,
+  the ask at reading size, and the verb of the press that answers it — `KIND_VERB`, total over
+  `NeedKind` — where a faint "Open" used to be. **The verb is not decoration and not an afterthought
+  for the kinds with no pane.** `config`, `profile`, `intake`, `placement`, `limit` and the rest are
+  about the goal as a whole or the fleet carrying it, so they have no pane to be drawn in and can
+  only ever be a row; a row that says *open* on a page whose panes say *Write the criteria* is the
+  one ask on the page wearing no verb.
+
+**Two rows are never in the pane's set.** The parent ask is drawn by the band at the foot. And the
+plan's own ask belongs to the plan card in **both** of its states — the gate while the plan is
+withheld, the verdict card once it is revealed
+([the verdict, where the plan was read](#the-verdict-where-the-plan-was-read)) — so `planCardAsk`,
+not `planVerdictAsk`, is what the split takes out, and only on the pane that card is drawn in: on
+every other pane it stays a row, because there the card is not in front of the operator. Cut on the verdict alone, a withheld plan drew the
+ask twice: a card at the top of the pane saying reveal it, and the gate a few hundred pixels below,
+which is the guess the gate exists to prevent.
+
+**The pane's card does not replace the dot or the rail.** What needs the operator has not moved: the
+tab still carries its dot, and the rail still carries the row. What changed is only that the ask is
+answerable where the operator already is.
 
 Each ask embeds the **shared** component that owns its refusal rules — `EscalationCard` for a
 question, a permission or a proposal, `HumanTaskActions` for a bench task or a close-out. The
@@ -2765,11 +2800,11 @@ one press that leads to the gate. It is the ask for **this plan** — read off t
 `planId` and the plan's status, never off the row's kind, which a change to a running plan is raised
 under too.
 
-**While it is drawn, the ask leaves the lines at the top of the page** — but only on the pane that
-draws it. A one-line row saying go and find an ask, above a card already asking it, is the same ask
-twice; on every other pane the card is not in front of the operator and the row is the only thing
-that says the plan is waiting. The pane's own dot is unchanged, because what needs the operator has
-not moved.
+**The plan card owns that ask, in both of the plan's states.** While the plan is withheld the gate is
+what asks it; once revealed, this card is. Either way the ask is not also drawn among this pane's
+own asks — a row saying go and find an ask, above the card already asking it, is the same ask twice
+([an ask is the loudest thing on its page](#an-ask-is-the-loudest-thing-on-its-page)). The pane's own
+dot and the rail's row are unchanged, because what needs the operator has not moved.
 
 ### Moment two, beside moment one
 

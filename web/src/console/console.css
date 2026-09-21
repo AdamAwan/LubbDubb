@@ -1647,6 +1647,16 @@ a.cn-qbody {
   border-top: 1px solid var(--cn-line-soft);
 }
 /* The asks, a row each, above the tabs. */
+/* The pane's own asks, above its cards. Same gap as the rows above the
+   navigation, so the two sets read as one kind of thing seen at two weights.
+   → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */
+.cn-paneasks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
 .cn-asklines {
   display: flex;
   flex-direction: column;
@@ -6955,24 +6965,47 @@ button.cn-grow {
    the pane's own content off the screen and leave the navigation reading as
    unrelated to what is below it.
    → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+/* The row carries the weight of the thing it is: a left rule in the kind's hue,
+   the ask at reading size, and the verb drawn as a press. A 13px tinted strip
+   with a faint "Open" on it loses every page where a pane below has a filled
+   primary — and the pane's primary is never the thing waiting on anybody.
+   → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */
 .cn .cn-needs-line {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 10px 13px;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
   color: var(--cn-fg);
   background: var(--cn-tone-fill);
   border: 1px solid var(--cn-tone-line);
+  border-left: 3px solid var(--cn-tone);
   border-radius: var(--cn-r);
   cursor: pointer;
 }
 .cn .cn-needs-line:hover {
   background: var(--cn-hover);
+}
+.cn .cn-needs-line:hover .cn-needs-do {
+  background: var(--cn-tone);
+  color: var(--cn-bg);
+}
+/* The verb, at the weight of the control it stands for. It is the row's own
+   press rather than a second button inside one, so it is drawn and never
+   focusable — the whole row already takes the focus and the keyboard. */
+.cn-needs-do {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cn-tone-ink);
+  background: var(--cn-tone-bg);
+  border: 1px solid var(--cn-tone-line);
+  border-radius: var(--cn-r-sm);
 }
 .cn-needs-kind {
   flex: none;

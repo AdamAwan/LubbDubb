@@ -608,8 +608,23 @@ export function planUnderWay(page: GoalPageView): boolean {
  * @public the seam the goal page reads to draw the verdict beside the plan
  */
 export function planVerdictAsk(page: GoalPageView, escalations: readonly Escalation[]): NeedRow | null {
+  return page.plan?.revealed === true ? planCardAsk(page, escalations) : null;
+}
+
+/**
+ * The same ask while the plan card is answering it *in either way* — the gate
+ * under a withheld plan, the verdict card under a revealed one.
+ *
+ * The two are one row and the card is where it is answered, so this is what the
+ * page takes out of the asks it draws elsewhere. Read off `planVerdictAsk` alone
+ * it would be dropped only after the reveal, and a withheld plan drew the ask
+ * twice: a card at the top of the pane saying reveal it, and the gate itself a
+ * few hundred pixels below, which is the guess the gate exists to prevent.
+ * → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page
+ */
+function planCardAsk(page: GoalPageView, escalations: readonly Escalation[]): NeedRow | null {
   const plan = page.plan;
-  if (plan === null || plan.status !== 'awaiting_approval' || !plan.revealed) return null;
+  if (plan === null || plan.status !== 'awaiting_approval') return null;
   return (
     page.needs.find((row) => {
       if (row.kind !== 'plan') return false;
@@ -617,6 +632,43 @@ export function planVerdictAsk(page: GoalPageView, escalations: readonly Escalat
       return typeof planId === 'string' && planId === plan.id;
     }) ?? null
   );
+}
+
+/**
+ * The goal's asks, split into the ones the open pane owns and the ones that stay
+ * a row above the navigation.
+ *
+ * An ask drawn in the pane it is about is drawn **in full**: the row was one line
+ * of 13px over a pane whose own primary button is filled and three times its size,
+ * and the control nothing is waiting on was winning every page. In its own pane
+ * the ask is the pane's first card, so what needs the operator is what they read
+ * first.
+ *
+ * Three rows are never in that set. The parent ask is drawn by the band at the
+ * foot; the plan's verdict is drawn by the plan card, under the prediction; and an
+ * ask about the goal as a whole — a profile answer, an intake, the fleet's own
+ * config — belongs to no pane at all and can only be a row. Those keep the line,
+ * which is why the line has to carry its own weight wherever it is drawn.
+ * → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page
+ *
+ * @public the seam the goal page draws both sets from
+ */
+export function splitGoalAsks(
+  page: GoalPageView,
+  escalations: readonly Escalation[],
+  tab: GoalTab,
+): { inPane: NeedRow[]; lines: NeedRow[] } {
+  /* Only on the pane the plan card is drawn in: elsewhere the card is not in front
+     of the operator, and the row is the only thing saying the plan is waiting. */
+  const onPlanCard = tab === 'plan' ? planCardAsk(page, escalations) : null;
+  const inPane: NeedRow[] = [];
+  const lines: NeedRow[] = [];
+  for (const row of page.needs) {
+    if (row.id.startsWith('placement:parent:')) continue;
+    if (row.id === onPlanCard?.id) continue;
+    (GOAL_ASK_TAB[row.kind] === tab ? inPane : lines).push(row);
+  }
+  return { inPane, lines };
 }
 
 function outcomeAsked(page: GoalPageView): boolean {

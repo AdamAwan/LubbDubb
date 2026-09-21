@@ -17,6 +17,7 @@ import {
   obligationEnvironment,
   planUnderWay,
   planVerdictAsk,
+  splitGoalAsks,
   GOAL_ANCHOR,
   goalLanding,
   goalPanes,
@@ -118,6 +119,9 @@ export function GoalPage({
      → docs/spec/17-cockpit.md#the-panes */
   const picked = view.goalTab !== null && goalPanes(page).includes(view.goalTab) ? view.goalTab : null;
   const tab = picked ?? opening.tab;
+  /* Which asks the open pane owns, and which stay rows above the navigation.
+     → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */
+  const asks = splitGoalAsks(page, view.state.escalations, tab);
   return (
     <div className="cn-goal">
       <Header page={page} view={view} actions={actions} />
@@ -126,7 +130,7 @@ export function GoalPage({
           what belongs here is that there is one and which stage it is about —
           and a row costs the page one line, where a band cost it three hundred.
           → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */}
-      <AskLines rows={askLines(page, view, tab)} view={view} actions={actions} />
+      <AskLines rows={asks.lines} view={view} actions={actions} />
       {/* The stages are the tabs, and the tabs are cut out of the panel they
           select: one object, so the row cannot read as a strip that merely sits
           above the pane. → docs/spec/17-cockpit.md#the-panes */}
@@ -139,6 +143,17 @@ export function GoalPage({
         }}
         label="This goal"
       >
+        {/* The pane's own asks, in full and first: this is the pane the ask is
+            about, and one line of small print above the navigation is not what a
+            filled primary button inside the pane is competing with.
+            → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
+        {asks.inPane.length > 0 && (
+          <div className="cn-paneasks">
+            {asks.inPane.map((row) => (
+              <NeedsBand key={row.id} row={row} view={view} actions={actions} checksBelow={row.kind === 'validate'} />
+            ))}
+          </div>
+        )}
         {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'validate' && <ValidatePane page={page} view={view} actions={actions} folds={folds} />}
@@ -543,20 +558,6 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
     ];
   });
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
-}
-
-/*
- * Every ask on the goal, less the two drawn in full somewhere on the page: the
- * parent one the band at the foot carries, and — on the pane that draws it — the
- * plan's verdict, which the plan card asks for under the prediction. A line saying
- * go and find an ask, above a card that is already asking it, is the same ask
- * twice. On every other pane the line stays: the card is not in front of the
- * operator there, and the row is the only thing that says the plan is waiting.
- * → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read
- */
-function askLines(page: GoalPageView, view: CockpitView, tab: GoalTab): NeedRow[] {
-  const drawn = tab === 'plan' ? planVerdictAsk(page, view.state.escalations) : null;
-  return page.needs.filter((row) => !row.id.startsWith('placement:parent:') && row.id !== drawn?.id);
 }
 
 function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView; fold: Fold }): JSX.Element {

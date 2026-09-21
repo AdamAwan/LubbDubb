@@ -18,6 +18,7 @@ import {
   buildGoalTrack,
   goalSectionsOpen,
   planVerdictAsk,
+  splitGoalAsks,
   standsFor,
 } from '../web/src/view/goalPage.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
@@ -833,4 +834,64 @@ test('the plan’s verdict is asked beside the plan once it is revealed and stil
     null,
     'a `plan` ask about another plan — a change to a running one — is not this plan’s verdict',
   );
+});
+
+test('an ask is drawn in the pane it is about, and stays a row everywhere else', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
+  const page: GoalPageView = {
+    ...base,
+    plan: { ...base.plan!, status: 'awaiting_approval', revealed: true },
+    needs: [
+      planAsk({}),
+      /* About the goal as a whole — no pane owns it, so it can only ever be a row. */
+      planAsk({ id: 'profile:1', kind: 'profile' }),
+      planAsk({ id: 'task:check', kind: 'validate' }),
+      planAsk({ id: 'placement:parent:1', kind: 'placement' }),
+    ],
+  };
+  const escalations = [planEscalation('e:1', 'p')];
+
+  const onPlan = splitGoalAsks(page, escalations, 'plan');
+  assert.deepEqual(
+    onPlan.inPane.map((row) => row.id),
+    [],
+    'the plan ask is the plan card’s in both states, and the parent ask is the foot band’s',
+  );
+  assert.deepEqual(
+    onPlan.lines.map((row) => row.id),
+    ['profile:1', 'task:check'],
+    'the checks ask belongs to another pane, and the profile ask to none',
+  );
+
+  const onValidate = splitGoalAsks(page, escalations, 'validate');
+  assert.deepEqual(
+    onValidate.inPane.map((row) => row.id),
+    ['task:check'],
+    'the checks ask is drawn in full on the pane that owns the rows',
+  );
+  assert.deepEqual(
+    onValidate.lines.map((row) => row.id),
+    ['e:1', 'profile:1'],
+  );
+});
+
+test('a withheld plan’s ask is the gate’s, never a card above it as well', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
+  const gated: GoalPageView = {
+    ...base,
+    plan: { ...base.plan!, status: 'awaiting_approval', revealed: false },
+    needs: [planAsk({})],
+  };
+  const escalations = [planEscalation('e:1', 'p')];
+
+  const split = splitGoalAsks(gated, escalations, 'plan');
+  assert.deepEqual(split.inPane, [], 'the gate is what asks it — a card saying reveal it is the ask twice');
+  assert.deepEqual(split.lines, [], 'and neither is a row that leads back to the card in front of them');
+  assert.equal(planVerdictAsk(gated, escalations), null, 'no verdict is asked under the gate');
 });

@@ -134,6 +134,50 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   project_pull: '\u21a5',
 };
 
+/**
+ * What the ask wants, as the verb of the press that answers it.
+ *
+ * The row's own word, never "Open": a page whose asks say *open* and whose panes
+ * say *Write the criteria* is a page where the only thing wearing a verb is the
+ * thing that is not waiting on anybody. Total over {@link NeedKind}, so a new
+ * kind is given one deliberately rather than inheriting a door.
+ *
+ * It names what happens after the press honestly — the ask opens where it is
+ * answered, and an ask that is answered by going somewhere and doing the work
+ * says *that*: `validate` is "Run the checks", not "Answer".
+ *
+ * @public shared with the needs band, which draws the row this labels
+ */
+export const KIND_VERB: Record<NeedKind, string> = {
+  config: 'Fix the config',
+  config_gap: 'Fill it in',
+  recovery: 'Look',
+  escalation: 'Answer',
+  permission: 'Allow or deny',
+  plan: 'Decide',
+  reply: 'Review the draft',
+  merge: 'Decide',
+  describe: 'Describe it',
+  shortfall: 'Decide',
+  intake: 'Let it in',
+  profile: 'Answer',
+  placement: 'Pick a parent',
+  bench: 'Do it',
+  close_out: 'Close it out',
+  outcome: 'Say how it went',
+  validate: 'Run the checks',
+  validation_plan: 'Decide',
+  watch: 'Look',
+  unwatched: 'Look',
+  burn: 'Look',
+  limit: 'Look',
+  supply: 'Top it up',
+  dispatch: 'Look',
+  assigned: 'Look',
+  upgrade: 'Upgrade',
+  project_pull: 'Turn it on',
+};
+
 const GROUP_LABEL: Record<NeedGroup, string> = {
   blocking: 'Blocking',
   yours: 'Yours to do',
