@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { api, type CriteriaVersionReading, type GoalCriteriaReading } from '../api.js';
 import type { CriteriaStanding } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
@@ -50,10 +50,17 @@ const DRIFT_REASON_HINT =
 export function GoalCriteria({
   issueNumber,
   workStarted,
+  open,
+  settled,
+  onToggle,
   now,
 }: {
   issueNumber: number;
   workStarted: boolean;
+  open: boolean;
+  /** Whether `open` is the operator's own answer rather than the page's default. */
+  settled: boolean;
+  onToggle: (open: boolean) => void;
   now: number;
 }): JSX.Element | null {
   const [reading, setReading] = useState<GoalCriteriaReading | null>(null);
@@ -65,6 +72,10 @@ export function GoalCriteria({
   // standing moved underneath the form: a part was dispatched between the page
   // loading and the press. The field appears and what was typed is still there.
   const [refused, setRefused] = useState(false);
+  /* Latched at the first reading, for the reason the prediction card latches its
+     own: a card that folded itself the moment the version was appended would take
+     the operator's own words away as they pressed. */
+  const arrivedWritten = useRef<boolean | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setReading(await api.getGoalCriteria(issueNumber));
@@ -94,6 +105,12 @@ export function GoalCriteria({
   // Three sources, all answering the same question: a version already on record as
   // drift, a part already dispatched, and the route having just said so.
   const nextIsDrift = workStarted || drifted.length > 0 || refused;
+  /* Once somebody has written what "done" means the card is a record, and a record
+     arrives folded — the heading still carries the version count and the drift tag,
+     which is what a folded card owes its reader.
+     → docs/spec/17-cockpit.md#goal-criteria-and-drift */
+  if (arrivedWritten.current === null) arrivedWritten.current = current !== null;
+  const showing = settled ? open : open && arrivedWritten.current === false;
 
   const submit = async (): Promise<void> => {
     const body = text.trim();
@@ -125,7 +142,13 @@ export function GoalCriteria({
   return (
     <section className="cn-card" id="cn-criteria">
       <h3>
-        What “done” means
+        {/* The disclosure is the card's own, as the prediction panel's is: only this
+            card knows whether anybody has written criteria, so only it can say
+            whether there is a record here to fold. */}
+        <button type="button" className="cn-disc" aria-expanded={showing} onClick={() => onToggle(!showing)}>
+          <i className="cn-caret">{showing ? '▾' : '▸'}</i>
+          What “done” means
+        </button>
         {versions.length > 0 && <i className="cn-n">v{versions.length}</i>}
         {drifted.length > 0 && (
           <Tag tone="amber" title={STANDING['post-work'].why}>
@@ -133,100 +156,109 @@ export function GoalCriteria({
           </Tag>
         )}
       </h3>
-      <div className="cn-crit-body">
-        <p className="cn-crit-why">
-          The goal&rsquo;s acceptance criteria, written by hand and kept as an append-only chain. Where these and a
-          part&rsquo;s own acceptance disagree, these are the authority and the part is the defect. They are an oracle
-          the work is judged against, so they are written for the fleet to read.
-        </p>
+      {showing && (
+        <div className="cn-crit-body">
+          <p className="cn-crit-why">
+            The goal&rsquo;s acceptance criteria, written by hand and kept as an append-only chain. Where these and a
+            part&rsquo;s own acceptance disagree, these are the authority and the part is the defect. They are an oracle
+            the work is judged against, so they are written for the fleet to read.
+          </p>
 
-        {current === null && <p className="cn-empty">No criteria have been written for this goal.</p>}
-        {current !== null && <CurrentVersion version={current} now={now} />}
+          {current === null && <p className="cn-empty">No criteria have been written for this goal.</p>}
+          {current !== null && <CurrentVersion version={current} now={now} />}
 
-        {earlier.length > 0 && (
-          <details className="cn-crit-chain">
-            <summary>
-              {earlier.length === 1 ? 'The version behind it' : `The ${earlier.length} versions behind it`}
-            </summary>
-            <ol className="cn-crit-olds">
-              {earlier.map((version) => (
-                <li className="cn-crit-old" key={version.id}>
-                  <div className="hdr hdr-base">
-                    <span className="cn-crit-v">v{version.version}</span>
-                    <Tag tone="grey" title={STANDING[version.standing].why}>
-                      {STANDING[version.standing].label}
-                    </Tag>
-                    <span className="cn-crit-by">
-                      {version.author ?? 'author unrecorded'} · {relTime(version.authoredAt, now)}
-                    </span>
-                  </div>
-                  <blockquote className="cn-crit-text">{version.text}</blockquote>
-                  {version.standing === 'post-work' && <Reason reason={version.reason} />}
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
+          {earlier.length > 0 && (
+            <details className="cn-crit-chain">
+              <summary>
+                {earlier.length === 1 ? 'The version behind it' : `The ${earlier.length} versions behind it`}
+              </summary>
+              <ol className="cn-crit-olds">
+                {earlier.map((version) => (
+                  <li className="cn-crit-old" key={version.id}>
+                    <div className="hdr hdr-base">
+                      <span className="cn-crit-v">v{version.version}</span>
+                      <Tag tone="grey" title={STANDING[version.standing].why}>
+                        {STANDING[version.standing].label}
+                      </Tag>
+                      <span className="cn-crit-by">
+                        {version.author ?? 'author unrecorded'} · {relTime(version.authoredAt, now)}
+                      </span>
+                    </div>
+                    <blockquote className="cn-crit-text">{version.text}</blockquote>
+                    {version.standing === 'post-work' && <Reason reason={version.reason} />}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
 
-        {!writing && (
-          <div className="cn-crit-presses">
-            <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setWriting(true)}>
-              {current === null ? 'Write the criteria' : 'Revise the criteria'}
-            </button>
-            {nextIsDrift && <span className="cn-crit-warn">A revision now is drift, and will want a reason.</span>}
-          </div>
-        )}
-
-        {writing && (
-          <div className="cn-crit-form">
-            {/* The requirement is surfaced before the press rather than after it: the
-                chain is append-only, so a refused submission is a whole draft the
-                operator retypes. */}
-            {nextIsDrift && <p className="cn-crit-warn">{DRIFT_REASON_HINT}</p>}
-            {nextIsDrift && (
-              <label>
-                <span>Why are the criteria changing?</span>
-                <input
-                  className="cn-crit-reason"
-                  value={reason}
-                  placeholder="What we learned, and what it changes"
-                  onChange={(e) => setReason(e.target.value)}
-                />
-              </label>
-            )}
-            <label>
-              <span>What “done” means for this goal</span>
-              <textarea
-                className="cn-crit-write"
-                rows={6}
-                value={text}
-                placeholder={current === null ? 'One criterion per line' : "The whole of what 'done' means, restated"}
-                onChange={(e) => setText(e.target.value)}
-              />
-            </label>
-            <p className="cn-crit-note">
-              A version is the whole text rather than a patch, and nothing is ever edited in place: this appends v
-              {versions.length + 1} behind the one that stands now.
-            </p>
-            {refusal !== null && <p className="cn-crit-refusal">{refusal}</p>}
+          {!writing && (
             <div className="cn-crit-presses">
-              <AsyncButton tone="primary" onClick={submit} onRefused={setRefusal}>
-                Append this version
-              </AsyncButton>
+              {/* Primary only where there is nothing on record. A revision is one way
+                on from a card that already says what it says, and drawn as the act
+                the page is asking for it reads as work owed on every goal. */}
               <button
                 type="button"
-                className={buttonClass({})}
-                onClick={() => {
-                  setWriting(false);
-                  setRefusal(null);
-                }}
+                className={buttonClass(current === null ? { tone: 'primary' } : {})}
+                onClick={() => setWriting(true)}
               >
-                Cancel
+                {current === null ? 'Write the criteria' : 'Revise the criteria'}
               </button>
+              {nextIsDrift && <span className="cn-crit-warn">A revision now is drift, and will want a reason.</span>}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {writing && (
+            <div className="cn-crit-form">
+              {/* The requirement is surfaced before the press rather than after it: the
+                chain is append-only, so a refused submission is a whole draft the
+                operator retypes. */}
+              {nextIsDrift && <p className="cn-crit-warn">{DRIFT_REASON_HINT}</p>}
+              {nextIsDrift && (
+                <label>
+                  <span>Why are the criteria changing?</span>
+                  <input
+                    className="cn-crit-reason"
+                    value={reason}
+                    placeholder="What we learned, and what it changes"
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                </label>
+              )}
+              <label>
+                <span>What “done” means for this goal</span>
+                <textarea
+                  className="cn-crit-write"
+                  rows={6}
+                  value={text}
+                  placeholder={current === null ? 'One criterion per line' : "The whole of what 'done' means, restated"}
+                  onChange={(e) => setText(e.target.value)}
+                />
+              </label>
+              <p className="cn-crit-note">
+                A version is the whole text rather than a patch, and nothing is ever edited in place: this appends v
+                {versions.length + 1} behind the one that stands now.
+              </p>
+              {refusal !== null && <p className="cn-crit-refusal">{refusal}</p>}
+              <div className="cn-crit-presses">
+                <AsyncButton tone="primary" onClick={submit} onRefused={setRefusal}>
+                  Append this version
+                </AsyncButton>
+                <button
+                  type="button"
+                  className={buttonClass({})}
+                  onClick={() => {
+                    setWriting(false);
+                    setRefusal(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

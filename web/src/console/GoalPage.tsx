@@ -294,7 +294,6 @@ function WorkPaneBody({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
-  const held = usePartDescriptions();
   /* The chosen card itself, so the panel can draw its pointer under it. The board's
      columns wrap on a narrow pane, so where that card ends up is a question only the
      laid-out page can answer — a share of the width would point at whichever card
@@ -304,15 +303,12 @@ function WorkPaneBody({
   const describable = page.parts
     .map(({ part }, i) => ({ part, position: i + 1 }))
     .filter((p) => p.part.prNumber !== null);
-  /* The operator's pick, or the part that wants them: the first nobody has
-     described, and failing that the first that opened. Never none while there is a
-     pull request to describe — an empty space where the panel was is a feature an
-     operator has to know to go looking for. */
-  const chosen =
-    describable.find((p) => p.part.slug === view.goalPart) ??
-    describable.find((p) => held !== null && held.parts[p.part.slug] === undefined) ??
-    describable[0] ??
-    null;
+  /* The operator's pick and nothing else. A part opened for them was a panel of
+     prose between the board and the criteria on every visit to every goal, for a
+     part nobody had asked about — the card's own standing already says which parts
+     want describing, and the card is the press.
+     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+  const chosen = describable.find((p) => p.part.slug === view.goalPart) ?? null;
   return (
     <>
       <PlanWaves
@@ -353,6 +349,9 @@ function WorkPaneBody({
       <GoalCriteria
         issueNumber={page.issue.number}
         workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
+        open={folds.criteria.open}
+        settled={folds.criteria.settled}
+        onToggle={folds.criteria.onToggle}
         now={view.now}
       />
       {/* Last on the pane, once the plan is approved and the work is under way: it is
@@ -369,6 +368,7 @@ function WorkPaneBody({
           plan={page.plan}
           parts={page.parts.map((p) => p.part)}
           open={folds.prediction.open}
+          settled={folds.prediction.settled}
           onToggle={folds.prediction.onToggle}
           now={view.now}
         />
@@ -550,6 +550,13 @@ function ObligationPicker({
 
 interface Fold {
   open: boolean;
+  /**
+   * Whether `open` is the operator's own answer rather than the page's default. A
+   * card whose reading only it holds — the criteria, the prediction — narrows the
+   * default it was handed, and must not narrow a fold somebody opened on purpose.
+   * → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet
+   */
+  settled: boolean;
   onToggle: (open: boolean) => void;
   reveal: () => void;
 }
@@ -557,11 +564,13 @@ interface Fold {
 function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActions): Record<GoalSection, Fold> {
   const byDefault = goalSectionsOpen(page);
   const entries = GOAL_SECTIONS.map((section): [GoalSection, Fold] => {
+    const settled = view.goalOpen.has(section) || view.goalShut.has(section);
     const open = view.goalOpen.has(section) ? true : view.goalShut.has(section) ? false : byDefault[section];
     return [
       section,
       {
         open,
+        settled,
         onToggle: (next) => {
           if (next) logUsage('goal.expand');
           actions.openGoalSection(section, next);
@@ -1445,6 +1454,7 @@ function PlanWaves({
           plan={plan}
           parts={page.parts.map((p) => p.part)}
           open={fold.open}
+          settled={fold.settled}
           onToggle={fold.onToggle}
           now={view.now}
         />

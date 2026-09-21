@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { api, type GoalPredictionReading } from '../api.js';
 import type { PlanPart, PlanView, PredictionMark, PredictionOutcomeMarks, PredictionSlot } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
@@ -129,6 +129,7 @@ export function PredictionReview({
   plan,
   parts,
   open,
+  settled,
   onToggle,
   now,
 }: {
@@ -138,10 +139,17 @@ export function PredictionReview({
   plan: PlanView | null;
   parts: readonly PlanPart[];
   open: boolean;
+  /** Whether `open` is the operator's own answer rather than the page's default. */
+  settled: boolean;
   onToggle: (open: boolean) => void;
   now: number;
 }): JSX.Element | null {
   const [reading, setReading] = useState<GoalPredictionReading | null>(null);
+  /* Latched at the first reading rather than read live: the panel narrowing its own
+     default is a decision about how the page arrives, and one taken again on every
+     answer would shut the card under the operator as they marked the last slot.
+     → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */
+  const arrivedAnswered = useRef<boolean | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -187,6 +195,14 @@ export function PredictionReview({
   const marked = SLOTS.filter(({ key }) => prediction.slots[key] !== null && prediction.planMarks[key] !== null).length;
   const askedOf = SLOTS.filter(({ key }) => prediction.slots[key] !== null).length;
 
+  /* Nothing in here is still the operator's to do: every slot they wrote is marked
+     against the plan, and moment two is either unasked or answered. The page's
+     default opens this card where the prediction is the live question; once it has
+     been answered it is a record, and a record arrives folded. */
+  const answered = marked === askedOf && (!showOutcome || prediction.outcomeMarkedAt !== null);
+  if (arrivedAnswered.current === null) arrivedAnswered.current = answered;
+  const showing = settled ? open : open && arrivedAnswered.current === false;
+
   return (
     <div className="cn-pmark-fold">
       {/* The disclosure is the panel's own, as the work record's is: only this
@@ -196,8 +212,8 @@ export function PredictionReview({
           folded record owes its reader is whether anything in it is unanswered.
           → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
       <h4 className="cn-pmark-hdr">
-        <button type="button" className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
-          <i className="cn-caret">{open ? '\u25be' : '\u25b8'}</i>
+        <button type="button" className="cn-disc" aria-expanded={showing} onClick={() => onToggle(!showing)}>
+          <i className="cn-caret">{showing ? '\u25be' : '\u25b8'}</i>
           What you predicted
         </button>
         {askedOf > 0 && (
@@ -207,7 +223,7 @@ export function PredictionReview({
         )}
         {showOutcome && prediction.outcomeMarkedAt === null && <i className="cn-n">outcome unanswered</i>}
       </h4>
-      {open && (
+      {showing && (
         <div className="cn-pmark">
           <div className="cn-pmark-said">
             <p className="cn-pmark-why">
