@@ -67,7 +67,7 @@ import {
   ControlSegments,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
-import { checkStandings, pressableChecks } from '../view/validatePane.js';
+import { checkStandings, pressableRows, unanswered, type CheckStanding } from '../view/validatePane.js';
 import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
 import { HeadRow } from '../components/panel.js';
 import { SignalsSection } from '../components/SignalsSection.js';
@@ -381,14 +381,18 @@ function ValidatePane({
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const showing = obligationEnvironment(page, 'validate', view.sheetEnvironment);
+  const standings = checkStandings(page.checks, page.remoteSheets);
   return (
     <>
       <ObligationPicker page={page} tab="validate" showing={showing} actions={actions} />
       {/* Before the list, because the question an operator arrives with is whether a run would
-          answer some of it. → docs/spec/17-cockpit.md#the-validate-pane */}
-      <RunStrip page={page} view={view} actions={actions} />
+          answer some of it. The standings are computed once, here, and handed to both halves: the
+          bands and the strip's count of what is still unanswered are one reading, and two of them
+          would be free to disagree. → docs/spec/17-cockpit.md#the-validate-pane */}
+      <RunStrip page={page} view={view} actions={actions} standings={standings} />
       <Validation
         page={page}
+        standings={standings}
         actions={actions}
         refUrls={view.state.refUrls}
         desktopFolder={view.state.config.desktopFolder}
@@ -964,10 +968,12 @@ function RunStrip({
   page,
   view,
   actions,
+  standings,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
+  standings: Map<string, CheckStanding>;
 }): JSX.Element | null {
   const { issue } = page;
   const run = view.state.localRun;
@@ -1023,10 +1029,13 @@ function RunStrip({
         )}
       </div>
       {/* One line per environment with a sheet, carrying the gate's own count so the strip never
-          offers a run of rows a press would touch in no way at all.
-          → docs/spec/36-remote-validation.md#a-row-no-press-can-read */}
+          offers a run of rows a press would touch in no way at all. **Rows, not checks**: a sheet
+          carries queries and measures beside its check rows, and a press re-reads the answered ones
+          too — so the line says what a press does and, separately, how many checks are still
+          unanswered there. → docs/spec/36-remote-validation.md#a-row-no-press-can-read */}
       {page.remoteSheets.map((sheet) => {
-        const pressable = pressableChecks(sheet);
+        const rows = pressableRows(sheet);
+        const owed = unanswered(sheet.environment, standings);
         const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
         return (
           <div className="cn-runstrip-row" key={sheet.environment}>
@@ -1039,14 +1048,24 @@ function RunStrip({
                   className={`${CONTROL_CLASS} primary`}
                   onClick={() => actions.pressRemoteSheet(issue.number, sheet.environment)}
                   onRefused={setRefusal}
-                  title={`Re-read every selected row against the commit ${sheet.environment} stands at right now`}
+                  title={`Re-read every selected row on this sheet against the commit ${sheet.environment} stands at right now — the ones already answered included`}
                 >
-                  {pressable === 1 ? 'Run 1 check' : `Run ${String(pressable)} checks`}
+                  {rows === 1 ? 'Run 1 row' : `Run ${String(rows)} rows`}
                 </AsyncButton>
                 <span className="cn-sub">
-                  where this goal&rsquo;s work has arrived
-                  {sheet.tenant.stale && ' · its tenant is stale, and the panel below reseeds it'}
+                  every selected row re-read, answered ones included
+                  {owed > 0 && ` · ${String(owed)} check${owed === 1 ? '' : 's'} here have no answer yet`}
                 </span>
+                {/* What staleness means, where it can be acted on. A tenant accumulates the residue
+                    of every run that used it, so past the window the environment declares a red row
+                    may be that residue rather than the code — which is why the answer is to reseed
+                    first and press after. → docs/spec/36-remote-validation.md#tenants */}
+                {sheet.tenant.stale && (
+                  <span className="cn-sub cn-runstrip-stale">
+                    Its test data is older than {sheet.environment} allows — reseed it below first, or a failure here
+                    may be leftovers from earlier runs rather than this goal&rsquo;s work.
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -1075,12 +1094,14 @@ function RunStrip({
 
 function Validation({
   page,
+  standings,
   actions,
   refUrls,
   desktopFolder,
   fold,
 }: {
   page: GoalPageView;
+  standings: Map<string, CheckStanding>;
   actions: CockpitActions;
   refUrls: Record<string, string>;
   desktopFolder: string;
@@ -1089,10 +1110,6 @@ function Validation({
   const { issue, plan, checks } = page;
   const live = checks.filter((c) => c.supersededReason === null);
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
-  /* Where each check's answer is coming from. Computed once here and handed down, because the
-     bands the list groups on and the runner panels below it are two readings of one fact.
-     → docs/spec/17-cockpit.md#the-validate-pane */
-  const standings = checkStandings(checks, page.remoteSheets);
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.validation}>
@@ -1223,13 +1240,13 @@ function RemoteValidation({
   const waiting = open.rows.filter((r) => r.awaitingApproval).length;
   /* The same count the gate's own button carries, said on the header so an operator scanning the
      pane knows a press is waiting without opening it. → docs/spec/36-remote-validation.md */
-  const pressable = pressableChecks(open);
+  const pressable = pressableRows(open);
   return (
     <section className="cn-card" id="cn-remote-validation">
       <h3>
         <Disclosure open={fold.open} onToggle={fold.onToggle} label={`Runs on ${open.environment}`} />
         <i className="cn-n">
-          {pressable === 1 ? '1 check a press would carry' : `${pressable} checks a press would carry`}
+          {pressable === 1 ? '1 row a press would read' : `${pressable} rows a press would read`}
           {waiting > 0 && ` · ${waiting} waiting on an approval`}
         </i>
         <span className="cn-more">where this goal&rsquo;s work has arrived</span>

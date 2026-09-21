@@ -7155,3 +7155,10 @@ button.cn-grow {
   padding: 7px 10px;
   background: var(--cn-panel);
 }
+.cn-runstrip-stale {
+  flex-basis: 100%;
+  color: var(--cn-amber-ink);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}

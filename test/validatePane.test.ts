@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkStandings, pressableChecks } from '../web/src/view/validatePane.js';
+import { checkStandings, pressableRows, unanswered } from '../web/src/view/validatePane.js';
 import type { RemoteSheetRowView, RemoteSheetView, ValidationCheckView } from '../src/wire.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
@@ -147,7 +147,7 @@ test('a superseded check gets no standing at all', () => {
   assert.equal(standings.size, 0);
 });
 
-test('the pressable count is the gate’s own, so the panel offers exactly what a press would carry', () => {
+test('the pressable count is the gate’s own, and it counts rows rather than checks', () => {
   const s = sheet({
     rows: [
       row({ rowId: 'r1', sourceId: 'c1' }),
@@ -156,7 +156,23 @@ test('the pressable count is the gate’s own, so the panel offers exactly what 
       row({ rowId: 'r4', sourceId: 'c4', idleReason: 'a person carries every step' }),
     ],
   });
-  assert.equal(pressableChecks(s), 1);
+  assert.equal(pressableRows(s), 1);
+});
+
+test('what is still unanswered is counted off the standings, never off the sheet a second time', () => {
+  /* A press re-reads every selected row, answered ones and queries included, so the gate's count is
+     always the larger number. The one an operator is asking about is how many checks here have no
+     answer yet, and it comes from the bands so the two can never disagree. */
+  const s = sheet({
+    rows: [
+      row({ rowId: 'r1', sourceId: 'c1' }),
+      row({ rowId: 'r2', sourceId: 'c2' }),
+      row({ rowId: 'q1', kind: 'state', sourceId: 'q1' }),
+    ],
+  });
+  const standings = checkStandings([check({ id: 'c1' }), check({ id: 'c2', state: 'passed', resultBy: 'spec' })], [s]);
+  assert.equal(pressableRows(s), 3, 'the press reads three rows');
+  assert.equal(unanswered('staging', standings), 1, 'but only one check there is still owed an answer');
 });
 
 function reading(): NonNullable<RemoteSheetRowView['reading']> {

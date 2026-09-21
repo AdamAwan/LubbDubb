@@ -2443,8 +2443,19 @@ start button (`press={false}`): a press offered in two places is two controls fo
 on the panels is everything about a run rather than the starting of one — calling a live run off,
 reseeding the tenant, ruling on a row.
 
-The strip counts what a press would carry with the gate's own count, `pressableChecks`, and never one
-of its own ([36](36-remote-validation.md#a-row-no-press-can-read)).
+**The strip counts rows, and says separately how many checks are owed.** A press re-reads every
+selected row on the sheet — the `state` queries and `measure` rows beside the check rows, and the
+checks already answered — so the gate's number is always larger than the list's, and calling it
+_checks_ made the strip read as a miscount of the bands under it. The press carries `pressableRows`,
+the gate's own count ([36](36-remote-validation.md#a-row-no-press-can-read)); the sentence beside it
+carries `unanswered`, counted off the same standings the bands are drawn from so the two can never
+disagree.
+
+**Where a tenant is stale, the strip says what that costs.** A tenant accumulates the residue of
+every run that used it, so past the window the environment declares, a red row may be that residue
+rather than the code ([36](36-remote-validation.md#tenants)) — which is why the answer is reseed
+first, press after. The strip says exactly that, in the line where the press is; the reseed control
+itself stays on the panel, where the tenant's name and age are.
 
 The environment panel draws its **gate** — the tenant, the commit the last run pinned, the cancel and
 the reseed — and folds its rows behind one summary line. The rows keep every control they have: approving a query and

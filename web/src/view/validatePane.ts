@@ -91,11 +91,23 @@ function answeredBy(check: ValidationCheckView, sheets: readonly RemoteSheetView
 }
 
 /**
- * How many checks a press against this sheet would carry. The sheet's gate counts the same rows for
- * its own button; this is that count said on the Checks panel's side of the pane, so an operator
- * reading the list knows a press is waiting for them further down.
+ * How many **rows** a press against this sheet would read — the gate's own count, so the strip and
+ * the gate never offer different numbers.
+ *
+ * Rows, and never checks: a sheet carries `state` queries and `measure` rows beside its check rows,
+ * and a press re-reads every selected row including the ones already answered. Called *checks*, the
+ * number is larger than the list's unanswered count and reads as a miscount of the list.
  * → docs/spec/36-remote-validation.md#a-row-no-press-can-read
  */
-export function pressableChecks(sheet: RemoteSheetView): number {
+export function pressableRows(sheet: RemoteSheetView): number {
   return sheet.rows.filter((row) => row.selected && row.blockedReason === null && row.idleReason === null).length;
+}
+
+/**
+ * How many of this environment's checks have no answer yet, read off the same standings the bands
+ * are drawn from. It is the number an operator is actually asking about when they read a press, and
+ * it is deliberately *not* derived from the sheet a second time.
+ */
+export function unanswered(environment: string, standings: Map<string, CheckStanding>): number {
+  return [...standings.values()].filter((s) => s.band === 'open' && s.label.includes(environment)).length;
 }
