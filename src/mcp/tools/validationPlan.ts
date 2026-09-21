@@ -63,6 +63,17 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
                 'What a pass looks like, and where — the row, the log line, the ref that is gone, the screen. ' +
                   'One run settles several things: list all of them here rather than splitting the check.',
               ),
+            proof: z
+              .string()
+              .describe(
+                'What must come **back** for a pass to count — the evidence, not the assertion. Name the ' +
+                  'screen and what has to be visible on it. Write it on every check an agent carries out ' +
+                  'unwatched: it is the only thing standing between an agent\u2019s word and a green row, ' +
+                  'and a check that declares it is refused a pass that hands nothing back. Leave it out ' +
+                  'where the assertion is the whole of the evidence \u2014 a store reading, a log line, a ' +
+                  'suite area\u2019s own report.',
+              )
+              .optional(),
             uses: z
               .array(z.string())
               .describe('Names of declared resources this check needs. Names, never paths.')

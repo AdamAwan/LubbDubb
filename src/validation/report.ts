@@ -47,9 +47,10 @@ export const ReportSchema = z
           'it, so nothing is recorded and a person gets it back.',
       ),
     capture: CaptureName.describe(
-      'The screenshot you wrote into the check’s own directory, by file name. Required with "captured" and ' +
-        'accepted with nothing else — a capture is the whole of what a "captured" report carries, and it ' +
-        'outlives the run because somebody still has to look at it.',
+      'The screenshot you wrote into the check’s own directory, by file name. Required with "captured", and ' +
+        'required with "passed" on a check that declares `proof` — there the image is the evidence its author ' +
+        'demanded in advance, and the pass is refused without it. Accepted with nothing else. It outlives the ' +
+        'run, because somebody still has to be able to look at it.',
     ).optional(),
     note: z
       .string({ required_error: 'note is required — say what you saw', invalid_type_error: 'note is required' })
@@ -65,22 +66,11 @@ export const ReportSchema = z
       'you were dispatched to run',
   )
   .superRefine((report, ctx) => {
-    // A capture asserts nothing, so it can only ride the one result that asserts nothing either.
-    // Attached to a `passed` it would be the failure this design refuses everywhere else, arrived at
-    // by the one route that looks helpful: an image colouring its own row green.
     if (report.result === 'captured' && report.capture === undefined)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['capture'],
         message: 'a "captured" report names the screenshot it took — without one there is nothing to look at',
-      });
-    if (report.result !== 'captured' && report.capture !== undefined)
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['capture'],
-        message:
-          '"capture" belongs to a "captured" report. A screenshot asserts nothing, so it never rides a result ' +
-          'that does — an image beside a pass reads as the evidence for it, and nobody looked.',
       });
   });
 
@@ -95,7 +85,44 @@ type ParsedReport = z.infer<typeof ReportSchema>;
  */
 const RETIRED_RESULT = 'handback';
 
-export function validateReport(args: unknown): { ok: true; report: ParsedReport } | { ok: false; error: string } {
+/**
+ * Whether this check refuses a pass that hands nothing back. `proof` is the author's demand, written
+ * before the run and read here — which is the whole of what separates it from an agent volunteering
+ * an image beside its own green row. That direction is the one the capture rule was written against,
+ * and it is why a capture may ride a `passed` here and nowhere else.
+ * → docs/spec/20-validation.md#proof
+ */
+export function demandsProof(check: Pick<ValidationCheck, 'proof'>): boolean {
+  return check.proof !== null && check.proof.trim() !== '';
+}
+
+/**
+ * The cross-field rule the pure schema cannot hold, because it turns on the **check** rather than on
+ * the report: which results a capture may ride, and which result may not arrive without one. Null is
+ * a report that satisfies it.
+ */
+function captureFault(report: ParsedReport, check: Pick<ValidationCheck, 'proof'> | null): string | null {
+  const demanded = check !== null && demandsProof(check);
+  if (report.result === 'passed' && demanded && report.capture === undefined)
+    return (
+      'this check declares "proof" — the evidence its author demanded before anybody ran it — so a pass names ' +
+      'the screenshot that shows it. Write the image into the check’s own directory and name it in ' +
+      '"capture", or report what you actually saw: "failed" if it was wrong, "blocked" if you could not get ' +
+      'to it. A pass on your word alone is the one thing this check was written to refuse.'
+    );
+  if (report.capture !== undefined && report.result !== 'captured' && !(report.result === 'passed' && demanded))
+    return (
+      '"capture" belongs to a "captured" report, or to a pass on a check that declares "proof". A screenshot ' +
+      'asserts nothing, so it never rides a result that does unless the check asked for it in advance — an ' +
+      'image volunteered beside a pass reads as the evidence for it, and nobody looked.'
+    );
+  return null;
+}
+
+export function validateReport(
+  args: unknown,
+  check: Pick<ValidationCheck, 'proof'> | null = null,
+): { ok: true; report: ParsedReport } | { ok: false; error: string } {
   if (typeof args === 'object' && args !== null && (args as { result?: unknown }).result === RETIRED_RESULT)
     return {
       ok: false,
@@ -105,7 +132,10 @@ export function validateReport(args: unknown): { ok: true; report: ParsedReport 
         'with the same note and result "blocked".',
     };
   const parsed = ReportSchema.safeParse(args);
-  if (parsed.success) return { ok: true, report: parsed.data };
+  if (parsed.success) {
+    const fault = captureFault(parsed.data, check);
+    return fault === null ? { ok: true, report: parsed.data } : { ok: false, error: fault };
+  }
   const first = parsed.error.errors[0];
   return { ok: false, error: first ? first.message : 'the report could not be read' };
 }

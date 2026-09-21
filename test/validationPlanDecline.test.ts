@@ -48,6 +48,7 @@ function input(id: string, seq: number, title: string): ValidationCheckInput {
     title,
     do: `Run ${id}.`,
     expect: 'It works.',
+    proof: null,
     uses: [],
     covers: [],
     fleetCandidate: false,

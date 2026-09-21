@@ -110,6 +110,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     title: 'The export opens in Excel',
     do: 'Export a report and open it.',
     expect: 'It opens with the columns intact.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [],

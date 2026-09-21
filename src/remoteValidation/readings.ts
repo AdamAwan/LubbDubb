@@ -6,6 +6,7 @@ import type { EnvironmentConfig } from '../environments/policy.js';
 import type { EnvironmentProber } from '../environments/prober.js';
 import type { Store } from '../store/store.js';
 import type { RemoteRun, RemoteSheetRow, ValidationCheck } from '../types.js';
+import { demandsProof } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../validation/steps.js';
 import { remoteValidationRunDir } from './origin.js';
@@ -172,7 +173,14 @@ export class RemoteReadingDesk {
               run,
               endedSha,
             );
-      const folded = screen ? await this.withScreen(run, check, asserted, report) : (asserted as RowOutcome);
+      // `proof` is the author's demand for evidence, written before anybody ran this, and it is read
+      // here for the same reason the report tool reads it: a row the fleet drove unwatched goes green
+      // on an agent's word unless something makes it hand the screen back. It tightens an instrument
+      // that already ran and never creates a row of its own, so a check with no instrument is
+      // untouched by it. → docs/spec/20-validation.md#proof
+      const owes = instrument !== null && demandsProof(check);
+      const folded =
+        screen || owes ? await this.withScreen(run, check, asserted, report, screen) : (asserted as RowOutcome);
       const settling =
         folded.outcome === 'blocked' ? null : this.writeCheck(run, check, folded, instrument, folded.capture ?? null);
       if (settling !== null && settling.kept !== null) kept.push(settling.kept);
@@ -237,6 +245,7 @@ export class RemoteReadingDesk {
     check: ValidationCheck,
     asserted: RowOutcome | null,
     report: RunReport,
+    screen: boolean,
   ): Promise<RowOutcome> {
     const base: RowOutcome = asserted ?? {
       outcome: 'captured',
@@ -254,11 +263,22 @@ export class RemoteReadingDesk {
     const waiting = `A screen was handed back for somebody to look at: \`${kept.capture}\`.`;
     if (asserted?.outcome === 'failed')
       return { ...asserted, capture: kept.capture, detail: joined(asserted.detail, waiting) };
+    // A `screenshot` step asserts nothing, so its row waits for a person whatever else it carries.
+    // A `proof` demand is the other way round: the row **did** assert, and the evidence is what the
+    // author required before the assertion would be believed — so the outcome the instrument reached
+    // stands, with the image beside it. Folding the two would put a person back in front of every
+    // goal, which is the thing a driven check exists to remove.
+    if (screen)
+      return {
+        ...base,
+        outcome: 'captured',
+        capture: kept.capture,
+        detail: joined(asserted?.detail ?? null, `${waiting} Nothing here says it is right — a person judges that.`),
+      };
     return {
       ...base,
-      outcome: 'captured',
       capture: kept.capture,
-      detail: joined(asserted?.detail ?? null, `${waiting} Nothing here says it is right — a person judges that.`),
+      detail: joined(asserted?.detail ?? null, `The evidence this check asked for: \`${kept.capture}\`.`),
     };
   }
 

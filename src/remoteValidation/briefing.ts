@@ -276,6 +276,11 @@ interface RunDrive {
   title: string;
   /** The `browser` steps the fleet carries, in the order they were authored. */
   steps: string[];
+  /**
+   * What a pass must hand back, where the check's author demanded it. Null is *none demanded*, and
+   * the brief asks for nothing. → docs/spec/20-validation.md#proof
+   */
+  proof: string | null;
 }
 
 /**
@@ -299,6 +304,7 @@ function drivesOf(store: Store, goalRef: string, rows: readonly RemoteSheetRow[]
       checkId: check.id,
       title: check.title,
       steps: check.steps.filter((step) => step.kind === 'browser' && step.actor === 'fleet').map((step) => step.do),
+      proof: check.proof,
     });
   }
   return out;
@@ -358,14 +364,26 @@ function drivenSection(input: BriefingInput): string[] {
     '## The checks you drive yourself',
     '',
     'These name no suite area and carry no script: the test plan asks for a **browser step**, and you are the ' +
-      'one at the browser. Carry the steps out in the order they are written, one at a time — a reading taken ' +
-      'early answers a different question — and take them against this run’s tenant and the deployed build ' +
-      'you are pinned to.',
+      'one at the browser. What each one says is where to go and what to find out — **not a route**. How you ' +
+      'get there is yours: navigate, sign in, arrange the data, click through whatever the application actually ' +
+      'puts in front of you. Take the steps in the order they are written, one at a time — a reading taken ' +
+      'early answers a different question — and take them against this run’s tenant and the deployed ' +
+      'build you are pinned to.',
     ...input.drives.flatMap((drive) => [
       '',
       `### \`${drive.checkId}\` — ${drive.title}`,
       '',
       ...drive.steps.map((step, at) => `${String(at + 1)}. ${step}`),
+      ...(drive.proof === null
+        ? []
+        : [
+            '',
+            `**Proof — this check is refused a pass without it:** ${drive.proof}`,
+            '',
+            'Write the image into the artefact directory below and name the file on this check’s report row, ' +
+              'in `capture`. A `passed` row that names no capture is recorded as **blocked**, because the author ' +
+              'of this check said in advance that your word was not going to be enough on its own.',
+          ]),
     ]),
     '',
     '**Each one reports under the check’s own id**, in the same shape and into the same report file as every ' +

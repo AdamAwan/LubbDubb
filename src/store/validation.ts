@@ -49,6 +49,11 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // run, because somebody still has to look at it.
     // → docs/spec/36-remote-validation.md#handing-a-screen-back-to-look-at
     capture: 'TEXT',
+    // What a pass must hand back, prose, written by the check's author. Null means *no evidence was
+    // demanded*, which is true of every row written before the column existed and of every check
+    // whose assertion is the whole of its evidence — so nothing is backfilled, and null must never
+    // be read as "evidence was demanded and none came". → docs/spec/20-validation.md#proof
+    proof: 'TEXT',
   },
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
@@ -196,6 +201,7 @@ export class ValidationStore {
       title: input.title,
       do: input.do,
       expect: input.expect,
+      proof: input.proof,
       uses: input.uses,
       covers: input.covers,
       fleetCandidate: input.fleetCandidate,
@@ -527,11 +533,11 @@ export class ValidationStore {
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
            result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note,
-           steps, capture, created_at, updated_at)
+           steps, capture, proof, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
            @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote,
-           @steps, @capture, @createdAt, @updatedAt)
+           @steps, @capture, @proof, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
@@ -541,7 +547,8 @@ export class ValidationStore {
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note,
-           steps=excluded.steps, capture=excluded.capture, updated_at=excluded.updated_at`,
+           steps=excluded.steps, capture=excluded.capture, proof=excluded.proof,
+           updated_at=excluded.updated_at`,
       )
       .run({
         ...check,
@@ -555,13 +562,21 @@ export class ValidationStore {
 }
 
 function isReworded(prev: ValidationCheck, next: ValidationCheckAmendmentLike): boolean {
-  return prev.title !== next.title || prev.do !== next.do || prev.expect !== next.expect;
+  return (
+    prev.title !== next.title ||
+    prev.do !== next.do ||
+    prev.expect !== next.expect ||
+    // The evidence demanded is part of the terms a reading was taken against: a pass earned by
+    // handing back one screen is not a pass under a `proof` that now asks for another.
+    prev.proof !== next.proof
+  );
 }
 
 interface ValidationCheckAmendmentLike {
   title: string;
   do: string;
   expect: string;
+  proof: string | null;
 }
 
 function priorWording(prev: ValidationCheck): ValidationRevision {
@@ -569,6 +584,7 @@ function priorWording(prev: ValidationCheck): ValidationRevision {
     title: prev.title,
     do: prev.do,
     expect: prev.expect,
+    proof: prev.proof,
     state: prev.state === 'unrun' ? null : prev.state,
     note: prev.resultNote,
   };
@@ -582,6 +598,7 @@ interface ValidationCheckRow {
   title: string;
   check_do: string;
   check_expect: string;
+  proof: string | null | undefined;
   uses: string;
   covers: string;
   fleet_candidate: number;
@@ -623,6 +640,7 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     title: r.title,
     do: r.check_do,
     expect: r.check_expect,
+    proof: r.proof ?? null,
     uses: parseStringArray(r.uses),
     covers: parseStringArray(r.covers),
     fleetCandidate: r.fleet_candidate === 1,
@@ -697,6 +715,10 @@ function parseRevision(raw: string | null): ValidationRevision | null {
       title: r.title,
       do: r.do,
       expect: r.expect,
+      // Tolerated rather than required: a revision written before the field carries no `proof`, and
+      // reading that blob as unparseable would throw away the whole record of what a check used to
+      // say to gain one line of it.
+      proof: typeof r.proof === 'string' ? r.proof : null,
       state: state === 'unrun' ? null : state,
       note: typeof r.note === 'string' ? r.note : null,
     };

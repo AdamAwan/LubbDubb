@@ -21,6 +21,7 @@ const set = {
       letter: 'A',
       title: 'The doc 609 journey',
       expect: BULLETS,
+      proof: '',
       steps: [],
       fleetCandidate: false,
       candidateWhy: null,

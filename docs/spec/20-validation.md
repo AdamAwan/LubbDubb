@@ -554,6 +554,7 @@ one at boot, `id` and `letter` untouched
 | `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                                                                                                                                                                                                                                                                              |
 | `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. It is also where the **area** a remote run selects the check by lives, and the spec names that area is expected to run: both are read off a `suite` step (`stepArea`, `stepExpects`) and the check carries no field for either, because one fact with two homes drifts. → [The test plan](#the-test-plan), [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
 | `expect`         | What a pass looks like, markdown. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy. Asked for as grouped bullets and drawn as markdown — [How the note and the `expect` are written](#how-the-note-and-the-expect-are-written).                                                                                                                                                                                                                          |
+| `proof`          | What a pass must hand **back**, markdown. Null is *none demanded*. A check that declares it is refused a pass that names no capture, on every channel that can record one. → [Proof](#proof)                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -618,7 +619,14 @@ text rather than its index ([08](08-planning.md)).
 ## The test plan
 
 **Built.** A check's `steps` are one journey through the delivered goal, in order, and each step
-says who carries it out. Their shapes are `ValidationStepSchema` (`src/validation/checkDocument.ts`),
+says who carries it out.
+
+**A step names an instrument and what to find out with it, and not a route.** That is the correction
+this section took after the fact, and it is worth stating before the vocabulary rather than after: a
+planner writing click-by-click is describing a screen it read the source of rather than looking at,
+and the agent carrying the step is the one looking. So a `browser` step's `do` says where to go and
+what to find out there, and how to get there is the carrier's. What the planner owes instead is
+[`proof`](#proof) — the evidence that makes the answer checkable by somebody who was not there. Their shapes are `ValidationStepSchema` (`src/validation/checkDocument.ts`),
 resolved by `src/validation/steps.ts` and stored on `validation_checks.steps`. The vocabulary itself
 is `STEP_KINDS` (`src/validation/steps.ts`) and every schema over it reads from that list rather than
 restating it: the ingestion schema, and `validationStepsSchema` — the **tool-facing** test plan, the
@@ -636,13 +644,24 @@ to anything but a reader.
 
 | Step kind    | What it does                                                                                                        |
 | ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `browser`    | Drives the application — navigate, upload, click, wait.                                                             |
+| `browser`    | The application, driven. Where to go and what to find out there — the route is the carrier's.                       |
 | `suite`      | Runs a named area of the project's own browser suite. **This step is the check's area**, and carries its `expects`. |
 | `screenshot` | Captures the screen and attaches it to the row. Asserts nothing; reaches `captured`.                                |
 | `state`      | Reads the deployed store through the environment's `state.run`.                                                     |
 | `signal`     | Reads logs and error records.                                                                                       |
 | `measure`    | Reads a metric.                                                                                                     |
 | `manual`     | A person does something the fleet cannot.                                                                           |
+
+**A `suite` step is the exception rather than the default, and the note says so.** An area is matched
+**exactly** against the deployed commit's own listing, one press later, and a name that does not resolve
+**blocks the row** — so the instrument is worth that risk only where the journey is one the product
+will keep having, the suite already covers it, and the planner read the name off the listing it was
+given the command for. Everything else is a plain `browser` step, which answers _does this goal work_
+directly and can never be blocked by a string. The note the planner is handed is explicit that a
+listing that would not run, or a name for coverage this goal has only just added, is a reason to write
+`browser` rather than a reason to guess: a guessed area was the ordinary outcome of asking for one
+first, and its cost is a row nobody can press. →
+[36](36-remote-validation.md#how-a-check-comes-to-have-an-area)
 
 **A `suite` step's `area` is named as the runner selects on it — the identifier its own listing
 prints**, which is often not what a test-framework config file calls the project or the group and never
@@ -763,6 +782,74 @@ planner's suggestion to go on. `fleetCanStart` answers **null** there for that r
 different fact from "the fleet cannot start this" and must not be folded into it: null is the
 operator's press deciding, false is a plan that can never execute.
 
+## Proof
+
+**Built.** `proof` is what a check's author says has to come **back** for a pass to count: the screen,
+and what has to be visible on it. It is prose, it is optional, and null means *no evidence was
+demanded* — which is every check written before the field, and every check whose assertion is the whole
+of its evidence.
+
+**It is not a second `expect`.** `expect` is what has to be **true**; `proof` is what has to be handed
+back to show it. _The batch page shows 412 rows_ is an `expect`. _A screen of the batch page with the
+row count visible_ is the `proof`. One is the claim and the other is what makes the claim checkable by
+somebody who was not there.
+
+### What it is for
+
+A check the fleet drives goes green **on an agent's word**. Nothing reviewed it and nobody watched it,
+and `resultBy` says so: such a reading is `agent`, the weakest attribution on the sheet
+([36](36-remote-validation.md#the-reading-an-agent-produced)). That was tolerable while a driven check
+was the exception. It is not tolerable as the default, and
+[the test plan](#the-test-plan) now makes it the default deliberately — a planner that writes a
+`browser` step rather than a guessed suite area is writing more of them, not fewer.
+
+So `proof` is the counterweight, and the trade it makes is the whole point: **freedom in _how_, an
+obligation on _what comes back_.** The agent picks its own route through the application, and cannot
+settle the check without the evidence its author named in advance.
+
+### A check that declares it is refused a pass without a capture
+
+Two channels can record a reading on a check, and both carry the rule, because a rule on one of them
+is a rule an operator's own Claude walks around without noticing:
+
+- **The tool channel.** `validateReport` (`src/validation/report.ts`) takes the **check** as well as
+  the report, and `demandsProof` is the one predicate. A `passed` naming no `capture` is refused with
+  a message that offers the honest alternatives — `failed` if it was wrong, `blocked` if it could not
+  be reached — rather than a schema error. Both `validation_report` and the desktop channel's copy go
+  through that one funnel, which is why it is a parameter there and not a guard at each call site.
+- **The run.** `RemoteReadingDesk.withScreen` already refused a pass that named no screen, for a
+  `screenshot` step; a driven check that demands proof enters the same fold and comes back `blocked`
+  for the same reason.
+
+**It tightens an instrument that already ran, and never creates a row of its own.** A check with no
+instrument the run can carry is untouched by `proof` — the row is a person's, it says which
+declaration would have carried it, and the harness forms no second opinion about that.
+
+### Why a capture may ride a pass here, and nowhere else
+
+The report schema refused a `capture` on any result but `captured`, and the reason it gave is worth
+keeping: _an image beside a pass reads as the evidence for it, and nobody looked_. That is about an
+agent **volunteering** a picture it chose, beside a green row it awarded itself.
+
+`proof` runs the other way. The demand is written by the check's author, before anybody ran anything,
+and the effect of declaring it is that the pass is **refused** without the image. So the narrowing is
+exact: a capture rides a `passed` on a check that declares `proof`, and on nothing else. The cross-field
+rule moved out of `ReportSchema`'s `superRefine` into `captureFault` to make that possible at all — a
+pure schema sees the report and never the check, so it could refuse `passed + capture` but could never
+refuse a `passed` **without** one, which is the half that has teeth.
+
+### What it does not do
+
+**It does not put a person back in front of the goal.** A `screenshot` step asserts nothing and reaches
+`captured`, waiting for somebody's judgement; a `proof` rides a check that **did** assert, and the row
+reaches whatever the instrument reached, with the image beside it. Folding the two would hand every
+driven check back to an operator, which is the thing a driven check exists to remove
+([36](36-remote-validation.md#the-one-off-script)).
+
+**It does not make an `agent` reading worth a `spec` one.** Nothing reviewed it either way, and the
+attribution is unchanged. What the evidence buys is that an operator counting green rows can look at
+one, cheaply, instead of taking it on trust.
+
 ## The document block
 
 `src/validation/checkDocument.ts`. Additive and **optional** on the plan document, for the reason
@@ -845,7 +932,8 @@ ask against it.
 
 - `id` matches `^[a-z0-9][a-z0-9-]*$` and is unique within the document.
 - `title`, `do` and `expect` are non-empty. A check that cannot say what a pass looks like is not a
-  check.
+  check. `proof` is optional and, where present, non-empty: absent and `""` are the same fact, which
+  is that no evidence was demanded.
 - `uses` names declared resources and `covers` names live part slugs; an unknown entry is **dropped**
   at ingestion, not refused — a check's prose is worth more than its bibliography, the `MAX_EVIDENCE`
   trade-off, and refusing would sink the whole plan document with it.
@@ -1087,8 +1175,15 @@ Both writers merge on the check id, on the same terms `upsertPlanParts` folds th
 | **Reword**     | The result is **withdrawn** and the check returns to `unrun`.                                    | `acceptanceCriteria`'s rule exactly: an amendment that changes what a pass means has withdrawn the thing that was confirmed. Rewording is also how a check quietly becomes easier. |
 | **Drop**       | **Superseded, not deleted** — the row stays, greyed, outside the verdict, with the reason on it. | The same settlement an amended plan gives a part it dropped, and what keeps the letter taken. An agent that cannot pass a check must not be able to make it disappear.             |
 
-A rewording is judged on `title`, `do` and `expect` alone. `uses`, `covers` and `fleetCandidate` are
-references and a suggestion, and a result is not about them.
+A rewording is judged on `title`, `do`, `expect` and `proof` alone. `uses`, `covers` and
+`fleetCandidate` are references and a suggestion, and a result is not about them.
+
+**`proof` is on that list rather than off it**, and it is the one entry that is not obviously wording.
+It is there because it is part of the terms the reading was taken under: a pass earned by handing back
+one screen is not a pass under a demand for another, and a check that gains a `proof` it did not have
+was passed by an agent that was never asked for evidence at all. Left off the list, the cheapest way to
+make a check easier would be to withdraw what it has to prove — which is [the rule above](#amendment)'s
+own worry arriving through the one field written to guard against it.
 
 **An omitted `validation` block leaves the checks exactly as they are**, and that is the only honest
 reading: an operator override that never learned the block produces plans without one, and treating
@@ -1684,7 +1779,7 @@ saying nothing.
 delegated to under the same method names ([14](14-persistence.md#shape)).
 
 - **`validation_checks`** — `origin_ref`, `id`, `letter`, `seq`, `title`, `check_do`, `check_expect`,
-  `uses`, `covers`, `fleet_candidate`, `candidate_why`, `actor`, `handback_note`, `claimed_by`,
+  `proof`, `uses`, `covers`, `fleet_candidate`, `candidate_why`, `actor`, `handback_note`, `claimed_by`,
   `claimed_at`, `state`, `result_note`, `result_by`,
   `result_at`, `defer_until`, `superseded_reason`, `created_at`, `updated_at`. `check_do` rather than
   `do` because DO is a SQLite keyword; `check_expect` follows it so the pair reads as a pair.

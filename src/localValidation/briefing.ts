@@ -48,7 +48,11 @@ function quote(text: string): string {
 function checksSection(checks: ValidationCheck[]): string {
   if (checks.length === 0) return '';
   const rows = checks
-    .map((check) => `### ${check.letter} — ${check.title}\n\n${check.do}\n\n**A pass looks like:** ${check.expect}`)
+    .map(
+      (check) =>
+        `### ${check.letter} — ${check.title}\n\n${check.do}\n\n**A pass looks like:** ${check.expect}` +
+        (check.proof === null ? '' : `\n\n**And it has to hand back:** ${check.proof}`),
+    )
     .join('\n\n');
   return (
     `## What the operator already says this goal has to satisfy\n\n` +

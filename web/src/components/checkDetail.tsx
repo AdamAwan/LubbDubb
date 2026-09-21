@@ -56,6 +56,7 @@ const CHECK_WORDS = {
   doing: 'Do',
   steps: 'Steps',
   passes: 'Passes when',
+  proof: 'Proves it',
   fleet: 'the fleet',
   you: 'you',
   youAfter: 'you, afterwards',
@@ -135,6 +136,7 @@ export function CheckDetail({
   steps,
   foldSteps = false,
   passesWhen,
+  proof = null,
   meta,
 }: {
   doing: ReactNode;
@@ -147,6 +149,12 @@ export function CheckDetail({
    */
   foldSteps?: boolean;
   passesWhen: ReactNode;
+  /**
+   * What a pass has to hand back, where the check's author demanded it. Null is *none demanded* and
+   * draws nothing — the ordinary case, and the row must not grow a gutter label for it.
+   * → docs/spec/20-validation.md#proof
+   */
+  proof?: ReactNode;
   meta?: ReactNode;
 }): JSX.Element {
   return (
@@ -169,6 +177,12 @@ export function CheckDetail({
         <>
           <dt>{CHECK_WORDS.passes}</dt>
           <dd>{passesWhen}</dd>
+        </>
+      )}
+      {proof !== null && proof !== undefined && (
+        <>
+          <dt>{CHECK_WORDS.proof}</dt>
+          <dd>{proof}</dd>
         </>
       )}
       {steps.length > 0 && foldSteps && (

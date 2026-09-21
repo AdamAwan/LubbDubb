@@ -484,6 +484,7 @@ test('a reworded claimed check refuses a result, clears the session, and keeps t
         {
           ...CHECKS[0]!,
           do: 'Open Downloads and open the exported file.',
+          proof: null,
           uses: [],
           covers: [],
           fleetCandidate: false,
@@ -566,6 +567,7 @@ function handedOver(over: Partial<ValidationCheck> = {}): ValidationCheck {
     title: 'The export opens in Excel',
     do: 'Export a report and open it.',
     expect: 'It opens with the columns intact.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [],
@@ -649,6 +651,7 @@ test('a rewording releases the claim with the hand-over and the reading', async 
           title: 'The export downloads and opens in Excel',
           do: 'Click Export and open the downloaded file.',
           expect: 'It opens with the columns intact.',
+          proof: null,
           uses: [],
           covers: [],
           fleetCandidate: false,

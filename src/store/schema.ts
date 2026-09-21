@@ -1410,6 +1410,12 @@ CREATE TABLE IF NOT EXISTS validation_checks (
                                       -- goal's validation directory, never a path and never an
                                       -- artefact URL. NULL is "no capture", true of every row from
                                       -- before the column, so nothing is backfilled
+  proof       TEXT,                   -- what a pass must hand BACK, prose, written by the check's
+                                      -- author before the run. NULL is "no evidence was demanded",
+                                      -- true of every row from before the column and of every check
+                                      -- whose assertion is the whole of its evidence, so nothing is
+                                      -- backfilled — and it never folds into "evidence was demanded
+                                      -- and none came", which is a blocked row
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (origin_ref, id)

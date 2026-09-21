@@ -217,29 +217,62 @@ This is about form only. It removes nothing you would have said and adds nothing
  */
 const TEST_PLAN_NOTE = `## Give a check a test plan
 
-A check may carry \`steps\`: **one ordered journey** through the delivered goal. The ordering is the
-whole point — a store reading whose subject is *what the browser steps just did* is meaningless taken
-before them, and prose in a \`do\` cannot say that to anything but a reader.
+A check may carry \`steps\`. A step says **which instrument the check needs and what to find out with
+it** — never a route. Where an agent carries a step, it works out the clicks itself against the
+application that is actually up; a step that scripts them is a guess about a screen you are reading
+the source of rather than looking at, and the agent is the one looking.
 
-| kind | what it does |
+| kind | what it needs, and what you write in its \`do\` |
 | --- | --- |
-| \`browser\` | Drives the application — navigate, upload, click, wait. |
-| \`suite\` | Runs a named \`area\` of the project's own browser suite, named as the **runner selects on it** and not as a config file names the project or group. **This is the only thing that gives a check an area**, and an area is what lets the browser half run at all. |
-| \`screenshot\` | Captures the screen for somebody to look at. |
-| \`state\` | Reads the deployed store. |
-| \`signal\` | Reads logs and error records. |
-| \`measure\` | Reads a metric. |
+| \`browser\` | The application, driven. Where to go and what to find out there. |
+| \`suite\` | A **named area** of the project's own permanent browser suite. See below — this one is the exception, and it is rarely the right move. |
+| \`screenshot\` | A screen captured for somebody to look at. What has to be on it. |
+| \`state\` | The deployed store, read. What should be in it. |
+| \`signal\` | The logs and error records. What should be in them, and what should not. |
+| \`measure\` | A metric. What it should read. |
 | \`manual\` | Something only a person can do. |
 
-**A \`suite\` step also takes \`expects\`: the concrete spec names you expect that area to run**, named as
-the runner selects on them, exactly as the area is. Write them down — it is the only thing that can catch a spec
-**deleted or renamed** since you wrote the check: the area goes on running whatever it now holds, and
-the count of what it holds moves down with the deletion, so a name nobody wrote down simply goes
-missing and the row reports a pass for coverage that no longer exists. Both the area and these names
-are resolved against the deployed commit's own listing when the run happens, and a name that does not
-resolve blocks the row with both lists side by side rather than passing on what remains.
+The ordering is the point, and it is the one thing prose in a \`do\` cannot say to anything but a
+reader: a store or log reading whose subject is *what the browser steps just did* is meaningless
+taken before them.
 
-**“Somebody needs to look at this” is a \`screenshot\` step, not a \`manual\` one.** Where the deployment
+**Write \`browser\`, not \`suite\`, unless the journey is permanent.** A \`suite\` step names an area
+of the repository's own test suite, as the runner selects on it, and that string is matched
+**exactly** against the deployed commit's own listing when the run happens — a name that does not
+resolve **blocks the row** rather than running anything. So it is worth that risk only where the
+journey is one the product will keep having and the suite genuinely already covers it, and only
+where you ran the listing command above and read the name off it. If you did not run the listing, or
+it would not run, or you are naming coverage this goal has only just added: write a plain
+\`browser\` step. An agent driving the application answers *does this goal work* directly, which is
+the question a check exists to ask, and it can never be blocked by a string.
+
+**A \`suite\` step also takes \`expects\`: the concrete spec names you expect that area to run**, named
+the same way the area is. Where you write a \`suite\` step at all, write these too — they are the only
+thing that can catch a spec **deleted or renamed** since you wrote the check: the area goes on running
+whatever it now holds, and the count of what it holds moves down with the deletion, so a name nobody
+wrote down simply goes missing and the row reports a pass for coverage that no longer exists.
+
+## Say what would prove it
+
+A check an agent carries out unwatched goes green **on that agent's word**. Nothing reviewed it and
+nobody watched it, and the sheet says so — such a reading is recorded as \`agent\`, which is the
+weakest evidence on it.
+
+\`proof\` is what you do about that. It is what has to come **back** for a pass to count: name the
+screen, and what has to be visible on it. A check that declares it is **refused a pass that hands
+nothing back** — the run records \`blocked\` instead, and an agent reporting through a tool is told
+to report what it actually saw. So it costs an operator nothing and it is the difference between a
+green row somebody can check and a green row they have to trust.
+
+Write it on every check whose steps the fleet can carry. Leave it out where the assertion is the
+whole of the evidence and there is nothing to photograph — a store reading, a log line, a \`suite\`
+area's own machine-readable report.
+
+It is not a second \`expect\`. \`expect\` is what has to be **true**; \`proof\` is what has to be
+**handed back** to show it. *The batch page shows 412 rows* is an \`expect\`; *a screen of the batch
+page with the row count visible* is the \`proof\`.
+
+**"Somebody needs to look at this" is a \`screenshot\` step, not a \`manual\` one.** Where the deployment
 drives a browser, the fleet goes to the screen and captures it, and a person judges the image at their
 leisure — so the going and the looking cost nobody a trip, and what is left on the bench is the
 judgement, which is the part that actually needed a person. Reach for \`manual\` for what no agent can
@@ -248,10 +281,16 @@ decision that is somebody else's to make. A screen described as \`manual\` on a 
 have captured it is a bench row that did not have to exist, and the row above it is where the operator
 stops reading.
 
+A \`screenshot\` step and a \`proof\` are not the same thing and do not do the same job. A
+\`screenshot\` step **asserts nothing**: the row reaches *captured, waiting to be looked at*, and a
+person decides what it means. A \`proof\` rides a check that **did** assert — the agent says it
+passed and hands over the evidence, and nobody is put back in front of it. Reach for the first where
+the judgement is genuinely somebody's; reach for the second everywhere else.
+
 **Who carries each step is not yours to say.** It is read off what the deployment declares above: a
 step whose kind nothing here can drive comes back to a person, with the configuration that would have
-carried it named on the row. That is a fact rather than a nomination, which is why you write the
-journey and not the assignment.
+carried it named on the row. That is a fact rather than a nomination, which is why you write what the
+check needs and not who does it.
 
 **A \`manual\` step's \`when\` is yours, and it matters more than it looks.** \`deferred\` is *somebody
 looks at this afterwards*: the run completes and it costs the sequence nothing. \`inline\` stops the

@@ -126,6 +126,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     title: 'The export opens in Excel',
     do: 'Export a report.',
     expect: 'It opens.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [],

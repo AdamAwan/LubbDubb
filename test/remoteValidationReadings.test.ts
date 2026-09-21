@@ -59,6 +59,7 @@ function check(id: string, title: string): ValidationCheckInput {
     title,
     do: 'Place one',
     expect: 'It places',
+    proof: null,
     uses: [],
     covers: [],
     fleetCandidate: false,
