@@ -159,9 +159,10 @@ test('the pressable count is the gate’s own, and it counts rows rather than ch
   assert.equal(pressableRows(s), 1);
 });
 
-test('the press says what its number is made of, because it is bigger than the ticks above it', () => {
+test('the press says what its number is made of, because it is bigger than the ticks below it', () => {
   /* The sheet carries queries and measures that have no check to tick, and a press re-reads the
-     checks already answered — so "Run 5 rows" over three ticked boxes needs its arithmetic said. */
+     checks already answered — so "Run 5 rows" over three ticked boxes needs its arithmetic said.
+     The strip sits above the list, so the ticks it counts are the ones below it. */
   const s = sheet({
     rows: [
       row({ rowId: 'r1', sourceId: 'c1' }),

@@ -1052,11 +1052,11 @@ function RunStrip({
                 >
                   {rows === 1 ? 'Run 1 row' : `Run ${String(rows)} rows`}
                 </AsyncButton>
-                {/* What the number is made of, because it is bigger than the ticks above it: the
+                {/* What the number is made of, because it is bigger than the ticks below it: the
                     sheet carries queries and measures that have no check to tick, and a press
                     re-reads the checks already answered. */}
                 <span className="cn-sub">
-                  {made.checks === 1 ? '1 check ticked above' : `${String(made.checks)} checks ticked above`}
+                  {made.checks === 1 ? '1 check ticked below' : `${String(made.checks)} checks ticked below`}
                   {made.own > 0 &&
                     ` · ${String(made.own)} ${made.own === 1 ? 'query or measure' : 'queries and measures'} of its own`}
                 </span>

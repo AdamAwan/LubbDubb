@@ -2460,10 +2460,10 @@ run is already carrying draws its box **disabled** — what that run carries is 
 
 **The strip counts rows, and says what the number is made of.** A press re-reads every selected row
 on the sheet — the `state` queries and `measure` rows beside the check rows, and the checks already
-answered — so the gate's number is always larger than the ticks above it, and calling it _checks_
+answered — so the gate's number is always larger than the ticks below it, and calling it _checks_
 made the strip read as a miscount of the bands under it. The press carries `pressableRows`, the
 gate's own count ([36](36-remote-validation.md#a-row-no-press-can-read)), and the sentence beside it
-carries `pressBreakdown`: _3 checks ticked above · 2 queries and measures of its own_. The arithmetic
+carries `pressBreakdown`: _3 checks ticked below · 2 queries and measures of its own_. The arithmetic
 is said because an operator who ticked three boxes and read _Run 5 rows_ would otherwise be reading a
 number nothing on the page explains.
 
