@@ -21,7 +21,7 @@ import { buildPrPage } from '../view/prPage.js';
 import { oneLine, refusedDispatchFor } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
-import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './QueueRail.js';
 import { Button, ButtonRow } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
@@ -67,7 +67,12 @@ export function NeedsBand({
           {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
           {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
         </span>
-        <span className="cn-open">Open</span>
+        {/* The verb, drawn as the press it is. A faint "Open" beside a pane's own
+            filled primary is a row that loses the page to the one control on it
+            that nothing is waiting on. It is a span rather than a button because
+            the row *is* the button — nesting a second one is invalid.
+            → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
+        <span className="cn-needs-do">{KIND_VERB[row.kind]}</span>
       </button>
     );
   }

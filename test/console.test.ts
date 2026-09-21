@@ -12,7 +12,8 @@ import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { EnvironmentHealthReading } from '../web/src/types.js';
 import type { GoalPartView, GoalTab } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
-import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB } from '../web/src/console/QueueRail.js';
+import { oneLine } from '../web/src/view/needsYou.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
 import { repoPath, repoText } from './support/paths.js';
@@ -944,14 +945,58 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
 
 test('the ask row on the goal page wears the tone and glyph its rail row does', () => {
   const ref = goalRef();
-  const v = goalView();
-  const row = v.needsYou.find((n) => n.goalRef === ref && n.opens === 'goal');
-  assert.ok(row, 'the demo goal must carry an ask read on its own page');
+  /* An ask that is a row on this pane: the plan's own is the plan card's in both
+     of its states, and an ask the open pane is about is drawn in full there.
+     → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */
+  const v = goalView(() => {}, ref, [], [], 'ask');
+  const row = v.needsYou.find((n) => n.goalRef === ref && n.opens === 'goal' && n.kind !== 'plan');
+  assert.ok(row, 'the demo goal must carry an ask drawn as a row on its own page');
 
   const html = render(v);
   assert.ok(html.includes(`cn-needs-line cn-t-${KIND_TONE[row.kind]}`), "the row takes the kind's tone");
   assert.ok(html.includes(`cn-q cn-t-${KIND_TONE[row.kind]}`), 'and the rail row it came from takes the same one');
   assert.ok(html.includes(KIND_SYMBOL[row.kind]), 'the glyph is drawn on both');
+});
+
+test('the plan’s verdict is asked on the plan card, and not as a line as well', () => {
+  const ref = goalRef();
+  const plan = goalView(() => {}, ref, [], [], 'plan');
+  const row = plan.needsYou.find((n) => n.goalRef === ref && n.kind === 'plan');
+  assert.ok(row, 'the demo goal must carry a plan ask');
+
+  /* The rows drawn as lines on a render, by the words they carry. */
+  const linesOf = (html: string): string[] =>
+    html
+      .split('cn-needs-line')
+      .slice(1)
+      .map((chunk) => decode(chunk.slice(0, chunk.indexOf('</button>'))));
+
+  const html = render(plan);
+  assert.ok(html.includes('cn-plan-verdict'), 'the ask is drawn in full where the plan is read');
+  assert.ok(
+    !linesOf(html).some((line) => line.includes(oneLine(row.title))),
+    'and not as a row as well — go and find an ask, above the card already asking it, is the same ask twice',
+  );
+
+  /* Every other pane draws no plan card, so the row is the only thing there that
+     says a verdict is waiting. */
+  const elsewhere = render(goalView(() => {}, ref, [], [], 'ask'));
+  assert.ok(!elsewhere.includes('cn-plan-verdict'), 'no plan card where the plan is not drawn');
+  assert.ok(
+    linesOf(elsewhere).some((line) => line.includes(oneLine(row.title))),
+    'the row is kept on a pane the card is not drawn in',
+  );
+});
+
+test('the verb of the press is on the row, not a faint way in', () => {
+  const ref = goalRef();
+  const v = goalView(() => {}, ref, [], [], 'ask');
+  const row = v.needsYou.find((n) => n.goalRef === ref && n.opens === 'goal' && n.kind !== 'plan');
+  assert.ok(row, 'the demo goal must carry an ask drawn as a row on its own page');
+
+  const html = decode(render(v));
+  assert.ok(html.includes(KIND_VERB[row.kind]), 'the row says what answering it is');
+  assert.ok(!/>\s*Open\s*</.test(html.split('cn-needs-line')[1] ?? ''), 'and not “Open”, which no pane’s primary says');
 });
 
 test('a selected goal draws its page instead of the overview', () => {
