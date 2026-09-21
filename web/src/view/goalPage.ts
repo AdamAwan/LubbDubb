@@ -545,6 +545,7 @@ function watchFold(window: GoalWatchView): 'regressed' | 'not read' | 'clean' {
 
 export const GOAL_SECTIONS = [
   'prediction',
+  'criteria',
   'validation',
   'localValidation',
   'remoteValidation',
@@ -566,6 +567,12 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
        Between those it is a record of a moment that has passed, and an operator
        watching the work is reading past it to reach the parts. */
     prediction: !planUnderWay(page) || outcomeAsked(page),
+    /* The page cannot answer this one: whether anybody has written criteria is the
+       card's own read, not anything on the goal. So the default here is the widest
+       the page can honestly give, and the card narrows it once its reading lands —
+       which it may do only while the operator has not said, or it would be shutting
+       a card they opened. → docs/spec/17-cockpit.md#goal-criteria-and-drift */
+    criteria: true,
     /* `live`, never `page.checks`: a superseded row is one the plan has already
        moved past, so a goal whose only started check was superseded has nothing
        live to show and the card opening on it reports work nobody can act on. */
@@ -730,6 +737,7 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   sequence: 'ask',
   prediction: 'plan',
+  criteria: 'plan',
   /* All three are the same obligation seen at three distances: the set of checks,
      the local run that answers some of them by hand, and the sheet an environment's
      run answers the rest from — a sheet row carries a check's `sourceId` and writes

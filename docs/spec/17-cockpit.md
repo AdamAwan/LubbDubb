@@ -478,10 +478,12 @@ So the board is where the part is chosen and the panel follows the choice:
   its title, which say the same thing in words.
 - **The panel is drawn directly under the board**, above the criteria card. A pointer with another
   card in between points at that one instead.
-- What is in front is the operator's pick if they made one, and otherwise **the part that wants
-  them**: the first nobody has described, falling back to the first that opened. It is never nothing
-  while a pull request is open to describe — an empty space is a feature an operator has to know to go
-  looking for.
+- **What is in front is the operator's pick, and nothing else.** No part is opened for them. A panel
+  chosen by the page was a wall of prose between the board and the criteria on every visit to every
+  goal, about a part nobody had asked about — and on a goal whose parts are all merged and described
+  it is the loudest thing on the pane for a question that was answered days ago. The feature stays
+  discoverable without it: each card with an open pull request carries **`needs description`** in
+  amber, which says both that the panel exists and which parts want it, and the card is the press.
 - The pick is `?part=<slug>`, a [place](#the-address-bar) like the pane and the folds, and dropped on
   the way to another goal for the same reason they are: it is a pick made on one plan.
 
@@ -562,7 +564,7 @@ once.
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
-| `part`                               | which part of the plan has its description in front, by slug — absent means the page picks the one that wants the operator, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                   |
+| `part`                               | which part of the plan has its description in front, by slug — absent means no description panel is drawn at all, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                   |
 | `open`                               | the goal page's reference sections held open, as `record,sequence`                                                                                                                                                                                                                                                                                                                                                                                 |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1622,6 +1624,20 @@ stop saying so.
 it knows that, so a heading drawn outside it would either carry no count or carry a stale one. That
 also keeps "fetched on open, never polled" true now the card no longer opens with the page: folded
 away it issues no request at all.
+
+**A card whose reading only it holds narrows its own default, and only while the operator has not
+said.** `goalSectionsOpen` answers off the goal page, and two cards — [the criteria](#goal-criteria-and-drift)
+and [the prediction](#where-the-prediction-is-drawn) — are drawn off a read the page does not carry:
+whether anybody has written what "done" means, and whether the prediction has been marked. So the
+page gives the widest default it can honestly give and the card narrows it once its own reading
+lands. A `Fold` therefore says whether it is `settled` — `?open=` or `?shut=` naming it — and a
+settled fold is passed through untouched: a card that reasoned its way over the operator's own press
+is a disclosure that does not work.
+
+**The narrowing is latched at the first reading, never read live.** It is a decision about how the
+page _arrives_. Taken again on every answer, the criteria card would fold itself shut the moment the
+operator appended a version and the prediction panel the moment they marked the last slot — the page
+taking the work away at the press that finished it.
 
 ### The header
 
@@ -2843,6 +2859,11 @@ disclosure:
   operator reads first.
 - **Unless moment two is being asked.** A goal whose delivery has landed has a live question in that
   panel again, so it opens — still last, where the work it is now a reading of already is.
+- **And only while something in it is unanswered.** An operator who has marked every slot they wrote
+  — and answered moment two where it is asked — has a record, not a question, so the panel arrives
+  folded even where the plan is still at its gate. It is the panel's own narrowing of the page's
+  default, latched at the first reading and dropped the moment the operator works the disclosure
+  themselves. → [Folding what is not relevant yet](#folding-what-is-not-relevant-yet)
 
 Folded, the header still says how much of it is unanswered — `2/3 marked`, and `outcome unanswered`
 where moment two is owed — because what a folded record owes its reader is whether anything in it is
@@ -2918,7 +2939,20 @@ a rail row that appears to do nothing.
 ### Goal criteria, and drift
 
 Below the plan — criteria are read against the shape that was proposed — the goal page draws the
-current criteria version prominently, with the chain behind it collapsed, newest first. Each version
+current criteria version prominently, with the chain behind it collapsed, newest first.
+
+**Once anybody has written a version the card arrives folded**, because what is in it is then a
+record and the pane below it is the work. The heading still carries the version count and the drift
+tag, which is what a folded card owes its reader. Nothing written is the other way round: the card
+is open, and the press that writes the first version is the one primary button on it. The fold is a
+`criteria` section like any other, in the query string beside the rest — but the *default* is the
+card's own, because whether a version exists is a read only the card makes.
+→ [Folding what is not relevant yet](#folding-what-is-not-relevant-yet)
+
+**Revising is not drawn as the act the page is asking for.** `Write the criteria` wears the primary
+tone on a goal with none; `Revise the criteria` on a card that already says what it says does not.
+A blue button under a filled card reads as work owed, on every goal, for ever — the same reason
+`Rewrite it` on [a written description](#one-panel-for-the-part-in-front) does not wear it either. Each version
 carries its derived standing, its author, when it was written, and for a `post-work` version the
 **reason**, which is the whole point of having required one.
 

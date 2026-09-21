@@ -275,7 +275,14 @@ export function PrDescription({
 
       {!writing && (
         <div className="cn-desc-presses">
-          <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setWriting(true)}>
+          {/* Primary only where nobody has written one. A rewrite is one way on from
+              a panel that already carries a description, and drawn as the act the
+              page is asking for it reads as work owed on every part. */}
+          <button
+            type="button"
+            className={buttonClass(current === null ? { tone: 'primary' } : {})}
+            onClick={() => setWriting(true)}
+          >
             {current === null ? 'Describe it' : 'Rewrite it'}
           </button>
           {/* The check is the operator's own Claude Code rather than a dispatched

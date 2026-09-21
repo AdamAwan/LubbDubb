@@ -16,6 +16,7 @@ import {
   buildGoalPage,
   buildGoalNav,
   buildGoalTrack,
+  GOAL_TAB_OF,
   goalSectionsOpen,
   planVerdictAsk,
   splitGoalAsks,
@@ -681,6 +682,19 @@ test('validation and signals stay folded until the work is somewhere', () => {
     false,
     'a probe that could not say is not a reading that the work arrived',
   );
+});
+
+test('the criteria fold is the page at its widest, for the card to narrow', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+
+  /* Whether anybody has written what "done" means is a read the goal page does not
+     carry, so the default here can only be the widest honest answer — and the card
+     narrows it off its own reading, while the operator has not said otherwise.
+     → docs/spec/17-cockpit.md#goal-criteria-and-drift */
+  assert.equal(goalSectionsOpen(page).criteria, true);
+  assert.equal(GOAL_TAB_OF.criteria, 'plan', 'the criteria card is drawn beside the plan it is read against');
 });
 
 test('a check anyone has ruled on opens validation wherever the work is', () => {
