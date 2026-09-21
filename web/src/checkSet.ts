@@ -22,15 +22,14 @@ export function checkSetOf(proposal: Proposal | undefined): ProposedCheckSet | n
   const checks: ProposedCheck[] = [];
   for (const entry of raw) {
     if (typeof entry !== 'object' || entry === null) continue;
-    const { letter, title, expect, steps, fleetCandidate, candidateWhy, fleetBlocked, carriesQuery } = entry as Record<
-      string,
-      unknown
-    >;
+    const { letter, title, expect, proof, steps, fleetCandidate, candidateWhy, fleetBlocked, carriesQuery } =
+      entry as Record<string, unknown>;
     if (typeof letter !== 'string' || letter === '' || typeof title !== 'string' || title === '') continue;
     checks.push({
       letter,
       title,
       expect: typeof expect === 'string' ? expect : '',
+      proof: typeof proof === 'string' ? proof : '',
       steps: readSteps(steps),
       fleetCandidate: fleetCandidate === true,
       candidateWhy: typeof candidateWhy === 'string' && candidateWhy ? candidateWhy : null,

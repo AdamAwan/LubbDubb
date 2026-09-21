@@ -233,7 +233,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
           'running it. Nothing was recorded, and nothing more is needed on it.',
       );
     }
-    const parsed = validateReport(args);
+    const parsed = validateReport(args, check);
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note, capture } = parsed.report;
 

@@ -16,6 +16,7 @@ function check(over: Partial<ValidationCheckView> = {}): ValidationCheckView {
     title: 'A refund writes a ledger entry',
     do: 'Refund an order and open the ledger.',
     expect: 'One entry.',
+    proof: null,
     uses: [],
     covers: [],
     fleetCandidate: false,

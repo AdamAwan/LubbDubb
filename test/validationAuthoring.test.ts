@@ -229,6 +229,7 @@ function planTimeCheck(patch: Partial<ValidationCheck>): ValidationCheck {
     title: 'The export opens',
     do: 'Export.',
     expect: 'It opens.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [],

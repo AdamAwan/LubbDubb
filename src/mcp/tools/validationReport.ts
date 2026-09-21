@@ -35,7 +35,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
           'from you on it.',
       );
     }
-    const parsed = validateReport(args);
+    const parsed = validateReport(args, check);
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note, capture } = parsed.report;
 

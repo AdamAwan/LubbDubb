@@ -407,6 +407,7 @@ test("through a real store, the standing row's warning follows the goal's checks
         title: 'Check b',
         do: 'Do b.',
         expect: 'It works.',
+        proof: null,
         uses: [],
         covers: [],
         fleetCandidate: false,

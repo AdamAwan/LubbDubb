@@ -222,7 +222,8 @@ Eleven things produce `blocked`, and the number of roads into it is the point:
 - the goal's work is **no longer in the deployed commit**, or the pin could not say;
 - a **runner-level failure** skipped the tests a dependency was holding up;
 - the environment **moved mid-run and the row failed**;
-- a check whose plan asks for a **screen** came back without one;
+- a check whose plan asks for a **screen** came back without one, or whose author demanded
+  [`proof`](20-validation.md#proof) and whose pass named no capture;
 - the report named a screen that is **not a file name** — a path, or a URL.
 
 **`blocked` resolves per row, never per run**, and that is the sharpest edge in the document.
@@ -429,6 +430,16 @@ Naming the _kind_ of identifier is what the guidance can do for free. A reposito
 journey twice — a runner selecting on tags while its config file carries human-readable project or group
 names — gives a planner asked for "the name the suite uses" two honest readings and no way to choose,
 and picking the wrong one is the predictable outcome rather than a careless error.
+
+**It is no longer the first thing asked for.** Everything below about the string still holds — where
+it comes from, why it is compared exactly, and where a mismatch is caught. What moved is the planner's
+default: asking for an exact selector first, with an advisory listing and an explicit instruction to
+name one anyway where the listing would not come, made a guess the sanctioned outcome. The guess costs
+a row nobody can press. So `TEST_PLAN_NOTE` asks for a `suite` step only where the journey is permanent
+and the name was read off the listing, and for a plain `browser` step otherwise
+([a check the agent drives itself](#a-check-the-agent-drives-itself)). That does not weaken any rule
+here: a named area is still matched exactly, still resolved against the deployed commit, and still
+blocks its row when it does not resolve. There are simply fewer names written on a guess.
 
 **Nothing pre-resolves it, and no list is stored to pick from.** The planner used to be shown a cached
 listing and told to copy from it. The listing was taken in the _harness's_ clone at whatever commit it
@@ -1633,8 +1644,19 @@ open a page itself, and the brief says so rather than leaving it to describe a s
 
 ### A check the agent drives itself
 
-**Built.** A `browser` step the fleet carries, on a check that names **no** `suite` area and carries
-**no** one-off script, is the run agent's own to carry out at the browser above. It is the fourth thing
+**Built, and now the ordinary case rather than the fallback.** A `browser` step the fleet carries, on
+a check that names **no** `suite` area and carries **no** one-off script, is the run agent's own to
+carry out at the browser above.
+
+**What changed is which instrument the planner reaches for first.** An area is resolved exactly, one
+press later, against a listing the planner never saw — and the note that asked for one first was
+explicit that a listing which would not run is no reason to leave the step out, so a guessed selector
+was the sanctioned outcome rather than a careless one. A guessed selector blocks its row. So the
+authoring note now asks for a `suite` step only where the journey is permanent and the name was read
+off the listing, and for a plain `browser` step everywhere else
+([20](20-validation.md#the-test-plan)). This instrument carries most checks now, and the
+weight that puts on an `agent` reading is what [`proof`](20-validation.md#proof) answers: a check whose
+author demanded evidence is refused a pass that hands none back, here and on the tool channel alike. It is the fourth thing
 a run can be pressed for, and `runnableDrives` (`src/remoteValidation/briefing.ts`) is the one place
 that rule is written — read by the brief and by the press, which is what
 [the three halves of one question](#a-screen-from-the-sheets-own-run) means with a fourth entry in it:

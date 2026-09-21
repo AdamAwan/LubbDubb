@@ -63,6 +63,7 @@ const CHECK: ValidationCheckInput = {
   title: 'The confirmation screen reads legibly at 1280',
   do: 'Place an order and stop at the confirmation',
   expect: 'A person can read it',
+  proof: null,
   uses: [],
   covers: [],
   fleetCandidate: false,

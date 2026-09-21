@@ -44,6 +44,7 @@ function seed(system: System, ids: readonly string[]): void {
       title: `Check ${id}`,
       do: 'Run it.',
       expect: 'It holds.',
+      proof: null,
       uses: [],
       covers: [],
       fleetCandidate: false,

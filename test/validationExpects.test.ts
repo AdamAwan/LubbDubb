@@ -201,6 +201,7 @@ function input(over: Partial<ValidationCheckInput>): ValidationCheckInput {
     title: 'An order still places',
     do: 'Place one.',
     expect: 'It places.',
+    proof: null,
     uses: [],
     covers: [],
     fleetCandidate: false,

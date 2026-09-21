@@ -63,7 +63,7 @@ function planWith(system: System, checks: Record<string, unknown>[]): string {
 }
 
 function amendment(over: Partial<ValidationCheckAmendment> = {}): ValidationCheckAmendment[] {
-  return [{ ...CHECK, uses: [], covers: [], fleetCandidate: false, candidateWhy: null, ...over }];
+  return [{ ...CHECK, proof: null, uses: [], covers: [], fleetCandidate: false, candidateWhy: null, ...over }];
 }
 
 function byId(system: System, goal: string, id: string): ValidationCheck {
@@ -149,6 +149,7 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     title: 'The export opens in Excel',
     do: 'Export a report and open it.',
     expect: 'It opens with the columns intact.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [],
@@ -389,6 +390,7 @@ test('a reworded dispatched check refuses a result and keeps the amendment band'
       {
         ...CHECK,
         do: 'Open Downloads and open the exported file.',
+        proof: null,
         uses: [],
         covers: [],
         fleetCandidate: false,

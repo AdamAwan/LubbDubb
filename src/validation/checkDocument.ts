@@ -168,6 +168,19 @@ export const ValidationCheckSchema = z
           'operator reads this while deciding whether to release the set, so a dense paragraph is ' +
           'read by skimming.',
       ),
+    proof: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        'What must come **back** for a pass to count — the evidence, not the assertion. A screen of ' +
+          'the page that proves it, named for what has to be visible on it. Write it wherever the ' +
+          'check is one an agent carries out unwatched: it is the only thing standing between an ' +
+          'agent\u2019s word and a green row, and a check that declares it cannot be recorded as ' +
+          'passed without it. Leave it out where the assertion is the whole of the evidence \u2014 a ' +
+          'store reading, a log line, a suite area\u2019s own report.',
+      ),
     uses: z.array(z.string().min(1)).default([]),
     covers: z.array(z.string().min(1)).default([]),
     fleetCandidate: z.boolean().default(false),
@@ -178,7 +191,7 @@ export const ValidationCheckSchema = z
       .transform((list) => (list !== undefined && list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list)),
   })
   .strict(
-    'a check declares only id/title/do/expect/uses/covers/steps/fleetCandidate/why — who runs it is not yours to say',
+    'a check declares only id/title/do/expect/proof/uses/covers/steps/fleetCandidate/why — who runs it is not yours to say',
   );
 
 export const ValidationSchema = z
@@ -288,6 +301,7 @@ function checkAmendment(
     title: check.title,
     do: check.do,
     expect: check.expect,
+    proof: check.proof ?? null,
     uses: check.uses.filter((name) => names.has(name)),
     covers: check.covers.filter((slug) => slugs.has(slug)),
     fleetCandidate: check.fleetCandidate,

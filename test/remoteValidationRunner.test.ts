@@ -54,6 +54,7 @@ const CHECK: ValidationCheckInput = {
   title: 'An order still places end to end',
   do: 'Place one',
   expect: 'It places',
+  proof: null,
   uses: [],
   covers: [],
   fleetCandidate: false,

@@ -972,6 +972,14 @@ export interface ValidationCheck {
   title: string;
   do: string;
   expect: string;
+  /**
+   * What must come back for a pass to count — the evidence the author demanded in advance, in prose.
+   * Null is *none was demanded*, which is every check written before the field and every check whose
+   * assertion is the whole of its evidence. It is not a second `expect`: `expect` is what has to be
+   * true and this is what has to be **handed back** to show it.
+   * → docs/spec/20-validation.md#proof
+   */
+  proof: string | null;
   uses: string[];
   covers: string[];
   fleetCandidate: boolean;
@@ -1012,6 +1020,12 @@ export interface ValidationRevision {
   title: string;
   do: string;
   expect: string;
+  /**
+   * The evidence the replaced wording demanded. Null is both *it demanded none* and *this revision
+   * was recorded before the field existed*, which read the same way: there is no prior demand to
+   * show. → docs/spec/20-validation.md#proof
+   */
+  proof: string | null;
   state: ValidationCheckState | null;
   note: string | null;
 }
@@ -1022,6 +1036,8 @@ export interface ValidationCheckInput {
   title: string;
   do: string;
   expect: string;
+  /** The evidence a pass must hand back, or null where none was demanded. → {@link ValidationCheck.proof} */
+  proof: string | null;
   uses: string[];
   covers: string[];
   fleetCandidate: boolean;
@@ -1082,6 +1098,8 @@ export interface ProposedCheck {
   letter: string;
   title: string;
   expect: string;
+  /** What a pass must hand back. Empty is *none demanded* — the card draws nothing. */
+  proof: string;
   steps: { kind: ValidationStepKind; do: string; actor: ValidationCheckActor; why: string | null }[];
   /** The planner's nomination, with its reason. Advice: the hand-over is still the operator's. */
   fleetCandidate: boolean;

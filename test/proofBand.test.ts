@@ -240,6 +240,7 @@ function check(over: Partial<ValidationCheck> & { id: string }): ValidationCheck
     title: 'A snapshot download opens in a new tab',
     do: 'the do wording',
     expect: 'The file downloads.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [],

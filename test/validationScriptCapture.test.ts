@@ -277,6 +277,7 @@ function scriptBench(over: { steps?: ValidationStep[]; area?: string | null } = 
   const input: ValidationCheckInput = {
     ...BASE,
     seq: 1,
+    proof: null,
     uses: [],
     covers: [],
     fleetCandidate: false,
@@ -393,6 +394,7 @@ test('the grace sweep removes a script past its window, names where it was, and 
   const input: ValidationCheckInput = {
     ...BASE,
     seq: 1,
+    proof: null,
     uses: [],
     covers: [],
     fleetCandidate: false,
@@ -523,7 +525,7 @@ test('a row written before the state existed reads unrun, not captured', () => {
   const file = join(dir, 'harness.sqlite');
   const store = new Store(file);
   store.validation.ingestValidation(GOAL, {
-    checks: [{ ...BASE, seq: 1, uses: [], covers: [], fleetCandidate: false, candidateWhy: null }],
+    checks: [{ ...BASE, seq: 1, proof: null, uses: [], covers: [], fleetCandidate: false, candidateWhy: null }],
     resources: [],
     supersededReason: '',
     amendNote: '',

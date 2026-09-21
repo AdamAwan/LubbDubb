@@ -141,6 +141,7 @@ function fleetCheck(steps: ValidationCheck['steps']): ValidationCheck {
     title: 'An order still places',
     do: 'Place one.',
     expect: 'It places.',
+    proof: null,
     uses: [],
     covers: [],
     steps,
@@ -416,6 +417,7 @@ test('a check dispatched across a boundary is told to stop at it and hand back w
     title: 'An order still places',
     do: 'Place one.',
     expect: 'It places.',
+    proof: null,
     uses: [],
     covers: [],
     steps: [

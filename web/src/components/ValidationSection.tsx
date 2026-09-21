@@ -453,6 +453,7 @@ export function ValidationDigest({
               doing={renderMarkdown(check.do, refUrls)}
               steps={check.steps}
               passesWhen={renderMarkdown(check.expect, refUrls)}
+              proof={check.proof === null ? null : renderMarkdown(check.proof, refUrls)}
             />
           </div>
         </div>
@@ -691,6 +692,7 @@ function CheckBlock({
           steps={check.steps}
           foldSteps
           passesWhen={renderMarkdown(check.expect, refUrls)}
+          proof={check.proof === null ? null : renderMarkdown(check.proof, refUrls)}
           meta={
             <>
               <span className="cd-id">{check.id}</span>
@@ -883,6 +885,7 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
               doing={renderMarkdown(prior.do, refUrls)}
               steps={[]}
               passesWhen={renderMarkdown(prior.expect, refUrls)}
+              proof={prior.proof === null ? null : renderMarkdown(prior.proof, refUrls)}
             />
             {prior.note !== null && <div className="pm-vnote">{prior.note}</div>}
           </div>

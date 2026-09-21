@@ -106,6 +106,7 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
             doing={null}
             steps={check.steps}
             passesWhen={check.expect === '' ? null : renderMarkdown(check.expect)}
+            proof={check.proof === '' ? null : renderMarkdown(check.proof)}
           />
         </details>
         {/* The planner's nomination and the fact that stops it are the two things an operator needs

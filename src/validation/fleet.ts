@@ -24,6 +24,14 @@ export function checkBriefing(check: ValidationCheck): string {
     `### Do\n\n${check.do}\n`,
     `### Expect\n\n${check.expect}\n`,
   ];
+  if (check.proof !== null) {
+    lines.push(
+      `### Proof\n\n${check.proof}\n`,
+      'That is what has to come **back**, and this check is refused a pass without it: report `passed` with the ' +
+        'image named in `capture`, or report what you actually saw. Its author wrote that demand before anybody ' +
+        'ran this, which is why your word alone does not settle it.\n',
+    );
+  }
   if (check.candidateWhy !== null) {
     lines.push(`The planner thought an agent could run this because: ${check.candidateWhy}\n`);
   }
