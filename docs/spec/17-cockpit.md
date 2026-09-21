@@ -2415,8 +2415,15 @@ those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)).
 is therefore the **residue**: nobody offered a run. It is not the cockpit's reading of whether the
 fleet could carry the check's first step — that is `fleetCanStart`, three-valued and the server's
 ([20](20-validation.md#who-carries-a-step)) — and a second opinion on it drawn beside the sheet's own
-is exactly what this pane had too much of. The band label carries the runner's name only where it
-names one; in the last two bands the heading and the state chip already say it.
+is exactly what this pane had too much of.
+
+**A banded row says as little as the band leaves unsaid.** The runner rides the _heading_ — once,
+and only where every check under it names the same one — because five rows reading "staging can take
+it" is the same fact five times. The state is drawn only where it is **not** what the band implies:
+nothing on an `unrun` check under _no run yet_, nothing on a `passed` one under _answered_, and the
+odd ones — failed, later, dropped, needs a look — in the state's own hue. What is left is quiet text
+rather than a chip: a chip is a box, a border and a shout, and twelve rows carrying two each is the
+noise the banding was for. All of it is on the row at full weight the moment it is opened.
 
 **A run carries a set of checks, so a press is per runner and never per check.** The machine has one
 dev environment and a remote run holds the lock on `(environment, tenant)`

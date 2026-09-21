@@ -168,6 +168,12 @@ export function ValidationSection({
             <div className="vq-band" key={band}>
               <span className="lb lb-sm">
                 {BAND_HEADING[band]} <i className="vq-band-n">{inBand.length}</i>
+                {/* Which runner, once on the heading rather than on every row under it: in a band
+                    of five, five copies of “staging can take it” is the reading nobody needed
+                    five times. → docs/spec/17-cockpit.md#the-validate-pane */}
+                {band !== 'yours' && runners(inBand, standings) !== null && (
+                  <i className="vq-band-n"> · {runners(inBand, standings)}</i>
+                )}
               </span>
               {inBand.map((check) =>
                 opened?.id === check.id ? (
@@ -463,6 +469,16 @@ export function ValidationDigest({
 /** Work still owed. `passed` and `waived` are the two states that settle a check; everything else —
  *  unrun, captured, failed, deferred, declined — is something somebody still has to answer.
  *  → docs/spec/20-validation.md#states */
+/**
+ * The runners named by a band's checks, said once on its heading. Null where they do not agree —
+ * two environments across one band is a fact about the rows and belongs on them, not on a heading
+ * that would then be wrong for half of what is under it.
+ */
+function runners(checks: readonly ValidationCheckView[], standings: Map<string, CheckStanding>): string | null {
+  const said = new Set(checks.map((check) => standings.get(check.id)?.label ?? ''));
+  return said.size === 1 ? ([...said][0] ?? null) : null;
+}
+
 /** The order the owed bands are read in: what is moving, what could move, what is waiting on a person. */
 const BANDS: CheckBand[] = ['running', 'open', 'yours'];
 
@@ -480,6 +496,31 @@ function isOwed(check: ValidationCheckView): boolean {
  * an operator needs to see that there are four left and what they are about — and none of the rest
  * of a check helps with that. → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
  */
+/**
+ * What a band already implies about the state of a check in it. A row that says it again is a chip
+ * carrying no news, and a list of twelve of them is twelve boxes of shouting between the reader and
+ * the two rows that are actually odd. → docs/spec/17-cockpit.md#the-validate-pane
+ */
+const BAND_IMPLIES: Record<CheckBand, ValidationCheckState | null> = {
+  running: null,
+  open: 'unrun',
+  yours: 'unrun',
+  answered: 'passed',
+};
+
+/**
+ * A check the sheet is not currently answering: one line, and a way to make it the one it is.
+ *
+ * It carries the letter, the title and the state and nothing else. The set has to stay countable —
+ * an operator needs to see that there are four left and what they are about — and none of the rest
+ * of a check helps with that. → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
+ *
+ * **Banded, it says less.** The queue draws chips because its lines sit under one heading and have
+ * to carry their own state; a banded line sits under a heading that already said where its answer is
+ * coming from, so the state is drawn only where it is *not* what the band implies, and everything it
+ * draws is quiet text rather than a bordered chip. All of it is on the row at full weight the moment
+ * it is opened.
+ */
 function CheckLine({
   check,
   standing,
@@ -489,25 +530,30 @@ function CheckLine({
   standing: CheckStanding | undefined;
   onOpen: () => void;
 }): JSX.Element {
-  /* At most two chips: what the check's state is, and one thing about it. A line carrying four —
-     the state, the amendment, the hand-back and who is on it — is a line nobody reads, and every
-     one of the four is drawn at full length the moment the row is opened.
-     → docs/spec/17-cockpit.md#the-validate-pane */
   const aside =
-    standing !== undefined && (standing.band === 'running' || standing.band === 'open')
-      ? { tone: standing.band === 'running' ? ('violet' as const) : undefined, word: standing.label }
-      : check.amendedAt !== null
-        ? { tone: 'amber' as const, word: 'changed' }
-        : check.handbackNote !== null
-          ? { tone: 'amber' as const, word: 'back with you' }
-          : check.actor === 'fleet'
-            ? { tone: 'amber' as const, word: 'with the fleet' }
-            : null;
+    check.amendedAt !== null
+      ? 'changed'
+      : check.handbackNote !== null
+        ? 'back with you'
+        : check.actor === 'fleet'
+          ? 'with the fleet'
+          : null;
+  if (standing !== undefined) {
+    const odd = BAND_IMPLIES[standing.band] === check.state ? null : CHECK_STATE_WORDS[check.state];
+    return (
+      <button className={`vq-line ${check.state}`} onClick={onOpen}>
+        <span className="pm-vletter">{check.letter}</span>
+        <span className="vq-line-title">{check.title}</span>
+        {aside !== null && <span className="vq-said">{aside}</span>}
+        {odd !== null && <span className={`vq-said ${check.state}`}>{odd}</span>}
+      </button>
+    );
+  }
   return (
     <button className={`vq-line ${check.state}`} onClick={onOpen}>
       <span className="pm-vletter">{check.letter}</span>
       <span className="vq-line-title">{check.title}</span>
-      {aside !== null && <Tag tone={aside.tone}>{aside.word}</Tag>}
+      {aside !== null && <Tag tone="amber">{aside}</Tag>}
       <Tag tone={stateTone(check.state)}>{CHECK_STATE_WORDS[check.state]}</Tag>
     </button>
   );

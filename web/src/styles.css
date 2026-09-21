@@ -11916,6 +11916,24 @@ button.pk.pk {
   color: var(--muted);
   opacity: 0.75;
 }
+/* What a banded line says beyond its title: quiet text, never a chip. A chip is a box, a border and
+   a shout, and a list of twelve rows carrying two each is what the pane was rebuilt to stop.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.vq-said {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.vq-said.failed {
+  color: var(--red);
+}
+.vq-said.captured {
+  color: var(--cn-captured);
+}
+.vq-said.deferred,
+.vq-said.declined {
+  color: var(--amber);
+}
 .vq-band-note {
   margin: 0 0 6px;
   font-size: 12px;
