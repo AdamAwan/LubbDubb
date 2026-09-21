@@ -1006,6 +1006,7 @@ function buildRemoteSheets(
   );
   const runsByGoalEnvironment = groupBy(runs, (run) => `${run.goalRef} ${run.environment}`);
   const tenants = store.remoteValidation.listRemoteTenants();
+  const prepares = new Map(store.remoteValidation.listTenantPrepares().map((p) => [p.environment, p]));
   const now = Date.now();
   return sheets.map((sheet) => {
     const key = `${sheet.goalRef} ${sheet.environment}`;
@@ -1027,6 +1028,8 @@ function buildRemoteSheets(
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
+        destructive: validate?.reseed !== undefined,
+        preparation: prepares.get(sheet.environment) ?? null,
       },
     };
   });

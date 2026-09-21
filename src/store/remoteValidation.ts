@@ -13,6 +13,7 @@ import type {
   StateQueryApproval,
   StateQueryAuthor,
   StateQueryInput,
+  TenantPreparation,
   WatchReadingVerdict,
 } from '../types.js';
 import type { StoreContext } from './context.js';
@@ -59,6 +60,7 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // stays true — there is nothing to compute it from and nothing that would be right to invent.
   remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT' },
   remote_tenants: {},
+  remote_tenant_prepares: {},
   remote_capture_posts: {},
 };
 
@@ -527,6 +529,63 @@ export class RemoteValidationStore {
       });
   }
 
+  /**
+   * Opens the record an operator reads while the environment's own tenant commands run. Returns null
+   * where one is already in flight for this environment: two reseeds of one tenant at once is the
+   * clash the record exists to refuse, and the second press must be told so rather than queued behind
+   * a command it cannot see. → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+   */
+  beginTenantPrepare(environment: string): TenantPreparation | null {
+    const open = this.tenantPrepare(environment);
+    if (open !== null && open.finishedAt === null) return null;
+    const startedAt = this.ctx.now();
+    this.ctx
+      .prep(
+        `INSERT OR REPLACE INTO remote_tenant_prepares (environment, tenant, started_at, finished_at, ok, detail)
+         VALUES (?, NULL, ?, NULL, NULL, NULL)`,
+      )
+      .run(environment, startedAt);
+    return { environment, tenant: null, startedAt, finishedAt: null, ok: null, detail: null };
+  }
+
+  /** What the commands came back as, in the words the operator is told. */
+  finishTenantPrepare(input: { environment: string; tenant: string | null; ok: boolean; detail: string }): void {
+    this.ctx
+      .prep(
+        `UPDATE remote_tenant_prepares SET tenant=?, finished_at=?, ok=?, detail=? WHERE environment=? AND finished_at IS NULL`,
+      )
+      .run(input.tenant, this.ctx.now(), input.ok ? 1 : 0, input.detail, input.environment);
+  }
+
+  /**
+   * A preparation the process died in the middle of. The command ran on somebody else's machine and
+   * outlived this one, so whether it finished is **not knowable from here** — which is what the row is
+   * closed saying. Left open instead, the gate draws a reseed that has been running since last week
+   * and refuses every later press.
+   */
+  closeOrphanedTenantPrepares(): number {
+    const info = this.ctx
+      .prep(
+        `UPDATE remote_tenant_prepares SET finished_at=?, ok=NULL,
+           detail='The harness restarted while this was running. Whether the command finished is not known from here — read the tenant''s age below, or run it again.'
+         WHERE finished_at IS NULL`,
+      )
+      .run(this.ctx.now());
+    return info.changes;
+  }
+
+  listTenantPrepares(): TenantPreparation[] {
+    const rows = this.ctx.prep(`SELECT * FROM remote_tenant_prepares ORDER BY environment`).all() as PrepareRow[];
+    return rows.map(toTenantPreparation);
+  }
+
+  private tenantPrepare(environment: string): TenantPreparation | null {
+    const row = this.ctx.prep(`SELECT * FROM remote_tenant_prepares WHERE environment=?`).get(environment) as
+      | PrepareRow
+      | undefined;
+    return row === undefined ? null : toTenantPreparation(row);
+  }
+
   listRemoteTenants(): RemoteTenant[] {
     const rows = this.ctx.prep(`SELECT * FROM remote_tenants ORDER BY environment, tenant`).all() as TenantRow[];
     return rows.map((r) => ({
@@ -651,6 +710,26 @@ interface RunRow {
   report_path: string | null | undefined;
   listing_path: string | null | undefined;
   artefacts: string | null | undefined;
+}
+
+function toTenantPreparation(r: PrepareRow): TenantPreparation {
+  return {
+    environment: r.environment,
+    tenant: r.tenant,
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
+    ok: r.ok === null ? null : r.ok === 1,
+    detail: r.detail,
+  };
+}
+
+interface PrepareRow {
+  environment: string;
+  tenant: string | null;
+  started_at: string;
+  finished_at: string | null;
+  ok: number | null;
+  detail: string | null;
 }
 
 interface TenantRow {

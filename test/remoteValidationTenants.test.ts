@@ -330,3 +330,131 @@ test('a tenantEnv’s value reaches neither a prompt, the cockpit, nor a committ
     system.store.close();
   }
 });
+
+/*
+ * The gate's warning cuts on `destructive`, not on `reseedable`. An `ensureTenant` provisions and
+ * destroys nothing, and a card that warns about a wipe which will not happen teaches an operator that
+ * its warnings are noise — which is how the one that matters stops being read.
+ *
+ * → docs/spec/36-remote-validation.md#reseeding-is-destructive-and-the-gate-says-so
+ */
+test('a reseed is shipped as destructive, and an ensureTenant on its own is not', () => {
+  const sheetFor = (validate: NonNullable<EnvironmentConfig['validate']>) => {
+    const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-destructive-'));
+    const system: System = buildSystem(
+      loadConfig({
+        selfUpdate: { enabled: false } as never,
+        auth: { enabled: false } as never,
+        labelPrefix: '',
+        dbPath: ':memory:',
+        agentMode: 'raw',
+        repoRoot: dir,
+        deskRoot: join(dir, 'desk'),
+        worktreeRoot: join(dir, 'wt'),
+        heartbeatIntervalMs: 999_999,
+        environments: [environment(validate)],
+      }),
+      {
+        worktrees: new FakeWorktreeManager(),
+        backend: new FakePtyBackend(),
+        stateReader: new FakeStateReader(),
+        tenants: new FakeTenantKeeper(),
+        environmentProber: new FakeEnvironmentProber({ acceptance: [DEPLOYED] }),
+        environmentObserver: new FakeEnvironmentObserver(),
+        projectConfigFile: join(dir, 'absent.json'),
+        errorMirror: () => {},
+      },
+    );
+    try {
+      seed(system.store);
+      return buildStateSnapshot(system).remoteSheets[0]!.tenant;
+    } finally {
+      system.store.close();
+    }
+  };
+
+  const wipes = sheetFor({
+    permits: ['state'],
+    tenant: 'validation-customer-1',
+    reseed: './scripts/reseed.sh',
+    state: { run: './scripts/query.sh' },
+  });
+  assert.equal(wipes.reseedable, true);
+  assert.equal(wipes.destructive, true, 'a declared reseed destroys the tenant, and the gate must say so');
+
+  const provisions = sheetFor({
+    permits: ['state'],
+    ensureTenant: './scripts/ensure-validation-tenant.sh',
+    state: { run: './scripts/query.sh' },
+  });
+  assert.equal(provisions.reseedable, true, 'the gate still offers the control');
+  assert.equal(provisions.destructive, false, 'but provisioning is idempotent and warns about nothing');
+
+  const neither = sheetFor({ permits: ['state'], state: { run: './scripts/query.sh' } });
+  assert.equal(neither.reseedable, false);
+  assert.equal(neither.destructive, false);
+});
+
+/*
+ * The press opens a record and returns; the commands settle it later. An operator pressed a button
+ * that runs for tens of minutes, so the one thing that must not happen is a press that shows nothing
+ * and a reload that loses it.
+ *
+ * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+ */
+test('a press opens a preparation record, and a second press over the same tenant is refused', async () => {
+  const b = bench(LITERAL);
+  try {
+    seed(b.store);
+    let settled = 0;
+    const begun = b.runs.beginPrepareTenant('acceptance', () => {
+      settled += 1;
+    });
+    assert.equal(begun.started, true);
+
+    const open = b.store.remoteValidation.listTenantPrepares()[0]!;
+    assert.equal(open.environment, 'acceptance');
+    assert.equal(open.finishedAt, null, 'a null finishedAt is the whole test for “still running”');
+
+    const again = b.runs.beginPrepareTenant('acceptance');
+    assert.equal(again.started, false, 'two reseeds of one tenant at once is the clash the record refuses');
+    assert.match(again.detail, /already running/);
+
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const done = b.store.remoteValidation.listTenantPrepares()[0]!;
+    assert.notEqual(done.finishedAt, null, 'and it settles');
+    assert.equal(done.ok, true);
+    assert.match(done.detail ?? '', /reseeded/, 'the outcome is kept in the words the operator is told');
+    assert.equal(settled, 1, 'the route is told, so the cockpit is refreshed');
+  } finally {
+    b.close();
+  }
+});
+
+/*
+ * The third verdict. A preparation the process died inside of is not a failure and not a success: the
+ * command outlived this harness and what it did is not knowable from here. Left open instead, the gate
+ * draws a reseed running since last week and refuses every later press, with nothing red.
+ */
+test('a preparation left open by a restart is closed at boot as an outcome nothing here can know', () => {
+  const store = new Store(':memory:');
+  try {
+    assert.notEqual(store.remoteValidation.beginTenantPrepare('acceptance'), null);
+
+    assert.equal(store.remoteValidation.closeOrphanedTenantPrepares(), 1);
+    const closed = store.remoteValidation.listTenantPrepares()[0]!;
+    assert.notEqual(closed.finishedAt, null);
+    assert.equal(closed.ok, null, 'neither true nor false — the third value is the point');
+    assert.match(closed.detail ?? '', /not known from here/);
+
+    assert.notEqual(
+      store.remoteValidation.beginTenantPrepare('acceptance'),
+      null,
+      'and a later press is no longer refused by a preparation nothing is running',
+    );
+  } finally {
+    store.close();
+  }
+});

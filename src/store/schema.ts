@@ -989,6 +989,22 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
   PRIMARY KEY (environment, tenant)
 );
 
+-- One row per environment: the tenant preparation running right now, or the last one
+-- that ran. Keyed on the environment alone and not on the tenant, because an
+-- ensureTenant environment has no tenant name until its own command answers -- the
+-- harness invents none while it waits. The commands run for tens of minutes, so an
+-- operator who pressed and saw nothing has no way to tell a job still running from one
+-- that died; finished_at null is *still running*, and a preparation left open by a
+-- restart is closed at boot saying so, never left in flight for ever.
+CREATE TABLE IF NOT EXISTS remote_tenant_prepares (
+  environment TEXT PRIMARY KEY,
+  tenant      TEXT,
+  started_at  TEXT NOT NULL,
+  finished_at TEXT,
+  ok          INTEGER,
+  detail      TEXT
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

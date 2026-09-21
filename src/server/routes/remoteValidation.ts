@@ -168,11 +168,16 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    */
   app.post(
     '/api/issues/:number/remote-validation/:environment/reseed',
-    checked({ params: EnvironmentParams }, async ({ params, reply }) => {
-      const prepared = await system.remoteRuns.prepareTenant(params.environment);
-      if (!prepared.ok) return reply.code(400).send({ error: prepared.detail, tenant: prepared.standing });
+    checked({ params: EnvironmentParams }, ({ params, reply }) => {
+      // Started rather than awaited: the commands run for tens of minutes, and the record the gate
+      // reads is what tells an operator it is running, what it came back as, and that a reload did
+      // not lose it. → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+      const begun = system.remoteRuns.beginPrepareTenant(params.environment, () =>
+        hub.broadcast({ type: 'dirty', sections: ['goals'] }),
+      );
+      if (!begun.started) return reply.code(409).send({ error: begun.detail, tenant: begun.standing });
       hub.broadcast({ type: 'dirty', sections: ['goals'] });
-      return { ok: true, detail: prepared.detail, tenant: prepared.standing };
+      return { ok: true, detail: begun.detail, tenant: begun.standing };
     }),
   );
 }

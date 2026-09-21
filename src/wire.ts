@@ -119,6 +119,7 @@ import type {
   ShortfallAuthor,
   ShortfallCause,
   StateQuery,
+  TenantPreparation,
   TenantStanding,
   StackLanding,
   GoalWatch,
@@ -542,6 +543,18 @@ export type RemoteRunView = RemoteRun;
 export interface RemoteTenantView extends TenantStanding {
   /** Whether the environment declares an `ensureTenant` or a `reseed` for the gate's own control. */
   reseedable: boolean;
+  /**
+   * Whether pressing that control runs a `reseed` — a command that destroys the tenant's data. An
+   * environment declaring only `ensureTenant` provisions and destroys nothing, so the gate must not
+   * warn about a wipe that will not happen.
+   */
+  destructive: boolean;
+  /**
+   * The preparation running right now, or the last one that ran. Null before anything was ever
+   * pressed. `finishedAt` null is **still running** — which is what an operator who pressed a command
+   * that takes tens of minutes has otherwise no way to learn.
+   */
+  preparation: TenantPreparation | null;
 }
 
 export interface RemoteSheetRowView extends RemoteSheetRow {
@@ -1025,6 +1038,7 @@ export type {
   StallPark,
   StateQuery,
   TaskSummary,
+  TenantPreparation,
   TenantStanding,
   CheckDecline,
   ProposedCheck,

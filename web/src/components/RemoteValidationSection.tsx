@@ -6,9 +6,11 @@ import type {
   RemoteSheetRowView,
   RemoteSheetView,
   RemoteTenantView,
+  TenantPreparation,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Button } from './button.js';
+import { ConfirmButton } from './ConfirmButton.js';
 import { ExtLink } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
@@ -81,8 +83,11 @@ export function RemoteValidationSection({
       ))}
       <div className="cn-sig-add">
         <span className="cn-sub">
-          Assembled when this goal&rsquo;s work arrived in {open.environment}. Nothing here deploys, promotes or writes:
+          Assembled when this goal&rsquo;s work arrived in {open.environment}. No row here deploys, promotes or writes:
           every query is read-only and runs with your own credential.
+          {open.tenant.reseedable && open.tenant.destructive
+            ? ' The reseed control above is the one thing on this card that changes the environment.'
+            : ''}
         </span>
       </div>
     </div>
@@ -118,17 +123,95 @@ function Gate({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetCont
             {pressable === 1 ? 'Run 1 row' : `Run ${pressable} rows`}
           </AsyncButton>
         )}
-        {sheet.tenant.reseedable && (
-          <AsyncButton
-            onClick={() => controls.onReseed(sheet.environment)}
-            title="Run this environment’s own tenant commands — the harness never invents a tenant name"
-          >
-            Reseed the tenant
-          </AsyncButton>
-        )}
+        {sheet.tenant.reseedable &&
+          preparing(sheet.tenant) === null &&
+          (sheet.tenant.destructive ? (
+            <ConfirmButton
+              label="Reseed the tenant"
+              confirmLabel={
+                sheet.tenant.tenant === null
+                  ? 'Confirm — this destroys its data'
+                  : `Confirm — this destroys ${sheet.tenant.tenant}’s data`
+              }
+              pendingLabel="Reseeding…"
+              title={reseedWarning(sheet.tenant)}
+              onConfirm={() => controls.onReseed(sheet.environment)}
+            />
+          ) : (
+            <AsyncButton
+              onClick={() => controls.onReseed(sheet.environment)}
+              title="Provision this environment’s tenant with its own command — the harness never invents a tenant name"
+            >
+              Provision the tenant
+            </AsyncButton>
+          ))}
       </div>
+      <PrepareLine tenant={sheet.tenant} />
+      {sheet.tenant.reseedable && sheet.tenant.destructive && preparing(sheet.tenant) === null && (
+        <span className="cn-sub cn-sheet-warn">{reseedWarning(sheet.tenant)}</span>
+      )}
     </div>
   );
+}
+
+/** The preparation still running, or null. `finishedAt` null is the whole test. */
+function preparing(tenant: RemoteTenantView): TenantPreparation | null {
+  return tenant.preparation !== null && tenant.preparation.finishedAt === null ? tenant.preparation : null;
+}
+
+/**
+ * What the gate shows while the environment's own tenant commands run, and what they came back as.
+ * They take tens of minutes, so an operator who pressed and was shown nothing cannot tell a job still
+ * running from one that died — and the outcome is where the tenant's new name comes from on an
+ * `ensureTenant` environment. Read off the record rather than the click, so it survives a reload and
+ * shows in a second browser. → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+ */
+function PrepareLine({ tenant }: { tenant: RemoteTenantView }): JSX.Element | null {
+  const p = tenant.preparation;
+  if (p === null) return null;
+  if (p.finishedAt === null)
+    return (
+      <span className="cn-sheet-warn">
+        <Tag tone="violet">
+          {tenant.destructive ? 'reseeding' : 'provisioning'} — started {since(p.startedAt)}
+        </Tag>{' '}
+        <span className="cn-sub">
+          This runs the environment&rsquo;s own command and can take tens of minutes. It keeps going if you close this
+          page.
+        </span>
+      </span>
+    );
+  // `ok` null on a finished row is the third verdict, and it is not a failure: the harness restarted
+  // while the command was running, and what it did is not knowable from here.
+  const tone = p.ok === null ? 'amber' : p.ok ? 'green' : 'red';
+  return (
+    <span className="cn-sheet-warn">
+      <Tag tone={tone}>{p.ok === null ? 'outcome unknown' : p.ok ? 'done' : 'it did not run'}</Tag>{' '}
+      <span className="cn-sub">
+        {p.detail ?? 'The command said nothing.'} ({since(p.finishedAt)})
+      </span>
+    </span>
+  );
+}
+
+function since(at: string): string {
+  const ms = Math.max(0, Date.now() - Date.parse(at));
+  const mins = Math.round(ms / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${String(mins)} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.round(mins / 60);
+  return `${String(hours)} hour${hours === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * Said in words beside the control and again in its tooltip, because a reseed runs the project's own
+ * destructive command against a live deployment and there is nothing to undo it with. Only an
+ * environment that declares a `reseed` gets this — `ensureTenant` alone provisions and destroys
+ * nothing. → docs/spec/36-remote-validation.md#reseeding-is-destructive-and-the-gate-says-so
+ */
+function reseedWarning(tenant: RemoteTenantView): string {
+  const who = tenant.tenant === null ? 'this environment’s tenant' : tenant.tenant;
+  return `Reseeding runs this environment’s own reseed command against ${who}, which wipes everything in it back to seeded fixture data — uploads, records and anything else a run or a person left there. It cannot be undone from here.`;
 }
 
 function TenantLine({ tenant, environment }: { tenant: RemoteTenantView; environment: string }): JSX.Element {
