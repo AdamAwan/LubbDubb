@@ -891,9 +891,12 @@ export function goalLanding(held: GoalLanding | null, ref: string, page: GoalPag
  * map decides is the dot: an ask with a pane puts one on that pane's nav entry,
  * and one about the goal as a whole puts none anywhere. The row says there is
  * something; the dot says which stage it is about.
+ *
+ * It is also what a press on the ask carries with it, so the pane the dot is on
+ * and the pane the press lands on cannot disagree.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
-const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
+export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   assigned: 'plan',
   bench: 'plan',
   burn: 'plan',

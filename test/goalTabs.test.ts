@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { GoalEnvironmentReachView, OpenPullRequest, ValidationCheckView } from '../web/src/types.js';
-import type { GoalPageView } from '../web/src/view/goalPage.js';
+import type { CockpitActions } from '../web/src/cockpit/actions.js';
+import type { GoalPageView, GoalTab } from '../web/src/view/goalPage.js';
 import {
   buildGoalNav,
   buildGoalPage,
@@ -10,7 +11,9 @@ import {
   goalTabOpening,
   GOAL_TABS,
   GOAL_TAB_OF,
+  GOAL_ASK_TAB,
 } from '../web/src/view/goalPage.js';
+import { openGoalForAsk } from '../web/src/console/jump.js';
 import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -366,4 +369,29 @@ test('a goal that has landed nothing does not read as one that has arrived', () 
   const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:376', [])!);
   assert.equal(matrix.owed, 0);
   assert.equal(matrix.arrived, false, 'nothing has reached an environment, so no sheet exists to read');
+});
+
+test('an ask opens the goal on the pane it is answered in, not where the lifecycle rule points', () => {
+  const moves: { ref: string; pane: GoalTab | null }[] = [];
+  const actions = {
+    selectGoal: (ref: string | null) => moves.push({ ref: ref ?? '', pane: null }),
+    openGoalPane: (ref: string, pane: GoalTab) => moves.push({ ref, pane }),
+  } as unknown as CockpitActions;
+
+  /* The goal this ask is about is one whose landing rule answers Validate, which is what the
+     pane has to beat: `selectGoal` alone would land the operator on the checks. */
+  assert.equal(goalTabOpening(buildGoalPage(buildDemoState().state, 'issue:395', [])!).tab, 'validate');
+
+  openGoalForAsk(actions, 'issue:395', 'describe');
+  assert.deepEqual(moves, [{ ref: 'issue:395', pane: 'plan' }], 'a description is written in the plan pane');
+
+  moves.length = 0;
+  openGoalForAsk(actions, 'issue:395', 'limit');
+  assert.deepEqual(moves, [{ ref: 'issue:395', pane: null }], 'an ask about the fleet leaves the landing to the rule');
+});
+
+test('every ask kind the rail draws is placed on a pane or deliberately on none', () => {
+  for (const [kind, pane] of Object.entries(GOAL_ASK_TAB)) {
+    assert.ok(pane === null || GOAL_TABS.includes(pane), `${kind} names a pane the page draws`);
+  }
 });

@@ -6,6 +6,7 @@ import type { PrPageView } from '../view/prPage.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, QueueRail, holdingLabel, subjectLabel } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
+import { openGoalForAsk } from './jump.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 
@@ -481,7 +482,7 @@ function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions })
     const ref = row.goalRef;
     const read = () => {
       actions.openPanel(null);
-      actions.selectGoal(ref);
+      openGoalForAsk(actions, ref, row.kind);
     };
     return (
       <span className="cn-psub">
