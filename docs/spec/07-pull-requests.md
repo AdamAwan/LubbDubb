@@ -610,7 +610,14 @@ agent with nothing to add should add nothing.
 ### The footer
 
 Under the body, `renderPrFooter` (`src/pr/prFooter.ts`) writes a horizontal rule and two lines: the
-work this pull request belongs to, and `🤖 Automated PR from LubbDubb`. Nothing else goes there.
+work this pull request belongs to, and `🤖 Automated PR from **LubbDubb**` carrying the sign-off's own
+trailing clause. Nothing else goes there.
+
+**One rule, one robot line.** The footer writes the `<!-- lubbdubb:signoff -->` marker itself, so the
+composite connector's sign-off ([15](15-integrations.md#signing-what-the-harness-says)) leaves the
+body alone rather than adding a second rule and a second robot line under the harness's own — which
+is what a reviewer used to meet: two horizontal rules, two 🤖 lines, the second of them calling a
+pull request body an automated comment. The footer _is_ the pull request's sign-off.
 
 **What is above the rule is one author's and the harness adds nothing to it.** A reviewer reads the
 body before the diff, and every line the harness puts there is a line spent on something other than
@@ -632,7 +639,11 @@ is worth a reviewer's time.
 agent's judgement, and a harness-written `closes #12` would shut a ticket whose remaining parts are
 still open. A part reads `Part <n>/<m> of #<issue> — <title>`; a whole-issue pickup reads
 `Relates to #<issue> — <title>`. The title rides along because the number alone is a coordinate a
-reviewer has to leave the page to resolve.
+reviewer has to leave the page to resolve — **unless the provider resolves it on the page**.
+`expandsIssueRefs` drops the title on a provider that draws the reference as a card carrying the
+work item's own title and state, which Azure does: written there too, the line says the same title
+twice in a row, which reads as a glitch rather than as a courtesy. It is derived from the same
+`prRefStyle` the tool's guidance is, so one fact about the provider decides both.
 
 **The automation note is the harness's own line, never the agent's.** It is the one thing a body
 cannot leave a reader to infer: a reviewer weighs an account by who wrote it, and a pull request that
@@ -685,7 +696,7 @@ Two things follow, and both are load-bearing:
   provider would make the provider a second source of truth for a string the harness composed, and a
   reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
 - **A person's description says so.** `composeDescribedBody` (`src/pr/prDescription.ts`) puts
-  `🫀 Organic human description` under the operator's text, above the footer's rule. Without it the
+  `_🫀 Organic human description_` under the operator's text, above the footer's rule. Without it the
   only attribution on the page is the footer's automation note, which names the wrong author for the
   prose above it — and that takes back the only thing the description was for, that a person and not
   the thing that made the change is answering for it. The mark goes with the half it labels: an empty

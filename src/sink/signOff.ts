@@ -2,7 +2,15 @@
 
 export type BodyFormat = 'markdown' | 'html';
 
-const MARKER = '<!-- lubbdubb:signoff -->';
+/**
+ * The mark that says a body is already signed.
+ *
+ * Exported because a pull request body is signed by its own footer
+ * (`renderPrFooter`) rather than here: the footer writes this marker, and `signOff`
+ * then leaves the body alone instead of adding a second rule and a second robot
+ * line under the harness's own one. → docs/spec/07-pull-requests.md#the-footer
+ */
+export const SIGNOFF_MARKER = '<!-- lubbdubb:signoff -->';
 
 const SIGN_OFF = {
   lead: '\u{1F916} Automated comment from ',
@@ -132,10 +140,21 @@ function ending(body: string): string {
   return ENDINGS[hash % ENDINGS.length] as string;
 }
 
+/**
+ * The sign-off's trailing clause, for a line that already names its author.
+ *
+ * The footer's automation note is that line, so it takes the clause rather than a
+ * whole second sign-off. `seed` is what the ending is drawn from, and is stable for
+ * a given string so an edited-in-place body does not churn its joke.
+ */
+export function signOffTail(seed: string): string {
+  return `${SIGN_OFF.tail}${ending(seed)}.`;
+}
+
 export function signOff(body: string, format: BodyFormat): string {
-  if (body.includes(MARKER)) return body;
-  const { lead, name, tail } = SIGN_OFF;
-  const line = `${tail}${ending(body)}.`;
-  if (format === 'html') return `${body}\n${MARKER}\n<hr>\n<p>${lead}<strong>${name}</strong>${line}</p>`;
-  return `${body}\n\n${MARKER}\n\n---\n\n${lead}**${name}**${line}`;
+  if (body.includes(SIGNOFF_MARKER)) return body;
+  const { lead, name } = SIGN_OFF;
+  const line = signOffTail(body);
+  if (format === 'html') return `${body}\n${SIGNOFF_MARKER}\n<hr>\n<p>${lead}<strong>${name}</strong>${line}</p>`;
+  return `${body}\n\n${SIGNOFF_MARKER}\n\n---\n\n${lead}**${name}**${line}`;
 }
