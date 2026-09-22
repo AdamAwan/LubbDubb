@@ -11,8 +11,8 @@ type Harness = Awaited<ReturnType<typeof buildHarness>>;
 const SLOT_SENTINELS = {
   locus: 'quokka-locus-sentinel',
   cause: 'quokka-cause-sentinel',
-  hard: 'quokka-hard-sentinel',
-  surprise: 'quokka-surprise-sentinel',
+  split: 'quokka-split-sentinel',
+  avoid: 'quokka-avoid-sentinel',
 };
 
 async function aggregate(harness: Harness): Promise<PredictionAggregate> {
@@ -120,7 +120,7 @@ test('a slot nobody marked is absent rather than nought per cent, and so is a sl
   const read = await aggregate(harness);
   const slots = new Map(read.slots.map((slot) => [slot.slot, slot]));
   assert.deepEqual([...slots.keys()], ['locus', 'cause'], 'a slot no prediction filled has no row at all');
-  assert.equal(slots.get('hard'), undefined);
+  assert.equal(slots.get('split'), undefined);
   assert.equal(slots.get('cause')?.plan, null, 'filled but unmarked: absent, not a nought');
   assert.equal(slots.get('cause')?.filled, 1);
   assert.ok(slots.get('locus')?.plan);
@@ -156,7 +156,7 @@ test('nothing in the aggregate payload is a word the operator wrote, or the auth
   await predict(harness, 1, SLOT_SENTINELS);
   await reveal(harness, 1);
   await mark(harness, 1, 'marks', { locus: 'matched', cause: 'not-applicable' });
-  await mark(harness, 1, 'outcome', { hard: 'missed' });
+  await mark(harness, 1, 'outcome', { split: 'missed' });
 
   const res = await harness.app.inject({ method: 'GET', url: '/api/predictions/aggregate' });
   const body = res.body;

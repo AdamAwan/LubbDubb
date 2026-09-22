@@ -9,8 +9,8 @@ import { buttonClass } from './button.js';
 const SLOTS: readonly { key: keyof PredictionDraft; question: string }[] = [
   { key: 'locus', question: 'Where do I think this lives?' },
   { key: 'cause', question: 'What do I think the cause / approach is?' },
-  { key: 'hard', question: 'What do I think will be hard?' },
-  { key: 'surprise', question: 'What would surprise me?' },
+  { key: 'split', question: 'How would I split this up?' },
+  { key: 'avoid', question: 'What should NOT happen?' },
 ];
 
 /**
@@ -39,8 +39,10 @@ export const HOLDS_NOTHING_UP = 'It holds nothing up: the fleet is not waiting o
 
 const CONTAINMENT =
   'What you write here is kept from every agent the harness runs — it goes into no prompt, no ' +
-  'transcript and no tool answer. The one leak the containment cannot stop is you: paste it into ' +
-  "this goal's standing instructions and the fleet reads it.";
+  'transcript and no tool answer. That holds for what should not happen as much as for the rest: it ' +
+  'is a prediction the plan is marked against, never an instruction the fleet is given. The one leak ' +
+  "the containment cannot stop is you: paste it into this goal's standing instructions and the " +
+  'fleet reads it.';
 
 /**
  * The criteria field's own note, and the reason it cannot be folded in under
@@ -56,7 +58,7 @@ const REACHES_THE_FLEET =
 
 type Draft = Record<keyof PredictionDraft, string>;
 
-const EMPTY: Draft = { locus: '', cause: '', hard: '', surprise: '' };
+const EMPTY: Draft = { locus: '', cause: '', split: '', avoid: '' };
 
 function filled(draft: Draft): PredictionDraft {
   const slots: PredictionDraft = {};

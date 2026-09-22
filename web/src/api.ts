@@ -79,8 +79,8 @@ import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 export interface PredictionDraft {
   locus?: string;
   cause?: string;
-  hard?: string;
-  surprise?: string;
+  split?: string;
+  avoid?: string;
 }
 
 /**

@@ -13,13 +13,13 @@ import type { RouteContext } from './context.js';
 const PredictionBody = z.object({
   locus: optionalText('locus'),
   cause: optionalText('cause'),
-  hard: optionalText('hard'),
-  surprise: optionalText('surprise'),
+  split: optionalText('split'),
+  avoid: optionalText('avoid'),
 });
 
 const Mark = z.enum(['matched', 'missed', 'not-applicable']).nullable().optional();
 
-const MarkBody = z.object({ locus: Mark, cause: Mark, hard: Mark, surprise: Mark });
+const MarkBody = z.object({ locus: Mark, cause: Mark, split: Mark, avoid: Mark });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   if (!revealGateOn(system.config)) return;
@@ -47,7 +47,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const prediction = predictions.recordPrediction({
         originRef,
         author: config.userId ?? null,
-        slots: { locus: body.locus, cause: body.cause, hard: body.hard, surprise: body.surprise },
+        slots: { locus: body.locus, cause: body.cause, split: body.split, avoid: body.avoid },
       });
       if (prediction === null)
         return reply.code(409).send({ error: 'a prediction is recorded once and is not re-openable' });
@@ -91,7 +91,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         const owedBefore = owesOutcome(originRef);
         const outcome = write({
           originRef,
-          marks: { locus: body.locus, cause: body.cause, hard: body.hard, surprise: body.surprise },
+          marks: { locus: body.locus, cause: body.cause, split: body.split, avoid: body.avoid },
         });
         if (!outcome.ok) {
           if (outcome.reason === 'slot-skipped')

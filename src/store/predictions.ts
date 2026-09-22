@@ -8,11 +8,11 @@ import type {
   PredictionSlot,
 } from '../types.js';
 import type { StoreContext } from './context.js';
-import type { ColumnMigrations } from './migrate.js';
+import type { ColumnMigrations, TableRebuild } from './migrate.js';
 
 // → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
 
-export const PREDICTION_SLOTS = ['locus', 'cause', 'hard', 'surprise'] as const satisfies readonly PredictionSlot[];
+export const PREDICTION_SLOTS = ['locus', 'cause', 'split', 'avoid'] as const satisfies readonly PredictionSlot[];
 
 /**
  * `goal_predictions` predates both moments' marks, so they arrive by `ALTER TABLE`
@@ -25,20 +25,53 @@ export const PREDICTION_COLUMNS: ColumnMigrations = {
   goal_predictions: {
     plan_mark_locus: 'TEXT',
     plan_mark_cause: 'TEXT',
-    plan_mark_hard: 'TEXT',
-    plan_mark_surprise: 'TEXT',
+    plan_mark_split: 'TEXT',
+    plan_mark_avoid: 'TEXT',
     plan_marked_at: 'TEXT',
     outcome_mark_locus: 'TEXT',
     outcome_mark_cause: 'TEXT',
-    outcome_mark_hard: 'TEXT',
-    outcome_mark_surprise: 'TEXT',
+    outcome_mark_split: 'TEXT',
+    outcome_mark_avoid: 'TEXT',
     outcome_marked_at: 'TEXT',
   },
 };
 
+/**
+ * The slot vocabulary changed: `hard` and `surprise` were retired for `split` and
+ * `avoid`, because a slot phrased as a thing you do *not* expect cannot be marked
+ * `matched` without the operator having to guess which way round the word runs.
+ * → docs/spec/14-persistence.md#retiring-a-slot
+ *
+ * A retired slot is a **column**, so `ensureColumns` cannot reach it and the table is
+ * rebuilt instead, keyed on `hard` still being there. What carries over is the text
+ * of the two slots whose question is unchanged and nothing else: every mark is
+ * dropped, on all four slots, so that the stamps stay derived — a row whose only
+ * marks were on the two retired slots would otherwise keep a `plan_marked_at` saying
+ * a moment was answered with nothing left in it to have answered, and the
+ * aggregate's count of answered goals would become a count of goals somebody once
+ * opened. The columns copied are the ones the table has carried since it was
+ * created, because a database old enough to predate the mark columns has `hard` too
+ * and must survive this pass as well.
+ *
+ * `goal_reveals` is deliberately untouched. A goal whose plan the operator has
+ * already read can never take a new prediction — `recordPrediction` refuses once a
+ * reveal stands — and clearing the reveals to re-offer the gate would invite a
+ * prediction written by somebody who has seen the plan, which is the one thing the
+ * whole record cannot survive.
+ */
+export const PREDICTION_REBUILDS: readonly TableRebuild[] = [
+  {
+    table: 'goal_predictions',
+    keyedOn: 'hard',
+    copy: (old) => `
+      INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, created_at, updated_at)
+      SELECT id, origin_ref, author, locus, cause, created_at, updated_at FROM ${old}`,
+  },
+];
+
 type PredictionSlots = Readonly<Record<PredictionSlot, string | null>>;
 
-const UNMARKED: PredictionPlanMarks = { locus: null, cause: null, hard: null, surprise: null };
+const UNMARKED: PredictionPlanMarks = { locus: null, cause: null, split: null, avoid: null };
 
 /** What a mark call answers: the written prediction, or which refusal and over which slot. */
 type MarkOutcome =
@@ -61,12 +94,12 @@ type MarkInput = Partial<Readonly<Record<PredictionSlot, PredictionMark | null>>
  */
 const MOMENT_WRITES = {
   plan: `UPDATE goal_predictions
-            SET plan_mark_locus=@locus, plan_mark_cause=@cause, plan_mark_hard=@hard,
-                plan_mark_surprise=@surprise, plan_marked_at=@markedAt, updated_at=@updatedAt
+            SET plan_mark_locus=@locus, plan_mark_cause=@cause, plan_mark_split=@split,
+                plan_mark_avoid=@avoid, plan_marked_at=@markedAt, updated_at=@updatedAt
           WHERE origin_ref=@originRef`,
   outcome: `UPDATE goal_predictions
-               SET outcome_mark_locus=@locus, outcome_mark_cause=@cause, outcome_mark_hard=@hard,
-                   outcome_mark_surprise=@surprise, outcome_marked_at=@markedAt, updated_at=@updatedAt
+               SET outcome_mark_locus=@locus, outcome_mark_cause=@cause, outcome_mark_split=@split,
+                   outcome_mark_avoid=@avoid, outcome_marked_at=@markedAt, updated_at=@updatedAt
              WHERE origin_ref=@originRef`,
 } as const;
 
@@ -116,8 +149,8 @@ export class PredictionStore {
       };
       this.ctx
         .prep(
-          `INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, hard, surprise, created_at, updated_at)
-           VALUES (@id, @originRef, @author, @locus, @cause, @hard, @surprise, @createdAt, @updatedAt)`,
+          `INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, split, avoid, created_at, updated_at)
+           VALUES (@id, @originRef, @author, @locus, @cause, @split, @avoid, @createdAt, @updatedAt)`,
         )
         .run({
           id: prediction.id,
@@ -289,17 +322,17 @@ interface PredictionRow {
   author: string | null;
   locus: string | null;
   cause: string | null;
-  hard: string | null;
-  surprise: string | null;
+  split: string | null;
+  avoid: string | null;
   plan_mark_locus: string | null;
   plan_mark_cause: string | null;
-  plan_mark_hard: string | null;
-  plan_mark_surprise: string | null;
+  plan_mark_split: string | null;
+  plan_mark_avoid: string | null;
   plan_marked_at: string | null;
   outcome_mark_locus: string | null;
   outcome_mark_cause: string | null;
-  outcome_mark_hard: string | null;
-  outcome_mark_surprise: string | null;
+  outcome_mark_split: string | null;
+  outcome_mark_avoid: string | null;
   outcome_marked_at: string | null;
   created_at: string;
   updated_at: string;
@@ -315,20 +348,20 @@ function rowToPrediction(r: PredictionRow): GoalPrediction {
   const planMarks: PredictionPlanMarks = {
     locus: readMark(r.plan_mark_locus),
     cause: readMark(r.plan_mark_cause),
-    hard: readMark(r.plan_mark_hard),
-    surprise: readMark(r.plan_mark_surprise),
+    split: readMark(r.plan_mark_split),
+    avoid: readMark(r.plan_mark_avoid),
   };
   const outcomeMarks: PredictionOutcomeMarks = {
     locus: readMark(r.outcome_mark_locus),
     cause: readMark(r.outcome_mark_cause),
-    hard: readMark(r.outcome_mark_hard),
-    surprise: readMark(r.outcome_mark_surprise),
+    split: readMark(r.outcome_mark_split),
+    avoid: readMark(r.outcome_mark_avoid),
   };
   return {
     id: r.id,
     originRef: r.origin_ref,
     author: r.author,
-    slots: { locus: r.locus, cause: r.cause, hard: r.hard, surprise: r.surprise },
+    slots: { locus: r.locus, cause: r.cause, split: r.split, avoid: r.avoid },
     planMarks,
     planMarkedAt: r.plan_marked_at,
     outcomeMarks,

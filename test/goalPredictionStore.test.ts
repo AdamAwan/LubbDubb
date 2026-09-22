@@ -15,15 +15,15 @@ test('a prediction is one per goal and is not re-openable', () => {
   const first = predictions.recordPrediction({
     originRef: 'issue:41',
     author: 'operator',
-    slots: { locus: 'the store layer', hard: 'the migration' },
+    slots: { locus: 'the store layer', split: 'the migration' },
   });
   assert.ok(first);
   assert.equal(first.slots.locus, 'the store layer');
-  assert.equal(first.slots.hard, 'the migration');
+  assert.equal(first.slots.split, 'the migration');
 
   // Every slot is individually skippable, and a skipped one is null rather than ''.
   assert.equal(first.slots.cause, null);
-  assert.equal(first.slots.surprise, null);
+  assert.equal(first.slots.avoid, null);
 
   const second = predictions.recordPrediction({
     originRef: 'issue:41',

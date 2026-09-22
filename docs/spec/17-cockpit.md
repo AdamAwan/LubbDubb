@@ -2798,8 +2798,8 @@ twice and making no case at all for the press underneath. The words are the gate
 rather than written again here, since two spellings of one argument is how a gate comes to be resented
 on one surface and welcomed on the other.
 
-**Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `hard`,
-`surprise` — each a free-text field labelled with the question it asks, each individually skippable,
+**Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `split`,
+`avoid` — each a free-text field labelled with the question it asks, each individually skippable,
 and one press that records the prediction and reveals the plan in the same breath. That is deliberate:
 moment one is one continuous interaction rather than a second visit, because predict → reveal → look
 is the sitting the operator was already having. A draft with nothing in it is caught before it is sent;
@@ -2898,6 +2898,32 @@ A **skipped** slot draws no buttons at all, and says why: nothing was written th
 nothing to mark. The third option is labelled **"Plan is silent"** rather than anything that reads as
 _I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
 a real answer, not a way of declining to give one.
+
+#### A slot that asks for a thing that should not happen
+
+`avoid` asks the operator to name something they expect **not** to see, and the other three ask for
+something they expect to see. Read against a prohibition, the default wording of the marks — "The plan
+says what you said it would" — runs both ways at once: did the plan do the named thing, or did it
+honour the ban? An operator who reads it the second way files the exact opposite of what they mean, in
+the one record that cannot be corrected by asking them again later, because asking later is asking
+somebody who has read the plan.
+
+So the slot carries **its own words, on both moments at once**: _Stayed clear_ / _The plan does it_ /
+_Plan is silent_ at moment one, and _Stayed clear_ / _It happened anyway_ / _Never came up_ at moment
+two. Both, never one — a slot drawn with one moment's own wording and the other's default leaves a
+record whose two halves were answered to two different questions, which is the failure the two moments
+are named apart to avoid in the first place.
+
+The **stored value is the same three-valued mark**, and `matched` keeps its one meaning throughout:
+the operator's reading borne out. On `avoid` that is the plan staying clear. The aggregate reads the
+four slots as one vocabulary, and a slot whose wording quietly inverted the stored value would make
+every figure on the panel a blend of two opposite claims.
+
+**What `avoid` is not is an instruction.** It is the slot an operator is most likely to mistake for
+one, so the composer's containment sentence says it outright: what is written there is a prediction
+the plan is marked against, never something the fleet is told. Where the operator wants the fleet to
+honour it, that is what the goal's criteria are, and they are asked in the same sitting a rule further
+down. → [the criteria half](#the-criteria-half-of-the-gate)
 
 ### The verdict, where the plan was read
 
@@ -8747,7 +8773,7 @@ that goal like any other, and the goal's own figures reach the Prediction panel.
 What the demo seeds beside it is **fourteen reveals over three plans**, which is not an inconsistency:
 a snapshot carries the plans of work that is live, and the record is over everything the gate was ever
 put to. The seed is shaped so the panel is worth reading rather than merely populated — three slots
-clear the ten-goal threshold and draw a rate, `surprise` does not and draws the count toward it,
+clear the ten-goal threshold and draw a rate, `avoid` does not and draws the count toward it,
 moment two lags moment one everywhere because it is asked at delivery, and two goals were offered the
 gate and declined it, which is the third outcome the aggregate exists to keep apart from _never
 offered_. Issue #395 carries both moments answered, so the pair sentences are reachable, and its

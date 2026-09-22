@@ -11,7 +11,7 @@ import { PREDICTION_COLUMNS } from '../src/store/predictions.js';
 // → docs/spec/14-persistence.md#migrations
 
 const NOW = '2026-09-16T09:00:00.000Z';
-const MARK_COLUMNS = ['plan_mark_locus', 'plan_mark_cause', 'plan_mark_hard', 'plan_mark_surprise', 'plan_marked_at'];
+const MARK_COLUMNS = ['plan_mark_locus', 'plan_mark_cause', 'plan_mark_split', 'plan_mark_avoid', 'plan_marked_at'];
 
 /**
  * A database from before moment one: `goal_predictions` already exists, with a
@@ -30,7 +30,7 @@ function beforeTheColumns(): string {
     assert.ok(!stripped.includes(column), `the fixture really is from before ${column}`);
   db.exec(stripped);
   db.prepare(
-    `INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, hard, surprise, created_at, updated_at)
+    `INSERT INTO goal_predictions (id, origin_ref, author, locus, cause, split, avoid, created_at, updated_at)
      VALUES ('pred_old', 'issue:12', 'operator', 'the store', 'the migration', 'the schema', 'the ALTER', ?, ?)`,
   ).run(NOW, NOW);
   db.prepare(`INSERT INTO goal_reveals (origin_ref, revealed_at, predicted) VALUES ('issue:12', ?, 1)`).run(NOW);
@@ -60,12 +60,12 @@ test('the mark columns are declared in PREDICTION_COLUMNS, so a database from be
   assert.ok(standing, 'the row from before the columns is still readable');
   assert.deepEqual(
     standing.slots,
-    { locus: 'the store', cause: 'the migration', hard: 'the schema', surprise: 'the ALTER' },
+    { locus: 'the store', cause: 'the migration', split: 'the schema', avoid: 'the ALTER' },
     'and nothing about what it predicted moved',
   );
   assert.deepEqual(
     standing.planMarks,
-    { locus: null, cause: null, hard: null, surprise: null },
+    { locus: null, cause: null, split: null, avoid: null },
     'a null mark is the truth for every row written before moment one — no backfill invents one',
   );
   assert.equal(standing.planMarkedAt, null);
@@ -92,13 +92,13 @@ test('a prediction from before the columns can be marked once the boot has added
 test('a second boot on the same file has nothing left to add, and the mark it took survives it', () => {
   const path = beforeTheColumns();
   const first = new Store(path);
-  assert.ok(first.openPredictions().recordPlanMarks({ originRef: 'issue:12', marks: { surprise: 'missed' } }).ok);
+  assert.ok(first.openPredictions().recordPlanMarks({ originRef: 'issue:12', marks: { avoid: 'missed' } }).ok);
   first.close();
 
   const second = new Store(path);
   const standing = second.openPredictions().getPrediction('issue:12');
   assert.equal(standing?.slots.locus, 'the store', 'one row, not two shapes');
-  assert.equal(standing?.planMarks.surprise, 'missed', 'the second boot re-adds nothing and clears nothing');
+  assert.equal(standing?.planMarks.avoid, 'missed', 'the second boot re-adds nothing and clears nothing');
   assert.equal(standing?.planMarks.locus, null);
   second.close();
 });

@@ -14,8 +14,8 @@ const NOW = '2026-09-17T09:00:00.000Z';
 const OUTCOME_COLUMNS = [
   'outcome_mark_locus',
   'outcome_mark_cause',
-  'outcome_mark_hard',
-  'outcome_mark_surprise',
+  'outcome_mark_split',
+  'outcome_mark_avoid',
   'outcome_marked_at',
 ];
 
@@ -37,7 +37,7 @@ function beforeTheColumns(): string {
   db.exec(stripped);
   db.prepare(
     `INSERT INTO goal_predictions
-       (id, origin_ref, author, locus, cause, hard, surprise, plan_mark_locus, plan_marked_at, created_at, updated_at)
+       (id, origin_ref, author, locus, cause, split, avoid, plan_mark_locus, plan_marked_at, created_at, updated_at)
      VALUES ('pred_old', 'issue:12', 'operator', 'the store', 'the migration', 'the schema', 'the ALTER',
              'missed', ?, ?, ?)`,
   ).run(NOW, NOW, NOW);
@@ -70,7 +70,7 @@ test("moment two's columns are declared, so a database from before them gains th
   assert.equal(standing.planMarks.locus, 'missed', 'nor what moment one said about it');
   assert.deepEqual(
     standing.outcomeMarks,
-    { locus: null, cause: null, hard: null, surprise: null },
+    { locus: null, cause: null, split: null, avoid: null },
     'null is the truth for every row written before delivery asked — no backfill invents an answer',
   );
   assert.equal(standing.outcomeMarkedAt, null);
@@ -102,13 +102,13 @@ test('a prediction from before the columns takes a second-moment mark once the b
 test('a second boot on the same file has nothing left to add, and the mark it took survives it', () => {
   const path = beforeTheColumns();
   const first = new Store(path);
-  assert.ok(first.openPredictions().recordOutcomeMarks({ originRef: 'issue:12', marks: { surprise: 'matched' } }).ok);
+  assert.ok(first.openPredictions().recordOutcomeMarks({ originRef: 'issue:12', marks: { avoid: 'matched' } }).ok);
   first.close();
 
   const second = new Store(path);
   const standing = second.openPredictions().getPrediction('issue:12');
   assert.equal(standing?.slots.locus, 'the store', 'one row, not two shapes');
-  assert.equal(standing?.outcomeMarks.surprise, 'matched', 'the second boot re-adds nothing and clears nothing');
+  assert.equal(standing?.outcomeMarks.avoid, 'matched', 'the second boot re-adds nothing and clears nothing');
   assert.equal(standing?.outcomeMarks.locus, null);
   second.close();
 });
