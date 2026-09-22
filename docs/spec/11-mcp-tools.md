@@ -606,8 +606,7 @@ the `partOutcome` event, so the cockpit repaints on the verdict rather than on t
 ### `open_pr`
 
 Opens the pull request for the work the calling agent was dispatched to do.
-Arguments `{summary, type?, scope?, body?, satisfies?, one_way?, unverified?, reach?, decided?}` — and
-**nothing that names work**.
+Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
 
 - **Identity is structural, with full force.** Branch, base, issue and stack position all resolve from
   the credential's origin (`resolveOpenPr`, `src/mcp/openPr.ts`), so an agent cannot open a pull
@@ -644,11 +643,14 @@ Arguments `{summary, type?, scope?, body?, satisfies?, one_way?, unverified?, re
   the generic arm, deliberately: a wrong diagnosis is worse than none.
 - **The title comes from `pr-title`** (see [07](07-pull-requests.md)); `type` and `scope` are the one
   thing the agent knows and the harness does not.
-- **The issue reference is appended, never a closing keyword.** Whether a PR closes its issue is the
-  agent's judgement — a harness-written "closes" would shut a ticket whose remaining parts are open.
-  A part gets `Part <n>/<m> of #<issue>.`, a whole-issue pickup `Relates to #<issue>.` So the prompts
-  keep telling the agent to write `closes #<n>` / `part of #<n>` itself: that clause is its call, and
-  this tool deliberately never makes it.
+- **The footer is appended, and its reference is never a closing keyword.** `renderPrFooter`
+  (`src/pr/prFooter.ts`) writes a rule, the work the pull request belongs to — `Part <n>/<m> of
+  #<issue> — <title>` for a part, `Relates to #<issue> — <title>` for a whole-issue pickup — and
+  `🤖 Automated PR from LubbDubb`. Whether a PR closes its issue is the agent's judgement, and a
+  harness-written "closes" would shut a ticket whose remaining parts are open, so the prompts keep
+  telling the agent to write `closes #<n>` / `part of #<n>` itself. Nothing else is added above the
+  footer: what the agent wrote is the whole of the description.
+  → [07](07-pull-requests.md#the-footer)
 - **The work-item link is written too, not just the reference.** The body's `#<issue>` is a link on
   GitHub and prose on Azure, where a work item and a pull request are joined only by an artifact
   relation — so the tool links it through `linkPrWorkItem` the moment the provider returns a number,
@@ -672,23 +674,6 @@ Arguments `{summary, type?, scope?, body?, satisfies?, one_way?, unverified?, re
   where `#12` is work item 12). The harness writes the issue reference itself, but a stacked part
   naming the rung beneath it is the agent's own prose, and this description is the last thing it reads
   before writing one. → [07](07-pull-requests.md#naming-a-pull-request)
-- **Five more arguments carry what the reviewer has to decide for themselves**, and the harness
-  renders them into a fixed block between the bullets and the reference. `satisfies` maps each of the
-  part's acceptance criteria to where it is met, `one_way` names what a revert would not take back,
-  `unverified` what nothing pins, `reach` what runs the changed code and what gates it, and `decided`
-  a fork the ask did not settle, as `"X, not Y"`. `evidenceRefusal` (`src/pr/prEvidence.ts`) asserts
-  the shape and never the claim: every entry carries a coordinate into a file the diff changes, and a
-  word that answers the reviewer's question for them — `safe`, `minimal`, `no risk` — is refused by
-  name. **Which of them are owed is read off the diff** (`diffFacts`, `src/pr/prDiff.ts`), so a change
-  that touches no one-way surface is never asked to invent a one-way door, and a clone that cannot
-  diff owes nothing at all. The arguments carry it rather than a sentence in a prompt for
-  `IssueCreateInput`'s reason: told to an agent, each failure is silent.
-  → [07](07-pull-requests.md#the-four-questions-a-reviewer-has)
-- **`git` on the tool's wiring is optional, and a test that leaves it out gets the fail-open path.**
-  Nothing is refused for it, so an ordinary `open_pr` test writes the same body it always did; a test
-  on the triggers injects `FakeGitObserver` and `setDiff(base, branch, …)`. The composition root hands
-  it the same `gitObserver` every other reader of the clone gets.
-  → [07](07-pull-requests.md#what-the-harness-can-see-for-itself)
 - **It is named in `MCP_PROTOCOL_ADDENDUM`, and that is load-bearing.** No dispatch prompt names it at
   its point of use, so for its first release nothing named it anywhere and every dispatched agent
   shelled out to `gh`/`az` instead — wired, allow-listed, unused. `test/mcpChannel.test.ts` now

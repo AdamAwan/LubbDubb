@@ -1,3 +1,4 @@
+import { HUMAN_NOTE } from './prFooter.js';
 import type { DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -14,9 +15,8 @@ export const PR_DESCRIPTION = {
 /**
  * The four questions, as they are put to the operator.
  *
- * The same four a reviewer has to be able to answer, which `renderEvidence` already
- * takes off the agent and turns into coordinates. Asked here in prose, of the person
- * who will answer for the change.
+ * The four a reviewer has to be able to answer for themselves, put in prose to the
+ * person who will answer for the change.
  *
  * They are **hints and never fields**. Four boxes make the form the task — an
  * operator fills each one because it is there, and a question with nothing to say
@@ -73,31 +73,22 @@ export function descriptionStanding(version: PrDescriptionVersion): 'unchecked' 
 }
 
 /**
- * The line that separates the two authors of a described body.
- *
- * Both halves are prose under one heading-less body, so without a mark between them a
- * reviewer reads the operator's account and the agent's coordinates as one voice — and
- * the whole point of the operator writing it is that a person, not the thing that made
- * the change, is answering for it. The rule alone would not say which side is whose, so
- * the attribution is written out.
- */
-const TAIL_ATTRIBUTION =
-  '_Above this line is the operator’s own description. Below it is the agent’s record of the change, ' +
-  'written when the pull request was opened._';
-
-/**
- * The body a described pull request carries: the operator's text, the mark, then the
- * tail `open_pr` recorded.
+ * The body a described pull request carries: the operator's text, the mark saying a
+ * person wrote it, then the footer `open_pr` recorded.
  *
  * Composed rather than patched, so a rewrite re-derives the whole body from the newest
- * version and the stored tail. Either half being empty leaves the other alone: a mark
- * with nothing on one side of it labels an author who wrote nothing.
+ * version and the stored footer. The mark is what makes the description's whole point
+ * legible: a reviewer weighs an account by who wrote it, and the footer below says the
+ * pull request is the harness's — which would name the wrong author for the prose above
+ * it. Either half being empty leaves the other alone, and the mark goes with the half it
+ * labels: a mark over nothing labels an author who wrote nothing.
  * → docs/spec/07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one
  */
 export function composeDescribedBody(text: string, tail: string): string {
   const head = text.trim();
   const rest = tail.trim();
   if (head === '') return rest;
-  if (rest === '') return head;
-  return [head, '---', TAIL_ATTRIBUTION, rest].join('\n\n');
+  const described = [head, HUMAN_NOTE].join('\n\n');
+  if (rest === '') return described;
+  return [described, rest].join('\n\n');
 }

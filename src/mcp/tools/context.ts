@@ -29,7 +29,6 @@ import type { StateQueryDesk } from '../../remoteValidation/stateQueries.js';
 import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
 import type { RemoteListingDesk } from '../../remoteValidation/listing.js';
 import type { PrRefStyle } from '../../pr/prRef.js';
-import type { GitObserver } from '../../git/gitObserver.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
@@ -159,14 +158,6 @@ export interface McpToolDeps {
     prompts: PromptTemplates;
     watchLabel: string;
     prRefStyle: PrRefStyle;
-    /**
-     * What the body's computed facts are read off, and what decides which of the
-     * reviewer's four questions this change owes an answer to. Optional, and a clone
-     * that cannot diff answers `null` — every trigger resting on it fails open, because
-     * the alternative is a pull request refused for a git that would not run.
-     * → docs/spec/07-pull-requests.md#what-the-harness-can-see-for-itself
-     */
-    git?: Pick<GitObserver, 'diff'>;
   };
   prReply?: PrReplyDesk;
   filing?: TicketFiler;
