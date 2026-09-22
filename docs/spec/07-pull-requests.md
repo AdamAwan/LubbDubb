@@ -577,8 +577,8 @@ Which leaves who writes it, and that is `manualDescriptions`' question rather th
 With the key off, the body is the agent's, under the rules the rest of this section states; with it
 on, [the operator writes it](#the-operator-writes-the-description) and an operator is not a template.
 
-What the harness does own is the **reference**, appended by `open_pr` after the agent's text and never
-a closing keyword ([11](11-mcp-tools.md#open_pr)). Everything above it ships as written.
+What the harness does own is the **footer**, appended by `open_pr` after the agent's text
+([#the-footer](#the-footer)). Everything above it ships as written.
 
 That leaves the form of the body expressible in exactly one place: the description of `open_pr`'s
 `body` argument, which states it — a bullet list, five bullets at most, why the change is needed
@@ -604,92 +604,41 @@ shape satisfied and the reading lost. `prBodyRefusal` (`src/pr/prBody.ts`) asser
 **Refused, never trimmed.** A truncated bullet reads as a finished thought that is wrong, and it
 ships that way: the body is the one thing about a pull request the harness does not rewrite. A
 refusal costs the agent one turn and names the exact line that broke it, which is a fix rather than
-a re-read of the description. An absent body is not refused — the appended reference stands on its
-own, and an agent with nothing to add should add nothing. What _is_ refused, with a body or without
-one, is a change that owes the reviewer an answer and gives none: that is the next section.
+a re-read of the description. An absent body is not refused — the footer stands on its own, and an
+agent with nothing to add should add nothing.
 
-### The four questions a reviewer has
+### The footer
 
-A reviewer looking at a pull request has to be able to answer four things, and the bullets above
-answer none of them:
+Under the body, `renderPrFooter` (`src/pr/prFooter.ts`) writes a horizontal rule and two lines: the
+work this pull request belongs to, and `🤖 Automated PR from LubbDubb`. Nothing else goes there.
 
-1. Is this what we asked for?
-2. What cannot be undone if it is wrong?
-3. What is missing?
-4. How far does it reach if it is wrong?
+**What is above the rule is one author's and the harness adds nothing to it.** A reviewer reads the
+body before the diff, and every line the harness puts there is a line spent on something other than
+the change. The body carries the agent's five bullets — or, with `manualDescriptions` on, the
+operator's own prose — and the footer carries the facts a reviewer cannot get from either: which part
+of which story this is, and that it was opened by the harness rather than by a person at a keyboard.
 
-**The harness must not answer them.** Whatever an agent writes about its own change is written by the
-thing with the most reason to be wrong about it, and a reviewer reading "this is low-risk and fully
-tested" has spent their attention being told the conclusion they came to reach. The point of a review
-is the reviewer's judgement, and a body that supplies judgement has replaced it rather than served it.
+**A block of headings under the body is what this refuses.** An earlier version of this document put
+five lists there — what the change satisfies, what could not be undone, what nothing pinned, how far
+it reached, what was decided — rendered under fixed headings with `_none named_` where the agent had
+nothing. On a real pull request it read as a form filled in by the thing that made the change, four
+fifths of it empty, above a diff the reviewer had come to read. A reviewer's attention is the scarcest
+thing a pull request spends, and that block spent it on the shape of the record rather than on the
+change. The questions it asked are still the right ones — they are
+[put to the operator](#the-operator-writes-the-description), in prose, by the one party whose answer
+is worth a reviewer's time.
 
-So the rule the whole of this rests on is: **coordinates, not conclusions.** Every entry the agent
-writes for these questions carries a pointer — `src/store/sync.ts:41` — into a file this pull request
-changes. A pointer is falsifiable in one click; a judgement is not falsifiable at all. It is also the
-only form in which reassurance is unwritable: "this is a safe change" cannot be said with a
-coordinate in it, and "`src/sync/resume.ts:88` runs on every boot with no flag on it" is the same
-sentence with the verdict taken out and the evidence left in.
+**The issue reference is never a closing keyword.** Whether a pull request closes its issue is the
+agent's judgement, and a harness-written `closes #12` would shut a ticket whose remaining parts are
+still open. A part reads `Part <n>/<m> of #<issue> — <title>`; a whole-issue pickup reads
+`Relates to #<issue> — <title>`. The title rides along because the number alone is a coordinate a
+reviewer has to leave the page to resolve.
 
-#### They are arguments, not a sentence in a prompt
-
-`open_pr` takes five lists — `satisfies`, `one_way`, `unverified`, `reach`, `decided` — and the
-harness renders them into a fixed block between the agent's bullets and the reference. The same
-reasoning as `IssueCreateInput` ([13](13-jobs-and-tickets.md#filing-a-ticket)): a thing a record must
-carry is an argument, because a sentence in a prompt fails silently and an argument does not. It also
-keeps the block's shape the harness's, so a reviewer learns where to look once and a field nobody
-filled reads `_none named_` rather than closing up — an absent heading is not an answer, and
-`_none named_` is one, on the record, attributable to the agent that wrote it.
-
-The bullets are untouched by all of this and stay five plain lines. Folding four more dimensions into
-them would rebuild the `## Summary` / `## Changes` / `## Testing` restatement the bullet rules exist
-to refuse.
-
-#### What each question turns into
-
-- **Is this what we asked for? — `satisfies`, and the criteria themselves.** The first half is free
-  and has no agent in it: `resolveOpenPr` carries the part's `acceptanceCriteria` on its target
-  ([08](08-planning.md)), and the block renders them **verbatim, as the plan recorded them**, which is
-  the one line on the page nothing the agent writes can shade. The agent's half is only the mapping —
-  one entry per criterion, in the plan's order, each naming where it is met. A criterion that is not
-  met is written `not met: <why>`, which is a real answer and not a failure to have one.
-- **What cannot be undone? — `one_way`.** A migration that has run, rows that are gone, something
-  written into the world under the operator's account, a name a deployment may already be overriding.
-- **What is missing? — `unverified` and `decided`.** It cannot be answered, by anybody: if the agent
-  knew what was missing it would not be missing. What can be answered is the **boundary** — what no
-  test pins, and what was in scope and deliberately left out. A reviewer who can see the edge of what
-  was checked is the only one who can tell what fell outside it, and that is their own knowledge
-  doing the work, which is the point.
-- **How far does it reach? — `reach`.** What runs the changed code — the pulse, boot, a route, an
-  agent tool, the cockpit alone — and whether a config flag gates it or it is unconditional. This
-  codebase's own quiet failures are all instances of this question, so it is the one field owed by
-  every change that touches code that runs.
-- **`decided`** carries a fork the ask did not settle, written as **"X, not Y"**. The road not taken
-  is the information: an agent that chose is the only one who knows there was a choice, and "not what
-  we asked for" lives in a gap silently filled far more often than in a criterion visibly unmet. It
-  is the one field that is never required, because it is honest only when volunteered.
-
-#### What is owed comes from the diff, not from asking
-
-`evidenceRefusal` (`src/pr/prEvidence.ts`) asserts the shape, for the reason `prBodyRefusal` exists:
-a description is a request. Its arms read the shape and never the claim — length, an entry cap, a
-coordinate that names a file in the diff, the plainness rules and reading-ease floor
-([31](31-review-packs.md#say-it-in-plainer-words)), the `"X, not Y"` form, and a list of words that
-answer the reviewer's question for them (`safe`, `simple`, `minimal`, `no risk`, `fully tested` and
-the rest), each refused by naming the word it caught.
-
-**Which fields are owed is decided by the diff**, so a change that touches nothing one-way is never
-asked to invent a one-way door. That is what keeps this from becoming a form to fill in:
-
-| Owed         | When                                                                         |
-| ------------ | ---------------------------------------------------------------------------- |
-| `satisfies`  | the part declares acceptance criteria — and the refusal lists them, numbered |
-| `one_way`    | the diff touches a one-way surface (below)                                   |
-| `unverified` | the diff changes code and no test under `test/` changed with it              |
-| `reach`      | the diff changes code that runs — deliberately, every time                   |
-| `decided`    | never                                                                        |
-
-`reach` firing on every code change is the one deliberate exception to trigger-gating, and it is
-worth naming as such: how far a change carries if it is wrong is live on all of them.
+**The automation note is the harness's own line, never the agent's.** It is the one thing a body
+cannot leave a reader to infer: a reviewer weighs an account by who wrote it, and a pull request that
+does not say it was opened by a fleet reads as one a colleague opened. It is written here and is not
+an argument, for `IssueCreateInput`'s reason ([13](13-jobs-and-tickets.md#filing-a-ticket)) — asked of
+an agent it would go missing silently, on exactly the pull requests nobody was watching.
 
 ### The operator writes the description
 
@@ -697,8 +646,7 @@ Behind `manualDescriptions`, off by default. With it off nothing in this section
 writes the body as the two sections above describe, and `open_pr` is unchanged.
 
 With it on, the body is the **operator's**, and `open_pr` refuses a `body` argument rather than
-merging the two. The five evidence lists are untouched — those are coordinates, and they are
-answerable only by the agent that made the change.
+merging the two.
 
 The case is not that the operator writes a better body. It is that **writing is the instrument of
 understanding rather than a report of it**: a description you cannot write is a change you have not
@@ -721,34 +669,33 @@ operator to write from the same place the agent did — the plan — which is th
 this exists to remove. On a plan still at the approval gate it is worse than useless: those parts may
 not survive the approval, so the ask is for prose about pull requests that may never exist.
 
-So the sequence is: `open_pr` opens the pull request carrying **the evidence and the reference
-alone**; the operator reads it; they write the description on the goal page; `PrDescriptionDesk`
+So the sequence is: `open_pr` opens the pull request carrying **the footer alone**; the operator
+reads it; they write the description on the goal page; `PrDescriptionDesk`
 (`src/pr/prDescriptionDesk.ts`) puts it at the top of that pull request's body on the next pulse.
 
 Two things follow, and both are load-bearing:
 
 - **The push is the feature, not the record.** A version written and never pushed is the quiet
   failure this exists to remove, one surface along — the cockpit would show a described part and the
-  reviewer would meet a body with nothing above the evidence. The stamp (`pr_descriptions.pushed_at`)
+  reviewer would meet a body with nothing above the footer. The stamp (`pr_descriptions.pushed_at`)
   is written **after** the send, so a push that throws is retried on the next pulse rather than lost.
-- **The body is recomposed, never patched.** `open_pr` records the tail it wrote —
-  the evidence block and the reference — in `pr_description_bodies`, and a description is put in
-  front of *that*, not in front of whatever the body currently says. Reading the body back off the
+- **The body is recomposed, never patched.** `open_pr` records the footer it wrote in
+  `pr_description_bodies`, and a description is put in front of *that*, not in front of whatever the
+  body currently says. Reading the body back off the
   provider would make the provider a second source of truth for a string the harness composed, and a
   reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
-- **The two halves are marked, never run together.** `composeDescribedBody`
-  (`src/pr/prDescription.ts`) puts a horizontal rule and a line of attribution between the
-  operator's text and the tail. Both halves are prose in one body, and joined by a blank line alone
-  they read as one voice — which takes back the only thing the description was for, that a person
-  and not the thing that made the change is answering for it. A reviewer weighs an account by who
-  wrote it, so the body has to say. Either half being empty leaves the other alone: a mark with
-  nothing on one side of it labels an author who wrote nothing.
+- **A person's description says so.** `composeDescribedBody` (`src/pr/prDescription.ts`) puts
+  `🫀 Organic human description` under the operator's text, above the footer's rule. Without it the
+  only attribution on the page is the footer's automation note, which names the wrong author for the
+  prose above it — and that takes back the only thing the description was for, that a person and not
+  the thing that made the change is answering for it. The mark goes with the half it labels: an empty
+  description carries no mark, because a mark over nothing labels an author who wrote nothing.
 
 #### It holds nothing up
 
 Not the plan's release, not the dispatch, not the pull request, not the review watch. A part nobody
-described leaves its pull request carrying **the evidence and the reference alone**, which is this
-document's existing answer to an absent body rather than a new one.
+described leaves its pull request carrying **the footer alone**, which is this document's existing
+answer to an absent body rather than a new one.
 
 And nothing fills the gap — emphatically not the agent. A backstop would reintroduce the account
 written by the thing with the most reason to be wrong about it, _and_ make the gap invisible: the
@@ -793,8 +740,10 @@ that party. A refusal that bounced their prose for a semicolon would teach them 
 checker, and the value here is in what the writing makes them notice, which nothing about a Flesch
 score is about.
 
-The [four questions](#the-four-questions-a-reviewer-has) sit beside the field as prompts. They are
-**hints and never four boxes**: four inputs make the form the task, and a question with nothing to
+Four questions sit beside the field as prompts — the four a reviewer has to be able to answer for
+themselves, and none of which the bullets above a pull request answer: *is this what we asked for*,
+*what can't be undone if this is wrong*, *what's missing*, *how far does it reach if it's wrong*
+(`DESCRIPTION_PROMPTS`, `src/pr/prDescription.ts`). They are **hints and never four boxes**: four inputs make the form the task, and a question with nothing to
 say under it gets an answer anyway. Beside it they do the one job worth doing — an operator who
 cannot answer one notices before a reviewer does.
 
@@ -861,34 +810,6 @@ is the one the operator most wants to see.
 **A re-check replaces the reading.** Two sessions over one text are two readings of
 it, and appended they read as one session that found twice as much.
 
-### What the harness can see for itself
-
-An agent-free fact beats an agent-written one, so anything the clone can read off the diff is read off
-the diff. `diffFacts` (`src/pr/prDiff.ts`) parses `GitObserver.diff(base, branch)` into the files
-changed, whether any test changed with them, and which one-way surfaces the change touches.
-
-**Only the one-way surfaces are rendered**, under **One-way surfaces in the diff**, and only when the
-clone found one. The other two are what the triggers are decided from and nothing else: the file list
-and whether a test changed with the code are both on the pull request already, a tab away and more
-accurate there, so printing them spends the space above the diff on what the reviewer can already see.
-What the clone can say that the page cannot is which of _this repo's_ one-way doors the change went
-through — and that line backstops the fields, because a computed line naming `src/store/` beside a
-`one_way` section reading `_none named_` is a contradiction a reviewer sees without being told about it.
-
-**The one-way table is a trigger and never a verdict.** `ONE_WAY` in `src/pr/prDiff.ts` is a list of
-_this repo's own_ one-way doors — `src/store/`, an `ALTER TABLE` or `DROP` in the added lines, a
-`DELETE FROM`, a `runOnce(` id, `src/sink/` and `src/tickets/`, `src/mcp/names.ts` and the prompt
-book, `src/selfUpdate/`, a `git clean` or a `switch -C`. Every row decides only that the **question is
-owed**; what a revert would not take back is the agent's to say, and nothing here reads the answer.
-
-**A clone that cannot diff owes nothing.** `GitObserver.diff` answers `null` for a ref it cannot
-resolve — the harness's clone never checks the branch out and may not have fetched it — and `null` is
-_could not look_, never _nothing found_. Every trigger resting on it fails open, so the pull request
-opens with the block saying the clone could not read the diff — the one case where it renders with no
-one-way surface in it, because _nothing was looked at_ is a different answer from _nothing was found_. The direction matters: a pull request
-refused because git would not run is a branch that never gets reviewed, and the fields the agent did
-fill still ship.
-
 ### Naming a pull request
 
 **`#12` is a work item on Azure DevOps, and `!12` is the pull request.** GitHub has one id space and
@@ -909,7 +830,7 @@ every place a pull request is named in prose that somebody else reads:
 - **What the harness publishes.** The plan's status comment on the tracker names each part's PR.
 
 **The issue reference is deliberately not routed through it.** `Relates to #12` means the tracker item
-on both providers, so `open_pr`'s appended reference is already right on Azure — and the work-item link
+on both providers, so the footer's reference is already right on Azure — and the work-item link
 it writes beside it is what actually satisfies the branch policy anyway (below).
 
 ### `renamablePrs(prs, ctx)` — and what may be renamed

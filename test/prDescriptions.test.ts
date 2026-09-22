@@ -10,6 +10,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { AUTOMATION_NOTE, HUMAN_NOTE, renderPrFooter } from '../src/pr/prFooter.js';
 import {
   composeDescribedBody,
   descriptionRefusal,
@@ -564,15 +565,15 @@ test('with the flag off the ask does not exist, because the agent wrote the body
 });
 
 test('the two authors of a described body are separated, so a reviewer knows who wrote what', () => {
-  const body = composeDescribedBody('  The cursor is read back at startup.  ', '**Asked for**\n1. a → b');
+  const footer = renderPrFooter({ issueNumber: 12, issueTitle: 'Resume the sync', position: 1, total: 1 });
+  const body = composeDescribedBody('  The cursor is read back at startup.  ', footer);
 
-  const rule = body.indexOf('\n---\n');
-  assert.ok(rule > 0, 'a rule sits between the operator\u2019s prose and the agent\u2019s record');
-  assert.ok(body.slice(0, rule).includes('read back at startup'), 'the operator is above it');
-  assert.ok(body.slice(rule).includes('**Asked for**'), 'the agent is below it');
-  assert.match(body.slice(rule), /Above this line .*operator/, 'and the mark says which side is whose');
+  const mark = body.indexOf(HUMAN_NOTE);
+  assert.ok(mark > 0, 'the mark sits under the operator\u2019s prose');
+  assert.ok(body.slice(0, mark).includes('read back at startup'), 'the operator is above it');
+  assert.ok(body.slice(mark).includes(AUTOMATION_NOTE), 'the harness\u2019s own footer is below it');
 
   // A mark with nothing on one side of it labels an author who wrote nothing.
-  assert.equal(composeDescribedBody('', 'tail only'), 'tail only');
-  assert.equal(composeDescribedBody('head only', '   '), 'head only');
+  assert.equal(composeDescribedBody('', footer), footer);
+  assert.doesNotMatch(composeDescribedBody('', footer), new RegExp(HUMAN_NOTE));
 });
