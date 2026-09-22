@@ -81,6 +81,11 @@ export function usePartDescriptions(): PartDescriptions | null {
  * it again by counting headings. The card itself is the control that brings that
  * part's panel to the front, so this is a reading and not a button.
  *
+ * The unwritten state is worded as the way in rather than as a standing — `needs
+ * description` named the gap and left the operator looking for the form, on a card
+ * whose being a control is a thing they had to discover. A reading nobody can act
+ * on is the same dead end the ask above it was.
+ *
  * Nothing is drawn for a part with no pull request open — there is nothing to
  * describe yet — or where the read did not answer.
  * → docs/spec/07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one
@@ -98,7 +103,7 @@ export function PartDescriptionTag({ slug, prNumber }: { slug: string; prNumber:
           : 'Nobody has said what this pull request does — open the part to write it'
       }
     >
-      <Tag tone={written ? undefined : 'amber'}>{written ? 'described' : 'needs description'}</Tag>
+      <Tag tone={written ? undefined : 'amber'}>{written ? 'described' : 'describe it \u2192'}</Tag>
     </span>
   );
 }
