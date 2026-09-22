@@ -141,6 +141,28 @@ export class PrDescriptionStore {
     return rows.map((r) => ({ originRef: r.origin_ref, prNumber: r.pr_number, openedAt: r.opened_at }));
   }
 
+  /**
+   * The part a pull request carries, or null for one this deployment did not open for
+   * a part.
+   *
+   * The same record `undescribedOpenParts` is anti-joined against, read the other way
+   * round — and for the same reason. `plan_parts.pr_number` is a *reading* of the
+   * world filled in by a later cycle that matched the branch, so a page that resolved
+   * its part there would offer the field whenever the next world read happened to
+   * land, and never at all for a branch the observer could not match. `open_pr` writes
+   * this row at the open.
+   *
+   * Newest first, because `origin_ref` is the key and nothing stops two parts from
+   * having named one pull request over a deployment's life.
+   * → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written
+   */
+  partOfPullRequest(prNumber: number): string | null {
+    const row = this.ctx
+      .prep(`SELECT origin_ref FROM pr_description_bodies WHERE pr_number=? ORDER BY opened_at DESC LIMIT 1`)
+      .get(prNumber) as { origin_ref: string } | undefined;
+    return row?.origin_ref ?? null;
+  }
+
   /** Every version that carries a check, newest first. The aggregate's input. */
   listCheckedDescriptions(): PrDescriptionVersion[] {
     const rows = this.ctx

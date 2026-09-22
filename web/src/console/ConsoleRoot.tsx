@@ -482,7 +482,7 @@ function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions })
     const ref = row.goalRef;
     const read = () => {
       actions.openPanel(null);
-      openGoalForAsk(actions, ref, row.kind, row.originRef);
+      openGoalForAsk(actions, ref, row.kind);
     };
     return (
       <span className="cn-psub">

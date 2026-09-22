@@ -681,8 +681,9 @@ this exists to remove. On a plan still at the approval gate it is worse than use
 not survive the approval, so the ask is for prose about pull requests that may never exist.
 
 So the sequence is: `open_pr` opens the pull request carrying **the footer alone**; the operator
-reads it; they write the description on the goal page; `PrDescriptionDesk`
-(`src/pr/prDescriptionDesk.ts`) puts it at the top of that pull request's body on the next pulse.
+reads it; they write the description on that pull request's own page in the cockpit;
+`PrDescriptionDesk` (`src/pr/prDescriptionDesk.ts`) puts it at the top of that pull request's body on
+the next pulse.
 
 Two things follow, and both are load-bearing:
 
@@ -714,6 +715,33 @@ pull request would read as described when nobody had. Either a person wrote the 
 and the absence is on the page where a reviewer can see it. That is what keeps a skipped description
 from being the quiet failure a required one would only have moved.
 
+#### The pull request's own page is where it is written
+
+The field is on the cockpit's page for the pull request, and that placement is the argument of the
+section above carried one step further. A description is a reading of a change, so the page the
+change is read on is the page it is written on: the threads, the checks, the merge and the diff's
+reference are all there, and an operator with something to say about a change is already looking at
+it. There is nothing to pick and nothing to point at — the page *is* the part.
+
+It was on the goal's plan board, as a panel for whichever part the operator clicked. That put the
+field one page away from every surface that asks for it: the rail's ask named the gap and opened the
+plan, where the only way on was a card an operator had to discover was a control, and the plan board
+is where parts are *told apart* rather than where any one of them is worked.
+
+- **The page resolves its part from the record, never from the world.**
+  `PrDescriptionStore.partOfPullRequest` reads `pr_description_bodies`, the row `open_pr` wrote at
+  the open — the same record the rail's ask is anti-joined against, read the other way round. Keyed
+  off `plan_parts.pr_number` instead, the field would appear whenever the next world read happened to
+  land, and never at all on a part whose branch the observer could not match: a page that silently
+  offers nothing, which is the failure this whole section exists to remove.
+- **A pull request that is not a part's draws nothing**, and its `POST` is refused. The read answers
+  `originRef: null` rather than 404, because "this deployment did not open that for a part" is an
+  answer and not an error.
+- **The plan board keeps the standing, and only the standing.** Each part with an open pull request
+  carries `describe it →` in amber or `described`, because the board is where an operator reads which
+  of five parts wants a sentence without opening five pages. The card is the way to the page; the
+  badge is a reading on it. → [17](17-cockpit.md#it-is-written-where-the-change-is-read)
+
 #### The rail asks for it, and nothing waits on the answer
 
 Holding nothing up is not the same as being invisible. A description that is only ever offered on the
@@ -737,11 +765,11 @@ makes the one cut the store cannot, dropping the parts whose pull request has si
 because a change already reviewed is not one anybody is going to describe.
 
 **The ask carries the act, not just the situation.** Its card says what the gap is and then presses
-through to the form: **Describe it** opens the goal's plan pane with that part chosen, which is the
-only place the field is drawn ([which pane opens](17-cockpit.md#which-pane-opens)). An ask that
-described the gap and left the operator on a board with nothing chosen was the same failure one layer
-up from the one this section exists to remove — the gap named where the person who could close it can
-see it, and no way from there to closing it.
+through to the field: **Describe it** opens the pull request's own page, which is where the field is
+([above](#the-pull-requests-own-page-is-where-it-is-written)). An ask that described the gap and left
+the operator on a page without it was the same failure one layer up from the one this section exists
+to remove — the gap named where the person who could close it can see it, and no way from there to
+closing it.
 
 With `manualDescriptions` off the list is empty, and that is the whole of what keeps the ask off a
 deployment where the agent writes the body.

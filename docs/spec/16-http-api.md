@@ -249,9 +249,20 @@ operator is not that party.
 
 The newest description of every described part of one goal, keyed by the part's slug; a part absent
 has none. It is what the plan board badges each part from, and one read rather than one per part,
-because the board draws all five and only one of them is in front of the operator. Mounted under the
-same flag as the two above, so the badges and the panel learn the same way.
-→ [17](17-cockpit.md#one-panel-for-the-part-in-front)
+because the board draws all five at once. Mounted under the same flag as the two above, so the badges
+and the panel learn the same way.
+→ [17](17-cockpit.md#it-is-written-where-the-change-is-read)
+
+### `GET /api/prs/:number/description` · `POST /api/prs/:number/description`
+
+The same description, keyed by the pull request rather than by the part — which is how the pull
+request's own page reads and writes it, because that page is where a description is written and it
+holds no plan. The part is resolved from the record `open_pr` wrote (`pr_description_bodies`), never
+from `plan_parts.pr_number`, which is a reading of the world filled in by a later cycle: a page keyed
+off that would offer the field whenever the next world read happened to land, and never at all for a
+branch the observer could not match. A pull request with no such record answers `originRef: null` and
+the panel draws nothing; the `POST` refuses it, because a description has nowhere to be written.
+→ [07](07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written)
 
 ### `GET /api/state`
 

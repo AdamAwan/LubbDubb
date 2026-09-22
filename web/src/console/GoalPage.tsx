@@ -1,4 +1,4 @@
-import { useRef, useState, type JSX, type MutableRefObject } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type {
@@ -40,8 +40,7 @@ import type {
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { GoalCriteria } from '../components/GoalCriteria.js';
-import { PrDescription } from '../components/PrDescription.js';
-import { PartDescriptionsProvider, PartDescriptionTag, usePartDescriptions } from '../components/partDescriptions.js';
+import { PartDescriptionsProvider, PartDescriptionTag } from '../components/partDescriptions.js';
 import { PlanRevealGate } from '../components/PlanRevealGate.js';
 import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -272,10 +271,9 @@ function WorkPane({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
-  /* The provider is above the body rather than around each reader because the board
-     and the panel ask the same question of different parts — and a component cannot
+  /* One read for the whole board rather than one per card, and a component cannot
      read a context it renders itself, which is why the body is its own.
-     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
+     → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
   return (
     <PartDescriptionsProvider issueNumber={page.issue.number}>
       <WorkPaneBody page={page} view={view} actions={actions} folds={folds} />
@@ -294,53 +292,10 @@ function WorkPaneBody({
   actions: CockpitActions;
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
-  /* The chosen card itself, so the panel can draw its pointer under it. The board's
-     columns wrap on a narrow pane, so where that card ends up is a question only the
-     laid-out page can answer — a share of the width would point at whichever card
-     happened to be there. → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
-  const chosenRef = useRef<HTMLDivElement | null>(null);
   const underWay = planUnderWay(page);
-  const describable = page.parts
-    .map(({ part }, i) => ({ part, position: i + 1 }))
-    .filter((p) => p.part.prNumber !== null);
-  /* The operator's pick and nothing else. A part opened for them was a panel of
-     prose between the board and the criteria on every visit to every goal, for a
-     part nobody had asked about — the card's own standing already says which parts
-     want describing, and the card is the press.
-     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
-  const chosen = describable.find((p) => p.part.slug === view.goalPart) ?? null;
   return (
     <>
-      <PlanWaves
-        page={page}
-        view={view}
-        actions={actions}
-        fold={folds.prediction}
-        chosen={chosen?.part.slug ?? null}
-        chosenRef={chosenRef}
-      />
-      {/* One panel, for the part in front — never one per part. A goal is five
-          parts, and five descriptions stacked is five walls of prose an operator tells
-          apart by counting headings. Which part a description belongs to is a question
-          the board above already answers, so the board is where the part is chosen and
-          the panel follows the choice.
-
-          Directly under the board, above the criteria card: the panel points back at
-          the card it was opened for, and a pointer with another card in between points
-          at that one instead.
-          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
-      {chosen !== null && chosen.part.prNumber !== null && (
-        <PrDescription
-          issueNumber={page.issue.number}
-          slug={chosen.part.slug}
-          position={chosen.position}
-          title={chosen.part.title}
-          row={partPrRow(page, chosen.part.prNumber, view, actions)}
-          anchor={chosenRef}
-          desktopFolder={view.state.config.desktopFolder}
-          now={view.now}
-        />
-      )}
+      <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} />
       {/* Below the plan rather than above it: what "done" means is read against the
           shape the fleet proposed, and the card draws nothing at all where the
           criteria routes are not mounted. A part with a task behind it is what
@@ -1339,38 +1294,16 @@ function loosePullRequests(page: GoalPageView): PartPr[] {
   ];
 }
 
-/* The row for the pull request a part carries, for a surface that holds the
-   number and not the pull request. One builder, so the panel under the board and
-   the part on it cannot disagree about the same pull request.
-   → docs/spec/17-cockpit.md#a-part-and-its-pull-request */
-function partPrRow(
-  page: GoalPageView,
-  prNumber: number,
-  view: CockpitView,
-  actions: CockpitActions,
-): PanelRowModel | undefined {
-  const open = page.openPullRequests.find((pr) => pr.number === prNumber);
-  if (open !== undefined) return prRow(open, view, actions, { goal: false });
-  const closed = page.closedPullRequests.find((pr) => pr.number === prNumber);
-  return closed === undefined ? undefined : closedPrRow(closed, view, actions);
-}
-
 function PlanWaves({
   page,
   view,
   actions,
   fold,
-  chosen,
-  chosenRef,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
   fold: Fold;
-  /** The part whose description is in front, so the board can say which one that is. */
-  chosen: string | null;
-  /** Attached to the chosen card, so the panel below can point back at it. */
-  chosenRef: MutableRefObject<HTMLDivElement | null>;
 }): JSX.Element {
   const groups = liveGroups(page).map((group) => ({
     group,
@@ -1492,9 +1425,6 @@ function PlanWaves({
                 agentId={p.agentId}
                 agentLive={p.agentLive}
                 pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
-                chosen={chosen === p.part.slug}
-                chosenRef={chosenRef}
-                receded={chosen !== null && chosen !== p.part.slug}
                 prRail={prRail}
                 view={view}
                 actions={actions}
@@ -1530,9 +1460,6 @@ function PlanWaves({
                 agentId={null}
                 agentLive={false}
                 pr={part.prNumber === null ? null : (prs.get(part.prNumber) ?? null)}
-                chosen={false}
-                chosenRef={chosenRef}
-                receded={chosen !== null}
                 prRail={prRail}
                 view={view}
                 actions={actions}
@@ -1551,9 +1478,6 @@ function Part({
   agentId,
   agentLive,
   pr,
-  chosen,
-  chosenRef,
-  receded,
   prRail,
   view,
   actions,
@@ -1563,29 +1487,24 @@ function Part({
   agentId: string | null;
   agentLive: boolean;
   pr: PartPr | null;
-  chosen: boolean;
-  chosenRef: MutableRefObject<HTMLDivElement | null>;
-  receded: boolean;
   prRail: readonly PanelRowModel[];
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const held = usePartDescriptions();
-  /* The panel follows this pick, so a part it would never draw is not one to pick:
-     no pull request to read, a retired part the panel's list does not hold, or a
-     deployment where the read did not answer.
-     → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */
-  const pickable = held !== null && part.prNumber !== null && group !== 'retired';
-  const pick = (): void => actions.openGoalPart(part.slug);
+  /* A part is a pull request, and the pull request's own page is where everything
+     about it is — the threads, the checks, and the description an operator writes.
+     So the card is a way *there* rather than a way to a panel of its own: the board
+     tells the parts apart, and the page the change is read on is where it is worked.
+     → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
+  const prNumber = part.prNumber;
+  const pickable = prNumber !== null;
+  const pick = (): void => actions.selectPr(prNumber ?? 0);
   return (
     <div
-      ref={chosen ? chosenRef : undefined}
-      className={`cn-part cn-${group} ${chosen ? 'is-chosen' : ''} ${receded ? 'is-receded' : ''} ${
-        pickable ? 'is-pickable' : ''
-      }`}
+      className={`cn-part cn-${group} ${pickable ? 'is-pickable' : ''}`}
       /* The whole card is the way in, and the title carries the same press for a
          keyboard — a control inside it (the PR reference, the agent) is its own
-         press and must not also pick the part. */
+         press and must not also open the page. */
       onClick={
         pickable
           ? (event) => {
@@ -1598,7 +1517,7 @@ function Part({
         <button
           type="button"
           className="cn-partpick"
-          title="Show what this part is — its description, and the way to write it"
+          title="Open this part’s pull request — its threads, its checks, and what it says it does"
           onClick={pick}
         >
           <b>
@@ -1613,10 +1532,10 @@ function Part({
       {group === 'held' && part.blockedReason !== null && <p className="cn-why">{part.blockedReason}</p>}
       {part.scope !== '' && <p>{part.scope}</p>}
       {pr !== null && <PartPrRow pr={pr} rail={prRail} view={view} actions={actions} />}
-      {/* The description's standing, said on the part it belongs to. The card is the
-          control that brings it to the front — the board is where the parts are told
-          apart, so it is where the one in front is chosen.
-          → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front */}
+      {/* The description's standing, said on the part it belongs to: the board is
+          where the parts are told apart, so it is where an operator reads which of
+          them wants a sentence. The card is the way to the page that takes one.
+          → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */}
       <PartDescriptionTag slug={part.slug} prNumber={part.prNumber} />
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}

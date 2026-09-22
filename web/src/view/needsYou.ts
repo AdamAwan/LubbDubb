@@ -166,7 +166,12 @@ function undescribedPartRows(state: AppState): NeedDraft[] {
       ),
       goalRef,
       originRef: waiting.originRef,
-      opens: opensAt(goalRef, state),
+      /* The pull request's own page, because that is where the description is
+         written now — the page the change is read on. The part's origin stays on
+         the row: it is what this ask is *about*, and what the surfaces that mark
+         the part read. → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
+      opens: 'pr',
+      prNumber: waiting.prNumber,
       agentId: null,
       agentLabel: null,
       holding: 0,
@@ -191,7 +196,7 @@ function assignedLine(pr: OpenPullRequest): string {
 /* `prediction` is `goal` with a pane named: the goal page's prediction card is the
    only surface moment two can be answered on, and the lifecycle rule lands a
    delivered goal on its record. → docs/spec/17-cockpit.md#the-panes */
-type NeedDestination = 'goal' | 'prediction' | 'ask' | 'config' | 'build' | 'provider' | null;
+type NeedDestination = 'goal' | 'prediction' | 'ask' | 'config' | 'build' | 'provider' | 'pr' | null;
 
 export interface NeedRow {
   id: string;
@@ -202,6 +207,13 @@ export interface NeedRow {
   goalRef: string | null;
   originRef: string | null;
   opens: NeedDestination;
+  /**
+   * The pull request a `pr` destination opens, on the cockpit's own page for it.
+   * Set only with that destination — `provider` reads its number off `originRef`,
+   * because that ask *is* about a pull request, while an ask about a part is about
+   * the part and keeps the part's origin so the surfaces that mark it still can.
+   */
+  prNumber?: number;
   details?: NeedDestination;
   agentId: string | null;
   agentLabel: string | null;

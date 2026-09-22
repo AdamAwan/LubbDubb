@@ -677,6 +677,11 @@ test('a pull request nobody described is an ask of yours, and never a blocker', 
   assert.match(row.title, /#41/);
   assert.match(row.title, /Read the cursor back/);
   assert.equal(row.raisedAt, '2026-01-02T00:00:00.000Z', 'it is as old as the pull request, not as old as the part');
+  /* The press lands on the page the field is on. The part's origin stays on the row
+     because that is what the ask is about, and what the surfaces that mark the part
+     read. → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
+  assert.equal(row.opens, 'pr', 'the description is written on the pull request\u2019s own page');
+  assert.equal(row.prNumber, 41, 'and the press carries the number of that page');
 });
 
 test('the ask is the server\u2019s list, so a cockpit given none draws none', () => {
