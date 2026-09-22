@@ -286,6 +286,81 @@ test('the routes are not mounted where the flag is off, which is how the panel l
   }
 });
 
+test('the pull request page writes by number, resolving the part from the record open_pr wrote', async () => {
+  const system = systemWith(true);
+  const { app } = await buildApp(system);
+  try {
+    /* The record `open_pr` writes at the open, which is the only mapping either
+       direction reads — `plan_parts.pr_number` is a reading of the world and a page
+       keyed off it would offer the field whenever the next world read landed.
+       → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
+    system.store.prDescriptions.recordPrBody({
+      originRef: 'issue:390:part:validate',
+      prNumber: 413,
+      tail: 'evidence',
+    });
+
+    const before = await app.inject({ method: 'GET', url: '/api/prs/413/description' });
+    assert.equal(before.statusCode, 200);
+    assert.deepEqual(before.json(), { originRef: 'issue:390:part:validate', current: null, versions: [] });
+
+    const written = await app.inject({
+      method: 'POST',
+      url: '/api/prs/413/description',
+      payload: { text: 'Enqueue becomes the one place a payload is checked.' },
+    });
+    assert.equal(written.statusCode, 200);
+
+    const read = await app.inject({ method: 'GET', url: '/api/prs/413/description' });
+    const body = read.json() as { originRef: string; current: { text: string; originRef: string } };
+    assert.equal(body.originRef, 'issue:390:part:validate');
+    assert.equal(
+      body.current.originRef,
+      'issue:390:part:validate',
+      'the version is the part\u2019s, however it was written',
+    );
+    assert.equal(body.current.text, 'Enqueue becomes the one place a payload is checked.');
+
+    assert.deepEqual(
+      system.store.prDescriptions.goalDescriptions(390)['validate']?.text,
+      'Enqueue becomes the one place a payload is checked.',
+      'the board reads the same row the pull request page wrote',
+    );
+
+    const empty = await app.inject({ method: 'POST', url: '/api/prs/413/description', payload: { text: '  ' } });
+    assert.equal(empty.statusCode, 400, 'an empty description is refused here too');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('a pull request that is not a part\u2019s answers with no part, and refuses a description', async () => {
+  const system = systemWith(true);
+  const { app } = await buildApp(system);
+  try {
+    /* A pull request this deployment did not open for a part: the page draws nothing
+       rather than offering a field whose write has nowhere to land. */
+    const read = await app.inject({ method: 'GET', url: '/api/prs/9999/description' });
+    assert.equal(read.statusCode, 200);
+    assert.deepEqual(read.json(), { originRef: null, current: null, versions: [] });
+
+    const written = await app.inject({
+      method: 'POST',
+      url: '/api/prs/9999/description',
+      payload: { text: 'Something about a pull request nobody opened for a part.' },
+    });
+    assert.equal(written.statusCode, 400);
+    assert.match(
+      (written.json() as { error: string }).error,
+      /not a part\u2019s pull request|not a part's pull request/,
+    );
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
 /**
  * A sink that records what body actually left for the provider, and quietly succeeds
  * at everything else `open_pr` does on its way out — the watch seed and the work-item

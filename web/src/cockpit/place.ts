@@ -33,7 +33,6 @@ export interface Place {
    * one that wants the operator. A pick made on **one** goal, so it is dropped on
    * the way to another, exactly as the pane and the folds are.
    */
-  goalPart: string | null;
   goalOpen: string[];
   goalShut: string[];
   configTab: ConfigTab;
@@ -133,7 +132,7 @@ export function homeTab(tab: ConsoleTab): ConsoleTab {
 export function goalMove(current: Place, ref: string | null): Partial<Place> {
   if (ref === null) return { goal: null, pr: null };
   const move = { goal: ref, pr: null, tab: homeTab(current.tab) };
-  return current.goal === ref ? move : { ...move, goalTab: null, goalPart: null, goalOpen: [], goalShut: [] };
+  return current.goal === ref ? move : { ...move, goalTab: null, goalOpen: [], goalShut: [] };
 }
 const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'economics',
@@ -168,7 +167,6 @@ export const NOWHERE: Place = {
   reviewPack: null,
   reviewIdea: null,
   goalTab: null,
-  goalPart: null,
   goalOpen: [],
   goalShut: [],
   obstacle: null,
@@ -264,7 +262,6 @@ export function readPlace(search: string): Place {
     scratchpad: param(query, 'pad'),
     ...readReviewPack(param(query, 'pack'), param(query, 'idea')),
     goalTab: GOAL_TABS.find((t) => t === param(query, 'pane')) ?? null,
-    goalPart: param(query, 'part'),
     goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
     goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
     obstacle: param(query, 'obs'),
@@ -405,7 +402,6 @@ export function placeQuery(place: Place): string {
     if (place.reviewIdea !== null) query.set('idea', place.reviewIdea);
   }
   if (place.goalTab !== null) query.set('pane', place.goalTab);
-  if (place.goalPart !== null) query.set('part', place.goalPart);
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
   if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
   if (place.obstacle !== null) query.set('obs', place.obstacle);

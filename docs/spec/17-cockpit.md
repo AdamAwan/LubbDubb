@@ -443,60 +443,48 @@ no pane to be the footer of.
 
 ## The description a reviewer reads
 
-One `PrDescription` panel on the goal page, for **the part in front** — one part is one pull request,
-and the plan's parts are what tell them apart. It draws nothing where `manualDescriptions` is off —
+One `PrDescription` panel, **on the pull request's own page** — one part is one pull request, and the
+pull request's page is where the change is read. It draws nothing where `manualDescriptions` is off —
 the routes are not mounted there and the read does not answer.
 
-### One panel, for the part in front
+### It is written where the change is read
 
-**One panel is drawn, never one per part.** A goal is five parts, and five descriptions stacked under
-one plan is five walls of prose an operator tells apart by counting headings — which is a question the
-board above has already answered.
+**The panel is on the pull request's page, not on the plan.** A description is a reading of a change,
+and the page an operator is already on when they have something to say about a change is that
+change's own page: the threads, the checks and the merge are there, and the field belongs beside
+them. On the plan board it was a panel for whichever part was picked, which meant the ask that said
+nobody had described a part opened a page that did not mention describing anything until the
+operator discovered the card was a control.
 
-So the board is where the part is chosen and the panel follows the choice:
+So there is no pick to make and no panel to point anywhere:
 
-- **The part's card is the control**, not a badge on it. Clicking anywhere on a part with an open
-  pull request brings that part's panel to the front, and the card's title carries the same press for
-  a keyboard. A badge was the control once, and it made the operator aim at a word to ask about the
-  part they were already looking at — the panel is _the information about that part_, of which the
-  description is one bit, so the part is what opens it. A control _inside_ the card — the pull
-  request's `Ref`, the way into the agent — is its own press and never also picks the part.
-- Each part with an open pull request still carries its description's standing on its own card —
-  **`describe it →`** in amber, or **`described`**. It is a reading, not a button: which part is in
-  front is said by the ring below, so the badge has only one thing left to say. The unwritten state
-  is worded as the way in rather than as a standing, because it is the only thing on a card whose
-  being a control an operator has to discover; `needs description` named the gap and then left them
-  looking for the form.
-- **The chosen card is ringed, and every other part recedes.** An outline and a halo
-  (`--cn-chosen-ring`), never a ground — the ground already says which column the part is in, and two
-  grounds on one card is two things claiming the same square. The rest of the board drops to half
-  strength, which is the cheapest way to say _one of these_: nothing is added to the page, it just
-  stops competing with itself. A not-started part is drawn faint already, so the chosen one is pinned
-  back to full strength whichever column it stands in.
-- **The panel points back at the card**, with one accent edge along its top and a pointer that lands
-  under the chosen card. The pointer is **measured**, not a share of the width: the board's columns
-  wrap on a narrow pane, so where that card ended up is a question only the laid-out page can answer,
-  and a fraction would aim at whichever card happened to be there. Where the card is off the page the
-  pointer is not drawn at all — the panel still carries the part's number, filled in the accent, and
-  its title, which say the same thing in words.
-- **The panel is drawn directly under the board**, above the criteria card. A pointer with another
-  card in between points at that one instead.
-- **What is in front is the operator's pick, and nothing else.** No part is opened for them. A panel
-  chosen by the page was a wall of prose between the board and the criteria on every visit to every
-  goal, about a part nobody had asked about — and on a goal whose parts are all merged and described
-  it is the loudest thing on the pane for a question that was answered days ago. The feature stays
-  discoverable without it: each card with an open pull request carries **`describe it →`** in amber,
-  which says both that the panel exists and which parts want it, and the card is the press. The
-  `describe` ask makes the same pick from the rail ([Which pane opens](#which-pane-opens)), so the
-  operator who never opened the plan is not the one who has to find it.
-- The pick is `?part=<slug>`, a [place](#the-address-bar) like the pane and the folds, and dropped on
-  the way to another goal for the same reason they are: it is a pick made on one plan.
+- **The panel is keyed by the pull request**, and reads `GET /api/prs/:number/description`. The part
+  is resolved server-side from the record `open_pr` wrote, so the cockpit holds no mapping of its
+  own — and a pull request this deployment did not open for a part answers with a null part and
+  draws nothing rather than offering a field whose write has nowhere to land.
+  → [07](07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written)
+- **It sits directly under the masthead, above the review.** What a reviewer meets first is what the
+  operator is writing, and a field below the threads is one they reach after answering everything
+  else.
+- **The plan board still says which parts want describing.** Each part with an open pull request
+  carries its standing on its own card — **`describe it →`** in amber, or **`described`** — because
+  the board is where the parts are told apart, and an operator reading a plan should not have to open
+  five pages to find the one that wants a sentence. It is a reading, not a button: the card around it
+  is the press, and a control inside a control is two presses one pixel apart.
+- **A part's card opens its pull request.** Clicking anywhere on a part that has one opens that
+  page, and the card's title carries the same press for a keyboard. A control _inside_ the card —
+  the pull request's `Ref`, the way into the agent — is its own press and never also opens the page.
+- **The `describe` ask opens it too**, as its own destination rather than a pane of the goal
+  ([which pane opens](#which-pane-opens)). The ask keeps the _part's_ origin, which is what it is
+  about and what the surfaces that mark the part read; the pull request's number rides beside it as
+  the thing the press opens.
 
-**One read serves both**, through `PartDescriptionsProvider` — `GET /api/goals/:number/descriptions`,
-above the board and the panel, because they ask the same question of different parts. A read per part
-would be five requests to say what one says, and five answers arriving separately is a board whose
-badges appear one at a time. The provider is also how both learn the feature is off: the route is not
-mounted, the read does not answer, and neither the badges nor the panel are drawn.
+**The board's badges are one read**, through `PartDescriptionsProvider` — `GET
+/api/goals/:number/descriptions`, above the whole board, because a read per part would be five
+requests to say what one says and five answers arriving separately is a board whose badges appear one
+at a time. The pull request's page reads its own description by number, because it holds no plan. The
+provider is also how the board learns the feature is off: the route is not mounted, the read does not
+answer, and no badge is drawn.
 
 **The open pull request is the gate, and it is not cosmetic.** A description is a reading of a
 change, so there is nothing to read before the pull request exists: on a plan still at the approval
@@ -504,11 +492,10 @@ gate the parts may not survive it, and on a dispatched part there is no diff yet
 panel asks the operator to write from the plan, which is the second-hand account the feature exists
 to remove. → [07](07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one)
 
-The panel draws that pull request as [the pull-request row](#the-pull-request-row), under the heading
-and above the words, because the first thing it asks is that the operator go and read it — and a panel
-about what a pull request says it does is a strange place to say less about that pull request than its
-own card on the board does. A bare `Ref` in the top-right corner is what it was, which answered "where"
-and nothing else.
+The panel says nothing about the pull request itself: the masthead above it is that pull request, and
+a card repeating its title and state under the page that draws them is a second reading of the same
+thing. On the plan board it drew the pull-request row, because there it was a panel about a pull
+request the operator had not necessarily opened; here they are on it.
 
 **The description itself carries no rule down its left.** The quote bar was a second left edge a few
 pixels inside the card's own, which reads as the panel being indented rather than as the text being
@@ -569,7 +556,6 @@ once.
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                            |
-| `part`                               | which part of the plan has its description in front, by slug — absent means no description panel is drawn at all, and a move to a different goal drops the pick → [One panel, for the part in front](#one-panel-for-the-part-in-front)                                                                                                                                                                                                   |
 | `open`                               | the goal page's reference sections held open, as `record,sequence`                                                                                                                                                                                                                                                                                                                                                                                 |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1540,14 +1526,15 @@ that says why — read top to bottom, first answer wins, and **the order is the 
 goal, not for an arrival at a question: `openGoalPrediction` and `openGoalForAsk` both put the pane on
 `Place`, and a pick on `Place` is never re-answered here.
 
-**A `describe` ask carries its part as well as its pane**, and it is the one kind that does. The pane
-alone lands the operator on the plan board with nothing chosen, and the description form is drawn
-only for the chosen part ([One panel, for the part in front](#one-panel-for-the-part-in-front)) — so
-an ask that says nobody has described this part opened a page that did not mention describing
-anything, and the way on was a card whose being a control they had to discover. `openGoalForAsk`
-reads the slug off the ask's `issue:<n>:part:<slug>` origin, sets `?part=`, and scrolls the plan card
-into view; the ask's own card carries the same press as **Describe it**. No other kind moves `?part=`
-— that pick belongs to the board, and an ask about something else must not take it.
+**A `describe` ask does not open the goal at all.** Its destination is `pr`, the cockpit's own page
+for the pull request, because that is where the description is written
+([It is written where the change is read](#it-is-written-where-the-change-is-read)) — an ask that
+opened the plan pane landed the operator a page away from the only field that answers it. The row
+keeps the *part's* origin, which is what the ask is about and what the surfaces that mark the part
+read; `prNumber` rides beside it as the thing the press opens, set only with that destination. Its
+card in the band carries the same press as **Describe it**. A `pr` destination is the one case where
+the dot on the goal's navigation and the press disagree, and deliberately: the dot says the ask is
+about the plan, which it is.
 
 **The environment arm reads `reached`, never `partial`.** A goal with one part in staging and three
 unwritten has nothing behind Close but an account of what is owed, and landing an operator there
@@ -2979,7 +2966,7 @@ card's own, because whether a version exists is a read only the card makes.
 **Revising is not drawn as the act the page is asking for.** `Write the criteria` wears the primary
 tone on a goal with none; `Revise the criteria` on a card that already says what it says does not.
 A blue button under a filled card reads as work owed, on every goal, for ever — the same reason
-`Rewrite it` on [a written description](#one-panel-for-the-part-in-front) does not wear it either. Each version
+`Rewrite it` on [a written description](#it-is-written-where-the-change-is-read) does not wear it either. Each version
 carries its derived standing, its author, when it was written, and for a `post-work` version the
 **reason**, which is the whole point of having required one.
 

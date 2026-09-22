@@ -522,6 +522,19 @@ class DemoServer {
     return { current: versions[versions.length - 1] ?? null, versions };
   }
 
+  /**
+   * The part a pull request carries, the way the harness's own store answers it: from
+   * the record of what was opened for what, never from a reading of the world. Here
+   * that record is the plan's parts, which is this world's only copy of it.
+   * → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written
+   */
+  partOfPullRequest(prNumber: number): string | null {
+    const part = (this.state.planParts ?? []).find((p) => p.prNumber === prNumber);
+    if (part === undefined) return null;
+    const issue = /^plan-(\d+)/.exec(part.planId)?.[1];
+    return issue === undefined ? null : `issue:${issue}:part:${part.slug}`;
+  }
+
   /** Every described part of one goal, by slug — what the plan's parts are badged from. */
   goalDescriptions(issueNumber: number): Record<string, PrDescriptionVersion> {
     const prefix = `issue:${issueNumber}:part:`;
@@ -4893,8 +4906,18 @@ export const demoApi = {
   writeGoalCriteria: (): Promise<never> =>
     Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
   getGoalDescriptions: (number: number) => Promise.resolve({ parts: getServer().goalDescriptions(number) }),
-  writePrDescription: (number: number, slug: string, body: { text: string }) =>
-    Promise.resolve().then(() => getServer().writeDescription(`issue:${number}:part:${slug}`, body.text)),
+  getPrDescription: (prNumber: number) =>
+    Promise.resolve().then(() => {
+      const originRef = getServer().partOfPullRequest(prNumber);
+      if (originRef === null) return { originRef: null, current: null, versions: [] };
+      return { originRef, ...getServer().descriptionReading(originRef) };
+    }),
+  writePrDescription: (prNumber: number, body: { text: string }) =>
+    Promise.resolve().then(() => {
+      const originRef = getServer().partOfPullRequest(prNumber);
+      if (originRef === null) throw new Error(`PR ${prNumber} is not a part's pull request`);
+      return getServer().writeDescription(originRef, body.text);
+    }),
   getTickets: (query: {
     watch: string;
     tracking: string;

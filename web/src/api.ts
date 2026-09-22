@@ -250,11 +250,17 @@ const realApi = {
     authFetch(`/api/goals/${number}/descriptions`).then((r) =>
       json<{ parts: Record<string, PrDescriptionVersion> }>(r),
     ),
-  writePrDescription: (number: number, slug: string, body: { text: string }) =>
-    post<{ ok: true; version: PrDescriptionVersion }>(
-      `/api/goals/${number}/parts/${encodeURIComponent(slug)}/description`,
-      body,
+  /* Keyed by the pull request, because the pull request's page is where a description
+     is written. The part is resolved server-side from the record `open_pr` wrote, so
+     the cockpit holds no mapping of its own; `originRef` comes back null for a pull
+     request that is not a part's and the panel draws nothing.
+     → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
+  getPrDescription: (prNumber: number) =>
+    authFetch(`/api/prs/${prNumber}/description`).then((r) =>
+      json<{ originRef: string | null; current: PrDescriptionVersion | null; versions: PrDescriptionVersion[] }>(r),
     ),
+  writePrDescription: (prNumber: number, body: { text: string }) =>
+    post<{ ok: true; version: PrDescriptionVersion }>(`/api/prs/${prNumber}/description`, body),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>

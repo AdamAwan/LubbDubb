@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import type { PrDescriptionVersion } from '../types.js';
 import { Tag } from './tag.js';
 
-// → docs/spec/17-cockpit.md#one-panel-for-the-part-in-front
+// → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written
 
 interface PartDescriptions {
   /** The newest description of each described part, by slug. A part absent has none. */
@@ -24,10 +24,10 @@ const PartDescriptionContext = createContext<PartDescriptions | null>(null);
 /**
  * One read of every part's description for the whole plan.
  *
- * It sits above both the board and the panel because they ask the same question of
- * different parts: the board badges all five, the panel draws one. A read per part
- * would be five requests to say what one says, and five answers arriving separately
- * is a board whose badges appear one at a time.
+ * The board badges every part, and a read per part would be five requests to say
+ * what one says — five answers arriving separately is a board whose badges appear
+ * one at a time. The pull request's own page reads its one description for itself,
+ * by pull request rather than by goal, because it holds no plan.
  */
 export function PartDescriptionsProvider({
   issueNumber,
@@ -67,7 +67,7 @@ export function PartDescriptionsProvider({
   );
 }
 
-/** @public the seam the board's badge and the panel both read the goal's descriptions through */
+/** @public the seam the board's badge reads the goal's descriptions through */
 export function usePartDescriptions(): PartDescriptions | null {
   return useContext(PartDescriptionContext);
 }
@@ -75,20 +75,19 @@ export function usePartDescriptions(): PartDescriptions | null {
 /**
  * A part's description's standing, said on the part itself.
  *
- * It is drawn on the board rather than in the panel because the board is where the
- * parts are told apart: which one a description belongs to is a question the wave
- * diagram already answers, and five panels stacked under it made an operator answer
- * it again by counting headings. The card itself is the control that brings that
- * part's panel to the front, so this is a reading and not a button.
+ * The board is where the parts are told apart, so it is where an operator reads
+ * which of them wants describing — one badge per card rather than a list somewhere
+ * else that has to name each part again. The description itself is written on the
+ * pull request's own page, and the card is the way there.
  *
  * The unwritten state is worded as the way in rather than as a standing — `needs
- * description` named the gap and left the operator looking for the form, on a card
- * whose being a control is a thing they had to discover. A reading nobody can act
- * on is the same dead end the ask above it was.
+ * description` named the gap and then left the operator looking for the form. It is
+ * still a reading and not a button: the card around it carries the press, because a
+ * control inside a card that is itself a control is two presses one pixel apart.
  *
  * Nothing is drawn for a part with no pull request open — there is nothing to
  * describe yet — or where the read did not answer.
- * → docs/spec/07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one
+ * → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written
  */
 export function PartDescriptionTag({ slug, prNumber }: { slug: string; prNumber: number | null }): JSX.Element | null {
   const held = usePartDescriptions();
@@ -99,8 +98,8 @@ export function PartDescriptionTag({ slug, prNumber }: { slug: string; prNumber:
       className="cn-desc-mark"
       title={
         written
-          ? 'Somebody has said what this pull request does — open the part to read it'
-          : 'Nobody has said what this pull request does — open the part to write it'
+          ? 'Somebody has said what this pull request does — open it to read it'
+          : 'Nobody has said what this pull request does — open the pull request to write it'
       }
     >
       <Tag tone={written ? undefined : 'amber'}>{written ? 'described' : 'describe it \u2192'}</Tag>

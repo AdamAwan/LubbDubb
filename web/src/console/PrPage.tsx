@@ -8,6 +8,7 @@ import { CONTROL_CLASS } from '../components/controls.js';
 import { ReviewPackControl } from '../components/ReviewPackControl.js';
 import { CiMark } from '../components/CiMark.js';
 import { ReviewDetail, ReviewMark } from '../components/ReviewMark.js';
+import { PrDescription } from '../components/PrDescription.js';
 import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
@@ -32,6 +33,16 @@ export function PrPage({
       <div className="cn-gcols">
         <Threads page={page} view={view} actions={actions} />
         <div className="cn-gcol">
+          {/* Directly under the masthead, because a description is written after the
+              change is read and this is the page it is read on — and above the review,
+              because what a reviewer meets first is what the operator is writing.
+              → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */}
+          <PrDescription
+            prNumber={page.pr.number}
+            open={page.open}
+            desktopFolder={view.state.config.desktopFolder}
+            now={view.now}
+          />
           <Review page={page} view={view} />
           <Checks pr={page.pr} />
           <Merge page={page} />

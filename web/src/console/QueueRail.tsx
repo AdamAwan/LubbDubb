@@ -346,9 +346,13 @@ function Row({
   }
 
   const ref = row.goalRef;
+  /* Narrowed at the one place that needs it, so `selectPr` is never handed the
+     number of an ask whose destination is not a pull request. */
+  const prOf = (r: NeedRow): number => r.prNumber ?? 0;
   const goTo = (dest: NeedRow['opens']): (() => void) | null => {
     if (dest === 'build') return () => actions.openPanel('build');
-    if (dest === 'goal') return ref === null ? null : () => openGoalForAsk(actions, ref, row.kind, row.originRef);
+    if (dest === 'goal') return ref === null ? null : () => openGoalForAsk(actions, ref, row.kind);
+    if (dest === 'pr') return row.prNumber === undefined ? null : () => actions.selectPr(prOf(row));
     if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
     if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
     return null;

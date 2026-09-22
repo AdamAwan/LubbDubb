@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { issueOriginRef } from '../../issueOrigins.js';
 import { buildDescriptionAggregate } from '../../insights/descriptionAggregate.js';
 import { descriptionRefusal } from '../../pr/prDescription.js';
-import { checked, IssueNumberParams, requiredText } from '../validation.js';
+import { checked, IssueNumberParams, PrNumberParams, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
@@ -45,6 +45,44 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         current: versions.length === 0 ? null : versions[versions.length - 1],
         versions,
       };
+    }),
+  );
+
+  /* Keyed by the pull request, because the pull request's own page is where a
+     description is written: it is the page the change is read on, and a field on
+     another page is a field an operator has to be told about. The part is resolved
+     from the record `open_pr` wrote, so the cockpit holds no mapping of its own and
+     a pull request this deployment did not open for a part answers with a null part
+     and draws nothing. → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
+  app.get(
+    '/api/prs/:number/description',
+    checked({ params: PrNumberParams }, async ({ params }) => {
+      const originRef = store.prDescriptions.partOfPullRequest(params.number);
+      if (originRef === null) return { originRef: null, current: null, versions: [] };
+      const versions = store.prDescriptions.listDescriptionVersions(originRef);
+      return { originRef, current: versions.at(-1) ?? null, versions };
+    }),
+  );
+
+  app.post(
+    '/api/prs/:number/description',
+    checked({ params: PrNumberParams, body: DescriptionBody }, async ({ params, body, reply }) => {
+      const originRef = store.prDescriptions.partOfPullRequest(params.number);
+      if (originRef === null)
+        return reply.code(400).send({
+          error:
+            `PR ${params.number} is not a part's pull request this deployment opened, so there is nothing ` +
+            'to describe here — a description belongs to a part, because a part is a pull request',
+        });
+      const refusal = descriptionRefusal(body.text);
+      if (refusal !== null) return reply.code(400).send({ error: refusal });
+      const version = store.prDescriptions.appendDescription({
+        originRef,
+        text: body.text.trim(),
+        author: config.userId ?? null,
+      });
+      hub.broadcast({ type: 'dirty', sections: ['plans'] });
+      return { ok: true, version };
     }),
   );
 

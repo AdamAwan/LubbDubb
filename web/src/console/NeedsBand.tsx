@@ -8,7 +8,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { GOAL_ANCHOR, GOAL_TAB_OF } from '../view/goalPage.js';
-import { openGoalForAsk, scrollToAnchor } from './jump.js';
+import { scrollToAnchor } from './jump.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { ParentPicker } from '../components/ParentPicker.js';
@@ -372,27 +372,22 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           it above the coordinates.
         </p>
         <p className="cn-tick">
-          Read the pull request first, then write it in your own words on the part below the plan — what you write goes
-          to the top of the pull request&rsquo;s body.
+          Read the change first, then write it in your own words on the pull request&rsquo;s own page — what you write
+          goes to the top of its body.
         </p>
-        {/* The act, not just the situation. The pane alone lands on the board with
-            nothing chosen and the form is drawn only for the chosen part, so an ask
-            that says nobody has described this part opened a page that did not
-            mention describing anything. The press carries the part.
-            → docs/spec/17-cockpit.md#which-pane-opens */}
-        {row.goalRef !== null && (
-          <ButtonRow>
-            <Button
-              tone="primary"
-              onClick={() => {
-                actions.openPanel(null);
-                openGoalForAsk(actions, row.goalRef ?? '', row.kind, row.originRef);
-              }}
-            >
-              Describe it
-            </Button>
-          </ButtonRow>
-        )}
+        {/* The act, not just the situation, and it lands on the page the field is on.
+            → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */}
+        <ButtonRow>
+          <Button
+            tone="primary"
+            onClick={() => {
+              actions.openPanel(null);
+              actions.selectPr(waiting.prNumber);
+            }}
+          >
+            Describe it
+          </Button>
+        </ButtonRow>
         <div className="cn-refs">
           <Ref to={`pr:${waiting.prNumber}`} title="Read the change you are describing" />
         </div>

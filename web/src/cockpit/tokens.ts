@@ -616,13 +616,6 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: 'The wash over a plan you have not read yet',
   },
   {
-    name: '--cn-chosen-ring',
-    label: 'Chosen part halo',
-    group: 'tints',
-    kind: 'colour',
-    why: 'The part of the plan whose description is in front',
-  },
-  {
     name: '--cn-unmarked-line',
     label: 'Unmarked edge',
     group: 'tints',
