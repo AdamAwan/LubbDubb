@@ -15,11 +15,11 @@ test('a prediction needs one slot filled, and one is enough — every slot is sk
   const one = await app.inject({
     method: 'POST',
     url: '/api/goals/12/prediction',
-    payload: { hard: 'the migration' },
+    payload: { split: 'the migration' },
   });
   assert.equal(one.statusCode, 200);
   const written = (one.json() as { prediction: GoalPrediction }).prediction;
-  assert.deepEqual(written.slots, { locus: null, cause: null, hard: 'the migration', surprise: null });
+  assert.deepEqual(written.slots, { locus: null, cause: null, split: 'the migration', avoid: null });
   assert.deepEqual(system.predictions.getPrediction('issue:12')?.id, written.id);
   await close();
 });
@@ -69,7 +69,7 @@ test('the reveal row remembers whether the goal was predicted on', async () => {
   seedProposedPlan(system, 12);
   seedProposedPlan(system, 13);
 
-  await app.inject({ method: 'POST', url: '/api/goals/12/prediction', payload: { surprise: 'the schema' } });
+  await app.inject({ method: 'POST', url: '/api/goals/12/prediction', payload: { avoid: 'the schema' } });
   const predicted = await app.inject({ method: 'POST', url: '/api/goals/12/reveal' });
   assert.equal((predicted.json() as { reveal: GoalReveal }).reveal.predicted, true);
 
@@ -79,7 +79,7 @@ test('the reveal row remembers whether the goal was predicted on', async () => {
   const read = await app.inject({ method: 'GET', url: '/api/goals/12/prediction' });
   assert.equal(read.statusCode, 200);
   const both = read.json() as { prediction: GoalPrediction | null; reveal: GoalReveal | null };
-  assert.equal(both.prediction?.slots.surprise, 'the schema');
+  assert.equal(both.prediction?.slots.avoid, 'the schema');
   assert.ok(both.reveal);
 
   const never = await app.inject({ method: 'GET', url: '/api/goals/99/prediction' });

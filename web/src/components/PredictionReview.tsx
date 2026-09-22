@@ -11,8 +11,8 @@ import { relTime } from './util.js';
 const SLOTS: readonly { key: PredictionSlot; question: string }[] = [
   { key: 'locus', question: 'Where did you think this lives?' },
   { key: 'cause', question: 'What did you think the cause / approach is?' },
-  { key: 'hard', question: 'What did you think would be hard?' },
-  { key: 'surprise', question: 'What would have surprised you?' },
+  { key: 'split', question: 'How did you think this should be split up?' },
+  { key: 'avoid', question: 'What did you say should not happen?' },
 ];
 
 /**
@@ -48,6 +48,38 @@ const OUTCOME_MARKS: readonly { mark: PredictionMark; label: string; why: string
   },
 ];
 
+/**
+ * `avoid` asks for a thing the operator expects *not* to see, and the three marks
+ * above are written for the three slots that ask for a thing they expect to see.
+ * Read against a prohibition, "The plan says what you said it would" runs both ways
+ * at once — did the plan do the thing, or did it honour the ban? — and an operator
+ * who reads it the second way files the exact opposite of what they mean, in the one
+ * record that cannot be corrected by asking them later. So the slot carries its own
+ * words. The stored value is the same three-valued mark: `matched` is the operator's
+ * reading borne out, which here is the plan staying clear.
+ * → docs/spec/17-cockpit.md#a-slot-that-asks-for-a-thing-that-should-not-happen
+ */
+const AVOID_MARKS: readonly { mark: PredictionMark; label: string; why: string }[] = [
+  { mark: 'matched', label: 'Stayed clear', why: 'The plan does not do the thing you said should not happen' },
+  { mark: 'missed', label: 'The plan does it', why: 'The plan does the thing you said should not happen' },
+  {
+    mark: 'not-applicable',
+    label: 'Plan is silent',
+    why: 'The plan does not go near this either way, so there was nothing for it to keep clear of',
+  },
+];
+
+/** Moment two's words for the same slot: delivery either kept clear of it or did not. */
+const AVOID_OUTCOME_MARKS: readonly { mark: PredictionMark; label: string; why: string }[] = [
+  { mark: 'matched', label: 'Stayed clear', why: 'Delivery never did the thing you said should not happen' },
+  { mark: 'missed', label: 'It happened anyway', why: 'Delivery did it — the plan did not keep clear of it' },
+  {
+    mark: 'not-applicable',
+    label: 'Never came up',
+    why: 'Delivery never went near this, so there was nothing for the plan to keep clear of',
+  },
+];
+
 const STATE_LABEL: Record<PredictionMark, string> = {
   matched: 'Matched',
   missed: 'Missed',
@@ -59,6 +91,39 @@ const OUTCOME_STATE_LABEL: Record<PredictionMark, string> = {
   missed: 'The plan did not hold',
   'not-applicable': 'It never came up',
 };
+
+const AVOID_STATE_LABEL: Record<PredictionMark, string> = {
+  matched: 'The plan stays clear',
+  missed: 'The plan does it',
+  'not-applicable': 'The plan is silent on this',
+};
+
+const AVOID_OUTCOME_STATE_LABEL: Record<PredictionMark, string> = {
+  matched: 'It stayed clear',
+  missed: 'It happened anyway',
+  'not-applicable': 'It never came up',
+};
+
+/**
+ * Which wording a slot's two controls carry. Only `avoid` departs, and it departs on
+ * both moments at once: a slot drawn with one moment's words and the other's default
+ * would leave a record whose two halves were answered to two different questions.
+ */
+function wordingFor(slot: PredictionSlot): {
+  options: readonly { mark: PredictionMark; label: string; why: string }[];
+  state: Record<PredictionMark, string>;
+  outcomeOptions: readonly { mark: PredictionMark; label: string; why: string }[];
+  outcomeState: Record<PredictionMark, string>;
+} {
+  return slot === 'avoid'
+    ? {
+        options: AVOID_MARKS,
+        state: AVOID_STATE_LABEL,
+        outcomeOptions: AVOID_OUTCOME_MARKS,
+        outcomeState: AVOID_OUTCOME_STATE_LABEL,
+      }
+    : { options: MARKS, state: STATE_LABEL, outcomeOptions: OUTCOME_MARKS, outcomeState: OUTCOME_STATE_LABEL };
+}
 
 /**
  * The two moments' answers said back as one sentence, drawn only where both have
@@ -251,6 +316,7 @@ export function PredictionReview({
                   </div>
                 );
               const pairing = showOutcome ? pairingOf(mark, outcome) : null;
+              const wording = wordingFor(key);
               return (
                 <div className={`cn-pmark-row ${mark === null ? 'is-unmarked' : `is-${mark}`}`} key={key}>
                   <div className="cn-pmark-q">{question}</div>
@@ -259,8 +325,8 @@ export function PredictionReview({
                     moment="one"
                     ask="Did you call it?"
                     about="about your reading of the system"
-                    options={MARKS}
-                    state={STATE_LABEL}
+                    options={wording.options}
+                    state={wording.state}
                     unanswered="Not marked yet"
                     question={question}
                     mark={mark}
@@ -271,8 +337,8 @@ export function PredictionReview({
                       moment="two"
                       ask="Was the plan right?"
                       about="about the plan, not about you"
-                      options={OUTCOME_MARKS}
-                      state={OUTCOME_STATE_LABEL}
+                      options={wording.outcomeOptions}
+                      state={wording.outcomeState}
                       unanswered="Not answered yet"
                       question={question}
                       mark={outcome}

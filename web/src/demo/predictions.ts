@@ -2,7 +2,7 @@ import type { GoalPrediction, GoalReveal, PredictionAggregate, PredictionMark, P
 
 // → docs/spec/17-cockpit.md#demo-mode
 
-const SLOTS: readonly PredictionSlot[] = ['locus', 'cause', 'hard', 'surprise'];
+const SLOTS: readonly PredictionSlot[] = ['locus', 'cause', 'split', 'avoid'];
 
 /** The fixtures' own clock, so a seeded row reads as minutes old rather than as 1970. */
 const ago = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -28,7 +28,7 @@ type Seed = readonly [issue: number, written: string, plan: string, outcome: str
  * Inkwell work that closed before this snapshot's window — the same shop, earlier.
  *
  * The shape of the seed is chosen so the panel is worth reading: `locus`, `cause`
- * and `hard` clear the ten-goal threshold and draw a rate, `surprise` does not and
+ * and `split` clear the ten-goal threshold and draw a rate, `avoid` does not and
  * draws the count toward it instead, and moment two lags moment one everywhere
  * because it is asked at delivery. Two goals were offered the gate and declined it,
  * which is the third outcome the aggregate exists to keep apart from never offered.
@@ -60,8 +60,8 @@ const DECLINED: readonly number[] = [371, 271];
 const HISTORIC: Readonly<Record<PredictionSlot, string>> = {
   locus: 'Somewhere in the basket, not the catalogue.',
   cause: 'A cheap guard in the wrong layer — the fix belongs one call earlier.',
-  hard: 'Deciding what the old rows mean once the shape changes.',
-  surprise: 'If it turned out to be the stock feed rather than the shop.',
+  split: 'One part for the guard itself, a second for the rows already written under the old shape.',
+  avoid: 'Nothing should touch the catalogue, and no existing basket should need migrating.',
 };
 
 /** The two goals a visitor can actually open, which is where slot text is read. */
@@ -69,13 +69,13 @@ const WRITTEN: Readonly<Record<number, Partial<Record<PredictionSlot, string>>>>
   395: {
     locus: 'The refund path — the order and the provider are both updated there, and nothing else is.',
     cause: 'The ledger is written overnight from the orders table, which cannot tell a refund from an unpaid order.',
-    hard: 'Proving the two agree, when the only place they are compared is a month-end spreadsheet.',
-    surprise: 'If it turned out the nightly job had been double-counting refunds all along.',
+    split: 'One part to write refunds into the ledger, a second to reconcile the month that is already wrong.',
+    avoid: 'The nightly job should not be rewritten, and no historic ledger row should be edited in place.',
   },
   390: {
     locus: 'The four checkout routes — each one builds its own charge request today.',
     cause: 'There is no one place a card is charged, so the routes and the refund path disagree.',
-    hard: 'Moving the charge without changing what a customer is charged on the way.',
+    split: 'One part for the shared charge call, then one route moved per part after it.',
   },
 };
 

@@ -1947,7 +1947,7 @@ already-revealed plan still works and does not re-stamp.
 
 ### `POST /api/goals/:number/prediction`
 
-`{ locus?, cause?, hard?, surprise? }` — the four slots, free text, each individually skippable. A
+`{ locus?, cause?, split?, avoid? }` — the four slots, free text, each individually skippable. A
 prediction with one slot filled is a prediction; **400** when none is. **409** when the goal already
 has one: the row records what was believed at one moment and is never re-opened. **409** when the goal
 has already been revealed — a prediction typed after the plan was read is not a prediction, and that
@@ -2001,7 +2001,7 @@ version also writes the drift row.
 
 ### `POST /api/goals/:number/prediction/marks`
 
-`{ locus?, cause?, hard?, surprise? }`, each `matched`, `missed`, `not-applicable` or `null`. A slot
+`{ locus?, cause?, split?, avoid? }`, each `matched`, `missed`, `not-applicable` or `null`. A slot
 left out is left as it stands; a slot given `null` is un-marked again, because unmarked is a real
 state and there has to be a way back to it.
 

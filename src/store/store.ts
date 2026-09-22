@@ -65,7 +65,7 @@ import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
 import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { GoalCriteriaStore } from './goalCriteria.js';
-import { PredictionStore, PREDICTION_COLUMNS } from './predictions.js';
+import { PredictionStore, PREDICTION_COLUMNS, PREDICTION_REBUILDS } from './predictions.js';
 import { PrDescriptionStore, PR_DESCRIPTION_COLUMNS } from './prDescriptions.js';
 import type { Job, CostDelta } from '../types.js';
 
@@ -135,7 +135,9 @@ export class Store {
     this.db.pragma('foreign_keys = ON');
     renameTables(this.db, ISSUE_VERDICT_RENAMES);
     dropRetiredTables(this.db, [...POOL_RETIRED_TABLES, ...REMOTE_VALIDATION_RETIRED_TABLES]);
-    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
+    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...PREDICTION_REBUILDS], () =>
+      this.db.exec(SCHEMA),
+    );
     const addedColumns: string[] = [];
     for (const columns of [
       TASK_COLUMNS,

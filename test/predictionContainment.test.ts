@@ -17,7 +17,7 @@ import { inheritableEnv } from '../src/agents/spawnEnv.js';
 /**
  * The prediction is a measurement of the fleet. It is worthless the moment anything
  * the fleet reads can name it, and worse than worthless if it reaches the tracker:
- * the operator's guess at what will be hard would be sitting on the ticket.
+ * the operator's guess at how the work should be split would be sitting on the ticket.
  */
 
 const CONTAINED_DIRS = [
@@ -197,8 +197,8 @@ test('no module that renders an agent prompt also reaches the prediction store',
 const SENTINELS = {
   locus: 'ZZQX-LOCUS-SENTINEL',
   cause: 'ZZQX-CAUSE-SENTINEL',
-  hard: 'ZZQX-HARD-SENTINEL',
-  surprise: 'ZZQX-SURPRISE-SENTINEL',
+  split: 'ZZQX-SPLIT-SENTINEL',
+  avoid: 'ZZQX-AVOID-SENTINEL',
 } as const;
 
 function sentinelIn(value: unknown): boolean {
@@ -362,8 +362,8 @@ test('a prediction reaches no prompt, no tool response, no transcript and — ab
     for (const call of calls) {
       assert.ok(
         !sentinelIn(call),
-        `the prediction left the harness through ActionSink.${call.method} — the operator's guess at what ` +
-          'would be hard would be on the tracker, where the fleet reads it back. Fix the caller, not this assertion.',
+        `the prediction left the harness through ActionSink.${call.method} — the operator's guess at how ` +
+          'the work should be split would be on the tracker, where the fleet reads it back. Fix the caller, not this assertion.',
       );
     }
   } finally {

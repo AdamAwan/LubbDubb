@@ -15,11 +15,11 @@ type Rate = PredictionAggregate['coverageRate'];
 const SLOT_LABEL: Record<PredictionSlot, string> = {
   locus: 'Where it lives',
   cause: 'The cause, or the approach',
-  hard: 'What would be hard',
-  surprise: 'What would have surprised you',
+  split: 'How it splits up',
+  avoid: 'What should not happen',
 };
 
-const SLOT_ORDER: readonly PredictionSlot[] = ['locus', 'cause', 'hard', 'surprise'];
+const SLOT_ORDER: readonly PredictionSlot[] = ['locus', 'cause', 'split', 'avoid'];
 
 /**
  * The two moments, labelled as the two different questions they are. The card on

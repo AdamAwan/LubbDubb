@@ -11,8 +11,8 @@ import type { HumanTask, Issue, IssueDelivery } from '../src/types.js';
 const SENTINELS = {
   locus: 'ZZQX-BENCH-LOCUS-SENTINEL',
   cause: 'ZZQX-BENCH-CAUSE-SENTINEL',
-  hard: 'ZZQX-BENCH-HARD-SENTINEL',
-  surprise: 'ZZQX-BENCH-SURPRISE-SENTINEL',
+  split: 'ZZQX-BENCH-SPLIT-SENTINEL',
+  avoid: 'ZZQX-BENCH-AVOID-SENTINEL',
 } as const;
 
 function delivery(number: number): IssueDelivery {
@@ -157,7 +157,7 @@ test('the bench row appears, carries no prediction text, and disappears once ans
   assert.equal(row.status, 'open');
 
   // Non-vacuous: the sentinels really are findable where they legitimately live.
-  assert.ok(JSON.stringify(predictions.getPrediction('issue:12')).includes(SENTINELS.hard));
+  assert.ok(JSON.stringify(predictions.getPrediction('issue:12')).includes(SENTINELS.split));
   const serialised = JSON.stringify(row);
   for (const sentinel of Object.values(SENTINELS))
     assert.ok(

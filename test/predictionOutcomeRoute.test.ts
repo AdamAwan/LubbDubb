@@ -5,7 +5,7 @@ import type { GoalPrediction } from '../src/types.js';
 
 // → docs/spec/16-http-api.md
 
-const FOUR = { locus: 'the store', cause: 'the migration', hard: 'the schema', surprise: 'the ALTER' };
+const FOUR = { locus: 'the store', cause: 'the migration', split: 'the schema', avoid: 'the ALTER' };
 
 async function predictedAndRevealed(): Promise<Awaited<ReturnType<typeof buildHarness>>> {
   const harness = await buildHarness(true);
@@ -43,7 +43,7 @@ test('the second moment is its own route, and each moment leaves the other unans
   };
   assert.equal(read.prediction.planMarks.locus, 'missed', 'moment one is untouched');
   assert.equal(read.prediction.planMarks.cause, null, 'and moment two did not answer it');
-  assert.deepEqual(read.prediction.outcomeMarks, { locus: 'missed', cause: 'matched', hard: null, surprise: null });
+  assert.deepEqual(read.prediction.outcomeMarks, { locus: 'missed', cause: 'matched', split: null, avoid: null });
   assert.ok(read.prediction.outcomeMarkedAt !== null);
   await close();
 });

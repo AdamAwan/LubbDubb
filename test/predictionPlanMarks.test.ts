@@ -10,9 +10,9 @@ import type { GoalPrediction, PredictionMark, PredictionSlot } from '../src/type
 
 // → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
 
-const SLOTS: readonly PredictionSlot[] = ['locus', 'cause', 'hard', 'surprise'];
+const SLOTS: readonly PredictionSlot[] = ['locus', 'cause', 'split', 'avoid'];
 
-const FOUR = { locus: 'the store', cause: 'the migration', hard: 'the schema', surprise: 'the ALTER' };
+const FOUR = { locus: 'the store', cause: 'the migration', split: 'the schema', avoid: 'the ALTER' };
 
 function marksOf(body: unknown): Record<PredictionSlot, PredictionMark | null> {
   return (body as { prediction: GoalPrediction }).prediction.planMarks;
@@ -50,7 +50,7 @@ test('a column value the vocabulary does not spell reads as unmarked, never as a
 
   const raw = new Database(path);
   raw
-    .prepare(`UPDATE goal_predictions SET plan_mark_locus='MATCHED?', plan_mark_hard='' WHERE origin_ref='issue:12'`)
+    .prepare(`UPDATE goal_predictions SET plan_mark_locus='MATCHED?', plan_mark_split='' WHERE origin_ref='issue:12'`)
     .run();
   raw.close();
 
@@ -58,7 +58,7 @@ test('a column value the vocabulary does not spell reads as unmarked, never as a
   const standing = second.openPredictions().getPrediction('issue:12');
   assert.equal(standing?.planMarks.locus, null, 'a value the vocabulary does not spell is not a mark');
   assert.notEqual(standing?.planMarks.locus, 'missed');
-  assert.equal(standing?.planMarks.hard, null, 'and neither is the empty string');
+  assert.equal(standing?.planMarks.split, null, 'and neither is the empty string');
   assert.equal(standing?.planMarks.cause, 'matched', 'while a value it does spell is untouched');
   second.close();
 });
@@ -117,10 +117,10 @@ test('a slot the operator skipped cannot be marked, but un-marking it is not a c
   const skipped = await app.inject({
     method: 'POST',
     url: '/api/goals/12/prediction/marks',
-    payload: { locus: 'matched', surprise: 'missed' },
+    payload: { locus: 'matched', avoid: 'missed' },
   });
   assert.equal(skipped.statusCode, 409);
-  assert.match((skipped.json() as { error: string }).error, /surprise/, 'the refusal names the slot');
+  assert.match((skipped.json() as { error: string }).error, /avoid/, 'the refusal names the slot');
   assert.equal(
     system.predictions.getPrediction('issue:12')?.planMarks.locus,
     null,
@@ -130,11 +130,11 @@ test('a slot the operator skipped cannot be marked, but un-marking it is not a c
   const unmark = await app.inject({
     method: 'POST',
     url: '/api/goals/12/prediction/marks',
-    payload: { locus: 'matched', surprise: null },
+    payload: { locus: 'matched', avoid: null },
   });
   assert.equal(unmark.statusCode, 200, 'marking an empty slot null is asking for what is already true');
   assert.equal(marksOf(unmark.json()).locus, 'matched');
-  assert.equal(marksOf(unmark.json()).surprise, null);
+  assert.equal(marksOf(unmark.json()).avoid, null);
   await close();
 });
 
@@ -152,7 +152,7 @@ test('marking merges over what stands: one slot at a time, un-marking, and corre
     payload: { locus: 'matched' },
   });
   assert.equal(first.statusCode, 200);
-  assert.deepEqual(marksOf(first.json()), { locus: 'matched', cause: null, hard: null, surprise: null });
+  assert.deepEqual(marksOf(first.json()), { locus: 'matched', cause: null, split: null, avoid: null });
   const stamped = (first.json() as { prediction: GoalPrediction }).prediction.planMarkedAt;
   assert.ok(stamped, 'moment one is stamped when it happens');
 
@@ -164,7 +164,7 @@ test('marking merges over what stands: one slot at a time, un-marking, and corre
   assert.equal(second.statusCode, 200);
   assert.deepEqual(
     marksOf(second.json()),
-    { locus: 'matched', cause: 'not-applicable', hard: null, surprise: null },
+    { locus: 'matched', cause: 'not-applicable', split: null, avoid: null },
     'a slot the call did not name is left exactly as it stood',
   );
 
@@ -174,7 +174,7 @@ test('marking merges over what stands: one slot at a time, un-marking, and corre
     payload: { locus: 'missed' },
   });
   assert.equal(corrected.statusCode, 200, 'a mark is a judgement the operator may correct');
-  assert.deepEqual(marksOf(corrected.json()), { locus: 'missed', cause: 'not-applicable', hard: null, surprise: null });
+  assert.deepEqual(marksOf(corrected.json()), { locus: 'missed', cause: 'not-applicable', split: null, avoid: null });
 
   const undone = await app.inject({
     method: 'POST',
@@ -184,7 +184,7 @@ test('marking merges over what stands: one slot at a time, un-marking, and corre
   assert.equal(undone.statusCode, 200);
   assert.deepEqual(
     marksOf(undone.json()),
-    { locus: null, cause: 'not-applicable', hard: null, surprise: null },
+    { locus: null, cause: 'not-applicable', split: null, avoid: null },
     'null un-marks the slot without touching its neighbours',
   );
 
@@ -192,8 +192,8 @@ test('marking merges over what stands: one slot at a time, un-marking, and corre
   assert.deepEqual((read.json() as { prediction: GoalPrediction }).prediction.planMarks, {
     locus: null,
     cause: 'not-applicable',
-    hard: null,
-    surprise: null,
+    split: null,
+    avoid: null,
   });
   await close();
 });
@@ -208,7 +208,7 @@ test('the reveal seals the prediction and opens the marks — two rules that mus
   const beforeMark = await app.inject({
     method: 'POST',
     url: '/api/goals/12/prediction/marks',
-    payload: { hard: 'matched' },
+    payload: { split: 'matched' },
   });
   assert.equal(beforeMark.statusCode, 409, 'before the reveal: marks are refused');
 
@@ -221,10 +221,10 @@ test('the reveal seals the prediction and opens the marks — two rules that mus
   const afterMark = await app.inject({
     method: 'POST',
     url: '/api/goals/12/prediction/marks',
-    payload: { hard: 'matched' },
+    payload: { split: 'matched' },
   });
   assert.equal(afterMark.statusCode, 200, 'after the reveal: marks are what the gate opens onto');
-  assert.equal(marksOf(afterMark.json()).hard, 'matched');
+  assert.equal(marksOf(afterMark.json()).split, 'matched');
   assert.equal(
     system.predictions.getPrediction('issue:12')?.slots.locus,
     'the store',

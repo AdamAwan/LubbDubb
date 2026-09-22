@@ -2244,7 +2244,7 @@ export interface GoalPrediction {
   updatedAt: string;
 }
 
-export type PredictionSlot = 'locus' | 'cause' | 'hard' | 'surprise';
+export type PredictionSlot = 'locus' | 'cause' | 'split' | 'avoid';
 
 /**
  * How one filled slot stood against what it was predicting. Named for the moment it

@@ -12,7 +12,7 @@ import type { PredictionMark, PredictionSlot } from '../src/types.js';
  * assertions are about the two never being read off one another.
  */
 
-const SLOTS: readonly PredictionSlot[] = ['locus', 'cause', 'hard', 'surprise'];
+const SLOTS: readonly PredictionSlot[] = ['locus', 'cause', 'split', 'avoid'];
 
 function predicted(slots: Partial<Record<PredictionSlot, string>> = {}): {
   store: Store;
@@ -23,7 +23,7 @@ function predicted(slots: Partial<Record<PredictionSlot, string>> = {}): {
   predictions.recordPrediction({
     originRef: 'issue:12',
     author: 'operator',
-    slots: { locus: 'the store', cause: 'a missing index', hard: 'the migration', surprise: 'nothing', ...slots },
+    slots: { locus: 'the store', cause: 'a missing index', split: 'the migration', avoid: 'nothing', ...slots },
   });
   predictions.recordReveal('issue:12');
   return { store, predictions };
@@ -34,10 +34,10 @@ test('the two moments are independent: moment one answered leaves moment two abs
   assert.ok(predictions.recordPlanMarks({ originRef: 'issue:12', marks: { locus: 'matched', cause: 'missed' } }).ok);
 
   const standing = predictions.getPrediction('issue:12')!;
-  assert.deepEqual(standing.planMarks, { locus: 'matched', cause: 'missed', hard: null, surprise: null });
+  assert.deepEqual(standing.planMarks, { locus: 'matched', cause: 'missed', split: null, avoid: null });
   assert.deepEqual(
     standing.outcomeMarks,
-    { locus: null, cause: null, hard: null, surprise: null },
+    { locus: null, cause: null, split: null, avoid: null },
     'an unanswered second moment is absent on every slot',
   );
   for (const slot of SLOTS)
@@ -49,11 +49,11 @@ test('the two moments are independent: moment one answered leaves moment two abs
 
 test('and the other way round: moment two answered leaves moment one absent, and never missed', () => {
   const { store, predictions } = predicted();
-  assert.ok(predictions.recordOutcomeMarks({ originRef: 'issue:12', marks: { hard: 'matched' } }).ok);
+  assert.ok(predictions.recordOutcomeMarks({ originRef: 'issue:12', marks: { split: 'matched' } }).ok);
 
   const standing = predictions.getPrediction('issue:12')!;
-  assert.deepEqual(standing.outcomeMarks, { locus: null, cause: null, hard: 'matched', surprise: null });
-  assert.deepEqual(standing.planMarks, { locus: null, cause: null, hard: null, surprise: null });
+  assert.deepEqual(standing.outcomeMarks, { locus: null, cause: null, split: 'matched', avoid: null });
+  assert.deepEqual(standing.planMarks, { locus: null, cause: null, split: null, avoid: null });
   for (const slot of SLOTS) assert.notEqual(standing.planMarks[slot], 'missed');
   assert.equal(standing.planMarkedAt, null);
   assert.ok(standing.outcomeMarkedAt !== null);
@@ -66,14 +66,14 @@ test('the four cross combinations round-trip distinctly, the operator-was-right 
   const plan: Record<PredictionSlot, PredictionMark> = {
     locus: 'missed', // missed the plan, and the plan turned out wrong: the operator was right.
     cause: 'matched', // matched a plan that turned out wrong: both wrong together.
-    hard: 'matched', // matched a plan that turned out right.
-    surprise: 'missed', // missed a plan that turned out right.
+    split: 'matched', // matched a plan that turned out right.
+    avoid: 'missed', // missed a plan that turned out right.
   };
   const outcome: Record<PredictionSlot, PredictionMark> = {
     locus: 'missed',
     cause: 'missed',
-    hard: 'matched',
-    surprise: 'matched',
+    split: 'matched',
+    avoid: 'matched',
   };
   assert.ok(predictions.recordPlanMarks({ originRef: 'issue:12', marks: plan }).ok);
   assert.ok(predictions.recordOutcomeMarks({ originRef: 'issue:12', marks: outcome }).ok);
