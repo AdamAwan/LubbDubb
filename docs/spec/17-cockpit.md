@@ -462,8 +462,11 @@ So the board is where the part is chosen and the panel follows the choice:
   description is one bit, so the part is what opens it. A control _inside_ the card — the pull
   request's `Ref`, the way into the agent — is its own press and never also picks the part.
 - Each part with an open pull request still carries its description's standing on its own card —
-  **`needs description`** in amber, or **`described`**. It is a reading, not a button: which part is
-  in front is said by the ring below, so the badge has only one thing left to say.
+  **`describe it →`** in amber, or **`described`**. It is a reading, not a button: which part is in
+  front is said by the ring below, so the badge has only one thing left to say. The unwritten state
+  is worded as the way in rather than as a standing, because it is the only thing on a card whose
+  being a control an operator has to discover; `needs description` named the gap and then left them
+  looking for the form.
 - **The chosen card is ringed, and every other part recedes.** An outline and a halo
   (`--cn-chosen-ring`), never a ground — the ground already says which column the part is in, and two
   grounds on one card is two things claiming the same square. The rest of the board drops to half
@@ -482,8 +485,10 @@ So the board is where the part is chosen and the panel follows the choice:
   chosen by the page was a wall of prose between the board and the criteria on every visit to every
   goal, about a part nobody had asked about — and on a goal whose parts are all merged and described
   it is the loudest thing on the pane for a question that was answered days ago. The feature stays
-  discoverable without it: each card with an open pull request carries **`needs description`** in
-  amber, which says both that the panel exists and which parts want it, and the card is the press.
+  discoverable without it: each card with an open pull request carries **`describe it →`** in amber,
+  which says both that the panel exists and which parts want it, and the card is the press. The
+  `describe` ask makes the same pick from the rail ([Which pane opens](#which-pane-opens)), so the
+  operator who never opened the plan is not the one who has to find it.
 - The pick is `?part=<slug>`, a [place](#the-address-bar) like the pane and the folds, and dropped on
   the way to another goal for the same reason they are: it is a pick made on one plan.
 
@@ -1534,6 +1539,15 @@ that says why — read top to bottom, first answer wins, and **the order is the 
 **A press that knows its pane beats every arm of this table.** The rule answers for an arrival at a
 goal, not for an arrival at a question: `openGoalPrediction` and `openGoalForAsk` both put the pane on
 `Place`, and a pick on `Place` is never re-answered here.
+
+**A `describe` ask carries its part as well as its pane**, and it is the one kind that does. The pane
+alone lands the operator on the plan board with nothing chosen, and the description form is drawn
+only for the chosen part ([One panel, for the part in front](#one-panel-for-the-part-in-front)) — so
+an ask that says nobody has described this part opened a page that did not mention describing
+anything, and the way on was a card whose being a control they had to discover. `openGoalForAsk`
+reads the slug off the ask's `issue:<n>:part:<slug>` origin, sets `?part=`, and scrolls the plan card
+into view; the ask's own card carries the same press as **Describe it**. No other kind moves `?part=`
+— that pick belongs to the board, and an ask about something else must not take it.
 
 **The environment arm reads `reached`, never `partial`.** A goal with one part in staging and three
 unwritten has nothing behind Close but an account of what is owed, and landing an operator there

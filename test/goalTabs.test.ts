@@ -390,6 +390,38 @@ test('an ask opens the goal on the pane it is answered in, not where the lifecyc
   assert.deepEqual(moves, [{ ref: 'issue:395', pane: null }], 'an ask about the fleet leaves the landing to the rule');
 });
 
+test('a describe ask carries its part, so the press lands on the form and not near it', () => {
+  const parts: (string | null)[] = [];
+  const panes: string[] = [];
+  /* The press scrolls the plan card into view, which is two animation frames the test
+     runtime has none of. Stubbed rather than avoided: the scroll is part of what the
+     press does, and a test that dodged it would be asserting a different function. */
+  const frames: (() => void)[] = [];
+  globalThis.requestAnimationFrame = ((fn: () => void) => {
+    frames.push(fn);
+    return frames.length;
+  }) as typeof requestAnimationFrame;
+  const actions = {
+    selectGoal: () => {},
+    openGoalPane: (_ref: string, pane: GoalTab) => panes.push(pane),
+    openGoalPart: (slug: string | null) => parts.push(slug),
+  } as unknown as CockpitActions;
+
+  /* The form is drawn only for the chosen part, so a press that moved the pane alone left the
+     operator on a board with nothing chosen — the ask named the gap and pointed at no way to
+     close it. → docs/spec/17-cockpit.md#which-pane-opens */
+  openGoalForAsk(actions, 'issue:395', 'describe', 'issue:395:part:header');
+  assert.deepEqual(panes, ['plan']);
+  assert.deepEqual(parts, ['header'], 'the part the ask is about is the one the panel opens for');
+
+  parts.length = 0;
+  openGoalForAsk(actions, 'issue:395', 'merge', 'issue:395:part:header');
+  assert.deepEqual(parts, [], 'the board owns the pick, and an ask about something else must not move it');
+
+  openGoalForAsk(actions, 'issue:395', 'describe', 'issue:395');
+  assert.deepEqual(parts, [], 'an origin naming no part chooses none rather than an empty slug');
+});
+
 test('every ask kind the rail draws is placed on a pane or deliberately on none', () => {
   for (const [kind, pane] of Object.entries(GOAL_ASK_TAB)) {
     assert.ok(pane === null || GOAL_TABS.includes(pane), `${kind} names a pane the page draws`);

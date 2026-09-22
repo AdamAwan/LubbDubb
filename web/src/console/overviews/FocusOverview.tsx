@@ -281,7 +281,7 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
         <button
           type="button"
           className="cn-ov-ctx-name"
-          onClick={() => openGoalForAsk(actions, row.goalRef ?? '', row.kind)}
+          onClick={() => openGoalForAsk(actions, row.goalRef ?? '', row.kind, row.originRef)}
         >
           {issue?.title ?? row.goalRef}
         </button>

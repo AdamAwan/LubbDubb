@@ -725,6 +725,13 @@ exists to remove. `PrDescriptionStore.undescribedOpenParts` is the anti-join; `b
 makes the one cut the store cannot, dropping the parts whose pull request has since merged or closed,
 because a change already reviewed is not one anybody is going to describe.
 
+**The ask carries the act, not just the situation.** Its card says what the gap is and then presses
+through to the form: **Describe it** opens the goal's plan pane with that part chosen, which is the
+only place the field is drawn ([which pane opens](17-cockpit.md#which-pane-opens)). An ask that
+described the gap and left the operator on a board with nothing chosen was the same failure one layer
+up from the one this section exists to remove — the gap named where the person who could close it can
+see it, and no way from there to closing it.
+
 With `manualDescriptions` off the list is empty, and that is the whole of what keeps the ask off a
 deployment where the agent writes the body.
 

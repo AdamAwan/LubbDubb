@@ -8,7 +8,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { GOAL_ANCHOR, GOAL_TAB_OF } from '../view/goalPage.js';
-import { scrollToAnchor } from './jump.js';
+import { openGoalForAsk, scrollToAnchor } from './jump.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { ParentPicker } from '../components/ParentPicker.js';
@@ -371,6 +371,28 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           fills the gap and nothing is held up by it — the reviewer simply meets a change with nobody&rsquo;s account of
           it above the coordinates.
         </p>
+        <p className="cn-tick">
+          Read the pull request first, then write it in your own words on the part below the plan — what you write goes
+          to the top of the pull request&rsquo;s body.
+        </p>
+        {/* The act, not just the situation. The pane alone lands on the board with
+            nothing chosen and the form is drawn only for the chosen part, so an ask
+            that says nobody has described this part opened a page that did not
+            mention describing anything. The press carries the part.
+            → docs/spec/17-cockpit.md#which-pane-opens */}
+        {row.goalRef !== null && (
+          <ButtonRow>
+            <Button
+              tone="primary"
+              onClick={() => {
+                actions.openPanel(null);
+                openGoalForAsk(actions, row.goalRef ?? '', row.kind, row.originRef);
+              }}
+            >
+              Describe it
+            </Button>
+          </ButtonRow>
+        )}
         <div className="cn-refs">
           <Ref to={`pr:${waiting.prNumber}`} title="Read the change you are describing" />
         </div>
