@@ -116,6 +116,7 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       issueTitle: target.issueTitle,
       position: target.position,
       total: target.total,
+      expandsIssueRefs: (deps.openPr?.prRefStyle ?? '#') === '!',
     });
     // With `manualDescriptions` on, nothing of the operator's goes above the footer
     // here: they write the description after reading the pull request, so it always

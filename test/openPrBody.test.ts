@@ -10,6 +10,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { AUTOMATION_NOTE, HUMAN_NOTE, renderPrFooter } from '../src/pr/prFooter.js';
 import { composeDescribedBody } from '../src/pr/prDescription.js';
+import { signOff } from '../src/sink/signOff.js';
 import type { ActionSink, PrCreateInput, SendResult } from '../src/sink/actionSink.js';
 import type { McpTool } from '../src/mcp/protocol.js';
 import type { Agent } from '../src/types.js';
@@ -40,13 +41,36 @@ test('a body the agent did not write leaves the footer standing alone', async ()
   const { tool, opened } = wire();
   await tool.handler({ summary: 'sync cursor table' });
   assert.equal(opened[0]!.body.startsWith('---'), true);
-  assert.equal(opened[0]!.body.endsWith(AUTOMATION_NOTE), true);
+  assert.match(opened[0]!.body, new RegExp(`${AUTOMATION_NOTE.replace(/\*/g, '\\*')} — automating PR busy work`));
 });
 
 test('a part names its position and the whole issue it belongs to', () => {
   const footer = renderPrFooter({ issueNumber: 12, issueTitle: 'Resume the sync', position: 2, total: 2 });
-  assert.match(footer, /^---\n\nPart 2\/2 of #12 — Resume the sync\n🤖 Automated PR from LubbDubb$/);
+  assert.match(
+    footer,
+    /^---\n\nPart 2\/2 of #12 — Resume the sync\n\n<!-- lubbdubb:signoff -->\n\n🤖 Automated PR from \*\*LubbDubb\*\* — automating PR busy work so the user can [^\n]+\.$/,
+  );
   assert.doesNotMatch(footer, /closes|fixes/i);
+});
+
+test('one rule and one robot line: the footer is the pull request body\u2019s whole sign-off', () => {
+  const footer = renderPrFooter({ issueNumber: 12, issueTitle: 'Resume the sync', position: 1, total: 1 });
+  const signed = signOff([BULLETS, footer].join('\n\n'), 'markdown');
+  assert.equal(signed, [BULLETS, footer].join('\n\n'), 'signOff adds nothing to a body the footer already signed');
+  assert.equal(signed.match(/^---$/gm)?.length, 1);
+  assert.equal(signed.match(/🤖/g)?.length, 1);
+});
+
+test('a provider that expands an issue reference is not told the title twice', () => {
+  const footer = renderPrFooter({
+    issueNumber: 12,
+    issueTitle: 'Resume the sync',
+    position: 1,
+    total: 2,
+    expandsIssueRefs: true,
+  });
+  assert.match(footer, /Part 1\/2 of #12\n/);
+  assert.doesNotMatch(footer, /Resume the sync/);
 });
 
 test("an operator's description is marked as a person's, above the footer", () => {

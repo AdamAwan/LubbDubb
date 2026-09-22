@@ -392,7 +392,13 @@ Four decisions hold it up.
 plan status comment, the appraisal question, the arrival announcement, the PR review reply, the filed
 ticket body and the opened PR body — and every one of them reaches a provider through
 `postPrReply`, `upsertIssueComment`, `createIssue` or `createPullRequest`. Signing there signs the
-surfaces that exist _and_ the ones added later. Six call sites each remembering to sign is six that
+surfaces that exist _and_ the ones added later.
+
+**A pull request body signs itself, once.** It is the one surface that already carries a line saying
+who opened it — the footer's automation note ([07](07-pull-requests.md#the-footer)) — so the footer
+writes the marker and takes the sign-off's own trailing clause (`signOffTail`), and `signed()` then
+leaves the body alone. Signed twice, a reviewer met two rules and two robot lines under a two-line
+description, the second of them calling a pull request body a comment. Six call sites each remembering to sign is six that
 can quietly become five, on a comment that reads perfectly and is attributed to the wrong author.
 Same reasoning as appending to a rendered prompt rather than interpolating into it
 ([05](05-dispatcher.md#prompt-templates)).
