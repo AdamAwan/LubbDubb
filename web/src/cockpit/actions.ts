@@ -119,6 +119,14 @@ export interface CockpitActions {
    * cannot be answered, with nothing red. → docs/spec/17-cockpit.md#the-address-bar
    */
   openGoalPrediction(ref: string): void;
+  /**
+   * The goal, opened on the pane the ask being pressed is answered in. Same rule as
+   * `openGoalPrediction`, one press wider: `selectGoal` alone drops the pane and leaves
+   * the landing to the lifecycle rule, which sends a goal whose checks have begun to
+   * Validate however the press was about its plan — an ask that opens a pane it is not
+   * drawn in, with nothing red. → docs/spec/17-cockpit.md#which-pane-opens
+   */
+  openGoalPane(ref: string, pane: GoalTab): void;
   selectPr(prNumber: number | null): void;
   reopenThread(prNumber: number, threadId: string, reopened: boolean): Promise<void>;
   openPanel(panel: ConsolePanel): void;

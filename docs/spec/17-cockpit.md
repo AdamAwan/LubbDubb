@@ -1497,6 +1497,15 @@ whole — a config gap, a recovery, the fleet parked on a rate limit — maps to
 nowhere. The dot is the whole of what a band above the navigation used to say, said by the control the
 operator would press anyway.
 
+**And the same map is what a press on the ask carries with it**, through `openGoalForAsk`
+(`web/src/console/jump.ts`) rather than `selectGoal` — on the rail, on the ask panel's "read it in
+context", and on the focus overview's name of the goal. `selectGoal` names no pane, so the landing
+falls to the lifecycle rule below, which reads the goal's _state_ and not the press: a goal whose
+checks have begun opens on Validate however the ask was about its plan, and an operator who pressed
+"nobody has said what this pull request does" arrives at the checks with nothing to say why. An ask
+with no pane still leaves the landing to the rule, which is the right answer for one that is not about
+any stage. `test/goalTabs.test.ts` pins both arms.
+
 Each tab takes its hue from a `cn-t-*` tone alias, so it invents no colour and owes no new token —
 green settled, blue moving, amber held or failed, grey not reached.
 
@@ -1521,6 +1530,10 @@ that says why — read top to bottom, first answer wins, and **the order is the 
 | has begun its checks                                          | Validate |
 | has a plan, a pull request or an agent                        | Plan     |
 | has none of those                                             | Ask      |
+
+**A press that knows its pane beats every arm of this table.** The rule answers for an arrival at a
+goal, not for an arrival at a question: `openGoalPrediction` and `openGoalForAsk` both put the pane on
+`Place`, and a pick on `Place` is never re-answered here.
 
 **The environment arm reads `reached`, never `partial`.** A goal with one part in staging and three
 unwritten has nothing behind Close but an account of what is owed, and landing an operator there

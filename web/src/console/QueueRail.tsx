@@ -2,6 +2,7 @@ import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { AppliedFix, NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
+import { openGoalForAsk } from './jump.js';
 import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
 import { PrLink, Ref, refLabel } from '../components/refs.js';
@@ -347,7 +348,7 @@ function Row({
   const ref = row.goalRef;
   const goTo = (dest: NeedRow['opens']): (() => void) | null => {
     if (dest === 'build') return () => actions.openPanel('build');
-    if (dest === 'goal') return ref === null ? null : () => actions.selectGoal(ref);
+    if (dest === 'goal') return ref === null ? null : () => openGoalForAsk(actions, ref, row.kind);
     if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
     if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
     return null;

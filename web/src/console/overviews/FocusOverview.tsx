@@ -9,6 +9,7 @@ import { relTime } from '../../components/util.js';
 import { Button, ButtonRow } from '../../components/button.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '../QueueRail.js';
 import { needBody } from '../NeedsBand.js';
+import { openGoalForAsk } from '../jump.js';
 import { PICKUP_WORD } from '../Overview.js';
 import { waitedFor } from '../../components/util.js';
 import { PetFloor, openPets } from '../Vivarium.js';
@@ -277,7 +278,11 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
       <h3 className="cn-ov-ctx-label">The goal this is about</h3>
 
       <div className="hdr hdr-base">
-        <button type="button" className="cn-ov-ctx-name" onClick={() => actions.selectGoal(row.goalRef ?? '')}>
+        <button
+          type="button"
+          className="cn-ov-ctx-name"
+          onClick={() => openGoalForAsk(actions, row.goalRef ?? '', row.kind)}
+        >
           {issue?.title ?? row.goalRef}
         </button>
         <Ref to={row.goalRef} />

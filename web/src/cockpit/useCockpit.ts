@@ -264,6 +264,7 @@ export function useCockpit(): CockpitStatus {
         }),
       selectGoal: (ref) => go((current) => goalMove(current, ref)),
       openGoalPrediction: (ref) => go((current) => ({ ...goalMove(current, ref), goalTab: PREDICTION_PANE })),
+      openGoalPane: (ref, pane) => go((current) => ({ ...goalMove(current, ref), goalTab: pane })),
       selectPr: (prNumber) =>
         go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
