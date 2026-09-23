@@ -856,13 +856,9 @@ in a prompt:
   the goal like every other pad note, decision included (`padTestimony`); and in the retrospective's
   dossier, which reads the pad through the same function.
 
-The instruction to use it, `WITNESS_INSTRUCTION`, is **appended** to the rendered execution prompt of
-every code dispatch, never interpolated into it — an operator's overridden template never learned the
-placeholder, and interpolation drops it silently on exactly the deployments that customised most. It
-is short: what a fork is, that `rejected` is the field that matters, and that an empty record is fine.
-Desk agents do not get it — they move no head, so they take no fork in a change.
-→ [09](09-execution.md#the-instruction-to-record-forks-reaches-the-agent),
-[05](05-dispatcher.md#prompt-templates)
+No prompt tells an agent to record forks. The `decision` field stays on `scratch_append` for an agent
+that uses it unprompted; the standing instruction that was appended to every code dispatch was removed
+because it tripped security checks on the agent side.
 
 ## Identity
 

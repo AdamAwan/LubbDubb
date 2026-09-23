@@ -52,7 +52,7 @@ import { assessIssueNumber } from '../delivery/assessment.js';
 import { issueForPr } from '../pr/prIssue.js';
 import { liveParts } from '../plans/parts.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
-import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
+import { goalOriginFor } from '../scratch/pad.js';
 import { dispatchFactScopes } from '../knowledge/block.js';
 import { corroborationGoal } from '../knowledge/knowledge.js';
 import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
@@ -852,7 +852,6 @@ export class ActionExecutor {
         : null;
     const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
     const obstacles = obstaclesFor(action, store);
-    const witness = action.type === 'dispatch_code_agent' ? WITNESS_INSTRUCTION : null;
     const prompt = [
       note,
       action.prompt,
@@ -867,7 +866,6 @@ export class ActionExecutor {
       feature,
       sequence,
       attachments,
-      witness,
     ]
       .filter(Boolean)
       .join('\n\n');

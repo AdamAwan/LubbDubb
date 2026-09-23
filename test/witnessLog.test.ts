@@ -10,7 +10,6 @@ import {
   MAX_PAD_LINE,
   normalisePadDecision,
   padOriginFor,
-  WITNESS_INSTRUCTION,
 } from '../src/scratch/pad.js';
 import { padTestimony } from '../src/retro/dossier.js';
 import { Store } from '../src/store/store.js';
@@ -303,7 +302,7 @@ test('a database created before the column reads every old row as a note', () =>
   store.close();
 });
 
-test('the instruction to record forks is appended for a code agent and absent for a desk agent', async () => {
+test('no dispatch prompt carries an instruction to record forks', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'Something', branch: 'feature/x' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
@@ -327,11 +326,7 @@ test('the instruction to record forks is appended for a code agent and absent fo
   const desk = tasks.filter((t) => t.kind === 'desk');
   assert.ok(code.length > 0, 'a code agent was dispatched');
   assert.ok(desk.length > 0, 'a desk agent was dispatched');
-  for (const t of code) {
-    assert.ok(t.prompt.endsWith(WITNESS_INSTRUCTION), `${t.originRef}: the instruction is appended, last`);
-    assert.match(t.prompt, /`rejected`/, 'and names the field that matters');
-    assert.doesNotMatch(t.prompt, /already on the pull request pad/, 'the PR pad is not replayed');
-  }
-  for (const t of desk) assert.doesNotMatch(t.prompt, /Record the forks/, `${t.originRef}: a desk agent moves no head`);
+  for (const t of code) assert.doesNotMatch(t.prompt, /already on the pull request pad/, 'the PR pad is not replayed');
+  for (const t of [...code, ...desk]) assert.doesNotMatch(t.prompt, /Record the forks/, `${t.originRef}`);
   system.store.close();
 });
