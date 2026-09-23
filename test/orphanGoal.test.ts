@@ -9,6 +9,7 @@ import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { AppState, Issue } from '../web/src/types.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import { orphanCount, orphanGoal } from '../web/src/view/orphanGoal.js';
+import { isContainerType } from '../web/src/issueGroups.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -23,16 +24,16 @@ const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 function stateWith(mutate: (state: AppState, goal: Issue) => void = () => {}): AppState {
   const state = buildDemoState().state as AppState;
   state.config = { ...state.config, canPlaceWorkItem: true };
-  const goal = state.world.issues[0];
-  assert.ok(goal, 'the demo fixtures must carry at least one issue');
+  const goal = firstGoal(state);
   goal.parent = null;
   mutate(state, goal);
   return state;
 }
 
+/* A container's goal page is its Feature page, so the goal is the first item that is not one. */
 function firstGoal(state: AppState): Issue {
-  const goal = state.world.issues[0];
-  assert.ok(goal, 'the demo fixtures must carry at least one issue');
+  const goal = state.world.issues.find((i) => !isContainerType(i, state.config.containerTypes));
+  assert.ok(goal, 'the demo fixtures must carry at least one goal');
   return goal;
 }
 
@@ -204,7 +205,7 @@ test('an answered orphan keeps a quiet note and a way back', () => {
 test('goals in flight name the ones missing a Feature', () => {
   const state = stateWith((s, goal) => {
     goal.pickup = { ...goal.pickup, status: 'active' };
-    const other = s.world.issues[1];
+    const other = s.world.issues.find((i) => i !== goal && !isContainerType(i, s.config.containerTypes));
     assert.ok(other, 'the fixtures must carry a second issue');
     other.pickup = { ...other.pickup, status: 'active' };
     other.parent = {

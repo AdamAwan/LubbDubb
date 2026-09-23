@@ -458,18 +458,27 @@ test('the board draws briefs while it is short and rows once it is not', () => {
   assert.equal(drawsRows('rows', 1), true, 'asked for rows, they get rows however short it is');
 });
 
-test('a row says the one thing a scan needs, and the open card is still whole', () => {
+test('a row says the one thing a scan needs, and an opened card is a page of its own', () => {
   const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
 
+  assert.match(board, /rows \? \(\s*<FeatureRow/, 'in rows every Feature is a row');
+  assert.match(board, /rows \? \(\s*<GoalRow/, 'promoted goals collapse too');
   assert.match(
     board,
-    /rows && view\.featureCard !== card\.rollup\.number \? \(\s*<FeatureRow/,
-    'the card the reader opened is drawn in full even in rows — collapsing it would make the mode useless',
+    /view\.featureMode === 'board' && view\.featureCard !== null\) \{\s*return \(\s*<FeatureDetail/,
+    'a card opened on `?card=` is the Feature’s page, not a card unfolded in the list',
   );
   assert.match(
     board,
-    /rows && view\.featureCard !== card\.row\.number \? \(\s*<GoalRow/,
-    'promoted goals collapse too',
+    /\{page && \(\s*<div className=\{`cn-fb-detail/,
+    'the detail is drawn on the page and nowhere else',
+  );
+
+  const root = repoText('web', 'src', 'console', 'ConsoleRoot.tsx');
+  assert.match(
+    root,
+    /isContainerType\(view\.goalPage\.issue, view\.state\.config\.containerTypes\) \? \([\s\S]*?<FeaturePage/,
+    'a container’s goal page is its Feature page — the fleet never works a container, so the goal page is empty',
   );
 
   const row = board.slice(board.indexOf('function FeatureRow('), board.indexOf('function FeatureCard('));

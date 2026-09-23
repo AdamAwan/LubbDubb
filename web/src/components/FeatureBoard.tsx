@@ -41,10 +41,11 @@ import { HeadRow, Panel } from './panel.js';
 import { DesktopLink } from './DesktopLink.js';
 import { Tag, type TagTone } from './tag.js';
 import { FeatureAccount, FeatureMarks } from './featureAccount.js';
+import { Crumb, type CrumbStep } from '../console/Crumb.js';
 
 // → docs/spec/17-cockpit.md
 
-export function FeatureBoard({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+function useFeatureBoard(): { board: FeatureBoardPayload | null; failed: boolean; read: () => Promise<void> } {
   const [board, setBoard] = useState<FeatureBoardPayload | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -60,8 +61,29 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
     void read();
   }, [read]);
 
+  return { board, failed, read };
+}
+
+export function FeatureBoard({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const { board, failed, read } = useFeatureBoard();
+
   if (failed) return <p className="muted">This deployment has no feature board.</p>;
   if (board === null) return <p className="muted">Reading the tracker’s hierarchy…</p>;
+
+  /* A card opened is a page of its own, on `?card=` — the board draws briefs and
+     nothing more. → docs/spec/17-cockpit.md#the-feature-page */
+  if (view.featureMode === 'board' && view.featureCard !== null) {
+    return (
+      <FeatureDetail
+        number={view.featureCard}
+        board={board}
+        back={{ label: 'Features', go: () => actions.setFeatureQuery({ featureCard: null }) }}
+        view={view}
+        actions={actions}
+        onAnswered={() => void read()}
+      />
+    );
+  }
 
   const { features, orphans, unresolved } = board;
   if (features.length === 0 && orphans === null) {
@@ -112,7 +134,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
         {view.featureMode === 'board' &&
           cards.map((card) =>
             card.kind === 'feature' ? (
-              rows && view.featureCard !== card.rollup.number ? (
+              rows ? (
                 <FeatureRow
                   key={`f:${card.rollup.number}`}
                   card={card}
@@ -128,7 +150,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
                   onAnswered={() => void read()}
                 />
               )
-            ) : rows && view.featureCard !== card.row.number ? (
+            ) : rows ? (
               <GoalRow key={`g:${card.row.number}`} card={card} view={view} actions={actions} />
             ) : (
               <GoalCard
@@ -146,6 +168,72 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
             {unresolved} {unresolved === 1 ? 'item’s' : 'items’'} parent link could not be read, so{' '}
             {unresolved === 1 ? 'it is' : 'they are'} counted nowhere above.
           </p>
+        )}
+      </div>
+    </RefLinksExtended>
+  );
+}
+
+/**
+ * A Feature's own page, for a surface that is not the board — the goal page of an
+ * item that is a container, which the fleet never works and so has nothing of its own
+ * to draw. → docs/spec/17-cockpit.md#the-feature-page
+ */
+export function FeaturePage({
+  number,
+  back,
+  view,
+  actions,
+}: {
+  number: number;
+  back: CrumbStep;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const { board, failed, read } = useFeatureBoard();
+  if (failed) return <p className="muted">This deployment has no feature board.</p>;
+  if (board === null) return <p className="muted">Reading the tracker’s hierarchy…</p>;
+  return (
+    <FeatureDetail
+      number={number}
+      board={board}
+      back={back}
+      view={view}
+      actions={actions}
+      onAnswered={() => void read()}
+    />
+  );
+}
+
+function FeatureDetail({
+  number,
+  board,
+  back,
+  view,
+  actions,
+  onAnswered,
+}: {
+  number: number;
+  board: FeatureBoardPayload;
+  back: CrumbStep;
+  view: CockpitView;
+  actions: CockpitActions;
+  onAnswered: () => void;
+}): JSX.Element {
+  const card = buildCards(board, view).find((c) => (c.kind === 'feature' ? c.rollup.number : c.row.number) === number);
+  const title = card === undefined ? null : card.kind === 'feature' ? card.rollup.title : card.row.title;
+  return (
+    <RefLinksExtended refUrls={board.refUrls}>
+      <Crumb trail={[back]} here={title === null ? `#${number}` : `#${number} ${title}`} />
+      <div className="cn-fb cn-fb-page">
+        {card === undefined ? (
+          <p className="muted">
+            #{number} is not on the feature board — it is neither a Feature nor a story that hangs off none.
+          </p>
+        ) : card.kind === 'feature' ? (
+          <FeatureCard card={card} view={view} actions={actions} onAnswered={onAnswered} page />
+        ) : (
+          <GoalCard card={card} environments={board.environments} view={view} actions={actions} page />
         )}
       </div>
     </RefLinksExtended>
@@ -358,7 +446,6 @@ function FeatureRow({
       <button
         type="button"
         className="cn-fb-row-open"
-        aria-expanded={false}
         onClick={() => actions.setFeatureQuery({ featureCard: feature.number })}
       >
         <span className="cn-fb-row-name">{feature.title}</span>
@@ -378,14 +465,15 @@ function FeatureCard({
   view,
   actions,
   onAnswered,
+  page = false,
 }: {
   card: Card & { kind: 'feature' };
   view: CockpitView;
   actions: CockpitActions;
   onAnswered: () => void;
+  page?: boolean;
 }): JSX.Element {
   const { rollup: feature, holds } = card;
-  const open = view.featureCard === feature.number;
   const attention = wantsYou(feature, view);
   const rested = feature.paused !== null;
   // Both halves of the first column draw nothing of their own when they have
@@ -396,7 +484,7 @@ function FeatureCard({
   return (
     <Panel
       density="flush"
-      className={`cn-fb-card${holds.you.length > 0 && !rested ? ' cn-fb-wants' : ''}${open ? ' cn-fb-open' : ''}${
+      className={`cn-fb-card${holds.you.length > 0 && !rested ? ' cn-fb-wants' : ''}${page ? ' cn-fb-open' : ''}${
         rested ? ' cn-fb-rested' : ''
       }`}
     >
@@ -406,7 +494,7 @@ function FeatureCard({
         number={feature.number}
         state={feature.workItemState}
         holds={holds}
-        open={open}
+        onOpen={page ? null : () => actions.setFeatureQuery({ featureCard: feature.number })}
         actions={actions}
         headline={feature.summary?.headline ?? null}
         standing={<Standing feature={feature} view={view} />}
@@ -426,7 +514,7 @@ function FeatureCard({
         )}
         {attention !== null && !rested && <p className="cn-fb-attn">{attention}</p>}
       </Brief>
-      {open && (
+      {page && (
         <div className={`cn-fb-detail${told ? '' : ' cn-fb-detail-2'}`}>
           {told && (
             <div className="cn-fb-col">
@@ -483,7 +571,6 @@ function GoalRow({
       <button
         type="button"
         className="cn-fb-row-open"
-        aria-expanded={false}
         onClick={() => actions.setFeatureQuery({ featureCard: row.number })}
       >
         <span className="cn-fb-row-name">{row.title}</span>
@@ -504,20 +591,21 @@ function GoalCard({
   environments,
   view,
   actions,
+  page = false,
 }: {
   card: Card & { kind: 'goal' };
   environments: readonly string[];
   view: CockpitView;
   actions: CockpitActions;
+  page?: boolean;
 }): JSX.Element {
   const { row, holds, landings } = card;
-  const open = view.featureCard === row.number;
   const issue = view.state.world.issues.find((i) => i.number === row.number);
   const reach = goalReach(view, row.number, environments);
   return (
     <Panel
       density="flush"
-      className={`cn-fb-card cn-fb-promoted${holds.you.length > 0 ? ' cn-fb-wants' : ''}${open ? ' cn-fb-open' : ''}`}
+      className={`cn-fb-card cn-fb-promoted${holds.you.length > 0 ? ' cn-fb-wants' : ''}${page ? ' cn-fb-open' : ''}`}
     >
       <Brief
         hue={<i className="cn-fb-hue cn-fb-hue-none" aria-hidden="true" />}
@@ -525,7 +613,7 @@ function GoalCard({
         number={row.number}
         state={row.issueType === null ? 'no Feature' : `${row.issueType} · no Feature`}
         holds={holds}
-        open={open}
+        onOpen={page ? null : () => actions.setFeatureQuery({ featureCard: row.number })}
         actions={actions}
         standing={
           <p className="cn-fb-noline">
@@ -556,7 +644,7 @@ function GoalCard({
         landings={landings}
         now={view.now}
       />
-      {open && (
+      {page && (
         <div className="cn-fb-detail cn-fb-detail-2">
           <div className="cn-fb-col">
             <h4 className="cn-fb-colhead">In the way · grouped by who clears it</h4>
@@ -596,7 +684,7 @@ function Brief({
   number,
   state,
   holds,
-  open,
+  onOpen,
   actions,
   headline,
   standing,
@@ -614,7 +702,8 @@ function Brief({
   number: number;
   state: string | null;
   holds: FeatureHolds;
-  open: boolean;
+  /** Opens the Feature's page; null on the page itself, where the name is a heading. */
+  onOpen: (() => void) | null;
   actions: CockpitActions;
   headline?: string | null;
   standing: ReactNode;
@@ -632,14 +721,13 @@ function Brief({
       {hue}
       <div className="cn-fb-brief-body">
         <div className="cn-fb-top">
-          <button
-            type="button"
-            className="cn-fb-toggle"
-            aria-expanded={open}
-            onClick={() => actions.setFeatureQuery({ featureCard: open ? null : number })}
-          >
+          {onOpen === null ? (
             <h3>{title}</h3>
-          </button>
+          ) : (
+            <button type="button" className="cn-fb-toggle" onClick={onOpen}>
+              <h3>{title}</h3>
+            </button>
+          )}
           <span className="cn-refs">
             <Ref to={`issue:${number}`} />
           </span>
