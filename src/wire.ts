@@ -380,6 +380,7 @@ interface CockpitConfig {
   canClosePr: boolean;
   canPlaceWorkItem: boolean;
   featureBoard: boolean;
+  featureSummaries: boolean;
   areaPaths: string[];
   stateRules: { pickup: string[]; inProgress: string | null; inReview: string | null; returnsTo: string | null } | null;
 }

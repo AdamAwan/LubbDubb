@@ -1220,14 +1220,17 @@ No parameters — the board is the whole of what the tracker's hierarchy holds, 
 operator wants is the tickets tab one click down. Rate-limited and fetched rather than polled, for
 `/api/tickets`' reason.
 
-**Gated twice, and a refusal is a `404`.** It exists only where the operator has set `featureBoard`
-([02](02-configuration.md)) _and_ the connector answers `canPlaceWorkItem` — a flat tracker has no
-hierarchy to roll up, so on GitHub the route is absent rather than empty. Neither gate is about
-permission, which is why the refusal is a 404 and not a 403: a 403 would say the operator may not see
-a page that is there, and send whoever reported it looking for a token problem. The predicate is
-`featureBoardOn`, exported from the route module and read by exactly two callers — this refusal, and
-the `config.featureBoard` on `/api/state` the nav draws its tab off. One predicate, because two would
-drift into a tab whose every fetch 404s.
+**Gated once, and a refusal is a `404`.** It exists wherever the connector answers `canPlaceWorkItem`
+— a flat tracker has no hierarchy to roll up, so on GitHub the route is absent rather than empty. The
+operator's `featureBoard` flag ([02](02-configuration.md)) is **not** a gate here: it switches on the
+summariser, and a board without summaries is still the board ([17](17-cockpit.md#the-two-gates)). The
+gate is not about permission, which is why the refusal is a 404 and not a 403: a 403 would say the
+operator may not see a page that is there, and send whoever reported it looking for a token problem.
+The predicate is `featureBoardOn` (`src/features/featureBoard.ts`), read by exactly two callers — this
+refusal, and the `config.featureBoard` on `/api/state` the nav draws its tab off. One predicate,
+because two would drift into a tab whose every fetch 404s. `/api/state` carries
+`config.featureSummaries` beside it, `featureSummariesOn`'s answer, which the board draws its banner
+off.
 
 Returns `{ features, orphans, unresolved, environments, backfilling, refUrls }`. Each feature carries
 its identity and hue slot, a six-way `counts` of its children, a `briefing`, a bounded slice of the

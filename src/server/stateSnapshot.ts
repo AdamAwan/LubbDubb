@@ -78,7 +78,7 @@ import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
-import { featureBoardOn } from '../features/featureBoard.js';
+import { featureBoardOn, featureSummariesOn } from '../features/featureBoard.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
 import { acceptanceCriteria, bySlug, partDepth, partOrigin, planIssueNumber } from '../plans/parts.js';
@@ -543,7 +543,8 @@ export function buildStateSections(
       canCloseIssue: connector.canCloseIssue(),
       canClosePr: connector.canClosePr(),
       canPlaceWorkItem: connector.canPlaceWorkItem(),
-      featureBoard: featureBoardOn(config, connector),
+      featureBoard: featureBoardOn(connector),
+      featureSummaries: featureSummariesOn(config, connector),
       areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,
       stateRules: workItemStateRules(config),
     },
