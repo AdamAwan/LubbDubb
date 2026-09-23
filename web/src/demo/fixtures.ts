@@ -2332,6 +2332,14 @@ export function buildDemoState(): DemoSeed {
       refFacts: null,
     },
     localRunTargets: [],
+    tenantCommands: [
+      {
+        environment: 'staging',
+        ensureTenant: null,
+        reseed: './scripts/reseed-validation-tenant.sh',
+        preparation: null,
+      },
+    ],
     pets: {
       slots: 4,
       startedAt: '2026-05-02T09:00:00.000Z',

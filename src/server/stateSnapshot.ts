@@ -48,6 +48,8 @@ import type {
   PullRequest,
   RemoteReadingView,
   RemoteSheetView,
+  TenantCommandView,
+  TenantPreparation,
   ValidationCheckView,
   ValidationResourceView,
 } from '../wire.js';
@@ -512,7 +514,15 @@ export function buildStateSections(
   });
   const harnessSection = (): Pick<
     CockpitState,
-    'config' | 'recovery' | 'build' | 'pets' | 'localRun' | 'localRunTargets' | 'planning' | 'dispatchRules'
+    | 'config'
+    | 'recovery'
+    | 'build'
+    | 'pets'
+    | 'localRun'
+    | 'localRunTargets'
+    | 'tenantCommands'
+    | 'planning'
+    | 'dispatchRules'
   > => ({
     config: {
       /* The declaration, in promotion order, and never a goal's reading of it: the goal page's
@@ -566,6 +576,7 @@ export function buildStateSections(
       tasks,
       defaultBranch: config.defaultBranch,
     }),
+    tenantCommands: tenantCommandViews(config.environments, store.remoteValidation.listTenantPrepares()),
     planning: config.planning,
     dispatchRules: DISPATCH_RULES,
   });
@@ -1031,6 +1042,24 @@ function buildRemoteSheets(
         preparation: prepares.get(sheet.environment) ?? null,
       },
     };
+  });
+}
+
+function tenantCommandViews(
+  environments: readonly EnvironmentConfig[],
+  prepares: readonly TenantPreparation[],
+): TenantCommandView[] {
+  return environments.flatMap((env) => {
+    const validate = env.validate;
+    if (validate?.ensureTenant === undefined && validate?.reseed === undefined) return [];
+    return [
+      {
+        environment: env.name,
+        ensureTenant: validate.ensureTenant ?? null,
+        reseed: validate.reseed ?? null,
+        preparation: prepares.find((p) => p.environment === env.name) ?? null,
+      },
+    ];
   });
 }
 

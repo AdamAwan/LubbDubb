@@ -2460,6 +2460,12 @@ The session's last lines. Fetched rather than shipped on the snapshot: the tail 
 lines and the snapshot goes out on every heartbeat and every `dirty`, so putting it there would pay for
 a log nobody has open — the argument that keeps the work graph and the prompt book off it too.
 
+### `GET /api/tenant-commands/:environment/output`
+
+The tail of the environment's current or last tenant command, `{lines, lastOutputAt}` — read from the
+log the harness tees it into, so it survives a restart. Fetched for the same reason as the local run's.
+→ [36](36-remote-validation.md#where-an-operator-sees-it)
+
 ### Static SPA
 
 When `web/dist` exists it is served statically, with a not-found handler that returns `index.html` for

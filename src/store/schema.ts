@@ -994,15 +994,23 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
 -- ensureTenant environment has no tenant name until its own command answers -- the
 -- harness invents none while it waits. The commands run for tens of minutes, so an
 -- operator who pressed and saw nothing has no way to tell a job still running from one
--- that died; finished_at null is *still running*, and a preparation left open by a
--- restart is closed at boot saying so, never left in flight for ever.
+-- that died; finished_at null is *still running*, and a preparation whose command is
+-- gone after a restart is closed saying so, never left in flight for ever.
 CREATE TABLE IF NOT EXISTS remote_tenant_prepares (
   environment TEXT PRIMARY KEY,
   tenant      TEXT,
   started_at  TEXT NOT NULL,
   finished_at TEXT,
   ok          INTEGER,
-  detail      TEXT
+  detail      TEXT,
+  -- The command running now (ensure | reseed), the harness-owned directory its output
+  -- is teed into, and the runner holding it. A restart that finds the runner still
+  -- beating keeps the row open and follows it; only a runner that is gone and left no
+  -- outcome closes the row as not knowable from here.
+  call        TEXT,
+  launch_id   TEXT,
+  pid         INTEGER,
+  launched_at TEXT
 );
 
 -- Goals the operator has said are not waiting on an environment: a docs change, a

@@ -319,6 +319,7 @@ export function useCockpit(): CockpitStatus {
       validateLocally: (issueNumber, opts) => then(api.validateLocally(issueNumber, opts)),
       cancelLocalValidation: (issueNumber) => then(api.cancelLocalValidation(issueNumber)),
       localRunOutput: () => api.localRunOutput().then((r) => r.lines),
+      tenantCommandOutput: (environment) => api.tenantCommandOutput(environment),
 
       openPet: (id) => then(api.openPet(id)),
       feedPet: (id, beats) => then(api.feedPet(id, beats)),

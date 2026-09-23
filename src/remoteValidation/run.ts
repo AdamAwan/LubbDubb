@@ -1,9 +1,10 @@
+import { EventEmitter } from 'node:events';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { EnvironmentProber } from '../environments/prober.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { Store } from '../store/store.js';
-import type { RemoteRun, RemoteSheetRow, TenantStanding } from '../types.js';
+import type { RemoteRun, RemoteSheetRow, TenantCall, TenantLaunch, TenantStanding } from '../types.js';
 import { runnableDrives, runnableScreens, runnableScripts, runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
 import { rowRun } from './sheet.js';
@@ -47,11 +48,22 @@ interface PressResult {
  * synchronously under the pin — they are read-only, consented and cheap — and leaves the run row
  * `pending` where a confirmed `check` row is owed the agent rule `remote-validation` dispatches.
  */
-export class RemoteRunDesk {
+export class RemoteRunDesk extends EventEmitter {
   private readonly now: () => number;
 
   constructor(private readonly deps: RemoteRunDeps) {
+    super();
     this.now = deps.now ?? (() => Date.now());
+  }
+
+  /** `tenantSettled`: a preparation finished, so every surface drawing it is stale. */
+  override emit(event: 'tenantSettled'): boolean;
+  override emit(event: string, ...args: unknown[]): boolean {
+    return super.emit(event, ...args);
+  }
+  override on(event: 'tenantSettled', cb: () => void): this;
+  override on(event: string, cb: (...args: unknown[]) => void): this {
+    return super.on(event, cb);
   }
 
   /** @public the seam the press route runs a cycle through */
@@ -163,14 +175,6 @@ export class RemoteRunDesk {
   }
 
   /**
-   * Provisioning and reseeding, the two operator acts on a tenant. Both are invoked from the gate and
-   * neither runs per arrival: provisioning is possibly very slow, and reseeding destroys the residue
-   * an operator may still be reading. The name stamped is always the one the project's own command
-   * gave back — the harness generates or infers no tenant identifier, anywhere.
-   *
-   * @public the seam the reseed route runs the environment's own commands through
-   */
-  /**
    * The gate's own entry point. `prepareTenant` awaits commands that run for **tens of minutes**, so
    * an HTTP request that waited on it would be a request no proxy keeps open and no reload survives —
    * an operator who pressed reseed and then refreshed would have destroyed their tenant with nothing
@@ -183,26 +187,64 @@ export class RemoteRunDesk {
     environmentName: string,
     onSettled: () => void = () => {},
   ): { started: boolean; detail: string; standing: TenantStanding } {
-    const environment = this.deps.environments.find((e) => e.name === environmentName);
-    const standing = (): TenantStanding =>
-      environment === undefined
-        ? absent()
-        : resolveTenant({
-            environment,
-            stamped: this.deps.store.remoteValidation.listRemoteTenants(),
-            now: this.now(),
-            env: this.deps.env,
-          }).standing;
-
     const opened = this.deps.store.remoteValidation.beginTenantPrepare(environmentName);
     if (opened === null)
       return {
         started: false,
         detail: `a tenant preparation is already running against "${environmentName}". Wait for it rather than starting a second one over the same tenant.`,
-        standing: standing(),
+        standing: this.standing(environmentName),
       };
+    this.settle(environmentName, this.prepareTenant(environmentName), onSettled);
+    return {
+      started: true,
+      detail: 'the environment’s own tenant commands are running.',
+      standing: this.standing(environmentName),
+    };
+  }
 
-    void this.prepareTenant(environmentName)
+  /**
+   * At boot: every preparation the last process left open. A command outlives the harness that
+   * started it, so a row whose runner is still beating stays open — and keeps refusing a second press
+   * over the same tenant — while this process follows it to the end. Only a row with no launch on
+   * record, or whose runner is gone with no outcome, is closed as not knowable from here.
+   *
+   * @public the seam `buildSystem` resumes preparations through
+   */
+  resumeTenantPrepares(onSettled: () => void = () => {}): void {
+    for (const open of this.deps.store.remoteValidation.openTenantPrepares()) {
+      if (open.launched === null) {
+        this.deps.store.remoteValidation.closeOrphanedTenantPrepare(open.environment);
+        continue;
+      }
+      this.settle(open.environment, this.prepareTenant(open.environment, open.launched), onSettled);
+    }
+  }
+
+  /** @public the seam the tenant-command output route reads through */
+  tenantOutput(environmentName: string): { lines: string[]; lastOutputAt: string | null } {
+    const launched = this.deps.store.remoteValidation.tenantLaunch(environmentName);
+    if (launched === null) return { lines: [], lastOutputAt: null };
+    return this.deps.tenants.tail(environmentName, launched.launch);
+  }
+
+  private standing(environmentName: string): TenantStanding {
+    const environment = this.deps.environments.find((e) => e.name === environmentName);
+    return environment === undefined
+      ? absent()
+      : resolveTenant({
+          environment,
+          stamped: this.deps.store.remoteValidation.listRemoteTenants(),
+          now: this.now(),
+          env: this.deps.env,
+        }).standing;
+  }
+
+  private settle(
+    environmentName: string,
+    running: Promise<{ ok: boolean | null; detail: string; standing: TenantStanding }>,
+    onSettled: () => void,
+  ): void {
+    void running
       .then((outcome) => {
         this.deps.store.remoteValidation.finishTenantPrepare({
           environment: environmentName,
@@ -220,19 +262,30 @@ export class RemoteRunDesk {
         });
         this.deps.store.remoteValidation.finishTenantPrepare({
           environment: environmentName,
-          tenant: standing().tenant,
+          tenant: this.standing(environmentName).tenant,
           ok: false,
           detail: `the tenant commands threw — ${err instanceof Error ? err.message : String(err)}`,
         });
       })
       .finally(() => {
+        this.emit('tenantSettled');
         onSettled();
       });
-
-    return { started: true, detail: 'the environment’s own tenant commands are running.', standing: standing() };
   }
 
-  async prepareTenant(environmentName: string): Promise<{ ok: boolean; detail: string; standing: TenantStanding }> {
+  /**
+   * Provisioning and reseeding, the two operator acts on a tenant. Both are invoked from the gate and
+   * neither runs per arrival: provisioning is possibly very slow, and reseeding destroys the residue
+   * an operator may still be reading. The name stamped is always the one the project's own command
+   * gave back — the harness generates or infers no tenant identifier, anywhere.
+   *
+   * `resumed` is a launch an earlier process started: that command is followed rather than started
+   * again, and the preparation carries on from it.
+   */
+  async prepareTenant(
+    environmentName: string,
+    resumed: { call: TenantCall; launch: TenantLaunch } | null = null,
+  ): Promise<{ ok: boolean | null; detail: string; standing: TenantStanding }> {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     const validate = environment?.validate;
     if (environment === undefined || validate === undefined)
@@ -242,21 +295,27 @@ export class RemoteRunDesk {
         standing: absent(),
       };
 
-    const standing = (): TenantStanding =>
-      resolveTenant({
-        environment,
-        stamped: this.deps.store.remoteValidation.listRemoteTenants(),
-        now: this.now(),
-        env: this.deps.env,
-      }).standing;
+    const standing = (): TenantStanding => this.standing(environmentName);
+    const launched =
+      (call: TenantCall) =>
+      (launch: TenantLaunch): void =>
+        this.deps.store.remoteValidation.recordTenantLaunch(environmentName, call, launch);
+    const gone = (): { ok: null; detail: string; standing: TenantStanding } => ({
+      ok: null,
+      detail:
+        'The harness restarted while this was running, and the command is no longer running. Whether it ' +
+        'finished is not known from here — read its output and the tenant’s age, or run it again.',
+      standing: standing(),
+    });
 
     const said: string[] = [];
-    if (validate.ensureTenant !== undefined) {
-      const provisioned = await this.deps.tenants.ensure({
-        environment: environmentName,
-        command: validate.ensureTenant,
-        tenant: standing().tenant,
-      });
+    if (validate.ensureTenant !== undefined && resumed?.call !== 'reseed') {
+      const request = { environment: environmentName, command: validate.ensureTenant, tenant: standing().tenant };
+      const provisioned =
+        resumed === null
+          ? await this.deps.tenants.ensure(request, launched('ensure'))
+          : await this.deps.tenants.follow('ensure', request, resumed.launch);
+      if (provisioned === null) return gone();
       if (provisioned.detail !== null || provisioned.tenant === null)
         return {
           ok: false,
@@ -286,11 +345,12 @@ export class RemoteRunDesk {
             `"${environmentName}" declares a reseed and nothing has supplied a tenant to reseed.`,
           standing: resolved.standing,
         };
-      const reseeded = await this.deps.tenants.reseed({
-        environment: environmentName,
-        command: validate.reseed,
-        tenant: resolved.value,
-      });
+      const request = { environment: environmentName, command: validate.reseed, tenant: resolved.value };
+      const reseeded =
+        resumed?.call === 'reseed'
+          ? await this.deps.tenants.follow('reseed', request, resumed.launch)
+          : await this.deps.tenants.reseed(request, launched('reseed'));
+      if (reseeded === null) return gone();
       if (reseeded.detail !== null)
         return { ok: false, detail: `the reseed did not run — ${reseeded.detail}`, standing: resolved.standing };
       this.deps.store.remoteValidation.stampRemoteTenant({

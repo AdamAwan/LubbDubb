@@ -1866,6 +1866,19 @@ export interface RemoteRunBrief {
  * not a success — the command outlived this process and what it did is not knowable from here.
  * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
  */
+/** Which of an environment's two tenant commands. */
+export type TenantCall = 'ensure' | 'reseed';
+
+/**
+ * One launch of a tenant command: what a later process needs to find it again. `id` names the
+ * harness-owned directory its output is teed into; `pid` is the runner holding the command.
+ */
+export interface TenantLaunch {
+  id: string;
+  pid: number | null;
+  startedAt: string;
+}
+
 export interface TenantPreparation {
   environment: string;
   /** The name the commands settled on. Null while it runs, and on an `ensureTenant` that named none. */
@@ -1874,6 +1887,10 @@ export interface TenantPreparation {
   finishedAt: string | null;
   ok: boolean | null;
   detail: string | null;
+  /** The command running now, or the last one this preparation ran. Null before one has launched. */
+  call: TenantCall | null;
+  /** When that command was launched. */
+  launchedAt: string | null;
 }
 
 export interface RemoteTenant {

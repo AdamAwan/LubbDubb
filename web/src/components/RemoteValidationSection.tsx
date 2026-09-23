@@ -216,12 +216,12 @@ function PrepareLine({ tenant }: { tenant: RemoteTenantView }): JSX.Element | nu
         </Tag>{' '}
         <span className="cn-sub">
           This runs the environment&rsquo;s own command and can take tens of minutes. It keeps going if you close this
-          page.
+          page or the harness restarts; its live output is under the tenant chip at the top of the page.
         </span>
       </span>
     );
   // `ok` null on a finished row is the third verdict, and it is not a failure: the harness restarted
-  // while the command was running, and what it did is not knowable from here.
+  // and found the command gone with no outcome recorded, so what it did is not knowable from here.
   const tone = p.ok === null ? 'amber' : p.ok ? 'green' : 'red';
   return (
     <span className="cn-sheet-warn">

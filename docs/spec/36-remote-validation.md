@@ -1173,11 +1173,72 @@ record exists to refuse, and a `beginTenantPrepare` that finds an open row retur
 answers 409 rather than queueing behind a command it cannot see.
 
 **`ok` is three-valued on a finished row, and the third value is load bearing.** True is done, false is
-the failure in the words the operator is told, and **null is _the harness restarted while this was
-running_** — which is neither. The command ran on somebody else's machine and outlived this process,
-so what it did is not knowable from here, and the row says exactly that. `closeOrphanedTenantPrepares`
-runs at boot in `src/system.ts`: a preparation left open is a reseed the gate draws as running since
-last week, refusing every later press for ever, with nothing red.
+the failure in the words the operator is told, and **null is _the harness restarted, and the command
+was gone with no outcome recorded_** — which is neither. What it did is not knowable from here, and the
+row says exactly that.
+
+#### The command outlives the harness, and the row follows it
+
+A tenant command is started **detached**, under a small **runner** — a Node process handed its source
+on `node -e` (`src/remoteValidation/tenantLog.ts`), so it needs no build and no file on disk. The runner
+starts the project's command through the shell, with the `LUBBDUBB_ENVIRONMENT` / `LUBBDUBB_TENANT`
+env, `windowsHide`, stdin closed, and `cwd` at the repo root, and it owns three things in a directory
+the **harness** owns, `<validationRoot>/tenant-commands/<environment>/<launch id>/`:
+
+- `output.log` — stdout and stderr together, teed as they are written. **The harness never relies on
+  the project's command writing a log of its own**: plenty of commands only print, and a known log
+  path is an assumption about somebody else's script.
+- `heartbeat` — rewritten every five seconds while the runner lives.
+- `exit.json` — written once, renamed into place, when the command ends: its exit code or signal,
+  whether the timeout killed it, and the first 4 KB of stdout and of stderr. It is the **only** thing
+  an outcome is read from, whichever process reads it. `ensureTenant`'s tenant is still the first
+  non-empty line of **stdout** — stderr is in the log for the operator, never a stand-in for the name.
+
+**The timeout is the runner's, not the harness's**, so it still fires across a restart. At
+`tenantTimeoutMs` the runner kills the command's **whole tree** — `taskkill /T /F` on Windows, the
+command's own process group on POSIX (it is started detached for exactly that), then `SIGKILL` five
+seconds later — and records `timedOut`. A `SIGTERM` to the runner does the same.
+
+The row records the launch — `call` (`ensure` | `reseed`), `launch_id`, the runner's `pid`, and
+`launched_at`. **At boot, `resumeTenantPrepares` replaces the old blanket close.** A row with no launch
+on record — one from before the columns, or one whose command never started — is closed as before. A
+row with one is **followed**: `TenantKeeper.follow` polls for `exit.json`, and while the runner lives the
+row stays **open**, so a second press over the same tenant is still refused — the clash
+`beginTenantPrepare` exists for, and exactly what closing every row at boot let through while the first
+reseed was still running. When the command ends the preparation carries on from there, as if the
+harness had never gone: an `ensure` that finishes is stamped and then the `reseed` runs on the name it
+provisioned.
+
+**A runner is alive only if its pid answers _and_ its heartbeat is fresh** (a minute). The pid alone
+is not enough, because a pid is reused, and a reused pid belongs to a process that never writes this
+heartbeat. It is judged gone only on **two** stale polls in a row, so a laptop waking from sleep does
+not close a row whose runner is about to beat. Gone with no `exit.json` is the third verdict.
+
+**Output is bounded.** The log rotates to `output.log.1` at 2 MB, so a launch holds at most two files;
+each launch sweeps its environment down to the five newest directories, never one whose runner is still
+beating. The tail served is the last **200** lines, from the last 64 KB of each file, with a `\r`-drawn
+progress line folded to what it last showed — the local run's number
+([23](23-local-runs.md)). The harness parses none of it: nothing here looks for a sign-in prompt or any
+other string, because what a command prints is the project's business.
+
+#### Where an operator sees it
+
+`GET /api/tenant-commands/:environment/output` serves `{lines, lastOutputAt}` for the environment's
+current or last launch — fetched, never on the snapshot, for the local run's reason
+([16](16-http-api.md#get-apilocal-runoutput)). `lastOutputAt` is the log's mtime, and it is the
+**only** stall reading: the panel says _Nothing printed for 12:00_ once a running command has been
+quiet for five minutes, and never guesses why.
+
+The top bar carries a **tenant chip** in the Usage / Local pill **whenever any environment declares an
+`ensureTenant` or a `reseed`** — `CockpitState.tenantCommands`, one `TenantCommandView` per such
+environment with its configured command text and its preparation — and nothing where none does. Idle it
+reads _Tenants · n_, quiet; while one runs it reads _Reseed · staging · 12m_ (or _Provision_, or
+_n running_ where several are). It opens the **Tenant commands** panel: per environment, the commands
+as configured, how the last run ended or how long this one has run, its detail, and the live output in
+`TranscriptPane`, polled every two seconds while it runs. The press stays on the sheet, where the
+tenant's warning is; the panel is where the running command is read. The hub rebroadcasts on
+`RemoteRunDesk`'s `tenantSettled`, which is what covers a preparation a restart resumed — no request
+is waiting on it.
 
 **The outcome's detail is shown, never discarded.** On an `ensureTenant` environment it carries the
 name the project's own command provisioned, which is the one place that name is ever learned.
@@ -2526,9 +2587,19 @@ a `tenantEnv` nobody set and an `ensureTenant` nobody ran both **block naming th
 would provide one** rather than inventing a name, and a `tenantEnv`'s **value reaches neither a prompt,
 the cockpit, nor a committed project layer**; the reseed runs the environment's own commands and stamps
 `remote_tenants`, on the fake's own record of what it was asked for and with **no process spawned**;
+after a restart a preparation whose runner the fake `hold`s **stays open, refuses a second press,
+serves its output and settles when it ends** — an interrupted `ensure` carrying on into its reseed —
+while one whose runner is gone, or that has no launch on record, closes with `ok` null;
 and waiving is **not** a route here — the retire path is
 `POST /api/issues/:number/validation/:checkId/waive`, its reason is required, a waived check counts as
 clear at close-out and a **deferred** one does not.
+
+The runner itself is asserted in `test/tenantCommandRunner.test.ts` against throwaway `node -e`
+commands, never a project's script: output is readable **while** the command runs, stdout and stderr
+together; `ensureTenant` takes its tenant from the first line of **stdout** and a stderr-only command
+names none; a command past its timeout is **killed** and says so; a second keeper — a restarted
+harness — follows a launch the first one started to its outcome; and a launch with no live runner and
+no `exit.json` follows to nothing.
 
 What the harness does **not** spawn is asserted in `test/remoteValidationRunner.test.ts`, which is now
 about the parser, the delimiter and the silence: `parseSelectorListing` reads a listing as areas, never

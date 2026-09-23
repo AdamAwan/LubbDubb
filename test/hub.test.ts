@@ -31,6 +31,7 @@ function fakeSystem(): {
     reviewPacks: new EventEmitter(),
     reviewPackChecker: new EventEmitter(),
     localValidations: new EventEmitter(),
+    remoteRuns: new EventEmitter(),
   } as unknown as System;
   return { system, agents, localRun, localRunWatch, errors, readying };
 }
