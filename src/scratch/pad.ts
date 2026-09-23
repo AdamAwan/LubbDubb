@@ -109,15 +109,3 @@ export function normalisePadDecision(
     trimmed,
   };
 }
-
-export const WITNESS_INSTRUCTION = [
-  '## Record the forks you take',
-  '',
-  'When the change could reasonably have gone another way — two ways to shape a fix, a file you',
-  'chose not to touch, an approach you tried and dropped — leave a `scratch_append` entry with a',
-  '`decision` beside the note: `chose` (what you did here), `because` (why), `rejected` (each',
-  'alternative with the reason it was not taken) and `paths` (the files the fork touches, where you',
-  'can say). One line each, written at the fork rather than as a narrative at the end. `rejected`',
-  'is the field that matters: the road not taken leaves no trace in the diff, and it is the thing a',
-  'reviewer asks about most. If there were no forks, write nothing — an empty log is an honest one.',
-].join('\n');

@@ -788,25 +788,6 @@ operator's own filename as a label.
 - **The label is quoted as the operator's**, never as an instruction — a filename is not a directive,
   and it is never used to build a path.
 
-## The instruction to record forks reaches the agent
-
-`recordDispatchTask` appends `WITNESS_INSTRUCTION` (`src/scratch/pad.ts`, a constant) to every
-**code** dispatch's prompt, last among the appended blocks: the standing instruction to record forks
-([11](11-mcp-tools.md#forks-on-the-pad)) to leave a `scratch_append` entry with a `decision`
-at each fork the change takes.
-
-- **Appended, not filled in**, for the rejection note's reason — and with more force, because this
-  block goes on every code dispatch there is: an operator template written before it existed would
-  drop a `{witness}` token on every one of them, in silence.
-- **Code agents only.** A desk agent moves no head, so it takes no fork in a change.
-  The prompt of a desk dispatch is byte-identical to one composed before this existed.
-- **Last, and constant.** It is about how to work rather than what the work is, so it follows every
-  block that says what the work is; and it derives nothing from the dispatch, so it is the one
-  appended block that is the same on every prompt.
-- **Short, and it says an empty log is fine.** A prose ceiling to fill is what turns a record of
-  facts into a story; the instruction names what a fork is, that `rejected` is the field that
-  matters, and that nothing recorded is an honest outcome.
-
 ## `update_pr_branch` — the base merge without an agent
 
 The `behind` arm of rule `pr-base-update` ([05](05-dispatcher.md#pr-base-update--two-arms)), performed
