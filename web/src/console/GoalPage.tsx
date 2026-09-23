@@ -293,6 +293,7 @@ function WorkPaneBody({
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const underWay = planUnderWay(page);
+  const gatedPlan = page.plan !== null && !page.plan.revealed;
   return (
     <>
       <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} />
@@ -300,15 +301,19 @@ function WorkPaneBody({
           shape the fleet proposed, and the card draws nothing at all where the
           criteria routes are not mounted. A part with a task behind it is what
           makes the next version drift, which is the one thing the form has to know
-          before the operator starts typing. */}
-      <GoalCriteria
-        issueNumber={page.issue.number}
-        workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
-        open={folds.criteria.open}
-        settled={folds.criteria.settled}
-        onToggle={folds.criteria.onToggle}
-        now={view.now}
-      />
+          before the operator starts typing. Not while the plan is at its gate: the
+          gate asks the same question, and asked twice the operator answers one.
+          → docs/spec/17-cockpit.md#goal-criteria-and-drift */}
+      {!gatedPlan && (
+        <GoalCriteria
+          issueNumber={page.issue.number}
+          workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
+          open={folds.criteria.open}
+          settled={folds.criteria.settled}
+          onToggle={folds.criteria.onToggle}
+          now={view.now}
+        />
+      )}
       {/* Last on the pane, once the plan is approved and the work is under way: it is
           a record of a moment that has passed, and everything above it — the parts,
           the description in front, what "done" means, the pull requests — is the work
