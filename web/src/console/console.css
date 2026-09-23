@@ -3551,7 +3551,7 @@ a.cn-tgl {
   --cn-w-lamp: 30px;
 }
 /* The pull-request rack's reading slot holds **three** marks — the fleet's review,
-   the review pack and the checks — where the token's 104px was measured for a
+   the unanswered comments and the checks — where the token's 104px was measured for a
    glyph and a run of dots. Measured against the widest the three get: two 22px
    boxes, their gaps, and `CI 2 running`. The card's rather than the token's,
    because no other card draws all three and a global widening would open a gutter
@@ -5249,7 +5249,7 @@ button.cn-grow {
 .cn-prchips .cn-refs {
   margin-left: auto;
 }
-.cn-prpack {
+.cn-prmast-links {
   display: flex;
   align-items: center;
   gap: 8px;

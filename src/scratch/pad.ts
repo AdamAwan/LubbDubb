@@ -1,6 +1,6 @@
 import type { PadDecision } from '../types.js';
 
-// → docs/spec/31-review-packs.md
+// → docs/spec/11-mcp-tools.md#forks-on-the-pad
 
 export const MAX_PAD_NOTE = 4000;
 

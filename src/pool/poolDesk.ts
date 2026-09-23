@@ -1,10 +1,9 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { WorldScope } from '../integrations/registry.js';
-import { packSecretRefusal } from '../reviewPacks/secrets.js';
 import type { Store } from '../store/store.js';
-import type { PoolClockDocument, PoolClockKind, PoolPackDocument, ReviewPackShare } from '../types.js';
+import type { PoolClockDocument, PoolClockKind } from '../types.js';
 import { buildDigestDocument } from './digestArm.js';
-import { POOL_SCHEMA_VERSION, parsePoolDocument, poolContentHash, poolStaleBefore } from './document.js';
+import { parsePoolDocument, poolContentHash, poolStaleBefore } from './document.js';
 import type { PoolTransport } from './transport.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -23,7 +22,6 @@ export class PoolDesk {
       harnessVersion: string;
       now: () => string;
       digestIntervalMs: number;
-      closedPrWindowMs: number;
       worldScope: WorldScope;
       errors?: ErrorRecorder;
     },
@@ -34,100 +32,6 @@ export class PoolDesk {
     this.firstPass = false;
     if (this.deps.transport.canRead) await this.poll();
     await this.publishKind('digest', boot);
-    await this.carryPacks();
-  }
-
-  private async carryPacks(): Promise<void> {
-    for (const share of this.deps.store.reviewPacks.listReviewPackShares()) {
-      if (share.withdrawnAt !== null || this.dead(share)) {
-        await this.prune(share);
-        continue;
-      }
-      if (share.publishedAt !== null || share.refusal !== null) continue;
-      await this.publishPack(share);
-    }
-  }
-
-  private async publishPack(share: ReviewPackShare): Promise<void> {
-    const record = this.deps.store.reviewPacks.getReviewPackAt(share.prNumber, share.headSha);
-    if (record === null) {
-      this.deps.store.reviewPacks.recordReviewPackShareRefusal(
-        share.prNumber,
-        `the pack for #${share.prNumber} at ${share.headSha} is no longer in the store, so there was nothing to share`,
-      );
-      return;
-    }
-    const refusal = packSecretRefusal(record.pack);
-    if (refusal !== null) {
-      this.deps.store.reviewPacks.recordReviewPackShareRefusal(share.prNumber, refusal);
-      return;
-    }
-    const document: PoolPackDocument = {
-      pool: POOL_SCHEMA_VERSION,
-      kind: 'pack',
-      fleetId: this.deps.fleetId,
-      project: this.deps.project,
-      publishedAt: this.deps.now(),
-      harnessVersion: this.deps.harnessVersion,
-      prNumber: share.prNumber,
-      headSha: record.pack.headSha,
-      writtenAt: record.writtenAt,
-      pack: record.pack,
-    };
-    try {
-      await this.deps.transport.publish(document);
-      this.deps.store.reviewPacks.recordReviewPackShared(share.prNumber);
-    } catch (error) {
-      this.record(`Could not publish the review pack for #${share.prNumber} to the pool`, error);
-    }
-  }
-
-  private async prune(share: ReviewPackShare): Promise<void> {
-    if (share.publishedAt === null) {
-      this.deps.store.reviewPacks.deleteReviewPackShare(share.prNumber);
-      return;
-    }
-    try {
-      await this.deps.transport.unpublish({ fleetId: this.deps.fleetId, prNumber: share.prNumber });
-      this.deps.store.reviewPacks.deleteReviewPackShare(share.prNumber);
-    } catch (error) {
-      this.record(`Could not prune the shared review pack for #${share.prNumber}`, error);
-    }
-  }
-
-  private dead(share: ReviewPackShare): boolean {
-    const world = this.deps.store.world.getWorldBaseline();
-    if (!world) return false;
-    if (world.pullRequests.some((pr) => pr.number === share.prNumber)) return false;
-    const closed = world.closedPullRequests?.find((pr) => pr.number === share.prNumber);
-    if (!closed) return true;
-    if (!closed.closedAt) return false;
-    return new Date(this.deps.now()).getTime() - new Date(closed.closedAt).getTime() >= this.deps.closedPrWindowMs;
-  }
-
-  unshareReviewPack(prNumber: number): { share: ReviewPackShare | null } {
-    return { share: this.deps.store.reviewPacks.withdrawReviewPackShare(prNumber) };
-  }
-
-  shareReviewPack(prNumber: number): { ok: true; share: ReviewPackShare } | { ok: false; status: 409; error: string } {
-    const record = this.deps.store.reviewPacks.getCurrentReviewPack(prNumber);
-    if (record === null) {
-      return { ok: false, status: 409, error: `there is no review pack for #${prNumber} to share` };
-    }
-    const refusal = packSecretRefusal(record.pack);
-    if (refusal !== null) {
-      return {
-        ok: false,
-        status: 409,
-        error:
-          `This pack was not shared: ${refusal}. Nothing was rewritten and nothing left the machine — ` +
-          `fix the line in the change and ask for the pack again.`,
-      };
-    }
-    return {
-      ok: true,
-      share: this.deps.store.reviewPacks.recordReviewPackShare({ prNumber, headSha: record.pack.headSha }),
-    };
   }
 
   status(): PoolStatus {

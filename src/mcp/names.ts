@@ -41,8 +41,6 @@ export const MCP_TOOL_NAMES = [
   'pr_describe',
   'report_remedy',
   'raise',
-  'review_pack_submit',
-  'review_pack_check',
 ] as const;
 
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
@@ -83,8 +81,6 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   watch_declare: 'point-of-use',
   state_declare: 'point-of-use',
   report_remedy: 'point-of-use',
-  review_pack_submit: 'point-of-use',
-  review_pack_check: 'point-of-use',
   request_permission: 'point-of-use',
 };
 
@@ -154,9 +150,19 @@ export const RETIRED_TOOL_NAMES: readonly string[] = [
   'knowledge_notice',
   'knowledge_contradict',
   'knowledge_ask',
+  'review_pack_submit',
+  'review_pack_check',
 ];
 
+const REVIEW_PACK_TOOLS: readonly string[] = ['review_pack_submit', 'review_pack_check'];
+
 export function retiredToolMessage(name: string): string {
+  if (REVIEW_PACK_TOOLS.includes(name)) {
+    return (
+      `${name} has been retired: review packs were removed from the harness, and nothing replaces them. ` +
+      'There is nothing to hand back. If you reached this from a prompt that named it, that prompt is out of date.'
+    );
+  }
   return (
     `${name} has been retired. Everything it did is now one call: raise(what, why_not_mine) — say what ` +
     'you hit and why it is not your own change doing, and the harness works out the rest. **The call ' +

@@ -69,7 +69,6 @@ if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
 export function placeReach(place: Place): { key: PlaceKey; view: UiUsageEvent | null } {
   if (place.hatch !== null) return { key: 'hatch', view: 'pet.view' };
   if (place.scratchpad !== null) return { key: 'scratchpad', view: 'scratchpad.view' };
-  if (place.reviewPack !== null) return { key: 'review-pack', view: 'review-pack.view' };
   if (place.plan !== null) return { key: 'plan', view: 'plan.view' };
   if (place.retro !== null) return { key: 'retro', view: 'retro.view' };
   if (place.agent !== null) return { key: 'agent', view: 'agent.view' };

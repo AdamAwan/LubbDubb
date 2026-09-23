@@ -48,7 +48,6 @@ export type InsightsView =
   | 'causes'
   | 'trend'
   | 'mcp'
-  | 'review'
   | 'prediction'
   | 'usage';
 
@@ -101,8 +100,6 @@ export interface CockpitActions {
   viewRetro(issueRef: string | null): void;
   hatchEgg(id: string | null): void;
   viewScratchpad(issueRef: string | null): void;
-  viewReviewPack(prNumber: number | null): void;
-  openReviewIdea(id: string | null): void;
   openConfig(where: { configTab?: ConfigTab; configGroup?: string | null }): void;
   openInsights(where: {
     insightsView?: InsightsView;

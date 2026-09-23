@@ -65,8 +65,6 @@ export class Hub {
     agents.on('conclusion', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     agents.on('goalMet', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     agents.on('scratch', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
-    system.reviewPacks.on('written', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
-    system.reviewPackChecker.on('checked', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     agents.on('retrospective', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     agents.on('files', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));
     agents.on('usage', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));

@@ -62,7 +62,6 @@ import { expiresAt } from '../ejection/policy.js';
 import { prAttentionStatus, type PrAttentionContext } from '../pr/prAttention.js';
 import { reviewReading } from '../review/prReview.js';
 import { prReviewState } from '../review/prReviewState.js';
-import { packStandingOf } from '../reviewPacks/standing.js';
 import {
   effectivePickupStates,
   issuePickupStatus,
@@ -489,9 +488,6 @@ export function buildStateSections(
   const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
     prReviewState(pr.number, reviewReading(reviewRows(), pr.number), config.review, pr.reviewThreads) ?? undefined;
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
-  const packHeads = once(() => new Map(store.reviewPacks.listReviewPackHeads().map((head) => [head.prNumber, head])));
-  const packStandingFor = (pr: PullRequest): PullRequest['pack'] =>
-    packStandingOf(packHeads().get(pr.number), pr.headSha, system.reviewPacks.writing(pr.number));
 
   const splitVerdicts = once(() => new Map(store.prSplits.listPrSplitVerdicts().map((v) => [v.prNumber, v])));
   const openPullRequests = once((): OpenPullRequest[] =>
@@ -501,7 +497,6 @@ export function buildStateSections(
       attention: prAttentionStatus(pr, attentionCtx()),
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
       review: reviewStateOf(pr),
-      pack: packStandingFor(pr),
       split: splitVerdicts().get(pr.number),
     })),
   );

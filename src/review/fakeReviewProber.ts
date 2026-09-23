@@ -1,6 +1,6 @@
 import type { ReviewedElsewhere, ReviewedElsewhereReport, ReviewProber } from './reviewedElsewhere.js';
 
-// → docs/spec/31-review-packs.md
+// → docs/spec/07-pull-requests.md#the-fleet-review
 
 export class FakeReviewProber implements ReviewProber {
   readonly asked: number[] = [];

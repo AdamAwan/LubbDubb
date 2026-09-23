@@ -717,7 +717,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is ' +
       'read-only. Submit with `review_pack_submit` when you are done — that call is the pack, and a run that ' +
       'ends without it has written nothing.',
-    doc: 'Sent to a read-only agent when a reviewer asks for a review pack from a pull request’s row in the cockpit (31-review-packs). Outside the rule dispatcher: nothing dispatches this on its own. The diff’s hunks by id, both witness pads (the linked goal’s and the pull request’s own) and the note naming review_pack_submit are appended after this text rather than interpolated, so an override cannot silently drop any of them. Tests are never an idea of their own — a test hunk belongs to the idea it exercises, whose `coverage` lists the scenarios as bare lines — and `assemblePack` refuses a pack that breaks either half, so an override that drops this paragraph is caught rather than obeyed. Placeholders: {number} {title} {branch} {base} {headSha}.',
+    retired: true,
+    doc:
+      '**Retired — no longer rendered.** It was sent to the agent that wrote a review pack, and review packs ' +
+      'were removed from the harness. The id stays loadable so a deployment that overrode it still boots; the ' +
+      'override is read and never used.',
   },
   'review-pack-check': {
     placeholders: ['number', 'title', 'branch', 'base', 'headSha'],
@@ -758,7 +762,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is ' +
       'read-only. Record everything with `review_pack_check` when you are done — that call is the check, and a ' +
       'run that ends without it has checked nothing.',
-    doc: 'Sent to a read-only agent when the review pack author has finished and left a pack written against its head (31-review-packs). Outside the rule dispatcher: nothing dispatches this on its own, and nobody asks for it — it follows the author. The skeleton of each idea (its claim, its anchors as bare ranges, its claims by number) and the note naming review_pack_check are appended after this text rather than interpolated, so an override cannot silently drop either; the witness log and the author’s notes are withheld on purpose. Placeholders: {number} {title} {branch} {base} {headSha}.',
+    retired: true,
+    doc:
+      '**Retired — no longer rendered.** It was sent to the agent that checked a review pack’s claims, and ' +
+      'review packs were removed from the harness. The id stays loadable so a deployment that overrode it still ' +
+      'boots; the override is read and never used.',
   },
   'pr-review-comment': {
     placeholders: ['number', 'branch', 'author', 'comment'],

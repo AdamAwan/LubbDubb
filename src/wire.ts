@@ -21,14 +21,12 @@ import type { PrAttention } from './pr/prAttention.js';
 import type { PoolStatus } from './pool/poolDesk.js';
 import type { PoolRollup } from './pool/aggregate.js';
 import type { PrHealth } from './pr/prHealth.js';
-import type { PrPackStanding } from './reviewPacks/standing.js';
 import type { PrReviewState } from './review/prReviewState.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ConfigChange } from './config/configApply.js';
 import type { ReliabilityInsights, RunTally } from './insights/reliabilityInsights.js';
 import type { ThroughputInsights } from './insights/throughputInsights.js';
-import type { ReviewCalibration } from './reviewPacks/calibration.js';
 import type { RemedyInsights } from './insights/remedyInsights.js';
 import type { ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 import type { AllowanceInsights } from './insights/allowanceInsights.js';
@@ -107,14 +105,10 @@ import type {
   PullRequest as WorldPullRequest,
   ReadyingAction,
   Retrospective,
-  ReviewAttention,
-  ReviewMark,
   RemoteReading,
   RemoteRun,
   RemoteSheet,
   RemoteSheetRow,
-  ReviewPackRecord,
-  ReviewPackShare,
   ScratchEntry,
   ShortfallAuthor,
   ShortfallCause,
@@ -142,7 +136,6 @@ export interface PullRequest extends WorldPullRequest {
   health?: PrHealth;
   attention?: PrAttention;
   ciVerdict?: CiVerdict;
-  pack?: PrPackStanding;
   review?: PrReviewState;
   split?: PrSplitVerdict;
 }
@@ -819,44 +812,6 @@ export interface ScratchpadPayload {
   entries: ScratchEntry[];
 }
 
-export interface ReviewPackPayload extends ReviewPackRecord {
-  marks: ReviewMark[];
-  head: string | null;
-  stale: { headSha: string; commitsBehind: number | null } | null;
-  checking: boolean;
-  sharing: ReviewPackSharing;
-}
-
-export interface ReviewPackSharing {
-  available: boolean;
-  share: ReviewPackShare | null;
-}
-
-export interface ReviewPackAbsence {
-  error: string;
-  writing: boolean;
-}
-
-export interface ReviewReadBody {
-  read: boolean;
-}
-
-export interface ReviewAttentionBody {
-  attention: ReviewAttention | null;
-}
-
-export interface ReviewSeenBody {
-  seen: boolean;
-}
-
-export interface ReviewMarksPayload {
-  marks: ReviewMark[];
-}
-
-export interface ReviewCalibrationPayload {
-  calibration: ReviewCalibration;
-}
-
 export interface SpendPayload {
   insights: SpendInsights;
 }
@@ -1011,23 +966,12 @@ export type {
   ReadyingStep,
   ReadyingStepTiming,
   Retrospective,
-  ReviewAnchor,
-  ReviewAttention,
-  ReviewClaim,
-  ReviewFinding,
-  ReviewIdea,
-  ReviewMark,
-  ReviewNote,
   RemoteReading,
   RemoteRun,
   RemoteRowKind,
   RemoteRowOutcome,
   RemoteSheet,
   RemoteSheetRow,
-  ReviewPack,
-  ReviewPackShare,
-  ReviewRange,
-  ReviewVerdict,
   ScratchEntry,
   GoalWatch,
   GoalWatchDeclaration,
@@ -1095,14 +1039,6 @@ export type {
   ThroughputSubject,
   ThroughputTotal,
 } from './insights/throughputInsights.js';
-export type {
-  ReviewCalibration,
-  ReviewOverridePair,
-  ReviewOverrideReading,
-  ReviewPlumbingPack,
-  ReviewPlumbingReading,
-  ReviewProminenceReading,
-} from './reviewPacks/calibration.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
@@ -1112,7 +1048,6 @@ export type { PrComment } from './types.js';
 export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } from './types.js';
 export type { PoolStatus } from './pool/poolDesk.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
-export type { PrPackStanding } from './reviewPacks/standing.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 export type { RunClearOut } from './floor/endRun.js';
 export type {
@@ -1248,30 +1183,3 @@ export interface ObstacleBoardPayload {
   canFileTickets: boolean;
   ticketApproval: boolean;
 }
-
-/**
- * The one runtime this contract carries, and the only value the cockpit imports
- * from the harness: the review-pack derivations. They are pure functions of the
- * pack document — the numbering, the false-claim list, the facts line, the code
- * block, the highlighter — read by the HTML companion server-side and by the
- * cockpit's page, which is why they may not be two copies.
- * `src/reviewPacks/derive.ts` is a leaf: it imports `src/types.ts` for types and
- * nothing else, so nothing server-only rides in with it. `test/wireRuntime.test.ts`
- * holds that. → docs/spec/31-review-packs.md#one-copy-of-the-derivations
- */
-export {
-  anchorWeight,
-  codeBlockLines,
-  codeLanguage,
-  falseClaims,
-  highlightCode,
-  ideaAtom,
-  ideaFlags,
-  numberIdeas,
-  packFacts,
-  plainSummary,
-  shortSha,
-  splitBody,
-  testScenarios,
-} from './reviewPacks/derive.js';
-export type { FalseClaim, NumberedIdea } from './reviewPacks/derive.js';

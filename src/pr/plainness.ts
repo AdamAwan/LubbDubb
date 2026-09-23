@@ -1,4 +1,4 @@
-// → docs/spec/31-review-packs.md#say-it-in-plainer-words
+// → docs/spec/07-pull-requests.md#plain-words
 
 export const PLAINNESS = {
   sentenceWords: 24,

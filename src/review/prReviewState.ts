@@ -2,7 +2,7 @@ import type { PrReviewThread } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
 import { defaultReviewMode, resolvedReviewMode, reviewSkipped, triageRuns, type PrReviewReading } from './prReview.js';
 
-// → docs/spec/31-review-packs.md
+// → docs/spec/07-pull-requests.md#the-fleet-review
 
 export type PrReviewStatus = 'deciding' | 'routed' | 'clear' | 'findings' | 'skipped' | 'elsewhere';
 

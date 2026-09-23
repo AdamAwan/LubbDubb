@@ -628,99 +628,6 @@ export interface Retrospective {
   updatedAt: string;
 }
 
-export interface ReviewPack {
-  schema: number;
-  prNumber: number;
-  headSha: string;
-  headline: string;
-  summary: string;
-  estimatedMinutes: number;
-  order: string[];
-  ideas: ReviewIdea[];
-  witnessed: boolean;
-  fake: string;
-}
-
-export interface ReviewIdea {
-  id: string;
-  claim: string;
-  title: string;
-  atom: string | null;
-  cue: string | null;
-  anchors: ReviewAnchor[];
-  claims: ReviewClaim[];
-  coverage?: string[];
-  attention: ReviewAttention | null;
-}
-
-export type ReviewAttention = 'read' | 'decide' | 'skim' | 'split';
-
-export interface ReviewAnchor {
-  kind: 'hunk' | 'region';
-  range: ReviewRange;
-  code: string[];
-  gist: string;
-  note: ReviewNote | null;
-  caption: string | null;
-  mark: ReviewAnchorMark | null;
-}
-
-export interface ReviewRange {
-  path: string;
-  start: number;
-  end: number;
-}
-
-export type ReviewAnchorMark = 'key' | 'false' | 'disputed';
-
-export type ReviewNote = { by: 'witness'; text: string; entryId: string; at: string } | { by: 'author'; text: string };
-
-export interface ReviewClaim {
-  text: string;
-  provenance: ReviewProvenance;
-  verdict: ReviewVerdict | null;
-  evidence: string | null;
-  finding: ReviewFinding | null;
-}
-
-export type ReviewProvenance =
-  | { kind: 'witnessed'; entryId: string }
-  | { kind: 'inferred' }
-  | { kind: 'disputed'; entryId: string };
-
-export type ReviewVerdict = 'true' | 'false' | 'cant_tell';
-
-export interface ReviewFinding {
-  headline: string;
-  body: string;
-  step: number | null;
-  counter: { range: ReviewRange; code: string[]; caption: string } | null;
-}
-
-export interface ReviewPackRecord {
-  pack: ReviewPack;
-  writtenAt: string;
-}
-
-export interface ReviewPackShare {
-  prNumber: number;
-  headSha: string;
-  requestedAt: string;
-  publishedAt: string | null;
-  withdrawnAt: string | null;
-  refusal: string | null;
-}
-
-export interface ReviewMark {
-  prNumber: number;
-  hunk: ReviewRange;
-  headSha: string;
-  attention: ReviewAttention | null;
-  read: boolean;
-  seen: boolean;
-  markedAt: string;
-}
-
 export interface FeatureSummary {
   originRef: string;
   /**
@@ -2064,13 +1971,11 @@ export interface SurfaceReach {
 
 export type SurfaceReachInput = Omit<SurfaceReach, 'at'>;
 
-type PoolDocumentKind = PoolClockKind | 'pack';
-
 export type PoolClockKind = 'digest';
 
 interface PoolEnvelope {
   pool: number;
-  kind: PoolDocumentKind;
+  kind: PoolClockKind;
   fleetId: string;
   project: string;
   publishedAt: string;
@@ -2101,17 +2006,9 @@ export interface PoolDigestDocument extends PoolEnvelope {
   byFault: PoolDigestRow[];
 }
 
-export interface PoolPackDocument extends PoolEnvelope {
-  kind: 'pack';
-  prNumber: number;
-  headSha: string;
-  writtenAt: string;
-  pack: ReviewPack;
-}
-
 export type PoolClockDocument = PoolDigestDocument;
 
-export type PoolDocument = PoolClockDocument | PoolPackDocument;
+export type PoolDocument = PoolClockDocument;
 
 export interface PoolFleetReading {
   fleetId: string;

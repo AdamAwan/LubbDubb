@@ -22,8 +22,6 @@ export interface Place {
   retro: string | null;
   hatch: string | null;
   scratchpad: string | null;
-  reviewPack: number | null;
-  reviewIdea: string | null;
   obstacle: string | null;
   obstacleEnded: boolean;
   /** Which pane of the goal page is open, or null to let the lifecycle rule pick. */
@@ -142,7 +140,6 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'causes',
   'trend',
   'mcp',
-  'review',
   'prediction',
   'usage',
 ];
@@ -164,8 +161,6 @@ export const NOWHERE: Place = {
   retro: null,
   hatch: null,
   scratchpad: null,
-  reviewPack: null,
-  reviewIdea: null,
   goalTab: null,
   goalOpen: [],
   goalShut: [],
@@ -260,7 +255,6 @@ export function readPlace(search: string): Place {
     retro: param(query, 'retro'),
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
-    ...readReviewPack(param(query, 'pack'), param(query, 'idea')),
     goalTab: GOAL_TABS.find((t) => t === param(query, 'pane')) ?? null,
     goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
     goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
@@ -347,12 +341,6 @@ function readPrNumber(value: string | null): number | null {
   return value !== null && Number.isInteger(number) && number > 0 ? number : null;
 }
 
-function readReviewPack(pack: string | null, idea: string | null): Pick<Place, 'reviewPack' | 'reviewIdea'> {
-  const number = pack === null ? NaN : Number(pack);
-  if (!Number.isInteger(number) || number <= 0) return { reviewPack: null, reviewIdea: null };
-  return { reviewPack: number, reviewIdea: idea };
-}
-
 function readFeature(value: string | null): number | 'none' | null {
   if (value === null) return null;
   if (value === 'none') return 'none';
@@ -397,10 +385,6 @@ export function placeQuery(place: Place): string {
   if (place.retro !== null) query.set('retro', place.retro);
   if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
-  if (place.reviewPack !== null) {
-    query.set('pack', String(place.reviewPack));
-    if (place.reviewIdea !== null) query.set('idea', place.reviewIdea);
-  }
   if (place.goalTab !== null) query.set('pane', place.goalTab);
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
   if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));

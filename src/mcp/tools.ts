@@ -21,8 +21,6 @@ import { replyToReview } from './tools/replyToReview.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
 import { requestPermission } from './tools/requestPermission.js';
 import { retroSubmit } from './tools/retroSubmit.js';
-import { reviewPackCheck } from './tools/reviewPackCheck.js';
-import { reviewPackSubmit } from './tools/reviewPackSubmit.js';
 import { reviewReport } from './tools/reviewReport.js';
 import { reviewRoute } from './tools/reviewRoute.js';
 import { splitAssess } from './tools/splitAssess.js';
@@ -80,8 +78,6 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   pr_describe: prDescribe,
   report_remedy: reportRemedy,
   raise: raiseFact,
-  review_pack_submit: reviewPackSubmit,
-  review_pack_check: reviewPackCheck,
 };
 
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {

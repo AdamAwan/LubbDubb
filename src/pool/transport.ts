@@ -6,13 +6,7 @@ export interface PoolTransport {
   readonly id: string;
   readonly canRead: boolean;
   publish(document: PoolDocument): Promise<void>;
-  unpublish(pack: PoolPackRef): Promise<void>;
   fetch(): Promise<PoolFetchedDocument[]>;
-}
-
-export interface PoolPackRef {
-  fleetId: string;
-  prNumber: number;
 }
 
 export interface PoolFetchedDocument {

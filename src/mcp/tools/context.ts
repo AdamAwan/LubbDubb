@@ -35,8 +35,6 @@ import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../../reviewLabels/labels.js';
 import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
-import type { ReviewPackAuthor } from '../../reviewPacks/author.js';
-import type { ReviewPackChecker } from '../../reviewPacks/checker.js';
 import type { LocalValidationDesk } from '../../localValidation/desk.js';
 import type { LocalRunner } from '../../localRun/runner.js';
 import type { LocalRunWatch } from '../../localRun/watch.js';
@@ -157,8 +155,6 @@ export interface McpToolDeps {
   filing?: TicketFiler;
   watch?: WatchDryRunner;
   state?: Pick<StateQueryDesk, 'configured' | 'declare' | 'dryRun'>;
-  reviewPacks?: Pick<ReviewPackAuthor, 'submit'>;
-  reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
   localValidations?: () => LocalValidationDesk;
   /**
    * The one reader of a run's report. It is a seam here rather than a body in the report tool

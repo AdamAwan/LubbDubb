@@ -51,12 +51,6 @@ import type {
   SetupResolvePayload,
   ConfigSavePayload,
   ConfigPreviewPayload,
-  ReviewAttention,
-  ReviewCalibrationPayload,
-  ReviewMarksPayload,
-  ReviewPackAbsence,
-  ReviewPackPayload,
-  ReviewPackSharing,
   ScratchpadPayload,
   ReliabilityPayload,
   ThroughputPayload,
@@ -89,7 +83,7 @@ export interface PredictionDraft {
  * reveal that opened onto it. Either may be null — a goal that was never predicted
  * on, or one whose gate has not been answered — and the card is drawn only when
  * both are present. The route answers with an anonymous pair, so the shape is named
- * here rather than in `src/wire.ts`, as `ReviewPackReading` is.
+ * here rather than in `src/wire.ts`.
  */
 export interface GoalPredictionReading {
   prediction: GoalPrediction | null;
@@ -108,8 +102,6 @@ export interface GoalCriteriaReading {
   current: CriteriaVersionReading | null;
   versions: CriteriaVersionReading[];
 }
-
-export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
 
 export class UnauthorizedError extends Error {
   constructor(readonly status: number) {
@@ -273,32 +265,10 @@ const realApi = {
     authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) => json<RetrospectivePayload>(r)),
   getScratchpad: (ref: string) =>
     authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) => json<ScratchpadPayload>(r)),
-  getReviewPack: (prNumber: number): Promise<ReviewPackReading> =>
-    authFetch(`/api/prs/${prNumber}/review-pack`).then(async (r) => {
-      if (r.status === 404) {
-        const absence = (await r.json()) as ReviewPackAbsence;
-        return { kind: 'none', writing: absence.writing === true };
-      }
-      return { kind: 'pack', payload: await json<ReviewPackPayload>(r) };
-    }),
-  requestReviewPack: (prNumber: number) =>
-    post<{ ok: true; prNumber: number; headSha: string }>(`/api/prs/${prNumber}/review-pack`),
-  shareReviewPack: (prNumber: number) => post<ReviewPackSharing>(`/api/prs/${prNumber}/review-pack/share`),
-  unshareReviewPack: (prNumber: number) => post<ReviewPackSharing>(`/api/prs/${prNumber}/review-pack/unshare`),
-  markReviewIdeaRead: (prNumber: number, ideaId: string, read: boolean) =>
-    post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/read`, { read }),
   /* The aggregate takes no window: it is a fold over the whole record, because a
      prediction is written once and marked once. → docs/spec/17-cockpit.md */
   getPredictionAggregate: () =>
     authFetch('/api/predictions/aggregate').then((r) => json<PredictionAggregatePayload>(r)),
-  getReviewCalibration: (window: InsightsWindow) =>
-    authFetch(`/api/review-calibration?window=${window}`).then((r) => json<ReviewCalibrationPayload>(r)),
-  markReviewFindingSeen: (prNumber: number, ideaId: string, seen: boolean) =>
-    post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/seen`, { seen }),
-  overrideReviewAttention: (prNumber: number, ideaId: string, attention: ReviewAttention | null) =>
-    post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/attention`, {
-      attention,
-    }),
   getSpend: (window: InsightsWindow) => authFetch(`/api/spend?window=${window}`).then((r) => json<SpendPayload>(r)),
   getSpendTrend: (window: InsightsWindow) =>
     authFetch(`/api/spend/trend?window=${window}`).then((r) => json<SpendTrendPayload>(r)),

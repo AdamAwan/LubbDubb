@@ -1,7 +1,7 @@
 import type { PrReview, PrReviewRoute, PullRequest } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
 
-// → docs/spec/31-review-packs.md
+// → docs/spec/07-pull-requests.md#the-fleet-review
 
 export function reviewOrigin(prNumber: number): string {
   return `pr:${prNumber}:review`;

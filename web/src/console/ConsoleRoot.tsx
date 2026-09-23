@@ -31,7 +31,6 @@ import { Vivarium, openPets } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
 import { InsightsPage } from '../components/InsightsPage.js';
-import { ReviewPackScreen } from '../components/ReviewPackScreen.js';
 import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
@@ -72,21 +71,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
     ) : null;
 
   const situation =
-    // The top rung, and above `PrGone` on purpose — a pack outlives the pull
-    // request's presence in the world. → docs/spec/17-cockpit.md#the-pull-request-page
-    view.viewingReviewPack !== null ? (
-      <>
-        <PackCrumb view={view} actions={actions} />
-        <ReviewPackScreen
-          key={view.viewingReviewPack}
-          prNumber={view.viewingReviewPack}
-          goalRef={view.selectedGoal}
-          openIdea={view.reviewIdea}
-          refUrls={view.state.refUrls}
-          onOpenIdea={(id) => actions.openReviewIdea(id)}
-        />
-      </>
-    ) : view.prPage !== null ? (
+    view.prPage !== null ? (
       <>
         <PrCrumb page={view.prPage} tab={view.tab} actions={actions} />
         <PrPage page={view.prPage} view={view} actions={actions} />
@@ -263,37 +248,6 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
         </span>
       </section>
     </>
-  );
-}
-
-/**
- * The way out of a pack: the tab, the goal where the place holds one, and the pull
- * request it is about — that rung drawn from the number alone, because a pack
- * outlives the pull request's presence in the world and a crumb that vanished with
- * it would leave the reader with no way back.
- */
-function PackCrumb({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const prNumber = view.viewingReviewPack;
-  const goalRef = view.selectedGoal;
-  return (
-    <Crumb
-      trail={[
-        tabStep(view.tab, actions),
-        ...(view.goalPage !== null && goalRef !== null
-          ? [
-              {
-                label: `#${view.goalPage.issue.number} ${view.goalPage.issue.title}`,
-                go: () => {
-                  actions.viewReviewPack(null);
-                  actions.selectGoal(goalRef);
-                },
-              },
-            ]
-          : []),
-        ...(prNumber !== null ? [{ label: `PR #${prNumber}`, go: () => actions.viewReviewPack(null) }] : []),
-      ]}
-      here="Review pack"
-    />
   );
 }
 

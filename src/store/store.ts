@@ -25,7 +25,6 @@ import {
 } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
 import { ScratchStore, SCRATCH_COLUMNS } from './scratch.js';
-import { ReviewPackStore, REVIEW_PACK_COLUMNS } from './reviewPacks.js';
 import { RateLimitStore } from './rateLimits.js';
 import { UpgradeStore } from './upgrades.js';
 import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
@@ -71,6 +70,8 @@ import type { Job, CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
 
+const REVIEW_PACK_RETIRED_TABLES: readonly string[] = ['review_packs', 'review_marks', 'review_pack_shares'];
+
 export class Store {
   private readonly db: Database.Database;
   readonly tasks: TaskStore;
@@ -89,7 +90,6 @@ export class Store {
   readonly verdicts: IssueVerdictStore;
   readonly instructions: InstructionStore;
   readonly scratch: ScratchStore;
-  readonly reviewPacks: ReviewPackStore;
   readonly rateLimits: RateLimitStore;
   readonly agents: AgentStore;
   readonly transcripts: TranscriptStore;
@@ -134,7 +134,11 @@ export class Store {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     renameTables(this.db, ISSUE_VERDICT_RENAMES);
-    dropRetiredTables(this.db, [...POOL_RETIRED_TABLES, ...REMOTE_VALIDATION_RETIRED_TABLES]);
+    dropRetiredTables(this.db, [
+      ...POOL_RETIRED_TABLES,
+      ...REMOTE_VALIDATION_RETIRED_TABLES,
+      ...REVIEW_PACK_RETIRED_TABLES,
+    ]);
     rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...PREDICTION_REBUILDS], () =>
       this.db.exec(SCHEMA),
     );
@@ -161,7 +165,6 @@ export class Store {
       PR_REVIEW_COLUMNS,
       PR_THREAD_LABEL_COLUMNS,
       SCRATCH_COLUMNS,
-      REVIEW_PACK_COLUMNS,
       OBSTACLE_COLUMNS,
       SEQUENCE_COLUMNS,
       EJECTION_COLUMNS,
@@ -210,7 +213,6 @@ export class Store {
     this.verdicts = new IssueVerdictStore(ctx);
     this.instructions = new InstructionStore(ctx);
     this.scratch = new ScratchStore(ctx);
-    this.reviewPacks = new ReviewPackStore(ctx);
     this.rateLimits = new RateLimitStore(ctx);
     this.agents = new AgentStore(ctx);
     this.transcripts = new TranscriptStore(ctx);

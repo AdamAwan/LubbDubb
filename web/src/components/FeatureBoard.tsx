@@ -21,7 +21,6 @@ import { AgentOnIt } from './AgentOnIt.js';
 import { Button } from './button.js';
 import { CiMark } from './CiMark.js';
 import { CommentsMark } from './CommentsMark.js';
-import { PackMark } from './PackMark.js';
 import { ReviewMark } from './ReviewMark.js';
 import { heldByAccepting, waitsOn, wavesOf } from '../view/sequence.js';
 import { fmtUsd, relAge } from './util.js';
@@ -1497,7 +1496,6 @@ function PrRow({
       {openPr !== null && (
         <span className="cn-fb-pr-marks">
           <ReviewMark review={openPr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
-          <PackMark pack={openPr.pack} onOpen={() => actions.selectPr(pr.number)} />
           <CommentsMark comments={openPr.unresolvedComments} onOpen={() => actions.selectPr(pr.number)} />
         </span>
       )}
