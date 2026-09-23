@@ -58,7 +58,6 @@ function harness(start = '2026-08-24T12:00:00.000Z'): {
     harnessVersion: '0.1.0',
     now: c.now,
     digestIntervalMs: 60 * 60 * 1000,
-    closedPrWindowMs: 6 * 60 * 60 * 1000,
     worldScope: SCOPED,
   });
   return { s, transport, desk, advance: c.advance };

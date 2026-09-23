@@ -1585,20 +1585,12 @@ Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
 `issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `remote-validation`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-split`, `pr-describe`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
-`work-item-ticket-body`, `brief-ticket-body`, `review-pack-author`, `review-pack-check`, and the retired `work-item-ticket`,
-`blueprint-ticket`, `blueprint-ticket-body` and `issue-assay`. The filing ids are route-driven rather than dispatcher-driven — they are here
+`work-item-ticket-body`, `brief-ticket-body`, and the retired `work-item-ticket`,
+`blueprint-ticket`, `blueprint-ticket-body`, `issue-assay`, `review-pack-author` and `review-pack-check`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
 make overridable. `local-run` is here for the same reason and reaches nothing the dispatcher does:
 _how this project starts on a developer's machine_ is the operator's opinion too, and the tool that
-renders it is on the desktop channel ([20](20-validation.md#getting-the-application-up)). `review-pack-author`
-is route-driven too and reaches nothing the dispatcher does: a reviewer asks for a pack from a pull
-request's row and the author desk spawns the agent itself, outside the pipeline
-([31](31-review-packs.md#when-a-pack-is-made)); the hunks, both witness pads and the note naming
-`review_pack_submit` are appended after the rendered text, never interpolated. `review-pack-check` is
-the same, one step further from the pipeline: nobody asks for it, the checker desk spawns it when the
-author's run ends with a pack written ([31](31-review-packs.md#the-check)), and the skeleton of the
-ideas and the note naming `review_pack_check` are appended, with the witness log and the author's
-notes withheld on purpose.
+renders it is on the desktop channel ([20](20-validation.md#getting-the-application-up)).
 
 Not every entry is a prompt. `pr-title` is rendered straight onto a pull request, and
 `work-item-ticket-body` and `brief-ticket-body` are written straight into the tracker: the harness files those two items itself
@@ -1611,7 +1603,8 @@ rather than an instruction to an agent.
 the names the cockpit's _brief_ and the goal _appraisal_ carried before they were renamed. An id
 follows its word, and the one it leaves behind stays loadable so a deployment holding an override for
 it still boots. Nor is `local-run`, whose instruction moved to the `localRun.instruction` config field so an
-operator could edit it in the cockpit without a restart ([23](23-local-runs.md#the-instruction-is-config-not-a-prompt)). But
+operator could edit it in the cockpit without a restart ([23](23-local-runs.md#the-instruction-is-config-not-a-prompt)). Nor
+are `review-pack-author` and `review-pack-check`, whose agents went when review packs were removed. But
 deleting them would make `loadPromptTemplates` throw on a deployment that had overridden one, which is
 a harness that will not boot over a file it no longer reads. They carry `retired: true` instead, which
 `describe()` ships to the Prompts panel, so an override that is no longer sent says so rather than

@@ -20,8 +20,6 @@ import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/wor
 import { PrewarmDesk } from './worktree/prewarmDesk.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
-import { ReviewPackAuthor } from './reviewPacks/author.js';
-import { ReviewPackChecker } from './reviewPacks/checker.js';
 import { PlanReconciler } from './plans/planReconciler.js';
 import { AppraisalDesk } from './intake/appraisalDesk.js';
 import { AreaPathDirectory } from './intake/areaPaths.js';
@@ -165,8 +163,6 @@ export interface System {
   mcp: McpBridgeServer;
   desktop: McpDesktopServer;
   worktrees: Worktrees;
-  reviewPacks: ReviewPackAuthor;
-  reviewPackChecker: ReviewPackChecker;
   errors: ErrorLog;
   configFile: string;
   projectConfigFile: string;
@@ -334,12 +330,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     prReply: (): McpToolDeps['prReply'] => executor,
     watch: (): McpToolDeps['watch'] => watchDryRun,
     state: (): McpToolDeps['state'] => stateQueries,
-    reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
     localValidations: (): LocalValidationDesk => localValidations,
     remoteReadings: (): RemoteReadingDesk => remoteReadings,
     remoteListings: (): RemoteListingDesk => remoteListings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
-    reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     errors,
   });
@@ -495,29 +489,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     ciEvidence: opts.ciEvidence ?? connector,
     instructionTracker: (issueNumber) => ticketAmendCommands(config, issueNumber),
     featureBoard,
-  });
-
-  const reviewPacks = new ReviewPackAuthor({
-    store,
-    agents,
-    worktrees,
-    git: gitObserver,
-    prompts,
-    defaultBranch: config.defaultBranch,
-    runtime: runtimeControl,
-    fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
-    errors,
-  });
-
-  const reviewPackChecker = new ReviewPackChecker({
-    store,
-    agents,
-    worktrees,
-    git: gitObserver,
-    prompts,
-    defaultBranch: config.defaultBranch,
-    runtime: runtimeControl,
-    errors,
   });
 
   const proposals = new ProposalDesk(store, escalations, executor, {
@@ -766,7 +737,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           harnessVersion: harnessVersion(),
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
-          closedPrWindowMs: config.closedPrWindowMs,
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
           errors,
         });
@@ -1025,8 +995,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp,
     desktop,
     worktrees,
-    reviewPacks,
-    reviewPackChecker,
     errors,
   };
 }

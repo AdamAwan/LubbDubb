@@ -11,7 +11,6 @@ import type {
   ReviewLabelInsights,
   RemedyInsights,
   ThroughputInsights,
-  ReviewCalibration,
   SpendInsights,
   SpendTrend,
 } from '../types.js';
@@ -27,7 +26,6 @@ import { SpendTrendTab } from './SpendTrendTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
-import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
 import { PredictionTab } from './PredictionTab.js';
 import { Label } from './label.js';
 import { logUsage } from '../cockpit/usage.js';
@@ -62,7 +60,6 @@ const TABS: readonly { id: InsightsView; label: string; asks: string; poolAsks?:
   },
   { id: 'trend', label: 'Trend', asks: 'Is what I changed working?' },
   { id: 'mcp', label: 'MCP', asks: 'Can the fleet reach its tools?' },
-  { id: 'review', label: 'Review', asks: 'What do the packs say about the agents that write them?' },
   { id: 'prediction', label: 'Prediction', asks: 'Did you see the plan coming, and was the plan right?' },
   {
     id: 'usage',
@@ -116,8 +113,6 @@ export function InsightsPage({
   const trendFetchedFor = useRef<InsightsWindow | null>(null);
   const mcpFetchedFor = useRef<InsightsWindow | null>(null);
   const allowanceFetchedFor = useRef<InsightsWindow | null>(null);
-  const [calibration, setCalibration] = useState<Fetched<ReviewCalibration>>(PENDING);
-  const calibrationFetchedFor = useRef<InsightsWindow | null>(null);
   const [usage, setUsage] = useState<Fetched<UsagePayload>>(PENDING);
   const usageFetchedFor = useRef<InsightsWindow | null>(null);
   const [prediction, setPrediction] = useState<Fetched<PredictionAggregate>>(PENDING);
@@ -136,8 +131,6 @@ export function InsightsPage({
     setMcp(PENDING);
     allowanceFetchedFor.current = null;
     setAllowance(PENDING);
-    calibrationFetchedFor.current = null;
-    setCalibration(PENDING);
     usageFetchedFor.current = null;
     setUsage(PENDING);
     api
@@ -209,20 +202,6 @@ export function InsightsPage({
       .getAllowance(chosen)
       .then((res) => live && setAllowance({ state: 'ready', data: res }))
       .catch(() => live && setAllowance({ state: 'failed', data: null }));
-    return () => {
-      live = false;
-    };
-  }, [view, chosen, scope]);
-
-  useEffect(() => {
-    if (scope !== 'mine' || view !== 'review' || calibrationFetchedFor.current === chosen) return;
-    calibrationFetchedFor.current = chosen;
-    let live = true;
-    setCalibration(PENDING);
-    api
-      .getReviewCalibration(chosen)
-      .then((res) => live && setCalibration({ state: 'ready', data: res.calibration }))
-      .catch(() => live && setCalibration({ state: 'failed', data: null }));
     return () => {
       live = false;
     };
@@ -392,7 +371,6 @@ export function InsightsPage({
           mcp={mcp}
           throughput={throughput}
           allowance={allowance}
-          calibration={calibration}
           prediction={prediction}
           usage={usage}
           pool={pool}
@@ -526,7 +504,6 @@ function Body({
   mcp,
   throughput,
   allowance,
-  calibration,
   prediction,
   usage,
   pool,
@@ -542,7 +519,6 @@ function Body({
   mcp: Fetched<McpInsights>;
   throughput: Fetched<ThroughputInsights>;
   allowance: Fetched<AllowancePayload>;
-  calibration: Fetched<ReviewCalibration>;
   prediction: Fetched<PredictionAggregate>;
   usage: Fetched<UsagePayload>;
   pool: Fetched<PoolInsightsPayload>;
@@ -587,12 +563,6 @@ function Body({
     if (mcp.state === 'loading') return <p className="empty">Reading the tool channel…</p>;
     if (mcp.data === null) return <p className="empty">Could not read the tool channel.</p>;
     return <McpUsageTab insights={mcp.data} />;
-  }
-
-  if (view === 'review') {
-    if (calibration.state === 'loading') return <p className="empty">Reading the packs…</p>;
-    if (calibration.data === null) return <p className="empty">Could not read the review packs.</p>;
-    return <ReviewCalibrationTab calibration={calibration.data} />;
   }
 
   if (view === 'prediction') {

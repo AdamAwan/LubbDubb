@@ -1,4 +1,4 @@
-import { PLAINNESS, plainnessRefusal, readingEase } from '../reviewPacks/plainness.js';
+import { PLAINNESS, plainnessRefusal, readingEase } from './plainness.js';
 
 // → docs/spec/07-pull-requests.md#the-body-is-not-templated
 

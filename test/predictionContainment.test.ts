@@ -38,7 +38,6 @@ const CONTAINED_DIRS = [
   'src/escalation',
   'src/knowledge',
   'src/summaries',
-  'src/reviewPacks',
 ];
 
 /**

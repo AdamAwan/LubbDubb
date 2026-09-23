@@ -5,15 +5,15 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import { REPO_ROOT as ROOT } from './support/paths.js';
 
-// → docs/spec/31-review-packs.md#one-copy-of-the-derivations
+// → docs/spec/16-http-api.md#the-wire-contract
 
 /**
  * The modules `src/wire.ts` may re-export a *value* from. `test/wireContract.test.ts`
- * holds that the contract declares no runtime of its own; this holds the one thing it
- * passes through, because a re-export is not a declaration and would slip past that
- * assertion with the whole server graph behind it.
+ * holds that the contract declares no runtime of its own; this holds what it may
+ * pass through, because a re-export is not a declaration and would slip past that
+ * assertion with the whole server graph behind it. There are none today.
  */
-const RUNTIME_MODULES = ['./reviewPacks/derive.js'];
+const RUNTIME_MODULES: string[] = [];
 
 test('the contract passes through runtime from the declared modules and no others', () => {
   const source = readFileSync(join(ROOT, 'src/wire.ts'), 'utf8');

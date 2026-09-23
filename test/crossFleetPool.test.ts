@@ -228,7 +228,6 @@ function desk(s: Store, transport: FakePoolTransport, now = () => NOW): PoolDesk
     harnessVersion: '0.1.0',
     now,
     digestIntervalMs: 60 * 60 * 1000,
-    closedPrWindowMs: 6 * 60 * 60 * 1000,
     worldScope: SCOPED,
   });
 }
@@ -263,7 +262,6 @@ test('a failed publish leaves the document dirty and nothing else stops', async 
     harnessVersion: '0.1.0',
     now: () => NOW,
     digestIntervalMs: 60 * 60 * 1000,
-    closedPrWindowMs: 6 * 60 * 60 * 1000,
     worldScope: SCOPED,
     errors: { record: (e: { message: string }) => void errors.push(e.message) } as never,
   });
@@ -463,6 +461,9 @@ test("a publish clears what a retired kind left in this fleet's own namespace, a
     mkdirSync(join(writer, 'fleets', fleet), { recursive: true });
     writeFileSync(join(writer, 'fleets', fleet, 'claims.json'), '{"pool":1,"kind":"claims"}', 'utf8');
     writeFileSync(join(writer, 'fleets', fleet, 'claims.md'), '# claims\n', 'utf8');
+    mkdirSync(join(writer, 'fleets', fleet, 'packs'), { recursive: true });
+    writeFileSync(join(writer, 'fleets', fleet, 'packs', 'pr-7.json'), '{"pool":1,"kind":"pack"}', 'utf8');
+    writeFileSync(join(writer, 'fleets', fleet, 'packs', 'pr-7.html'), '<p>pack</p>', 'utf8');
   }
   execFileSync('git', ['add', '-A'], { cwd: writer });
   execFileSync('git', ['commit', '-q', '-m', 'seed'], { cwd: writer });
@@ -474,6 +475,13 @@ test("a publish clears what a retired kind left in this fleet's own namespace, a
 
   assert.equal(remoteFile(remote, 'fleets/alice@acme-api/claims.json'), null);
   assert.equal(remoteFile(remote, 'fleets/alice@acme-api/claims.md'), null, 'the wiki page goes with the document');
+  assert.equal(remoteFile(remote, 'fleets/alice@acme-api/packs/pr-7.json'), null, 'a shared review pack goes');
+  assert.equal(remoteFile(remote, 'fleets/alice@acme-api/packs/pr-7.html'), null, 'and its page with it');
+  assert.notEqual(
+    remoteFile(remote, 'fleets/bob@acme-api/packs/pr-7.json'),
+    null,
+    "another fleet's pack is not this fleet's to delete",
+  );
   assert.notEqual(remoteFile(remote, 'fleets/alice@acme-api/digest.json'), null, 'the publish still published');
   assert.notEqual(
     remoteFile(remote, 'fleets/bob@acme-api/claims.json'),

@@ -6,7 +6,7 @@ import type { PrReviewPolicy } from './policy.js';
 import { needsFleetReview, reviewReading } from './prReview.js';
 import { firstLine } from '../primitives.js';
 
-// → docs/spec/31-review-packs.md
+// → docs/spec/07-pull-requests.md#the-fleet-review
 
 export type ReviewedElsewhere = 'reviewed' | 'not-reviewed' | 'unknown';
 

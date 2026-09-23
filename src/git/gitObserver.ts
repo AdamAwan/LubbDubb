@@ -23,7 +23,6 @@ export interface GitObserver {
   divergence(branch: string, base: string): Promise<BranchDivergence | null>;
   hasCommitsBeyond(branch: string, base: string): Promise<boolean>;
   contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>>;
-  diff(base: string, head: string): Promise<string | null>;
 }
 
 export class GitCliObserver implements GitObserver {
@@ -59,25 +58,6 @@ export class GitCliObserver implements GitObserver {
   async hasCommitsBeyond(branch: string, base: string): Promise<boolean> {
     const d = await this.divergence(branch, base);
     return d !== null && d.ahead > 0;
-  }
-
-  async diff(base: string, head: string): Promise<string | null> {
-    const [baseSha, headSha] = await Promise.all([
-      resolveCommit(this.repoRoot, base, READ_ONLY),
-      resolveCommit(this.repoRoot, head, READ_ONLY),
-    ]);
-    if (!baseSha || !headSha) return null;
-    try {
-      const { stdout } = await runGit(
-        this.repoRoot,
-        ['diff', '--no-color', '--no-ext-diff', '-M', `${baseSha}...${headSha}`],
-        READ_ONLY,
-      );
-      return stdout;
-    } catch (err) {
-      this.note(`diff ${base}...${head}`, err);
-      return null;
-    }
   }
 
   async contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>> {

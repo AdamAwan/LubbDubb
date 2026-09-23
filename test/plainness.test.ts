@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PLAINNESS, plainnessRefusal, readingEase, readingEaseRefusal } from '../src/reviewPacks/plainness.js';
+import { PLAINNESS, plainnessRefusal, readingEase, readingEaseRefusal } from '../src/pr/plainness.js';
 
 test('a semicolon is refused, because it is a full stop that will not admit it', () => {
   const refusal = plainnessRefusal(

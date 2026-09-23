@@ -10,14 +10,9 @@ bundled. `test/wireContract.test.ts` asserts both halves — that the shared mod
 and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 
-**One module is passed through by value, and it is a named exception rather than a crack.**
-`src/reviewPacks/derive.ts` — the review-pack derivations, pure functions of the pack document that
-the HTML companion and the cockpit's page both read — is re-exported by `src/wire.ts` and re-exported
-onward by `web/src/view/reviewPack.ts`, because the alternative was two byte-identical copies of three
-hundred lines including a syntax highlighter. It is a leaf: it imports `src/types.ts` for types and
-nothing else. `test/wireRuntime.test.ts` pins the list of modules the contract may pass a value
-through and walks what they import, because a re-export is not a declaration and slips past
-`test/wireContract.test.ts`. → [31](31-review-packs.md#one-copy-of-the-derivations)
+**Nothing is passed through by value.** `src/wire.ts` re-exports no runtime today, and
+`test/wireRuntime.test.ts` pins that list — a re-export is not a declaration and would slip past
+`test/wireContract.test.ts`, so adding one is a deliberate entry there.
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
@@ -553,8 +548,6 @@ once.
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                         |
-| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                                                                       |
-| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                                                                   |
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -1743,7 +1736,7 @@ decision, made once, taken by the console's chips, inputs and controls alike.
 ### The modal
 
 **One overlay** — `Modal` in `web/src/components/Modal.tsx`. Every sheet that covers the cockpit is
-drawn through it: the plan sheet, the goal's three composers, the questionnaire, the review pack, the
+drawn through it: the plan sheet, the goal's three composers, the questionnaire, the
 retrospective and notepad readers, the issue and bug filers, the agent drawer, the console's panels,
 the prompt-template viewer and the hatching ceremony.
 
@@ -1948,8 +1941,8 @@ surface (`.cn .t-red`) is still two families wearing one class.
 
 **Weight is `fill`, not a second hue.** The outlined and the filled tag are the same box in the same
 colour and the ground is what ranks them, which is the bargain [the rail](#hue-is-the-kind-weight-is-the-group)
-already makes with `cn-parked`. **`dashed` is the box that is not the plain case** — a region outside
-the diff being walked, a tracker's copy gone stale, a label a person overrode the checker on.
+already makes with `cn-parked`. **`dashed` is the box that is not the plain case** — a tracker's copy
+gone stale, a ticket whose tracking is frozen.
 **`lower` is an id that gets typed back**: those are lowercase kebab-case, and the tag's own uppercase
 would be a lie about the one string on the surface that has to be copied exactly.
 
@@ -2102,7 +2095,7 @@ to differ by a weight nobody declared.
 axes where the cockpit's registers genuinely differ, and folding them in would make a two-value
 component a four-value one:
 
-- **Family.** The review pack, the species sheet and most of the console draw their labels in mono.
+- **Family.** The species sheet and most of the console draw their labels in mono.
   That rule keeps its own `font-family`, which is one line.
 - **Colour.** `--muted`/`--grey` against `--cn-fg-faint`/`--cn-fg-dim` is [the two
   families](#tokens), not a namespace, so there are two faces — `.lb` and `.cn-lb` — and a label that
@@ -3106,11 +3099,7 @@ so a closed row still opens the page it links to rather than the gone screen.
 
 **The pull request's name is the way onto [its own page](#the-pull-request-page)**, with the
 provider reference beside it — never inside it, since one click cannot have two destinations and the
-provider is a different place from the cockpit's page for the same pull request. The
-[review pack](31-review-packs.md#reading-it) is asked for and opened there rather than on this row,
-which is where it sat while there was no pull request page to put it on. What the row keeps is the
-one bit that says whether going there is worth it: the [pack mark](31-review-packs.md#on-the-row),
-third in the reading slot, drawn only where there is a pack or one being written.
+provider is a different place from the cockpit's page for the same pull request.
 
 Whether anybody is waiting on an answer is the [comments mark](#the-checks-mark)'s, drawn only where
 there is one — a mark reading `0` on every settled pull request is furniture — and never at all where
@@ -3347,13 +3336,6 @@ page's own control (`selectPr(null)`) lands on the goal underneath, which the pl
 and because a `<Ref>` reaches this page from anywhere at all, the tab it hangs off is narrowed to one
 that lists pull requests on the way in → [nesting](#nesting).
 
-**A review pack is the rung above it** ([31](31-review-packs.md#reading-it)) — `?pack=<n>`, drawn by
-`ReviewPackScreen` with the tab, the goal and the pull request behind it in the crumb. It sits **above
-the "that pull request is gone" answer** deliberately: a pack is fetched by number over its own route
-and never off the snapshot, so it outlives the pull request's presence in the world, and a reader
-following a link to the pack of a long-closed pull request must not be told there is nothing there
-while the pack sits behind the message.
-
 **The goal rung _selects_ the goal, rather than clearing the pull request over it.** The two are the
 same move only when the place already holds the goal, and it does not always: the overview's
 pull-request rack — and every `<Ref to="pr:…">` drawn away from a goal page — opens this page with
@@ -3383,9 +3365,7 @@ What it draws:
   fleet, and whose
   court it is. The goal's reference sits at the far end of that line, and only the goal's: a ref onto
   this pull request opens this very page, so the provider's own is a control of its own —
-  `Open pull request ↗`, the shape the goal page's `Open ticket ↗` already has. The
-  [review pack](31-review-packs.md#reading-it) control rides the masthead beside it: a pack is a
-  reading of _this diff_, which is what the masthead is about.
+  `Open pull request ↗`, the shape the goal page's `Open ticket ↗` already has.
 - **The review threads**, which is what the page is for — see below.
 - **The checks**, in the CI policy's own three categories: what the harness will fix, what it will
   put to a person, what it has been told to leave alone. No check name is written in this repository;
@@ -3655,7 +3635,7 @@ Three of them carry the rules that kept being forgotten:
   and was the row's least useful fact: the title says what the work is and the refs say where it is.
   Unresolved `comments` was one too, and left for the opposite reason — it is not a quantity about the
   pull request the way an age is, it is a verdict on it, and it wears
-  [its own mark](#the-comments-mark) beside the three it belongs with.
+  [its own mark](#the-comments-mark) beside the two it belongs with.
 
 The card draws its rows as **one line each on a fixed rail**: lamp, switch, subject, why, reading,
 chips, action, refs — or, where the card is over-subscribed, [cut in two](#the-strip) with the same
@@ -3729,20 +3709,18 @@ Three things are load-bearing:
   line's slot order: the `reading` slot leads, then the court, then the facts. A strip is a short run
   of boxes with a ragged end, and where the gaps fall is the whole of whether a card reads as a column
   or as a scatter. Inside the reading slot the rack applies the same rule — **the checks first**, since
-  a provider reports checks on nearly every pull request, the fleet has read most and a pack exists for
-  a handful.
+  a provider reports checks on nearly every pull request, and the fleet has read most.
 
-  The run is **checks, review, comments, pack**, and the comments are where that rule gives way to a
+  The run is **checks, review, comments**, and the comments are where that rule gives way to a
   better one. The first three are the conversation about this diff **in the order it happens** — the
   machine read it, the fleet read it, then a person asked something — so a reader following the
-  sequence finds the unanswered question where the sequence puts it, rather than after a mark about a
-  document. The pack is not in that sequence at all, which is why it is the one that moves.
+  sequence finds the unanswered question where the sequence puts it.
 
   That order costs the marks their fixed x unless two things follow it, and both do. The checks were
   the one variable-width thing in the slot while they were a chip of words (`passing` against
   `2 failing`), so they were given `--cn-w-ci` rather than left to their text; they are
   [a mark](#the-checks-mark) now and the token is that box's width, kept because `CiSlot` has to match
-  it exactly. And the review and pack marks now `reserve` on **every**
+  it exactly. And the review mark now `reserve`s on **every**
   row of the card rather than only where some row fills the column: `reserve` asked whether the reading
   exists anywhere on this card, which made a rack of unread pull requests a different shape from a rack
   of read ones — each fine to look at alone, which is how that kind of drift survives. Where the row is
@@ -6135,8 +6113,8 @@ bottom of the page that exists to surface it. Promoted goals sort on the same ke
 order on the payload (`byWantsYouThenSize`) is what the cockpit starts from; it re-sorts on read.
 
 The feature page's stories carry a filter — `open` / `done` / `all`, on `Place` as `?prs=` — and under
-each story its **pull requests in stack order**, bottom rung first, each wearing the four marks every
-other pull request row wears (`CiMark`, `ReviewMark`, `PackMark`, `CommentsMark`), its rung position
+each story its **pull requests in stack order**, bottom rung first, each wearing the three marks every
+other pull request row wears (`CiMark`, `ReviewMark`, `CommentsMark`), its rung position
 (`[2/3]`), its court's own leading reason, and `AgentOnIt` where a task names it. Which pull requests
 are a story's is `goalOfPr`'s answer and the rung order is `state.stacks`' — both readings the cockpit
 already holds, so `FeatureChildRow` carries no PR field.
@@ -6673,13 +6651,6 @@ shape of a wrong seam.
 - **MCP** — which tools the fleet reaches for, and which it never does. The odd one out, and
   deliberately: every other tab is a reading about work the harness did, and this is a reading about a
   **channel**. See [below](#mcp).
-- **Review** — what the [review packs](31-review-packs.md#the-operators-reading) say about the agents
-  that write them: where reviewers overrode the checker's attention label and which way, the ratio of
-  `plumbing` hunks to owned ones, and how often a pull request merged with a false claim nobody marked
-  as read. The one tab whose subject is the harness's own output rather than the fleet's work — and
-  **never shown to the checker**, because a label that has learned to agree with its reader has stopped
-  being evidence. Fetched on the tab's first visit for a window, like Trend and MCP: it folds every pack
-  against every mark.
   Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
   in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
   and the trend's.
@@ -6722,8 +6693,8 @@ operator's question decided by which tab they happened to be on, and the compari
 answers, which is the only reason the pool exists, taken by reading one and remembering the other.
 
 `POOL_VIEWS` (`web/src/cockpit/place.ts`) is the four the pool can answer, and it is the one list. The
-other six are readings a fleet only holds about **itself** — an account allowance, a run log, a tool
-channel, a review pack — and under the pool scope they are **withheld from the tab strip** rather than
+other five are readings a fleet only holds about **itself** — an account allowance, a run log, a tool
+channel — and under the pool scope they are **withheld from the tab strip** rather than
 drawn as a refusal where a tab used to be. A scope move from one of them lands on Economics, and so does
 a hand-edited link naming one: `readInsights` narrows the pair on the way in, so `?scope=pool&view=mcp`
 is not a representable place. `?view=pool` still resolves — to the scope, on Economics — because the
@@ -7876,71 +7847,12 @@ plan and retrospective documents, which are written to be read as documents. A p
 testimony, and rendering it would let a stray backtick or hash change what that testimony looks like.
 
 **A fork is drawn apart from a note.** An entry carrying a `decision`
-([31](31-review-packs.md#the-witness-log)) gets a `fork` chip in its head and, under its note, a
+([11](11-mcp-tools.md#forks-on-the-pad)) gets a `fork` chip in its head and, under its note, a
 labelled block: _chose_, _because_, the _rejected_ list with each alternative's reason, and the
 _paths_ where the agent gave them. The rejected list is the part a diff can never show, so it is the
 part given the room. Drawn on the blue tint the cockpit already uses for the fleet's own reasoning
 (`--blue-line`, `--blue-line-2`, `--blue-fill`) — a fork is not a new meaning for colour to carry, so
 no token was added.
-
-## The review pack
-
-`ReviewPackScreen` (`web/src/components/`) is a pull request's [review pack](31-review-packs.md#reading-it),
-**the page one rung in from the pull request's own** ([the pull request page](#the-pull-request-page)):
-the change restated as ideas, each followed through the code it touched, every claim with the
-checker's verdict beside it. It is the one rendering of a pack that takes input — the reviewer's
-marks — and the page it draws is `ReviewPackPage`, a pure function of the payload, so the order of
-things on it is asserted on static markup rather than hoped for.
-
-It was a modal until there was a pull request page to hang it off. A modal is where a decision is
-taken without leaving what is underneath; a pack is the longest read in the cockpit and wants the
-column its [contents rail](31-review-packs.md#the-contents-rail) sits in, which a modal will not give.
-
-**Shell-owned**, opened through `viewReviewPack(prNumber | null)` and its fold through
-`openReviewIdea(id | null)` — the notepad's seam, for its reason: the modal reaches `api.js` for the
-pack, for the two pads the claims cite and for the marks, while the control that opens it is on the
-pull request's own page. Both are `Place` fields (`?pack=`, `?idea=`), so the back
-button steps out of an idea and a link somebody sends lands on one; `idea=all` is the open-all
-control, a value of the same field rather than a second one. An idea row is a `<details>` whose open
-state is the address bar's — the click is a move, not a toggle the element does on its own.
-
-**Four states, and the 404 is one of them**: loading, no pack (not asked for, with the ask; or being
-written, with nothing to press), the pack, and an error — a fetch that failed must not read as
-"nobody asked". While an author or a checker is on the pull request the screen re-reads on a short
-clock; the `dirty` the hub emits for either is a snapshot signal it is not on.
-
-**The page is [31](31-review-packs.md#the-page)'s order and nothing else**: masthead, the gate above
-the ideas when any claim is false, the idea rows numbered by the checker's order (or document order,
-and the rule says which), the walk and the claims on opening one — a false or disputed claim at the
-top of its idea, before the walk — the finding boxes, where to spend the time, the folded colophon.
-A pack whose `schema` this build does not know is refused whole at the top, never drawn as far as it
-is recognised. What a reviewer does rides the marks routes ([16](16-http-api.md#post-apiprsnumberreview-packideasidread))
-and the rows the write returns replace what the page holds, laid over the ideas by `layMarks`
-(`web/src/view/reviewPack.ts`): read only when every hunk the idea owns says so, and the same for
-`seen`. `layMarks`, the schema number and the page's own place state are what that module still
-holds; every other derivation it exports is [the one copy](31-review-packs.md#one-copy-of-the-derivations),
-re-exported from the contract.
-
-**Three marks, and the third is under a finding.** Read and the attention override sit in the idea's
-own row; _I have taken this_ sits at the foot of each finding box and nowhere else, because it is a
-statement about the checker's output rather than about the walk, and it is the one number that says
-whether [prominence](31-review-packs.md#whether-prominence-works) works. Nothing about it blocks
-anything — the sentence beside it says so, since a control at the end of a red box otherwise reads as
-an approval.
-
-**Sharing has an inverse, drawn beside it.** The share control's six states include _unshared, waiting
-for the next pool publish to take it out_: the withdrawal is recorded at once and the copy leaves on
-the pool's own clock, so the modal's short re-read clock covers it exactly as it covers a share
-waiting to go out ([31](31-review-packs.md#unsharing-a-pack)).
-
-**Colour is a verdict or a mark the document states, never decoration.** The four attention labels
-and the three verdicts take the shared family's hues — `--red` for read and false, `--amber` for
-decide, can't tell and a dispute, `--blue` for split, `--green` for true — and the diff lines four
-tokens of their own, `--diff-add-fill` / `-ink` and `--diff-del-fill` / `-ink`, all `color-mix` of
-the two verdict hues over the well so a theme that moves green or red moves the diff with it. A
-dashed box is the one visual rule the colophon explains: code that is _not_ in the pull request.
-Pad notes and cited entries render as plain text with their newlines kept, for the
-[notepad](#the-notepad-modal)'s reason.
 
 ## Running locally
 
@@ -8181,8 +8093,8 @@ two buttons, a signal carries its count), so this is a slot rather than a table 
 header over it.
 
 **Every selector in that block doubles its class** — `.ref-goal.ref-goal`, not `.ref-goal` — and it has
-to. The same rule holds for the three marks in the reading slot
-([review](#the-fleet-reviews-mark), [pack](31-review-packs.md#on-the-row), [checks](#the-checks-mark)):
+to. The same rule holds for the marks in the reading slot
+([review](#the-fleet-reviews-mark), [checks](#the-checks-mark)):
 each is drawn as a `button` on a row, so the reset below took its border, its ground and its ink, and a
 tint that is declared, computed and then thrown away looks exactly like a mark nobody styled. `console.css` resets its own markup with `.cn button` and `.cn a`, which counts as (0,1,1) and so
 outranks a single class, and the console is where most references are drawn. Under one class the reset
@@ -8571,7 +8483,7 @@ row wearing this mark is a row with an answer outstanding — `PrComment.handled
 **It was a `fact` and it was in the wrong grammar.** `comments 1` sat on the row's sub-line beside
 `waiting 3d` as though the two were the same kind of thing. They are not: `waiting` says how long
 something has been true, and this says somebody asked a question and it is unanswered — a verdict
-about the pull request, which is what the three marks beside it are. On the sub-line it also read at a
+about the pull request, which is what the two marks beside it are. On the sub-line it also read at a
 caption's weight, which is the wrong weight for the one reading on the row that is a person waiting.
 
 **The tooltip quotes whose question it is**, three threads at most, each clamped to two lines. A review
@@ -8604,7 +8516,7 @@ the ladder could not make. What it cost was the rail: a chip of words is the one
 on a row of 22px boxes, so it had to be pinned at `--cn-w-ci: 96px` to stop the two marks behind it
 moving from row to row — four times its neighbours' width, on the densest card in the cockpit, for one
 of the three verdicts a row carries. As a mark it is the same box as
-[the review's](#the-fleet-reviews-mark) and [the pack's](31-review-packs.md#on-the-row), and the three
+[the review's](#the-fleet-reviews-mark) and [the comments'](#the-comments-mark), and the three
 read as one run rather than as a chip with two marks after it.
 
 **What the badge keeps and what it spends.** The hue says which kind of trouble and the number says
@@ -8807,33 +8719,6 @@ show. Worse, they were alerts about the demo's own fixture: `agentMode is raw`, 
 cockpit said to a new reader was that it was broken. The fake reports a harness that is configured and
 healthy, and the rail opens on the fleet.
 
-**The demo carries one review pack, and it is a whole one.** PR #413 has a written and checked pack
-([31](31-review-packs.md)), reached from the pull request page's masthead control the way a real one
-is. **The pack marks in the fixtures say what `demoApi.getReviewPack` answers**, because the mark is
-the only thing on the overview, the goal page and the feature board that leads anybody to the pack:
-`#413` wears `current` and no other fixture wears a mark that claims a pack. `#409` wears `writing`,
-and that arm answers `writing` for it — a mark on a pull request whose page then offers to _ask_ for
-a pack sends every visitor who follows one to a control that refuses, which is the demo teaching that
-the feature is broken. `stale` and `unplaced` go unshown rather than faked; each needs a second pack
-to be true of, and the one pack this demo carries is whole on purpose. It is the fixture that has to be complete rather than representative, because the pack page is
-the longest read in the cockpit and every reading on it is a different judgement: the gate over one
-false claim with its finding and its counter-example, the checker's order and its cues, all four
-attention labels, a `witnessed` note and a `disputed` claim — both citing entries the pull request's
-own pad actually holds, so the verbatim rendering renders something — a `region` anchor on a file
-the diff does not touch, and the atoms. Two ideas name the atoms their part carries, **one names
-none** — the finding that the work went somewhere the plan did not declare — and the `plumbing` idea
-names none either without being drawn as one
-([31](31-review-packs.md#an-idea-the-atoms-do-not-cover-is-a-finding)). A demo that showed the atom
-but never the gap would teach a visitor the field is a label rather than a reading.
-
-The marks commit like every other demo interaction: marking an idea read, seeing a finding and
-overriding an attention label all write to a fixture world held beside the pack, never into it,
-which is the rule the real one keeps ([31](31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack)).
-What stays refused is **asking for a pack** and **sharing one** — there is no fleet to write one and
-no pool to publish into, and each refusal says which. The operator's calibration reading is counted
-off that same pack rather than invented, because a reading that contradicted the pack a visitor can
-open would be the one thing worse than no reading.
-
 **The demo meets the reveal gate, and the record it writes into is a deployment's, not a session's.**
 Issue #333's plan is served withheld — `demoBackend` applies the redaction the routes apply, so the
 approval ask draws the stand-in sentence, its caveats are empty and the doors into the document are
@@ -8900,10 +8785,6 @@ Eleven files, split on what they can see:
 - `test/refLinks.test.ts` — [Links](#links): where each family of ref goes, that a goal with no page
   links out instead, that an unresolvable ref is plain text, that `refLabel` is the only shortener, and
   — structurally, over the rendered console — that no reference is ever drawn inside a button.
-- `test/reviewPackPage.test.ts` — [the review pack](#the-review-pack): the derivations, and on the
-  rendered page the masthead-gate-ideas order, the flag on a collapsed row, the false claim at the top
-  of its idea, the three standings and three currencies each drawn as themselves, the unknown schema
-  refused whole, and the renderer's schema number pinned to the harness's.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.

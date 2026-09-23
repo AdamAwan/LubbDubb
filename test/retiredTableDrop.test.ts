@@ -43,3 +43,19 @@ test('a database that never had it boots twice with nothing to do', () => {
   new Store(path).close();
   assert.ok(!tables(path).includes('pool_claims'));
 });
+
+test("review packs' tables are dropped on the next boot, rows and all", () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-retired-packs-')), 'old.db');
+  const db = new Database(path);
+  db.exec(`CREATE TABLE review_packs (pr_number INTEGER NOT NULL, head_sha TEXT NOT NULL, document TEXT NOT NULL)`);
+  db.exec(`CREATE TABLE review_marks (pr_number INTEGER NOT NULL, path TEXT NOT NULL)`);
+  db.exec(`CREATE TABLE review_pack_shares (pr_number INTEGER PRIMARY KEY, head_sha TEXT NOT NULL)`);
+  db.prepare(`INSERT INTO review_packs VALUES (7, 'abc', '{}')`).run();
+  db.close();
+
+  new Store(path).close();
+
+  const names = tables(path);
+  for (const table of ['review_packs', 'review_marks', 'review_pack_shares']) assert.ok(!names.includes(table), table);
+  assert.ok(names.includes('scratch_entries'), 'the pad the forks live on is not one of them');
+});

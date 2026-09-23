@@ -64,12 +64,6 @@ import type {
   ReliabilityInsights,
   ThroughputInsights,
   ThroughputMeasure,
-  ReviewAttention,
-  ReviewCalibration,
-  ReviewMark,
-  ReviewMarksPayload,
-  ReviewPack,
-  ReviewRange,
   RemedyCause,
   RemedyInsights,
   ReviewAreaTotal,
@@ -103,7 +97,7 @@ import type {
   TenantCommandOutput,
   TenantPreparation,
 } from '../types.js';
-import type { PredictionDraft, ReviewPackReading, WsClient } from '../api.js';
+import type { PredictionDraft, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, DEMO_FEATURE_SUMMARIES, demoPlanHistory } from './fixtures.js';
 import { DemoPredictions } from './predictions.js';
@@ -2536,234 +2530,12 @@ function getServer(): DemoServer {
   return server;
 }
 
-const DEMO_PACK_HEAD = 'c7d41e02a9b6538f14ac0d7b2e95f83610d4ab27';
-
-/**
- * The pull request whose fixture wears the `writing` pack mark. The mark is
- * `packStandingOf`'s reading of no pack plus an author running, so the reading this
- * arm gives has to say the same thing — a mark whose pull request page then offers to
- * ask for a pack teaches a visitor the mark means nothing.
- * → docs/spec/17-cockpit.md#demo-mode
- */
-const DEMO_PACK_WRITING_PR = 409;
-
 const DEMO_PAD_AT = new Date(Date.now() - 5 * 3_600_000).toISOString();
 
 /**
- * The review pack for PR #413, the one open pull request whose plan part declares
- * atoms. It is written and checked, so the page draws every reading it has: the
- * gate over a false claim, the checker's order and cues, the two ideas that name
- * the atoms their part carries, the idea that names none — the finding — and the
- * `plumbing` idea, which is exempt from that reading rather than an example of it.
- * → docs/spec/31-review-packs.md, docs/spec/17-cockpit.md#demo-mode
- */
-const DEMO_REVIEW_PACK: ReviewPack = {
-  schema: 1,
-  prNumber: 413,
-  headSha: DEMO_PACK_HEAD,
-  headline: 'Every card is now charged through the new provider, and a decline writes no order.',
-  summary: [
-    '- **Checkout** asks the provider before the order is written, so a declined card never becomes an order.',
-    '- The four routes **stop building** charge requests of their own.',
-    '- The retry count moved too, and **the plan did not ask for that** — idea 02.',
-  ].join('\n'),
-  estimatedMinutes: 9,
-  order: ['idea_charge', 'idea_retries', 'idea_routes', 'plumbing'],
-  witnessed: true,
-  fake: 'nothing',
-  ideas: [
-    {
-      id: 'idea_charge',
-      atom: 'take-payment',
-      claim: 'Every checkout path charges through the provider client before the order row is written.',
-      title: 'The card is charged before the order exists, not after',
-      cue: 'Read: this is the guarantee the whole change exists to make.',
-      attention: 'read',
-      coverage: ['a declined card writes no order', 'an accepted card still writes one'],
-      anchors: [
-        {
-          kind: 'hunk',
-          range: { path: 'apps/api/src/checkout/pay.ts', start: 18, end: 27 },
-          code: [
-            ' export async function pay(basket: Basket, card: CardInput) {',
-            '+  const charge = await provider.charge(basket.total, card);',
-            '+  if (!charge.ok) throw new PaymentDeclined(charge.reason);',
-            '-  return db.orders.insert({ basket, card });',
-            '+  return db.orders.insert({ basket, chargeRef: charge.ref });',
-            ' }',
-          ],
-          gist: 'The provider is asked here, and its reference is what gets stored.',
-          note: {
-            by: 'witness',
-            text: 'Chose to throw rather than to write the order and reconcile later: an order nobody paid for is worse than a checkout that fails loudly.',
-            entryId: 'scr_kf20a7',
-            at: DEMO_PAD_AT,
-          },
-          caption: 'the whole guarantee',
-          mark: 'key',
-        },
-        {
-          kind: 'region',
-          range: { path: 'apps/api/src/features/refunds/issue.ts', start: 64, end: 69 },
-          code: [
-            '  const order = await loadOrder(id);',
-            '  // Still the old gateway — the refund move is part 3.',
-            '  await gateway.refund(order.gatewayRef, amount);',
-          ],
-          gist: 'Should refunds have changed too? No — part 3 does that, and it is not in this diff.',
-          note: null,
-          caption: 'unchanged, and deliberately',
-          mark: null,
-        },
-      ],
-      claims: [
-        {
-          text: 'Every checkout path goes through this function.',
-          provenance: { kind: 'inferred' },
-          verdict: 'false',
-          evidence:
-            'Three callers reach `db.orders.insert` directly: apps/api/src/features/orders/phone.ts:88, apps/api/src/admin/replay.ts:41, and the seed script.',
-          finding: {
-            headline: 'A phone order still writes the order without charging the card.',
-            body: 'The claim is what the change rests on, and it is not true of `phone.ts`, which builds its row and calls `db.orders.insert` itself. A shop-floor phone order can still be written against a card the provider would decline, which is the exact failure this pull request exists to close.\n\nIt is one call site and the fix is the same two lines, but it is a decision rather than a nit: taking phone orders through `pay` also takes them through the fraud check, which they deliberately skip today.',
-            step: 1,
-            counter: {
-              range: { path: 'apps/api/src/features/orders/phone.ts', start: 86, end: 90 },
-              code: [
-                '  for (const line of lines) {',
-                '    await db.orders.insert({ basket, takenBy: staffId });',
-                '  }',
-              ],
-              caption: 'the path that skips the charge',
-            },
-          },
-        },
-        {
-          text: 'The client throws by name on a declined card.',
-          provenance: { kind: 'witnessed', entryId: 'scr_kf20a7' },
-          verdict: 'true',
-          evidence:
-            'packages/payments/src/provider.ts:31 throws `PaymentDeclined(reason)`; the test at test/provider.test.ts:22 covers it.',
-          finding: null,
-        },
-      ],
-    },
-    {
-      id: 'idea_retries',
-      atom: null,
-      claim: 'A failed charge is retried three times rather than five, and the backoff is now exponential.',
-      title: 'Retries went from five to three, with a longer wait',
-      cue: 'Split: nobody asked for this, and it decides on its own what a customer sees on a slow provider.',
-      attention: 'split',
-      coverage: [],
-      anchors: [
-        {
-          kind: 'hunk',
-          range: { path: 'apps/api/src/checkout/pay.ts', start: 41, end: 45 },
-          code: [
-            '-  attempts: 5,',
-            '-  backoffMs: 30_000,',
-            '+  attempts: 3,',
-            '+  backoffMs: (n: number) => 30_000 * 2 ** n,',
-          ],
-          gist: 'The retry policy changed in the same commit as the charge.',
-          note: {
-            by: 'author',
-            text: 'Nothing in the plan or the pad mentions retries. It may be right — a card the provider declines will never succeed on a retry — but it is a separate decision and it is not stated anywhere.',
-          },
-          caption: 'not asked for',
-          mark: 'key',
-        },
-      ],
-      claims: [
-        {
-          text: 'No payment method depends on more than three attempts.',
-          provenance: { kind: 'inferred' },
-          verdict: 'cant_tell',
-          evidence:
-            'Nothing in the repository states an attempt budget per method; the only evidence either way is production data this checkout has no access to.',
-          finding: null,
-        },
-      ],
-    },
-    {
-      id: 'idea_routes',
-      atom: 'drop-gateway',
-      claim: 'No route builds a charge request of its own; each hands the basket to checkout.',
-      title: 'Four routes stop having opinions about charges',
-      cue: 'Decide: three of the four are mechanical, and the fourth changes what a client is sent.',
-      attention: 'decide',
-      coverage: ['each route still rejects a malformed basket', 'the error body keeps its shape'],
-      anchors: [
-        {
-          kind: 'hunk',
-          range: { path: 'apps/api/src/features/payments/card.route.ts', start: 12, end: 16 },
-          code: [
-            '-  const req = buildGatewayCharge(await req.json());',
-            '-  await gateway.charge(req);',
-            '+  await pay(basket, await req.json());',
-          ],
-          gist: 'The route hands the card over unbuilt; one of four, all identical.',
-          note: null,
-          caption: 'one of four',
-          mark: null,
-        },
-      ],
-      claims: [
-        {
-          text: 'All four routes returned the same 400 body before, and still do.',
-          provenance: { kind: 'disputed', entryId: 'scr_kf31b2' },
-          verdict: 'true',
-          evidence:
-            'The pad says the gift-card route returned a bare string; it does not — apps/api/src/features/payments/giftcard.route.ts:19 has used the shared error body since #341.',
-          finding: null,
-        },
-      ],
-    },
-    {
-      id: 'plumbing',
-      atom: null,
-      claim: 'These hunks carry nothing to review: an import order, a lockfile and a moved type.',
-      title: 'Formatting, a lockfile and one moved type',
-      cue: 'Skim: nothing here changes behaviour.',
-      attention: 'skim',
-      coverage: [],
-      anchors: [
-        {
-          kind: 'hunk',
-          range: { path: 'apps/api/src/checkout/pay.ts', start: 1, end: 4 },
-          code: [
-            '-import { db } from "../db.js";',
-            '+import { provider } from "@inkwell/payments";',
-            '+import { db } from "../db.js";',
-          ],
-          gist: 'The import the client needs, in the order the linter wants.',
-          note: null,
-          caption: 'imports',
-          mark: null,
-        },
-      ],
-      claims: [
-        {
-          text: 'None of these hunks changes behaviour.',
-          provenance: { kind: 'inferred' },
-          verdict: 'true',
-          evidence: 'Each is an import, a lockfile line or a type moved without its shape changing.',
-          finding: null,
-        },
-      ],
-    },
-  ],
-};
-
-const DEMO_REVIEW_PACK_WRITTEN_AT = new Date(Date.now() - 40 * 60_000).toISOString();
-
-/**
- * The pull request's own pad — the witness log behind the pack for #413. It holds
- * exactly the two entries the pack's claims cite, because a `witnessed` claim whose
- * entry the reader cannot see is the retelling the verbatim rendering exists to
- * prevent.
- * → docs/spec/31-review-packs.md#the-witness-log
+ * The pull request's own pad for #413: one fork with the decision behind it and
+ * one ordinary note.
+ * → docs/spec/11-mcp-tools.md#forks-on-the-pad
  */
 const DEMO_PR_PAD = [
   {
@@ -2803,75 +2575,6 @@ const DEMO_PR_PAD = [
     createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
   },
 ];
-
-/**
- * The reviewer's marks, held beside the pack rather than in it — the demo's copy of
- * the rule that what a reviewer does is never written back into the document. Held
- * in module state so a mark survives leaving the pack and coming back, the way the
- * real one survives a reload.
- * → docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack
- */
-const demoReviewMarks = new Map<string, ReviewMark>();
-
-const demoHunksOf = (ideaId: string): ReviewRange[] =>
-  (DEMO_REVIEW_PACK.ideas.find((i) => i.id === ideaId)?.anchors ?? [])
-    .filter((a) => a.kind === 'hunk')
-    .map((a) => a.range);
-
-const demoMarkKey = (hunk: ReviewRange): string => `${hunk.path}:${hunk.start}-${hunk.end}`;
-
-function demoMark(ideaId: string, patch: Partial<Pick<ReviewMark, 'read' | 'seen' | 'attention'>>): ReviewMarksPayload {
-  for (const hunk of demoHunksOf(ideaId)) {
-    const key = demoMarkKey(hunk);
-    const prev = demoReviewMarks.get(key);
-    demoReviewMarks.set(key, {
-      prNumber: 413,
-      hunk,
-      headSha: DEMO_PACK_HEAD,
-      attention: prev?.attention ?? null,
-      read: prev?.read ?? false,
-      seen: prev?.seen ?? false,
-      ...patch,
-      markedAt: new Date().toISOString(),
-    });
-  }
-  return { marks: [...demoReviewMarks.values()] };
-}
-
-const DEMO_REVIEW_CALIBRATION: ReviewCalibration = {
-  window: {
-    key: 'all',
-    label: 'All time',
-    bucketLabel: 'one bar a day',
-    since: null,
-    startsAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
-    bucketMs: 86_400_000,
-    buckets: 30,
-    session: null,
-  },
-  // The reading is of the one pack the demo holds (#413), counted rather than
-  // invented: four hunks of which one is plumbing, four labelled ideas none of
-  // which a reviewer has overridden yet, and the one false claim, unseen — a
-  // reading that would contradict the pack a visitor can open is worse than none.
-  packs: 1,
-  overrides: { labelled: 4, overridden: 0, upgrades: 0, downgrades: 0, sideways: 0, pairs: [] },
-  plumbing: {
-    hunks: 4,
-    plumbingHunks: 1,
-    ratio: 0.25,
-    worst: [
-      {
-        prNumber: 413,
-        headSha: DEMO_PACK_HEAD,
-        writtenAt: DEMO_REVIEW_PACK_WRITTEN_AT,
-        hunks: 4,
-        plumbingHunks: 1,
-        ratio: 0.25,
-      },
-    ],
-  },
-  prominence: { packsWithFalse: 1, falseClaims: 1, ideas: 4, seen: 0, mergedUnseen: [] },
-};
 
 const DEMO_RETROSPECTIVE = {
   originRef: 'issue:364',
@@ -3865,7 +3568,6 @@ function buildDemoUsage(): UsagePayload {
     reach('goal', 'operated', 88, 84, 31),
     reach('pr', 'operated', 63, 60, 12),
     reach('validation', 'visited-never-operated', 9, 9, 0),
-    reach('review-pack', 'visited-never-operated', 4, 4, 0),
     reach('escalation', 'operated', 17, 17, 9),
     reach('human-task', 'operated', 12, 12, 5),
     reach('ticket', 'operated', 55, 50, 18),
@@ -3960,7 +3662,6 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   goal: 'Goals',
   pr: 'Pull requests',
   validation: 'Validation',
-  'review-pack': 'Review packs',
   escalation: 'Escalations',
   'human-task': 'The bench',
   ticket: 'Tickets',
@@ -5009,32 +4710,6 @@ export const demoApi = {
       padRef: ref,
       entries: ref === 'issue:364' ? DEMO_SCRATCHPAD : ref === 'pr:413' ? DEMO_PR_PAD : [],
     }),
-  getReviewPack: (prNumber: number): Promise<ReviewPackReading> =>
-    Promise.resolve(
-      prNumber === DEMO_REVIEW_PACK.prNumber
-        ? {
-            kind: 'pack',
-            payload: {
-              pack: DEMO_REVIEW_PACK,
-              writtenAt: DEMO_REVIEW_PACK_WRITTEN_AT,
-              marks: [...demoReviewMarks.values()],
-              head: DEMO_PACK_HEAD,
-              stale: null,
-              checking: false,
-              sharing: { available: false, share: null },
-            },
-          }
-        : { kind: 'none', writing: prNumber === DEMO_PACK_WRITING_PR },
-    ),
-  requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
-  shareReviewPack: () => Promise.reject(new Error('the demo has no pool to share a review pack into')),
-  unshareReviewPack: () => Promise.reject(new Error('the demo has no pool to unshare a review pack from')),
-  getReviewCalibration: () => Promise.resolve({ calibration: DEMO_REVIEW_CALIBRATION }),
-  markReviewIdeaRead: (_prNumber: number, ideaId: string, read: boolean) => Promise.resolve(demoMark(ideaId, { read })),
-  markReviewFindingSeen: (_prNumber: number, ideaId: string, seen: boolean) =>
-    Promise.resolve(demoMark(ideaId, { seen })),
-  overrideReviewAttention: (_prNumber: number, ideaId: string, attention: ReviewAttention | null) =>
-    Promise.resolve(demoMark(ideaId, { attention })),
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
   getSpendTrend: () => Promise.resolve({ trend: buildDemoTrend() }),
   getReliability: () =>

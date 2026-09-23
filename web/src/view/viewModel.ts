@@ -98,8 +98,6 @@ export interface CockpitView {
   viewingRetro: string | null;
   hatching: string | null;
   viewingScratchpad: string | null;
-  viewingReviewPack: number | null;
-  reviewIdea: string | null;
   viewingObstacle: string | null;
   obstacleEnded: boolean;
   insightsView: InsightsView;
@@ -153,8 +151,6 @@ interface ViewInputs {
   viewingRetro: string | null;
   hatching: string | null;
   viewingScratchpad: string | null;
-  viewingReviewPack?: number | null;
-  reviewIdea?: string | null;
   viewingObstacle?: string | null;
   obstacleEnded?: boolean;
   insightsView: InsightsView;
@@ -326,8 +322,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
-    viewingReviewPack: input.viewingReviewPack ?? null,
-    reviewIdea: input.reviewIdea ?? null,
     viewingObstacle: input.viewingObstacle ?? null,
     obstacleEnded: input.obstacleEnded ?? false,
   };

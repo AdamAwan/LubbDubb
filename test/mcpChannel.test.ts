@@ -168,7 +168,11 @@ test('a retired name is answered, so an override that still names one is not a d
     const tool = tools.find((t) => t.name === name);
     assert.ok(tool, `${name} must still be dispatchable`);
     assert.equal(tool.hidden, true, `${name} must not be advertised in tools/list`);
-    assert.match(tool.description, /raise/, 'the refusal names the door that replaced it');
+    assert.match(
+      tool.description,
+      name.startsWith('review_pack_') ? /nothing replaces them/ : /raise/,
+      'the refusal names the door that replaced it, or says there is none',
+    );
   }
 });
 

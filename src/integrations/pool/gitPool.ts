@@ -14,12 +14,11 @@ import { poolCompanion } from '../../pool/companion.js';
 import {
   POOL_CLOCK_KINDS,
   poolDocumentAddress,
-  poolPackPath,
+  poolRetiredDirs,
   poolRetiredPaths,
   serialisePoolDocument,
 } from '../../pool/document.js';
-import { reviewPackCompanionPath } from '../../reviewPacks/companion.js';
-import type { PoolFetchedDocument, PoolPackRef, PoolTransport } from '../../pool/transport.js';
+import type { PoolFetchedDocument, PoolTransport } from '../../pool/transport.js';
 import type { PoolDocument } from '../../types.js';
 
 // → docs/spec/15-integrations.md
@@ -63,23 +62,12 @@ export class GitPoolTransport implements PoolTransport {
       unlinkSync(absolute);
       cleared.push(relative);
     }
-    return cleared;
-  }
-
-  async unpublish(pack: PoolPackRef): Promise<void> {
-    await this.ensureClone();
-    const paths = [
-      this.prefixed(poolPackPath(pack.fleetId, pack.prNumber)),
-      this.prefixed(reviewPackCompanionPath(pack.fleetId, pack.prNumber)),
-    ];
-    for (const relative of paths) {
-      try {
-        unlinkSync(join(this.deps.root, ...relative.split('/')));
-      } catch {
-        /* already gone: a prune that has run before, or a pack that never landed */
-      }
+    for (const relative of poolRetiredDirs(this.deps.fleetId).map((path) => this.prefixed(path))) {
+      const absolute = join(this.deps.root, ...relative.split('/'));
+      for (const name of listFiles(absolute)) cleared.push(posix.join(relative, name));
+      rmSync(absolute, { recursive: true, force: true });
     }
-    await this.commit(paths, `pool: ${this.deps.fleetId} pack #${pack.prNumber} pruned`);
+    return cleared;
   }
 
   private async commit(paths: string[], message: string): Promise<void> {
@@ -173,6 +161,16 @@ function listDirectories(path: string): string[] {
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();
+  } catch {
+    return [];
+  }
+}
+
+function listFiles(path: string): string[] {
+  try {
+    return readdirSync(path, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name);
   } catch {
     return [];
   }

@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { reviewModeNames, type PrReviewCharters } from './prReview.js';
 import type { PrReviewPolicy } from './policy.js';
 
-// → docs/spec/31-review-packs.md
+// → docs/spec/07-pull-requests.md#the-fleet-review
 
 export function loadReviewCharters(
   repoRoot: string,

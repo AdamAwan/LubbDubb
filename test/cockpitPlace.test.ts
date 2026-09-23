@@ -44,9 +44,6 @@ test('every place round-trips through the query string', () => {
     at({ scratchpad: 'issue:142' }),
     at({ goal: 'issue:142', pr: 706 }),
     at({ tab: 'tickets', goal: 'issue:142', pr: 706, agent: 'agent-7' }),
-    at({ goal: 'issue:142', reviewPack: 684 }),
-    at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'idea_V1StGXR8-Z5jdHi6' }),
-    at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'all' }),
     at({ hatch: 'pet_7f2a1c' }),
     at({ tab: 'pets', hatch: 'pet_7f2a1c' }),
     at({ tab: 'pets', petsBlended: true }),
@@ -134,14 +131,6 @@ test('ids and refs survive encoding', () => {
   const place = at({ panel: { ask: 'esc:1&2=3' }, goal: 'issue:142' });
   assert.ok(!placeQuery(place).includes('&2=3'));
   assert.deepEqual(readPlace(placeQuery(place)), place);
-});
-
-test('an idea is carried only under a pack, and a pack is a positive integer', () => {
-  assert.deepEqual(readPlace('?idea=idea_x'), NOWHERE);
-  assert.deepEqual(readPlace('?pack=abc&idea=idea_x'), NOWHERE);
-  assert.deepEqual(readPlace('?pack=0'), NOWHERE);
-  assert.equal(readPlace('?pack=684&idea=idea_x').reviewIdea, 'idea_x');
-  assert.equal(placeQuery(at({ reviewIdea: 'idea_x' })), '', 'an idea with no pack writes nothing');
 });
 
 test('a pull request page is a positive integer, or it is nowhere', () => {
@@ -352,7 +341,7 @@ test('the pool scope carries only the tabs the pool can answer', () => {
     assert.equal(place.insightsScope, 'pool');
     assert.equal(place.insightsView, view);
   }
-  for (const view of ['allowance', 'reliability', 'trend', 'mcp', 'review']) {
+  for (const view of ['allowance', 'reliability', 'trend', 'mcp']) {
     const place = readPlace(`?tab=insights&scope=pool&view=${view}`);
     assert.equal(place.insightsScope, 'pool');
     assert.equal(place.insightsView, 'economics', `${view} is not a pool reading and must not be representable`);

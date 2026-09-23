@@ -116,12 +116,9 @@ test('the checks lead the strip, and the marks behind them hold their boxes', ()
   for (const read of rows) {
     const checks = Math.min(...[/class="ck /, /class="ck-slot"/].map((re) => at(read, re)));
     const review = Math.min(...[/class="rv /, /class="rv rv-none"/].map((re) => at(read, re)));
-    const pack = Math.min(...[/class="pk /, /class="pk pk-none"/].map((re) => at(read, re)));
     assert.ok(checks < Infinity, 'a row kept nothing in the checks’ place');
     assert.ok(review < Infinity, 'a row closed the review mark’s box up');
-    assert.ok(pack < Infinity, 'a row closed the pack mark’s box up');
     assert.ok(checks < review, 'the review mark is drawn ahead of the checks');
-    assert.ok(review < pack, 'the pack mark is drawn ahead of the review');
   }
 });
 

@@ -242,9 +242,6 @@ export function useCockpit(): CockpitStatus {
       viewRetro: (issueRef) => go({ retro: issueRef }),
       hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
-      viewReviewPack: (prNumber) =>
-        go(prNumber === null ? { reviewPack: null, reviewIdea: null } : { reviewPack: prNumber }),
-      openReviewIdea: (id) => go({ reviewIdea: id }),
       setObstacleQuery: (next) => go(next),
       muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
       decideObstacleTicket: (id, approved) => then(api.decideObstacleTicket(id, approved)),
@@ -418,8 +415,6 @@ export function useCockpit(): CockpitStatus {
       viewingRetro: place.retro,
       hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
-      viewingReviewPack: place.reviewPack,
-      reviewIdea: place.reviewIdea,
       viewingObstacle: place.obstacle,
       obstacleEnded: place.obstacleEnded,
       insightsView: place.insightsView,

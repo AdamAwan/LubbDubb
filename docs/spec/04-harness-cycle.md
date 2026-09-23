@@ -458,8 +458,7 @@ flowchart TD
    `graduations.run()` follows what became of the documentation pull requests an operator opened for
    a claim, and takes a landed claim out of every prompt because the repository now says it. **Below
    the graph record** — it reads the graph, so above that line it acts on a merge a pulse late every
-   time — and above the launch line, so no agent is still told a claim the repository states
-   ([31](31-review-packs.md)).
+   time — and above the launch line, so no agent is still told a claim the repository states.
 
    `clusters.run()` groups the proposals a machine thinks are one claim. Its position in the pulse is
    **not** load-bearing at all: nothing waits on a cluster, it takes its own cadence, and the page an
@@ -637,7 +636,7 @@ breaking silently:
 | `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                                                         |
 | `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                         |
 | `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                                                          |
-| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([31](31-review-packs.md), [28](28-cross-fleet-pool.md))         |
+| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([28](28-cross-fleet-pool.md))                                   |
 | `notices` → `obstacles`                            | an agent whose report was taken up is told so by the pulse that took it; the five obstacle stages keep their order inside the desk ([27](27-obstacles.md#one-desk-on-the-pulse)) |
 | `prWatch` → `prWorkItems`                          | one pass says the pull request is the fleet's, the other which work item it is for                                                                                               |
 

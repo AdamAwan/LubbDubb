@@ -7,7 +7,6 @@ export class FakeGitObserver implements GitObserver {
   private readonly presences = new Map<string, BranchPresence>();
   private readonly divergences = new Map<string, BranchDivergence>();
   private readonly containment = new Map<string, boolean>();
-  private readonly diffs = new Map<string, string>();
 
   setPresence(branch: string, presence: Partial<BranchPresence>): this {
     this.presences.set(branch, { local: presence.local ?? false, remote: presence.remote ?? false });
@@ -22,16 +21,6 @@ export class FakeGitObserver implements GitObserver {
   setContains(head: string, commit: string, held: boolean): this {
     this.containment.set(`${head} ${commit}`, held);
     return this;
-  }
-
-  setDiff(base: string, head: string, diff: string): this {
-    this.diffs.set(key(head, base), diff);
-    return this;
-  }
-
-  async diff(base: string, head: string): Promise<string | null> {
-    this.calls.push(`diff:${key(head, base)}`);
-    return this.diffs.get(key(head, base)) ?? null;
   }
 
   async contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>> {

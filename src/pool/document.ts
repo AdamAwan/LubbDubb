@@ -20,6 +20,10 @@ export function poolRetiredPaths(fleetId: string): string[] {
   return POOL_RETIRED_CLOCK_KINDS.flatMap((kind) => [`fleets/${fleetId}/${kind}.json`, `fleets/${fleetId}/${kind}.md`]);
 }
 
+export function poolRetiredDirs(fleetId: string): string[] {
+  return [`fleets/${fleetId}/packs`];
+}
+
 export function serialisePoolDocument(document: PoolDocument): string {
   return `${JSON.stringify(document, stableKeys(document), 2)}\n`;
 }
@@ -147,12 +151,6 @@ export function poolDocumentPath(fleetId: string, kind: PoolClockKind): string {
   return `fleets/${fleetId}/${kind}.json`;
 }
 
-export function poolPackPath(fleetId: string, prNumber: number): string {
-  return `fleets/${fleetId}/packs/pr-${prNumber}.json`;
-}
-
 export function poolDocumentAddress(document: PoolDocument): string {
-  return document.kind === 'pack'
-    ? poolPackPath(document.fleetId, document.prNumber)
-    : poolDocumentPath(document.fleetId, document.kind);
+  return poolDocumentPath(document.fleetId, document.kind);
 }

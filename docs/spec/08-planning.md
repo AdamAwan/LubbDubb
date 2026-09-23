@@ -70,7 +70,7 @@ drawn through it.
 Flat rather than nested inside their part, because regrouping is the operator's act and it has to be
 cheap: nested, moving an atom between parts is a document rewrite that carries its prose with it;
 flat, it is one string moving between two arrays, and an atom's slug survives the move. That is what
-will later let a commit and a review-pack idea both name the same atom.
+lets a commit name the atom the plan declared.
 
 **The criterion is revertability, never size, and this is the whole risk in the feature.** Asked for
 the smallest possible pieces a model returns `add the type` / `add the field` / `add the test` —
@@ -162,8 +162,8 @@ Two derivations make the rebuilt document mean what the grouping says:
 ### What is built, and what is not
 
 Built, all of it: the atoms in the document and the store, the refusals above, `atomNote`, the plan
-sheet drawing a part's atoms **read-only**, the regroup route and surface above, **one commit per
-atom** from the part agent, and **the review pack keyed on the atom**.
+sheet drawing a part's atoms **read-only**, the regroup route and surface above, and **one commit per
+atom** from the part agent.
 
 That last one is `partDeclarationNote` (`src/plans/parts.ts`) growing a third block, beside the paths
 the part owns and what it is done when: the atoms the part carries — each one's title, why it exists,
@@ -174,19 +174,12 @@ refuses a part whose series does not line up, and no surface draws the series as
 [09](09-execution.md#the-atoms-of-a-part-reach-its-agent) says why, and what the note has to say for
 the commits to be worth writing at all.
 
-And the **review pack keyed on the atom** ([31](31-review-packs.md#an-idea-names-the-atom-it-corresponds-to)):
-the pack's author is handed the atoms of the part that owns the pull request, an idea carries the
-slug of the atom it corresponds to, and an idea the atoms do not cover carries null — which is
-reported as a finding, never refused, because whether an idea is the atom the planner meant is a
-judgement rather than a mechanical fact. That is the last reader the declarations were waiting for,
-and with it an atom is named in three places by the one slug: the plan that declared it, the commit
-that wrote it and the pack idea that restates it. **The commit series remains a reading for a human
-opening the pull request** — nothing reads it back as a record, and the pack reaches the atoms
-through the plan rather than through the commits, so [09](09-execution.md#the-atoms-of-a-part-reach-its-agent)'s
-decision that nothing enforces the series stands.
+**The commit series is a reading for a human opening the pull request** — nothing reads it back as a
+record, so [09](09-execution.md#the-atoms-of-a-part-reach-its-agent)'s decision that nothing enforces
+the series stands.
 
 Nothing about atoms is built beyond that, and nothing here is a gate: no atom is dispatched for, no
-count is refused, and no pack, part or merge is blocked for one.
+count is refused, and no part or merge is blocked for one.
 
 ## The four arms
 

@@ -1,4 +1,4 @@
-// → docs/spec/31-review-packs.md
+// → docs/spec/07-pull-requests.md#the-fleet-review
 
 interface PrReviewMode {
   charterFile?: string | null;

@@ -1,7 +1,6 @@
 import { poolCompanion } from '../../pool/companion.js';
-import { poolDocumentAddress, poolDocumentPath, poolPackPath, serialisePoolDocument } from '../../pool/document.js';
-import { reviewPackCompanionPath } from '../../reviewPacks/companion.js';
-import type { PoolFetchedDocument, PoolPackRef, PoolTransport } from '../../pool/transport.js';
+import { poolDocumentAddress, poolDocumentPath, serialisePoolDocument } from '../../pool/document.js';
+import type { PoolFetchedDocument, PoolTransport } from '../../pool/transport.js';
 import type { PoolClockDocument, PoolDocument } from '../../types.js';
 
 // → docs/spec/15-integrations.md
@@ -10,10 +9,6 @@ export class FakePoolTransport implements PoolTransport {
   readonly id = 'pool:fake';
 
   readonly published: PoolDocument[] = [];
-
-  readonly packs = new Map<string, string>();
-
-  readonly unpublished: PoolPackRef[] = [];
 
   publishError: Error | null = null;
   fetchError: Error | null = null;
@@ -42,19 +37,7 @@ export class FakePoolTransport implements PoolTransport {
     const address = poolDocumentAddress(document);
     const companion = poolCompanion(document);
     this.companions.set(companion.path, companion.text);
-    if (document.kind === 'pack') {
-      this.packs.set(address, serialisePoolDocument(document));
-      return;
-    }
     this.documents.set(address, { addressedTo: document.fleetId, text: serialisePoolDocument(document) });
-  }
-
-  async unpublish(ref: PoolPackRef): Promise<void> {
-    if (this.publishError) throw this.publishError;
-    const address = poolPackPath(ref.fleetId, ref.prNumber);
-    this.packs.delete(address);
-    this.companions.delete(reviewPackCompanionPath(ref.fleetId, ref.prNumber));
-    this.unpublished.push(ref);
   }
 
   async fetch(): Promise<PoolFetchedDocument[]> {

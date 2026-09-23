@@ -5,7 +5,6 @@ import type { PrPageView } from '../view/prPage.js';
 import type { OpenPullRequest, PrReviewThread, PrThreadMessage, PrThreadState, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { CONTROL_CLASS } from '../components/controls.js';
-import { ReviewPackControl } from '../components/ReviewPackControl.js';
 import { CiMark } from '../components/CiMark.js';
 import { ReviewDetail, ReviewMark } from '../components/ReviewMark.js';
 import { PrDescription } from '../components/PrDescription.js';
@@ -29,7 +28,7 @@ export function PrPage({
 }): JSX.Element {
   return (
     <div className="cn-goal">
-      <Masthead page={page} view={view} actions={actions} />
+      <Masthead page={page} view={view} />
       <div className="cn-gcols">
         <Threads page={page} view={view} actions={actions} />
         <div className="cn-gcol">
@@ -55,15 +54,7 @@ export function PrPage({
 
 const STATE_TONE: Record<string, TagTone | undefined> = { merged: 'green', closed: undefined, open: 'blue' };
 
-function Masthead({
-  page,
-  view,
-  actions,
-}: {
-  page: PrPageView;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
+function Masthead({ page, view }: { page: PrPageView; view: CockpitView }): JSX.Element {
   const { pr } = page;
   const state = pr.state ?? (pr.merged ? 'merged' : 'open');
   return (
@@ -111,21 +102,10 @@ function Masthead({
           {page.goalRef !== null && <Ref to={page.goalRef} />}
         </span>
       </div>
-      {/* The pack rides the masthead rather than the rail: it is a reading *of this
-          diff*, which is what the masthead is about, and the control reaches its own
-          route — which console markup may not, but embedding a component that does
-          is not reaching. A closed pull request cannot be asked about; the pack it
-          already has stays readable. */}
-      <div className="cn-prpack">
+      <div className="cn-prmast-links">
         <PrLink number={pr.number} className={CONTROL_CLASS}>
           Open pull request ↗
         </PrLink>
-        <ReviewPackControl
-          prNumber={pr.number}
-          headSha={pr.headSha ?? null}
-          canAsk={page.open}
-          onOpen={() => actions.viewReviewPack(pr.number)}
-        />
       </div>
     </section>
   );

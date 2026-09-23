@@ -10,7 +10,6 @@ import type { PanelRowModel } from './PanelRow.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { CiMark, CiSlot } from '../components/CiMark.js';
 import { CommentsMark } from '../components/CommentsMark.js';
-import { PackMark } from '../components/PackMark.js';
 import { ReviewMark } from '../components/ReviewMark.js';
 import { Tag } from '../components/tag.js';
 
@@ -62,8 +61,6 @@ export function prRow(
         {/* Whether anybody is waiting on an answer — a verdict, not a fact like
             an age, so it left the sub-line for its own mark. */}
         <CommentsMark comments={pr.unresolvedComments} reserve onOpen={() => actions.selectPr(pr.number)} />
-        {/* Whether there is a pack to read — about a document, not the PR itself. */}
-        <PackMark pack={pr.pack} reserve onOpen={() => actions.selectPr(pr.number)} />
       </>
     ),
     toggle: (
