@@ -5781,8 +5781,16 @@ type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same pa
 and the goal page stands.
 
 The detail is three columns from 1200px and one below: **its order, and what landed** (the story
-order when there is one, and what was delivered, in its authors' words), **what is in the way,
-grouped by who clears it**, and **its stories and PRs**. The first column is **drawn only when it has
+order when there is one, and what was delivered, in its authors' words — an accepted order is listed
+wave by wave with each story's title, what has already been delivered or settled dimmed rather than
+dropped, because the order is the record of what was agreed; and the delivery quotation sits under
+its story in that list rather than in a Delivered list of its own, which would name every landed
+story twice), **what is in the way,
+grouped by who clears it** — one heading per court rather than a court tag on every row, and each row
+leading with the story it is about before what is asked, the ask's own trailing story title trimmed
+since the row already names it — and **its stories and PRs** — in wave order when an order is accepted, but
+under no wave headings of its own: the first column already lists the waves, and each story here
+carries its own _waits on_ line. The first column is **drawn only when it has
 something in it** — both halves of it render nothing of their own when they are empty, so with the
 account on the brief it would otherwise be a heading over blank space, which is the one thing the
 [account's own fields](#the-feature-summary) are careful never to be. Without it the card is the
