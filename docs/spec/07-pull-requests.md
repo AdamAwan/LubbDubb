@@ -653,7 +653,7 @@ an agent it would go missing silently, on exactly the pull requests nobody was w
 
 ### The operator writes the description
 
-Behind `manualDescriptions`, off by default. With it off nothing in this section happens: the agent
+Behind `manualDescriptions`, on by default. With it off nothing in this section happens: the agent
 writes the body as the two sections above describe, and `open_pr` is unchanged.
 
 With it on, the body is the **operator's**. The agent still sends `open_pr` a `body`, checked by the
@@ -788,7 +788,10 @@ pull request with the footer alone.
 - **Used on a press, at once.** **Use the agent's** (`POST /api/prs/:number/description/handoff`)
   stamps `handed_at`, and `PrDescriptionDesk` puts the text above the footer on the next pulse. It is
   pushed as the agent's, with no `HUMAN_NOTE`: the mark says a person answers for the prose, and here
-  nobody did. Nothing stamps it by itself, so an unchosen draft never reaches the pull request.
+  nobody did. Nothing stamps it by itself, so an unchosen draft never reaches the pull request —
+  unless the operator has turned on `autoUseAgentDescriptions` (off by default), which is that press
+  made once for every pull request: `open_pr` stamps `handed_at` as it records the draft. It is the
+  operator's standing choice, so it is still not a backstop the harness chose.
 - **The press answers the rail's ask.** `undescribedOpenParts` leaves out a handed-over part, so the
   `describe` ask goes as soon as the operator has decided who writes it. An unchosen draft does not
   answer it.

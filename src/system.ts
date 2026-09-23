@@ -325,6 +325,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewAllowSkip: config.review.allowSkip,
     checkSets: config.validation.checkSets,
     manualDescriptions: config.manualDescriptions,
+    autoUseAgentDescriptions: config.autoUseAgentDescriptions,
     repoRoot: config.repoRoot,
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
     permissions: (): PermissionDesk => permissions,

@@ -148,10 +148,12 @@ export interface McpToolDeps {
    * `config.manualDescriptions`. On, `open_pr` keeps its `body` as a draft and opens
    * with the evidence and the reference alone: the operator writes the description
    * against the pull request once it is open, or uses the draft, and a desk puts it there.
-   * Absent is off, which is what every deployment is until somebody turns it on.
+   * Absent is off.
    * → docs/spec/07-pull-requests.md#the-operator-writes-the-description
    */
   manualDescriptions?: boolean;
+  /** `config.autoUseAgentDescriptions`: the draft is handed over at the open. Absent is off. */
+  autoUseAgentDescriptions?: boolean;
   openPr?: {
     sink: ActionSink;
     defaultBranch: string;

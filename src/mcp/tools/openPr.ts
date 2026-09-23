@@ -138,7 +138,11 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         // the provider. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
         if (deps.manualDescriptions && target.partRef !== null) {
           deps.store.prDescriptions.recordPrBody({ originRef: target.partRef, prNumber, tail: footer });
-          if (given !== '') deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: given });
+          if (given !== '') {
+            deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: given });
+            if (deps.autoUseAgentDescriptions)
+              deps.store.prDescriptions.handOff({ originRef: target.partRef, prNumber, handedBy: null });
+          }
         }
       }
       return ok({

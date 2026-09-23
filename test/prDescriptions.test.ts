@@ -564,7 +564,7 @@ test('a part whose pull request never opened is never pushed, however much is wr
   }
 });
 
-function manualSystem(dir: string, sink: ActionSink): System {
+function manualSystem(dir: string, sink: ActionSink, autoUseAgentDescriptions = false): System {
   return buildSystem(
     loadConfig({
       selfUpdate: { enabled: false } as never,
@@ -574,6 +574,7 @@ function manualSystem(dir: string, sink: ActionSink): System {
       agentMode: 'raw',
       userId: 'operator',
       manualDescriptions: true,
+      autoUseAgentDescriptions,
       maxConcurrentAgents: 10,
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
@@ -806,6 +807,30 @@ test('the agent\u2019s draft is kept hidden, and using it puts it on the pull re
     assert.equal(sink.bodies[0]!.body, `- A restart replays the whole feed.\n\n${tail}`);
   } finally {
     await app.close();
+    system.store.close();
+  }
+});
+
+test('with auto-use on, the agent\u2019s draft goes on the pull request with no press', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink, true);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'read the cursor back',
+      body: '- A restart replays the whole feed.',
+    });
+    assert.equal(opened.isError, false, opened.text);
+    const tail = sink.opened[0]!.body;
+    system.connector.inject({ kind: 'new_pr', number: 1, title: 'read the cursor back', branch: 'issue/182/cursor' });
+    await system.harness.runCycle('manual');
+    assert.equal(buildStateSnapshot(system).undescribedParts.length, 0, 'the ask is answered');
+    assert.equal(sink.bodies.length, 1);
+    assert.equal(sink.bodies[0]!.body, `- A restart replays the whole feed.\n\n${tail}`);
+  } finally {
     system.store.close();
   }
 });

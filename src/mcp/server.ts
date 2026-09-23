@@ -34,6 +34,7 @@ interface McpBridgeServerOptions {
   reviewAllowSkip?: boolean;
   checkSets?: boolean;
   manualDescriptions?: boolean;
+  autoUseAgentDescriptions?: boolean;
   areaPaths?: () => AreaPathTree | null;
   permissions?: () => import('../agents/permissionDesk.js').PermissionDesk | undefined;
   openPr?: () => McpToolDeps['openPr'];
@@ -207,6 +208,7 @@ export class McpBridgeServer {
         reviewAllowSkip: this.opts.reviewAllowSkip,
         checkSets: this.opts.checkSets,
         manualDescriptions: this.opts.manualDescriptions,
+        autoUseAgentDescriptions: this.opts.autoUseAgentDescriptions,
         areaPaths: this.opts.areaPaths,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
