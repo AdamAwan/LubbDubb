@@ -2042,6 +2042,23 @@ export interface McpCall {
   createdAt: string;
 }
 
+export type ApiErrorKind = 'safeguards' | 'other';
+
+export interface ApiErrorReading {
+  kind: ApiErrorKind;
+  code: string | null;
+  message: string;
+}
+
+export interface ApiErrorEvent extends ApiErrorReading {
+  id: string;
+  agentId: string;
+  taskId: string;
+  originRef: string | null;
+  model: string | null;
+  createdAt: string;
+}
+
 export interface McpCallInput {
   channel: McpChannel;
   tool: string;

@@ -1787,6 +1787,22 @@ CREATE TABLE IF NOT EXISTS surface_reach (
   arrival TEXT NOT NULL
 );
 
+-- One row per agent turn the model API refused ("API Error: ..."), read off the
+-- stream transport's result event (docs/spec/18-observability.md#api-errors).
+-- kind is 'safeguards' for a usage-policy flag, 'other' for anything else; code is
+-- the bracketed Details tag, e.g. reasoning_extraction.
+CREATE TABLE IF NOT EXISTS api_errors (
+  id         TEXT PRIMARY KEY,
+  agent_id   TEXT NOT NULL,
+  task_id    TEXT NOT NULL,
+  origin_ref TEXT,
+  model      TEXT,
+  kind       TEXT NOT NULL,
+  code       TEXT,
+  message    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS mcp_calls (
   id         TEXT PRIMARY KEY,
   -- 'fleet' or 'desktop'. Never summed across: they are different credentials,
@@ -2339,6 +2355,7 @@ CREATE INDEX IF NOT EXISTS idx_pet_purchases_pet ON pet_purchases(pet_id);
 -- cut on the date alone.
 CREATE INDEX IF NOT EXISTS idx_surface_reach_at ON surface_reach(at);
 CREATE INDEX IF NOT EXISTS idx_mcp_calls_created ON mcp_calls(created_at);
+CREATE INDEX IF NOT EXISTS idx_api_errors_created ON api_errors(created_at);
 CREATE INDEX IF NOT EXISTS idx_mcp_calls_args ON mcp_calls(args_dropped, created_at);
 -- Both obstacle reads are by their parent row: the keys an obstacle holds, and the
 -- sightings behind it. The key *lookup* goes through the UNIQUE index on value.
