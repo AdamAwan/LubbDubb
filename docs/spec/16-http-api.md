@@ -38,6 +38,7 @@ is about.
 | `routes/reviewPacks.ts`     | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
 | `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                                                                                            |
+| `routes/apiErrors.ts`       | `/api/api-errors` — how often the model API refused an agent's turn                                                                                                                                                                             |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
 | `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))                                                                                    |
 | `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
@@ -1432,6 +1433,13 @@ and the desk's own clock decides when it goes out.
 Neither read rides on `/api/state`, for `/api/mcp/usage`'s reason: the mirror is other teams' prose plus
 ninety days of rows per fleet, and the snapshot comes round every couple of seconds for every open
 cockpit.
+
+### `GET /api/api-errors`
+
+How often the model API refused an agent's turn, over `?window=` (the insights windows). Returns
+`{ insights }` — `total`, `agentsStarted`, `agentsAffected`, `affectedRate`, counts `byKind`, `byCode`
+and `byModel`, a `byDay` series (`errors` beside `agentsStarted`), and the twenty most `recent` rows.
+See [18](18-observability.md#api-errors).
 
 ### `GET /api/mcp/usage`
 

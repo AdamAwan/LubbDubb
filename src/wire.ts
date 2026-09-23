@@ -34,6 +34,7 @@ import type { ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 import type { AllowanceInsights } from './insights/allowanceInsights.js';
 import type { SpendInsights } from './insights/spendInsights.js';
 import type { McpInsights } from './insights/mcpInsights.js';
+import type { ApiErrorInsights } from './insights/apiErrorInsights.js';
 import type { OperatorInsights } from './insights/operatorInsights.js';
 import type { SurfaceReachInsights } from './insights/surfaceReachInsights.js';
 import type { SpendTrend } from './insights/spendTrend.js';
@@ -897,6 +898,10 @@ export interface SpendTrendPayload {
 
 export interface PredictionAggregatePayload {
   aggregate: PredictionAggregate;
+}
+
+export interface ApiErrorsPayload {
+  insights: ApiErrorInsights;
 }
 
 export interface McpUsagePayload {
