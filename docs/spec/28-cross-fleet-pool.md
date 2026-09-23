@@ -7,8 +7,7 @@ against.
 
 This is the distance above one fleet. It carries a **daily digest** of what a fleet spent and what its
 returns to pull requests cost, so a person can read where the money goes across a company rather than
-across a laptop — plus, on a person's own say-so, one [shared review pack](#a-third-document-rides-this-and-is-not-a-claim)
-at a time.
+across a laptop.
 
 **It carried a second thing and no longer does.** A fleet's vouched **claims** crossed here too, so
 other fleets' agents were not sent to buy them again — and the claim store behind that arm is gone
@@ -50,7 +49,6 @@ interface PoolTransport {
   readonly id: string; // `pool:git` — for the audit log and the cockpit
   readonly canRead: boolean;
   publish(doc: PoolDocument): Promise<void>; // replaces MY namespace, whole
-  unpublish(pack: PoolPackRef): Promise<void>; // removes MY shared pack for one pull request
   fetch(): Promise<PoolFetchedDocument[]>; // everyone's, mine included
 }
 
@@ -60,12 +58,9 @@ interface PoolFetchedDocument {
 }
 ```
 
-`unpublish` is the one delete, and it is narrow on purpose: only a
-[shared review pack](#a-third-document-rides-this-and-is-not-a-claim) is ever removed — pruned on the
-pull request's retention clock, or withdrawn because somebody unshared it — so nothing can be asked to
-remove `digest.json`. It is inside this fleet's own directory, so one writer per namespace
-is untouched, and removing what is not there is a success — the inverse of a whole-document put has to
-be as retryable as one.
+There is no delete. A transport only ever replaces its own document whole, so nothing can be asked to
+remove anything — what a fleet stops publishing it clears itself, on its next publish
+([below](#what-a-retired-kind-leaves-behind)).
 
 `fetch` hands up **bytes and an address**, not parsed documents, because checking the one against the
 other is the layer above's job — see [the envelope](#the-envelope). A substrate whose addresses do not
@@ -100,7 +95,7 @@ an hourly cadence costs a hash rather than a commit.
 
 ### The payload is opaque to the transport
 
-Versioned JSON. The transport moves bytes; the layer above understands what a digest and a pack are. A
+Versioned JSON. The transport moves bytes; the layer above understands what a digest is. A
 text-only substrate that stores a document in a fenced code block is first-class.
 
 ### `canRead: false` means publish-only
@@ -230,9 +225,8 @@ The digest is published at one address, with a companion a person can read
 ```
 
 **It stays a `kind` on an envelope rather than a bare body**, and that is worth stating now there is
-one of them. `PoolDocument` is still a discriminated union — the shared review pack is a second kind,
-published by a person and never polled — so the layer above splits on `kind` and the transport stays
-opaque. A document whose kind the parser does not know is skipped **per document**, which is what a
+one of them. `PoolDocument` is the digest alone today, but the layer above still splits on `kind` and
+the transport stays opaque. A document whose kind the parser does not know is skipped **per document**, which is what a
 second clock document costs to add and what a stranger's file in a shared wiki costs to ignore.
 
 **One writer per namespace becomes one writer per address**, which is strictly stronger and unchanged
@@ -276,15 +270,19 @@ the write set that is already exactly `<path>/fleets/<fleetId>/`. A retired kind
 retired list and never removed from it afterwards: the deployment that has not published since the
 retirement is exactly the one still holding the file.
 
+**A retired directory is cleared the same way** (`poolRetiredDirs`, beside `poolRetiredPaths`).
+`fleets/<fleetId>/packs/` held the review packs a person shared into the pool, one JSON document and
+one HTML companion per pull request; review packs were removed, so the fleet's next publish removes
+every file under it, staged by name in the same commit. Nothing ever fetched from there — `fetch` names
+`digest.json` — so the directory is cleared for the person browsing the pool, not for a parser.
+
 ## The human-readable companion
 
 A pool lives where people already are — a team's wiki, a repository somebody browses on the web. What
 they find there is a JSON document written for an aggregator, and the fleet's own numbers are
 consequently readable only by the fleets. So each document is published with a rendering of itself
-beside it, at the same address: markdown for the digest, and for a
-[shared review pack](#a-third-document-rides-this-and-is-not-a-claim) the HTML companion
-[31](31-review-packs.md#reading-it) specifies. `poolCompanion` in `src/pool/companion.ts` is the one
-place that decides which, because what matters is a property of the pair — every document goes out
+beside it, at the same address: markdown for the digest. `poolCompanion` in `src/pool/companion.ts` is
+the one place that pairs them, because what matters is a property of the pair — every document goes out
 with its companion, written and committed together.
 
 **It is derived output and never an input.** `fetch` names `digest.json` by name, so nothing ever
@@ -638,7 +636,6 @@ during a pause, during shutdown and during the upgrade handoff, which is the cla
 | -------------- | ---------------------- | --------------------------------------------------------- |
 | Poll           | every pulse            | 30s busy, up to five minutes idle                         |
 | Digest publish | an hour since the last | the next pulse after the hour                             |
-| Packs          | a share is standing    | the next pulse — and prunes the pull requests long closed |
 
 ### The dirty flag is a hint. The content hash is the truth.
 
@@ -657,7 +654,6 @@ fleet commits an identical file twenty-four times a day and the pool's history i
 A route that did the network write would make an operator's click wait on a push to another continent,
 and a failed push there is a 500 on something that **succeeded locally** — the operator told their
 action failed when the store took it. The store write is the truth and the publish is a consequence.
-The one route that still asks for a publish is a pack share, and it marks and returns.
 
 **Dirty is a flag and not a queue.** Because the put is a whole replace, a failed push simply stays
 dirty. There is no pending-change list to lose, reorder or replay.
@@ -888,54 +884,6 @@ all go on `Place`
 back button steps over ([17](17-cockpit.md#the-address-bar)). Every colour it draws is a custom property
 on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on it is drawn with
 `<Ref to={ref}/>` — except that a pooled fleet has no ref to draw, and its name is text.
-
-## A third document rides this, and is not a claim
-
-_Built_ — specified in [31](31-review-packs.md#sharing-a-pack) rather than here, but it lands in this
-fleet's namespace, so it is named where a reader of this document would look for it.
-
-A **review pack** is the restatement of one change for a human reviewer: ideas, claims about the code,
-and the code they point at, embedded. A shared one is published as a second kind of document beside
-`digest.json`, over the same `PoolTransport`, under the same one-writer-per-namespace
-rule — with an HTML companion beside it, rendered the way
-[the markdown companion](#the-human-readable-companion) is: a pure function of the document, written
-together with it, never read back. The companion is the whole of the standalone rendering, for a
-reviewer with no harness.
-
-**One per pull request rather than one per fleet**, so it has an address of its own inside the
-namespace:
-
-```
-<pool.path>/fleets/<fleetId>/packs/pr-<n>.json   <pool.path>/fleets/<fleetId>/packs/pr-<n>.html
-```
-
-Which is also why **nothing polls it**. `fetch` names `digest.json` by name and never walks
-([the clone](#the-clone-and-its-root)), so a pack is published for a person to open and is never read
-back, landed or mirrored — and `parsePoolDocument` never sees one. `PoolDocumentKind` carries both
-values and `PoolClockKind` is the one a clock publishes and `pool_publications` tracks: a pack has no
-dirty flag, no content hash and no cadence, because it goes out when a person shares it and comes out
-when its pull request is long closed. Removing it is the one delete a transport does — `unpublish`,
-narrowed to a pack of this fleet's, so nothing can be asked to remove `digest.json`.
-
-**It rides the transport and nothing else.** Nothing about it is injected into a prompt or read by a
-rule. Two properties are worth stating here, because both cut against the arrangements above:
-
-- **Publishing is a person's act, per pack.** A digest is derived and goes out on a clock; a pack is
-  source, in volume, and goes nowhere until somebody says so. A pack unshared costs nobody anything.
-  The secret backstop that guarded the claims arm survives here, over every embedded line: a pack is
-  the only prose this pool still carries.
-- **Shared packs are pruned.** A pack for a merged pull request is dead weight in a substrate every
-  fleet clones, and the cost of keeping it is paid by whoever pulls rather than by whoever published.
-  The publishing fleet drops it from its namespace once the pull request has been closed for
-  `closedPrWindowMs`, the clock that drops the pull request from the world; the fleet's own local row
-  is kept.
-- **A pack can also be taken back out on the ask, and that is the same removal.** A pack shared by
-  mistake must not wait weeks for the prune, so the share row carries a `withdrawnAt` and the packs
-  arm calls the same `unpublish` on the next pulse before it looks at whether the pull request is dead
-  ([31](31-review-packs.md#unsharing-a-pack)). The **network write stays out of the route** for this
-  half exactly as for the publish: the route records the withdrawal and answers `202`, and a withdrawal
-  that throws leaves the row standing so the next pulse tries again. A share the pool never carried has
-  nothing to remove and no commit is made to say so.
 
 ## What nothing does
 

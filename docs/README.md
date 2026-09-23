@@ -117,7 +117,6 @@ deliberately left unchecked, and why, is in
 | [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | One namespace per fleet, and the shared digest of what each one spent                                                   |
 | [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
 | [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
-| [31](spec/31-review-packs.md)        | Review packs               | How a change is restated for a human: the witness log, the ideas, the claims, and the check                             |
 | [32](spec/32-local-validation.md)    | Local validation           | The fleet driving that environment: the plan, the browser, the reading, and the fix it schedules                        |
 | [33](spec/33-story-sequencing.md)    | Story sequencing           | The order the stories under a Feature are worked in, where it comes from, and the hold it puts on a story               |
 | [34](spec/34-usage-metrics.md)       | Usage metrics              | What the harness asks of a person and what they do about it: the ledger, surface reach, the digest section              |

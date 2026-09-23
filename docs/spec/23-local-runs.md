@@ -387,7 +387,7 @@ into an empty list or a zero, which would draw a reading nothing took.
   has that the checkout does not, which is an agent having pushed since the start. `base` is the branch
   this ref was cut from — a part's from `partBase`, the goal's own branch's from its pull request, none
   for the integration branch — and how many of its commits the ref lacks. Every count is null where the
-  clone cannot say, the review pack's rule ([31](31-review-packs.md)). Before comparing, the watch
+  clone cannot say. Before comparing, the watch
   fetches, floored by `planning.gitFetchIntervalMs` and only when the observer is real — and it is then
   the only thing keeping `origin/*` fresh on a deployment with no active plan, since the reconciler
   fetches only while it has plans to reconcile.

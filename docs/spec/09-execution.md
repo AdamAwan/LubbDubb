@@ -777,7 +777,7 @@ operator's own filename as a label.
 - **Scoped to the goal, not to the exact origin.** The lookup is `goalOriginFor(originRef) ?? originRef`
   — the harness's own spelling of "which goal is this origin inside": the issue half of `padOriginFor`,
   which decides who shares a scratchpad, so the two cannot drift. The pull request half is not a goal
-  ([31](31-review-packs.md#the-witness-log)), so a `pr:<n>:*` concern still resolves to itself here. It has to be: a filed brief's images are keyed `issue:<n>`
+  ([11](11-mcp-tools.md#forks-on-the-pad)), so a `pr:<n>:*` concern still resolves to itself here. It has to be: a filed brief's images are keyed `issue:<n>`
   while the agents that go on to work it are dispatched for `issue:<n>:appraisal`, `:plan`, `:part:<slug>`
   and `:retro`. An exact match would put the screenshot in front of the filing agent alone, the one
   agent that writes no code. An origin outside any issue subtree — a `job:<id>` brief that
@@ -791,14 +791,14 @@ operator's own filename as a label.
 ## The instruction to record forks reaches the agent
 
 `recordDispatchTask` appends `WITNESS_INSTRUCTION` (`src/scratch/pad.ts`, a constant) to every
-**code** dispatch's prompt, last among the appended blocks: the standing instruction of the witness
-log ([31](31-review-packs.md#the-witness-log)) to leave a `scratch_append` entry with a `decision`
+**code** dispatch's prompt, last among the appended blocks: the standing instruction to record forks
+([11](11-mcp-tools.md#forks-on-the-pad)) to leave a `scratch_append` entry with a `decision`
 at each fork the change takes.
 
 - **Appended, not filled in**, for the rejection note's reason — and with more force, because this
   block goes on every code dispatch there is: an operator template written before it existed would
   drop a `{witness}` token on every one of them, in silence.
-- **Code agents only.** A desk agent moves no head, and a pack is written from the forks behind one.
+- **Code agents only.** A desk agent moves no head, so it takes no fork in a change.
   The prompt of a desk dispatch is byte-identical to one composed before this existed.
 - **Last, and constant.** It is about how to work rather than what the work is, so it follows every
   block that says what the work is; and it derives nothing from the dispatch, so it is the one
@@ -1092,13 +1092,6 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   (`src/dispatcher/rules/readOnlyDispatch.ts`), the executor reads `action.readOnly` at the single
   `ensure` call site, and `readOnly` defaults to false — so a dispatch that writes code cannot lose
   its branch by omission. Tests: `test/readOnlyCheckout.test.ts`.
-- Two spawns live outside the executor and take the same shape: the review pack author
-  (`src/reviewPacks/author.ts`), which a reviewer asks for rather than a rule, leases a read-only
-  checkout of the pull request's head under `review-pack/pr-<n>/<headSha>` through this same
-  `ensureReadOnly`, and is released by the same reap; the checker (`src/reviewPacks/checker.ts`)
-  follows it onto the same head under `review-pack-check/pr-<n>/<headSha>`, one slot for all the
-  claims. The key carries the head because the task row has nowhere else to keep it.
-  → [31](31-review-packs.md#when-a-pack-is-made), [the check](31-review-packs.md#the-check)
 
 ### Handing a conversation on
 

@@ -35,7 +35,6 @@ is about.
 | `routes/spend.ts`           | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                                                                                                   |
 | `routes/allowance.ts`       | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                                                                                         |
 | `routes/readings.ts`        | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                                                                                             |
-| `routes/reviewPacks.ts`     | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
 | `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                                                                                            |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
@@ -510,114 +509,6 @@ reporting either as done would leave the operator believing the fleet had been a
 will never see. **No cycle is run** — the reopened thread is picked up by rule `pr-review-comment` on
 the next pulse under its own steam, and a pulse per click would buy a beat of latency at the cost of a
 provider read per click.
-
-### `POST /api/prs/:number/review-pack`
-
-Ask for a review pack for the pull request ([31](31-review-packs.md#when-a-pack-is-made)). **`202`,
-accepted rather than done**: the author is an agent run, and the route returns the moment the ask is
-accepted — `{ok, prNumber, headSha}`, the head the pack will be written against — because holding
-the connection for an agent would time out on every proxy between the cockpit and the port. The pack
-arrives later, through the read below.
-
-Refused in the order a reader would blame them: 400 on a non-integer number; 404 for a pull request
-that is not open; 409 when the provider reports no head for it, when an author is already on it
-(a second ask is refused rather than queued — the reader decides when a new pack is worth two agent
-runs, and the ask on a new head once the first author has finished is the same call), when the
-checker that follows the author is still on it (a second author would replace the ideas its verdicts
-are keyed to), and when dispatch is paused. The author is not counted against the concurrency cap; it takes a read-only
-worktree slot under `review-pack/pr-<n>/<headSha>`. Nothing is written to the provider and no cycle
-runs. A head the clone turns out not to hold fails after the 202 — recorded to the error log, with no
-task and no lease left behind — and the pull request can be asked about again.
-
-### `GET /api/prs/:number/review-pack`
-
-The pull request's current pack with the reviewer's marks: `ReviewPackPayload` — the record (the
-document and when it was written), every `ReviewMark` on the pull request, `head` (the pull
-request's head as the harness last saw it, null for one no longer in the world) and `stale`, set
-when that head is not the pack's: `{headSha, commitsBehind}`, the count asked of the clone and null
-where it cannot say — a head not yet fetched leaves the pack stale by sha alone, never "zero
-behind". Both null for a pull request the world no longer carries, which a reader must not fold into
-"current". `checking` says whether the checker is on the pull request right now, so a pack whose
-every verdict is null reads as "being checked" or "unchecked" rather than either
-([31](31-review-packs.md#the-check)). `sharing` is `{available, share}`: whether this deployment has
-a pool to publish to at all, and the pull request's share row — null where nobody has asked, which is
-the ordinary state ([31](31-review-packs.md#sharing-a-pack)). Nothing here regenerates a pack: a stale one is shown, and the
-ask above is how a new one is made.
-
-404 with `{error, writing}` (`ReviewPackAbsence`) when there is no pack — `writing` says whether an
-author is on its way, so "not asked for" and "on its way" read differently. The newest pack written
-is what is shipped, whatever head it names; an older head's row is kept and never shipped here.
-
-### `POST /api/prs/:number/review-pack/share`
-
-Publish the pull request's current pack into the cross-fleet pool — **a second, deliberate act**, and
-never something asking for a pack does ([31](31-review-packs.md#sharing-a-pack)). **`202`**, and the
-answer is the `ReviewPackSharing` the read above ships: the share is recorded and the document goes
-out on the pool's own pulse, because the publish is never inside a route handler
-([28](28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler)) — a route that did the
-network write would make the click wait on a push to another continent and report a failure there as
-a failure here.
-
-Refused: 400 on a non-integer number; 409 for a deployment with no pool (nothing is selected, or the
-fleet has no name yet), for a pull request with no pack to share, and — the one that matters — by the
-**secret backstop**, whose message names the line it stopped on and never quotes it. The backstop
-runs over every embedded line, not only the sentences, it refuses and never rewrites, and a refusal
-with somebody to tell writes no row: nothing was published and nothing was changed.
-
-Asking again on a newer pack replaces the share, and the pool holds one document per pull request.
-
-### `POST /api/prs/:number/review-pack/unshare`
-
-Take a shared pack back out of the pool — the inverse of the share, and the same shape: **`202`**
-with the `ReviewPackSharing`, because the removal is the pool's own arm's and never a route
-handler's ([31](31-review-packs.md#unsharing-a-pack)). The row is stamped `withdrawnAt` and the next
-pulse calls the transport's `unpublish` and deletes it; a share the pool never carried has nothing to
-remove and the row goes at once. Without it a pack shared by mistake waits for the prune, which is
-`closedPrWindowMs` after the pull request closes.
-
-Refused: 400 on a non-integer number; 409 for a deployment with no pool. Unsharing something nobody
-shared is **not** refused — the caller wanted it out of the pool, and it is.
-
-### `GET /api/review-calibration`
-
-What the review packs say about the agents that write them: the attention overrides, the plumbing
-ratio, and whether false claims get read ([31](31-review-packs.md#the-operators-reading)). Takes the
-Insights page's `window` (`InsightsQuery`) and answers `{calibration}`
-(`ReviewCalibrationPayload`). Folded over each pull request's **current** pack written in the window,
-with every mark on that pull request laid over it by the rule the page lays them by.
-
-It is in this module because the review packs are the group that owns the reading, not because it is
-an insights route. **It is never shown to the checker and reaches no prompt.**
-
-### `POST /api/prs/:number/review-pack/ideas/:id/read`
-
-Body `{read: boolean}` (`ReviewReadBody`). A reviewer marking an idea of the pull request's
-**current** pack read, or unread again ([31](31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack)).
-Recorded against every hunk the idea owns — its `hunk` anchors, at the pack's head — and never
-against the idea's id, which the next pack mints afresh; the `read` column alone is written, so an
-attention override on the same rows keeps what it had. Answers `{marks}` (`ReviewMarksPayload`):
-every mark on the pull request, exactly as the read ships them.
-
-Refused: 400 on a body that is not a boolean; 404 when the pull request has no pack, or when the
-current pack has no idea of that id — the pack was rewritten under the page, which should reload it;
-409 when the idea owns no hunk at all (a walk of regions only), since the mark would have nothing to
-ride on and a click that wrote nothing would read as taken.
-
-### `POST /api/prs/:number/review-pack/ideas/:id/attention`
-
-Body `{attention: 'read' | 'decide' | 'skim' | 'split' | null}` (`ReviewAttentionBody`) — the
-reviewer's label over the checker's, or null to clear it. The same rows, the same key and the same
-refusals as the read mark, writing only the `attention` column. The override is recorded and drawn;
-it is never shown to the checker on a later pack, and it is surfaced to the operator at
-`GET /api/review-calibration`.
-
-### `POST /api/prs/:number/review-pack/ideas/:id/seen`
-
-Body `{seen: boolean}` (`ReviewSeenBody`) — the reader taking the finding on this idea's false claim,
-or putting it back. The same rows, the same key and the same refusals as the other two marks, writing
-only the `seen` column ([31](31-review-packs.md#whether-prominence-works)). It is offered on the page
-under a finding and nowhere else; the route does not second-guess that by refusing an idea with no
-false claim, since the mark rides on hunks and the document's shape is the renderer's rule to keep.
 
 ### `POST /api/issues/:number/watch`
 
@@ -1506,7 +1397,7 @@ this design accepts, and a navigation must never break over a metric.
 ### `GET /api/scratchpads/:ref`
 
 One goal's — or one pull request's — shared scratchpad in full: every entry every agent on it left,
-oldest first, each fork with its `decision` ([31](31-review-packs.md#the-witness-log)). Fetched on
+oldest first, each fork with its `decision` ([11](11-mcp-tools.md#forks-on-the-pad)). Fetched on
 open for the reason the write-up above is, with more force: a pad is unbounded prose from every agent
 on the goal, where a retrospective is one document. The snapshot carries `issue.scratchpad`
 (`{entries, updatedAt}`, and `null` when nothing has been written), which is all a way in needs to
@@ -2486,13 +2377,10 @@ Four properties hold it together:
   about what gets bundled; `import type` is erased first. `test/wireContract.test.ts` asserts it
   structurally rather than trusting it: the shared modules must declare no runtime and import nothing
   by value, and `src/wire.ts` must be the **only** server module anything under `web/src/` names.
-  The declaration half still holds, but "imports nothing by value" is no longer the whole rule:
-  `src/wire.ts` also **re-exports** a named allow-list of pure derivations, so that the cockpit and the
-  server share one copy rather than two
-  ([31](31-review-packs.md#one-copy-of-the-derivations)). A re-export is invisible to the checks
-  above — they read declarations and `import` lines — so what a re-export may reach is pinned
-  separately by `test/wireRuntime.test.ts`, which walks each allowed module's transitive relative
-  imports and refuses a node builtin or a package value import.
+  A **re-export** of a value is invisible to those checks — they read declarations and `import`
+  lines — so `test/wireRuntime.test.ts` pins the modules `src/wire.ts` may pass a value through from,
+  and walks each one's transitive relative imports refusing a node builtin or a package value import.
+  The list is empty today: `src/wire.ts` re-exports no runtime.
 - **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
   `extends` it. The cockpit's copy previously widened the server's unions three different ways in one
   file — `Job.status` to `string`, `Proposal.action` to an index-signature bag, `Finding.status`

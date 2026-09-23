@@ -594,18 +594,45 @@ shape satisfied and the reading lost. `prBodyRefusal` (`src/pr/prBody.ts`) asser
 - **At most `PR_BODY.bullets` of them**, and none longer than `PR_BODY.bulletChars` characters. The
   length cap is what makes a paragraph impossible rather than merely discouraged — a bullet that
   needs a second line is a paragraph wearing a dash.
-- **The review packs' plainness rules, per bullet**, and their reading-ease floor over the set
-  (`src/reviewPacks/plainness.ts`, [31](31-review-packs.md#say-it-in-plainer-words)). Same numbers,
-  because it is the same question one subsystem over: no semicolons, no clause hung off a dash, no
-  sentence past `PLAINNESS.sentenceWords`, and a Flesch floor of `PLAINNESS.readingEase`. A per-line
-  cap cannot catch a register — every bullet can be short and every word still be one the reader has
-  to look up — so the body answers for its prose as a whole.
+- **The plainness rules, per bullet**, and their reading-ease floor over the set
+  ([below](#plain-words)): no semicolons, no clause hung off a dash, no sentence past
+  `PLAINNESS.sentenceWords`, and a Flesch floor of `PLAINNESS.readingEase`. A per-line cap cannot
+  catch a register — every bullet can be short and every word still be one the reader has to look
+  up — so the body answers for its prose as a whole.
 
 **Refused, never trimmed.** A truncated bullet reads as a finished thought that is wrong, and it
 ships that way: the body is the one thing about a pull request the harness does not rewrite. A
 refusal costs the agent one turn and names the exact line that broke it, which is a fix rather than
 a re-read of the description. An absent body is not refused — the footer stands on its own, and an
 agent with nothing to add should add nothing.
+
+### Plain words
+
+`src/pr/plainness.ts`. A cap makes writing short. It does nothing about the **register** — a line can
+be sixty characters and still read like a legal notice. So the same enforcement the cap gets,
+plainness gets: four rules, refused with the exact sentence that broke one.
+
+| Rule                          | Why it is a rule and not advice                                                |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| no semicolon                  | it is a full stop that will not admit it, and it is how two ideas get one line |
+| no clause hung off a dash     | a dash with a space each side is how a long sentence hides that it is two      |
+| no sentence over **24** words | one idea per sentence, and the count is what makes an author choose which idea |
+| reading ease at least **60**  | the backstop for the register itself, which no per-line rule catches           |
+
+The first three are per-bullet and their refusal quotes the sentence, so the fix is obvious. The
+fourth is one Flesch reading-ease score over the whole body, because each sentence can pass all three
+rules and every word still be one the reader has to look up. 60 is about a newspaper. Its refusal
+names the three sentences that cost the score most, since a score alone is a number nobody can act on.
+
+**Code is never counted.** Backticked spans, fenced blocks, table rows and any word that looks like an
+identifier — a path, a flag, a version, something with an internal capital — are dropped from both the
+sentence count and the syllable count. A bullet that names the method it is about would otherwise be
+refused for doing the right thing.
+
+The trade is stated rather than hidden: **a rule this blunt refuses some good writing.** "the
+template — edit this one" is fine English and is refused. That is accepted, because it costs the
+agent one rewrite. If bodies start failing on the score rather than the three rules, the floor is the
+number to move, not the rule to drop.
 
 ### The footer
 
@@ -662,9 +689,7 @@ The case is not that the operator writes a better body. It is that **writing is 
 understanding rather than a report of it**: a description you cannot write is a change you have not
 understood, and that is information available at no other moment and by no other means. Remove the
 writing and nothing announces what was lost, because what was lost is a state of mind and nothing
-measures one. The same argument [`mission.md`](../mission.md) already makes of review packs — a
-change is restated _"by a party that did not write it"_ — applied to the one part of a pull request
-where it was not.
+measures one. It is the argument [`mission.md`](../mission.md) opens with.
 
 It is also owed to the reviewer. A pull request spends another person's attention and the operator
 is the one spending it; sent with a body written by the thing that made the change, with nobody who
@@ -1344,12 +1369,6 @@ that, so what a person approves is a change something has already argued with.
 
 It is a first pass, not the last word. A human approval is still what rule `pr-merge-ready` requires,
 unchanged.
-
-**It is not a review pack, and does not write one.** [31](31-review-packs.md) restates a change as
-checked claims for the person reading it, on request, and reads the same diff this rule does. The two
-are kept apart on purpose: this review is one round, its charter is the project's, and on the
-deployments that run it a policy requires it — so its agent carries one job, and a pack is asked for
-separately. Neither reads the other's output.
 
 ### When it runs
 

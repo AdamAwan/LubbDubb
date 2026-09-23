@@ -10,14 +10,9 @@ bundled. `test/wireContract.test.ts` asserts both halves — that the shared mod
 and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 
-**One module is passed through by value, and it is a named exception rather than a crack.**
-`src/reviewPacks/derive.ts` — the review-pack derivations, pure functions of the pack document that
-the HTML companion and the cockpit's page both read — is re-exported by `src/wire.ts` and re-exported
-onward by `web/src/view/reviewPack.ts`, because the alternative was two byte-identical copies of three
-hundred lines including a syntax highlighter. It is a leaf: it imports `src/types.ts` for types and
-nothing else. `test/wireRuntime.test.ts` pins the list of modules the contract may pass a value
-through and walks what they import, because a re-export is not a declaration and slips past
-`test/wireContract.test.ts`. → [31](31-review-packs.md#one-copy-of-the-derivations)
+**Nothing is passed through by value.** `src/wire.ts` re-exports no runtime today, and
+`test/wireRuntime.test.ts` pins that list — a re-export is not a declaration and would slip past
+`test/wireContract.test.ts`, so adding one is a deliberate entry there.
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
@@ -553,8 +548,6 @@ once.
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                         |
-| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                                                                       |
-| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                                                                   |
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -1743,7 +1736,7 @@ decision, made once, taken by the console's chips, inputs and controls alike.
 ### The modal
 
 **One overlay** — `Modal` in `web/src/components/Modal.tsx`. Every sheet that covers the cockpit is
-drawn through it: the plan sheet, the goal's three composers, the questionnaire, the review pack, the
+drawn through it: the plan sheet, the goal's three composers, the questionnaire, the
 retrospective and notepad readers, the issue and bug filers, the agent drawer, the console's panels,
 the prompt-template viewer and the hatching ceremony.
 
@@ -2102,7 +2095,7 @@ to differ by a weight nobody declared.
 axes where the cockpit's registers genuinely differ, and folding them in would make a two-value
 component a four-value one:
 
-- **Family.** The review pack, the species sheet and most of the console draw their labels in mono.
+- **Family.** The species sheet and most of the console draw their labels in mono.
   That rule keeps its own `font-family`, which is one line.
 - **Colour.** `--muted`/`--grey` against `--cn-fg-faint`/`--cn-fg-dim` is [the two
   families](#tokens), not a namespace, so there are two faces — `.lb` and `.cn-lb` — and a label that
@@ -3101,11 +3094,7 @@ so a closed row still opens the page it links to rather than the gone screen.
 
 **The pull request's name is the way onto [its own page](#the-pull-request-page)**, with the
 provider reference beside it — never inside it, since one click cannot have two destinations and the
-provider is a different place from the cockpit's page for the same pull request. The
-[review pack](31-review-packs.md#reading-it) is asked for and opened there rather than on this row,
-which is where it sat while there was no pull request page to put it on. What the row keeps is the
-one bit that says whether going there is worth it: the [pack mark](31-review-packs.md#on-the-row),
-third in the reading slot, drawn only where there is a pack or one being written.
+provider is a different place from the cockpit's page for the same pull request.
 
 Whether anybody is waiting on an answer is the [comments mark](#the-checks-mark)'s, drawn only where
 there is one — a mark reading `0` on every settled pull request is furniture — and never at all where
@@ -3342,13 +3331,6 @@ page's own control (`selectPr(null)`) lands on the goal underneath, which the pl
 and because a `<Ref>` reaches this page from anywhere at all, the tab it hangs off is narrowed to one
 that lists pull requests on the way in → [nesting](#nesting).
 
-**A review pack is the rung above it** ([31](31-review-packs.md#reading-it)) — `?pack=<n>`, drawn by
-`ReviewPackScreen` with the tab, the goal and the pull request behind it in the crumb. It sits **above
-the "that pull request is gone" answer** deliberately: a pack is fetched by number over its own route
-and never off the snapshot, so it outlives the pull request's presence in the world, and a reader
-following a link to the pack of a long-closed pull request must not be told there is nothing there
-while the pack sits behind the message.
-
 **The goal rung _selects_ the goal, rather than clearing the pull request over it.** The two are the
 same move only when the place already holds the goal, and it does not always: the overview's
 pull-request rack — and every `<Ref to="pr:…">` drawn away from a goal page — opens this page with
@@ -3378,9 +3360,7 @@ What it draws:
   fleet, and whose
   court it is. The goal's reference sits at the far end of that line, and only the goal's: a ref onto
   this pull request opens this very page, so the provider's own is a control of its own —
-  `Open pull request ↗`, the shape the goal page's `Open ticket ↗` already has. The
-  [review pack](31-review-packs.md#reading-it) control rides the masthead beside it: a pack is a
-  reading of _this diff_, which is what the masthead is about.
+  `Open pull request ↗`, the shape the goal page's `Open ticket ↗` already has.
 - **The review threads**, which is what the page is for — see below.
 - **The checks**, in the CI policy's own three categories: what the harness will fix, what it will
   put to a person, what it has been told to leave alone. No check name is written in this repository;

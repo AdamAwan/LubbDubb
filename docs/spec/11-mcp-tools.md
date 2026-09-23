@@ -31,7 +31,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `appraise_issue`            | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `assess_issue`              | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins. On `delivered` its answer asks for the goal's check set as well, where one is still owed — the half of the fold an operator's prompt override cannot drop. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `conclude_part`             | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `scratch_append`            | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. An optional `decision` object `{chose, because, rejected: [{alternative, because}], paths}` marks the entry as a **fork** of the witness log ([31](31-review-packs.md#the-witness-log)); `chose` and `because` are required inside it, one line each, and a malformed one is refused by field name rather than stored as a note.                                                                                                                                                                                                                                                                                                                                                             |
+| `scratch_append`            | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. An optional `decision` object `{chose, because, rejected: [{alternative, because}], paths}` marks the entry as a **fork** ([below](#forks-on-the-pad)); `chose` and `because` are required inside it, one line each, and a malformed one is refused by field name rather than stored as a note.                                                                                                                                                                                                                                                                                                                                                             |
 | `scratch_read`              | Read that pad — every note left by every agent on the goal, oldest first, each fork with its decision. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `retro_submit`              | Submit the retrospective for a delivered goal: what shipped, and how the run went. One document, no second field — anything that outlives the goal goes through `raise`. Fenced to `issue:<n>:retro` origins. → [13](13-jobs-and-tickets.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `feature_summary`           | Say where a Feature has got to, for the person who asked for it: how far along it is, where it is, what of it is usable today and where, what needs a person, what is left. Five fields, only `standing` required, and short by construction — two sentences of lede and one-line bullets, with the lengths enforced rather than advised. Fenced to `issue:<n>:summary` origins — a working agent has an opinion about one story and no view of the rest. → [17](17-cockpit.md#the-feature-summary)                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -50,8 +50,6 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `review_route`              | Choose which of the project's declared review modes a pull request gets — the triage's verdict, as a **name from an enum** rather than prose, because the reviewer's prompt, charter and model profile are all resolved from it before it runs. A name the project has not declared is refused. Where the project set `review.allowSkip`, it also carries `skip: true` — that the pull request needs no review at all — and that argument is offered **only** on those deployments: the one answer that waives the gate rather than sizing it is not left in front of a triage whose project never opened it. A skip and a mode together is refused, and the reason is required either way, because on a skip the row is the only account of why a change went in unread. Refused to any caller whose own origin is not `pr:<n>:review-triage`. → [07](07-pull-requests.md#choosing-how-to-review)   |
 | `split_assess`              | Say whether a pull request the harness measured past `planning.fileBudget` holds one concept or several — the answer a file count cannot give. `coherent` is a record and an ending: nothing happens and nothing asks again, so the reason is the whole account of why a wide pull request was left alone. `split` requires at least **two** named concepts, and its answer is an instruction to propose the plan that separates them with `plan_correct` in the same turn; the recording itself splits nothing, closes nothing and touches no branch. Refused to any caller whose own origin is not `issue:<n>:split:<pr>`, which is also where both the pull request and the issue are read from — the tool takes neither as an argument. → [07](07-pull-requests.md#how-wide-a-pull-request-is)                                                                                                   |
 | `pr_describe`               | Write the description of a pull request the operator handed to an agent with no draft to use. The body runs `prBodyRefusal` — the rules `open_pr`'s `body` runs — and is recorded as the part's draft, which `PrDescriptionDesk` pushes above the footer. Refused to any caller whose origin is not `issue:<n>:describe:<pr>`. → [07](07-pull-requests.md#the-agents-draft)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `review_pack_submit`        | Hand back the review pack for the pull request this agent was dispatched to restate: the ideas, their claims and provenance, their walks — a hunk anchor by the id the prompt listed, a region anchor by path and lines — and the gists and notes. **The call is the pack**: the harness copies the pull request and head off the task, mints the idea ids (`plumbing` excepted), fills every hunk's range and code from the diff and every region's code from the tree, stamps witness notes from the entries they cite, reads `witnessed` off the log, and refuses a pack that leaves a hunk unowned or owns one twice, naming the hunks. Everything the checker owns — verdicts, attention, cues, the reading order — is set null and never taken. Fenced to `pr:<n>:pack` origins, by name. → [31](31-review-packs.md#when-a-pack-is-made)                                                       |
-| `review_pack_check`         | Record the checker's verdicts on the review pack this agent was dispatched to check, keyed to what its prompt handed out — the idea ids and the claim numbers — never a document back: per idea an `attention` label and its `cue`; per claim a `verdict` (`true`, `false`, `cant_tell`) with its `evidence` and, on a false one, a `finding` (headline, body, the step of the walk it is about, an optional `counter` range the harness reads off the tree); and the reading `order`. **The call is the check**: the desk merges it onto the stored document through a function that can reach only those fields, so nothing else in the pack — a claim's wording, an anchor, a `key` or `disputed` mark — can be changed from here. Complete or refused: every idea, every claim, the order naming each idea once. Fenced to `pr:<n>:check` origins, by name. → [31](31-review-packs.md#the-check) |
 | `reply_to_review`           | Hand the harness your reply to a review thread, instead of posting it yourself — say with `resolved` whether the thread is now dealt with, which is the only thing that closes one, and with `about_comment` and `changed_code` what the thread was, which nothing else records. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                                                                                                                                                                                                                            |
 | `request_permission`        | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
@@ -313,6 +311,8 @@ back on the silent failure the list exists to end — which is `PromptId`'s `ret
 ([05](05-dispatcher.md#prompt-templates)), reached independently and for the same reason.
 `knowledge_ask` joined the list when the claim store went: there is no search tool now, and that is a
 decision rather than an omission → [27](27-obstacles.md#reporting-is-the-lookup).
+`review_pack_submit` and `review_pack_check` joined it when review packs were removed; nothing replaced
+them, so `retiredToolMessage` answers those two with that instead of pointing at `raise`.
 
 **A withdrawn word _inside_ a live tool is answered the same way, in the module that owns it rather
 than on this list.** `validation_report`'s third verdict was `handback` until the three validation
@@ -666,8 +666,8 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
 - **And the shape is checked, because a description is a request.** `prBodyRefusal`
   (`src/pr/prBody.ts`) runs before anything resolves, and a body that breaks the form is a
   `toolError` rather than a pull request: every line a bullet, at most `PR_BODY.bullets` of them,
-  none past `PR_BODY.bulletChars` characters, and the review packs' plainness rules and reading-ease
-  floor over the bullets. Asked politely for five bullets, agents wrote five paragraphs with a dash
+  none past `PR_BODY.bulletChars` characters, and the plainness rules and reading-ease floor
+  ([07](07-pull-requests.md#plain-words)) over the bullets. Asked politely for five bullets, agents wrote five paragraphs with a dash
   in front of each. Refused rather than trimmed — a cut bullet reads as a finished thought that is
   wrong — and the refusal quotes the line it caught, so the agent fixes that line.
   → [07](07-pull-requests.md#the-body-is-not-templated)
@@ -786,6 +786,83 @@ is not told about and does not call itself.
   to the operator is Claude's headless default, a silent deny, which is a worse answer to the same
   question. Where the channel itself is unavailable the tool is unwired and denies rather than
   blocking, which is the floor below rather than a setting.
+
+## Forks on the pad
+
+_Built_ — `src/scratch/pad.ts`, `src/mcp/tools/scratchAppend.ts` and `src/store/scratch.ts`;
+`test/witnessLog.test.ts` holds it.
+
+A working agent records **forks** on the pad, not commentary. A fork is a moment where the change could
+reasonably have gone another way. One line at the fork is cheap; recovering it afterwards is not.
+
+**A fork is a pad entry, not a second store.** The pad ([the tools](#the-tools), `scratch_append`) is
+already an append-only, attributed, per-goal record that survives worktree reuse and re-dispatch and is
+replayed to the next agent on the goal — every property a record of forks needs. A fork is an entry
+that carries a _decision_ argument beside its note; an entry without one is an ordinary note. No new
+tool, so the three-way agreement in [launch flags](#launch-flags) is untouched; the tool's schema grows
+one optional object, and `scratch_entries` grows one column, `decision`, holding the object as JSON and
+null on a note — an existing table, so it has its `ColumnMigrations` entry, `SCRATCH_COLUMNS`
+([14](14-persistence.md#migrations)). Null is what every row from before the column spells, and it is
+the right answer for all of them, so no backfill is owed.
+
+**The pad has a second family for the agents the issue pad refuses.** `padOriginFor` resolves
+`issue:<n>` subtrees, and refuses to reach an issue's pad from a `pr:<n>:*` origin on purpose:
+`linkedPrNumber` is sticky, so reaching an issue's pad through a pull request would let an agent write
+onto a goal it was not sent to. But the CI-fix and review-comment agents are `pr:<n>:*` origins, and
+they are exactly the agents whose pushes move a head. So a `pr:<n>:*` origin resolves to a pad of its
+own, `pr:<n>`, that no issue agent reads and no issue agent can reach — and the resolution is by the
+origin's own first segment, never by a join, so the sticky `linkedPrNumber` still reaches nothing.
+`scratch_read` and `GET /api/scratchpads/:ref` resolve the same way
+([16](16-http-api.md#get-apiscratchpadsref)). A desk agent on a pull request — the triage, the fleet
+reviewer — may write there too, and rarely has reason to.
+
+Two things the pull request's pad does **not** yet do: it is not replayed into the next agent on the
+pull request the way `priorWorkBriefing` replays an issue's pad — a CI fixer reads it with
+`scratch_read` — and the cockpit draws no way into it, since the notepad is opened from a goal's page
+alone ([17](17-cockpit.md#the-notepad-modal)).
+
+An entry's `decision` carries:
+
+| Field      | What                                                             |
+| ---------- | ---------------------------------------------------------------- |
+| `chose`    | one line: what the change does here                              |
+| `because`  | one line: why                                                    |
+| `rejected` | zero or more alternatives, each with the reason it was not taken |
+| `paths`    | the files the fork touches, where the agent can say              |
+
+`chose` and `because` are required inside the object and every line is collapsed to one; `rejected`
+and `paths` may be empty and come back empty rather than missing, so a reader never has to ask which
+fields a fork carries. `normalisePadDecision` refuses a malformed object **by field name** — the way
+`normalisePadNote` refuses an empty note — rather than storing it as a note, because a fork lost in
+silence is the one thing the record exists not to do; an over-long line or list is trimmed and the
+result says so, the pad's own trade. The pad supplies `createdAt` from the harness clock, and
+attribution from the credential.
+
+`rejected` is the field that justifies recording forks at all. _Why not the other way?_ is the question
+a reader of a change asks most often and the one a diff can never answer, because the road not taken
+leaves no trace in the tree. The agent's transcript holds it, in principle — the harness keeps every
+one ([10](10-agent-runtimes.md)) — but a transcript is the whole run, tool output included, and reading
+one to find three forks costs more than the forks are worth. The entry is the fork already found.
+
+Three rules hold the record honest, and all three are properties of the pad rather than instructions
+in a prompt:
+
+- **Append-only.** The pad offers no edit and no delete. A later entry may supersede an earlier one
+  and says so; the earlier one stays.
+- **No prose ceiling to fill.** An agent with nothing to record writes nothing. An empty pad is an
+  honest outcome, not a gap to pad out.
+- **It is read where the pad is read.** In the notepad modal, drawn apart from a note — chose,
+  because, the rejected list ([17](17-cockpit.md#the-notepad-modal)); replayed into the next agent on
+  the goal like every other pad note, decision included (`padTestimony`); and in the retrospective's
+  dossier, which reads the pad through the same function.
+
+The instruction to use it, `WITNESS_INSTRUCTION`, is **appended** to the rendered execution prompt of
+every code dispatch, never interpolated into it — an operator's overridden template never learned the
+placeholder, and interpolation drops it silently on exactly the deployments that customised most. It
+is short: what a fork is, that `rejected` is the field that matters, and that an empty record is fine.
+Desk agents do not get it — they move no head, so they take no fork in a change.
+→ [09](09-execution.md#the-instruction-to-record-forks-reaches-the-agent),
+[05](05-dispatcher.md#prompt-templates)
 
 ## Identity
 
@@ -1372,7 +1449,6 @@ So every tool is named in one of two places, and which one is a decision, not a 
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `appraise_issue`, `plan_submit`, `plan_not_needed`, `retro_submit`, `feature_summary`, `link_ticket`,
-  `review_pack_submit`, `review_pack_check`,
   the scratch pair, the validation pair. The planner's **two verdicts** sit here together, and that is the
   rule doing its work rather than an exception to it: `plan_submit` is fenced to `issue:<n>:plan` and
   `plan_not_needed` to the same family, so the addendum — read by every agent there is — was naming a
@@ -1427,10 +1503,9 @@ it scopes, for the reason the naming classification lives there:
   no release ever had**.
 
 **The fail-open default is the load-bearing half.** A task carries no rule when nothing in the pipeline
-dispatched it — the review-pack author and checker are asked for from a cockpit row, and rows from before
-the column existed are backfilled from `dispatchReason` and may stay null. Folding null into "core only"
-would advertise a review-pack author no `review_pack_submit`, and the run would end having answered
-nothing, with nothing red anywhere.
+dispatched it — rows from before the column existed are backfilled from `dispatchReason` and may stay
+null. Folding null into "core only" would advertise such an agent none of the extras its prompt names,
+and the run would end having answered nothing, with nothing red anywhere.
 
 **Unadvertised is not withdrawn.** A tool outside the dispatch's set is built with `hidden: true`, the
 same flag [retired names](#retired-tools) use, and `handleRequest` filters `hidden` out of `tools/list`

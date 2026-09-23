@@ -36,11 +36,12 @@ them. The risk is concentrated: a join, a branch of business logic, an authorisa
 who spreads an hour evenly over the diff spends most of it where nothing was going to be found, and
 reaches the dangerous part tired.
 
-So the harness's job at review time is to **say where to look**. A change is restated as ideas, each
-labelled for how hard to look at it and why, by a party that did not write it — how much scrutiny a
-change deserves is exactly the judgement not to take from its author. The reviewer still reads. They
-read the two things that mattered, properly, instead of forty that did not, badly.
-→ [31 — Review packs](spec/31-review-packs.md)
+So the harness's job at review time is to **say where to look** — and how much scrutiny a change
+deserves is exactly the judgement not to take from its author. The fleet's own review reads the diff
+first, as a party that did not write it, so what a person approves is a change something has already
+argued with. The reviewer still reads. They should read the two things that mattered, properly, instead
+of forty that did not, badly.
+→ [07 — The fleet review](spec/07-pull-requests.md#the-fleet-review)
 
 ## What this is not
 

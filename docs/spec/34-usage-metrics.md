@@ -74,7 +74,6 @@ offers no such control, and the day it does, the cell is where it is added.
 | `goal`        | `view` `expand` `edit` `accept` `abandon`                |
 | `pr`          | `view` `accept` `send`                                   |
 | `validation`  | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
-| `review-pack` | `view` `expand` `send`                                   |
 | `escalation`  | `view` `accept` `reject` `send`                          |
 | `human-task`  | `view` `accept` `reject`                                 |
 | `ticket`      | `view` `filter` `create`                                 |
