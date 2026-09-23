@@ -162,6 +162,7 @@ test('a declined row is owed to nobody and is never assembled onto a sheet', () 
     checks: new Map([[GOAL, checks]]),
     sheetRows: new Map(),
     opened: null,
+    released: null,
     watchCleared: null,
   });
   const filed = steps.find((s) => s.kind === 'file');

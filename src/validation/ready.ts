@@ -20,6 +20,8 @@ interface ValidationReadyInput {
   /** The sheet rows an arrival assembled, by goal — one line each on the row's detail. */
   sheetRows: ReadonlyMap<string, readonly RemoteSheetRow[]>;
   opened: ReadonlySet<string> | null;
+  /** Goals whose check set is released; null reads every set as released. */
+  released: ReadonlySet<string> | null;
   watchCleared: ReadonlySet<string> | null;
 }
 
@@ -44,6 +46,16 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
           taskId: existing.id,
           status: 'done',
           resolution: settledResolution(live.length),
+        });
+      continue;
+    }
+    if (input.released !== null && !input.released.has(originRef)) {
+      if (existing?.status === 'open')
+        steps.push({
+          kind: 'settle',
+          taskId: existing.id,
+          status: 'declined',
+          resolution: DESK_SETTLED + 'the check set is waiting on your accept — it is not work until you do',
         });
       continue;
     }

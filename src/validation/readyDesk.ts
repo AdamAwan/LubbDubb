@@ -3,6 +3,7 @@ import { watchClearedGoals } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
+import { checkSetReleased } from './planApproval.js';
 import { validationReadyPass } from './ready.js';
 
 // → docs/spec/20-validation.md
@@ -22,12 +23,14 @@ export class ValidationReadyDesk {
     const deliveries = this.store.verdicts.listDeliveries();
     const existing = this.store.humanTasks.listHumanTasksOfKind('validate');
     if (deliveries.length === 0 && existing.length === 0) return;
+    const checks = this.checksByOrigin(deliveries.map((d) => d.originRef));
     const steps = validationReadyPass({
       issues: world.issues,
       deliveries,
       shortfalls: this.store.verdicts.listShortfalls(),
       existing,
-      checks: this.checksByOrigin(deliveries.map((d) => d.originRef)),
+      checks,
+      released: this.releasedOf(checks),
       sheetRows: this.sheetRowsByOrigin(),
       watchCleared: watchClearedGoals(
         'validate',
@@ -82,6 +85,7 @@ export class ValidationReadyDesk {
       checks: this.checksByOrigin([originRef]),
       sheetRows: this.sheetRowsByOrigin(),
       opened: null,
+      released: null,
       watchCleared: null,
     });
     let settled = false;
@@ -91,6 +95,14 @@ export class ValidationReadyDesk {
       settled = true;
     }
     return settled;
+  }
+
+  private releasedOf(checks: ReadonlyMap<string, readonly ValidationCheck[]>): Set<string> {
+    const out = new Set<string>();
+    for (const [originRef, its] of checks)
+      if (checkSetReleased({ record: this.store.validation.getValidationPlanRecord(originRef), checks: its }))
+        out.add(originRef);
+    return out;
   }
 
   private sheetRowsByOrigin(): Map<string, RemoteSheetRow[]> {

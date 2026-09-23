@@ -328,6 +328,7 @@ two different things to meet on a goal page, and only one of them is yours to ac
 | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | Sheet assembly — `sheetableArrivals` reads released, not authored ([36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)) | Authoring. The planner still runs on `delivered` and still writes the set                                       |
 | Rule `validate-check` — a check handed to the fleet on an unreleased set dispatches nothing                                                              | An operator's own reading. The rows draw on the goal page, marked as proposed, and a person may run one by hand |
+| The `validate` bench row — `ValidationReadyDesk` files none on an unreleased set, and retracts a standing one ([below](#saying-so-on-the-bench))         |                                                                                                                 |
 
 **A set no press ever released reads as released.** `checkSetReleased` (`src/validation/planApproval.ts`)
 answers on the stamp only where the validation planner wrote one: a goal carrying checks a plan document
@@ -554,7 +555,7 @@ one at boot, `id` and `letter` untouched
 | `do`             | The procedure, markdown. Prose form, still accepted and still what a human-only check usually carries.                                                                                                                                                                                                                                                                                                                                                                                              |
 | `steps`          | The procedure in executable form: an ordered list, each step assigned. Optional — a check has `do`, or `steps`, or both. It is also where the **area** a remote run selects the check by lives, and the spec names that area is expected to run: both are read off a `suite` step (`stepArea`, `stepExpects`) and the check carries no field for either, because one fact with two homes drifts. → [The test plan](#the-test-plan), [36](36-remote-validation.md#how-a-check-comes-to-have-an-area) |
 | `expect`         | What a pass looks like, markdown. Where `steps` carries per-step expectations, this is what the run as a whole has to satisfy. Asked for as grouped bullets and drawn as markdown — [How the note and the `expect` are written](#how-the-note-and-the-expect-are-written).                                                                                                                                                                                                                          |
-| `proof`          | What a pass must hand **back**, markdown. Null is *none demanded*. A check that declares it is refused a pass that names no capture, on every channel that can record one. → [Proof](#proof)                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `proof`          | What a pass must hand **back**, markdown. Null is _none demanded_. A check that declares it is refused a pass that names no capture, on every channel that can record one. → [Proof](#proof)                                                                                                                                                                                                                                                                                                        |
 | `uses`           | Resource **names**, not paths.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `covers`         | Part slugs this check exercises. Optional, any number.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.**                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -785,8 +786,8 @@ operator's press deciding, false is a plan that can never execute.
 ## Proof
 
 **Built.** `proof` is what a check's author says has to come **back** for a pass to count: the screen,
-and what has to be visible on it. It is prose, it is optional, and null means *no evidence was
-demanded* — which is every check written before the field, and every check whose assertion is the whole
+and what has to be visible on it. It is prose, it is optional, and null means _no evidence was
+demanded_ — which is every check written before the field, and every check whose assertion is the whole
 of its evidence.
 
 **It is not a second `expect`.** `expect` is what has to be **true**; `proof` is what has to be handed
@@ -1016,6 +1017,15 @@ sheet waiting to be run is this row's business. → [36](36-remote-validation.md
 check rows, with the ones still owed already open, under the desk's prose. The detail above them is
 still what this desk writes and still refreshed every pulse — it is what the row says on every surface
 that has no check rows to draw. → [17](17-cockpit.md#an-ask-that-asks-for-work-draws-the-work)
+
+**It waits for the check set's accept.** A set still proposed is not work yet
+([The check set is proposed before it is work](#the-check-set-is-proposed-before-it-is-work)), so the
+desk reads `checkSetReleased` and files nothing on one — otherwise the bench carries the accept card
+and a "run these checks" row for the same set at once, the second asking for work the first has not
+agreed to. A row already standing when the set goes back to proposed (re-authored after an accept) is
+settled with the `DESK_SETTLED` marker, so the accept that releases the set reopens it. The hold is
+the pulse's alone: `settleAnswered` does not consult it, so a check a person runs by hand on a
+proposed set still settles what it answers.
 
 **It blocks nothing**, which is the table at the top of this document holding: the row gates no
 dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running
