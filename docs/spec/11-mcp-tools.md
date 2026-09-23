@@ -31,7 +31,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `appraise_issue`            | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `assess_issue`              | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins. On `delivered` its answer asks for the goal's check set as well, where one is still owed — the half of the fold an operator's prompt override cannot drop. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `conclude_part`             | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `scratch_append`            | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. An optional `decision` object `{chose, because, rejected: [{alternative, because}], paths}` marks the entry as a **fork** ([below](#forks-on-the-pad)); `chose` and `because` are required inside it, one line each, and a malformed one is refused by field name rather than stored as a note.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `scratch_append`            | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. Takes `note` and an optional `topic` only — it no longer accepts a `decision` ([below](#forks-on-the-pad)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `scratch_read`              | Read that pad — every note left by every agent on the goal, oldest first, each fork with its decision. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `retro_submit`              | Submit the retrospective for a delivered goal: what shipped, and how the run went. One document, no second field — anything that outlives the goal goes through `raise`. Fenced to `issue:<n>:retro` origins. → [13](13-jobs-and-tickets.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `feature_summary`           | Say where a Feature has got to, for the person who asked for it: how far along it is, where it is, what of it is usable today and where, what needs a person, what is left. Five fields, only `standing` required, and short by construction — two sentences of lede and one-line bullets, with the lengths enforced rather than advised. Fenced to `issue:<n>:summary` origins — a working agent has an opinion about one story and no view of the rest. → [17](17-cockpit.md#the-feature-summary)                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -789,21 +789,21 @@ is not told about and does not call itself.
 
 ## Forks on the pad
 
-_Built_ — `src/scratch/pad.ts`, `src/mcp/tools/scratchAppend.ts` and `src/store/scratch.ts`;
-`test/witnessLog.test.ts` holds it.
+_Withdrawn from the tool_ — `scratch_entries.decision` and the readers stay; `test/witnessLog.test.ts`
+holds what is left.
 
-A working agent records **forks** on the pad, not commentary. A fork is a moment where the change could
-reasonably have gone another way. One line at the fork is cheap; recovering it afterwards is not.
+`scratch_append` once took an optional `decision` object `{chose, because, rejected, paths}` that marked
+an entry as a **fork**, and its description asked agents to record what they chose, why, and the
+alternatives they rejected. That request tripped the model API's safeguards (`[reasoning_extraction]`,
+[18](18-observability.md#api-errors)), so both the standing prompt instruction and the tool argument are
+gone. The tool takes `note` and `topic` only, and its description no longer asks for reasoning.
 
-**A fork is a pad entry, not a second store.** The pad ([the tools](#the-tools), `scratch_append`) is
-already an append-only, attributed, per-goal record that survives worktree reuse and re-dispatch and is
-replayed to the next agent on the goal — every property a record of forks needs. A fork is an entry
-that carries a _decision_ argument beside its note; an entry without one is an ordinary note. No new
-tool, so the three-way agreement in [launch flags](#launch-flags) is untouched; the tool's schema grows
-one optional object, and `scratch_entries` grows one column, `decision`, holding the object as JSON and
-null on a note — an existing table, so it has its `ColumnMigrations` entry, `SCRATCH_COLUMNS`
-([14](14-persistence.md#migrations)). Null is what every row from before the column spells, and it is
-the right answer for all of them, so no backfill is owed.
+What stays, so nothing already written is lost:
+
+- **The column.** `scratch_entries.decision` holds a `PadDecision` as JSON, null on a note, with its
+  `ColumnMigrations` entry, `SCRATCH_COLUMNS` ([14](14-persistence.md#migrations)). No new row gets one.
+- **The readers.** A stored fork is still drawn apart from a note in the notepad modal
+  ([17](17-cockpit.md#the-notepad-modal)), replayed by `padTestimony`, and read by the retrospective.
 
 **The pad has a second family for the agents the issue pad refuses.** `padOriginFor` resolves
 `issue:<n>` subtrees, and refuses to reach an issue's pad from a `pr:<n>:*` origin on purpose:
@@ -821,44 +821,8 @@ pull request the way `priorWorkBriefing` replays an issue's pad — a CI fixer r
 `scratch_read` — and the cockpit draws no way into it, since the notepad is opened from a goal's page
 alone ([17](17-cockpit.md#the-notepad-modal)).
 
-An entry's `decision` carries:
-
-| Field      | What                                                             |
-| ---------- | ---------------------------------------------------------------- |
-| `chose`    | one line: what the change does here                              |
-| `because`  | one line: why                                                    |
-| `rejected` | zero or more alternatives, each with the reason it was not taken |
-| `paths`    | the files the fork touches, where the agent can say              |
-
-`chose` and `because` are required inside the object and every line is collapsed to one; `rejected`
-and `paths` may be empty and come back empty rather than missing, so a reader never has to ask which
-fields a fork carries. `normalisePadDecision` refuses a malformed object **by field name** — the way
-`normalisePadNote` refuses an empty note — rather than storing it as a note, because a fork lost in
-silence is the one thing the record exists not to do; an over-long line or list is trimmed and the
-result says so, the pad's own trade. The pad supplies `createdAt` from the harness clock, and
-attribution from the credential.
-
-`rejected` is the field that justifies recording forks at all. _Why not the other way?_ is the question
-a reader of a change asks most often and the one a diff can never answer, because the road not taken
-leaves no trace in the tree. The agent's transcript holds it, in principle — the harness keeps every
-one ([10](10-agent-runtimes.md)) — but a transcript is the whole run, tool output included, and reading
-one to find three forks costs more than the forks are worth. The entry is the fork already found.
-
-Three rules hold the record honest, and all three are properties of the pad rather than instructions
-in a prompt:
-
-- **Append-only.** The pad offers no edit and no delete. A later entry may supersede an earlier one
-  and says so; the earlier one stays.
-- **No prose ceiling to fill.** An agent with nothing to record writes nothing. An empty pad is an
-  honest outcome, not a gap to pad out.
-- **It is read where the pad is read.** In the notepad modal, drawn apart from a note — chose,
-  because, the rejected list ([17](17-cockpit.md#the-notepad-modal)); replayed into the next agent on
-  the goal like every other pad note, decision included (`padTestimony`); and in the retrospective's
-  dossier, which reads the pad through the same function.
-
-No prompt tells an agent to record forks. The `decision` field stays on `scratch_append` for an agent
-that uses it unprompted; the standing instruction that was appended to every code dispatch was removed
-because it tripped security checks on the agent side.
+**Do not ask an agent for its reasoning.** No prompt and no tool description asks an agent to record
+why it chose one approach over another or which alternatives it rejected.
 
 ## Identity
 

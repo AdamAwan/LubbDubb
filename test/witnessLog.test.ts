@@ -4,13 +4,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import {
-  goalOriginFor,
-  MAX_DECISION_ITEMS,
-  MAX_PAD_LINE,
-  normalisePadDecision,
-  padOriginFor,
-} from '../src/scratch/pad.js';
+import { goalOriginFor, padOriginFor } from '../src/scratch/pad.js';
+import { buildTools } from '../src/mcp/tools.js';
 import { padTestimony } from '../src/retro/dossier.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -81,54 +76,6 @@ test("a pull request's concerns resolve to the pull request's own pad, which is 
   assert.equal(goalOriginFor('job:job_abc'), null);
 });
 
-test('a decision is normalised whole, and absent means a note', () => {
-  assert.deepEqual(normalisePadDecision(undefined), { ok: true, decision: null, trimmed: false });
-  assert.deepEqual(normalisePadDecision(null), { ok: true, decision: null, trimmed: false });
-
-  const whole = normalisePadDecision(FORK);
-  assert.deepEqual(whole, { ok: true, decision: FORK, trimmed: false });
-
-  const bare = normalisePadDecision({ chose: 'x', because: 'y' });
-  assert.deepEqual(bare, { ok: true, decision: { chose: 'x', because: 'y', rejected: [], paths: [] }, trimmed: false });
-
-  const folded = normalisePadDecision({ chose: '  two\n  lines ', because: 'why' });
-  assert.equal(folded.ok && folded.decision?.chose, 'two lines');
-});
-
-test('a malformed decision is refused by field name', () => {
-  const cases: [unknown, RegExp][] = [
-    [{ because: 'y' }, /decision\.chose is required/],
-    [{ chose: 'x' }, /decision\.because is required/],
-    [{ chose: 'x', because: '   ' }, /decision\.because is required/],
-    ['just a string', /decision must be an object/],
-    [['a', 'b'], /decision must be an object/],
-    [{ chose: 'x', because: 'y', rejected: 'none' }, /decision\.rejected must be a list/],
-    [{ chose: 'x', because: 'y', rejected: [{ alternative: 'a' }] }, /decision\.rejected\[0\]\.because is required/],
-    [{ chose: 'x', because: 'y', rejected: [{ because: 'b' }] }, /decision\.rejected\[0\]\.alternative is required/],
-    [{ chose: 'x', because: 'y', rejected: ['a'] }, /decision\.rejected\[0\] must be an object/],
-    [{ chose: 'x', because: 'y', paths: 'src' }, /decision\.paths must be a list/],
-    [{ chose: 'x', because: 'y', paths: ['ok', 3] }, /decision\.paths\[1\] is required/],
-  ];
-  for (const [input, error] of cases) {
-    const res = normalisePadDecision(input);
-    assert.equal(res.ok, false, JSON.stringify(input));
-    if (!res.ok) assert.match(res.error, error);
-  }
-});
-
-test('an over-long line or list is trimmed rather than refused, and says so', () => {
-  const long = normalisePadDecision({
-    chose: 'c'.repeat(MAX_PAD_LINE + 5),
-    because: 'y',
-    rejected: Array.from({ length: MAX_DECISION_ITEMS + 3 }, (_, i) => ({ alternative: `a${i}`, because: 'b' })),
-  });
-  assert.equal(long.ok, true);
-  if (!long.ok) return;
-  assert.equal(long.trimmed, true);
-  assert.equal(long.decision?.chose.length, MAX_PAD_LINE);
-  assert.equal(long.decision?.rejected.length, MAX_DECISION_ITEMS);
-});
-
 test('a fork is replayed with its decision wherever the pad is read', () => {
   const entry: ScratchEntry = {
     id: 's1',
@@ -149,26 +96,33 @@ test('a fork is replayed with its decision wherever the pad is read', () => {
   assert.doesNotMatch(padTestimony([{ ...entry, decision: null }]), /Rejected|chose:/, 'a note carries no fork lines');
 });
 
-test('a fork is stored and read back whole, and a note is unaffected', async () => {
+test('the tool takes no decision, and a fork already stored is read back whole', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:part:schema');
 
-  const wrote = await callTool(system, agent, 'scratch_append', {
-    note: 'the migration is where the guard has to go',
+  const task = system.store.tasks.getTask(agent.taskId)!;
+  const append = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find(
+    (t) => t.name === 'scratch_append',
+  );
+  assert.ok(append);
+  const schema = append.inputSchema as { properties: Record<string, unknown> };
+  assert.deepEqual(Object.keys(schema.properties).sort(), ['note', 'topic'], 'scratch_append offers no decision');
+
+  system.store.scratch.appendScratchEntry({
+    padRef: 'issue:12',
+    authorOriginRef: 'issue:12:part:schema',
+    agentId: agent.id,
+    taskId: agent.taskId,
     topic: 'store',
+    note: 'the migration is where the guard has to go',
     decision: FORK,
   });
-  assert.equal(wrote.isError, false, wrote.text);
-  assert.match(wrote.text, /"fork":\s*true/);
-
   const plain = await callTool(system, agent, 'scratch_append', { note: 'an ordinary note' });
-  assert.equal(plain.isError, false);
-  assert.match(plain.text, /"fork":\s*false/);
+  assert.equal(plain.isError, false, plain.text);
 
   const entries = system.store.scratch.listScratchEntries('issue:12');
   assert.equal(entries.length, 2);
   assert.deepEqual(entries[0]?.decision, FORK, 'the store hands the decision back exactly as written');
-  assert.equal(entries[0]?.note, 'the migration is where the guard has to go');
   assert.equal(entries[1]?.decision, null);
   assert.equal(entries[1]?.note, 'an ordinary note');
 
@@ -188,19 +142,6 @@ test('a fork is stored and read back whole, and a note is unaffected', async () 
   system.store.close();
 });
 
-test('a malformed decision is refused by name through the tool, and lands nowhere', async () => {
-  const system = build();
-  const agent = spawnAgent(system, 'issue:12');
-  const res = await callTool(system, agent, 'scratch_append', {
-    note: 'a fork with no reason',
-    decision: { chose: 'this way' },
-  });
-  assert.equal(res.isError, true);
-  assert.match(res.text, /decision\.because is required/);
-  assert.equal(system.store.scratch.listScratchEntries('issue:12').length, 0, 'a refused fork is not stored as a note');
-  system.store.close();
-});
-
 test("a pull request's agents write to the pull request's own pad, never the issue's", async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
@@ -216,7 +157,6 @@ test("a pull request's agents write to the pull request's own pad, never the iss
   assert.equal(onIssue.isError, false);
   const onPr = await callTool(system, ciAgent, 'scratch_append', {
     note: 'the failing check was the base branch',
-    decision: { chose: 'Rebase onto main', because: 'the failure is not ours' },
   });
   assert.equal(onPr.isError, false, onPr.text);
   assert.match(onPr.text, /"pad":\s*"pr:42"/);
