@@ -25,7 +25,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/features',
     FEATURES_RATE_LIMIT,
     checked({}, async ({ reply }) => {
-      if (!featureBoardOn(config, connector)) {
+      if (!featureBoardOn(connector)) {
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
 
@@ -115,7 +115,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/features/:number/sequence',
     FEATURES_RATE_LIMIT,
     checked({ params: NumberParams, body: SequenceAnswerBody }, async ({ params, body, reply }) => {
-      if (!featureBoardOn(config, connector)) {
+      if (!featureBoardOn(connector)) {
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
       const answered = store.sequences.answerFeatureSequence(
@@ -137,7 +137,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/features/:number/pause',
     FEATURES_RATE_LIMIT,
     checked({ params: NumberParams, body: PauseBody }, ({ params, body, reply }) => {
-      if (!featureBoardOn(config, connector)) {
+      if (!featureBoardOn(connector)) {
         return reply.code(404).send({ error: 'no feature board on this deployment' });
       }
       store.pauses.setGoalPause(goalPauseOrigin(params.number), body.paused);

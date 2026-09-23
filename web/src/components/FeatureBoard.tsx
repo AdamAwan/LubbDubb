@@ -14,6 +14,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import { featureHolds, goalPullRequests } from '../view/featureHolds.js';
 import type { FeatureHold, FeatureHolds, FeaturePresence, GoalPullRequest } from '../view/featureHolds.js';
 import { FeatureFocus } from './FeatureFocus.js';
+import { FeatureSummariesAd } from './FeatureSummariesAd.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AgentOnIt } from './AgentOnIt.js';
@@ -126,6 +127,8 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
             </>
           )}
         </div>
+
+        {!view.state.config.featureSummaries && <FeatureSummariesAd actions={actions} onTurnedOn={() => void read()} />}
 
         {view.featureMode === 'focus' && (
           <FeatureFocus board={board} view={view} actions={actions} onAnswered={() => void read()} />
@@ -801,9 +804,10 @@ function Presence({
   );
 }
 
-function Standing({ feature, view }: { feature: FeatureRollup; view: CockpitView }): JSX.Element {
+function Standing({ feature, view }: { feature: FeatureRollup; view: CockpitView }): JSX.Element | null {
   const summary = feature.summary;
   if (summary === null) {
+    if (!view.state.config.featureSummaries) return null;
     return (
       <p className="cn-fb-noline">
         {feature.counts.inFlight + feature.counts.delivered + feature.counts.fellShort + feature.counts.settled === 0

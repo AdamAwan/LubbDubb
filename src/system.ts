@@ -89,8 +89,8 @@ import { reviewModeNames } from './review/prReview.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import { issueWatchGateReason, openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelFor } from './watchLabels.js';
-import { featureBoardOn } from './features/featureBoard.js';
-import { featureRecords } from './summaries/featureRecord.js';
+import { featureSummariesOn } from './features/featureBoard.js';
+import { featureRecords, type FeatureBoardFacts } from './summaries/featureRecord.js';
 import { resolveModelTag } from './modelLabels.js';
 import { sequenceableFeatures } from './sequence/sequence.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
@@ -403,13 +403,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultPriority: 0,
   };
 
-  const featureBoard = featureBoardOn(config, connector)
-    ? {
-        containerTypes: config.issueContainerTypes,
-        watchLabel: watchLabelFor(config.labelPrefix),
-        environments: config.environments,
-      }
-    : null;
+  const featureBoard = (): FeatureBoardFacts | null =>
+    featureSummariesOn(config, connector)
+      ? {
+          containerTypes: config.issueContainerTypes,
+          watchLabel: watchLabelFor(config.labelPrefix),
+          environments: config.environments,
+        }
+      : null;
 
   const agents: AgentManager = new AgentManager(store, {
     command: config.claudeCommand,
@@ -428,11 +429,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
             },
           }
         : undefined,
-    featureStanding: featureBoard
-      ? (featureOrigin: string): string | null =>
-          featureRecords(store, featureBoard).find((f) => issueOriginRef('root', f.number) === featureOrigin)?.key ??
-          null
-      : undefined,
+    featureStanding: (featureOrigin: string): string | null => {
+      const facts = featureBoard();
+      if (!facts) return null;
+      return featureRecords(store, facts).find((f) => issueOriginRef('root', f.number) === featureOrigin)?.key ?? null;
+    },
     featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
       const found = sequenceableFeatures(
         store.world.getWorldBaseline()?.issues ?? [],
@@ -498,7 +499,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     autoSendReplies: () => config.sendPrRepliesWithoutApproval,
     ciEvidence: opts.ciEvidence ?? connector,
     instructionTracker: (issueNumber) => ticketAmendCommands(config, issueNumber),
-    featureBoard: featureBoard ?? undefined,
+    featureBoard,
   });
 
   const reviewPacks = new ReviewPackAuthor({
@@ -774,10 +775,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     connector,
     dispatcher,
     executor,
-    featureStandings: featureBoard
-      ? (): { number: number; title: string; key: string }[] =>
-          featureRecords(store, featureBoard).map((f) => ({ number: f.number, title: f.title, key: f.key }))
-      : undefined,
+    featureStandings: (): { number: number; title: string; key: string }[] => {
+      const facts = featureBoard();
+      if (!facts) return [];
+      return featureRecords(store, facts).map((f) => ({ number: f.number, title: f.title, key: f.key }));
+    },
     plans,
     appraisals,
     areaPaths,

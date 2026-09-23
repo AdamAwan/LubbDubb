@@ -103,3 +103,16 @@ test('an unchanged config is not a change', () => {
   const { live } = harness();
   assert.deepEqual(live.apply(loadConfig({ maxConcurrentAgents: 3 })), []);
 });
+
+test('feature summaries apply now, so the Features banner can turn them on without a restart', () => {
+  const { running, live } = harness({ featureBoard: false });
+
+  const changes = live.apply(loadConfig({ maxConcurrentAgents: 3, featureBoard: true }));
+
+  assert.deepEqual(
+    changes.map((change) => ({ path: change.path, applied: change.applied })),
+    [{ path: 'featureBoard', applied: true }],
+  );
+  assert.equal(running.featureBoard, true, 'the object featureSummariesOn reads on every pulse');
+  assert.deepEqual(live.pending(), [], 'no restart is owed for it');
+});

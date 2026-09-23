@@ -92,7 +92,7 @@ interface ExecutorDeps {
   errors: ErrorRecorder;
   ciEvidence?: CiEvidenceReader;
   instructionTracker?: (issueNumber: number) => string | null;
-  featureBoard?: FeatureBoardFacts;
+  featureBoard?: () => FeatureBoardFacts | null;
 }
 
 export interface ExecutionSummary {
@@ -838,7 +838,7 @@ export class ActionExecutor {
     const prior = priorWorkFor(action.originRef, store, outstanding !== null);
     const delivered = deliveredWorkFor(action.originRef, store);
     const briefing = retroBriefing(action.originRef, store);
-    const feature = featureBriefing(action.originRef, store, this.deps.featureBoard);
+    const feature = featureBriefing(action.originRef, store, this.deps.featureBoard?.() ?? undefined);
     const sequence = sequenceBriefing(
       action.originRef,
       store.world.getWorldBaseline()?.issues ?? [],

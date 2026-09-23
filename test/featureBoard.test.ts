@@ -6,7 +6,7 @@ import {
   FEATURE_CHILDREN,
   FEATURE_LANDINGS,
 } from '../src/features/featureBoard.js';
-import { featureBoardOn } from '../src/features/featureBoard.js';
+import { featureBoardOn, featureSummariesOn } from '../src/features/featureBoard.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
 import type { Escalation, GoalEnvironmentReach, GoalLanding, IssueDelivery, IssueShortfall } from '../src/types.js';
 
@@ -451,14 +451,19 @@ test('the orphan card gets a briefing too — the work under no Feature is still
   assert.equal(board.orphans?.briefing.delivered[0]?.summary, 'Shipped 1');
 });
 
-test('the board needs the flag and a provider that can place a work item', () => {
+test('the board needs only a provider that can place a work item', () => {
+  assert.equal(featureBoardOn({ canPlaceWorkItem: () => true }), true);
+  assert.equal(featureBoardOn({ canPlaceWorkItem: () => false }), false);
+});
+
+test('summaries need the flag and a provider that can place a work item', () => {
   const azure = { canPlaceWorkItem: () => true };
   const github = { canPlaceWorkItem: () => false };
 
-  assert.equal(featureBoardOn({ featureBoard: true }, azure), true);
-  assert.equal(featureBoardOn({ featureBoard: true }, github), false);
-  assert.equal(featureBoardOn({ featureBoard: false }, azure), false);
-  assert.equal(featureBoardOn({ featureBoard: false }, github), false);
+  assert.equal(featureSummariesOn({ featureBoard: true }, azure), true);
+  assert.equal(featureSummariesOn({ featureBoard: true }, github), false);
+  assert.equal(featureSummariesOn({ featureBoard: false }, azure), false);
+  assert.equal(featureSummariesOn({ featureBoard: false }, github), false);
 });
 
 test('a closed story with no Feature leaves the board, but its spend does not', () => {

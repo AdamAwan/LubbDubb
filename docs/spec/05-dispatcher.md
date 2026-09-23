@@ -1452,10 +1452,11 @@ dispatcher's half is:
   `retrospectiveOrigins`' rule, and for its reason: a rule branching on what an agent wrote about a
   Feature would let one account of it change what the harness schedules next. Nothing under
   `src/dispatcher/` touches `buildFeatureBoard`.
-- **Absent means off.** Both fields are empty on a deployment with no feature board — no flag, or a
-  tracker with no hierarchy — and nothing is ever summarised. One conjunction (`featureBoardOn`)
-  gates the route, the cockpit's tab, the dossier and the digest, so they cannot come to different
-  answers about whether the feature exists at all.
+- **Absent means off.** Both fields are empty on a deployment without summaries — no `featureBoard`
+  flag, or a tracker with no hierarchy — and nothing is ever summarised. The board itself is drawn
+  without the flag ([17](17-cockpit.md#the-two-gates)); one conjunction (`featureSummariesOn`) gates
+  the rule's inputs, the dossier, the digest and the cockpit's banner, so they cannot come to
+  different answers about whether anything is being summarised.
 - **One at a time.** A summariser already on the Feature is not joined by a second: it reads the
   standing again when it submits, so the movement that would have dispatched the second is already
   in what the first is writing.

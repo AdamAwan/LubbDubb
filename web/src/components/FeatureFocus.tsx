@@ -76,7 +76,12 @@ export function FeatureFocus({
         ))}
       </nav>
 
-      <Context rollup={picked.rollup} holds={picked.holds} onChanged={onAnswered} />
+      <Context
+        summaries={view.state.config.featureSummaries}
+        rollup={picked.rollup}
+        holds={picked.holds}
+        onChanged={onAnswered}
+      />
       <YourMove holds={picked.holds} view={view} actions={actions} onAnswered={onAnswered} />
       <Goals rollup={picked.rollup} holds={picked.holds} actions={actions} />
     </div>
@@ -90,10 +95,12 @@ export function FeatureFocus({
  */
 function Context({
   rollup,
+  summaries,
   holds,
   onChanged,
 }: {
   rollup: FeatureRollup;
+  summaries: boolean;
   holds: FeatureHolds;
   onChanged: () => void;
 }): JSX.Element {
@@ -107,7 +114,7 @@ function Context({
         </span>
       </h2>
       {rollup.summary === null ? (
-        <p className="cn-psub">Not yet summarised.</p>
+        summaries && <p className="cn-psub">Not yet summarised.</p>
       ) : (
         <>
           {rollup.summary.headline !== null && <p className="cn-ff-headline">{rollup.summary.headline}</p>}

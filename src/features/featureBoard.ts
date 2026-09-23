@@ -364,6 +364,13 @@ function byWantsYouThenSize(a: FeatureRollup, b: FeatureRollup): number {
   return resting(a) - resting(b) || wants(b) - wants(a) || b.counts.total - a.counts.total || a.number - b.number;
 }
 
-export function featureBoardOn(config: { featureBoard: boolean }, connector: { canPlaceWorkItem(): boolean }): boolean {
-  return config.featureBoard && connector.canPlaceWorkItem();
+export function featureBoardOn(connector: { canPlaceWorkItem(): boolean }): boolean {
+  return connector.canPlaceWorkItem();
+}
+
+export function featureSummariesOn(
+  config: { featureBoard: boolean },
+  connector: { canPlaceWorkItem(): boolean },
+): boolean {
+  return config.featureBoard && featureBoardOn(connector);
 }

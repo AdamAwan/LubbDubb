@@ -102,7 +102,7 @@ import type {
 } from '../types.js';
 import type { PredictionDraft, ReviewPackReading, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
-import { buildDemoState, demoPlanHistory } from './fixtures.js';
+import { buildDemoState, DEMO_FEATURE_SUMMARIES, demoPlanHistory } from './fixtures.js';
 import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 import { inFlight } from '../view/localValidation.js';
@@ -584,6 +584,11 @@ class DemoServer {
 
   private id(prefix: string): string {
     return `${prefix}-${++this.seq}`;
+  }
+
+  turnOnFeatureSummaries(): void {
+    demoFeatureSummaries = true;
+    this.state.config.featureSummaries = true;
   }
 
   async getState(): Promise<AppState> {
@@ -5072,11 +5077,14 @@ export const demoApi = {
   saveConfig: (edits: { set?: Record<string, unknown>; clear?: string[]; baseline: string }) => {
     demoConfigText = demoConfigTextFor(edits.set ?? {});
     demoSetupWritten = true;
+    /* The one live field the demo honours, so the Features banner's toggle does what it says. */
+    if (edits.set?.featureBoard === true) getServer().turnOnFeatureSummaries();
+    const changes = demoChanges(edits.set ?? {}).map((c) => (c.path === 'featureBoard' ? { ...c, applied: true } : c));
     return Promise.resolve({
       ok: true as const,
       revision: 'demo',
-      changes: demoChanges(edits.set ?? {}),
-      pending: demoChanges(edits.set ?? {}),
+      changes,
+      pending: changes.filter((c) => !c.applied),
     });
   },
   restartHarness: () => Promise.reject(new Error('the demo has no process to restart')),
@@ -5364,6 +5372,7 @@ function demoTickets(query: {
   };
 }
 
+let demoFeatureSummaries = DEMO_FEATURE_SUMMARIES;
 const DEMO_FEATURE_PAUSES = new Map<number, string>();
 const DEMO_FEATURE_PRIORITIES = new Map<number, string>();
 
@@ -5742,7 +5751,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       children: ordered(rows),
       costUsd: cost(rows),
       reach: extra.reach,
-      summary: extra.summary,
+      summary: demoFeatureSummaries ? extra.summary : null,
       sequence: number === 901 ? acceptedOrder(number, rows) : null,
       lastLandingAt: landed[0]?.at ?? null,
       landings: landed,

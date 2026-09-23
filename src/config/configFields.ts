@@ -482,7 +482,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'featureBoard',
     type: 'boolean',
     access: 'plain',
-    why: 'Draw the Feature board — the fleet’s work rolled up per Feature — and let rule `feature-summary` spend one desk agent per Feature whose work has moved, to say where it has got to. Needs a tracker with a container hierarchy; on a provider without one the tab stays absent and nothing is summarised.',
+    why: 'Let rule `feature-summary` spend one desk agent per Feature whose work has moved, to write down where it has got to — the prose on the Features tab. The tab itself is drawn without it wherever the tracker has a container hierarchy. Turned on, every Feature is summarised once straight away.',
   },
   {
     path: 'planning.maxConcurrentPartsPerIssue',

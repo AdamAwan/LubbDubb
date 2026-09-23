@@ -202,6 +202,10 @@ function demoPart(seed: PartSeed): PlanPartView {
  *
  * → docs/spec/17-cockpit.md#demo-mode
  */
+/** Off, so the demo's Features tab is what a deployment that has not set `featureBoard` sees:
+ *  the board without the summariser's prose, under the banner offering it. */
+export const DEMO_FEATURE_SUMMARIES = false;
+
 export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
@@ -222,6 +226,7 @@ export function buildDemoState(): DemoSeed {
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
       featureBoard: true,
+      featureSummaries: DEMO_FEATURE_SUMMARIES,
       canPlaceWorkItem: true,
       desktopFolder: '/Users/you/code/inkwell-books',
       ejectionEnabled: true,

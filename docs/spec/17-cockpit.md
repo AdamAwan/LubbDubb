@@ -2390,8 +2390,8 @@ draw:
   another, asked once on the server exactly as `canCloseIssue` and `canSetWorkItemState` are. Where it
   is false the warning would be a dead end rather than a warning, and it is drawn nowhere.
 
-  It was **`config.featureBoard`**, which is that same probe _and_ the operator's own flag, folded by
-  `featureBoardOn` ([the two gates](#the-two-gates)). The argument for the conjunction was that
+  It was **`config.featureBoard`**, which was then that same probe _and_ the operator's own flag, folded
+  by `featureBoardOn` (the tab has since dropped the flag too — [the two gates](#the-two-gates)). The argument for the conjunction was that
   somebody who has not asked for the tier above their stories has not asked to be told which stories
   are missing from it — but that argument is about a **tab**, and this band is about a fact: the goal
   merges, closes, and rolls up to nothing. One flag was answering both questions with the tab's
@@ -5567,7 +5567,7 @@ to the bar forgets.
 ## The feature board
 
 `web/src/components/FeatureBoard.tsx`, off `/api/features`, derived by `src/features/featureBoard.ts`.
-**Off by default and absent on most deployments** — see [the two gates](#the-two-gates) below.
+**Drawn wherever the tracker has a hierarchy, flag or no flag** — see [the two gates](#the-two-gates) below.
 
 A fleet worked at the story level answers _is #583 done_ and never _how is the Environments work
 going_, and the second question is the one anybody outside the fleet actually asks. The board is that
@@ -5591,28 +5591,63 @@ none. `test/refLinks.test.ts` pins the merge here beside the other three.
 
 ### The two gates
 
-The board needs **both** the operator's `featureBoard` flag ([02](02-configuration.md)) and a provider
-that can place a work item. The second is not a permission check and not a guess at the provider's
-name: `canPlaceWorkItem` is asked of the connector exactly as `canCloseIssue` and `canSetWorkItemState`
-are, and it is the right predicate rather than a near one — placing a work item _is_ setting its
-parent, so a provider that can do it is exactly a provider with the container hierarchy this board
-rolls up. GitHub answers false by design ([15](15-integrations.md)).
+There are two gates, and they hold **different things**: the tab, and the agent that writes on it.
 
-Without that second half the flag alone would draw a page where every item is its own orphan and the
-whole board is one grey card. So on a flat tracker the tab is **absent**, not empty.
+**The tab needs only a provider that can place a work item** — `featureBoardOn(connector)` in
+`src/features/featureBoard.ts`. That is not a permission check and not a guess at the provider's name:
+`canPlaceWorkItem` is asked of the connector exactly as `canCloseIssue` and `canSetWorkItemState` are,
+and it is the right predicate rather than a near one — placing a work item _is_ setting its parent, so
+a provider that can do it is exactly a provider with the container hierarchy this board rolls up.
+GitHub answers false by design ([15](15-integrations.md)). Without it the board would be a page where
+every item is its own orphan and the whole board is one grey card, so on a flat tracker the tab is
+**absent**, not empty.
 
-The conjunction is one predicate — `featureBoardOn` in `src/features/featureBoard.ts` — read by four
-callers that must never disagree: the route's own refusal, the `config.featureBoard` on `/api/state`
-that the nav draws its tab off, the dossier a summariser is handed, and the digest its submission is
-stamped with. Two copies would drift into the cockpit's worst shape, a tab whose every fetch 404s. The
-refusal is a **404 and not a 403** for the same reason: neither gate is about permission, and a 403
-would send whoever reported it looking for a token problem.
+It used to need the operator's `featureBoard` flag as well, and that was the wrong half of the
+conjunction. Everything on the board except the summary is a quotation of what the deployment already
+records — the mirror's hierarchy (the sweep reads parents whether or not anybody asked for the tab),
+`ticketOutcomes`, the verdicts, the spend, the landings, the reach, the open asks. None of it costs an
+agent, and a Feature's worth of it was sitting unread on every Azure deployment that had never set a
+flag it had no reason to know about.
 
-**The flag switches on an agent as well as a surface.** Rule `feature-summary`
-([05](05-dispatcher.md)) spends one desk agent per Feature whose work has moved, and both halves of
-this gate hold it: a deployment with the flag off, or a tracker with no hierarchy, summarises nothing
-and does not read the mirror to find out whether anything moved. That is worth stating where the flag
-is described, because "draw a tab" is not what an operator expects to start a fleet.
+**The flag gates the summariser, and only that** — `featureSummariesOn(config, connector)`, the flag
+_and_ the tab's own predicate. Rule `feature-summary` ([05](05-dispatcher.md)) spends one desk agent
+per Feature whose work has moved, and a deployment with the flag off summarises nothing and does not
+read the mirror to find out whether anything moved. The config key kept its name: renaming it would
+silently turn the summariser off on every deployment that had set it.
+
+Each predicate is one function read by every caller that must agree with it. `featureBoardOn` is read
+by the route's own refusal and the `config.featureBoard` on `/api/state` that the nav draws its tab
+off — two copies would drift into the cockpit's worst shape, a tab whose every fetch 404s.
+`featureSummariesOn` is read by the `config.featureSummaries` on `/api/state` the board draws its
+banner off, the dossier a summariser is handed, and the digest its submission is stamped with. The
+route's refusal is a **404 and not a 403**: the gate is not about permission, and a 403 would send
+whoever reported it looking for a token problem.
+
+### The summaries banner
+
+With `featureSummaries` false, the board draws **one banner under its head**
+(`web/src/components/FeatureSummariesAd.tsx`): what turning the flag on adds, and how. It is an
+advert and it says so — the gains are the account's own fields (how far along; usable now, needs a
+person, left to do), the one-line view that only [works with a headline](#the-board-at-length), and
+the rewrite-on-movement stamp — and it names the **cost** in the same breath: one desk agent per
+Feature when its work moves, and one per Feature straight away, since none has an account yet. An
+operator switching on a fleet of agents from a banner should not learn that from the bill.
+
+**Turn on** writes the key rather than sending the operator to the settings page: it saves
+`featureBoard: true` through `POST /api/config` ([16](16-http-api.md)), the same write the
+Configuration page makes, so the file is still the one record of the setting and a refusal (the key
+pinned by the environment, a file changed underneath) comes back in the banner in that route's own
+words. `featureBoard` has a live arm ([02](02-configuration.md#liveness)), so
+the save applies at once: the cockpit refreshes, the banner goes, and the summariser starts on the next
+pulse. A deployment whose save came back pending anyway is told the harness applies it on restart,
+rather than shown a success it has not had. The demo opens with summaries off (`DEMO_FEATURE_SUMMARIES`), so the tab shows what a deployment without the flag sees, and honours the same button by flipping its own summaries on.
+
+**Not now** hides it for that browser (`localStorage`, read in a `try`); it is a preference, not a
+place, so it is not on the query string.
+
+**With summaries off, a card draws no "Not yet summarised" line.** That line is a promise that an
+account is coming, and on a deployment without the summariser it is false — the brief and the focus
+header simply start at the counts. The banner is the one place that says why the prose is missing.
 
 ### Board or focus
 
@@ -5740,9 +5775,9 @@ twice as long to scan and put the detail of one Feature in the way of every othe
 **A container's goal page is its feature page.** A container is never dispatched at
 ([06](06-issue-pickup.md#watching-a-container-cascades)), so the goal page of a Feature has no plan,
 no checks and no pull requests — every pane empty — yet every reference to it (the _Unseen stories_
-row, a `Ref`) leads there. So where the feature board is on and the goal's issue is a container
+row, a `Ref`) leads there. So where the feature board is drawn and the goal's issue is a container
 type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same page, reached by
-`?goal=`, with its crumb back to the tab it came from. With the board off there is no page to draw,
+`?goal=`, with its crumb back to the tab it came from. On a tracker with no hierarchy there is no page to draw,
 and the goal page stands.
 
 The detail is three columns from 1200px and one below: **its order, and what landed** (the story
