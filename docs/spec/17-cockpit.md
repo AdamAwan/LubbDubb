@@ -2983,6 +2983,11 @@ a rail row that appears to do nothing.
 Below the plan — criteria are read against the shape that was proposed — the goal page draws the
 current criteria version prominently, with the chain behind it collapsed, newest first.
 
+**The card is not drawn while the plan is at its gate.** The gate asks what "done" means in the same
+sitting as the prediction ([the criteria half](#the-criteria-half-of-the-gate)); a second field asking
+the same thing lower on the same pane is a question the operator meets twice, and whichever one they
+answer, the other reads as still owed. The card arrives once the plan is revealed.
+
 **Once anybody has written a version the card arrives folded**, because what is in it is then a
 record and the pane below it is the work. The heading still carries the version count and the drift
 tag, which is what a folded card owes its reader. Nothing written is the other way round: the card
