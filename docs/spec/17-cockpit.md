@@ -5770,7 +5770,9 @@ A card opened is **a page of its own**, not a card unfolded in the list: `?card=
 tab in board mode ([the address bar](#the-address-bar)), so the back button steps out of it and a link
 somebody sends opens on it. It draws a crumb back to the board, the same brief, and under it the
 detail below. The list stays a list of briefs — one card standing open among them made the board
-twice as long to scan and put the detail of one Feature in the way of every other.
+twice as long to scan and put the detail of one Feature in the way of every other. **Opening the
+Features tab always lands on the list**: `openTab('features')` drops `card`, so the tab is never a
+way back into whichever Feature was read last — the back button is.
 
 **A container's goal page is its feature page.** A container is never dispatched at
 ([06](06-issue-pickup.md#watching-a-container-cascades)), so the goal page of a Feature has no plan,

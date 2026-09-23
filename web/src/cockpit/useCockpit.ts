@@ -269,7 +269,7 @@ export function useCockpit(): CockpitStatus {
         go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
       openPanel: (panel) => go({ panel }),
-      openTab: (next) => go({ tab: next }),
+      openTab: (next) => go(next === 'features' ? { tab: next, featureCard: null } : { tab: next }),
       setTicketQuery: (next) => {
         logUsage('ticket.filter');
         go(next);
