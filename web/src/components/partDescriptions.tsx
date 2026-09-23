@@ -12,12 +12,8 @@ interface PartDescriptions {
 }
 
 /**
- * Null until the read answers, and null for good where it does not.
- *
- * The goal-level route is mounted only where `manualDescriptions` is on, so a read
- * that never answers is a deployment with the feature off — and every surface under
- * this provider draws nothing. The presence of the data decides, never a flag on the
- * payload, which is the rule the panel already learned this way.
+ * Null until the read answers, and null for good where it does not — every surface
+ * under this provider then draws nothing.
  */
 const PartDescriptionContext = createContext<PartDescriptions | null>(null);
 

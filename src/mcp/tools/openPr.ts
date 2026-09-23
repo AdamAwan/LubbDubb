@@ -50,11 +50,8 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       body: z
         .string()
         .describe(
-          (deps.manualDescriptions
-            ? 'Optional PR body. On this deployment the operator writes the description, so what you send is ' +
-              'kept as a draft they can read and choose to use rather than put on the pull request at the ' +
-              'open. Write it the same way either way. '
-            : 'Optional PR body. ') +
+          'Optional PR body. The operator writes the description, so what you send is kept as a draft ' +
+            'they can read and choose to use rather than put on the pull request at the open. ' +
             'The harness adds the issue reference itself, so describe the change, not ' +
             `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
             'the change is needed first and what it does after, one line each. No headings, no prose ' +
@@ -111,10 +108,9 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       total: target.total,
       expandsIssueRefs: (deps.openPr?.prRefStyle ?? '#') === '!',
     });
-    // With `manualDescriptions` on, the agent's body is kept as a draft rather than
-    // shipped: the operator decides whether it reaches the pull request.
-    // → docs/spec/07-pull-requests.md#the-agents-draft
-    const body = deps.manualDescriptions ? footer : [given, footer].filter((part) => part !== '').join('\n\n');
+    // The agent's body is kept as a draft rather than shipped: the operator decides
+    // whether it reaches the pull request. → docs/spec/07-pull-requests.md#the-agents-draft
+    const body = footer;
 
     try {
       const result = await wiring.sink.createPullRequest({
@@ -136,9 +132,13 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         // The footer this body carries, kept so the description written against the
         // open pull request goes in front of it without the body being read back off
         // the provider. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
-        if (deps.manualDescriptions && target.partRef !== null) {
+        if (target.partRef !== null) {
           deps.store.prDescriptions.recordPrBody({ originRef: target.partRef, prNumber, tail: footer });
-          if (given !== '') deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: given });
+          if (given !== '') {
+            deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: given });
+            if (deps.autoUseAgentDescriptions)
+              deps.store.prDescriptions.handOff({ originRef: target.partRef, prNumber, handedBy: null });
+          }
         }
       }
       return ok({

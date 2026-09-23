@@ -324,7 +324,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reviewModes: reviewModeNames(config.review),
     reviewAllowSkip: config.review.allowSkip,
     checkSets: config.validation.checkSets,
-    manualDescriptions: config.manualDescriptions,
+    autoUseAgentDescriptions: config.autoUseAgentDescriptions,
     repoRoot: config.repoRoot,
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
     permissions: (): PermissionDesk => permissions,
@@ -589,12 +589,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     template: prompts.render('pr-title', {}),
     errors,
   });
-  // Only where the operator writes the description: with `manualDescriptions` off
-  // nothing ever writes a `pr_description_bodies` row, so the desk would read an
-  // empty table on every pulse for ever.
-  const prDescriptions = config.manualDescriptions
-    ? new PrDescriptionDesk({ sink: opts.sink ?? connector, store, errors })
-    : undefined;
+  const prDescriptions = new PrDescriptionDesk({ sink: opts.sink ?? connector, store, errors });
 
   const prWatch = new PrWatchDesk({
     sink: opts.sink ?? connector,

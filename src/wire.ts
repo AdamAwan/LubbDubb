@@ -408,9 +408,7 @@ export interface CockpitState {
   localRunTargets: LocalRunTargetView[];
   planParts: PlanPartView[];
   /**
-   * Parts whose pull request is open and which nobody has described. Empty on every
-   * deployment with `manualDescriptions` off, which is what keeps the ask off a
-   * cockpit where the agent writes the body.
+   * Parts whose pull request is open and which nobody has described.
    *
    * It is the server's list rather than the cockpit's subtraction because the
    * described set is not on the wire at all — the goal page reads it per goal, and

@@ -17,7 +17,6 @@ const DescriptionBody = z.object({
 });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  if (!system.config.manualDescriptions) return;
   const { store, config } = system;
 
   app.post(

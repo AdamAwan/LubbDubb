@@ -244,9 +244,7 @@ const realApi = {
   writeGoalCriteria: (number: number, body: { text: string; reason?: string }) =>
     post<{ ok: true; version: GoalCriteriaVersion; standing: CriteriaStanding }>(`/api/goals/${number}/criteria`, body),
   /* The pull-request descriptions of one goal: the newest of each described part, by
-     slug, and one read for the whole board. Mounted only where `manualDescriptions`
-     is on, so a rejected read is how the board and the panel learn there is nothing
-     to draw — the same shape the criteria card uses one subsystem over. */
+     slug, and one read for the whole board. */
   getGoalDescriptions: (number: number) =>
     authFetch(`/api/goals/${number}/descriptions`).then((r) =>
       json<{ parts: Record<string, PrDescriptionVersion> }>(r),

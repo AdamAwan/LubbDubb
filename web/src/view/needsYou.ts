@@ -141,8 +141,7 @@ function assignedPrRows(state: AppState): NeedDraft[] {
 /**
  * One ask per part whose pull request is open and which nobody has described.
  *
- * The server decides membership — `state.undescribedParts` is empty wherever
- * `manualDescriptions` is off — so this draws what it is given rather than
+ * The server decides membership, so this draws what it is given rather than
  * subtracting one list from another the cockpit does not hold.
  * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
  */

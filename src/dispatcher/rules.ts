@@ -64,7 +64,7 @@ const RULES = [
     kind: 'rule',
     name: 'Write a pull request description the operator handed back',
     description:
-      'Where the operator writes descriptions (`manualDescriptions`), they can hand one pull request back to an agent from its page instead of writing it. One read-only agent reads the diff and writes the body the agent would have written at `open_pr` with the key off — the same bullet list, checked by the same rules — and the harness puts it above the footer on the next pulse. Only on a press: nothing hands a description over by itself, so an undescribed pull request still carries the footer alone. It sits above the review so the reviewer reads a body rather than an empty one. Inert where the pull request has merged or closed.',
+      'The operator can hand one pull request back to an agent from its page instead of writing it. One read-only agent reads the diff and writes the body the agent would have written at `open_pr` — the same bullet list, checked by the same rules — and the harness puts it above the footer on the next pulse. Only on a press: nothing hands a description over by itself, so an undescribed pull request still carries the footer alone. It sits above the review so the reviewer reads a body rather than an empty one. Inert where the pull request has merged or closed.',
   },
   {
     id: 'pr-review',

@@ -8,9 +8,8 @@ and almost everything between those two belongs to the harness.
 Almost, because one piece of the work between them was never overhead. Writing down what a change
 does is not the report of having understood it, it is the instrument that produces the
 understanding — so a step removed there takes the understanding with it, and nothing announces the
-loss, because what is lost is a state of mind and nothing measures one. Where
-[`manualDescriptions`](spec/07-pull-requests.md#the-operator-writes-the-description) is on, the
-engineer writes their pull requests' descriptions for that reason and no other.
+loss, because what is lost is a state of mind and nothing measures one. So the
+engineer [writes](spec/07-pull-requests.md#the-operator-writes-the-description) their pull requests' descriptions for that reason and no other.
 
 ## The two ends the engineer keeps
 

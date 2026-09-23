@@ -22,18 +22,14 @@ const BULLETS = [
   '- Stores the cursor per source and reads it at startup.',
 ].join('\n');
 
-test("a part agent's bullets ship as written, above the footer and nothing else", async () => {
+test("a part agent's bullets are kept off the pull request at the open, which carries the footer alone", async () => {
   const { tool, opened } = wire();
   const result = await tool.handler({ summary: 'sync cursor table', body: BULLETS });
   assert.equal(result.isError, undefined, JSON.stringify(result));
   const body = opened[0]!.body;
 
   const footer = renderPrFooter({ issueNumber: 12, issueTitle: 'Resume the sync', position: 1, total: 1 });
-  assert.equal(
-    body,
-    [BULLETS, footer].join('\n\n'),
-    'the body is the bullets, a rule, the reference and the automation note — and nothing else',
-  );
+  assert.equal(body, footer, 'the bullets are a draft for the operator, not the body');
   assert.doesNotMatch(body, /Asked for|Cannot be undone|Not verified|How far it reaches/);
 });
 

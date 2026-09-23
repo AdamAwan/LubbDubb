@@ -698,7 +698,7 @@ classifying free text, which means a model reading predictions.
 
 ## How a description stood
 
-`GET /api/insights/descriptions`, mounted only where `manualDescriptions` is on, folds every
+`GET /api/insights/descriptions` folds every
 description a desktop session checked. It inherits two rules from
 [the prediction record](#the-prediction-record) rather than inventing its own, and they are the
 reason this section is short:

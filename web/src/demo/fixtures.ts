@@ -2668,8 +2668,8 @@ export function buildDemoState(): DemoSeed {
         rejected: [],
       },
     ],
-    /* The one part whose pull request is open and which nobody has described. `manualDescriptions` is
-       on for this deployment, so the rail asks — and the ask holds nothing up, which is the feature.
+    /* The one part whose pull request is open and which nobody has described, so the rail
+       asks — and the ask holds nothing up, which is the feature.
        → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer */
     undescribedParts: [{ originRef: 'issue:396:part:header', prNumber: 426, openedAt: ago(30) }],
     planParts: [
