@@ -566,9 +566,9 @@ once.
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                                                                |
 | `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
 | `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                                                                      |
-| `card`                               | the Features tab's open card, by issue number; every card folded to its brief is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                            |
+| `card`                               | the Features tab's open Feature, by issue number — in board mode, [its page](#the-feature-page); the board of briefs is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                     |
 | `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                          |
-| `prs`                                | which of the open card's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                      |
+| `prs`                                | which of the open Feature's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                   |
 | `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
 | `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                    |
 | `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
@@ -1530,7 +1530,7 @@ goal, not for an arrival at a question: `openGoalPrediction` and `openGoalForAsk
 for the pull request, because that is where the description is written
 ([It is written where the change is read](#it-is-written-where-the-change-is-read)) — an ask that
 opened the plan pane landed the operator a page away from the only field that answers it. The row
-keeps the *part's* origin, which is what the ask is about and what the surfaces that mark the part
+keeps the _part's_ origin, which is what the ask is about and what the surfaces that mark the part
 read; `prNumber` rides beside it as the thing the press opens, set only with that destination. Its
 card in the band carries the same press as **Describe it**. A `pr` destination is the one case where
 the dot on the goal's navigation and the press disagree, and deliberately: the dot says the ask is
@@ -2307,7 +2307,7 @@ and `splitGoalAsks` decides which:
   `NeedKind` — where a faint "Open" used to be. **The verb is not decoration and not an afterthought
   for the kinds with no pane.** `config`, `profile`, `intake`, `placement`, `limit` and the rest are
   about the goal as a whole or the fleet carrying it, so they have no pane to be drawn in and can
-  only ever be a row; a row that says *open* on a page whose panes say *Write the criteria* is the
+  only ever be a row; a row that says _open_ on a page whose panes say _Write the criteria_ is the
   one ask on the page wearing no verb.
 
 **Two rows are never in the pane's set.** The parent ask is drawn by the band at the foot. And the
@@ -2985,7 +2985,7 @@ current criteria version prominently, with the chain behind it collapsed, newest
 record and the pane below it is the work. The heading still carries the version count and the drift
 tag, which is what a folded card owes its reader. Nothing written is the other way round: the card
 is open, and the press that writes the first version is the one primary button on it. The fold is a
-`criteria` section like any other, in the query string beside the rest — but the *default* is the
+`criteria` section like any other, in the query string beside the rest — but the _default_ is the
 card's own, because whether a version exists is a read only the card makes.
 → [Folding what is not relevant yet](#folding-what-is-not-relevant-yet)
 
@@ -5722,15 +5722,30 @@ coming along** — the update a lead gives the product owner, quotable with no c
 operator is the product owner _for_ the harness, so anything in prose here is read by them and quoted
 onward to people with no cockpit in front of them.
 
-So every card **folds to a brief**, and the page opens with every card folded. The brief is five
+So every card on the board **is a brief** and nothing more. The brief is five
 lines: the name, with who is on it and what is in the way counted beside it; the standing, quoted
 whole and stamped; **the account's other three fields** — usable now, needs a person, left to do; the
-bar and the reach; the movement. One card is open at a time, on `Place`
-(`?card=<n>`, [the address bar](#the-address-bar)), so the back button steps out of it and a link
-somebody sends opens on it. **The name is the control** that opens and shuts the card, and the
-reference sits beside it in its own group — a reference never goes inside a button ([links](#links)).
+bar and the reach; the movement. **The name is the control** that opens the Feature's page
+([below](#the-feature-page)), and the reference sits beside it in its own group — a reference never
+goes inside a button ([links](#links)).
 
-The open card is three columns from 1200px and one below: **its order, and what landed** (the story
+### The feature page
+
+A card opened is **a page of its own**, not a card unfolded in the list: `?card=<n>` on the features
+tab in board mode ([the address bar](#the-address-bar)), so the back button steps out of it and a link
+somebody sends opens on it. It draws a crumb back to the board, the same brief, and under it the
+detail below. The list stays a list of briefs — one card standing open among them made the board
+twice as long to scan and put the detail of one Feature in the way of every other.
+
+**A container's goal page is its feature page.** A container is never dispatched at
+([06](06-issue-pickup.md#watching-a-container-cascades)), so the goal page of a Feature has no plan,
+no checks and no pull requests — every pane empty — yet every reference to it (the _Unseen stories_
+row, a `Ref`) leads there. So where the feature board is on and the goal's issue is a container
+type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same page, reached by
+`?goal=`, with its crumb back to the tab it came from. With the board off there is no page to draw,
+and the goal page stands.
+
+The detail is three columns from 1200px and one below: **its order, and what landed** (the story
 order when there is one, and what was delivered, in its authors' words), **what is in the way,
 grouped by who clears it**, and **its stories and PRs**. The first column is **drawn only when it has
 something in it** — both halves of it render nothing of their own when they are empty, so with the
@@ -5767,10 +5782,9 @@ and nothing whatever about any of them, which is an index and not a board; a lis
 names and half-sentences answers _how is it going_ for thirty Features at once. The
 dense shape was not available until the account had a line short enough to put on one.
 
-**The card the reader opened is drawn in full, in place.** A mode that collapsed the
-one Feature somebody had asked about would be a mode with no use, and `?card=` is
-already a [place](#the-address-bar), so the shape and the opened card travel together in
-a link. A promoted goal collapses to the same row, dashed, with its delivery or
+**A row opens the same page a brief does** ([the feature page](#the-feature-page)) — the
+density is a shape of the list, and the page is not part of the list. A promoted goal
+collapses to the same row, dashed, with its delivery or
 shortfall quotation where a Feature's headline goes — a board of rows with full cards
 standing up in it reads as a rendering fault rather than as a distinction.
 
@@ -5867,7 +5881,7 @@ is a policy nobody has stated, and a rate shipped from the server would be the b
 
 ### The order its stories go in
 
-In the open card's first column, under the summary, when the Feature has one: a **proposal to answer** while nobody
+In the feature page's first column, under the summary, when the Feature has one: a **proposal to answer** while nobody
 has, and one line once somebody has. It groups the children list already on the card rather than
 adding a second one, and the copy on the Goal page is folded shut. Both surfaces, and why the order
 is amended by talking to Claude Code rather than by dragging, are
@@ -6064,7 +6078,7 @@ done" is offered and is **never the default**: it puts the Feature most blocked 
 bottom of the page that exists to surface it. Promoted goals sort on the same keys. The server's own
 order on the payload (`byWantsYouThenSize`) is what the cockpit starts from; it re-sorts on read.
 
-The open card's stories carry a filter — `open` / `done` / `all`, on `Place` as `?prs=` — and under
+The feature page's stories carry a filter — `open` / `done` / `all`, on `Place` as `?prs=` — and under
 each story its **pull requests in stack order**, bottom rung first, each wearing the four marks every
 other pull request row wears (`CiMark`, `ReviewMark`, `PackMark`, `CommentsMark`), its rung position
 (`[2/3]`), its court's own leading reason, and `AgentOnIt` where a task names it. Which pull requests

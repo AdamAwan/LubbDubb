@@ -18,7 +18,9 @@ import { EnvironmentsPanel } from './EnvironmentsPanel.js';
 import { PanelRows } from './PanelRow.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
-import { FeatureBoard } from '../components/FeatureBoard.js';
+import { FeatureBoard, FeaturePage } from '../components/FeatureBoard.js';
+import { Crumb, type CrumbStep } from './Crumb.js';
+import { isContainerType } from '../issueGroups.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
 import { PoolStatus } from '../components/PoolStatus.js';
@@ -91,6 +93,17 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       </>
     ) : view.selectedPr !== null ? (
       <PrGone number={view.selectedPr} goalRef={view.selectedGoal} tab={view.tab} actions={actions} />
+    ) : view.goalPage !== null &&
+      view.state.config.featureBoard &&
+      isContainerType(view.goalPage.issue, view.state.config.containerTypes) ? (
+      /* A container is never worked, so its goal page has nothing to draw — its page
+         is the Feature's. → docs/spec/17-cockpit.md#the-feature-page */
+      <FeaturePage
+        number={view.goalPage.issue.number}
+        back={tabStep(view.tab, actions)}
+        view={view}
+        actions={actions}
+      />
     ) : view.goalPage !== null ? (
       <>
         <Crumb
@@ -333,39 +346,12 @@ function PrGone({
   );
 }
 
-interface CrumbStep {
-  label: string;
-  go: () => void;
-}
-
 function tabStep(tab: ConsoleTab, actions: CockpitActions): CrumbStep {
   return { label: TAB_LABEL[tab], go: () => actions.selectGoal(null) };
 }
 
 function goalLabel(ref: string): string {
   return `#${/^issue:(\d+)$/.exec(ref)?.[1] ?? ref}`;
-}
-
-function Crumb({ trail, here }: { trail: readonly CrumbStep[]; here: string }): JSX.Element {
-  return (
-    <nav className="cn-crumb" aria-label="Breadcrumb">
-      {/* The mark that says *out*, once, at the head — not on each rung. On every
-          one it reads as a separator competing with the slash; on the last rung it
-          would point out of the page you are on. */}
-      <span className="cn-crumbback" aria-hidden="true">
-        ‹
-      </span>
-      {trail.map((step) => (
-        <span key={step.label} className="cn-crumbstep">
-          <button type="button" onClick={step.go}>
-            {step.label}
-          </button>
-          <span className="cn-crumbsep">/</span>
-        </span>
-      ))}
-      <span className="cn-crumbnow">{here}</span>
-    </nav>
-  );
 }
 
 const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
