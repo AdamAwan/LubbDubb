@@ -13,6 +13,8 @@ import type {
   StateQueryApproval,
   StateQueryAuthor,
   StateQueryInput,
+  TenantCall,
+  TenantLaunch,
   TenantPreparation,
   WatchReadingVerdict,
 } from '../types.js';
@@ -60,7 +62,11 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // stays true — there is nothing to compute it from and nothing that would be right to invent.
   remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT' },
   remote_tenants: {},
-  remote_tenant_prepares: {},
+  // Which command a preparation is running and the runner holding it, so a restart can find the
+  // command again rather than close a row whose process is still going. Null on a row from before the
+  // columns, and on one whose command never launched: no process to find, so boot closes it as it
+  // always did. → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+  remote_tenant_prepares: { call: 'TEXT', launch_id: 'TEXT', pid: 'INTEGER', launched_at: 'TEXT' },
   remote_capture_posts: {},
 };
 
@@ -541,37 +547,72 @@ export class RemoteValidationStore {
     const startedAt = this.ctx.now();
     this.ctx
       .prep(
-        `INSERT OR REPLACE INTO remote_tenant_prepares (environment, tenant, started_at, finished_at, ok, detail)
-         VALUES (?, NULL, ?, NULL, NULL, NULL)`,
+        `INSERT OR REPLACE INTO remote_tenant_prepares
+           (environment, tenant, started_at, finished_at, ok, detail, call, launch_id, pid, launched_at)
+         VALUES (?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`,
       )
       .run(environment, startedAt);
-    return { environment, tenant: null, startedAt, finishedAt: null, ok: null, detail: null };
+    return {
+      environment,
+      tenant: null,
+      startedAt,
+      finishedAt: null,
+      ok: null,
+      detail: null,
+      call: null,
+      launchedAt: null,
+    };
   }
 
-  /** What the commands came back as, in the words the operator is told. */
-  finishTenantPrepare(input: { environment: string; tenant: string | null; ok: boolean; detail: string }): void {
+  /** The command an open preparation has just launched, and the runner a restart will look for. */
+  recordTenantLaunch(environment: string, call: TenantCall, launch: TenantLaunch): void {
+    this.ctx
+      .prep(
+        `UPDATE remote_tenant_prepares SET call=?, launch_id=?, pid=?, launched_at=?
+           WHERE environment=? AND finished_at IS NULL`,
+      )
+      .run(call, launch.id, launch.pid, launch.startedAt, environment);
+  }
+
+  /** The launch behind an environment's preparation, running or last run. Null where none launched. */
+  tenantLaunch(environment: string): { call: TenantCall; launch: TenantLaunch } | null {
+    const row = this.ctx.prep(`SELECT * FROM remote_tenant_prepares WHERE environment=?`).get(environment) as
+      | PrepareRow
+      | undefined;
+    return row === undefined ? null : launchOf(row);
+  }
+
+  /** Every preparation still open, with the launch a restart has to find — null where none was recorded. */
+  openTenantPrepares(): { environment: string; launched: { call: TenantCall; launch: TenantLaunch } | null }[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM remote_tenant_prepares WHERE finished_at IS NULL ORDER BY environment`)
+      .all() as PrepareRow[];
+    return rows.map((row) => ({ environment: row.environment, launched: launchOf(row) }));
+  }
+
+  /** What the commands came back as, in the words the operator is told. Null `ok` is *not knowable from here*. */
+  finishTenantPrepare(input: { environment: string; tenant: string | null; ok: boolean | null; detail: string }): void {
     this.ctx
       .prep(
         `UPDATE remote_tenant_prepares SET tenant=?, finished_at=?, ok=?, detail=? WHERE environment=? AND finished_at IS NULL`,
       )
-      .run(input.tenant, this.ctx.now(), input.ok ? 1 : 0, input.detail, input.environment);
+      .run(input.tenant, this.ctx.now(), input.ok === null ? null : input.ok ? 1 : 0, input.detail, input.environment);
   }
 
   /**
-   * A preparation the process died in the middle of. The command ran on somebody else's machine and
-   * outlived this one, so whether it finished is **not knowable from here** — which is what the row is
-   * closed saying. Left open instead, the gate draws a reseed that has been running since last week
-   * and refuses every later press.
+   * A preparation whose command is gone and left no outcome. It ran on somebody else's machine, so
+   * whether it finished is **not knowable from here** — which is what the row is closed saying. Left
+   * open instead, the gate draws a reseed that has been running since last week and refuses every
+   * later press.
    */
-  closeOrphanedTenantPrepares(): number {
-    const info = this.ctx
+  closeOrphanedTenantPrepare(environment: string): void {
+    this.ctx
       .prep(
         `UPDATE remote_tenant_prepares SET finished_at=?, ok=NULL,
-           detail='The harness restarted while this was running. Whether the command finished is not known from here — read the tenant''s age below, or run it again.'
-         WHERE finished_at IS NULL`,
+           detail='The harness restarted while this was running, and the command is no longer running. Whether it finished is not known from here — read its output and the tenant''s age, or run it again.'
+         WHERE environment=? AND finished_at IS NULL`,
       )
-      .run(this.ctx.now());
-    return info.changes;
+      .run(this.ctx.now(), environment);
   }
 
   listTenantPrepares(): TenantPreparation[] {
@@ -720,7 +761,19 @@ function toTenantPreparation(r: PrepareRow): TenantPreparation {
     finishedAt: r.finished_at,
     ok: r.ok === null ? null : r.ok === 1,
     detail: r.detail,
+    call: tenantCall(r.call),
+    launchedAt: r.launched_at ?? null,
   };
+}
+
+function tenantCall(value: string | null | undefined): TenantCall | null {
+  return value === 'ensure' || value === 'reseed' ? value : null;
+}
+
+function launchOf(r: PrepareRow): { call: TenantCall; launch: TenantLaunch } | null {
+  const call = tenantCall(r.call);
+  if (call === null || r.launch_id === null || r.launch_id === undefined) return null;
+  return { call, launch: { id: r.launch_id, pid: r.pid ?? null, startedAt: r.launched_at ?? r.started_at } };
 }
 
 interface PrepareRow {
@@ -730,6 +783,10 @@ interface PrepareRow {
   finished_at: string | null;
   ok: number | null;
   detail: string | null;
+  call: string | null | undefined;
+  launch_id: string | null | undefined;
+  pid: number | null | undefined;
+  launched_at: string | null | undefined;
 }
 
 interface TenantRow {

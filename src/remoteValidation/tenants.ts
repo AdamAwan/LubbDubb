@@ -1,7 +1,16 @@
-import { exec } from 'node:child_process';
+import { join } from 'node:path';
 import type { EnvironmentConfig } from '../environments/policy.js';
-import type { RemoteTenant, TenantStanding } from '../types.js';
+import type { RemoteTenant, TenantCall, TenantLaunch, TenantStanding } from '../types.js';
 import { firstLine } from '../primitives.js';
+import {
+  launchDir,
+  readExit,
+  readTail,
+  runnerAlive,
+  startRunner,
+  type TenantExit,
+  type TenantTail,
+} from './tenantLog.js';
 
 // → docs/spec/36-remote-validation.md#tenants
 
@@ -23,10 +32,18 @@ export interface TenantOutcome {
  * `ensureTenant` and `reseed`, the two project-supplied commands that touch a tenant. Both are
  * operator-invoked and neither runs per arrival: provisioning is possibly very slow, and reseeding
  * is destructive to the residue an operator may still be reading.
+ *
+ * A command outlives the harness that started it, so each launch is named by a `TenantLaunch` the
+ * caller records, and a later process `follow`s it by that record.
+ * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
  */
 export interface TenantKeeper {
-  ensure(request: TenantRequest): Promise<TenantOutcome>;
-  reseed(request: TenantRequest): Promise<TenantOutcome>;
+  ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome>;
+  reseed(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome>;
+  /** A launch an earlier process started. Null where it is gone and left no outcome behind. */
+  follow(call: TenantCall, request: TenantRequest, launch: TenantLaunch): Promise<TenantOutcome | null>;
+  /** The tail of what a launch has printed, stdout and stderr together. */
+  tail(environment: string, launch: TenantLaunch): TenantTail;
 }
 
 /**
@@ -36,63 +53,101 @@ export interface TenantKeeper {
  * commands on every invocation, and the failure presents as a tenant command that will not answer.
  */
 const DEFAULT_TENANT_TIMEOUT_MS = 60 * 60 * 1000;
+const FOLLOW_POLL_MS = 2_000;
 
 export class CommandTenantKeeper implements TenantKeeper {
-  constructor(
-    private readonly repoRoot: string,
-    private readonly timeoutMs: number = DEFAULT_TENANT_TIMEOUT_MS,
-  ) {}
+  private readonly timeoutMs: number;
+  private readonly followPollMs: number;
 
-  /**
-   * The command names the tenant it provisioned, on stdout. The harness reads that name and never
-   * invents one: environments commonly reap tenants matching a pattern past a short age, so a
-   * harness-invented name survives about an hour and its disappearance presents as mysterious mass
-   * failure.
-   */
-  ensure(request: TenantRequest): Promise<TenantOutcome> {
-    return this.run(request, (stdout) => {
-      const named = firstLine(stdout);
-      return named === null
-        ? {
-            tenant: null,
-            detail:
-              'the command exited 0 and named no tenant. It has to print the tenant it provisioned, ' +
-              'because the harness never generates or infers one.',
-          }
-        : { tenant: named, detail: null };
-    });
+  constructor(private readonly opts: { repoRoot: string; logRoot: string; timeoutMs?: number; followPollMs?: number }) {
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TENANT_TIMEOUT_MS;
+    this.followPollMs = opts.followPollMs ?? FOLLOW_POLL_MS;
   }
 
-  reseed(request: TenantRequest): Promise<TenantOutcome> {
-    return this.run(request, () => ({ tenant: request.tenant, detail: null }));
+  ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
+    return this.run('ensure', request, launched);
   }
 
-  private run(request: TenantRequest, done: (stdout: string) => TenantOutcome): Promise<TenantOutcome> {
-    return new Promise((resolve) => {
-      const env: NodeJS.ProcessEnv = { ...process.env, LUBBDUBB_ENVIRONMENT: request.environment };
-      if (request.tenant !== null) env['LUBBDUBB_TENANT'] = request.tenant;
-      exec(
-        request.command,
-        { cwd: this.repoRoot, timeout: this.timeoutMs, windowsHide: true, env },
-        (err, stdout, stderr) => {
-          if (err !== null) return resolve({ tenant: null, detail: failure(err as ExecFailure, stderr) });
-          resolve(done(stdout));
-        },
-      );
+  reseed(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
+    return this.run('reseed', request, launched);
+  }
+
+  async follow(call: TenantCall, request: TenantRequest, launch: TenantLaunch): Promise<TenantOutcome | null> {
+    const dir = launchDir(this.opts.logRoot, request.environment, launch.id);
+    let missed = 0;
+    for (;;) {
+      const exit = readExit(dir);
+      if (exit !== null) return outcome(call, request, exit);
+      missed = runnerAlive(dir, launch.pid, Date.now()) ? 0 : missed + 1;
+      // Twice, a poll apart: one stale heartbeat can be a machine waking from sleep.
+      if (missed >= 2) {
+        const late = readExit(dir);
+        return late === null ? null : outcome(call, request, late);
+      }
+      await new Promise((r) => setTimeout(r, this.followPollMs));
+    }
+  }
+
+  tail(environment: string, launch: TenantLaunch): TenantTail {
+    return readTail(launchDir(this.opts.logRoot, environment, launch.id));
+  }
+
+  private async run(
+    call: TenantCall,
+    request: TenantRequest,
+    launched?: (launch: TenantLaunch) => void,
+  ): Promise<TenantOutcome> {
+    const env: NodeJS.ProcessEnv = { ...process.env, LUBBDUBB_ENVIRONMENT: request.environment };
+    if (request.tenant !== null) env['LUBBDUBB_TENANT'] = request.tenant;
+    const now = Date.now();
+    const runner = startRunner({
+      root: this.opts.logRoot,
+      environment: request.environment,
+      command: request.command,
+      cwd: this.opts.repoRoot,
+      env,
+      timeoutMs: this.timeoutMs,
+      now,
     });
+    launched?.({ id: runner.id, pid: runner.pid, startedAt: new Date(now).toISOString() });
+    await runner.exited;
+    const exit = readExit(runner.dir);
+    if (exit === null)
+      return { tenant: null, detail: 'the runner that holds the command ended without recording how it finished.' };
+    return outcome(call, request, exit);
   }
 }
 
-interface ExecFailure extends Error {
-  code?: number | string;
-  killed?: boolean;
-  signal?: NodeJS.Signals | null;
+/**
+ * The command names the tenant it provisioned, on the first line of stdout. The harness reads that
+ * name and never invents one: environments commonly reap tenants matching a pattern past a short age,
+ * so a harness-invented name survives about an hour and its disappearance presents as mysterious mass
+ * failure.
+ */
+function outcome(call: TenantCall, request: TenantRequest, exit: TenantExit): TenantOutcome {
+  if (exit.error !== null) return { tenant: null, detail: `the command could not start: ${exit.error}` };
+  if (exit.timedOut) return { tenant: null, detail: 'the command was killed after timeout' };
+  if (exit.signal !== null) return { tenant: null, detail: `the command was killed after ${exit.signal}` };
+  if (exit.code !== 0)
+    return {
+      tenant: null,
+      detail: `the command exited ${String(exit.code ?? 'unknown')}: ${firstLine(exit.stderrHead) ?? 'it printed nothing on stderr'}`,
+    };
+  if (call === 'reseed') return { tenant: request.tenant, detail: null };
+  const named = firstLine(exit.stdoutHead);
+  return named === null
+    ? {
+        tenant: null,
+        detail:
+          'the command exited 0 and named no tenant. It has to print the tenant it provisioned, ' +
+          'because the harness never generates or infers one.',
+      }
+    : { tenant: named, detail: null };
 }
 
-function failure(err: ExecFailure, stderr: string): string {
-  if (err.killed === true || (err.signal !== null && err.signal !== undefined))
-    return `the command was killed after ${err.signal ?? 'timeout'}`;
-  return `the command exited ${String(err.code ?? 'unknown')}: ${firstLine(stderr) ?? err.message}`;
+/** Where a deployment's tenant-command logs live: beside the validation resources, which the harness owns. */
+export function tenantLogRoot(validationRoot: string): string {
+  return join(validationRoot, 'tenant-commands');
 }
 
 /** What a `tenantEnv`'s value is read out of. Injected so a test never reads the machine's own. */

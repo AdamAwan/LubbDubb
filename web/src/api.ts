@@ -67,6 +67,7 @@ import type {
   FeatureBoardPayload,
   FeatureSequence,
   WorkSubtreePayload,
+  TenantCommandOutput,
 } from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
@@ -533,6 +534,10 @@ const realApi = {
   cancelLocalValidation: (issue: number) =>
     post<{ ok: true; validation: LocalValidationView }>(`/api/issues/${String(issue)}/validate-locally/cancel`),
   localRunOutput: () => authFetch('/api/local-run/output').then((r) => json<{ lines: string[] }>(r)),
+  tenantCommandOutput: (environment: string) =>
+    authFetch(`/api/tenant-commands/${encodeURIComponent(environment)}/output`).then((r) =>
+      json<TenantCommandOutput>(r),
+    ),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),

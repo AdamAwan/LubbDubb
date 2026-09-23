@@ -5107,7 +5107,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
 chip where there is an outage to report, **two
-gauges** — [Usage](#the-usage-chip) and **Local**, in one pill — and a **menu** holding the seven
+gauges** — [Usage](#the-usage-chip) and **Local**, in one pill, with a third **tenant** half where an
+environment declares a tenant command ([36](36-remote-validation.md#where-an-operator-sees-it)) — and a **menu** holding the seven
 ways-in that are not gauges: **Faults**, **Launch**, [**Build**](#the-build-gauge),
 [**Env**](#the-environments-gauge), [**Signals**](#world-signals), [**Record**](#the-record-panel)
 and **Config**. Findings and
@@ -5344,7 +5345,10 @@ measure.
 **Usage and Local are one pill** (`.cn-pill`, `.cn-pill-sep`), the fleet gauge's argument applied to
 the other two readings that are about the operator's own situation rather than about the work — what
 the allowance has left, and whether anything is up on this machine. Each is two or three characters
-wide, and two boxes around six characters was more chrome than reading. Each half keeps its **own
+wide, and two boxes around six characters was more chrome than reading. The **tenant chip** joins
+them as a third half on a deployment that declares an `ensureTenant` or a `reseed`, and is absent on one
+that does not — it is the same kind of reading, whether a command is running against an environment
+on the operator's behalf. Each half keeps its **own
 button**, because they open different surfaces; what they lose is the border, the padding and the
 chevron. `.cn-sub` is (0,2,0) through the pill, which is how it beats the usage tone classes' border and
 background: inside the pill a tint is the value's, never a second box around it.

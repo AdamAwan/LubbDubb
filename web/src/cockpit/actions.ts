@@ -1,4 +1,5 @@
 import type {
+  TenantCommandOutput,
   GoalWatchDeclaration,
   EjectionOutcome,
   FilingTargetProbe,
@@ -30,6 +31,7 @@ export type ConsolePanel =
   | 'launch'
   | 'build'
   | 'localRun'
+  | 'tenants'
   | 'setup'
   | 'record'
   | 'upnext'
@@ -142,6 +144,7 @@ export interface CockpitActions {
   messageLocalRun(text: string): Promise<void>;
   refreshLocalRun(): Promise<void>;
   localRunOutput(): Promise<string[]>;
+  tenantCommandOutput(environment: string): Promise<TenantCommandOutput>;
   validateLocally(issueNumber: number, opts?: { swap?: boolean; refresh?: boolean }): Promise<void>;
   cancelLocalValidation(issueNumber: number): Promise<void>;
   openTab(tab: ConsoleTab): void;

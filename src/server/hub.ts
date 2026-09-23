@@ -108,6 +108,7 @@ export class Hub {
     localRun.on('changed', refetchLocalRun);
     localRunWatch.on('changed', refetchLocalRun);
     system.localValidations.on('changed', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
+    system.remoteRuns.on('tenantSettled', () => this.broadcast({ type: 'dirty', sections: ['goals', 'harness'] }));
   }
 
   add(socket: WebSocket): void {

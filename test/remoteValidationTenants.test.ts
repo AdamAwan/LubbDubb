@@ -434,27 +434,138 @@ test('a press opens a preparation record, and a second press over the same tenan
 });
 
 /*
- * The third verdict. A preparation the process died inside of is not a failure and not a success: the
- * command outlived this harness and what it did is not knowable from here. Left open instead, the gate
- * draws a reseed running since last week and refuses every later press, with nothing red.
+ * The third verdict. A preparation the process died inside of, whose command is gone with no outcome,
+ * is not a failure and not a success: what it did is not knowable from here. Left open instead, the
+ * gate draws a reseed running since last week and refuses every later press, with nothing red.
  */
-test('a preparation left open by a restart is closed at boot as an outcome nothing here can know', () => {
-  const store = new Store(':memory:');
+test('a preparation left open with no launch on record is closed at boot as an outcome nothing here can know', () => {
+  const b = bench(LITERAL);
   try {
-    assert.notEqual(store.remoteValidation.beginTenantPrepare('acceptance'), null);
+    assert.notEqual(b.store.remoteValidation.beginTenantPrepare('acceptance'), null);
 
-    assert.equal(store.remoteValidation.closeOrphanedTenantPrepares(), 1);
-    const closed = store.remoteValidation.listTenantPrepares()[0]!;
+    b.runs.resumeTenantPrepares();
+    const closed = b.store.remoteValidation.listTenantPrepares()[0]!;
     assert.notEqual(closed.finishedAt, null);
     assert.equal(closed.ok, null, 'neither true nor false — the third value is the point');
     assert.match(closed.detail ?? '', /not known from here/);
+    assert.deepEqual(b.tenants.followed, [], 'nothing on record to follow');
 
     assert.notEqual(
-      store.remoteValidation.beginTenantPrepare('acceptance'),
+      b.store.remoteValidation.beginTenantPrepare('acceptance'),
       null,
       'and a later press is no longer refused by a preparation nothing is running',
     );
   } finally {
-    store.close();
+    b.close();
+  }
+});
+
+/*
+ * A command outlives the harness that started it. After a restart the row stays open while its runner
+ * is still going — a second press over the same tenant is still the clash the record refuses — and the
+ * output is still there to read; only when the command ends does the row settle, in its own words.
+ */
+test('after a restart, a preparation whose command is still running stays open, refuses a second press, and settles when it ends', async () => {
+  const b = bench(LITERAL);
+  try {
+    b.store.remoteValidation.beginTenantPrepare('acceptance');
+    b.store.remoteValidation.recordTenantLaunch('acceptance', 'reseed', {
+      id: 'from-the-last-process',
+      pid: 4242,
+      startedAt: '2026-09-08T11:30:00.000Z',
+    });
+    b.tenants.hold('from-the-last-process', ['Dropping fixtures', 'Seeding orders (1/3)']);
+
+    let settled = 0;
+    b.runs.resumeTenantPrepares(() => {
+      settled += 1;
+    });
+    await new Promise((r) => setImmediate(r));
+
+    const open = b.store.remoteValidation.listTenantPrepares()[0]!;
+    assert.equal(open.finishedAt, null, 'the runner is still beating, so the row stays open');
+    assert.equal(open.call, 'reseed');
+    assert.deepEqual(b.tenants.followed, [
+      { call: 'reseed', environment: 'acceptance', launchId: 'from-the-last-process' },
+    ]);
+    assert.equal(b.tenants.asked.length, 0, 'followed, never started a second time');
+    assert.equal(b.runs.beginPrepareTenant('acceptance').started, false, 'a second press is still refused');
+    assert.deepEqual(b.runs.tenantOutput('acceptance').lines, ['Dropping fixtures', 'Seeding orders (1/3)']);
+
+    b.tenants.finish('from-the-last-process', { tenant: 'validation-customer-1', detail: null });
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const done = b.store.remoteValidation.listTenantPrepares()[0]!;
+    assert.notEqual(done.finishedAt, null);
+    assert.equal(done.ok, true);
+    assert.match(done.detail ?? '', /reseeded/);
+    assert.notEqual(
+      b.store.remoteValidation.listRemoteTenants().find((t) => t.tenant === 'validation-customer-1')?.reseededAt,
+      null,
+      'the tenant is stamped as it would have been had the harness never restarted',
+    );
+    assert.equal(settled, 1);
+  } finally {
+    b.close();
+  }
+});
+
+test('after a restart, a preparation whose command is gone with no outcome is closed as not knowable', async () => {
+  const b = bench(LITERAL);
+  try {
+    b.store.remoteValidation.beginTenantPrepare('acceptance');
+    b.store.remoteValidation.recordTenantLaunch('acceptance', 'reseed', {
+      id: 'died-with-the-machine',
+      pid: 4242,
+      startedAt: '2026-09-08T11:30:00.000Z',
+    });
+
+    b.runs.resumeTenantPrepares();
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const closed = b.store.remoteValidation.listTenantPrepares()[0]!;
+    assert.notEqual(closed.finishedAt, null);
+    assert.equal(closed.ok, null);
+    assert.match(closed.detail ?? '', /not known from here/);
+    let settled = false;
+    assert.equal(
+      b.runs.beginPrepareTenant('acceptance', () => {
+        settled = true;
+      }).started,
+      true,
+      'and the next press is taken',
+    );
+    while (!settled) await new Promise((r) => setImmediate(r));
+  } finally {
+    b.close();
+  }
+});
+
+test('a provisioning the restart interrupted carries on into the reseed once it ends', async () => {
+  const b = bench(PROVISIONED);
+  try {
+    b.store.remoteValidation.beginTenantPrepare('acceptance');
+    b.store.remoteValidation.recordTenantLaunch('acceptance', 'ensure', {
+      id: 'provisioning',
+      pid: 4242,
+      startedAt: '2026-09-08T11:30:00.000Z',
+    });
+    b.tenants.hold('provisioning');
+    b.runs.resumeTenantPrepares();
+    b.tenants.finish('provisioning', { tenant: 'reaper-safe-customer-9', detail: null });
+    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
+
+    assert.deepEqual(
+      b.tenants.asked.map((a) => [a.call, a.tenant]),
+      [['reseed', 'reaper-safe-customer-9']],
+      'the ensure is followed, and the reseed runs on the name it provisioned',
+    );
+    const done = b.store.remoteValidation.listTenantPrepares()[0]!;
+    assert.equal(done.ok, true);
+    assert.match(done.detail ?? '', /provisioned and .*reseeded/);
+  } finally {
+    b.close();
   }
 });

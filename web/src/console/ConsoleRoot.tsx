@@ -30,6 +30,7 @@ import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium, openPets } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
+import { TenantCommandsPanel } from '../components/TenantCommandsPanel.js';
 import { InsightsPage } from '../components/InsightsPage.js';
 import { ReviewPackScreen } from '../components/ReviewPackScreen.js';
 import { ObstaclesPage } from '../components/ObstaclesPage.js';
@@ -359,6 +360,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   launch: 'Launch',
   build: 'Build',
   localRun: 'Running locally',
+  tenants: 'Tenant commands',
   setup: 'Setup',
   record: 'The record',
   upnext: 'Up next',
@@ -535,6 +537,14 @@ function panelBody(
           }
           validationConfigured={state.config.localRunConfigured}
           fetchOutput={() => actions.localRunOutput()}
+        />
+      );
+    case 'tenants':
+      return (
+        <TenantCommandsPanel
+          commands={state.tenantCommands}
+          now={view.now}
+          fetchOutput={(environment) => actions.tenantCommandOutput(environment)}
         />
       );
     case 'setup':
