@@ -1941,8 +1941,8 @@ surface (`.cn .t-red`) is still two families wearing one class.
 
 **Weight is `fill`, not a second hue.** The outlined and the filled tag are the same box in the same
 colour and the ground is what ranks them, which is the bargain [the rail](#hue-is-the-kind-weight-is-the-group)
-already makes with `cn-parked`. **`dashed` is the box that is not the plain case** — a region outside
-the diff being walked, a tracker's copy gone stale, a label a person overrode the checker on.
+already makes with `cn-parked`. **`dashed` is the box that is not the plain case** — a tracker's copy
+gone stale, a ticket whose tracking is frozen.
 **`lower` is an id that gets typed back**: those are lowercase kebab-case, and the tag's own uppercase
 would be a lie about the one string on the surface that has to be copied exactly.
 
@@ -3630,7 +3630,7 @@ Three of them carry the rules that kept being forgotten:
   and was the row's least useful fact: the title says what the work is and the refs say where it is.
   Unresolved `comments` was one too, and left for the opposite reason — it is not a quantity about the
   pull request the way an age is, it is a verdict on it, and it wears
-  [its own mark](#the-comments-mark) beside the three it belongs with.
+  [its own mark](#the-comments-mark) beside the two it belongs with.
 
 The card draws its rows as **one line each on a fixed rail**: lamp, switch, subject, why, reading,
 chips, action, refs — or, where the card is over-subscribed, [cut in two](#the-strip) with the same
@@ -8084,7 +8084,7 @@ two buttons, a signal carries its count), so this is a slot rather than a table 
 header over it.
 
 **Every selector in that block doubles its class** — `.ref-goal.ref-goal`, not `.ref-goal` — and it has
-to. The same rule holds for the three marks in the reading slot
+to. The same rule holds for the marks in the reading slot
 ([review](#the-fleet-reviews-mark), [checks](#the-checks-mark)):
 each is drawn as a `button` on a row, so the reset below took its border, its ground and its ink, and a
 tint that is declared, computed and then thrown away looks exactly like a mark nobody styled. `console.css` resets its own markup with `.cn button` and `.cn a`, which counts as (0,1,1) and so
@@ -8474,7 +8474,7 @@ row wearing this mark is a row with an answer outstanding — `PrComment.handled
 **It was a `fact` and it was in the wrong grammar.** `comments 1` sat on the row's sub-line beside
 `waiting 3d` as though the two were the same kind of thing. They are not: `waiting` says how long
 something has been true, and this says somebody asked a question and it is unanswered — a verdict
-about the pull request, which is what the three marks beside it are. On the sub-line it also read at a
+about the pull request, which is what the two marks beside it are. On the sub-line it also read at a
 caption's weight, which is the wrong weight for the one reading on the row that is a person waiting.
 
 **The tooltip quotes whose question it is**, three threads at most, each clamped to two lines. A review
@@ -8507,7 +8507,7 @@ the ladder could not make. What it cost was the rail: a chip of words is the one
 on a row of 22px boxes, so it had to be pinned at `--cn-w-ci: 96px` to stop the two marks behind it
 moving from row to row — four times its neighbours' width, on the densest card in the cockpit, for one
 of the three verdicts a row carries. As a mark it is the same box as
-[the review's](#the-fleet-reviews-mark) and [the pack's](31-review-packs.md#on-the-row), and the three
+[the review's](#the-fleet-reviews-mark) and [the comments'](#the-comments-mark), and the three
 read as one run rather than as a chip with two marks after it.
 
 **What the badge keeps and what it spends.** The hue says which kind of trouble and the number says

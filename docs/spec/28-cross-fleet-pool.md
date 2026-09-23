@@ -632,10 +632,10 @@ One desk in the pulse, and the pulse is the clock. Not a timer of its own: a `se
 during a pause, during shutdown and during the upgrade handoff, which is the class of failure
 [21](21-self-update.md#where-the-shutdown-handlers-are-registered) is written about.
 
-|                | Attempts when          | At the default cadence (30s busy, 5 minutes idle)         |
-| -------------- | ---------------------- | --------------------------------------------------------- |
-| Poll           | every pulse            | 30s busy, up to five minutes idle                         |
-| Digest publish | an hour since the last | the next pulse after the hour                             |
+|                | Attempts when          | At the default cadence (30s busy, 5 minutes idle) |
+| -------------- | ---------------------- | ------------------------------------------------- |
+| Poll           | every pulse            | 30s busy, up to five minutes idle                 |
+| Digest publish | an hour since the last | the next pulse after the hour                     |
 
 ### The dirty flag is a hint. The content hash is the truth.
 

@@ -68,27 +68,27 @@ Not every verb applies to every subject, and which do is declared — `VERBS_BY_
 shape and exactly the purpose of `CAUSES_BY_KIND`. An empty cell is a statement that the product
 offers no such control, and the day it does, the cell is where it is added.
 
-| Subject       | Verbs it offers                                          |
-| ------------- | -------------------------------------------------------- |
-| `plan`        | `view` `expand` `edit` `accept` `reject` `abandon`       |
-| `goal`        | `view` `expand` `edit` `accept` `abandon`                |
-| `pr`          | `view` `accept` `send`                                   |
-| `validation`  | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
-| `escalation`  | `view` `accept` `reject` `send`                          |
-| `human-task`  | `view` `accept` `reject`                                 |
-| `ticket`      | `view` `filter` `create`                                 |
-| `feature`     | `view` `expand`                                          |
-| `agent`       | `view` `expand` `send` `stop`                            |
-| `obstacle`    | `view` `expand` `accept` `waive`                         |
-| `local-run`   | `view` `create` `stop`                                   |
-| `job`         | `view` `create` `stop`                                   |
-| `retro`       | `view`                                                   |
-| `scratchpad`  | `view` `edit`                                            |
-| `insights`    | `view` `filter`                                          |
-| `pool`        | `view` `filter`                                          |
-| `config`      | `view` `edit`                                            |
-| `upgrade`     | `view` `accept` `reject`                                 |
-| `pet`         | `view` `edit`                                            |
+| Subject      | Verbs it offers                                          |
+| ------------ | -------------------------------------------------------- |
+| `plan`       | `view` `expand` `edit` `accept` `reject` `abandon`       |
+| `goal`       | `view` `expand` `edit` `accept` `abandon`                |
+| `pr`         | `view` `accept` `send`                                   |
+| `validation` | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
+| `escalation` | `view` `accept` `reject` `send`                          |
+| `human-task` | `view` `accept` `reject`                                 |
+| `ticket`     | `view` `filter` `create`                                 |
+| `feature`    | `view` `expand`                                          |
+| `agent`      | `view` `expand` `send` `stop`                            |
+| `obstacle`   | `view` `expand` `accept` `waive`                         |
+| `local-run`  | `view` `create` `stop`                                   |
+| `job`        | `view` `create` `stop`                                   |
+| `retro`      | `view`                                                   |
+| `scratchpad` | `view` `edit`                                            |
+| `insights`   | `view` `filter`                                          |
+| `pool`       | `view` `filter`                                          |
+| `config`     | `view` `edit`                                            |
+| `upgrade`    | `view` `accept` `reject`                                 |
+| `pet`        | `view` `edit`                                            |
 
 **A subject is a thing, never a screen.** `pr` is the pull request wherever it is worked, so a
 control that moves to another surface keeps its row and the history stays one series. Keying on the
