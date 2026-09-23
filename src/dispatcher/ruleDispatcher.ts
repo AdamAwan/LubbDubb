@@ -47,6 +47,7 @@ import { obstacleRepair } from './rules/obstacleRepair.js';
 import { prConcerns } from './rules/prConcerns.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
 import { prSplit } from './rules/prSplit.js';
+import { prDescribe } from './rules/prDescribe.js';
 import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
@@ -78,6 +79,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'obstacle-repair': obstacleRepair,
   'pr-review-triage': prReviewTriage,
   'pr-split': prSplit,
+  'pr-describe': prDescribe,
   'pr-ci-failing': prConcerns,
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
@@ -474,6 +476,7 @@ export class RuleDispatcher implements Dispatcher {
       reviewCharters: this.reviewCharters,
       prReviewRoutes: new Map((ctx.prReviewRoutes ?? []).map((route) => [route.prNumber, route])),
       prSplits: new Map((ctx.prSplits ?? []).map((v) => [v.prNumber, v])),
+      descriptionDrafts: ctx.descriptionDrafts ?? [],
       prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
       prReviewedElsewhere: ctx.prReviewedElsewhere ?? new Set<number>(),
       defaultBranch: this.defaultBranch,

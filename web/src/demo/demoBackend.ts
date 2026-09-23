@@ -1,4 +1,5 @@
 import type {
+  PrDescriptionDraft,
   PrDescriptionVersion,
   RemoteSheetView,
   AgentFilesPayload,
@@ -432,6 +433,7 @@ class DemoServer {
   private seq = 1000;
   private readonly predictions = new DemoPredictions();
   private readonly descriptions = new Map<string, PrDescriptionVersion[]>(DEMO_DESCRIPTIONS);
+  private readonly drafts = new Map<string, PrDescriptionDraft>();
   /**
    * What the reveal hands back, per withheld plan: the approval ask's prose and the
    * caveats that carry the plan's risks and open questions verbatim.
@@ -546,6 +548,32 @@ class DemoServer {
       if (originRef.startsWith(prefix) && current !== undefined) out[originRef.slice(prefix.length)] = current;
     }
     return out;
+  }
+
+  /**
+   * The body the part's agent sent to `open_pr`, kept as a draft. The demo has no
+   * agent, so every part carries the same stand-in.
+   */
+  draftOf(originRef: string, prNumber: number): PrDescriptionDraft {
+    return (
+      this.drafts.get(originRef) ?? {
+        originRef,
+        prNumber,
+        text: '- The part needed its own change so the rest could build on it.\n- This is what that change does.',
+        writtenAt: new Date().toISOString(),
+        handedBy: null,
+        handedAt: null,
+        pushedAt: null,
+      }
+    );
+  }
+
+  handOff(originRef: string, prNumber: number): { ok: true; draft: PrDescriptionDraft } {
+    const held = this.draftOf(originRef, prNumber);
+    const draft =
+      held.handedAt === null ? { ...held, handedBy: DEMO_OPERATOR, handedAt: new Date().toISOString() } : held;
+    this.drafts.set(originRef, draft);
+    return { ok: true, draft };
   }
 
   writeDescription(originRef: string, text: string): { ok: true; version: PrDescriptionVersion } {
@@ -4916,8 +4944,18 @@ export const demoApi = {
   getPrDescription: (prNumber: number) =>
     Promise.resolve().then(() => {
       const originRef = getServer().partOfPullRequest(prNumber);
-      if (originRef === null) return { originRef: null, current: null, versions: [] };
-      return { originRef, ...getServer().descriptionReading(originRef) };
+      if (originRef === null) return { originRef: null, current: null, versions: [], draft: null };
+      return {
+        originRef,
+        ...getServer().descriptionReading(originRef),
+        draft: getServer().draftOf(originRef, prNumber),
+      };
+    }),
+  handOffPrDescription: (prNumber: number) =>
+    Promise.resolve().then(() => {
+      const originRef = getServer().partOfPullRequest(prNumber);
+      if (originRef === null) throw new Error(`PR ${prNumber} is not a part's pull request`);
+      return getServer().handOff(originRef, prNumber);
     }),
   writePrDescription: (prNumber: number, body: { text: string }) =>
     Promise.resolve().then(() => {

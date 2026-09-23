@@ -2300,6 +2300,20 @@ CREATE TABLE IF NOT EXISTS pr_description_bodies (
   opened_at  TEXT NOT NULL
 );
 
+-- The body the agent sent to open_pr where manualDescriptions is on: kept, not shipped,
+-- until the operator hands it over (handed_at). Where the agent sent none, a hand-over
+-- creates the row empty and rule pr-describe writes it. An operator's own version in
+-- pr_descriptions outranks it, so it is never pushed over theirs.
+CREATE TABLE IF NOT EXISTS pr_description_drafts (
+  origin_ref TEXT PRIMARY KEY,
+  pr_number  INTEGER NOT NULL,
+  text       TEXT,
+  written_at TEXT,
+  handed_by  TEXT,
+  handed_at  TEXT,
+  pushed_at  TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);

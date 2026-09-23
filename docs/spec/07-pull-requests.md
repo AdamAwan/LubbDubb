@@ -656,8 +656,8 @@ an agent it would go missing silently, on exactly the pull requests nobody was w
 Behind `manualDescriptions`, off by default. With it off nothing in this section happens: the agent
 writes the body as the two sections above describe, and `open_pr` is unchanged.
 
-With it on, the body is the **operator's**, and `open_pr` refuses a `body` argument rather than
-merging the two.
+With it on, the body is the **operator's**. The agent still sends `open_pr` a `body`, checked by the
+same rules, but it is kept as a [draft](#the-agents-draft) rather than put on the pull request.
 
 The case is not that the operator writes a better body. It is that **writing is the instrument of
 understanding rather than a report of it**: a description you cannot write is a change you have not
@@ -674,8 +674,8 @@ understood it anywhere in between, that is an ask which costs the asker nothing.
 #### It is written against an open pull request, never before one
 
 The description is asked for **only once the part's pull request is open**, and that is the whole
-shape of the feature rather than a detail of where the panel is drawn. A description is a *reading of
-a change*: before the pull request there is no change to read, and asking for one earlier asks the
+shape of the feature rather than a detail of where the panel is drawn. A description is a _reading of
+a change_: before the pull request there is no change to read, and asking for one earlier asks the
 operator to write from the same place the agent did — the plan — which is the second-hand account
 this exists to remove. On a plan still at the approval gate it is worse than useless: those parts may
 not survive the approval, so the ask is for prose about pull requests that may never exist.
@@ -692,7 +692,7 @@ Two things follow, and both are load-bearing:
   reviewer would meet a body with nothing above the footer. The stamp (`pr_descriptions.pushed_at`)
   is written **after** the send, so a push that throws is retried on the next pulse rather than lost.
 - **The body is recomposed, never patched.** `open_pr` records the footer it wrote in
-  `pr_description_bodies`, and a description is put in front of *that*, not in front of whatever the
+  `pr_description_bodies`, and a description is put in front of _that_, not in front of whatever the
   body currently says. Reading the body back off the
   provider would make the provider a second source of truth for a string the harness composed, and a
   reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
@@ -709,9 +709,10 @@ Not the plan's release, not the dispatch, not the pull request, not the review w
 described leaves its pull request carrying **the footer alone**, which is this document's existing
 answer to an absent body rather than a new one.
 
-And nothing fills the gap — emphatically not the agent. A backstop would reintroduce the account
-written by the thing with the most reason to be wrong about it, _and_ make the gap invisible: the
-pull request would read as described when nobody had. Either a person wrote the body or it has none,
+And nothing fills the gap **by itself** — emphatically not the agent's draft. A backstop would reintroduce the
+account written by the thing with the most reason to be wrong about it, _and_ make the gap invisible:
+the pull request would read as described when nobody had. The operator may still
+[use the agent's draft](#the-agents-draft) — a press on one pull request, never a default. Either a person wrote the body or it has none,
 and the absence is on the page where a reviewer can see it. That is what keeps a skipped description
 from being the quiet failure a required one would only have moved.
 
@@ -721,12 +722,12 @@ The field is on the cockpit's page for the pull request, and that placement is t
 section above carried one step further. A description is a reading of a change, so the page the
 change is read on is the page it is written on: the threads, the checks, the merge and the diff's
 reference are all there, and an operator with something to say about a change is already looking at
-it. There is nothing to pick and nothing to point at — the page *is* the part.
+it. There is nothing to pick and nothing to point at — the page _is_ the part.
 
 It was on the goal's plan board, as a panel for whichever part the operator clicked. That put the
 field one page away from every surface that asks for it: the rail's ask named the gap and opened the
 plan, where the only way on was a card an operator had to discover was a control, and the plan board
-is where parts are *told apart* rather than where any one of them is worked.
+is where parts are _told apart_ rather than where any one of them is worked.
 
 - **The page resolves its part from the record, never from the world.**
   `PrDescriptionStore.partOfPullRequest` reads `pr_description_bodies`, the row `open_pr` wrote at
@@ -757,7 +758,7 @@ already spending a reviewer's hour, so it is not an ask that keeps.
 
 **It is raised off `pr_description_bodies`, never off `plan_parts.pr_number`.** The body record is
 written by `open_pr` itself, so the ask exists the moment the pull request does. The part's `pr_number`
-is a *reading of the world*, filled in by a later cycle that matched the branch: asked there, the ask
+is a _reading of the world_, filled in by a later cycle that matched the branch: asked there, the ask
 appears whenever the next world read happens to land, and not at all for a part whose branch the
 observer could not match — an ask that silently never appears, which is the failure this whole section
 exists to remove. `PrDescriptionStore.undescribedOpenParts` is the anti-join; `buildStateSnapshot`
@@ -774,6 +775,32 @@ closing it.
 With `manualDescriptions` off the list is empty, and that is the whole of what keeps the ask off a
 deployment where the agent writes the body.
 
+#### The agent's draft
+
+The agent writes a body at `open_pr` exactly as it does with the key off — same argument, same
+`prBodyRefusal` — so the key-off description exists the moment the pull request does and nobody waits
+for one. What changes is where it goes: `open_pr` records it in `pr_description_drafts` and opens the
+pull request with the footer alone.
+
+- **Hidden until asked for.** The pull request's page offers **Reveal the agent's draft**, so the
+  operator can write first and read the agent's account after — or not at all. The read carries the
+  draft as `draft`; hiding it is the cockpit's, because it is a reading order, not a secret.
+- **Used on a press, at once.** **Use the agent's** (`POST /api/prs/:number/description/handoff`)
+  stamps `handed_at`, and `PrDescriptionDesk` puts the text above the footer on the next pulse. It is
+  pushed as the agent's, with no `HUMAN_NOTE`: the mark says a person answers for the prose, and here
+  nobody did. Nothing stamps it by itself, so an unchosen draft never reaches the pull request.
+- **The press answers the rail's ask.** `undescribedOpenParts` leaves out a handed-over part, so the
+  `describe` ask goes as soon as the operator has decided who writes it. An unchosen draft does not
+  answer it.
+- **No draft, one is written.** An agent that sent no body leaves nothing to use, and the page offers
+  **Hand it to the agent** instead. The press writes the row empty and rule `pr-describe` dispatches one
+  read-only agent on `issue:<n>:describe:<pr>` (a detached checkout under `describe/pr/<n>`), which
+  answers through `pr_describe` under the same rules. A run that ends without writing is dispatched
+  again under the ordinary cooldown.
+- **The operator's own version outranks it.** A hand-over is refused once a version exists, and
+  `unpushedDrafts` skips any part that has one — **Write your own instead** stays on the page, and
+  what they write replaces the agent's body on the next pulse.
+
 #### The field is free, and the four questions are hints
 
 `descriptionRefusal` (`src/pr/prDescription.ts`) asserts two things: not empty, and under
@@ -787,8 +814,8 @@ checker, and the value here is in what the writing makes them notice, which noth
 score is about.
 
 Four questions sit beside the field as prompts — the four a reviewer has to be able to answer for
-themselves, and none of which the bullets above a pull request answer: *is this what we asked for*,
-*what can't be undone if this is wrong*, *what's missing*, *how far does it reach if it's wrong*
+themselves, and none of which the bullets above a pull request answer: _is this what we asked for_,
+_what can't be undone if this is wrong_, _what's missing_, _how far does it reach if it's wrong_
 (`DESCRIPTION_PROMPTS`, `src/pr/prDescription.ts`). They are **hints and never four boxes**: four inputs make the form the task, and a question with nothing to
 say under it gets an answer anyway. Beside it they do the one job worth doing — an operator who
 cannot answer one notices before a reviewer does.
@@ -822,7 +849,7 @@ description** rather than anything that suggests the session produces it.
 `description_check` takes a list of findings and no marks, and this is the correction
 worth recording rather than the design that was almost shipped.
 
-The four questions are **hints under the field**. A check keyed *by* them — one mark
+The four questions are **hints under the field**. A check keyed _by_ them — one mark
 per question — quietly makes them the schema: it can report on four things, and
 everything else a session notices reading a description against its diff has nowhere
 to go. That is most of it. A rename the description does not mention, a claim about a

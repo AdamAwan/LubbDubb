@@ -60,6 +60,13 @@ const RULES = [
       'A watched pull request whose diff has grown past the file budget gets one read-only agent to answer a single question: is this one piece of work or several. The count is the prompt to look and never the answer — a rename across sixty files is one concept and a twelve-file diff spanning a schema change, an endpoint and a refactor is three — so what decides it is a model reading the diff, and a wide-but-coherent change is recorded as coherent and left alone. Where it finds seams it names them and proposes the plan that separates them, which changes nothing on its own: the amendment waits for an operator, the pull request is neither closed nor pushed to, and the agent on it is not stopped. It runs above the pull request concerns for the reason the triage does — reviewing, fixing CI on and merging a diff about to be cut in three is spend on work that is about to be redone — and it is the late half of a pair whose early half is the planner, told the same budget before any code exists. One round ever, whatever the answer: the verdict row is what stops it asking again, so a push to a pull request already judged coherent does not buy a second reading. Inert where the pull request maps to no issue, since a split it cannot express as a plan is one it cannot propose.',
   },
   {
+    id: 'pr-describe',
+    kind: 'rule',
+    name: 'Write a pull request description the operator handed back',
+    description:
+      'Where the operator writes descriptions (`manualDescriptions`), they can hand one pull request back to an agent from its page instead of writing it. One read-only agent reads the diff and writes the body the agent would have written at `open_pr` with the key off — the same bullet list, checked by the same rules — and the harness puts it above the footer on the next pulse. Only on a press: nothing hands a description over by itself, so an undescribed pull request still carries the footer alone. It sits above the review so the reviewer reads a body rather than an empty one. Inert where the pull request has merged or closed.',
+  },
+  {
     id: 'pr-review',
     kind: 'rule',
     emittedBy: 'pr-ci-failing',

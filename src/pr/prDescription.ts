@@ -1,3 +1,4 @@
+import { issueOriginId } from '../issueOrigins.js';
 import { HUMAN_NOTE } from './prFooter.js';
 import type { DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 
@@ -91,4 +92,15 @@ export function composeDescribedBody(text: string, tail: string): string {
   const described = [head, HUMAN_NOTE].join('\n\n');
   if (rest === '') return described;
   return [described, rest].join('\n\n');
+}
+
+/** The read-only checkout rule `pr-describe` reads a pull request's diff from. */
+export function describeBranch(prNumber: number): string {
+  return `describe/pr/${prNumber}`;
+}
+
+/** The pull request a `pr-describe` dispatch was sent for, or null for any other origin. */
+export function describeTargetPr(originRef: string | null): number | null {
+  const describe = issueOriginId('describe', originRef);
+  return describe === null ? null : Number(describe.id);
 }

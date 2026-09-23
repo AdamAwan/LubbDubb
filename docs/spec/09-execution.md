@@ -1712,8 +1712,8 @@ once, which is the case the observer's three-valued contract already covers
 
 It is deliberately not the default. `fetchRemote`, the worktree writes and the pool's clones may
 legitimately talk to a remote; what may not is the read-only seam. That is the same rule as
-"`GitObserver` is fetch-free", one layer down: fetch-free has to mean *git does not fetch*, not
-merely *the harness did not ask it to*.
+"`GitObserver` is fetch-free", one layer down: fetch-free has to mean _git does not fetch_, not
+merely _the harness did not ask it to_.
 
 A probe that genuinely could not answer is routed through `errors.record` rather than swallowed, so
 a deployment reading `unknown` everywhere has something red to read

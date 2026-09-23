@@ -18,6 +18,7 @@ import {
   PR_DESCRIPTION,
 } from '../src/pr/prDescription.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
+import { findTask } from './support/tasks.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
 
@@ -302,7 +303,12 @@ test('the pull request page writes by number, resolving the part from the record
 
     const before = await app.inject({ method: 'GET', url: '/api/prs/413/description' });
     assert.equal(before.statusCode, 200);
-    assert.deepEqual(before.json(), { originRef: 'issue:390:part:validate', current: null, versions: [] });
+    assert.deepEqual(before.json(), {
+      originRef: 'issue:390:part:validate',
+      current: null,
+      versions: [],
+      draft: null,
+    });
 
     const written = await app.inject({
       method: 'POST',
@@ -343,7 +349,7 @@ test('a pull request that is not a part\u2019s answers with no part, and refuses
        rather than offering a field whose write has nowhere to land. */
     const read = await app.inject({ method: 'GET', url: '/api/prs/9999/description' });
     assert.equal(read.statusCode, 200);
-    assert.deepEqual(read.json(), { originRef: null, current: null, versions: [] });
+    assert.deepEqual(read.json(), { originRef: null, current: null, versions: [], draft: null });
 
     const written = await app.inject({
       method: 'POST',
@@ -469,14 +475,25 @@ test('with the flag on nothing of the operator\u2019s ships at the open \u2014 t
     const bare = await callOpenPr(system, 'issue:182:part:reader', { summary: 'retire the in-memory map' });
     assert.equal(bare.isError, false, 'a part nobody described still opens');
 
-    // And the agent cannot smuggle one in.
-    const refused = await callOpenPr(system, 'issue:182:part:cursor', {
+    // The agent's body is kept as a draft, never shipped at the open.
+    const drafted = await callOpenPr(system, 'issue:182:part:cursor', {
       summary: 'something else',
       body: '- I will describe my own change, thanks.',
     });
+    assert.equal(drafted.isError, false, drafted.text);
+    assert.doesNotMatch(sink.opened[2]!.body, /describe my own change/, 'a draft is not on the pull request');
+    assert.equal(
+      system.store.prDescriptions.draftOf('issue:182:part:cursor')?.text,
+      '- I will describe my own change, thanks.',
+    );
+
+    // And it answers to the same rules as with the flag off.
+    const refused = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'something else',
+      body: 'A paragraph; not a bullet list.',
+    });
     assert.equal(refused.isError, true);
-    assert.equal(sink.opened.length, 2, 'the refusal happened before anything left');
-    assert.match(refused.text, /operator/i, 'the refusal says whose the body is, not merely that it was refused');
+    assert.equal(sink.opened.length, 3, 'the refusal happened before anything left');
   } finally {
     system.store.close();
   }
@@ -557,6 +574,7 @@ function manualSystem(dir: string, sink: ActionSink): System {
       agentMode: 'raw',
       userId: 'operator',
       manualDescriptions: true,
+      maxConcurrentAgents: 10,
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
@@ -651,4 +669,143 @@ test('the two authors of a described body are separated, so a reviewer knows who
   // A mark with nothing on one side of it labels an author who wrote nothing.
   assert.equal(composeDescribedBody('', footer), footer);
   assert.doesNotMatch(composeDescribedBody('', footer), new RegExp(HUMAN_NOTE));
+});
+
+async function callTool(
+  system: System,
+  originRef: string,
+  tool: string,
+  args: Record<string, unknown>,
+): Promise<{ isError: boolean; text: string }> {
+  const task = system.store.tasks.createTask({
+    kind: 'code',
+    title: `Work ${originRef}`,
+    prompt: 'do it',
+    branch: 'describe/pr/1',
+    originRef,
+  });
+  const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+  const session = system.mcp.session(agent.id);
+  assert.ok(session, 'a spawned agent has a live MCP credential');
+  const result = (await session.call(tool, args)) as { isError?: boolean; content: { text?: string }[] };
+  return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
+}
+
+// → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+test('where the agent sent no draft, handing it over dispatches one to write it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    const tail = sink.opened[0]!.body;
+    system.connector.inject({ kind: 'new_pr', number: 1, title: 'read the cursor back', branch: 'issue/182/cursor' });
+    await system.harness.runCycle('manual');
+    assert.equal(
+      findTask(system.store, (t) => t.rule === 'pr-describe'),
+      undefined,
+      'nothing hands a description over by itself',
+    );
+
+    const handed = await app.inject({ method: 'POST', url: '/api/prs/1/description/handoff' });
+    assert.equal(handed.statusCode, 200, handed.body);
+    assert.deepEqual(buildStateSnapshot(system).undescribedParts, [], 'handed over is no longer an ask');
+
+    await system.harness.runCycle('manual');
+    const task = findTask(system.store, (t) => t.originRef === 'issue:182:describe:1');
+    assert.ok(task, 'the press puts one agent on it');
+    assert.equal(task!.rule, 'pr-describe');
+
+    const refused = await callTool(system, 'issue:182:describe:1', 'pr_describe', {
+      body: 'A paragraph; not a bullet list.',
+    });
+    assert.equal(refused.isError, true, 'the same checks open_pr runs with the key off');
+
+    const wrong = await callTool(system, 'issue:182:part:cursor', 'pr_describe', { body: '- Reads the cursor.' });
+    assert.equal(wrong.isError, true, 'only a describe dispatch may write one');
+
+    const written = await callTool(system, 'issue:182:describe:1', 'pr_describe', {
+      body: '- A restart replays the whole feed.\n- The cursor is now read back at startup.',
+    });
+    assert.equal(written.isError, false, written.text);
+
+    await system.harness.runCycle('manual');
+    assert.equal(sink.bodies.length, 1);
+    assert.match(sink.bodies[0]!.body, /^- A restart replays the whole feed\./);
+    assert.ok(sink.bodies[0]!.body.endsWith(tail), 'in front of the footer, never instead of it');
+    assert.ok(!sink.bodies[0]!.body.includes(HUMAN_NOTE), 'an agent’s body is not marked as a person’s');
+
+    await system.harness.runCycle('manual');
+    assert.equal(sink.bodies.length, 1, 'pushed once');
+
+    const read = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
+    assert.match((read.json() as { draft: { text: string } }).draft.text, /read back at startup/);
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('a hand-off is refused once the operator has written their own', async () => {
+  const system = systemWith(true);
+  const { app } = await buildApp(system);
+  try {
+    system.store.prDescriptions.recordPrBody({ originRef: 'issue:390:part:validate', prNumber: 413, tail: 'x' });
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:390:part:validate',
+      text: 'Mine.',
+      author: 'operator',
+    });
+    const handed = await app.inject({ method: 'POST', url: '/api/prs/413/description/handoff' });
+    assert.equal(handed.statusCode, 400);
+    const stray = await app.inject({ method: 'POST', url: '/api/prs/999/description/handoff' });
+    assert.equal(stray.statusCode, 400, 'a pull request that is not a part’s has nothing to hand over');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('the agent\u2019s draft is kept hidden, and using it puts it on the pull request at once', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'read the cursor back',
+      body: '- A restart replays the whole feed.',
+    });
+    assert.equal(opened.isError, false, opened.text);
+    const tail = sink.opened[0]!.body;
+    system.connector.inject({ kind: 'new_pr', number: 1, title: 'read the cursor back', branch: 'issue/182/cursor' });
+    await system.harness.runCycle('manual');
+    assert.equal(sink.bodies.length, 0, 'a draft nobody chose stays off the pull request');
+    assert.equal(buildStateSnapshot(system).undescribedParts.length, 1, 'and the ask still stands');
+
+    const read = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
+    assert.equal((read.json() as { draft: { text: string } }).draft.text, '- A restart replays the whole feed.');
+
+    const used = await app.inject({ method: 'POST', url: '/api/prs/1/description/handoff' });
+    assert.equal(used.statusCode, 200, used.body);
+    await system.harness.runCycle('manual');
+    assert.equal(
+      findTask(system.store, (t) => t.rule === 'pr-describe'),
+      undefined,
+      'a draft already written needs no agent',
+    );
+    assert.equal(sink.bodies.length, 1);
+    assert.equal(sink.bodies[0]!.body, `- A restart replays the whole feed.\n\n${tail}`);
+  } finally {
+    await app.close();
+    system.store.close();
+  }
 });

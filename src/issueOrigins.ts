@@ -11,6 +11,7 @@ export type IssueOriginFamily =
   | 'summary'
   | 'shortfall'
   | 'part'
+  | 'describe'
   | 'assess'
   | 'retro'
   | 'validationPlan'
@@ -29,6 +30,7 @@ interface IssueOriginDeclaration {
 const FAMILIES = {
   root: { suffix: '', id: null, role: 'work' },
   part: { suffix: 'part', id: '[^:]+', role: 'work' },
+  describe: { suffix: 'describe', id: '\\d+', role: 'evidence' },
   localValidationFix: { suffix: 'validate-local-fix', id: '[A-Za-z0-9-]+', role: 'work' },
   assess: { suffix: 'assess', id: null, role: 'evidence' },
   retro: { suffix: 'retro', id: null, role: 'evidence' },

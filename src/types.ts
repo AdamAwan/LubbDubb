@@ -2371,3 +2371,19 @@ export interface PrDescriptionVersion {
   checkedAt: string | null;
   findings: DescriptionFinding[];
 }
+
+/**
+ * The body the agent wrote for a part's pull request, kept rather than shipped where
+ * `manualDescriptions` is on. `text` is null only where the agent sent none and the
+ * operator handed it over anyway; `handedAt` is the operator's press; `pushedAt` is
+ * when it reached the pull request. → docs/spec/07-pull-requests.md#the-agents-draft
+ */
+export interface PrDescriptionDraft {
+  originRef: string;
+  prNumber: number;
+  text: string | null;
+  writtenAt: string | null;
+  handedBy: string | null;
+  handedAt: string | null;
+  pushedAt: string | null;
+}

@@ -51,7 +51,7 @@ The record is one row, and it is the whole mechanism. `src/store/ejections.ts`, 
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `origin_ref`            | The dispatch origin the ejected agent was working — `issue:412:execute`. What the hold is _on_.                                                                        |
 | `branch`                | The branch its worktree has checked out. Held alongside the origin, because branch and origin are two separate dedup keys.                                             |
-| `worktree_path`         | The pool slot the operator is being handed. What the deep link opens, and what `pool.held` keeps out of the pool.                                                                                     |
+| `worktree_path`         | The pool slot the operator is being handed. What the deep link opens, and what `pool.held` keeps out of the pool.                                                      |
 | `agent_id`, `task_id`   | The run that was ejected. The transcript, the spend and the files hang off these; the ejection itself stores none of them again.                                       |
 | `session_id`            | The agent's `claude` session, so the resume command can be offered. Null on a runtime that keeps none, which makes it unofferable.                                     |
 | `reason`                | The operator's line, required. Read by the desktop session on arrival and shown wherever the ejection is drawn.                                                        |

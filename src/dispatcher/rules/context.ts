@@ -25,6 +25,7 @@ import type {
   Plan,
   PrReview,
   PrReviewRoute,
+  PrDescriptionDraft,
   PrSplitVerdict,
   PullRequest,
   RemoteRunBrief,
@@ -89,6 +90,7 @@ export interface StageContext {
   prReviews: ReadonlyMap<number, PrReview>;
   prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
   prSplits: ReadonlyMap<number, PrSplitVerdict>;
+  descriptionDrafts: readonly PrDescriptionDraft[];
   prReviewedElsewhere: ReadonlySet<number>;
   defaultBranch: string;
   prRefStyle: PrRefStyle;

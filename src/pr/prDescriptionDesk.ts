@@ -38,5 +38,16 @@ export class PrDescriptionDesk {
         });
       }
     }
+    for (const pending of store.prDescriptions.unpushedDrafts()) {
+      try {
+        await sink.setPullBody({ prNumber: pending.prNumber, body: pending.body });
+        store.prDescriptions.markDraftPushed(pending.originRef);
+      } catch (err) {
+        errors?.record({
+          source: 'cycle',
+          message: `writing the agent's description onto PR ${pending.prNumber} failed: ${(err as Error).message}`,
+        });
+      }
+    }
   }
 }

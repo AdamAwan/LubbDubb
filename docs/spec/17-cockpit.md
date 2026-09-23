@@ -463,6 +463,10 @@ So there is no pick to make and no panel to point anywhere:
   own — and a pull request this deployment did not open for a part answers with a null part and
   draws nothing rather than offering a field whose write has nowhere to land.
   → [07](07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written)
+- **It offers the agent as the other author.** Undescribed, the panel draws **Reveal the agent's
+  draft** and **Use the agent's** beside **Describe it** — or **Hand it to the agent** where the agent
+  sent no draft. Used, it shows what the agent wrote (or that one is writing it) — labelled as an agent's, and _not on the pull request yet_ until the push lands — with
+  **Write your own instead** still there. → [07](07-pull-requests.md#the-agents-draft)
 - **It sits directly under the masthead, above the review.** What a reviewer meets first is what the
   operator is writing, and a field below the threads is one they reach after answering everything
   else.

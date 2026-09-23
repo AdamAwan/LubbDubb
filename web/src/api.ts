@@ -19,6 +19,7 @@ import type {
   Plan,
   CriteriaStanding,
   GoalCriteriaVersion,
+  PrDescriptionDraft,
   PrDescriptionVersion,
   GoalPrediction,
   GoalReveal,
@@ -257,10 +258,17 @@ const realApi = {
      → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
   getPrDescription: (prNumber: number) =>
     authFetch(`/api/prs/${prNumber}/description`).then((r) =>
-      json<{ originRef: string | null; current: PrDescriptionVersion | null; versions: PrDescriptionVersion[] }>(r),
+      json<{
+        originRef: string | null;
+        current: PrDescriptionVersion | null;
+        versions: PrDescriptionVersion[];
+        draft: PrDescriptionDraft | null;
+      }>(r),
     ),
   writePrDescription: (prNumber: number, body: { text: string }) =>
     post<{ ok: true; version: PrDescriptionVersion }>(`/api/prs/${prNumber}/description`, body),
+  handOffPrDescription: (prNumber: number) =>
+    post<{ ok: true; draft: PrDescriptionDraft }>(`/api/prs/${prNumber}/description/handoff`),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>
