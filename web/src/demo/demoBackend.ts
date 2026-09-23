@@ -29,6 +29,8 @@ import type {
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,
+  FeatureSequence,
+  FeatureSequenceEdge,
   FeatureSummary,
   GoalPrediction,
   GoalReveal,
@@ -5698,6 +5700,29 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     903: { reach: reach({}), summary: null, standingKey: 'e2a7c40b9f13' },
   };
 
+  const acceptedOrder = (feature: number, rows: readonly FeatureChildRow[]): FeatureSequence => {
+    const [first, second, third] = [...rows].sort((a, b) => a.number - b.number);
+    const edges: FeatureSequenceEdge[] = [];
+    if (first && second)
+      edges.push({ issue: second.number, dependsOn: first.number, source: 'inferred', reason: null });
+    if (second && third) edges.push({ issue: third.number, dependsOn: second.number, source: 'link', reason: null });
+    return {
+      originRef: `issue:${feature}`,
+      status: 'accepted',
+      reason: 'The ledger has to exist before anything reads a refund total from it.',
+      unsure: null,
+      standingKey: 'seq901',
+      edges,
+      members: rows.map((c) => c.number),
+      answeredBy: '/Users/you/code/inkwell-books',
+      answeredAt: iso(20),
+      agentId: null,
+      taskId: null,
+      createdAt: iso(22),
+      updatedAt: iso(20),
+    };
+  };
+
   const under = (feature: number | null) => children.filter((c) => demoFeatureOf(c.number)?.number === (feature ?? -1));
   const features = [901, 902, 900, 300, 903].map((number): FeatureRollup => {
     const feature = DEMO_FEATURES.find((f) => f.number === number);
@@ -5718,7 +5743,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       costUsd: cost(rows),
       reach: extra.reach,
       summary: extra.summary,
-      sequence: null,
+      sequence: number === 901 ? acceptedOrder(number, rows) : null,
       lastLandingAt: landed[0]?.at ?? null,
       landings: landed,
       standingKey: extra.standingKey,

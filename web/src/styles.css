@@ -9245,7 +9245,7 @@ select:disabled {
 /* Refs inside the sentence stay in the sentence: the group's own right-packing and
    rule are for a row's trailing column, and a line of prose has neither. */
 .cn-fb-attn .cn-refs,
-.cn-fb-hold-title .cn-refs {
+.cn-fb-brief-list .cn-refs {
   display: inline-flex;
   justify-content: flex-start;
   border-left: 0;
@@ -9333,6 +9333,15 @@ select:disabled {
   letter-spacing: var(--label-track);
   text-transform: uppercase;
   color: var(--cn-fg-faint);
+}
+/* The board's own quiet line. `.cn-psub` is the ask panel's padded, ruled subject
+   bar, and borrowed for an aside it drew a stray rule under every one. */
+.cn-fb-quiet {
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+p.cn-fb-quiet {
+  margin: 0;
 }
 .cn-fb-empty {
   margin: 0;
@@ -9426,7 +9435,7 @@ select:disabled {
   text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
-.cn-fb-brief-list h4 .cn-psub {
+.cn-fb-brief-list h4 .cn-fb-quiet {
   text-transform: none;
   letter-spacing: 0;
   margin-left: 5px;
@@ -9470,26 +9479,42 @@ select:disabled {
 
 /* -- in the way --------------------------------------------------------------- */
 
-/* One row per hold, striped by court on the left: your court in the ask's amber
-   (red where an agent is stopped against it), the fleet's and the world's in the
-   neutral rule. The tag says the court, the sentence is its owner's. */
+/* Grouped by court under one small heading each, rather than a court tag on every
+   row. Each row leads with the story it is about, then says what is asked; the
+   stripe stays — amber for yours, red where an agent is stopped against it. */
 .cn-fb-holds {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
+}
+.cn-fb-court {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cn-fb-court h5 {
+  margin: 0;
+  font-size: var(--label-size-sm);
+  font-weight: 500;
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-court h5 .cn-fb-quiet {
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+.cn-fb-court-you h5 {
+  color: var(--cn-amber-ink);
 }
 .cn-fb-hold {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
-  padding: 6px 0 8px 10px;
-  border-bottom: 1px solid var(--cn-line-soft);
+  padding: 4px 0 4px 10px;
   border-left: 3px solid var(--cn-line-hi);
   font-size: 12.5px;
-}
-.cn-fb-hold:last-child {
-  border-bottom: 0;
 }
 .cn-fb-hold-you {
   border-left-color: var(--cn-amber);
@@ -9503,13 +9528,30 @@ select:disabled {
   gap: 2px;
   min-width: 0;
 }
+.cn-fb-hold-about {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-hold-about .cn-refs {
+  display: inline-flex;
+  justify-content: flex-start;
+  border-left: 0;
+  padding-left: 0;
+  min-width: 0;
+}
+.cn-fb-hold-story {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cn-fb-hold-title {
   color: var(--cn-fg);
+  line-height: 1.45;
   overflow-wrap: anywhere;
-}
-.cn-fb-hold-title .cn-refs {
-  margin-left: 6px;
-  display: inline-flex;
 }
 
 /* -- its stories and PRs ------------------------------------------------------ */
@@ -9535,58 +9577,73 @@ select:disabled {
   flex-direction: column;
   font-size: 12.5px;
 }
+/* A story is three tracks: its standing, everything said about it, and what it
+   cost. The tag's track is fixed so every title — and every line under one, the
+   wait and the pull requests — starts on the same edge. */
 .cn-fb-story {
-  padding: 6px 0;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 0 10px;
+  align-items: start;
+  padding: 8px 0;
   border-bottom: 1px solid var(--cn-line-soft);
 }
 .cn-fb-story:last-child {
   border-bottom: 0;
 }
-.cn-fb-story-row {
+.cn-fb-story > .tag {
+  justify-self: start;
+  margin-top: 1px;
+}
+.cn-fb-story-main {
   display: flex;
-  gap: 8px;
-  align-items: center;
-  color: var(--cn-fg-dim);
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
 }
-.cn-fb-story-row .cn-fb-goal {
-  flex: 1;
-  min-width: 0;
+.cn-fb-story-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--cn-fg);
+  line-height: 1.45;
 }
-.cn-fb-story-row .cn-refs {
+.cn-fb-story-head .cn-fb-goal {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cn-fb-story .cn-refs {
+  display: inline-flex;
+  justify-content: flex-start;
   border-left: 0;
   padding-left: 0;
   min-width: 0;
+  vertical-align: baseline;
 }
 .cn-fb-story-end {
-  margin-left: auto;
   display: inline-flex;
   gap: 8px;
   align-items: baseline;
+  padding-top: 2px;
 }
-/* The wave header, and what a held story waits behind — rows in the one list the
-   card draws, not a second list of the same stories.
-   → docs/spec/33-story-sequencing.md#the-feature-page */
-.cn-fb-wave {
-  padding: 9px 0 3px;
-  color: var(--cn-fg-faint);
-  font-size: var(--label-size-sm);
-  letter-spacing: var(--label-track);
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--cn-line);
+/* What a held story waits behind — a line of the story, not a second list of the
+   same stories. → docs/spec/33-story-sequencing.md#the-feature-page */
+.cn-fb-waits .cn-refs {
+  margin-left: 2px;
 }
-.cn-fb-waits {
-  padding: 2px 0 0 26px;
+/* A story's pull requests hang off one rule, bottom rung first, each wearing the
+   marks every other pull request row wears. */
+.cn-fb-prs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 2px solid var(--cn-line);
 }
-/* A pull request under its story: indented off a rule, bottom rung first, wearing
-   the marks every other pull request row wears. */
 .cn-fb-pr {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin: 4px 0 0 6px;
-  padding: 3px 0 3px 12px;
-  border-left: 2px solid var(--cn-line);
   color: var(--cn-fg-dim);
   min-width: 0;
 }
@@ -9698,7 +9755,72 @@ select:disabled {
 /* Answered, either way — one quiet line, because the answer’s whole consequence
    is the wave rail below it, or its absence. */
 .cn-fb-seq-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+/* The accepted order itself, a step per wave. What already landed is dimmed rather
+   than dropped: the order is the record of what was agreed. */
+.cn-fb-order {
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cn-fb-order > li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+}
+.cn-fb-order-n {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--cn-line);
+  display: grid;
+  place-items: center;
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-fb-order ul {
   margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cn-fb-order ul li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cn-fg);
+  min-width: 0;
+}
+.cn-fb-order .cn-refs {
+  display: inline-flex;
+  justify-content: flex-start;
+  border-left: 0;
+  padding-left: 0;
+  min-width: 0;
+}
+.cn-fb-order-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cn-fb-order-title {
+  overflow-wrap: anywhere;
+}
+.cn-fb-order-done .cn-fb-order-title {
+  color: var(--cn-fg-faint);
 }
 
 /* -- the children --------------------------------------------------------- */
