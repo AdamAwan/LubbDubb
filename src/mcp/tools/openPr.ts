@@ -50,18 +50,19 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       body: z
         .string()
         .describe(
-          deps.manualDescriptions
-            ? 'Do not use this. On this deployment the description is the operator\u2019s \u2014 they write it ' +
-                'against this pull request once it is open, and a body sent here is refused rather than ' +
-                'merged with theirs.'
-            : 'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
-                `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
-                'the change is needed first and what it does after, one line each. No headings, no prose ' +
-                'paragraphs — a reviewer reads this before the diff, not instead of it. These are checked and ' +
-                `a body that breaks them is refused: every line starts with \`- \`, no bullet runs past ` +
-                `${PR_BODY.bulletChars} characters, no semicolons, no clauses hung off a dash, and the plainest ` +
-                'word that is still true. ' +
-                prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
+          (deps.manualDescriptions
+            ? 'Optional PR body. On this deployment the operator writes the description, so what you send is ' +
+              'kept as a draft they can read and choose to use rather than put on the pull request at the ' +
+              'open. Write it the same way either way. '
+            : 'Optional PR body. ') +
+            'The harness adds the issue reference itself, so describe the change, not ' +
+            `which ticket it belongs to. Write it as a bullet list: at most ${PR_BODY.bullets} bullets, why ` +
+            'the change is needed first and what it does after, one line each. No headings, no prose ' +
+            'paragraphs — a reviewer reads this before the diff, not instead of it. These are checked and ' +
+            `a body that breaks them is refused: every line starts with \`- \`, no bullet runs past ` +
+            `${PR_BODY.bulletChars} characters, no semicolons, no clauses hung off a dash, and the plainest ` +
+            'word that is still true. ' +
+            prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
         )
         .optional(),
     }),
@@ -77,16 +78,8 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
     const given = typeof args.body === 'string' ? args.body.trim() : '';
-    if (deps.manualDescriptions && given !== '')
-      return toolError(
-        'open_pr rejected: this deployment writes its own pull-request descriptions. The body is the ' +
-          'operator\u2019s, written against this pull request once it is open, so there is nothing for you ' +
-          'to say here \u2014 drop the body argument and call again.',
-      );
-    if (!deps.manualDescriptions) {
-      const bodyRefusal = prBodyRefusal(given);
-      if (bodyRefusal !== null) return toolError(`open_pr rejected: ${bodyRefusal}`);
-    }
+    const bodyRefusal = prBodyRefusal(given);
+    if (bodyRefusal !== null) return toolError(`open_pr rejected: ${bodyRefusal}`);
 
     const issueNumber = issueSubtreeNumber(task.originRef);
     const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
@@ -118,11 +111,9 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
       total: target.total,
       expandsIssueRefs: (deps.openPr?.prRefStyle ?? '#') === '!',
     });
-    // With `manualDescriptions` on, nothing of the operator's goes above the footer
-    // here: they write the description after reading the pull request, so it always
-    // lands as an edit and never at the open. The agent's `given` cannot reach here
-    // either; it was refused above.
-    // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+    // With `manualDescriptions` on, the agent's body is kept as a draft rather than
+    // shipped: the operator decides whether it reaches the pull request.
+    // → docs/spec/07-pull-requests.md#the-agents-draft
     const body = deps.manualDescriptions ? footer : [given, footer].filter((part) => part !== '').join('\n\n');
 
     try {
@@ -147,6 +138,7 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         // the provider. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
         if (deps.manualDescriptions && target.partRef !== null) {
           deps.store.prDescriptions.recordPrBody({ originRef: target.partRef, prNumber, tail: footer });
+          if (given !== '') deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: given });
         }
       }
       return ok({

@@ -1,5 +1,5 @@
 import type {
-  PrDescriptionHandoff,
+  PrDescriptionDraft,
   PrDescriptionVersion,
   RemoteSheetView,
   AgentFilesPayload,
@@ -433,7 +433,7 @@ class DemoServer {
   private seq = 1000;
   private readonly predictions = new DemoPredictions();
   private readonly descriptions = new Map<string, PrDescriptionVersion[]>(DEMO_DESCRIPTIONS);
-  private readonly handoffs = new Map<string, PrDescriptionHandoff>();
+  private readonly drafts = new Map<string, PrDescriptionDraft>();
   /**
    * What the reveal hands back, per withheld plan: the approval ask's prose and the
    * caveats that carry the plan's risks and open questions verbatim.
@@ -550,23 +550,30 @@ class DemoServer {
     return out;
   }
 
-  /** A description handed back to an agent. The demo runs no fleet, so it stays pending. */
-  handoffOf(originRef: string): PrDescriptionHandoff | null {
-    return this.handoffs.get(originRef) ?? null;
+  /**
+   * The body the part's agent sent to `open_pr`, kept as a draft. The demo has no
+   * agent, so every part carries the same stand-in.
+   */
+  draftOf(originRef: string, prNumber: number): PrDescriptionDraft {
+    return (
+      this.drafts.get(originRef) ?? {
+        originRef,
+        prNumber,
+        text: '- The part needed its own change so the rest could build on it.\n- This is what that change does.',
+        writtenAt: new Date().toISOString(),
+        handedBy: null,
+        handedAt: null,
+        pushedAt: null,
+      }
+    );
   }
 
-  handOff(originRef: string, prNumber: number): { ok: true; handoff: PrDescriptionHandoff } {
-    const handoff = this.handoffs.get(originRef) ?? {
-      originRef,
-      prNumber,
-      requestedBy: DEMO_OPERATOR,
-      requestedAt: new Date().toISOString(),
-      text: null,
-      writtenAt: null,
-      pushedAt: null,
-    };
-    this.handoffs.set(originRef, handoff);
-    return { ok: true, handoff };
+  handOff(originRef: string, prNumber: number): { ok: true; draft: PrDescriptionDraft } {
+    const held = this.draftOf(originRef, prNumber);
+    const draft =
+      held.handedAt === null ? { ...held, handedBy: DEMO_OPERATOR, handedAt: new Date().toISOString() } : held;
+    this.drafts.set(originRef, draft);
+    return { ok: true, draft };
   }
 
   writeDescription(originRef: string, text: string): { ok: true; version: PrDescriptionVersion } {
@@ -4937,8 +4944,12 @@ export const demoApi = {
   getPrDescription: (prNumber: number) =>
     Promise.resolve().then(() => {
       const originRef = getServer().partOfPullRequest(prNumber);
-      if (originRef === null) return { originRef: null, current: null, versions: [], handoff: null };
-      return { originRef, ...getServer().descriptionReading(originRef), handoff: getServer().handoffOf(originRef) };
+      if (originRef === null) return { originRef: null, current: null, versions: [], draft: null };
+      return {
+        originRef,
+        ...getServer().descriptionReading(originRef),
+        draft: getServer().draftOf(originRef, prNumber),
+      };
     }),
   handOffPrDescription: (prNumber: number) =>
     Promise.resolve().then(() => {

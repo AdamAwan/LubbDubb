@@ -22,7 +22,7 @@ import type {
   PrReview,
   PrReviewRoute,
   PrSplitVerdict,
-  PrDescriptionHandoff,
+  PrDescriptionDraft,
   PullRequest,
   Remedy,
   TaskSummary,
@@ -51,7 +51,7 @@ export interface DispatchContext {
   prReviews?: PrReview[];
   prReviewRoutes?: PrReviewRoute[];
   prSplits?: PrSplitVerdict[];
-  descriptionHandoffs?: PrDescriptionHandoff[];
+  descriptionDrafts?: PrDescriptionDraft[];
   prReviewedElsewhere?: ReadonlySet<number>;
   tasks: TaskSummary[];
   agents: Agent[];

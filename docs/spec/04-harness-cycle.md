@@ -630,16 +630,16 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
 against the declared list**, so moving a pass that must stay below another fails a test instead of
 breaking silently:
 
-| Constraint                                                             | Why                                                                                                                                                                      |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `graph` → `environments`, immediately                                  | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                                          |
-| `environments` → `remoteValidation`                                    | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                                       |
-| `remoteValidation` → `validationReady`                                 | the validate row's detail carries **this** pulse's sheet                                                                                                                 |
-| `validationAsks` → `validationReady` → `closeOuts`                     | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                 |
-| `plans` → `graph`                                                      | the part→PR observations the reconciler just made are the ones recorded                                                                                                  |
-| `graph` → `graduations` → `pool`                                       | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([31](31-review-packs.md), [28](28-cross-fleet-pool.md)) |
-| `notices` → `obstacles`                                               | an agent whose report was taken up is told so by the pulse that took it; the five obstacle stages keep their order inside the desk ([27](27-obstacles.md#one-desk-on-the-pulse)) |
-| `prWatch` → `prWorkItems`                                              | one pass says the pull request is the fleet's, the other which work item it is for                                                                                       |
+| Constraint                                         | Why                                                                                                                                                                              |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graph` → `environments`, immediately              | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                                                  |
+| `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                                               |
+| `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                                                         |
+| `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                         |
+| `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                                                          |
+| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([31](31-review-packs.md), [28](28-cross-fleet-pool.md))         |
+| `notices` → `obstacles`                            | an agent whose report was taken up is told so by the pulse that took it; the five obstacle stages keep their order inside the desk ([27](27-obstacles.md#one-desk-on-the-pulse)) |
+| `prWatch` → `prWorkItems`                          | one pass says the pull request is the fleet's, the other which work item it is for                                                                                               |
 
 The same test asserts the walk reaches every entry in the declared order, and that no id is walked
 twice — a duplicate is what would make a position, and so every one of those constraints, mean
@@ -687,7 +687,7 @@ arms a watchdog for it:
   half, and a log that repeats is a log that is scrolled past. It is `unref`'d, so it never holds the
   process open.
 - **`harness.inFlightCycle`** is the live standing — `{cycleId, source, startedAt, elapsedMs, where,
-  overdue}`, null between cycles. `overdue` is the same threshold. `fleet_status` ships it as `cycle`,
+overdue}`, null between cycles. `overdue` is the same threshold. `fleet_status` ships it as `cycle`,
   and when the queue is empty _because_ of it the queue's note says so rather than repeating "no cycle
   has run since the harness started".
 - **A coalesced report's rationale** carries it too, so a route that asked for a cycle and got

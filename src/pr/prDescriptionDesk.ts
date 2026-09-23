@@ -38,10 +38,10 @@ export class PrDescriptionDesk {
         });
       }
     }
-    for (const pending of store.prDescriptions.unpushedHandoffs()) {
+    for (const pending of store.prDescriptions.unpushedDrafts()) {
       try {
         await sink.setPullBody({ prNumber: pending.prNumber, body: pending.body });
-        store.prDescriptions.markHandoffPushed(pending.originRef);
+        store.prDescriptions.markDraftPushed(pending.originRef);
       } catch (err) {
         errors?.record({
           source: 'cycle',

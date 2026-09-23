@@ -3,14 +3,14 @@ import { describeBranch } from '../../pr/prDescription.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
-// → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+// → docs/spec/07-pull-requests.md#the-agents-draft
 
 export function prDescribe(s: StageContext): void {
   const { ctx } = s;
-  for (const handoff of s.descriptionHandoffs) {
-    const pr = ctx.world.pullRequests.find((p) => p.number === handoff.prNumber);
+  for (const draft of s.descriptionDrafts) {
+    const pr = ctx.world.pullRequests.find((p) => p.number === draft.prNumber);
     if (pr === undefined || pr.merged) continue;
-    const part = parseIssueOrigin(handoff.originRef);
+    const part = parseIssueOrigin(draft.originRef);
     if (part === null) continue;
 
     const origin = issueOriginRef('describe', part.issueNumber, pr.number);

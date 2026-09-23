@@ -183,7 +183,7 @@ own story for good and there is nothing an operator could do about it from here.
 predecessor is still open holds, however far along that predecessor is and whatever it has pushed.
 
 This is deliberately **not** `dependencySatisfied`'s rule (`src/plans/parts.ts`), which a part is
-held by and which counts a pushed branch as satisfied. The difference is that a part is *based on*
+held by and which counts a pushed branch as satisfied. The difference is that a part is _based on_
 the branch it waits for — `partBase` bases it there, so the work it depends on is in the checkout it
 is handed. A **story** has no such base: `issue-pickup` names a branch and no base, so
 `codeWorkingDirectory` cuts the worktree from `defaultBranch`

@@ -307,7 +307,7 @@ test('the pull request page writes by number, resolving the part from the record
       originRef: 'issue:390:part:validate',
       current: null,
       versions: [],
-      handoff: null,
+      draft: null,
     });
 
     const written = await app.inject({
@@ -349,7 +349,7 @@ test('a pull request that is not a part\u2019s answers with no part, and refuses
        rather than offering a field whose write has nowhere to land. */
     const read = await app.inject({ method: 'GET', url: '/api/prs/9999/description' });
     assert.equal(read.statusCode, 200);
-    assert.deepEqual(read.json(), { originRef: null, current: null, versions: [], handoff: null });
+    assert.deepEqual(read.json(), { originRef: null, current: null, versions: [], draft: null });
 
     const written = await app.inject({
       method: 'POST',
@@ -475,14 +475,25 @@ test('with the flag on nothing of the operator\u2019s ships at the open \u2014 t
     const bare = await callOpenPr(system, 'issue:182:part:reader', { summary: 'retire the in-memory map' });
     assert.equal(bare.isError, false, 'a part nobody described still opens');
 
-    // And the agent cannot smuggle one in.
-    const refused = await callOpenPr(system, 'issue:182:part:cursor', {
+    // The agent's body is kept as a draft, never shipped at the open.
+    const drafted = await callOpenPr(system, 'issue:182:part:cursor', {
       summary: 'something else',
       body: '- I will describe my own change, thanks.',
     });
+    assert.equal(drafted.isError, false, drafted.text);
+    assert.doesNotMatch(sink.opened[2]!.body, /describe my own change/, 'a draft is not on the pull request');
+    assert.equal(
+      system.store.prDescriptions.draftOf('issue:182:part:cursor')?.text,
+      '- I will describe my own change, thanks.',
+    );
+
+    // And it answers to the same rules as with the flag off.
+    const refused = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'something else',
+      body: 'A paragraph; not a bullet list.',
+    });
     assert.equal(refused.isError, true);
-    assert.equal(sink.opened.length, 2, 'the refusal happened before anything left');
-    assert.match(refused.text, /operator/i, 'the refusal says whose the body is, not merely that it was refused');
+    assert.equal(sink.opened.length, 3, 'the refusal happened before anything left');
   } finally {
     system.store.close();
   }
@@ -681,7 +692,7 @@ async function callTool(
 }
 
 // → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
-test('a description handed back to the agent is written by one and put above the footer', async () => {
+test('where the agent sent no draft, handing it over dispatches one to write it', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
   const sink = recordingSink();
   const system = manualSystem(dir, sink);
@@ -733,7 +744,7 @@ test('a description handed back to the agent is written by one and put above the
     assert.equal(sink.bodies.length, 1, 'pushed once');
 
     const read = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
-    assert.match((read.json() as { handoff: { text: string } }).handoff.text, /read back at startup/);
+    assert.match((read.json() as { draft: { text: string } }).draft.text, /read back at startup/);
   } finally {
     await app.close();
     system.store.close();
@@ -754,6 +765,45 @@ test('a hand-off is refused once the operator has written their own', async () =
     assert.equal(handed.statusCode, 400);
     const stray = await app.inject({ method: 'POST', url: '/api/prs/999/description/handoff' });
     assert.equal(stray.statusCode, 400, 'a pull request that is not a part’s has nothing to hand over');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('the agent\u2019s draft is kept hidden, and using it puts it on the pull request at once', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', {
+      summary: 'read the cursor back',
+      body: '- A restart replays the whole feed.',
+    });
+    assert.equal(opened.isError, false, opened.text);
+    const tail = sink.opened[0]!.body;
+    system.connector.inject({ kind: 'new_pr', number: 1, title: 'read the cursor back', branch: 'issue/182/cursor' });
+    await system.harness.runCycle('manual');
+    assert.equal(sink.bodies.length, 0, 'a draft nobody chose stays off the pull request');
+    assert.equal(buildStateSnapshot(system).undescribedParts.length, 1, 'and the ask still stands');
+
+    const read = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
+    assert.equal((read.json() as { draft: { text: string } }).draft.text, '- A restart replays the whole feed.');
+
+    const used = await app.inject({ method: 'POST', url: '/api/prs/1/description/handoff' });
+    assert.equal(used.statusCode, 200, used.body);
+    await system.harness.runCycle('manual');
+    assert.equal(
+      findTask(system.store, (t) => t.rule === 'pr-describe'),
+      undefined,
+      'a draft already written needs no agent',
+    );
+    assert.equal(sink.bodies.length, 1);
+    assert.equal(sink.bodies[0]!.body, `- A restart replays the whole feed.\n\n${tail}`);
   } finally {
     await app.close();
     system.store.close();

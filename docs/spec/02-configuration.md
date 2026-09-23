@@ -162,8 +162,8 @@ from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays saf
 
 ### `manualDescriptions`
 
-Off by default. On, the operator writes a part's pull-request description themselves and `open_pr`
-refuses a `body` argument; off, the agent writes it exactly as it always has. It holds nothing up
+Off by default. On, the operator writes a part's pull-request description themselves and the body the agent
+sends to `open_pr` is kept as a hidden draft they can reveal or use; off, the agent writes it exactly as it always has. It holds nothing up
 either way — a part nobody described opens its pull request with no body above the reference.
 → [07](07-pull-requests.md#the-operator-writes-the-description)
 

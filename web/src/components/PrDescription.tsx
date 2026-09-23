@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import type {
   DescriptionFindingKind,
   DescriptionQuestion,
-  PrDescriptionHandoff,
+  PrDescriptionDraft,
   PrDescriptionVersion,
 } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
@@ -96,8 +96,8 @@ interface Reading {
   /** The part this pull request carries, or null for one that is not a part's. */
   originRef: string | null;
   current: PrDescriptionVersion | null;
-  /** The description handed back to an agent, or null where nobody did. */
-  handoff: PrDescriptionHandoff | null;
+  /** The body the agent sent to `open_pr`, kept as a draft, or null where it sent none. */
+  draft: PrDescriptionDraft | null;
 }
 
 /**
@@ -114,7 +114,7 @@ function usePrDescription(prNumber: number): { reading: Reading; reload: () => P
   const read = useCallback(async (): Promise<Reading | null> => {
     try {
       const answer = await api.getPrDescription(prNumber);
-      return { originRef: answer.originRef, current: answer.current, handoff: answer.handoff ?? null };
+      return { originRef: answer.originRef, current: answer.current, draft: answer.draft ?? null };
     } catch {
       return null;
     }
@@ -166,10 +166,11 @@ export function PrDescription({
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const held = usePrDescription(prNumber);
 
   if (held === null || !open) return null;
-  const { current, originRef, handoff } = held.reading;
+  const { current, originRef, draft } = held.reading;
   if (originRef === null) return null;
 
   const part = /^issue:(\d+):part:(.+)$/.exec(originRef);
@@ -192,9 +193,11 @@ export function PrDescription({
     await held.reload();
   };
 
-  /* Handed back, and not since overridden by the operator's own version, which
-     outranks it. → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent */
-  const handedOver = current === null ? handoff : null;
+  /* Handed over, and not since overridden by the operator's own version, which
+     outranks it. Before the press the draft is hidden behind a reveal, so the
+     operator can write first. → docs/spec/07-pull-requests.md#the-agents-draft */
+  const handedOver = current === null && draft !== null && draft.handedAt !== null ? draft : null;
+  const hiddenDraft = current === null && handedOver === null && draft?.text ? draft.text : null;
 
   return (
     <section className="cn-card cn-desc">
@@ -209,8 +212,8 @@ export function PrDescription({
         <p className="cn-desc-why">
           A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
           the agent&rsquo;s. Read the change above first; what you write goes to the top of this pull request&rsquo;s
-          body. It holds nothing up: leave it and the pull request carries the evidence alone, or hand this one back to
-          the agent.
+          body. It holds nothing up: leave it and the pull request carries the evidence alone, or use the agent&rsquo;s
+          draft instead.
         </p>
       )}
 
@@ -226,9 +229,16 @@ export function PrDescription({
         <div className="cn-desc-current">
           <blockquote className="cn-desc-text">{handedOver.text}</blockquote>
           <div className="cn-desc-by">
-            written by an agent · {relTime(handedOver.writtenAt ?? handedOver.requestedAt, now)}
+            written by an agent · {relTime(handedOver.writtenAt ?? handedOver.handedAt ?? '', now)}
             {handedOver.pushedAt === null && ' · not on the pull request yet'}
           </div>
+        </div>
+      )}
+
+      {hiddenDraft !== null && revealed && !writing && (
+        <div className="cn-desc-current">
+          <blockquote className="cn-desc-text">{hiddenDraft}</blockquote>
+          <div className="cn-desc-by">the agent&rsquo;s draft · not on the pull request</div>
         </div>
       )}
 
@@ -294,7 +304,16 @@ export function PrDescription({
           </button>
           {/* The fallback to what `open_pr` does with `manualDescriptions` off, on
               this one pull request and only on a press. */}
-          {current === null && handedOver === null && <AsyncButton onClick={handOff}>Hand it to the agent</AsyncButton>}
+          {hiddenDraft !== null && (
+            <button type="button" className={buttonClass({ ghost: true })} onClick={() => setRevealed(!revealed)}>
+              {revealed ? 'Hide the agent\u2019s draft' : 'Reveal the agent\u2019s draft'}
+            </button>
+          )}
+          {hiddenDraft !== null && <AsyncButton onClick={handOff}>Use the agent&rsquo;s</AsyncButton>}
+          {/* No draft to use: the agent sent no body, so one is dispatched to write it. */}
+          {current === null && handedOver === null && hiddenDraft === null && (
+            <AsyncButton onClick={handOff}>Hand it to the agent</AsyncButton>
+          )}
           {/* The check is the operator's own Claude Code rather than a dispatched
               agent, because what follows the report is an argument and an argument on
               the pulse costs an afternoon. It contradicts; it never hands back prose.

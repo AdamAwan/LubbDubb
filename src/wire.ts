@@ -970,7 +970,7 @@ export type {
   DescriptionFinding,
   DescriptionFindingKind,
   DescriptionQuestion,
-  PrDescriptionHandoff,
+  PrDescriptionDraft,
   PrDescriptionVersion,
   PredictionMark,
   PredictionOutcomeMarks,

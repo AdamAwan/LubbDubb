@@ -262,15 +262,15 @@ from `plan_parts.pr_number`, which is a reading of the world filled in by a late
 off that would offer the field whenever the next world read happened to land, and never at all for a
 branch the observer could not match. A pull request with no such record answers `originRef: null` and
 the panel draws nothing; the `POST` refuses it, because a description has nowhere to be written.
-The read also carries `handoff` — the part's `PrDescriptionHandoff`, or null.
+The read also carries `draft` — the part's `PrDescriptionDraft`, or null.
 → [07](07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written)
 
 ### `POST /api/prs/:number/description/handoff`
 
-Hands the part's description back to an agent: one `pr_description_handoffs` row, idempotent, which
-rule `pr-describe` dispatches for. A `400` for a pull request that is not a part's, and for one the
+Uses the agent's draft: stamps `handed_at` on the part's `pr_description_drafts` row, idempotent, and
+the desk pushes it. With no draft the row is created empty and rule `pr-describe` dispatches for it. A `400` for a pull request that is not a part's, and for one the
 operator has already described — their own version outranks the agent's.
-→ [07](07-pull-requests.md#handing-it-back-to-the-agent)
+→ [07](07-pull-requests.md#the-agents-draft)
 
 ### `GET /api/state`
 

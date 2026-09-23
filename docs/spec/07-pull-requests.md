@@ -656,8 +656,8 @@ an agent it would go missing silently, on exactly the pull requests nobody was w
 Behind `manualDescriptions`, off by default. With it off nothing in this section happens: the agent
 writes the body as the two sections above describe, and `open_pr` is unchanged.
 
-With it on, the body is the **operator's**, and `open_pr` refuses a `body` argument rather than
-merging the two.
+With it on, the body is the **operator's**. The agent still sends `open_pr` a `body`, checked by the
+same rules, but it is kept as a [draft](#the-agents-draft) rather than put on the pull request.
 
 The case is not that the operator writes a better body. It is that **writing is the instrument of
 understanding rather than a report of it**: a description you cannot write is a change you have not
@@ -709,10 +709,10 @@ Not the plan's release, not the dispatch, not the pull request, not the review w
 described leaves its pull request carrying **the footer alone**, which is this document's existing
 answer to an absent body rather than a new one.
 
-And nothing fills the gap **by itself** — emphatically not the agent. A backstop would reintroduce the
+And nothing fills the gap **by itself** — emphatically not the agent's draft. A backstop would reintroduce the
 account written by the thing with the most reason to be wrong about it, _and_ make the gap invisible:
 the pull request would read as described when nobody had. The operator may still
-[hand one back](#handing-it-back-to-the-agent) — a press on one pull request, never a default. Either a person wrote the body or it has none,
+[use the agent's draft](#the-agents-draft) — a press on one pull request, never a default. Either a person wrote the body or it has none,
 and the absence is on the page where a reviewer can see it. That is what keeps a skipped description
 from being the quiet failure a required one would only have moved.
 
@@ -775,27 +775,30 @@ closing it.
 With `manualDescriptions` off the list is empty, and that is the whole of what keeps the ask off a
 deployment where the agent writes the body.
 
-#### Handing it back to the agent
+#### The agent's draft
 
-The pull request's page offers **Hand it to the agent** beside **Describe it**. It is the key-off
-path — what `open_pr` does with `manualDescriptions` off — for this one pull request, run after the
-open instead of at it, because the pull request is already open by the time anybody is asked.
+The agent writes a body at `open_pr` exactly as it does with the key off — same argument, same
+`prBodyRefusal` — so the key-off description exists the moment the pull request does and nobody waits
+for one. What changes is where it goes: `open_pr` records it in `pr_description_drafts` and opens the
+pull request with the footer alone.
 
-- **Only on a press.** `POST /api/prs/:number/description/handoff` writes one
-  `pr_description_handoffs` row per part. Nothing writes one by itself, so the section above still
-  holds: an undescribed pull request carries the footer alone until somebody decides otherwise.
+- **Hidden until asked for.** The pull request's page offers **Reveal the agent's draft**, so the
+  operator can write first and read the agent's account after — or not at all. The read carries the
+  draft as `draft`; hiding it is the cockpit's, because it is a reading order, not a secret.
+- **Used on a press, at once.** **Use the agent's** (`POST /api/prs/:number/description/handoff`)
+  stamps `handed_at`, and `PrDescriptionDesk` puts the text above the footer on the next pulse. It is
+  pushed as the agent's, with no `HUMAN_NOTE`: the mark says a person answers for the prose, and here
+  nobody did. Nothing stamps it by itself, so an unchosen draft never reaches the pull request.
 - **The press answers the rail's ask.** `undescribedOpenParts` leaves out a handed-over part, so the
-  `describe` ask goes as soon as the operator has decided who writes it.
-- **One read-only agent writes it.** Rule `pr-describe` dispatches on `issue:<n>:describe:<pr>`, a
-  detached checkout under `describe/pr/<n>`, for every handoff with no text yet on a pull request
-  still open. It answers through `pr_describe`, which runs `prBodyRefusal` — the same bullet rules
-  `open_pr`'s `body` runs with the key off. A run that ends without writing is dispatched again under
-  the ordinary cooldown.
-- **It is pushed as the agent's, never marked as a person's.** `PrDescriptionDesk` puts the text above
-  the footer `open_pr` recorded, with no `HUMAN_NOTE`: the mark says a person answers for the prose, and
-  here nobody did.
-- **The operator's own version outranks it.** A handoff is refused once a version exists, and
-  `unpushedHandoffs` skips any part that has one — **Write your own instead** stays on the page, and
+  `describe` ask goes as soon as the operator has decided who writes it. An unchosen draft does not
+  answer it.
+- **No draft, one is written.** An agent that sent no body leaves nothing to use, and the page offers
+  **Hand it to the agent** instead. The press writes the row empty and rule `pr-describe` dispatches one
+  read-only agent on `issue:<n>:describe:<pr>` (a detached checkout under `describe/pr/<n>`), which
+  answers through `pr_describe` under the same rules. A run that ends without writing is dispatched
+  again under the ordinary cooldown.
+- **The operator's own version outranks it.** A hand-over is refused once a version exists, and
+  `unpushedDrafts` skips any part that has one — **Write your own instead** stays on the page, and
   what they write replaces the agent's body on the next pulse.
 
 #### The field is free, and the four questions are hints

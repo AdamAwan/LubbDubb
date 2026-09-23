@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { DescriptionFinding, DescriptionQuestion, PrDescriptionHandoff, PrDescriptionVersion } from '../types.js';
+import type { DescriptionFinding, DescriptionQuestion, PrDescriptionDraft, PrDescriptionVersion } from '../types.js';
 import { issueOriginRef } from '../issueOrigins.js';
 import { composeDescribedBody } from '../pr/prDescription.js';
 import type { ColumnMigrations } from './migrate.js';
@@ -135,7 +135,9 @@ export class PrDescriptionStore {
         `SELECT b.origin_ref AS origin_ref, b.pr_number AS pr_number, b.opened_at AS opened_at
            FROM pr_description_bodies b
           WHERE NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = b.origin_ref)
-            AND NOT EXISTS (SELECT 1 FROM pr_description_handoffs h WHERE h.origin_ref = b.origin_ref)
+            AND NOT EXISTS (
+              SELECT 1 FROM pr_description_drafts h WHERE h.origin_ref = b.origin_ref AND h.handed_at IS NOT NULL
+            )
           ORDER BY b.opened_at ASC`,
       )
       .all() as { origin_ref: string; pr_number: number; opened_at: string }[];
@@ -255,65 +257,81 @@ export class PrDescriptionStore {
   }
 
   /**
-   * Hands a part's description back to an agent. Idempotent: a second press returns
-   * the row the first one wrote rather than asking again.
-   * → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+   * The body the agent sent to `open_pr`, kept rather than shipped: with
+   * `manualDescriptions` on the operator decides whether it reaches the pull request.
+   * → docs/spec/07-pull-requests.md#the-agents-draft
    */
-  handOff(input: { originRef: string; prNumber: number; requestedBy: string | null }): PrDescriptionHandoff {
+  recordDraft(input: { originRef: string; prNumber: number; text: string }): void {
     this.ctx
       .prep(
-        `INSERT INTO pr_description_handoffs (origin_ref, pr_number, requested_by, requested_at)
-         VALUES (@originRef, @prNumber, @requestedBy, @requestedAt)
-         ON CONFLICT(origin_ref) DO NOTHING`,
+        `INSERT INTO pr_description_drafts (origin_ref, pr_number, text, written_at)
+         VALUES (@originRef, @prNumber, @text, @writtenAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET pr_number=excluded.pr_number, text=excluded.text,
+           written_at=excluded.written_at, pushed_at=NULL`,
       )
-      .run({ ...input, requestedAt: this.ctx.now() });
-    return this.handoffOf(input.originRef) as PrDescriptionHandoff;
+      .run({ ...input, writtenAt: this.ctx.now() });
   }
 
-  handoffOf(originRef: string): PrDescriptionHandoff | null {
-    const row = this.ctx.prep(`SELECT * FROM pr_description_handoffs WHERE origin_ref=?`).get(originRef) as
-      | HandoffRow
+  draftOf(originRef: string): PrDescriptionDraft | null {
+    const row = this.ctx.prep(`SELECT * FROM pr_description_drafts WHERE origin_ref=?`).get(originRef) as
+      | DraftRow
       | undefined;
-    return row ? toHandoff(row) : null;
-  }
-
-  /** Handoffs the agent has not written yet: what rule `pr-describe` dispatches for. */
-  pendingHandoffs(): PrDescriptionHandoff[] {
-    const rows = this.ctx
-      .prep(`SELECT * FROM pr_description_handoffs WHERE text IS NULL ORDER BY requested_at ASC`)
-      .all() as HandoffRow[];
-    return rows.map(toHandoff);
+    return row ? toDraft(row) : null;
   }
 
   /**
-   * The agent's text, against the pull request it was dispatched for. Null where no
-   * handoff names that pull request, which is the honest answer to a write nobody asked for.
+   * The operator's press: the agent's draft goes onto the pull request. Idempotent —
+   * a second press keeps the first one's stamp. Where the agent sent no body, the row
+   * is created empty and rule `pr-describe` dispatches one to write it.
    */
-  writeHandoff(input: { prNumber: number; text: string }): PrDescriptionHandoff | null {
-    const row = this.ctx.prep(`SELECT * FROM pr_description_handoffs WHERE pr_number=?`).get(input.prNumber) as
-      | HandoffRow
-      | undefined;
-    if (row === undefined) return null;
+  handOff(input: { originRef: string; prNumber: number; handedBy: string | null }): PrDescriptionDraft {
     this.ctx
-      .prep(`UPDATE pr_description_handoffs SET text=@text, written_at=@at, pushed_at=NULL WHERE origin_ref=@originRef`)
-      .run({ originRef: row.origin_ref, text: input.text, at: this.ctx.now() });
-    return this.handoffOf(row.origin_ref);
+      .prep(
+        `INSERT INTO pr_description_drafts (origin_ref, pr_number, handed_by, handed_at)
+         VALUES (@originRef, @prNumber, @handedBy, @handedAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET
+           handed_by=COALESCE(pr_description_drafts.handed_by, excluded.handed_by),
+           handed_at=COALESCE(pr_description_drafts.handed_at, excluded.handed_at)`,
+      )
+      .run({ ...input, handedAt: this.ctx.now() });
+    return this.draftOf(input.originRef) as PrDescriptionDraft;
+  }
+
+  /** Handed over with no draft to hand: what rule `pr-describe` dispatches for. */
+  pendingDrafts(): PrDescriptionDraft[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM pr_description_drafts WHERE handed_at IS NOT NULL AND text IS NULL ORDER BY handed_at ASC`)
+      .all() as DraftRow[];
+    return rows.map(toDraft);
   }
 
   /**
-   * Agent-written descriptions not yet on their pull request, composed with the tail
-   * `open_pr` recorded. A part the operator has written a version for is left out: a
-   * person's description outranks the agent's, and pushing both would race.
+   * The late draft `pr_describe` writes, against a pull request the operator handed
+   * over. Null where nobody did, which is the honest answer to a write nobody asked for.
    */
-  unpushedHandoffs(): { originRef: string; prNumber: number; body: string }[] {
+  writeHandedDraft(input: { prNumber: number; text: string }): PrDescriptionDraft | null {
+    const row = this.ctx
+      .prep(`SELECT * FROM pr_description_drafts WHERE pr_number=? AND handed_at IS NOT NULL`)
+      .get(input.prNumber) as DraftRow | undefined;
+    if (row === undefined) return null;
+    this.recordDraft({ originRef: row.origin_ref, prNumber: row.pr_number, text: input.text });
+    return this.draftOf(row.origin_ref);
+  }
+
+  /**
+   * Handed-over drafts not yet on their pull request, composed with the tail `open_pr`
+   * recorded. A part the operator has written a version for is left out: a person's
+   * description outranks the agent's, and pushing both would race.
+   */
+  unpushedDrafts(): { originRef: string; prNumber: number; body: string }[] {
     const rows = this.ctx
       .prep(
         `SELECT h.origin_ref AS origin_ref, b.pr_number AS pr_number, h.text AS text, b.tail AS tail
-           FROM pr_description_handoffs h
+           FROM pr_description_drafts h
            JOIN pr_description_bodies b ON b.origin_ref = h.origin_ref
-          WHERE h.text IS NOT NULL AND h.pushed_at IS NULL
+          WHERE h.handed_at IS NOT NULL AND h.text IS NOT NULL AND h.pushed_at IS NULL
             AND NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = h.origin_ref)
-          ORDER BY h.written_at ASC`,
+          ORDER BY h.handed_at ASC`,
       )
       .all() as { origin_ref: string; pr_number: number; text: string; tail: string }[];
     return rows.map((r) => ({
@@ -323,9 +341,9 @@ export class PrDescriptionStore {
     }));
   }
 
-  markHandoffPushed(originRef: string): void {
+  markDraftPushed(originRef: string): void {
     this.ctx
-      .prep(`UPDATE pr_description_handoffs SET pushed_at=@pushedAt WHERE origin_ref=@originRef`)
+      .prep(`UPDATE pr_description_drafts SET pushed_at=@pushedAt WHERE origin_ref=@originRef`)
       .run({ originRef, pushedAt: this.ctx.now() });
   }
 
@@ -367,24 +385,24 @@ interface DescriptionRow {
   checked_at: string | null;
 }
 
-interface HandoffRow {
+interface DraftRow {
   origin_ref: string;
   pr_number: number;
-  requested_by: string | null;
-  requested_at: string;
   text: string | null;
   written_at: string | null;
+  handed_by: string | null;
+  handed_at: string | null;
   pushed_at: string | null;
 }
 
-function toHandoff(r: HandoffRow): PrDescriptionHandoff {
+function toDraft(r: DraftRow): PrDescriptionDraft {
   return {
     originRef: r.origin_ref,
     prNumber: r.pr_number,
-    requestedBy: r.requested_by,
-    requestedAt: r.requested_at,
     text: r.text,
     writtenAt: r.written_at,
+    handedBy: r.handed_by,
+    handedAt: r.handed_at,
     pushedAt: r.pushed_at,
   };
 }

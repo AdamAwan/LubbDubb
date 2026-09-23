@@ -5,7 +5,7 @@ import { describeTargetPr } from '../../pr/prDescription.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-// → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+// → docs/spec/07-pull-requests.md#the-agents-draft
 
 export const prDescribe: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -36,7 +36,7 @@ export const prDescribe: ToolFactory = ({ deps, task, ok }) => ({
     if (body === '') return toolError('pr_describe rejected: the body is empty. Say what the change does.');
     const refusal = prBodyRefusal(body);
     if (refusal !== null) return toolError(`pr_describe rejected: ${refusal}`);
-    const written = deps.store.prDescriptions.writeHandoff({ prNumber, text: body });
+    const written = deps.store.prDescriptions.writeHandedDraft({ prNumber, text: body });
     if (written === null)
       return toolError(`pr_describe rejected: nobody handed PR #${prNumber}'s description to an agent.`);
     return ok({

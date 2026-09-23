@@ -2373,17 +2373,17 @@ export interface PrDescriptionVersion {
 }
 
 /**
- * A part's description handed back to an agent by the operator: what `open_pr` would
- * have carried with `manualDescriptions` off, written after the open instead of at it.
- * `text` is null until the agent has written it, `pushedAt` null until it reached the
- * pull request. → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+ * The body the agent wrote for a part's pull request, kept rather than shipped where
+ * `manualDescriptions` is on. `text` is null only where the agent sent none and the
+ * operator handed it over anyway; `handedAt` is the operator's press; `pushedAt` is
+ * when it reached the pull request. → docs/spec/07-pull-requests.md#the-agents-draft
  */
-export interface PrDescriptionHandoff {
+export interface PrDescriptionDraft {
   originRef: string;
   prNumber: number;
-  requestedBy: string | null;
-  requestedAt: string;
   text: string | null;
   writtenAt: string | null;
+  handedBy: string | null;
+  handedAt: string | null;
   pushedAt: string | null;
 }

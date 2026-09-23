@@ -723,7 +723,7 @@ checked and the denominator has to say so.
 `questionsRaised` is last and is deliberately weak. It counts how often a finding happened to name
 one of the four questions — but the questions are hints under the field rather than the shape of a
 check, most findings name none of them, and a panel leading with it would be reporting on the four
-things a check is *not* keyed by. → [07](07-pull-requests.md#a-check-is-findings-not-four-answers)
+things a check is _not_ keyed by. → [07](07-pull-requests.md#a-check-is-findings-not-four-answers)
 
 ## The allowance
 
@@ -1243,7 +1243,7 @@ account on a personal access token, a review bot commenting under an ordinary us
 
 1. **The provider's own word.** A GitHub App posts as `type: "Bot"` and cannot hide it, so
    `GhReviewComment.authorIsBot` carries it onto the thread. Azure DevOps reports nothing here, and
-   `undefined` means *it did not say* rather than *a person*.
+   `undefined` means _it did not say_ rather than _a person_.
 2. **The stamp the project declared.** `review.publishedThreadProperty` (with `.role`) is the key a
    project's **own** review tooling marks its threads with in the provider's per-thread property bag,
    and it already exists — the merge gate's `addressed` arm reads it

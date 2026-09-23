@@ -65,7 +65,7 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
       ...store.remedies.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
     ],
     prSplits: store.prSplits.listPrSplitVerdicts(),
-    descriptionHandoffs: store.prDescriptions.pendingHandoffs(),
+    descriptionDrafts: store.prDescriptions.pendingDrafts(),
     prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
     obstacles: store.obstacles.obstacleBoard(),
     obstacleBlocks: store.obstacles.listObstacleBlocks(),

@@ -1502,10 +1502,10 @@ before this change ever wrote. That join is what stops an upgrade rewriting the 
 request the deployment has opened; it is not incidental.
 → [07](07-pull-requests.md#it-is-written-against-an-open-pull-request-never-before-one)
 
-`pr_description_handoffs` is one row per part the operator handed back to an agent: the request,
-then the agent's `text`, then `pushed_at`. Its own table, never a version in `pr_descriptions`, because
+`pr_description_drafts` is one row per part the agent drafted a body for: its `text` (from `open_pr`,
+or later from `pr_describe`), the operator's `handed_at`, then `pushed_at`. Its own table, never a version in `pr_descriptions`, because
 that chain is the operator's prose and every reading of it — the badge, the check, the human mark —
-assumes a person wrote it. → [07](07-pull-requests.md#handing-it-back-to-the-agent)
+assumes a person wrote it. → [07](07-pull-requests.md#the-agents-draft)
 
 It is **not a `WorldEvent`**, the same trap as an arrival, a sheet reading and criteria drift:
 `deliveryHold` expires a standing delivery verdict on any world event matching the goal's issue ref,
