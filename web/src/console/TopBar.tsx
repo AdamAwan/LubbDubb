@@ -264,6 +264,44 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
   );
 }
 
+/* Present whenever an environment declares a tenant command, so what is configured
+   is one click away; it reads as running only while one is. The live output is
+   in the panel. → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs */
+function Tenants({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
+  const commands = view.state.tenantCommands;
+  if (commands.length === 0) return null;
+  const running = commands.filter((c) => c.preparation !== null && c.preparation.finishedAt === null);
+  const one = running.length === 1 ? running[0]!.preparation! : null;
+  const failed = running.length === 0 && commands.some((c) => c.preparation?.ok === false);
+  const mins = one === null ? 0 : Math.floor(Math.max(0, view.now - new Date(one.startedAt).getTime()) / 60_000);
+  const label = one === null ? 'Tenants' : one.call === 'ensure' ? 'Provision' : 'Reseed';
+  const value =
+    one !== null
+      ? `${one.environment} · ${String(mins)}m`
+      : running.length > 1
+        ? `${String(running.length)} running`
+        : String(commands.length);
+  const title =
+    running.length > 0
+      ? `${running.map((c) => c.environment).join(', ')}: a tenant command is running — open to watch its output`
+      : `Tenant commands on ${commands.map((c) => c.environment).join(', ')}${failed ? ' · the last run on one failed' : ''} — open to see what is configured and how the last run ended`;
+  return (
+    <>
+      <i className="cn-pill-sep" />
+      <button
+        type="button"
+        className={`cn-sub cn-act ${running.length > 0 ? '' : 'cn-quiet'} ${failed ? 'cn-stale' : ''}`}
+        onClick={() => actions.openPanel('tenants')}
+        title={title}
+        aria-label={title}
+      >
+        <span>{label}</span>
+        <b>{value}</b>
+      </button>
+    </>
+  );
+}
+
 const USAGE_STALE_MS = 10 * 60 * 1000;
 
 interface UsageSlot {
@@ -581,10 +619,10 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
 
       <div className="cn-reads">
         <Asks view={view} actions={actions} />
-        {/* One pill, two readings. Both are gauges of *this machine and this
-            account* rather than of the work — what the allowance has left, and
-            whether anything is up locally — and each is two or three characters
-            wide. Two boxes around six characters was more chrome than reading; one
+        {/* One pill, two readings — three where an environment declares a tenant
+            command. Each is a gauge of *this machine and this account* rather than
+            of the work — what the allowance has left, whether anything is up
+            locally, and whether a tenant command is running — and each is short. Two boxes around six characters was more chrome than reading; one
             box with a rule down the middle is the same two ways-in at half the
             width. Each half still opens its own surface, which is why they are two
             buttons and not one. */}
@@ -592,6 +630,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           <Usage view={view} actions={actions} />
           <i className="cn-pill-sep" />
           <LocalRun view={view} actions={actions} />
+          <Tenants view={view} actions={actions} />
         </div>
         {/* Everything that is not a gauge, behind one button. Usage and Local stay
             on the strip because each is a number that moves on its own and is

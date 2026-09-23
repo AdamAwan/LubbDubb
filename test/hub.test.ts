@@ -29,6 +29,7 @@ function fakeSystem(): {
     localRunWatch,
     readying,
     localValidations: new EventEmitter(),
+    remoteRuns: new EventEmitter(),
   } as unknown as System;
   return { system, agents, localRun, localRunWatch, errors, readying };
 }

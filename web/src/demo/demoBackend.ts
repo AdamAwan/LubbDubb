@@ -94,6 +94,8 @@ import type {
   CaveatAnswerInput,
   CheckDecline,
   PlanCaveat,
+  TenantCommandOutput,
+  TenantPreparation,
 } from '../types.js';
 import type { PredictionDraft, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
@@ -406,6 +408,7 @@ class DemoServer {
   private state: AppState = this.seed.state;
   private transcripts = new Map<string, string>(Object.entries(this.seed.transcripts));
   private readonly conns = new Set<Conn>();
+  private readonly tenantOutput = new Map<string, string[]>();
   private chatterTimer: ReturnType<typeof setInterval> | null = null;
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
@@ -1285,34 +1288,62 @@ class DemoServer {
    */
   reseedRemoteTenant(issueNumber: number, environment: string): Promise<{ ok: true }> {
     const sheet = this.remoteSheet(issueNumber, environment);
-    if (sheet !== undefined && sheet.tenant.preparation?.finishedAt === undefined) return Promise.resolve({ ok: true });
-    if (sheet !== undefined) {
-      const startedAt = new Date().toISOString();
-      sheet.tenant = {
-        ...sheet.tenant,
-        preparation: { environment, tenant: null, startedAt, finishedAt: null, ok: null, detail: null },
+    const commands = this.state.tenantCommands.find((c) => c.environment === environment);
+    if (commands?.preparation !== null && commands?.preparation.finishedAt === null)
+      return Promise.resolve({ ok: true });
+    const startedAt = new Date().toISOString();
+    const running: TenantPreparation = {
+      environment,
+      tenant: null,
+      startedAt,
+      finishedAt: null,
+      ok: null,
+      detail: null,
+      call: 'reseed',
+      launchedAt: startedAt,
+    };
+    if (sheet !== undefined) sheet.tenant = { ...sheet.tenant, preparation: running };
+    if (commands !== undefined) commands.preparation = running;
+    this.tenantOutput.set(environment, []);
+    const said = [
+      'Signing in to the staging tenant…',
+      'Dropping validation-customer-2 fixtures',
+      'Restoring fixture snapshot 2026-09-01',
+      'Seeding orders (1/3)',
+      'Seeding orders (2/3)',
+      'Seeding orders (3/3)',
+      'Rebuilding search index',
+    ];
+    said.forEach((line, i) => {
+      setTimeout(() => this.tenantOutput.get(environment)?.push(line), 800 * (i + 1));
+    });
+    this.dirty();
+    setTimeout(() => {
+      const name = sheet?.tenant.tenant ?? null;
+      const done: TenantPreparation = {
+        ...running,
+        tenant: name,
+        finishedAt: new Date().toISOString(),
+        ok: true,
+        detail: `\`${name ?? 'the tenant'}\` is reseeded.`,
       };
-      this.dirty();
-      setTimeout(() => {
-        const name = sheet.tenant.tenant;
+      this.tenantOutput.get(environment)?.push('Done.');
+      if (sheet !== undefined)
         sheet.tenant = {
           ...sheet.tenant,
           reseededAt: new Date().toISOString(),
           ageMs: 0,
           stale: false,
-          preparation: {
-            environment,
-            tenant: name,
-            startedAt,
-            finishedAt: new Date().toISOString(),
-            ok: true,
-            detail: `\`${name ?? 'the tenant'}\` is reseeded.`,
-          },
+          preparation: done,
         };
-        this.dirty();
-      }, 6000);
-    }
+      if (commands !== undefined) commands.preparation = done;
+      this.dirty();
+    }, 6000);
     return Promise.resolve({ ok: true });
+  }
+
+  tenantCommandOutput(environment: string): TenantCommandOutput {
+    return { lines: [...(this.tenantOutput.get(environment) ?? [])], lastOutputAt: null };
   }
 
   private remoteSheet(issueNumber: number, environment: string): RemoteSheetView | undefined {
@@ -4916,6 +4947,7 @@ export const demoApi = {
   messageLocalRun: (text: string) => getServer().messageLocalRun(text),
   refreshLocalRun: () => getServer().refreshLocalRun(),
   localRunOutput: () => Promise.resolve({ lines: getServer().localRunOutput() }),
+  tenantCommandOutput: (environment: string) => Promise.resolve(getServer().tenantCommandOutput(environment)),
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),

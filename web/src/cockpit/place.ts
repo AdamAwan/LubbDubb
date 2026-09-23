@@ -220,6 +220,7 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   signals: true,
   environments: true,
   localRun: true,
+  tenants: true,
   setup: true,
   record: true,
 };

@@ -43,6 +43,7 @@ import { register as registerPrs } from './routes/prs.js';
 import { register as registerReadings } from './routes/readings.js';
 import { register as registerRemoteValidation } from './routes/remoteValidation.js';
 import { register as registerReliability } from './routes/reliability.js';
+import { register as registerApiErrors } from './routes/apiErrors.js';
 import { register as registerThroughput } from './routes/throughput.js';
 import { register as registerSetup } from './routes/setup.js';
 import { register as registerSchedules } from './routes/schedules.js';
@@ -62,6 +63,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerState,
   registerAgents,
   registerAllowance,
+  registerApiErrors,
   registerArtifacts,
   registerControl,
   registerEjections,

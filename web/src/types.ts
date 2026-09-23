@@ -209,6 +209,8 @@ export type {
   StateSection,
   StateQuery,
   TaskSummary,
+  TenantCommandOutput,
+  TenantCommandView,
   TenantPreparation,
   FeatureBlockRow,
   FeatureBoardPayload,

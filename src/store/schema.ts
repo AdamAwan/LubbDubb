@@ -945,15 +945,23 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
 -- ensureTenant environment has no tenant name until its own command answers -- the
 -- harness invents none while it waits. The commands run for tens of minutes, so an
 -- operator who pressed and saw nothing has no way to tell a job still running from one
--- that died; finished_at null is *still running*, and a preparation left open by a
--- restart is closed at boot saying so, never left in flight for ever.
+-- that died; finished_at null is *still running*, and a preparation whose command is
+-- gone after a restart is closed saying so, never left in flight for ever.
 CREATE TABLE IF NOT EXISTS remote_tenant_prepares (
   environment TEXT PRIMARY KEY,
   tenant      TEXT,
   started_at  TEXT NOT NULL,
   finished_at TEXT,
   ok          INTEGER,
-  detail      TEXT
+  detail      TEXT,
+  -- The command running now (ensure | reseed), the harness-owned directory its output
+  -- is teed into, and the runner holding it. A restart that finds the runner still
+  -- beating keeps the row open and follows it; only a runner that is gone and left no
+  -- outcome closes the row as not knowable from here.
+  call        TEXT,
+  launch_id   TEXT,
+  pid         INTEGER,
+  launched_at TEXT
 );
 
 -- Goals the operator has said are not waiting on an environment: a docs change, a
@@ -1738,6 +1746,22 @@ CREATE TABLE IF NOT EXISTS surface_reach (
   arrival TEXT NOT NULL
 );
 
+-- One row per agent turn the model API refused ("API Error: ..."), read off the
+-- stream transport's result event (docs/spec/18-observability.md#api-errors).
+-- kind is 'safeguards' for a usage-policy flag, 'other' for anything else; code is
+-- the bracketed Details tag, e.g. reasoning_extraction.
+CREATE TABLE IF NOT EXISTS api_errors (
+  id         TEXT PRIMARY KEY,
+  agent_id   TEXT NOT NULL,
+  task_id    TEXT NOT NULL,
+  origin_ref TEXT,
+  model      TEXT,
+  kind       TEXT NOT NULL,
+  code       TEXT,
+  message    TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS mcp_calls (
   id         TEXT PRIMARY KEY,
   -- 'fleet' or 'desktop'. Never summed across: they are different credentials,
@@ -2290,6 +2314,7 @@ CREATE INDEX IF NOT EXISTS idx_pet_purchases_pet ON pet_purchases(pet_id);
 -- cut on the date alone.
 CREATE INDEX IF NOT EXISTS idx_surface_reach_at ON surface_reach(at);
 CREATE INDEX IF NOT EXISTS idx_mcp_calls_created ON mcp_calls(created_at);
+CREATE INDEX IF NOT EXISTS idx_api_errors_created ON api_errors(created_at);
 CREATE INDEX IF NOT EXISTS idx_mcp_calls_args ON mcp_calls(args_dropped, created_at);
 -- Both obstacle reads are by their parent row: the keys an obstacle holds, and the
 -- sightings behind it. The key *lookup* goes through the UNIQUE index on value.

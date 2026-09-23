@@ -63,7 +63,7 @@ import { RemoteValidationDesk } from './remoteValidation/desk.js';
 import { RemoteRunDesk } from './remoteValidation/run.js';
 import { RemoteReadingDesk } from './remoteValidation/readings.js';
 import { RemoteListingDesk } from './remoteValidation/listing.js';
-import { CommandTenantKeeper, type TenantKeeper } from './remoteValidation/tenants.js';
+import { CommandTenantKeeper, tenantLogRoot, type TenantKeeper } from './remoteValidation/tenants.js';
 import { WatchDesk } from './environments/watchDesk.js';
 import { screenCheckNote, stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from './plans/planning.js';
 import { validationPlanNote } from './validation/authoring.js';
@@ -199,11 +199,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
-  // A tenant preparation the last process died inside of. The command ran somewhere else and outlived
-  // this one, so it is closed saying what is true — that what it did is not knowable from here — never
-  // left in flight, which would draw a reseed running since last week and refuse every later press.
-  // → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
-  store.remoteValidation.closeOrphanedTenantPrepares();
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
   const ingressInbox = new IngressInbox();
@@ -638,9 +633,20 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     desk: remoteValidation,
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
     git: gitObserver,
-    tenants: opts.tenants ?? new CommandTenantKeeper(config.repoRoot, config.remoteValidation.tenantTimeoutMs),
+    tenants:
+      opts.tenants ??
+      new CommandTenantKeeper({
+        repoRoot: config.repoRoot,
+        logRoot: tenantLogRoot(config.validationRoot),
+        timeoutMs: config.remoteValidation.tenantTimeoutMs,
+      }),
     errors,
   });
+
+  // A tenant preparation the last process left open. The command outlives the harness, so one still
+  // running is followed, and only one that is gone is closed as not knowable from here.
+  // → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+  remoteRuns.resumeTenantPrepares();
 
   const remoteListings = new RemoteListingDesk({ store, errors });
 

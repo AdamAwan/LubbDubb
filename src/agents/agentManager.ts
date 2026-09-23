@@ -9,6 +9,7 @@ import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config/config.js';
 import type {
   AccountRateLimits,
+  ApiErrorReading,
   Agent,
   AgentAsk,
   AgentFlag,
@@ -1170,6 +1171,21 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     });
 
     session.on('limits', (limits: AccountRateLimits) => this.store.rateLimits.recordRateLimits(limits));
+
+    session.on('apiError', (reading: ApiErrorReading) => {
+      this.store.apiErrors.recordApiError({
+        ...reading,
+        agentId,
+        taskId: task.id,
+        originRef: task.originRef ?? null,
+        model: task.model ?? null,
+      });
+      this.opts.errors?.record({
+        source: 'agent',
+        message: `Agent ${agentId}: the model API refused a turn (${reading.kind}${reading.code ? `: ${reading.code}` : ''}).`,
+        detail: reading.message,
+      });
+    });
 
     session.on('flag', (flag: ParsedFlag) => {
       const saved = this.store.agents.recordFlag(agentId, flag);

@@ -5,6 +5,7 @@ import { StateQuerySchema } from '../../validation/stateDocument.js';
 import { NO_STATE_EXECUTOR, stateExecutor } from '../../remoteValidation/enabled.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
+import type { TenantCommandOutput } from '../../wire.js';
 
 // → docs/spec/16-http-api.md
 
@@ -96,6 +97,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   const EnvironmentParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
+  const TenantCommandParams = z.object({ environment: z.string().min(1, 'environment is required') });
   const RowParams = EnvironmentParams.extend({ rowId: z.string().min(1, 'rowId is required') });
 
   /*
@@ -172,12 +174,19 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // Started rather than awaited: the commands run for tens of minutes, and the record the gate
       // reads is what tells an operator it is running, what it came back as, and that a reload did
       // not lose it. → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
-      const begun = system.remoteRuns.beginPrepareTenant(params.environment, () =>
-        hub.broadcast({ type: 'dirty', sections: ['goals'] }),
-      );
+      // The hub rebroadcasts on `tenantSettled`, which also covers a preparation a restart resumed.
+      const begun = system.remoteRuns.beginPrepareTenant(params.environment);
       if (!begun.started) return reply.code(409).send({ error: begun.detail, tenant: begun.standing });
-      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      hub.broadcast({ type: 'dirty', sections: ['goals', 'harness'] });
       return { ok: true, detail: begun.detail, tenant: begun.standing };
     }),
+  );
+
+  app.get(
+    '/api/tenant-commands/:environment/output',
+    checked(
+      { params: TenantCommandParams },
+      ({ params }) => system.remoteRuns.tenantOutput(params.environment) satisfies TenantCommandOutput,
+    ),
   );
 }

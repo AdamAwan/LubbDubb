@@ -32,6 +32,7 @@ import type { ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 import type { AllowanceInsights } from './insights/allowanceInsights.js';
 import type { SpendInsights } from './insights/spendInsights.js';
 import type { McpInsights } from './insights/mcpInsights.js';
+import type { ApiErrorInsights } from './insights/apiErrorInsights.js';
 import type { OperatorInsights } from './insights/operatorInsights.js';
 import type { SurfaceReachInsights } from './insights/surfaceReachInsights.js';
 import type { SpendTrend } from './insights/spendTrend.js';
@@ -399,6 +400,12 @@ export interface CockpitState {
   pets: PetState | null;
   localRun: LocalRunView | null;
   localRunTargets: LocalRunTargetView[];
+  /**
+   * Every environment that declares a tenant command, whether or not one is running — the top bar's
+   * chip is drawn from this. Empty where none does, and then the chip is absent.
+   * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+   */
+  tenantCommands: TenantCommandView[];
   planParts: PlanPartView[];
   /**
    * Parts whose pull request is open and which nobody has described.
@@ -547,6 +554,25 @@ export interface RemoteTenantView extends TenantStanding {
    * that takes tens of minutes has otherwise no way to learn.
    */
   preparation: TenantPreparation | null;
+}
+
+/**
+ * One environment's tenant commands as configured, and its preparation — running now, or the last one
+ * that ran. The commands are the committed project config's own text; the tenant a `tenantEnv` names
+ * is never here.
+ */
+export interface TenantCommandView {
+  environment: string;
+  ensureTenant: string | null;
+  reseed: string | null;
+  preparation: TenantPreparation | null;
+}
+
+/** The tail of a tenant command's output, stdout and stderr together. */
+export interface TenantCommandOutput {
+  lines: string[];
+  /** When the command last wrote anything — what tells a stalled command from a busy one. */
+  lastOutputAt: string | null;
 }
 
 export interface RemoteSheetRowView extends RemoteSheetRow {
@@ -827,6 +853,10 @@ export interface SpendTrendPayload {
 
 export interface PredictionAggregatePayload {
   aggregate: PredictionAggregate;
+}
+
+export interface ApiErrorsPayload {
+  insights: ApiErrorInsights;
 }
 
 export interface McpUsagePayload {

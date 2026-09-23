@@ -37,6 +37,7 @@ is about.
 | `routes/readings.ts`        | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                        |
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                  |
 | `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                       |
+| `routes/apiErrors.ts`       | `/api/api-errors` — how often the model API refused an agent's turn                                                                                                        |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                           |
 | `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))               |
 | `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                           |
@@ -1324,6 +1325,13 @@ Neither read rides on `/api/state`, for `/api/mcp/usage`'s reason: the mirror is
 ninety days of rows per fleet, and the snapshot comes round every couple of seconds for every open
 cockpit.
 
+### `GET /api/api-errors`
+
+How often the model API refused an agent's turn, over `?window=` (the insights windows). Returns
+`{ insights }` — `total`, `agentsStarted`, `agentsAffected`, `affectedRate`, counts `byKind`, `byCode`
+and `byModel`, a `byDay` series (`errors` beside `agentsStarted`), and the twenty most `recent` rows.
+See [18](18-observability.md#api-errors).
+
 ### `GET /api/mcp/usage`
 
 The tool channel as a reading, behind the Insights MCP tab ([17](17-cockpit.md#mcp)). Returns
@@ -2350,6 +2358,12 @@ would not move. → [23](23-local-runs.md#refreshing-the-code-under-a-running-en
 The session's last lines. Fetched rather than shipped on the snapshot: the tail is up to two hundred
 lines and the snapshot goes out on every heartbeat and every `dirty`, so putting it there would pay for
 a log nobody has open — the argument that keeps the work graph and the prompt book off it too.
+
+### `GET /api/tenant-commands/:environment/output`
+
+The tail of the environment's current or last tenant command, `{lines, lastOutputAt}` — read from the
+log the harness tees it into, so it survives a restart. Fetched for the same reason as the local run's.
+→ [36](36-remote-validation.md#where-an-operator-sees-it)
 
 ### Static SPA
 

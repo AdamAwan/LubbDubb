@@ -97,6 +97,7 @@ const PANEL_REACH: Record<
   upnext: { key: 'upnext', view: null },
   signals: { key: 'signals', view: null },
   environments: { key: 'environments', view: null },
+  tenants: { key: 'environments', view: null },
 };
 
 const TAB_REACH: Record<ConsoleTab, { key: PlaceKey; view: UiUsageEvent | null }> = {

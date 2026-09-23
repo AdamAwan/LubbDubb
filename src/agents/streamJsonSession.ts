@@ -5,7 +5,7 @@ import { DONE_SENTINEL, extractFlags, extractWaitingReason, stripSentinels } fro
 import { resolveExecutable } from './resolveCommand.js';
 import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
-import type { AccountRateLimits, AgentUsage, RateLimitWindow } from '../types.js';
+import type { AccountRateLimits, AgentUsage, ApiErrorReading, RateLimitWindow } from '../types.js';
 import { debugLog } from '../debug.js';
 import { inheritableEnv } from './spawnEnv.js';
 
@@ -156,6 +156,8 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       if (usage) this.emit('usage', usage);
       const turnText = this.turnText;
       this.turnText = '';
+      const apiError = apiErrorOf(typeof ev.result === 'string' ? ev.result : turnText);
+      if (apiError) this.emit('apiError', apiError);
       if (this.pendingTurns > 0) this.pendingTurns -= 1;
       if (turnText.includes(DONE_SENTINEL)) {
         this.finish('done');
@@ -284,6 +286,7 @@ interface StreamEvent {
   subtype?: string;
   message?: { content?: ContentBlock[] | string };
   rate_limit_info?: RateLimitInfo;
+  result?: unknown;
   total_cost_usd?: number;
   num_turns?: number;
   usage?: {
@@ -306,6 +309,17 @@ function resultUsage(ev: StreamEvent): AgentUsage | null {
     cacheReadTokens: u ? (u.cache_read_input_tokens ?? 0) : null,
     cacheCreationTokens: u ? (u.cache_creation_input_tokens ?? 0) : null,
     numTurns: ev.num_turns ?? null,
+  };
+}
+
+function apiErrorOf(text: string): ApiErrorReading | null {
+  const at = text.search(/^API Error\b/m);
+  if (at === -1) return null;
+  const message = text.slice(at).trim();
+  return {
+    kind: /safeguards flagged/i.test(message) ? 'safeguards' : 'other',
+    code: /Details:\s*`?\[([^\]\s]+)\]/.exec(message)?.[1] ?? null,
+    message: message.slice(0, 2000),
   };
 }
 

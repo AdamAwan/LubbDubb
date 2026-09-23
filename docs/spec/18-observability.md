@@ -1269,6 +1269,26 @@ keeps it honest instead is that the reading draws **authors by name**: a machine
 row is visible to anyone reading the rows, where a single merged total would hide it. The cockpit's
 method note says which three sources decided it.
 
+## API errors
+
+A turn the model API refuses — `API Error: …`, most visibly a safeguards flag such as
+``Details: `[reasoning_extraction]` `` — is recorded, so how often it happens is a number rather than
+a feeling. `StreamJsonSession` checks each `result` event's text (or, without one, the turn's
+assistant text) for a line starting `API Error` and emits `apiError` with a **kind** (`safeguards`
+when the text says the safeguards flagged it, `other` otherwise), the bracketed **code** from
+`Details:`, and the message. `AgentManager` writes one `api_errors` row per refused turn, stamped with
+the agent, task, origin and model, and also records it in the error log (`source: 'agent'`) so it shows
+up in Faults straight away.
+
+**The count lives in its own table, not the error log,** because the log is the one record an operator
+clears, and a frequency that a clear resets is not a frequency. `GET /api/api-errors`
+([16](16-http-api.md#get-apiapi-errors)) folds the table with `buildApiErrorInsights`: totals, counts
+by kind, code and model, a per-UTC-day series beside the agents started that day, and **the share of
+agents started in the window that hit at least one** — the denominator a raw count needs, since a busy
+day has more refusals for no other reason. Nothing gates on a row; the harness's handling of the turn
+(it stalls like any other turn with no sentinel) is unchanged. Only the stream transport is read: a
+`raw`/pty agent's refusals are not counted.
+
 ## The live tail
 
 `agent:tail` is a per-agent rolling last-non-empty-line, folded in `Hub.updateTail` with ANSI stripped.
