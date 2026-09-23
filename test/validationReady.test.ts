@@ -105,6 +105,7 @@ const pass = (over: Partial<Parameters<typeof validationReadyPass>[0]> = {}) =>
     existing: [],
     checks: new Map(),
     opened: null,
+    released: null,
     watchCleared: null,
     ...over,
   });
@@ -423,4 +424,58 @@ test('a gate never holds a row already filed, so results still settle it', () =>
   });
   assert.equal(steps.length, 1);
   assert.equal(steps[0]?.kind, 'settle');
+});
+
+test('a check set still awaiting its accept asks nobody to run it', () => {
+  const checks = checksOn(check());
+  const held = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks, released: new Set() });
+  assert.deepEqual(held, []);
+
+  const released = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks, released: new Set(['issue:12']) });
+  assert.equal(released[0]?.kind, 'file');
+});
+
+test('a row standing on a set that goes back to proposed is retracted, and returns on the accept', () => {
+  const system = build();
+  const desk = new ValidationReadyDesk(system.store);
+  system.store.validation.ingestValidation('issue:12', {
+    checks: [
+      {
+        id: 'merged-branch-gone',
+        seq: 0,
+        title: 'A squash-merged part branch is gone on both sides',
+        do: 'Run the harness against the fixture repo…',
+        expect: 'No reap ref, locally or on the remote.',
+        proof: null,
+        uses: [],
+        covers: [],
+        fleetCandidate: false,
+        candidateWhy: null,
+      },
+    ],
+    resources: [],
+    supersededReason: 'the plan no longer declares it',
+    amendNote: 'the plan was re-read',
+  });
+  system.store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+
+  system.store.validation.recordValidationAuthoring('issue:12', { note: 'wrote one check', emptyReason: null });
+  desk.run({ issues: [issue(12)] });
+  assert.deepEqual(system.store.humanTasks.listHumanTasksOfKind('validate'), [], 'nothing asks before the accept');
+
+  system.store.validation.releaseValidationPlan('issue:12');
+  desk.run({ issues: [issue(12)] });
+  const filed = system.store.humanTasks.listHumanTasksOfKind('validate');
+  assert.equal(filed.length, 1);
+  assert.equal(filed[0]!.status, 'open');
+
+  system.store.validation.recordValidationAuthoring('issue:12', { note: 'rewrote it', emptyReason: null });
+  desk.run({ issues: [issue(12)] });
+  const retracted = system.store.humanTasks.getHumanTask(filed[0]!.id)!;
+  assert.equal(retracted.status, 'declined');
+  assert.match(retracted.resolution ?? '', /waiting on your accept/);
+
+  system.store.validation.releaseValidationPlan('issue:12');
+  desk.run({ issues: [issue(12)] });
+  assert.equal(system.store.humanTasks.getHumanTask(filed[0]!.id)!.status, 'open');
 });
