@@ -114,6 +114,7 @@ export type {
   CriteriaStanding,
   GoalCriteriaDrift,
   GoalCriteriaVersion,
+  PrDescriptionHandoff,
   PrDescriptionVersion,
   DescriptionQuestion,
   DescriptionFinding,

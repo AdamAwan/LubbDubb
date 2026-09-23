@@ -77,7 +77,7 @@ origin, a bench row's ref, and the keys `agentModels.byRule` prices work under. 
 shape silently orphans every row already written in the old one.
 
 `src/issueOrigins.ts` is the one place the vocabulary is stated. Each **family** is one entry —
-`issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `assess`, `retro`,
+`issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `describe:<pr>`, `assess`, `retro`,
 `validate-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
 `validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall` — and the entry carries
 three things and nothing else: the **suffix**, how its **id** is shaped (a pattern, or `null` for a
@@ -100,7 +100,7 @@ The `issue:<n>:*` subtree holds materially different things, and `issueOriginRol
 tells them apart — `null` for an origin that is not under issue `n` at all, and one of:
 
 - **`work`** — the pickup root and a plan's parts, plus `validate-local-fix:<id>`. Something was built.
-- **`evidence`** — `assess`, `retro`, `validate-plan`, `validate:<check>`,
+- **`evidence`** — `assess`, `retro`, `describe:<pr>`, `validate-plan`, `validate:<check>`,
   `validate-failure:<check>`, `validate-local:<id>` and `validate-remote:<run>`. Not work, but only
   ever downstream of some.
 - **`deliberation`** — `plan`, `appraisal`, `sequence` and `split:<pr>`. The harness thinking about the
@@ -177,6 +177,7 @@ unconditional.
 | `obstacle-repair`          | Something is blocking the fleet      | —                    | A standing obstacle is blocking the fleet **now** — a base branch red, or three or more independent voices — and nothing owns it. One code agent, on origin `obstacle:<id>`, bounded to one repair in flight across the fleet. → [27](27-obstacles.md#ownership)                                                                                                                                                                |
 | `pr-review-triage`         | Choose how to review a pull request  | `review`             | The project declares two or more `review.modes` and a watched, unreviewed PR has no route yet. One desk agent picks a mode; no branch, no checkout. Fails open onto `review.defaultMode`. → [07](07-pull-requests.md#choosing-how-to-review)                                                                                                                                                                                    |
 | `pr-split`                 | Pull request wide enough to be two   | —                    | An open PR the provider measured past `planning.fileBudget` changed files, mapping to an issue, with no verdict row against it. One read-only agent on `issue:<n>:split:<pr>` says whether the diff is one concept or several, and proposes the plan that separates them when it is several. One round for the life of the PR, whatever the answer. → [07](07-pull-requests.md#how-wide-a-pull-request-is)                      |
+| `pr-describe`              | Write a description handed back      | —                    | The operator pressed **Hand it to the agent** on an open part's pull request (`manualDescriptions` on). One read-only agent on `issue:<n>:describe:<pr>` reads the diff and writes the body through `pr_describe`, under `open_pr`'s rules with the key off. Only on a press. → [07](07-pull-requests.md#handing-it-back-to-the-agent)                                                                                          |
 | `pr-review`                | Pull request not yet reviewed        | `review`             | A watched PR nothing has reviewed yet, with no unhandled human threads on it. A read-only agent reads the diff and reports through `review_report`. One round for the life of the PR. → [07](07-pull-requests.md#the-fleet-review)                                                                                                                                                                                              |
 | `pr-review-comment`        | Unhandled review comments            | —                    | A PR carries unhandled review threads. All of them go to one agent.                                                                                                                                                                                                                                                                                                                                                             |
 | `pr-ci-failing`            | Failing CI                           | —                    | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.                                                                                                                                                                                                                                                                       |
@@ -249,6 +250,8 @@ under `split/pr/<n>` rather than the pull request's branch, so it is not competi
 fold arbitrates. It runs above the group for the reason the triage does — reviewing, fixing CI on and
 merging a diff that is about to be cut in three is spend on work about to be redone — and below the
 triage, because how to read a pull request is settled before whether it should have been three.
+`pr-describe` sits beside it for the same reason — a read-only checkout of its own, under
+`describe/pr/<n>` — and above `pr-review` so the body is written before anybody reads the diff.
 Nothing waits on its verdict: it holds no rule, gates no merge and produces no work of its own, and a
 pull request it never gets to is one that is reviewed and merged exactly as it would have been.
 
@@ -1581,7 +1584,7 @@ Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-
 `issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
 `issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `remote-validation`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
-`pr-review-triage`, `pr-split`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
+`pr-review-triage`, `pr-split`, `pr-describe`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `brief-ticket-body`, `review-pack-author`, `review-pack-check`, and the retired `work-item-ticket`,
 `blueprint-ticket`, `blueprint-ticket-body` and `issue-assay`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to

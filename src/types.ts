@@ -2371,3 +2371,19 @@ export interface PrDescriptionVersion {
   checkedAt: string | null;
   findings: DescriptionFinding[];
 }
+
+/**
+ * A part's description handed back to an agent by the operator: what `open_pr` would
+ * have carried with `manualDescriptions` off, written after the open instead of at it.
+ * `text` is null until the agent has written it, `pushedAt` null until it reached the
+ * pull request. → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+ */
+export interface PrDescriptionHandoff {
+  originRef: string;
+  prNumber: number;
+  requestedBy: string | null;
+  requestedAt: string;
+  text: string | null;
+  writtenAt: string | null;
+  pushedAt: string | null;
+}

@@ -2300,6 +2300,19 @@ CREATE TABLE IF NOT EXISTS pr_description_bodies (
   opened_at  TEXT NOT NULL
 );
 
+-- A part's description the operator handed back to an agent. One row per part: the
+-- request, then the agent's text, then the push. An operator's own version in
+-- pr_descriptions outranks it, so its text is never pushed over theirs.
+CREATE TABLE IF NOT EXISTS pr_description_handoffs (
+  origin_ref   TEXT PRIMARY KEY,
+  pr_number    INTEGER NOT NULL,
+  requested_by TEXT,
+  requested_at TEXT NOT NULL,
+  text         TEXT,
+  written_at   TEXT,
+  pushed_at    TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_remedies_pr ON remedies(pr_number);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);

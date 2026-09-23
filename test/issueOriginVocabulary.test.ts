@@ -13,6 +13,7 @@ import {
 const ROLES: Record<string, 'work' | 'evidence' | 'deliberation' | 'unrecognised'> = {
   'issue:12': 'work',
   'issue:12:part:schema': 'work',
+  'issue:12:describe:44': 'evidence',
   'issue:12:validate-local-fix:lv1': 'work',
   'issue:12:assess': 'evidence',
   'issue:12:retro': 'evidence',
@@ -41,6 +42,7 @@ const MINTED: Record<string, string> = {
   validationPlan: issueOriginRef('validationPlan', 12),
   part: issueOriginRef('part', 12, 'schema'),
   split: issueOriginRef('split', 12, 44),
+  describe: issueOriginRef('describe', 12, 44),
   validate: issueOriginRef('validate', 12, 'merged-branch-gone'),
   validateFailure: issueOriginRef('validateFailure', 12, 'merged-branch-gone'),
   localValidation: issueOriginRef('localValidation', 12, 'lv1'),
@@ -61,6 +63,7 @@ test('each origin family mints exactly the string it has always minted', async (
     validationPlan: 'issue:12:validate-plan',
     part: 'issue:12:part:schema',
     split: 'issue:12:split:44',
+    describe: 'issue:12:describe:44',
     validate: 'issue:12:validate:merged-branch-gone',
     validateFailure: 'issue:12:validate-failure:merged-branch-gone',
     localValidation: 'issue:12:validate-local:lv1',

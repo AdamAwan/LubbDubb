@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { DescriptionFinding, DescriptionQuestion, PrDescriptionVersion } from '../types.js';
+import type { DescriptionFinding, DescriptionQuestion, PrDescriptionHandoff, PrDescriptionVersion } from '../types.js';
 import { issueOriginRef } from '../issueOrigins.js';
 import { composeDescribedBody } from '../pr/prDescription.js';
 import type { ColumnMigrations } from './migrate.js';
@@ -135,6 +135,7 @@ export class PrDescriptionStore {
         `SELECT b.origin_ref AS origin_ref, b.pr_number AS pr_number, b.opened_at AS opened_at
            FROM pr_description_bodies b
           WHERE NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = b.origin_ref)
+            AND NOT EXISTS (SELECT 1 FROM pr_description_handoffs h WHERE h.origin_ref = b.origin_ref)
           ORDER BY b.opened_at ASC`,
       )
       .all() as { origin_ref: string; pr_number: number; opened_at: string }[];
@@ -253,6 +254,81 @@ export class PrDescriptionStore {
     }));
   }
 
+  /**
+   * Hands a part's description back to an agent. Idempotent: a second press returns
+   * the row the first one wrote rather than asking again.
+   * → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+   */
+  handOff(input: { originRef: string; prNumber: number; requestedBy: string | null }): PrDescriptionHandoff {
+    this.ctx
+      .prep(
+        `INSERT INTO pr_description_handoffs (origin_ref, pr_number, requested_by, requested_at)
+         VALUES (@originRef, @prNumber, @requestedBy, @requestedAt)
+         ON CONFLICT(origin_ref) DO NOTHING`,
+      )
+      .run({ ...input, requestedAt: this.ctx.now() });
+    return this.handoffOf(input.originRef) as PrDescriptionHandoff;
+  }
+
+  handoffOf(originRef: string): PrDescriptionHandoff | null {
+    const row = this.ctx.prep(`SELECT * FROM pr_description_handoffs WHERE origin_ref=?`).get(originRef) as
+      | HandoffRow
+      | undefined;
+    return row ? toHandoff(row) : null;
+  }
+
+  /** Handoffs the agent has not written yet: what rule `pr-describe` dispatches for. */
+  pendingHandoffs(): PrDescriptionHandoff[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM pr_description_handoffs WHERE text IS NULL ORDER BY requested_at ASC`)
+      .all() as HandoffRow[];
+    return rows.map(toHandoff);
+  }
+
+  /**
+   * The agent's text, against the pull request it was dispatched for. Null where no
+   * handoff names that pull request, which is the honest answer to a write nobody asked for.
+   */
+  writeHandoff(input: { prNumber: number; text: string }): PrDescriptionHandoff | null {
+    const row = this.ctx.prep(`SELECT * FROM pr_description_handoffs WHERE pr_number=?`).get(input.prNumber) as
+      | HandoffRow
+      | undefined;
+    if (row === undefined) return null;
+    this.ctx
+      .prep(`UPDATE pr_description_handoffs SET text=@text, written_at=@at, pushed_at=NULL WHERE origin_ref=@originRef`)
+      .run({ originRef: row.origin_ref, text: input.text, at: this.ctx.now() });
+    return this.handoffOf(row.origin_ref);
+  }
+
+  /**
+   * Agent-written descriptions not yet on their pull request, composed with the tail
+   * `open_pr` recorded. A part the operator has written a version for is left out: a
+   * person's description outranks the agent's, and pushing both would race.
+   */
+  unpushedHandoffs(): { originRef: string; prNumber: number; body: string }[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT h.origin_ref AS origin_ref, b.pr_number AS pr_number, h.text AS text, b.tail AS tail
+           FROM pr_description_handoffs h
+           JOIN pr_description_bodies b ON b.origin_ref = h.origin_ref
+          WHERE h.text IS NOT NULL AND h.pushed_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = h.origin_ref)
+          ORDER BY h.written_at ASC`,
+      )
+      .all() as { origin_ref: string; pr_number: number; text: string; tail: string }[];
+    return rows.map((r) => ({
+      originRef: r.origin_ref,
+      prNumber: r.pr_number,
+      body: [r.text.trim(), r.tail.trim()].filter((part) => part !== '').join('\n\n'),
+    }));
+  }
+
+  markHandoffPushed(originRef: string): void {
+    this.ctx
+      .prep(`UPDATE pr_description_handoffs SET pushed_at=@pushedAt WHERE origin_ref=@originRef`)
+      .run({ originRef, pushedAt: this.ctx.now() });
+  }
+
   /** Records that a version reached its pull request. */
   markPushed(id: string): void {
     this.ctx.prep(`UPDATE pr_descriptions SET pushed_at=@pushedAt WHERE id=@id`).run({ id, pushedAt: this.ctx.now() });
@@ -289,4 +365,26 @@ interface DescriptionRow {
   author: string | null;
   authored_at: string;
   checked_at: string | null;
+}
+
+interface HandoffRow {
+  origin_ref: string;
+  pr_number: number;
+  requested_by: string | null;
+  requested_at: string;
+  text: string | null;
+  written_at: string | null;
+  pushed_at: string | null;
+}
+
+function toHandoff(r: HandoffRow): PrDescriptionHandoff {
+  return {
+    originRef: r.origin_ref,
+    prNumber: r.pr_number,
+    requestedBy: r.requested_by,
+    requestedAt: r.requested_at,
+    text: r.text,
+    writtenAt: r.written_at,
+    pushedAt: r.pushed_at,
+  };
 }

@@ -58,9 +58,39 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/prs/:number/description',
     checked({ params: PrNumberParams }, async ({ params }) => {
       const originRef = store.prDescriptions.partOfPullRequest(params.number);
-      if (originRef === null) return { originRef: null, current: null, versions: [] };
+      if (originRef === null) return { originRef: null, current: null, versions: [], handoff: null };
       const versions = store.prDescriptions.listDescriptionVersions(originRef);
-      return { originRef, current: versions.at(-1) ?? null, versions };
+      return {
+        originRef,
+        current: versions.at(-1) ?? null,
+        versions,
+        handoff: store.prDescriptions.handoffOf(originRef),
+      };
+    }),
+  );
+
+  // → docs/spec/07-pull-requests.md#handing-it-back-to-the-agent
+  app.post(
+    '/api/prs/:number/description/handoff',
+    checked({ params: PrNumberParams }, async ({ params, reply }) => {
+      const originRef = store.prDescriptions.partOfPullRequest(params.number);
+      if (originRef === null)
+        return reply.code(400).send({
+          error:
+            `PR ${params.number} is not a part's pull request this deployment opened, so there is no ` +
+            'description to hand to an agent',
+        });
+      if (store.prDescriptions.currentDescription(originRef) !== null)
+        return reply.code(400).send({
+          error: `PR ${params.number} already carries your description — rewrite it rather than hand it over`,
+        });
+      const handoff = store.prDescriptions.handOff({
+        originRef,
+        prNumber: params.number,
+        requestedBy: config.userId ?? null,
+      });
+      hub.broadcast({ type: 'dirty', sections: ['plans'] });
+      return { ok: true, handoff };
     }),
   );
 
