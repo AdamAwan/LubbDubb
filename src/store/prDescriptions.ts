@@ -257,8 +257,8 @@ export class PrDescriptionStore {
   }
 
   /**
-   * The body the agent sent to `open_pr`, kept rather than shipped: with
-   * `manualDescriptions` on the operator decides whether it reaches the pull request.
+   * The body the agent sent to `open_pr`, kept rather than shipped: the operator
+   * decides whether it reaches the pull request.
    * → docs/spec/07-pull-requests.md#the-agents-draft
    */
   recordDraft(input: { originRef: string; prNumber: number; text: string }): void {

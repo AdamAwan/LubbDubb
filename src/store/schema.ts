@@ -2252,8 +2252,8 @@ CREATE TABLE IF NOT EXISTS goal_criteria_drift (
   UNIQUE (criteria_id)
 );
 
--- One part's pull-request description, as the operator wrote it, behind
--- manualDescriptions. Append-only for goal_criteria's reason: what shipped on a
+-- One part's pull-request description, as the operator wrote it.
+-- Append-only for goal_criteria's reason: what shipped on a
 -- pull request stays readable after the operator has rewritten it. origin_ref is
 -- the *part's* origin, because one part is one pull request.
 --
@@ -2300,7 +2300,7 @@ CREATE TABLE IF NOT EXISTS pr_description_bodies (
   opened_at  TEXT NOT NULL
 );
 
--- The body the agent sent to open_pr where manualDescriptions is on: kept, not shipped,
+-- The body the agent sent to open_pr: kept, not shipped,
 -- until the operator hands it over (handed_at). Where the agent sent none, a hand-over
 -- creates the row empty and rule pr-describe writes it. An operator's own version in
 -- pr_descriptions outranks it, so it is never pushed over theirs.

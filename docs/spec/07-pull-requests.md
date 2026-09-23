@@ -573,9 +573,9 @@ is a convention over a fixed set of known fields, and **a template could produce
 reading** — a shape filled in by an agent with nothing to say is exactly the thirty-line `## Summary`
 / `## Changes` / `## Testing` restatement of the diff the reviewer already has.
 
-Which leaves who writes it, and that is `manualDescriptions`' question rather than this section's.
-With the key off, the body is the agent's, under the rules the rest of this section states; with it
-on, [the operator writes it](#the-operator-writes-the-description) and an operator is not a template.
+Which leaves who writes it: [the operator does](#the-operator-writes-the-description), and an
+operator is not a template. The agent's body, under the rules the rest of this section states, is
+kept as their draft.
 
 What the harness does own is the **footer**, appended by `open_pr` after the agent's text
 ([#the-footer](#the-footer)). Everything above it ships as written.
@@ -621,8 +621,8 @@ pull request body an automated comment. The footer _is_ the pull request's sign-
 
 **What is above the rule is one author's and the harness adds nothing to it.** A reviewer reads the
 body before the diff, and every line the harness puts there is a line spent on something other than
-the change. The body carries the agent's five bullets — or, with `manualDescriptions` on, the
-operator's own prose — and the footer carries the facts a reviewer cannot get from either: which part
+the change. The body carries the operator's own prose — or the agent's five bullets, where
+the operator chose them — and the footer carries the facts a reviewer cannot get from either: which part
 of which story this is, and that it was opened by the harness rather than by a person at a keyboard.
 
 **A block of headings under the body is what this refuses.** An earlier version of this document put
@@ -653,10 +653,9 @@ an agent it would go missing silently, on exactly the pull requests nobody was w
 
 ### The operator writes the description
 
-Behind `manualDescriptions`, on by default. With it off nothing in this section happens: the agent
-writes the body as the two sections above describe, and `open_pr` is unchanged.
+Always on. (`manualDescriptions`, the switch that once kept it off, is retired.)
 
-With it on, the body is the **operator's**. The agent still sends `open_pr` a `body`, checked by the
+The body is the **operator's**. The agent still sends `open_pr` a `body`, checked by the
 same rules, but it is kept as a [draft](#the-agents-draft) rather than put on the pull request.
 
 The case is not that the operator writes a better body. It is that **writing is the instrument of
@@ -772,13 +771,10 @@ the operator on a page without it was the same failure one layer up from the one
 to remove — the gap named where the person who could close it can see it, and no way from there to
 closing it.
 
-With `manualDescriptions` off the list is empty, and that is the whole of what keeps the ask off a
-deployment where the agent writes the body.
-
 #### The agent's draft
 
-The agent writes a body at `open_pr` exactly as it does with the key off — same argument, same
-`prBodyRefusal` — so the key-off description exists the moment the pull request does and nobody waits
+The agent writes a body at `open_pr` — the bullet list above, checked by `prBodyRefusal` — so its
+description exists the moment the pull request does and nobody waits
 for one. What changes is where it goes: `open_pr` records it in `pr_description_drafts` and opens the
 pull request with the footer alone.
 

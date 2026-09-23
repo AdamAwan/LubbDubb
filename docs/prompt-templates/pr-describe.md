@@ -1,5 +1,5 @@
 <!--
-  Sent to a read-only agent when the operator hands a pull request’s description back from its page (rule pr-describe), on a deployment with `manualDescriptions` on. It writes the body `open_pr` would have carried with the key off, through `pr_describe`, under the same checks. Placeholders: {number} {title} {branch} {base}.
+  Sent to a read-only agent when the operator hands a pull request’s description back from its page (rule pr-describe). It writes the body the agent would have sent to `open_pr`, through `pr_describe`, under the same checks. Placeholders: {number} {title} {branch} {base}.
 -->
 
 Describe PR #{number} ("{title}") — branch {branch}, targeting {base}. On this project the operator usually writes pull-request descriptions themselves, and for this one they handed it to you.

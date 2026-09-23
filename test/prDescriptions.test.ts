@@ -22,7 +22,7 @@ import { findTask } from './support/tasks.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
 
-function systemWith(manualDescriptions: boolean): System {
+function systemWith(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
   return buildSystem(
     loadConfig({
@@ -32,7 +32,6 @@ function systemWith(manualDescriptions: boolean): System {
       dbPath: ':memory:',
       agentMode: 'raw',
       userId: 'operator',
-      manualDescriptions,
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
@@ -47,7 +46,7 @@ function systemWith(manualDescriptions: boolean): System {
 }
 
 test('the chain is append-only, so what shipped stays readable after a rewrite', () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     const ref = 'issue:390:part:validate';
     const first = system.store.prDescriptions.appendDescription({
@@ -76,7 +75,7 @@ test('the chain is append-only, so what shipped stays readable after a rewrite',
 });
 
 test('a check lands on the version it read, never on whatever is newest', () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     const ref = 'issue:390:part:validate';
     const read = system.store.prDescriptions.appendDescription({
@@ -112,7 +111,7 @@ test('a check lands on the version it read, never on whatever is newest', () => 
 });
 
 test('a report naming a version the store does not hold is answered null, not guessed at', () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     assert.equal(system.store.prDescriptions.recordCheck({ id: 'desc_gone', findings: [] }), null);
   } finally {
@@ -121,7 +120,7 @@ test('a report naming a version the store does not hold is answered null, not gu
 });
 
 test('a check is findings, not four answers, and a clean one is not an unchecked one', () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     const store = system.store.prDescriptions;
 
@@ -169,7 +168,7 @@ test('a check is findings, not four answers, and a clean one is not an unchecked
 });
 
 test('a re-check replaces the reading rather than piling onto it', () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     const store = system.store.prDescriptions;
     const version = store.appendDescription({ originRef: 'issue:390:part:e', text: 'E.', author: 'operator' });
@@ -183,7 +182,7 @@ test('a re-check replaces the reading rather than piling onto it', () => {
 });
 
 test('the goal-level read answers the newest of each part, which is what the board badges from', async () => {
-  const system = systemWith(true);
+  const system = systemWith();
   const { app } = await buildApp(system);
   try {
     system.store.prDescriptions.appendDescription({
@@ -224,18 +223,6 @@ test('the goal-level read answers the newest of each part, which is what the boa
   }
 });
 
-test('the goal-level read is not mounted where the flag is off, which is how the board learns', async () => {
-  const system = systemWith(false);
-  const { app } = await buildApp(system);
-  try {
-    const read = await app.inject({ method: 'GET', url: '/api/goals/390/descriptions' });
-    assert.equal(read.statusCode, 404);
-  } finally {
-    await app.close();
-    system.store.close();
-  }
-});
-
 test('the refusal bounds the field and asserts nothing about its shape', () => {
   // `prBodyRefusal` exists because asking an agent for a shape did not work. A person
   // writing about a change they read is not that party, and a refusal that bounced
@@ -252,9 +239,9 @@ test('the refusal bounds the field and asserts nothing about its shape', () => {
   assert.match(descriptionRefusal('x'.repeat(PR_DESCRIPTION.maxChars + 1)) ?? '', /the limit is/);
 });
 
-test('the routes are not mounted where the flag is off, which is how the panel learns', async () => {
-  for (const on of [true, false]) {
-    const system = systemWith(on);
+test('a part\u2019s description is written and read by the part', async () => {
+  {
+    const system = systemWith();
     const { app } = await buildApp(system);
     try {
       const written = await app.inject({
@@ -262,10 +249,6 @@ test('the routes are not mounted where the flag is off, which is how the panel l
         url: '/api/goals/390/parts/validate/description',
         payload: { text: 'Enqueue becomes the one place a payload is checked.' },
       });
-      if (!on) {
-        assert.equal(written.statusCode, 404, 'with the flag off there is no route to answer');
-        continue;
-      }
       assert.equal(written.statusCode, 200);
 
       const read = await app.inject({ method: 'GET', url: '/api/goals/390/parts/validate/description' });
@@ -288,7 +271,7 @@ test('the routes are not mounted where the flag is off, which is how the panel l
 });
 
 test('the pull request page writes by number, resolving the part from the record open_pr wrote', async () => {
-  const system = systemWith(true);
+  const system = systemWith();
   const { app } = await buildApp(system);
   try {
     /* The record `open_pr` writes at the open, which is the only mapping either
@@ -342,7 +325,7 @@ test('the pull request page writes by number, resolving the part from the record
 });
 
 test('a pull request that is not a part\u2019s answers with no part, and refuses a description', async () => {
-  const system = systemWith(true);
+  const system = systemWith();
   const { app } = await buildApp(system);
   try {
     /* A pull request this deployment did not open for a part: the page draws nothing
@@ -573,7 +556,6 @@ function manualSystem(dir: string, sink: ActionSink, autoUseAgentDescriptions = 
       dbPath: ':memory:',
       agentMode: 'raw',
       userId: 'operator',
-      manualDescriptions: true,
       autoUseAgentDescriptions,
       maxConcurrentAgents: 10,
       deskRoot: join(dir, 'desk'),
@@ -585,7 +567,7 @@ function manualSystem(dir: string, sink: ActionSink, autoUseAgentDescriptions = 
 }
 
 test('an open pull request nobody described is on the wire as an ask, and stops being one when it is written', async () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
     await system.harness.runCycle('manual');
@@ -620,7 +602,7 @@ test('an open pull request nobody described is on the wire as an ask, and stops 
 });
 
 test('the ask goes with the pull request, because a merged change is one nobody is going to describe', async () => {
-  const system = systemWith(true);
+  const system = systemWith();
   try {
     system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
     await system.harness.runCycle('manual');
@@ -634,25 +616,6 @@ test('the ask goes with the pull request, because a merged change is one nobody 
     await system.harness.runCycle('manual');
 
     assert.deepEqual(buildStateSnapshot(system).undescribedParts, [], 'the review it was owed to is over');
-  } finally {
-    system.store.close();
-  }
-});
-
-test('with the flag off the ask does not exist, because the agent wrote the body', async () => {
-  const system = systemWith(false);
-  try {
-    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
-    await system.harness.runCycle('manual');
-    seedParts(system);
-    const opened = await callOpenPr(system, 'issue:182:part:cursor', {
-      summary: 'read the cursor back',
-      body: '- The cursor is read back at startup.',
-    });
-    assert.equal(opened.isError, false, opened.text);
-    await system.harness.runCycle('manual');
-
-    assert.deepEqual(buildStateSnapshot(system).undescribedParts, []);
   } finally {
     system.store.close();
   }
@@ -753,7 +716,7 @@ test('where the agent sent no draft, handing it over dispatches one to write it'
 });
 
 test('a hand-off is refused once the operator has written their own', async () => {
-  const system = systemWith(true);
+  const system = systemWith();
   const { app } = await buildApp(system);
   try {
     system.store.prDescriptions.recordPrBody({ originRef: 'issue:390:part:validate', prNumber: 413, tail: 'x' });

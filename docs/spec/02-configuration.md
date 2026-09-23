@@ -160,22 +160,16 @@ worktrees, so `slots()` cannot see one and the pool's own slot names (`slot-<n>`
 No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
 from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
 
-### `manualDescriptions`
-
-On by default. On, the operator writes a part's pull-request description themselves and the body the agent
-sends to `open_pr` is kept as a hidden draft they can reveal or use; off, the agent writes it exactly as it always has. It holds nothing up
-either way — a part nobody described opens its pull request with no body above the reference.
-→ [07](07-pull-requests.md#the-operator-writes-the-description)
-
-Its routes are mounted only where it is on, which is how the cockpit learns: the panel draws nothing
-where the read does not answer, so the presence of the data decides and never a flag on the payload.
-The same shape `goalCriteria.enabled` uses.
-
 ### `autoUseAgentDescriptions`
 
-Off by default. With `manualDescriptions` on, `open_pr` hands every agent draft over as it records
-it, as if the operator had pressed **Use the agent's**, so it reaches the pull request on the next
-pulse. It does nothing with `manualDescriptions` off, and nothing where the agent sent no body.
+The operator always writes a part's pull-request description, and the body the agent sends to
+`open_pr` is kept as a hidden draft they can reveal or use
+([07](07-pull-requests.md#the-operator-writes-the-description)). `manualDescriptions`, the switch
+that used to turn this on, is retired: a file that still sets it warns and boots.
+
+Off by default. On, `open_pr` hands every agent draft over as it records it, as if the operator had
+pressed **Use the agent's**, so it reaches the pull request on the next pulse. It does nothing where
+the agent sent no body.
 → [07](07-pull-requests.md#the-agents-draft)
 
 ## The project layer

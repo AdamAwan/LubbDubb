@@ -636,7 +636,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Your checkout is read-only: do not commit, do not push, and do not edit the pull request yourself. The ' +
       'harness writes what you send onto it. A run that ends without `pr_describe` has written nothing and ' +
       'is dispatched again.',
-    doc: 'Sent to a read-only agent when the operator hands a pull request\u2019s description back from its page (rule pr-describe), on a deployment with `manualDescriptions` on. It writes the body `open_pr` would have carried with the key off, through `pr_describe`, under the same checks. Placeholders: {number} {title} {branch} {base}.',
+    doc: 'Sent to a read-only agent when the operator hands a pull request\u2019s description back from its page (rule pr-describe). It writes the body the agent would have sent to `open_pr`, through `pr_describe`, under the same checks. Placeholders: {number} {title} {branch} {base}.',
   },
   'pr-review': {
     placeholders: ['number', 'title', 'branch', 'base'],

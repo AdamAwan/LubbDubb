@@ -73,16 +73,7 @@ export interface Config {
   predictionAggregateMinGoals: number;
   goalCriteria: GoalCriteriaConfig;
   /**
-   * Whether the operator writes a part's pull-request description themselves.
-   *
-   * On by default: the body is the operator's text and the agent's `body` is kept as
-   * a hidden draft — but it holds nothing up: a part nobody described opens its pull
-   * request with no body above the reference. Off, the agent writes the body.
-   * → docs/spec/07-pull-requests.md#the-operator-writes-the-description
-   */
-  manualDescriptions: boolean;
-  /**
-   * With `manualDescriptions` on, use every agent draft as if the operator had pressed
+   * Use every agent draft as if the operator had pressed
    * **Use the agent's** at the open. Off by default.
    * → docs/spec/07-pull-requests.md#the-agents-draft
    */
@@ -265,7 +256,6 @@ const DEFAULTS: Config = {
   prediction: { enabled: false },
   predictionAggregateMinGoals: 10,
   goalCriteria: { enabled: false },
-  manualDescriptions: true,
   autoUseAgentDescriptions: false,
   selfUpdate: {
     enabled: true,
@@ -402,6 +392,8 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
 };
 
 const RETIRED_KEYS: Readonly<Record<string, string>> = {
+  manualDescriptions:
+    'you always write a pull request\'s description, and the agent\'s is kept as a draft you can use — set "autoUseAgentDescriptions": true to use it every time',
   'planning.enabled': 'the planning funnel is always on — every goal is planned',
   'planning.requireApproval':
     'a plan is always put to you before anything is scheduled from it — the undo for a plan that started itself is a replan, which is strictly worse than not starting',

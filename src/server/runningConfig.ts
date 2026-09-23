@@ -126,7 +126,6 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'prediction',
       'predictionAggregateMinGoals',
       'goalCriteria',
-      'manualDescriptions',
       'autoUseAgentDescriptions',
     ],
   },

@@ -101,12 +101,8 @@ interface Reading {
 }
 
 /**
- * Null until the read answers, and null for good where it does not.
- *
- * The routes are mounted only where `manualDescriptions` is on, so a read that never
- * answers is a deployment with the feature off and the panel is not drawn at all.
- * The presence of the data decides, never a flag on the payload — the same rule the
- * criteria card learned one subsystem over.
+ * Null until the read answers, and null for good where it does not — the panel is
+ * not drawn then.
  */
 function usePrDescription(prNumber: number): { reading: Reading; reload: () => Promise<void> } | null {
   const [reading, setReading] = useState<Reading | null>(null);
@@ -302,8 +298,7 @@ export function PrDescription({
           >
             {current !== null ? 'Rewrite it' : handedOver !== null ? 'Write your own instead' : 'Describe it'}
           </button>
-          {/* The fallback to what `open_pr` does with `manualDescriptions` off, on
-              this one pull request and only on a press. */}
+          {/* The agent's body, on this one pull request and only on a press. */}
           {hiddenDraft !== null && (
             <button type="button" className={buttonClass({ ghost: true })} onClick={() => setRevealed(!revealed)}>
               {revealed ? 'Hide the agent\u2019s draft' : 'Reveal the agent\u2019s draft'}

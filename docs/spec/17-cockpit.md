@@ -444,8 +444,7 @@ no pane to be the footer of.
 ## The description a reviewer reads
 
 One `PrDescription` panel, **on the pull request's own page** — one part is one pull request, and the
-pull request's page is where the change is read. It draws nothing where `manualDescriptions` is off —
-the routes are not mounted there and the read does not answer.
+pull request's page is where the change is read. It draws nothing until the read answers.
 
 ### It is written where the change is read
 
@@ -789,8 +788,7 @@ draws the thrower's own message instead, which already names the branch, the pat
 raised by something — an escalation, a bench task, a reading. This one is the parts whose pull request
 is open and which nobody has written a word about, so there is nothing to read it off in the cockpit:
 the described set is a per-goal route the goal page calls, and the rail is drawn over every goal at
-once. `CockpitState.undescribedParts` carries the list, empty on every deployment with
-`manualDescriptions` off, and `buildNeedsYou` draws what it was given rather than subtracting one list
+once. `CockpitState.undescribedParts` carries the list, and `buildNeedsYou` draws what it was given rather than subtracting one list
 from another it does not hold. It is `next` and always `yours`: the ask holds nothing up — that is the
 feature — but the pull request it is about is already open and already spending a reviewer's hour.
 → [07](07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer)

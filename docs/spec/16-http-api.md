@@ -233,9 +233,7 @@ Silently ignoring a field the caller clearly meant to set is the failure this is
 
 ### `POST|GET /api/goals/:number/parts/:slug/description`
 
-Both live in `src/server/routes/prDescriptions.ts` and **register nothing where `manualDescriptions`
-is off**, which is how the cockpit learns there is nothing to draw: the read does not answer, so the
-presence of the data decides and never a flag on the payload. `goalCriteria` uses the same shape.
+Both live in `src/server/routes/prDescriptions.ts` and are always mounted.
 
 The write is what the panel posts. The read is one part's whole chain, oldest first — the cockpit
 reads the goal-level route below instead, which answers for every part at once.
