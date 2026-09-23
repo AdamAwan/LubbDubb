@@ -1,5 +1,3 @@
-import type { PadDecision } from '../types.js';
-
 // → docs/spec/11-mcp-tools.md#forks-on-the-pad
 
 export const MAX_PAD_NOTE = 4000;
@@ -45,67 +43,4 @@ export function normalisePadNote(
   const tag = typeof topic === 'string' ? topic.replace(/\s+/g, ' ').trim().slice(0, MAX_PAD_TOPIC) : '';
   const trimmed = raw.length > MAX_PAD_NOTE;
   return { ok: true, note: trimmed ? raw.slice(0, MAX_PAD_NOTE) : raw, topic: tag || null, trimmed };
-}
-
-export const MAX_PAD_LINE = 300;
-
-export const MAX_DECISION_ITEMS = 20;
-
-export function normalisePadDecision(
-  value: unknown,
-): { ok: true; decision: PadDecision | null; trimmed: boolean } | { ok: false; error: string } {
-  if (value === undefined || value === null) return { ok: true, decision: null, trimmed: false };
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    return { ok: false, error: 'decision must be an object: {chose, because, rejected, paths}.' };
-  }
-  const raw = value as Record<string, unknown>;
-  let trimmed = false;
-  const line = (field: string, v: unknown, what: string): string | { error: string } => {
-    const text = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
-    if (!text) return { error: `${field} is required: ${what}, in one line.` };
-    if (text.length > MAX_PAD_LINE) trimmed = true;
-    return text.slice(0, MAX_PAD_LINE);
-  };
-  const chose = line('decision.chose', raw.chose, 'what the change does here');
-  if (typeof chose !== 'string') return { ok: false, error: chose.error };
-  const because = line('decision.because', raw.because, 'why');
-  if (typeof because !== 'string') return { ok: false, error: because.error };
-
-  const rejectedRaw = raw.rejected ?? [];
-  if (!Array.isArray(rejectedRaw)) {
-    return { ok: false, error: 'decision.rejected must be a list of {alternative, because}, or omitted.' };
-  }
-  const rejected: PadDecision['rejected'] = [];
-  for (const [i, item] of rejectedRaw.entries()) {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      return { ok: false, error: `decision.rejected[${i}] must be an object: {alternative, because}.` };
-    }
-    const r = item as Record<string, unknown>;
-    const alternative = line(`decision.rejected[${i}].alternative`, r.alternative, 'the road not taken');
-    if (typeof alternative !== 'string') return { ok: false, error: alternative.error };
-    const why = line(`decision.rejected[${i}].because`, r.because, 'why it was not taken');
-    if (typeof why !== 'string') return { ok: false, error: why.error };
-    rejected.push({ alternative, because: why });
-  }
-
-  const pathsRaw = raw.paths ?? [];
-  if (!Array.isArray(pathsRaw)) return { ok: false, error: 'decision.paths must be a list of file paths, or omitted.' };
-  const paths: string[] = [];
-  for (const [i, item] of pathsRaw.entries()) {
-    const path = line(`decision.paths[${i}]`, item, 'a file path');
-    if (typeof path !== 'string') return { ok: false, error: path.error };
-    paths.push(path);
-  }
-
-  if (rejected.length > MAX_DECISION_ITEMS || paths.length > MAX_DECISION_ITEMS) trimmed = true;
-  return {
-    ok: true,
-    decision: {
-      chose,
-      because,
-      rejected: rejected.slice(0, MAX_DECISION_ITEMS),
-      paths: paths.slice(0, MAX_DECISION_ITEMS),
-    },
-    trimmed,
-  };
 }
