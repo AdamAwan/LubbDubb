@@ -106,7 +106,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
       <div className="cn-fb">
         <div className="cn-fb-head">
           <h2>Features</h2>
-          <span className="cn-psub">
+          <span className="cn-fb-quiet">
             {features.length} {features.length === 1 ? 'feature' : 'features'}
             {/* A pause withholds work, so it is counted out loud. A rested card that
                 nothing says is resting is the silent version of this button. */}
@@ -164,7 +164,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
           )}
 
         {view.featureMode === 'board' && unresolved > 0 && (
-          <p className="cn-psub cn-fb-unresolved">
+          <p className="cn-fb-quiet cn-fb-unresolved">
             {unresolved} {unresolved === 1 ? 'item’s' : 'items’'} parent link could not be read, so{' '}
             {unresolved === 1 ? 'it is' : 'they are'} counted nowhere above.
           </p>
@@ -398,7 +398,7 @@ const SORT_WORD: Record<FeatureSort, string> = {
 function SortControl({ sort, actions }: { sort: FeatureSort; actions: CockpitActions }): JSX.Element {
   return (
     <span className="cn-fb-sort" role="group" aria-label="Order">
-      <span className="cn-psub">Order</span>
+      <span className="cn-fb-quiet">Order</span>
       {FEATURE_SORTS.map((s) => (
         <Button
           key={s}
@@ -520,17 +520,19 @@ function FeatureCard({
             <div className="cn-fb-col">
               <h4 className="cn-fb-colhead">Its order, and what landed</h4>
               <Sequence feature={feature} view={view} onAnswered={onAnswered} />
-              <Delivered
-                rows={feature.briefing.delivered}
-                total={feature.briefing.deliveredTotal}
-                now={view.now}
-                actions={actions}
-              />
+              {held(feature) === null && (
+                <Delivered
+                  rows={feature.briefing.delivered}
+                  total={feature.briefing.deliveredTotal}
+                  now={view.now}
+                  actions={actions}
+                />
+              )}
             </div>
           )}
           <div className="cn-fb-col">
             <h4 className="cn-fb-colhead">In the way · grouped by who clears it</h4>
-            <Holds holds={holds} now={view.now} actions={actions} />
+            <Holds holds={holds} stories={feature.children} now={view.now} actions={actions} />
           </div>
           <div className="cn-fb-col">
             <Children
@@ -622,7 +624,7 @@ function GoalCard({
               <>
                 {' '}
                 <span className="cn-fb-said">“{issue.delivery.summary}”</span>{' '}
-                <span className="cn-psub">
+                <span className="cn-fb-quiet">
                   — {issue.delivery.by}, {relAge(issue.delivery.decidedAt, view.now)}
                 </span>
               </>
@@ -631,7 +633,7 @@ function GoalCard({
               <>
                 {' '}
                 <span className="cn-fb-said">“{issue.shortfall.summary}”</span>{' '}
-                <span className="cn-psub">
+                <span className="cn-fb-quiet">
                   — {issue.shortfall.by}, {relAge(issue.shortfall.decidedAt, view.now)}
                 </span>
               </>
@@ -648,7 +650,7 @@ function GoalCard({
         <div className="cn-fb-detail cn-fb-detail-2">
           <div className="cn-fb-col">
             <h4 className="cn-fb-colhead">In the way · grouped by who clears it</h4>
-            <Holds holds={holds} now={view.now} actions={actions} />
+            <Holds holds={holds} stories={[row]} now={view.now} actions={actions} />
           </div>
           <div className="cn-fb-col">
             <Children rows={[row]} total={1} view={view} actions={actions} sequence={null} />
@@ -817,7 +819,7 @@ function Standing({ feature, view }: { feature: FeatureRollup; view: CockpitView
   return (
     <>
       <p className="cn-fb-standing">{summary.standing}</p>
-      <p className="cn-psub cn-fb-stamp">
+      <p className="cn-fb-quiet cn-fb-stamp">
         written {relAge(summary.updatedAt, view.now)}
         {moved && (
           <>
@@ -865,14 +867,14 @@ function Delivered({
   return (
     <section className="cn-fb-brief-list">
       <h4>
-        Delivered <span className="cn-psub">{total > rows.length ? `${rows.length} of ${total}` : total}</span>
+        Delivered <span className="cn-fb-quiet">{total > rows.length ? `${rows.length} of ${total}` : total}</span>
       </h4>
       <ul>
         {rows.map((row) => (
           <li key={row.number}>
             <GoalLink number={row.number} title={row.title} actions={actions} />
             <span className="cn-fb-said">“{row.summary}”</span>
-            <span className="cn-psub">
+            <span className="cn-fb-quiet">
               — {row.by}, {relAge(row.at, now)}
             </span>
           </li>
@@ -890,59 +892,84 @@ function isRed(hold: FeatureHold): boolean {
   return hold.tone === 'red' || RED_KINDS.has(hold.kind);
 }
 
-function Holds({ holds, now, actions }: { holds: FeatureHolds; now: number; actions: CockpitActions }): JSX.Element {
+function Holds({
+  holds,
+  stories,
+  now,
+  actions,
+}: {
+  holds: FeatureHolds;
+  stories: readonly { number: number; title: string }[];
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element {
   const groups: { court: keyof typeof COURT_WORD; rows: FeatureHold[]; empty: string }[] = [
     { court: 'you', rows: holds.you, empty: 'Nothing here is waiting on you.' },
     { court: 'fleet', rows: holds.fleet, empty: '' },
     { court: 'world', rows: holds.world, empty: '' },
   ];
   const any = groups.some((g) => g.rows.length > 0);
-  if (!any) return <p className="cn-psub cn-fb-empty">Nothing is in the way.</p>;
+  if (!any) return <p className="cn-fb-quiet cn-fb-empty">Nothing is in the way.</p>;
   return (
     <div className="cn-fb-holds">
       {groups.map(({ court, rows, empty }) =>
         rows.length === 0 ? (
           empty === '' ? null : (
-            <p key={court} className="cn-psub cn-fb-empty">
+            <p key={court} className="cn-fb-quiet cn-fb-empty">
               {empty}
             </p>
           )
         ) : (
-          <Fragment key={court}>
+          <section key={court} className={`cn-fb-court cn-fb-court-${court}`}>
+            <h5>
+              {COURT_WORD[court]} <span className="cn-fb-quiet">{rows.length}</span>
+            </h5>
             {rows.map((hold) => (
               <HoldRow
                 key={`${hold.court}:${hold.kind}:${hold.ref ?? ''}:${hold.needId ?? hold.title}`}
                 hold={hold}
+                story={stories.find((s) => s.number === hold.goal) ?? null}
                 now={now}
                 actions={actions}
               />
             ))}
-          </Fragment>
+          </section>
         ),
       )}
     </div>
   );
 }
 
-function HoldRow({ hold, now, actions }: { hold: FeatureHold; now: number; actions: CockpitActions }): JSX.Element {
-  const tone: TagTone | undefined = hold.court === 'you' ? (isRed(hold) ? 'red' : 'amber') : undefined;
+function HoldRow({
+  hold,
+  story,
+  now,
+  actions,
+}: {
+  hold: FeatureHold;
+  story: { number: number; title: string } | null;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element {
   const open = openHold(hold, actions);
+  const suffix = story === null ? '' : ` · ${story.title}`;
+  const said = suffix !== '' && hold.title.endsWith(suffix) ? hold.title.slice(0, -suffix.length) : hold.title;
+  const storyRef = story === null ? null : `issue:${story.number}`;
   return (
     <div className={`cn-fb-hold cn-fb-hold-${hold.court}${isRed(hold) ? ' cn-fb-hold-red' : ''}`}>
-      <Tag tone={tone} fill={tone !== undefined}>
-        {COURT_WORD[hold.court]}
-      </Tag>
       <div className="cn-fb-hold-body">
-        <div className="cn-fb-hold-title">
-          {hold.title}
-          {hold.ref !== null && (
+        {(story !== null || hold.ref !== null) && (
+          <div className="cn-fb-hold-about">
             <span className="cn-refs">
-              <Ref to={hold.ref} />
+              {storyRef !== null && <Ref to={storyRef} />}
+              {hold.ref !== null && hold.ref !== storyRef && <Ref to={hold.ref} />}
             </span>
-          )}
-        </div>
+            {story !== null && <span className="cn-fb-hold-story">{story.title}</span>}
+          </div>
+        )}
+        <div className="cn-fb-hold-title">{said}</div>
         {(hold.detail !== null || hold.since !== null) && (
-          <div className="cn-psub">
+          <div className="cn-fb-quiet">
             {hold.detail !== null && <span className="cn-fb-said-inline">{hold.detail}</span>}
             {hold.detail !== null && hold.since !== null && ' · '}
             {hold.since !== null && relAge(hold.since, now)}
@@ -994,14 +1021,21 @@ function Sequence({
   const waves = wavesOf(open, sequence.edges);
 
   if (sequence.status !== 'proposed') {
+    const folder = view.state.config.desktopFolder;
+    const by = sequence.answeredBy === null || sequence.answeredBy === folder ? 'you' : sequence.answeredBy;
+    const when = sequence.answeredAt === null ? '' : ` ${relAge(sequence.answeredAt, view.now)}`;
     return (
-      <p className="cn-psub cn-fb-seq-said">
-        {sequence.status === 'accepted'
-          ? `Order accepted — ${waves.length} wave${waves.length === 1 ? '' : 's'}`
-          : 'You said run them all — the fleet will not propose an order again until this Feature gains or loses a story'}
-        {sequence.answeredBy === null ? '' : ` · ${sequence.answeredBy}`}{' '}
-        <Discuss feature={feature.number} folder={view.state.config.desktopFolder} />
-      </p>
+      <div className="cn-fb-seq-said">
+        <p className="cn-fb-quiet">
+          {sequence.status === 'accepted'
+            ? `Order accepted by ${by}${when} — ${waves.length} wave${waves.length === 1 ? '' : 's'}.`
+            : `${by === 'you' ? 'You' : by} said run them all${when} — the fleet will not propose an order again until this Feature gains or loses a story.`}
+        </p>
+        <Discuss feature={feature.number} folder={folder} />
+        {sequence.status === 'accepted' && (
+          <Order waves={waves} stories={feature.children} delivered={feature.briefing.delivered} now={view.now} />
+        )}
+      </div>
     );
   }
 
@@ -1030,7 +1064,7 @@ function Sequence({
       <Edges sequence={sequence} />
       {/* What accepting costs. Without it the operator is agreeing to a hold whose
           size is not on the card. */}
-      <p className="cn-psub">
+      <p className="cn-fb-quiet">
         {wouldHold === 0
           ? 'Accepting holds nothing right now — everything this order puts later is already settled or in flight.'
           : `Accepting holds ${wouldHold} of these ${open.length} stories until what they wait on has a branch.`}
@@ -1062,6 +1096,54 @@ function Sequence({
   );
 }
 
+const DONE: ReadonlySet<FeatureChildStanding> = new Set(['delivered', 'settled']);
+
+function Order({
+  waves,
+  stories,
+  delivered,
+  now,
+}: {
+  waves: ReturnType<typeof wavesOf>;
+  stories: readonly FeatureChildRow[];
+  delivered: readonly FeatureReportRow[];
+  now: number;
+}): JSX.Element {
+  return (
+    <ol className="cn-fb-order">
+      {waves.map((wave) => (
+        <li key={wave.depth}>
+          <span className="cn-fb-order-n">{wave.depth + 1}</span>
+          <ul>
+            {wave.issues.map((n) => {
+              const story = stories.find((c) => c.number === n);
+              const said = delivered.find((d) => d.number === n);
+              return (
+                <li key={n} className={story !== undefined && DONE.has(story.standing) ? 'cn-fb-order-done' : ''}>
+                  <span className="cn-refs">
+                    <Ref to={`issue:${n}`} />
+                  </span>
+                  <div className="cn-fb-order-body">
+                    <span className="cn-fb-order-title">{story?.title ?? `#${n}`}</span>
+                    {said !== undefined && (
+                      <>
+                        <span className="cn-fb-said">“{said.summary}”</span>
+                        <span className="cn-fb-quiet">
+                          — {said.by}, {relAge(said.at, now)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Discuss({ feature, folder }: { feature: number; folder: string }): JSX.Element | null {
   if (!folder) return null;
   return (
@@ -1081,7 +1163,7 @@ const EDGE_SOURCE: Record<FeatureSequence['edges'][number]['source'], string> = 
 
 function Edges({ sequence }: { sequence: FeatureSequence }): JSX.Element | null {
   if (sequence.edges.length === 0) {
-    return <p className="cn-psub">No story waits on another — the sequencer found these independent.</p>;
+    return <p className="cn-fb-quiet">No story waits on another — the sequencer found these independent.</p>;
   }
   return (
     <ul className="cn-fb-seq-edges">
@@ -1172,7 +1254,7 @@ function Refs({ numbers }: { numbers: readonly number[] }): JSX.Element {
       {shown.map((n) => (
         <Ref key={n} to={`issue:${n}`} />
       ))}
-      {numbers.length > shown.length && <span className="cn-psub">+{numbers.length - shown.length}</span>}
+      {numbers.length > shown.length && <span className="cn-fb-quiet">+{numbers.length - shown.length}</span>}
     </span>
   );
 }
@@ -1264,13 +1346,13 @@ function Children({
   const openRows = rows.filter((r) => !isDone(r));
   const doneRows = rows.filter(isDone);
   const shown = filter === 'open' ? openRows : filter === 'done' ? doneRows : rows;
-  const groups =
+  const ordered =
     sequence === null
-      ? [{ depth: -1, rows: shown }]
+      ? shown
       : wavesOf(
           shown.map((r) => r.number),
           sequence.edges,
-        ).map((wave) => ({ depth: wave.depth, rows: shown.filter((r) => wave.issues.includes(r.number)) }));
+        ).flatMap((wave) => shown.filter((r) => wave.issues.includes(r.number)));
   const chip = (f: FeaturePrFilter, label: string, n: number): JSX.Element => (
     <Button
       key={f}
@@ -1292,24 +1374,16 @@ function Children({
           {chip('all', 'all', rows.length)}
         </span>
       </div>
-      {shown.length === 0 && <p className="cn-psub cn-fb-empty">Nothing {filter === 'open' ? 'open' : 'done'} here.</p>}
+      {shown.length === 0 && (
+        <p className="cn-fb-quiet cn-fb-empty">Nothing {filter === 'open' ? 'open' : 'done'} here.</p>
+      )}
       <div className="cn-fb-stories">
-        {groups.map((group) => (
-          <Fragment key={group.depth}>
-            {group.depth >= 0 && group.rows.length > 0 && (
-              <div className="cn-fb-wave">
-                Wave {group.depth + 1}
-                {group.depth === 0 ? ' — waits on nothing' : ''}
-              </div>
-            )}
-            {group.rows.map((row) => (
-              <Story key={row.number} row={row} view={view} actions={actions} sequence={sequence} />
-            ))}
-          </Fragment>
+        {ordered.map((row) => (
+          <Story key={row.number} row={row} view={view} actions={actions} sequence={sequence} />
         ))}
       </div>
       {total > rows.length && (
-        <p className="cn-psub">
+        <p className="cn-fb-quiet">
           {rows.length} of {total} shown — the rest are on the Tickets tab.
         </p>
       )}
@@ -1337,49 +1411,57 @@ function Story({
   const issue = view.state.world.issues.find((i) => i.number === row.number);
   return (
     <div className="cn-fb-story">
-      <div className="cn-fb-story-row">
-        <Tag tone={STANDING_TONE[row.standing]} fill={STANDING_TONE[row.standing] !== undefined}>
-          {STANDING_WORD[row.standing]}
-        </Tag>
-        <GoalLink number={row.number} title={row.title} actions={actions} />
-        {/* The harness's own outcome word, beside the standing rather than instead
-            of it: a re-picked goal is in flight and still carries `fell short`. */}
-        {row.outcome !== null && row.outcome !== STANDING_WORD[row.standing] && (
-          <span className="cn-psub">{row.outcome}</span>
-        )}
-        <span className="cn-fb-story-end">
-          {issue?.pickup.status === 'blocked' && issue.pickup.reasons[0] !== undefined && (
-            <Tag title={issue.pickup.reasons.join(' · ')}>held</Tag>
+      <Tag tone={STANDING_TONE[row.standing]} fill={STANDING_TONE[row.standing] !== undefined}>
+        {STANDING_WORD[row.standing]}
+      </Tag>
+      <div className="cn-fb-story-main">
+        <div className="cn-fb-story-head">
+          <GoalLink number={row.number} title={row.title} actions={actions} />
+          {/* The harness's own outcome word, beside the standing rather than instead
+              of it: a re-picked goal is in flight and still carries `fell short`. */}
+          {row.outcome !== null && row.outcome !== STANDING_WORD[row.standing] && (
+            <span className="cn-fb-quiet"> · {row.outcome}</span>
           )}
-          <span className="cn-fb-num">{money(row.costUsd)}</span>
-        </span>
-      </div>
-      {waiting.length > 0 && (
-        <div className="cn-fb-waits cn-psub">
-          waits on{' '}
-          <span className="cn-refs">
-            {waiting.map((n) => (
-              <Ref key={n} to={`issue:${n}`} />
-            ))}
-          </span>
         </div>
-      )}
-      {prs.length === 0 && !isDone(row) && row.standing !== 'unwatched' && (
-        <div className="cn-fb-pr cn-psub">no PR yet</div>
-      )}
-      {prs.map((gp) => (
-        <PrRow key={gp.pr.number} gp={gp} view={view} actions={actions} />
-      ))}
+        {waiting.length > 0 && (
+          <div className="cn-fb-waits cn-fb-quiet">
+            waits on{' '}
+            <span className="cn-refs">
+              {waiting.map((n) => (
+                <Ref key={n} to={`issue:${n}`} />
+              ))}
+            </span>
+          </div>
+        )}
+        {prs.length === 0 && !isDone(row) && row.standing !== 'unwatched' && (
+          <div className="cn-fb-quiet">no PR yet</div>
+        )}
+        {prs.length > 0 && (
+          <div className="cn-fb-prs">
+            {prs.map((gp) => (
+              <PrRow key={gp.pr.number} gp={gp} slot={prs.some((p) => p.open)} view={view} actions={actions} />
+            ))}
+          </div>
+        )}
+      </div>
+      <span className="cn-fb-story-end">
+        {issue?.pickup.status === 'blocked' && issue.pickup.reasons[0] !== undefined && (
+          <Tag title={issue.pickup.reasons.join(' · ')}>held</Tag>
+        )}
+        <span className="cn-fb-num">{money(row.costUsd)}</span>
+      </span>
     </div>
   );
 }
 
 function PrRow({
   gp,
+  slot,
   view,
   actions,
 }: {
   gp: GoalPullRequest;
+  slot: boolean;
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
@@ -1394,7 +1476,7 @@ function PrRow({
       {openPr !== null ? (
         <CiMark pr={openPr} reserve onOpen={() => actions.selectPr(pr.number)} />
       ) : (
-        <span className="ck-slot" />
+        slot && <span className="ck-slot" />
       )}
       <span className="cn-refs cn-fb-pr-ref">
         <Ref to={`pr:${pr.number}`} />
@@ -1406,7 +1488,7 @@ function PrRow({
       )}
       <span className="cn-fb-pr-said">
         {openPr !== null ? (openPr.attention.reasons[0] ?? pr.title) : pr.merged ? 'merged' : 'closed'}
-        {!open && pr.closedAt !== undefined && <span className="cn-psub"> {relAge(pr.closedAt, view.now)}</span>}
+        {!open && pr.closedAt !== undefined && <span className="cn-fb-quiet"> {relAge(pr.closedAt, view.now)}</span>}
       </span>
       {openPr !== null && (
         <span className="cn-fb-pr-marks">
