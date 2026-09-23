@@ -25,8 +25,8 @@ Write for the person: the `title` of an idea and the `gist` of an anchor say wha
 
 Before and after:
 
-- _No:_ "Which pull requests are the goal's, and in what order. Archive first, the world's closed window second, so the fresher reading of the same PR wins."
-- _Yes:_ "Get the relevant pull requests in the right order, use the latest."
+- *No:* "Which pull requests are the goal's, and in what order. Archive first, the world's closed window second, so the fresher reading of the same PR wins."
+- *Yes:* "Get the relevant pull requests in the right order, use the latest."
 
 And a warning about the tree you are standing in: **this codebase is written in a dense house style**, long sentences and dashes and all. Do not copy it. You will have just read a great deal of it, which is exactly when it starts coming out in your own writing.
 
