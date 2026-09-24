@@ -26,7 +26,157 @@ function shownValue(token: ThemeToken, draft: Readonly<Record<string, string>>):
   return getComputedStyle(document.documentElement).getPropertyValue(token.name).trim();
 }
 
-export function ThemeSettings() {
+function PresetPicker({ preset, onChoose }: { preset: PresetId; onChoose: (id: PresetId) => void }) {
+  return (
+    <>
+      <div className="th-presets" role="radiogroup" aria-label="Theme">
+        {PRESET_GROUPS.map((g) => (
+          <div className="th-preset-group" key={g.ground}>
+            <span className="th-preset-groupn">{g.label}</span>
+            <div className="th-preset-tiles">
+              {PRESETS.filter((p) => p.ground === g.ground).map((p) => (
+                <button
+                  key={p.id}
+                  role="radio"
+                  aria-checked={preset === p.id}
+                  className={`th-preset${preset === p.id ? ' on' : ''}`}
+                  onClick={() => onChoose(p.id)}
+                  title={p.blurb}
+                >
+                  {/* The swatches read their colours through the same declaration block
+                      as the theme itself — `theme.css` gives every preset a
+                      `[data-theme-swatch]` selector beside its `html[data-theme]` one —
+                      so a card cannot show a palette its preset does not have. */}
+                  <span className="th-sws" data-theme-swatch={p.id}>
+                    <i className="th-sw" style={{ background: 'var(--bg)' }} />
+                    <i className="th-sw" style={{ background: 'var(--panel)' }} />
+                    <i className="th-sw" style={{ background: 'var(--text)' }} />
+                    <i className="th-sw" style={{ background: 'var(--accent)' }} />
+                  </span>
+                  <b className="th-presetn">{p.label}</b>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="th-presetb">{PRESETS.find((p) => p.id === preset)?.blurb}</p>
+    </>
+  );
+}
+
+function TokenRow({
+  token,
+  draft,
+  presetLabel,
+  onSet,
+  onReset,
+}: {
+  token: ThemeToken;
+  draft: Readonly<Record<string, string>>;
+  presetLabel: string;
+  onSet: (value: string) => void;
+  onReset: () => void;
+}) {
+  const value = shownValue(token, draft);
+  const set = draft[token.name] !== undefined;
+  return (
+    <div className={`th-row${set ? ' set' : ''}`}>
+      <code className="th-name">{token.name}</code>
+      <span className="th-label">{token.label}</span>
+      <span className="th-why muted">{token.why}</span>
+      <span className="th-pick">
+        {token.kind === 'colour' ? (
+          <ColourField
+            value={value}
+            label={token.label}
+            valid={value === '' || isTokenValue(token.name, value)}
+            onChange={onSet}
+          />
+        ) : (
+          <input
+            type="text"
+            className={`cf-hex${value !== '' && !isTokenValue(token.name, value) ? ' bad' : ''}`}
+            aria-label={token.label}
+            value={value}
+            spellCheck={false}
+            onChange={(e) => onSet(e.target.value)}
+          />
+        )}
+      </span>
+      {/* Drawn only when the row is overridden: a hundred disabled
+          buttons is furniture, not an affordance. */}
+      {set ? (
+        <button
+          className="th-reset"
+          title={`Back to ${presetLabel}`}
+          aria-label={`Reset ${token.label} to ${presetLabel}`}
+          onClick={onReset}
+        >
+          ↺
+        </button>
+      ) : (
+        <span className="th-reset" />
+      )}
+    </div>
+  );
+}
+
+function SaveBar({
+  dirty,
+  changed,
+  justSaved,
+  presetLabel,
+  onRevert,
+  onSave,
+}: {
+  dirty: boolean;
+  changed: number;
+  justSaved: boolean;
+  presetLabel: string;
+  onRevert: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="th-bar">
+      <span className="th-barn">
+        {dirty ? (
+          changed === 0 ? (
+            <>
+              Preset <b>{presetLabel}</b>, unsaved — a reload drops it
+            </>
+          ) : (
+            <>
+              <b>{changed}</b> token{changed === 1 ? '' : 's'} changed · unsaved, and a reload drops them
+            </>
+          )
+        ) : justSaved ? (
+          <>Saved · this browser only</>
+        ) : (
+          <>
+            {changed > 0 ? (
+              <>
+                <b>{changed}</b> token{changed === 1 ? '' : 's'} off {presetLabel}
+              </>
+            ) : (
+              <>{presetLabel}, unmodified</>
+            )}
+          </>
+        )}
+      </span>
+      <span className="th-baracts">
+        <Button ghost size="small" onClick={onRevert} disabled={!dirty}>
+          Revert unsaved
+        </Button>
+        <Button size="small" onClick={onSave} disabled={!dirty}>
+          Save
+        </Button>
+      </span>
+    </div>
+  );
+}
+
+function useThemeEditor() {
   const [saved, setSaved] = useState<ThemePrefs>(() => loadThemePrefs());
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>(() => loadThemePrefs().overrides);
   const [preset, setPreset] = useState<PresetId>(() => loadThemePrefs().preset);
@@ -83,6 +233,32 @@ export function ThemeSettings() {
     setJustSaved(true);
   };
 
+  return {
+    draft,
+    preset,
+    query,
+    setQuery,
+    onlyChanged,
+    setOnlyChanged,
+    advanced,
+    setAdvanced,
+    justSaved,
+    dirty,
+    choosePreset,
+    setToken,
+    resetToken,
+    revert,
+    resetAll,
+    save,
+  };
+}
+
+function useVisibleTokens(
+  draft: Readonly<Record<string, string>>,
+  query: string,
+  onlyChanged: boolean,
+  advanced: boolean,
+): { visible: ThemeToken[]; groups: TokenGroup[] } {
   const needle = query.trim().toLowerCase();
   const visible = useMemo(
     () =>
@@ -96,8 +272,32 @@ export function ThemeSettings() {
       }),
     [needle, onlyChanged, advanced, draft],
   );
-
   const groups = (Object.keys(TOKEN_GROUPS) as TokenGroup[]).filter((g) => visible.some((t) => t.group === g));
+  return { visible, groups };
+}
+
+export function ThemeSettings() {
+  const {
+    draft,
+    preset,
+    query,
+    onlyChanged,
+    advanced,
+    dirty,
+    justSaved,
+    choosePreset,
+    setQuery,
+    setOnlyChanged,
+    setAdvanced,
+    resetAll,
+    setToken,
+    resetToken,
+    revert,
+    save,
+  } = useThemeEditor();
+
+  const { visible, groups } = useVisibleTokens(draft, query, onlyChanged, advanced);
+
   const changed = THEME_TOKENS.filter((t) => draft[t.name] !== undefined).length;
   const presetLabel = PRESETS.find((p) => p.id === preset)?.label ?? preset;
 
@@ -106,38 +306,7 @@ export function ThemeSettings() {
       {/* Tiles carry the swatches and a name only, in a Dark row and a Light row;
           the blurb is drawn once, beneath, for the preset that is on. Seventeen
           blurbs is a page, and the question the picker answers is "which one". */}
-      <div className="th-presets" role="radiogroup" aria-label="Theme">
-        {PRESET_GROUPS.map((g) => (
-          <div className="th-preset-group" key={g.ground}>
-            <span className="th-preset-groupn">{g.label}</span>
-            <div className="th-preset-tiles">
-              {PRESETS.filter((p) => p.ground === g.ground).map((p) => (
-                <button
-                  key={p.id}
-                  role="radio"
-                  aria-checked={preset === p.id}
-                  className={`th-preset${preset === p.id ? ' on' : ''}`}
-                  onClick={() => choosePreset(p.id)}
-                  title={p.blurb}
-                >
-                  {/* The swatches read their colours through the same declaration block
-                      as the theme itself — `theme.css` gives every preset a
-                      `[data-theme-swatch]` selector beside its `html[data-theme]` one —
-                      so a card cannot show a palette its preset does not have. */}
-                  <span className="th-sws" data-theme-swatch={p.id}>
-                    <i className="th-sw" style={{ background: 'var(--bg)' }} />
-                    <i className="th-sw" style={{ background: 'var(--panel)' }} />
-                    <i className="th-sw" style={{ background: 'var(--text)' }} />
-                    <i className="th-sw" style={{ background: 'var(--accent)' }} />
-                  </span>
-                  <b className="th-presetn">{p.label}</b>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="th-presetb">{PRESETS.find((p) => p.id === preset)?.blurb}</p>
+      <PresetPicker preset={preset} onChoose={choosePreset} />
 
       <div className="th-tools">
         <input
@@ -171,88 +340,27 @@ export function ThemeSettings() {
           <p className="muted th-groupb">{TOKEN_GROUPS[g].blurb}</p>
           {visible
             .filter((t) => t.group === g)
-            .map((token) => {
-              const value = shownValue(token, draft);
-              const set = draft[token.name] !== undefined;
-              return (
-                <div className={`th-row${set ? ' set' : ''}`} key={token.name}>
-                  <code className="th-name">{token.name}</code>
-                  <span className="th-label">{token.label}</span>
-                  <span className="th-why muted">{token.why}</span>
-                  <span className="th-pick">
-                    {token.kind === 'colour' ? (
-                      <ColourField
-                        value={value}
-                        label={token.label}
-                        valid={value === '' || isTokenValue(token.name, value)}
-                        onChange={(next) => setToken(token, next)}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        className={`cf-hex${value !== '' && !isTokenValue(token.name, value) ? ' bad' : ''}`}
-                        aria-label={token.label}
-                        value={value}
-                        spellCheck={false}
-                        onChange={(e) => setToken(token, e.target.value)}
-                      />
-                    )}
-                  </span>
-                  {/* Drawn only when the row is overridden: a hundred disabled
-                      buttons is furniture, not an affordance. */}
-                  {set ? (
-                    <button
-                      className="th-reset"
-                      title={`Back to ${presetLabel}`}
-                      aria-label={`Reset ${token.label} to ${presetLabel}`}
-                      onClick={() => resetToken(token)}
-                    >
-                      ↺
-                    </button>
-                  ) : (
-                    <span className="th-reset" />
-                  )}
-                </div>
-              );
-            })}
+            .map((token) => (
+              <TokenRow
+                key={token.name}
+                token={token}
+                draft={draft}
+                presetLabel={presetLabel}
+                onSet={(next) => setToken(token, next)}
+                onReset={() => resetToken(token)}
+              />
+            ))}
         </section>
       ))}
 
-      <div className="th-bar">
-        <span className="th-barn">
-          {dirty ? (
-            changed === 0 ? (
-              <>
-                Preset <b>{presetLabel}</b>, unsaved — a reload drops it
-              </>
-            ) : (
-              <>
-                <b>{changed}</b> token{changed === 1 ? '' : 's'} changed · unsaved, and a reload drops them
-              </>
-            )
-          ) : justSaved ? (
-            <>Saved · this browser only</>
-          ) : (
-            <>
-              {changed > 0 ? (
-                <>
-                  <b>{changed}</b> token{changed === 1 ? '' : 's'} off {presetLabel}
-                </>
-              ) : (
-                <>{presetLabel}, unmodified</>
-              )}
-            </>
-          )}
-        </span>
-        <span className="th-baracts">
-          <Button ghost size="small" onClick={revert} disabled={!dirty}>
-            Revert unsaved
-          </Button>
-          <Button size="small" onClick={save} disabled={!dirty}>
-            Save
-          </Button>
-        </span>
-      </div>
+      <SaveBar
+        dirty={dirty}
+        changed={changed}
+        justSaved={justSaved}
+        presetLabel={presetLabel}
+        onRevert={revert}
+        onSave={save}
+      />
     </div>
   );
 }

@@ -6,6 +6,34 @@ import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
+const LinkTicketInput = z.object({
+  title: z
+    .string()
+    .describe(
+      'The title of the item to file: one line naming the problem, for someone who was not ' +
+        'there. Pass this with `body`, or pass `ref` instead if you found an item that already ' +
+        'covers this.',
+    )
+    .optional(),
+  body: z
+    .string()
+    .describe(
+      'The body of the item to file, as Markdown. It goes into the tracker exactly as written — ' +
+        'no harness wrapping, no summarising — so say what is wrong, where, and which parts you ' +
+        'confirmed against the repository.',
+    )
+    .optional(),
+  ref: z
+    .string()
+    .describe(
+      'The **existing** item this duplicates, in the ref shape used everywhere else: ' +
+        '"issue:314" for a GitHub issue or an Azure DevOps work item. Pass this instead of ' +
+        'title/body when you decided not to file a second. A bare number is not accepted — say ' +
+        'which.',
+    )
+    .optional(),
+});
+
 export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'File the tracker item for the thing you were dispatched to file — a finding, or a bug an ' +
@@ -15,51 +43,13 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     'covers it, pass its `ref` instead and that one is linked rather than a second filed. Only for a ' +
     'filing job: if you were not dispatched to file something, this is not your tool. Calling it is ' +
     'what completes the filing — until you do, the operator sees a filing whose item never appeared.',
-  inputSchema: toolSchema(
-    z.object({
-      title: z
-        .string()
-        .describe(
-          'The title of the item to file: one line naming the problem, for someone who was not ' +
-            'there. Pass this with `body`, or pass `ref` instead if you found an item that already ' +
-            'covers this.',
-        )
-        .optional(),
-      body: z
-        .string()
-        .describe(
-          'The body of the item to file, as Markdown. It goes into the tracker exactly as written — ' +
-            'no harness wrapping, no summarising — so say what is wrong, where, and which parts you ' +
-            'confirmed against the repository.',
-        )
-        .optional(),
-      ref: z
-        .string()
-        .describe(
-          'The **existing** item this duplicates, in the ref shape used everywhere else: ' +
-            '"issue:314" for a GitHub issue or an Azure DevOps work item. Pass this instead of ' +
-            'title/body when you decided not to file a second. A bare number is not accepted — say ' +
-            'which.',
-        )
-        .optional(),
-    }),
-  ),
+  inputSchema: toolSchema(LinkTicketInput),
   handler: async (args) => {
     const ref = typeof args.ref === 'string' ? args.ref.trim() : '';
     const title = typeof args.title === 'string' ? args.title.trim() : '';
     const body = typeof args.body === 'string' ? args.body.trim() : '';
-    if (ref && (title || body)) {
-      return toolError(
-        'link_ticket takes either `ref` (an existing item this duplicates) or `title` + `body` (the ' +
-          'item to file), not both. Say which you meant.',
-      );
-    }
-    if (!ref && !(title && body)) {
-      return toolError(
-        'link_ticket needs `title` and `body` to file the item, or `ref` if you decided it ' +
-          'duplicates one that already exists.',
-      );
-    }
+    const problem = argumentsProblem(ref, title, body);
+    if (problem !== null) return toolError(problem);
 
     const target = deps.agents.filingTarget(agent.id);
     if (!target.ok) return toolError(target.error);
@@ -99,3 +89,19 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     });
   },
 });
+
+function argumentsProblem(ref: string, title: string, body: string): string | null {
+  if (ref && (title || body)) {
+    return (
+      'link_ticket takes either `ref` (an existing item this duplicates) or `title` + `body` (the ' +
+      'item to file), not both. Say which you meant.'
+    );
+  }
+  if (!ref && !(title && body)) {
+    return (
+      'link_ticket needs `title` and `body` to file the item, or `ref` if you decided it ' +
+      'duplicates one that already exists.'
+    );
+  }
+  return null;
+}

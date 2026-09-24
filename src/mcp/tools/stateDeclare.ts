@@ -9,6 +9,36 @@ import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
+const StateDeclarationInput = z.object({
+  queries: z
+    .array(
+      z.object({
+        id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
+        title: z.string().describe('One line: what being wrong here would look like.'),
+        query: z
+          .string()
+          .describe(
+            'The query, in the store’s own language. It reaches the command as a variable’s value and is ' +
+              'never interpolated into a command string. It returns the matching **rows themselves** and ' +
+              'the harness counts them: do not aggregate it. A query ending in a count answers one row ' +
+              'whatever the number is, which defeats every guard the contract has, and is refused. ' +
+              'Read-only — nothing here may write to the environment.',
+          ),
+        presence: z
+          .string()
+          .describe(
+            'A second query whose only job is to prove this store holds the thing at all. Required: a ' +
+              'query naming a column that is not there answers zero rows, and zero rows looks exactly ' +
+              'like a healthy release — so without one your change would be reported verified on the ' +
+              'strength of a typo. It returns rows too, and must not aggregate: a count can never answer ' +
+              'zero, so an aggregated presence query proves nothing and is refused.',
+          ),
+        why: z.string().describe('Why this is the question that matters, and what a wrong answer means.').optional(),
+      }),
+    )
+    .describe('One question each about the data the change writes. Declaring none is a legitimate answer.'),
+});
+
 export const stateDeclare: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Declare, or correct, the question that says whether the data your change writes is shaped correctly — ' +
@@ -19,40 +49,7 @@ export const stateDeclare: ToolFactory = ({ deps, task, ok }) => ({
     'key. Nothing you declare here runs anywhere until an operator has read the query and accepted it ' +
     'against one named environment — the query goes to their store with their credential — so write the ' +
     'query you would want run, and say in "why" what a wrong answer would mean.',
-  inputSchema: toolSchema(
-    z.object({
-      queries: z
-        .array(
-          z.object({
-            id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
-            title: z.string().describe('One line: what being wrong here would look like.'),
-            query: z
-              .string()
-              .describe(
-                'The query, in the store’s own language. It reaches the command as a variable’s value and is ' +
-                  'never interpolated into a command string. It returns the matching **rows themselves** and ' +
-                  'the harness counts them: do not aggregate it. A query ending in a count answers one row ' +
-                  'whatever the number is, which defeats every guard the contract has, and is refused. ' +
-                  'Read-only — nothing here may write to the environment.',
-              ),
-            presence: z
-              .string()
-              .describe(
-                'A second query whose only job is to prove this store holds the thing at all. Required: a ' +
-                  'query naming a column that is not there answers zero rows, and zero rows looks exactly ' +
-                  'like a healthy release — so without one your change would be reported verified on the ' +
-                  'strength of a typo. It returns rows too, and must not aggregate: a count can never answer ' +
-                  'zero, so an aggregated presence query proves nothing and is refused.',
-              ),
-            why: z
-              .string()
-              .describe('Why this is the question that matters, and what a wrong answer means.')
-              .optional(),
-          }),
-        )
-        .describe('One question each about the data the change writes. Declaring none is a legitimate answer.'),
-    }),
-  ),
+  inputSchema: toolSchema(StateDeclarationInput),
   handler: async (args) => {
     const ref = task.originRef ?? '';
     const head = issueOriginHead(ref);

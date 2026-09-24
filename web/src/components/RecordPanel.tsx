@@ -8,6 +8,51 @@ import { Tag } from './tag.js';
 
 // → docs/spec/17-cockpit.md
 
+function RecordGoals({
+  goals,
+  rootUrls,
+  showGoals,
+  onToggle,
+}: {
+  goals: WorkNodeView[];
+  rootUrls: Record<string, string>;
+  showGoals: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="work-goals">
+      {/* Collapsed, not dropped. A goal's record is on its goal page now, but
+          `Ref` is the only thing that knows whether this ref *has* one — a
+          ticket the snapshot has forgotten has no page, and hiding its root
+          here would make its record unreachable rather than relocated. So the
+          rows stay, drawn as references, and the component picks the
+          destination. */}
+      <Button
+        ghost
+        className="work-goals-head"
+        onClick={onToggle}
+        title="Each of these is drawn in full on its own goal page"
+      >
+        <span className="work-caret">{showGoals ? '▾' : '▸'}</span>
+        {goals.length} {goals.length === 1 ? 'goal' : 'goals'} — each on its own page
+      </Button>
+      {showGoals && (
+        <RefLinksExtended refUrls={rootUrls}>
+          {goals.map((root) => (
+            <div className="work-goal-row" key={root.ref}>
+              <span className="work-title">{root.title}</span>
+              <Tag tone={root.terminal ? 'green' : undefined}>{root.status}</Tag>
+              <span className="cn-refs">
+                <Ref to={root.ref} />
+              </span>
+            </div>
+          ))}
+        </RefLinksExtended>
+      )}
+    </div>
+  );
+}
+
 export function RecordPanel({ now }: { now: number }) {
   const [roots, setRoots] = useState<WorkNodeView[]>([]);
   const [rootUrls, setRootUrls] = useState<Record<string, string>>({});
@@ -42,36 +87,12 @@ export function RecordPanel({ now }: { now: number }) {
   return (
     <div className="work-roots">
       {goals.length > 0 && (
-        <div className="work-goals">
-          {/* Collapsed, not dropped. A goal's record is on its goal page now, but
-              `Ref` is the only thing that knows whether this ref *has* one — a
-              ticket the snapshot has forgotten has no page, and hiding its root
-              here would make its record unreachable rather than relocated. So the
-              rows stay, drawn as references, and the component picks the
-              destination. */}
-          <Button
-            ghost
-            className="work-goals-head"
-            onClick={() => setShowGoals(!showGoals)}
-            title="Each of these is drawn in full on its own goal page"
-          >
-            <span className="work-caret">{showGoals ? '▾' : '▸'}</span>
-            {goals.length} {goals.length === 1 ? 'goal' : 'goals'} — each on its own page
-          </Button>
-          {showGoals && (
-            <RefLinksExtended refUrls={rootUrls}>
-              {goals.map((root) => (
-                <div className="work-goal-row" key={root.ref}>
-                  <span className="work-title">{root.title}</span>
-                  <Tag tone={root.terminal ? 'green' : undefined}>{root.status}</Tag>
-                  <span className="cn-refs">
-                    <Ref to={root.ref} />
-                  </span>
-                </div>
-              ))}
-            </RefLinksExtended>
-          )}
-        </div>
+        <RecordGoals
+          goals={goals}
+          rootUrls={rootUrls}
+          showGoals={showGoals}
+          onToggle={() => setShowGoals(!showGoals)}
+        />
       )}
       {loose.map((root) => (
         <div className="work-root" key={root.ref}>

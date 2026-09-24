@@ -8,6 +8,50 @@ import type { ToolFactory } from './context.js';
 
 const MAX_REPLY_CHARS = 4000;
 
+const ReplyInput = z.object({
+  body: z
+    .string()
+    .describe(
+      'The reply, as the reviewer will read it. Answer what they asked and nothing else: what ' +
+        'you changed, or why you are keeping the current approach. Do not restate their comment ' +
+        'back to them, and do not thank them for it at length.',
+    ),
+  thread: z
+    .string()
+    .describe(
+      'The id of the review thread you are answering — the "thread <id>" beside each comment in ' +
+        'your prompt. Omit it only for a reply to the pull request itself rather than to a thread; ' +
+        'an omitted id means nobody reading the thread sees your answer in it.',
+    )
+    .optional(),
+  about_comment: z
+    .boolean()
+    .describe(
+      'True if the reviewer’s point was about a code comment — that one is missing, stale, wrong, ' +
+        'badly worded, or should not be there — rather than about the code itself. A thread asking ' +
+        'you to rename a variable or restructure a function is not this; a thread asking you to ' +
+        'explain that function in a comment is. Answer for what the reviewer raised, not for what ' +
+        'you ended up changing.',
+    ),
+  changed_code: z
+    .boolean()
+    .describe(
+      'True if you changed code for this thread, false if you are defending what is already there. ' +
+        'Answer for this thread alone, even where one edit settled several.',
+    ),
+  resolved: z
+    .boolean()
+    .describe(
+      'True if this thread is now dealt with — you made the change the reviewer asked for, or ' +
+        'answered a question that needed no change — and the harness should mark it resolved. ' +
+        'False (the default) leaves it open for the reviewer, which is what you want where you are ' +
+        'defending an approach they may still disagree with, or where your answer raises something ' +
+        'for them to decide. You cannot resolve a thread yourself: the reply goes out as the ' +
+        'harness, so this flag is the only way one gets closed.',
+    )
+    .optional(),
+});
+
 export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Post your reply to a review thread on the pull request you were dispatched for — a defence of ' +
@@ -24,51 +68,7 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
     'Two of the arguments are not part of the reply and the reviewer never sees them: `about_comment` ' +
     'and `changed_code` are what this fleet knows about the thread and nothing else records. Answer ' +
     'them for the thread in front of you, not for the dispatch as a whole.',
-  inputSchema: toolSchema(
-    z.object({
-      body: z
-        .string()
-        .describe(
-          'The reply, as the reviewer will read it. Answer what they asked and nothing else: what ' +
-            'you changed, or why you are keeping the current approach. Do not restate their comment ' +
-            'back to them, and do not thank them for it at length.',
-        ),
-      thread: z
-        .string()
-        .describe(
-          'The id of the review thread you are answering — the "thread <id>" beside each comment in ' +
-            'your prompt. Omit it only for a reply to the pull request itself rather than to a thread; ' +
-            'an omitted id means nobody reading the thread sees your answer in it.',
-        )
-        .optional(),
-      about_comment: z
-        .boolean()
-        .describe(
-          'True if the reviewer’s point was about a code comment — that one is missing, stale, wrong, ' +
-            'badly worded, or should not be there — rather than about the code itself. A thread asking ' +
-            'you to rename a variable or restructure a function is not this; a thread asking you to ' +
-            'explain that function in a comment is. Answer for what the reviewer raised, not for what ' +
-            'you ended up changing.',
-        ),
-      changed_code: z
-        .boolean()
-        .describe(
-          'True if you changed code for this thread, false if you are defending what is already there. ' +
-            'Answer for this thread alone, even where one edit settled several.',
-        ),
-      resolved: z
-        .boolean()
-        .describe(
-          'True if this thread is now dealt with — you made the change the reviewer asked for, or ' +
-            'answered a question that needed no change — and the harness should mark it resolved. ' +
-            'False (the default) leaves it open for the reviewer, which is what you want where you are ' +
-            'defending an approach they may still disagree with, or where your answer raises something ' +
-            'for them to decide. You cannot resolve a thread yourself: the reply goes out as the ' +
-            'harness, so this flag is the only way one gets closed.',
-        )
-        .optional(),
-    }),
-  ),
+  inputSchema: toolSchema(ReplyInput),
   handler: async (args) => {
     const scope = replyOrigin(task.originRef);
     if (!scope.ok) return toolError(scope.error);

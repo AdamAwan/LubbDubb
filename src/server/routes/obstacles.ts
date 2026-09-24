@@ -8,9 +8,34 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store } = system;
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerBoard(app, ctx);
+  registerDecisions(app, ctx);
+  registerNoteWriteUp(app, ctx);
+}
 
+const MuteBody = z.object({
+  muted: requiredBoolean(
+    'muted is required: true silences this obstacle for the fleet, false tells them about it again',
+  ),
+});
+
+const TicketBody = z.object({
+  approved: requiredBoolean(
+    'approved is required: true lets the pulse file the bug for this obstacle, false says no bug — the fleet is ' +
+      'still told about it',
+  ),
+});
+
+const OwnBody = z.object({
+  ownerRef: requiredText(
+    'ownerRef is required: name the ticket or work you are using to fix this, as a ref — the fleet is told ' +
+      'to stand down from it and shown this',
+  ),
+});
+
+function registerBoard(app: FastifyInstance, { system }: RouteContext): void {
+  const { store } = system;
   app.get('/api/obstacles', async () => {
     const board = store.obstacles.obstacleBoard();
     const rows: ObstacleBoardRow[] = board.map((row) => ({
@@ -30,12 +55,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       ticketApproval: system.config.obstacleTicketApproval,
     } satisfies ObstacleBoardPayload;
   });
+}
 
-  const MuteBody = z.object({
-    muted: requiredBoolean(
-      'muted is required: true silences this obstacle for the fleet, false tells them about it again',
-    ),
-  });
+function registerDecisions(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store } = system;
   app.post(
     '/api/obstacles/:id/mute',
     checked({ params: IdParams, body: MuteBody }, async ({ params, body, reply }) => {
@@ -53,12 +76,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const TicketBody = z.object({
-    approved: requiredBoolean(
-      'approved is required: true lets the pulse file the bug for this obstacle, false says no bug — the fleet is ' +
-        'still told about it',
-    ),
-  });
   app.post(
     '/api/obstacles/:id/ticket',
     checked({ params: IdParams, body: TicketBody }, async ({ params, body, reply }) => {
@@ -79,12 +96,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const OwnBody = z.object({
-    ownerRef: requiredText(
-      'ownerRef is required: name the ticket or work you are using to fix this, as a ref — the fleet is told ' +
-        'to stand down from it and shown this',
-    ),
-  });
   app.post(
     '/api/obstacles/:id/own',
     checked({ params: IdParams, body: OwnBody }, async ({ params, body, reply }) => {
@@ -118,7 +129,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, obstacle: store.obstacles.getObstacle(params.id) };
     }),
   );
+}
 
+function registerNoteWriteUp(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store } = system;
   app.post(
     '/api/obstacles/:id/write-up',
     checked({ params: IdParams, body: z.object({}).optional() }, async ({ params, reply }) => {

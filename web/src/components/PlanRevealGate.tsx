@@ -140,11 +140,7 @@ export function PlanRevealGate({
     const slots = filled(draft);
     const text = criteria.trim();
     if (Object.keys(slots).length === 0 && text === '') {
-      setRefusal(
-        asksCriteria
-          ? 'Nothing is written down yet — fill one prediction slot or say what “done” means, and there is a record to keep.'
-          : 'Every slot is skippable, but not all four — write one of them and the prediction is a prediction.',
-      );
+      setRefusal(nothingWritten(asksCriteria));
       return;
     }
     setRefusal(null);
@@ -163,81 +159,145 @@ export function PlanRevealGate({
     <div className="cn-gate">
       {/* Nothing of the plan is on the wire yet, so what is obscured here is a
           stand-in rather than the document under a blur. */}
-      <div className="cn-gate-under" aria-hidden>
-        <span />
-        <span />
-        <span />
-        <span />
-      </div>
+      <GateUnder />
       <div className="cn-gate-over">
-        <h4>{asksCriteria ? 'A plan is ready. Anything to write down first?' : 'A plan is ready. Predict first?'}</h4>
-        <p className="cn-gate-why">
-          {PREDICT_WHY}
-          {asksCriteria &&
-            ' This is also the last moment at which what you call “done” is your answer and not the plan’s.'}{' '}
-          {HOLDS_NOTHING_UP}
-        </p>
-        {!composing && (
-          <div className="cn-gate-presses">
-            <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setComposing(true)}>
-              {asksCriteria ? 'Write these down' : 'Predict'}
-            </button>
-            <AsyncButton tone="primary" onClick={reveal}>
-              Show me the plan
-            </AsyncButton>
-          </div>
-        )}
+        <GateIntro asksCriteria={asksCriteria} />
+        {!composing && <GateOffer asksCriteria={asksCriteria} onCompose={() => setComposing(true)} onReveal={reveal} />}
         {composing && (
-          <div className="cn-gate-slots">
-            {SLOTS.map(({ key, question }) => (
-              <label key={key}>
-                <span>{question}</span>
-                <textarea
-                  className="cn-gate-slot"
-                  rows={2}
-                  value={draft[key]}
-                  placeholder="Skip this one by leaving it empty"
-                  onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                />
-              </label>
-            ))}
-            <p className="cn-gate-kept">{CONTAINMENT}</p>
-            {asksCriteria && (
-              /* Fenced off rather than listed as a fifth slot: the posture is the
-                 opposite of the four above it and the note has to land before the
-                 field, not after it. */
-              <div className="cn-gate-crit">
-                <label>
-                  <span>What “done” means for this goal</span>
-                  <p className="cn-gate-crit-why">{REACHES_THE_FLEET}</p>
-                  <textarea
-                    className="cn-gate-slot"
-                    rows={4}
-                    value={criteria}
-                    placeholder="One criterion per line — skip this by leaving it empty"
-                    onChange={(e) => setCriteria(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
-            {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
-            <div className="cn-gate-presses">
-              <AsyncButton tone="primary" onClick={recordThenReveal} onRefused={setRefusal}>
-                {asksCriteria ? 'Record these and show me the plan' : 'Predict and show me the plan'}
-              </AsyncButton>
-              <button
-                type="button"
-                className={buttonClass({})}
-                onClick={() => {
-                  setComposing(false);
-                  setRefusal(null);
-                }}
-              >
-                Back
-              </button>
-            </div>
-          </div>
+          <GateCompose
+            draft={draft}
+            onDraft={setDraft}
+            asksCriteria={asksCriteria}
+            criteria={criteria}
+            onCriteria={setCriteria}
+            refusal={refusal}
+            onRefused={setRefusal}
+            onRecord={recordThenReveal}
+            onBack={() => {
+              setComposing(false);
+              setRefusal(null);
+            }}
+          />
         )}
+      </div>
+    </div>
+  );
+}
+
+function nothingWritten(asksCriteria: boolean): string {
+  return asksCriteria
+    ? 'Nothing is written down yet — fill one prediction slot or say what “done” means, and there is a record to keep.'
+    : 'Every slot is skippable, but not all four — write one of them and the prediction is a prediction.';
+}
+
+function GateIntro({ asksCriteria }: { asksCriteria: boolean }): JSX.Element {
+  return (
+    <>
+      <h4>{asksCriteria ? 'A plan is ready. Anything to write down first?' : 'A plan is ready. Predict first?'}</h4>
+      <p className="cn-gate-why">
+        {PREDICT_WHY}
+        {asksCriteria &&
+          ' This is also the last moment at which what you call “done” is your answer and not the plan’s.'}{' '}
+        {HOLDS_NOTHING_UP}
+      </p>
+    </>
+  );
+}
+
+function GateOffer({
+  asksCriteria,
+  onCompose,
+  onReveal,
+}: {
+  asksCriteria: boolean;
+  onCompose: () => void;
+  onReveal: () => Promise<void>;
+}): JSX.Element {
+  return (
+    <div className="cn-gate-presses">
+      <button type="button" className={buttonClass({ tone: 'primary' })} onClick={onCompose}>
+        {asksCriteria ? 'Write these down' : 'Predict'}
+      </button>
+      <AsyncButton tone="primary" onClick={onReveal}>
+        Show me the plan
+      </AsyncButton>
+    </div>
+  );
+}
+
+function GateUnder(): JSX.Element {
+  return (
+    <div className="cn-gate-under" aria-hidden>
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+function GateCompose({
+  draft,
+  onDraft,
+  asksCriteria,
+  criteria,
+  onCriteria,
+  refusal,
+  onRefused,
+  onRecord,
+  onBack,
+}: {
+  draft: Draft;
+  onDraft: (draft: Draft) => void;
+  asksCriteria: boolean;
+  criteria: string;
+  onCriteria: (criteria: string) => void;
+  refusal: string | null;
+  onRefused: (refusal: string) => void;
+  onRecord: () => Promise<void>;
+  onBack: () => void;
+}): JSX.Element {
+  return (
+    <div className="cn-gate-slots">
+      {SLOTS.map(({ key, question }) => (
+        <label key={key}>
+          <span>{question}</span>
+          <textarea
+            className="cn-gate-slot"
+            rows={2}
+            value={draft[key]}
+            placeholder="Skip this one by leaving it empty"
+            onChange={(e) => onDraft({ ...draft, [key]: e.target.value })}
+          />
+        </label>
+      ))}
+      <p className="cn-gate-kept">{CONTAINMENT}</p>
+      {asksCriteria && (
+        /* Fenced off rather than listed as a fifth slot: the posture is the
+           opposite of the four above it and the note has to land before the
+           field, not after it. */
+        <div className="cn-gate-crit">
+          <label>
+            <span>What “done” means for this goal</span>
+            <p className="cn-gate-crit-why">{REACHES_THE_FLEET}</p>
+            <textarea
+              className="cn-gate-slot"
+              rows={4}
+              value={criteria}
+              placeholder="One criterion per line — skip this by leaving it empty"
+              onChange={(e) => onCriteria(e.target.value)}
+            />
+          </label>
+        </div>
+      )}
+      {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
+      <div className="cn-gate-presses">
+        <AsyncButton tone="primary" onClick={onRecord} onRefused={onRefused}>
+          {asksCriteria ? 'Record these and show me the plan' : 'Predict and show me the plan'}
+        </AsyncButton>
+        <button type="button" className={buttonClass({})} onClick={onBack}>
+          Back
+        </button>
       </div>
     </div>
   );

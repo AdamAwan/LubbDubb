@@ -8,14 +8,23 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness, connector, errors } = system;
+const CreateBody = z.object({
+  title: requiredText('title is required'),
+  detail: optionalText('detail'),
+  originRef: optionalText('originRef'),
+});
 
-  const CreateBody = z.object({
-    title: requiredText('title is required'),
-    detail: optionalText('detail'),
-    originRef: optionalText('originRef'),
-  });
+const DoneBody = z.object({ note: optionalText('note') });
+
+const DeclineBody = z.object({
+  note: requiredText('note is required — say why, so a replan has something to go on'),
+});
+
+const CloseTicketBody = z.object({ note: optionalText('note') });
+
+function registerCreate(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store } = system;
   app.post(
     '/api/human-tasks',
     checked({ body: CreateBody }, async ({ body, reply }) => {
@@ -31,8 +40,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, humanTask: task };
     }),
   );
+}
 
-  const DoneBody = z.object({ note: optionalText('note') });
+function registerSettle(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, harness } = system;
   app.post(
     '/api/human-tasks/:id/done',
     checked({ params: IdParams, body: DoneBody }, async ({ params, body, reply }) => {
@@ -44,9 +56,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const DeclineBody = z.object({
-    note: requiredText('note is required — say why, so a replan has something to go on'),
-  });
   app.post(
     '/api/human-tasks/:id/decline',
     checked({ params: IdParams, body: DeclineBody }, async ({ params, body, reply }) => {
@@ -57,8 +66,25 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, humanTask: settled.task, report };
     }),
   );
+}
 
-  const CloseTicketBody = z.object({ note: optionalText('note') });
+function registerDismiss(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store } = system;
+  app.post(
+    '/api/human-tasks/:id/dismiss',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const task = store.humanTasks.dismissHumanTask(params.id);
+      if (!task) return reply.code(409).send({ error: 'human task not found, still open, or already dismissed' });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, humanTask: task };
+    }),
+  );
+}
+
+function registerCloseTicket(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, harness, connector, errors } = system;
   app.post(
     '/api/human-tasks/:id/close-ticket',
     checked({ params: IdParams, body: CloseTicketBody }, async ({ params, body, reply }) => {
@@ -96,19 +122,16 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, humanTask: settled, report };
     }),
   );
-
-  app.post(
-    '/api/human-tasks/:id/dismiss',
-    checked({ params: IdParams }, async ({ params, reply }) => {
-      const task = store.humanTasks.dismissHumanTask(params.id);
-      if (!task) return reply.code(409).send({ error: 'human task not found, still open, or already dismissed' });
-      hub.broadcast({ type: 'dirty' });
-      return { ok: true, humanTask: task };
-    }),
-  );
 }
 
 function closeTicketResolution(issueNumber: number, note: string | null): string {
   const closed = `Closed #${issueNumber} in the tracker from the cockpit.`;
   return note === null ? closed : `${closed} ${note}`;
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerCreate(app, ctx);
+  registerSettle(app, ctx);
+  registerCloseTicket(app, ctx);
+  registerDismiss(app, ctx);
 }

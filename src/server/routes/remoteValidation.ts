@@ -9,18 +9,34 @@ import type { TenantCommandOutput } from '../../wire.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
+const QueryParams = IssueNumberParams.extend({ queryId: z.string().min(1, 'queryId is required') });
+const ApprovalParams = QueryParams.extend({ environment: z.string().min(1, 'environment is required') });
+
+const RulingBody = z.object({
+  accept: z.boolean({
+    required_error: 'accept is required — true to approve this query here, false to decline it',
+    invalid_type_error: 'accept is required — true to approve this query here, false to decline it',
+  }),
+});
+
+const EnvironmentParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
+const TenantCommandParams = z.object({ environment: z.string().min(1, 'environment is required') });
+const RowParams = EnvironmentParams.extend({ rowId: z.string().min(1, 'rowId is required') });
+
+const SelectionBody = z.object({
+  selected: z.boolean({
+    required_error: 'selected is required — false to take this row out of the next press, true to put it back',
+    invalid_type_error: 'selected is required — false to take this row out of the next press, true to put it back',
+  }),
+});
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerQueryRoutes(app, ctx);
+  registerSheetRoutes(app, ctx);
+}
+
+function registerQueryRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store } = system;
-
-  const QueryParams = IssueNumberParams.extend({ queryId: z.string().min(1, 'queryId is required') });
-  const ApprovalParams = QueryParams.extend({ environment: z.string().min(1, 'environment is required') });
-
-  const RulingBody = z.object({
-    accept: z.boolean({
-      required_error: 'accept is required — true to approve this query here, false to decline it',
-      invalid_type_error: 'accept is required — true to approve this query here, false to decline it',
-    }),
-  });
 
   app.put(
     '/api/issues/:number/state-queries/:queryId',
@@ -95,10 +111,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, check: ruled.check, reading: ruled.reading, approved: ruled.approved };
     }),
   );
+}
 
-  const EnvironmentParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
-  const TenantCommandParams = z.object({ environment: z.string().min(1, 'environment is required') });
-  const RowParams = EnvironmentParams.extend({ rowId: z.string().min(1, 'rowId is required') });
+function registerSheetRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store } = system;
 
   /*
    * The press. In order: refuse 409 while a run is live for this (environment, tenant), naming it;
@@ -139,13 +155,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, run: cancelled };
     }),
   );
-
-  const SelectionBody = z.object({
-    selected: z.boolean({
-      required_error: 'selected is required — false to take this row out of the next press, true to put it back',
-      invalid_type_error: 'selected is required — false to take this row out of the next press, true to put it back',
-    }),
-  });
 
   app.post(
     '/api/issues/:number/remote-validation/:environment/rows/:rowId',

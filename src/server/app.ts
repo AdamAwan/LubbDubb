@@ -50,6 +50,7 @@ import { register as registerSchedules } from './routes/schedules.js';
 import { register as registerSpend } from './routes/spend.js';
 import { register as registerTickets } from './routes/tickets.js';
 import { register as registerUpgrade } from './routes/upgrade.js';
+import { register as registerUpstreamFiling } from './routes/upstreamFiling.js';
 import { register as registerUsage } from './routes/usage.js';
 import { register as registerStacks } from './routes/stacks.js';
 import { register as registerState } from './routes/state.js';
@@ -94,6 +95,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerStacks,
   registerTickets,
   registerUpgrade,
+  registerUpstreamFiling,
   registerUsage,
   registerValidation,
   registerWatches,

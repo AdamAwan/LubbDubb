@@ -39,16 +39,7 @@ export class WatchDryRun implements WatchDryRunner {
     return refusals;
   }
 
-  private async read(
-    environment: EnvironmentConfig,
-    check: GoalWatch,
-  ): Promise<{
-    verdict: WatchReadingVerdict;
-    presence: WatchReadingVerdict | null;
-    rows: number | null;
-    detail: string | null;
-    value: number | null;
-  }> {
+  private async read(environment: EnvironmentConfig, check: GoalWatch): Promise<DryRunReading> {
     const command = environment.watch!.observe;
     const since = new Date(this.now() - watchWindowMs(environment)).toISOString();
     if (check.presence !== null) {
@@ -89,42 +80,54 @@ export class WatchDryRun implements WatchDryRunner {
       kind: check.kind === 'measure' ? 'measure' : 'signal',
       since,
     });
-    const verdict = verdictOf(result);
-    const presence = check.presence === null ? null : ('fires' as const);
-    if (verdict === 'unknown')
-      return {
-        verdict,
-        presence,
-        rows: null,
-        value: null,
-        detail: `the watch could not read ${environment.name} — ${result.detail ?? 'the observation did not answer'}`,
-      };
-    if (check.kind === 'measure')
-      return { verdict, presence, rows: result.rows!.length, value: result.value, detail: null };
-    if (scalarShaped(result.rows!))
-      return {
-        verdict,
-        presence,
-        rows: result.rows!.length,
-        value: null,
-        detail:
-          `${environment.name} answered one row carrying one number, which is the shape of a query that ` +
-          'aggregated: a signal answers with the matching rows themselves and the harness counts them, so this ' +
-          'reads as exactly one occurrence however many there are. Return the rows rather than a count — ' +
-          '"tolerate" is how many of them the harness may count.',
-      };
-    if (verdict === 'zero')
-      return {
-        verdict,
-        presence,
-        rows: 0,
-        value: null,
-        detail:
-          `the code path runs on ${environment.name} and the thing this reports is not happening. Either the ` +
-          'query is wrong or the ticket is — one of the two is worth settling before any of this is built.',
-      };
-    return { verdict, presence, rows: result.rows!.length, value: null, detail: null };
+    return readingOf(environment, check, result);
   }
+}
+
+interface DryRunReading {
+  verdict: WatchReadingVerdict;
+  presence: WatchReadingVerdict | null;
+  rows: number | null;
+  detail: string | null;
+  value: number | null;
+}
+
+function readingOf(environment: EnvironmentConfig, check: GoalWatch, result: WatchResult): DryRunReading {
+  const verdict = verdictOf(result);
+  const presence = check.presence === null ? null : ('fires' as const);
+  if (verdict === 'unknown')
+    return {
+      verdict,
+      presence,
+      rows: null,
+      value: null,
+      detail: `the watch could not read ${environment.name} — ${result.detail ?? 'the observation did not answer'}`,
+    };
+  if (check.kind === 'measure')
+    return { verdict, presence, rows: result.rows!.length, value: result.value, detail: null };
+  if (scalarShaped(result.rows!))
+    return {
+      verdict,
+      presence,
+      rows: result.rows!.length,
+      value: null,
+      detail:
+        `${environment.name} answered one row carrying one number, which is the shape of a query that ` +
+        'aggregated: a signal answers with the matching rows themselves and the harness counts them, so this ' +
+        'reads as exactly one occurrence however many there are. Return the rows rather than a count — ' +
+        '"tolerate" is how many of them the harness may count.',
+    };
+  if (verdict === 'zero')
+    return {
+      verdict,
+      presence,
+      rows: 0,
+      value: null,
+      detail:
+        `the code path runs on ${environment.name} and the thing this reports is not happening. Either the ` +
+        'query is wrong or the ticket is — one of the two is worth settling before any of this is built.',
+    };
+  return { verdict, presence, rows: result.rows!.length, value: null, detail: null };
 }
 
 function verdictOf(result: WatchResult): WatchReadingVerdict {

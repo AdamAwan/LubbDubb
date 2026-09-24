@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { JSX } from 'react';
+import type { JSX, RefObject } from 'react';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { AsyncButton } from './AsyncButton.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -54,106 +54,190 @@ export function PlanAnswers({
     field.current?.focus();
   }, [open, seedNote]);
 
-  const words = text.trim();
   const drawer = open === null ? null : DRAWERS[open];
 
   return (
     <>
-      <HeadRow className="pa-row">
-        <AsyncButton
-          tone="primary"
-          disabled={held}
-          title={
-            held ? heldTitle(outstanding) : 'Release the plan — each part gets its own agent, branch and pull request'
-          }
-          onClick={() => onDecide(proposalId, 'accept', undefined, acknowledged, answers)}
-        >
-          {approveLabel}
-        </AsyncButton>
-        <button
-          type="button"
-          className={buttonClass({ ghost: true }, open === 'change' ? 'pa-on' : '')}
-          title="Say what should be different — the planner amends this plan with your words rather than starting over"
-          onClick={() => setOpen(open === 'change' ? null : 'change')}
-        >
-          Change something first
-        </button>
-        {/* The way into the plan, drawn as a peer of the answers rather than as a
-            banner above them: it is one of the things you can do here, and a card
-            that asks for a verdict should put reading the plan on the same row as
-            giving one. */}
-        {onReadPlan && (
-          <button
-            type="button"
-            className={buttonClass({ ghost: true })}
-            title="The split, the evidence, what it rules out"
-            onClick={onReadPlan}
-          >
-            Read the full plan →
-          </button>
-        )}
-        {issueNumber !== null && (
-          <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discussExplain} />
-        )}
-      </HeadRow>
+      <AnswerRow
+        held={held}
+        outstanding={outstanding}
+        approveLabel={approveLabel}
+        onApprove={() => onDecide(proposalId, 'accept', undefined, acknowledged, answers)}
+        changing={open === 'change'}
+        onToggleChange={() => setOpen(open === 'change' ? null : 'change')}
+        onReadPlan={onReadPlan}
+        issueNumber={issueNumber}
+        desktopFolder={desktopFolder}
+        discussExplain={discussExplain}
+      />
 
       {/* Set apart below the answers, because neither of these is about the plan.
           A change asks a planner for a different one, which is the wrong "no" for a
           goal that should not be worked at all — and reading the plan is what tends
           to produce exactly that reading. */}
-      <div className="pa-backout">
-        <span className="muted small">Not the work you want?</span>
-        <button
-          type="button"
-          className={buttonClass({ ghost: true, size: 'small' }, open === 'close' ? 'pa-on' : '')}
-          title="Comment on the ticket, close it, stop watching it and abandon this plan"
-          onClick={() => setOpen(open === 'close' ? null : 'close')}
-        >
-          Close the ticket
-        </button>
-        <AsyncButton
-          ghost
-          size="small"
-          title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."
-          onClick={() => onBackOut(proposalId, 'hold')}
-        >
-          Just stop watching
-        </AsyncButton>
-      </div>
+      <BackOutRow
+        closing={open === 'close'}
+        onToggleClose={() => setOpen(open === 'close' ? null : 'close')}
+        onHold={() => onBackOut(proposalId, 'hold')}
+      />
 
       {drawer && (
-        <div
-          className={`pa-drawer ${drawer.kind}`}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setOpen(null);
-          }}
-        >
-          <span className="pa-drawer-q">{drawer.question}</span>
-          <HeadRow className="pa-drawer-row">
-            <input
-              ref={field}
-              className="pa-drawer-note"
-              placeholder={drawer.placeholder}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            <AsyncButton
-              disabled={words.length === 0}
-              title={words.length === 0 ? drawer.held : drawer.ready}
-              onClick={() =>
-                open === 'change' ? onDecide(proposalId, 'reject', words) : onBackOut(proposalId, 'close', words)
-              }
-            >
-              {drawer.submit}
-            </AsyncButton>
-            <button type="button" className={buttonClass({ ghost: true, size: 'small' })} onClick={() => setOpen(null)}>
-              Cancel
-            </button>
-          </HeadRow>
-          <span className="pa-drawer-hint">{drawer.hint}</span>
-        </div>
+        <PlanDrawer
+          drawer={drawer}
+          field={field}
+          text={text}
+          onText={setText}
+          onSubmit={(words) =>
+            open === 'change' ? onDecide(proposalId, 'reject', words) : onBackOut(proposalId, 'close', words)
+          }
+          onClose={() => setOpen(null)}
+        />
       )}
     </>
+  );
+}
+
+function AnswerRow({
+  held,
+  outstanding,
+  approveLabel,
+  onApprove,
+  changing,
+  onToggleChange,
+  onReadPlan,
+  issueNumber,
+  desktopFolder,
+  discussExplain,
+}: {
+  held: boolean;
+  outstanding: PlanCaveat[];
+  approveLabel: string;
+  onApprove: () => Promise<unknown> | unknown;
+  changing: boolean;
+  onToggleChange: () => void;
+  onReadPlan?: () => void;
+  issueNumber: number | null;
+  desktopFolder: string;
+  discussExplain: string;
+}): JSX.Element {
+  return (
+    <HeadRow className="pa-row">
+      <AsyncButton
+        tone="primary"
+        disabled={held}
+        title={
+          held ? heldTitle(outstanding) : 'Release the plan — each part gets its own agent, branch and pull request'
+        }
+        onClick={onApprove}
+      >
+        {approveLabel}
+      </AsyncButton>
+      <button
+        type="button"
+        className={buttonClass({ ghost: true }, changing ? 'pa-on' : '')}
+        title="Say what should be different — the planner amends this plan with your words rather than starting over"
+        onClick={onToggleChange}
+      >
+        Change something first
+      </button>
+      {/* The way into the plan, drawn as a peer of the answers rather than as a
+          banner above them: it is one of the things you can do here, and a card
+          that asks for a verdict should put reading the plan on the same row as
+          giving one. */}
+      {onReadPlan && (
+        <button
+          type="button"
+          className={buttonClass({ ghost: true })}
+          title="The split, the evidence, what it rules out"
+          onClick={onReadPlan}
+        >
+          Read the full plan →
+        </button>
+      )}
+      {issueNumber !== null && (
+        <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discussExplain} />
+      )}
+    </HeadRow>
+  );
+}
+
+function BackOutRow({
+  closing,
+  onToggleClose,
+  onHold,
+}: {
+  closing: boolean;
+  onToggleClose: () => void;
+  onHold: () => Promise<unknown> | unknown;
+}): JSX.Element {
+  return (
+    <div className="pa-backout">
+      <span className="muted small">Not the work you want?</span>
+      <button
+        type="button"
+        className={buttonClass({ ghost: true, size: 'small' }, closing ? 'pa-on' : '')}
+        title="Comment on the ticket, close it, stop watching it and abandon this plan"
+        onClick={onToggleClose}
+      >
+        Close the ticket
+      </button>
+      <AsyncButton
+        ghost
+        size="small"
+        title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."
+        onClick={onHold}
+      >
+        Just stop watching
+      </AsyncButton>
+    </div>
+  );
+}
+
+function PlanDrawer({
+  drawer,
+  field,
+  text,
+  onText,
+  onSubmit,
+  onClose,
+}: {
+  drawer: (typeof DRAWERS)[DrawerId];
+  field: RefObject<HTMLInputElement>;
+  text: string;
+  onText: (text: string) => void;
+  onSubmit: (words: string) => Promise<unknown> | unknown;
+  onClose: () => void;
+}): JSX.Element {
+  const words = text.trim();
+  return (
+    <div
+      className={`pa-drawer ${drawer.kind}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
+    >
+      <span className="pa-drawer-q">{drawer.question}</span>
+      <HeadRow className="pa-drawer-row">
+        <input
+          ref={field}
+          className="pa-drawer-note"
+          placeholder={drawer.placeholder}
+          value={text}
+          onChange={(e) => onText(e.target.value)}
+        />
+        <AsyncButton
+          disabled={words.length === 0}
+          title={words.length === 0 ? drawer.held : drawer.ready}
+          onClick={() => onSubmit(words)}
+        >
+          {drawer.submit}
+        </AsyncButton>
+        <button type="button" className={buttonClass({ ghost: true, size: 'small' })} onClick={onClose}>
+          Cancel
+        </button>
+      </HeadRow>
+      <span className="pa-drawer-hint">{drawer.hint}</span>
+    </div>
   );
 }
 

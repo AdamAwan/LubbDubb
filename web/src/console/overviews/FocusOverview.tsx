@@ -91,56 +91,7 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
             that it could not be acted on, would be the same mistake one size
             down. They carry the ask's tone, so the column also says what kind of
             thing is waiting where. */}
-        <div className="cn-ov-focus-progress">
-          <span className="cn-ov-pips">
-            {stops.map((r, i) => (
-              <button
-                key={r?.id ?? LOOK_ID}
-                type="button"
-                className={`cn-ov-pip ${r === null ? 'cn-ov-pip-look' : `cn-t-${KIND_TONE[r.kind]}`} ${i === at ? 'cn-ov-pip-here' : ''}`}
-                aria-label={
-                  r === null
-                    ? `${i + 1} of ${stops.length} — ${LOOK_TITLE}`
-                    : `${i + 1} of ${stops.length} — ${KIND_LABEL[r.kind]}: ${r.title}`
-                }
-                aria-current={i === at}
-                title={r === null ? LOOK_TITLE : `${KIND_LABEL[r.kind]} — ${r.title}`}
-                onClick={() => go(i)}
-              />
-            ))}
-          </span>
-          {/* The controls sit with the counter rather than under the ask, because
-              the ask's own height is whatever its body happens to be — a footer
-              puts Next somewhere different on every one of them, and the operator
-              ends up hunting for the control they press most. Here it is the same
-              place on every ask, and beside the count that says what pressing it
-              does. */}
-          <ButtonRow className="cn-ov-focus-nav">
-            <span className="cn-ov-focus-count">
-              {at + 1} of {stops.length}
-            </span>
-            <Button
-              tone="secondary"
-              ghost
-              size="small"
-              disabled={at === 0}
-              onClick={() => go(at - 1)}
-              title="The ask before this one (←)"
-            >
-              ‹ Prev
-            </Button>
-            <Button
-              tone="secondary"
-              ghost
-              size="small"
-              disabled={at >= stops.length - 1}
-              onClick={() => go(at + 1)}
-              title="The ask after this one (→)"
-            >
-              Next ›
-            </Button>
-          </ButtonRow>
-        </div>
+        <FocusProgress stops={stops} at={at} go={go} />
 
         {row === null ? (
           <Look view={view} actions={actions} />
@@ -150,6 +101,69 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
 
         <Pets view={view} actions={actions} />
       </div>
+    </div>
+  );
+}
+
+function FocusProgress({
+  stops,
+  at,
+  go,
+}: {
+  stops: (NeedRow | null)[];
+  at: number;
+  go: (to: number) => void;
+}): JSX.Element {
+  return (
+    <div className="cn-ov-focus-progress">
+      <span className="cn-ov-pips">
+        {stops.map((r, i) => (
+          <button
+            key={r?.id ?? LOOK_ID}
+            type="button"
+            className={`cn-ov-pip ${r === null ? 'cn-ov-pip-look' : `cn-t-${KIND_TONE[r.kind]}`} ${i === at ? 'cn-ov-pip-here' : ''}`}
+            aria-label={
+              r === null
+                ? `${i + 1} of ${stops.length} — ${LOOK_TITLE}`
+                : `${i + 1} of ${stops.length} — ${KIND_LABEL[r.kind]}: ${r.title}`
+            }
+            aria-current={i === at}
+            title={r === null ? LOOK_TITLE : `${KIND_LABEL[r.kind]} — ${r.title}`}
+            onClick={() => go(i)}
+          />
+        ))}
+      </span>
+      {/* The controls sit with the counter rather than under the ask, because
+          the ask's own height is whatever its body happens to be — a footer
+          puts Next somewhere different on every one of them, and the operator
+          ends up hunting for the control they press most. Here it is the same
+          place on every ask, and beside the count that says what pressing it
+          does. */}
+      <ButtonRow className="cn-ov-focus-nav">
+        <span className="cn-ov-focus-count">
+          {at + 1} of {stops.length}
+        </span>
+        <Button
+          tone="secondary"
+          ghost
+          size="small"
+          disabled={at === 0}
+          onClick={() => go(at - 1)}
+          title="The ask before this one (←)"
+        >
+          ‹ Prev
+        </Button>
+        <Button
+          tone="secondary"
+          ghost
+          size="small"
+          disabled={at >= stops.length - 1}
+          onClick={() => go(at + 1)}
+          title="The ask after this one (→)"
+        >
+          Next ›
+        </Button>
+      </ButtonRow>
     </div>
   );
 }

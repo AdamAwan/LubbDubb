@@ -17,13 +17,49 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
     onInjected();
   };
 
+  return (
+    <div className="inject">
+      <Label>Inject event:</Label>
+      <DemoEventButtons world={world} inject={inject} />
+      <Button ghost onClick={() => setOpen((o) => !o)}>
+        {open ? 'Hide raw' : 'Raw JSON'}
+      </Button>
+      {open && (
+        <form
+          className="raw"
+          onSubmit={(e) => {
+            e.preventDefault();
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(raw);
+            } catch {
+              alert('Invalid JSON');
+              return;
+            }
+            void rawSubmit.run(() => inject(parsed));
+          }}
+        >
+          <input
+            placeholder='{"kind":"ci_failed","prNumber":42}'
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+          />
+          <SubmitButton phase={rawSubmit.phase} tone="primary">
+            Inject
+          </SubmitButton>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function DemoEventButtons({ world, inject }: { world: WorldSnapshot; inject: (event: unknown) => Promise<void> }) {
   const nextPr = (world.pullRequests.at(-1)?.number ?? 40) + 1;
   const firstPr = world.pullRequests[0]?.number ?? nextPr;
   const nextIssue = (world.issues.at(-1)?.number ?? 100) + 1;
 
   return (
-    <div className="inject">
-      <Label>Inject event:</Label>
+    <>
       <AsyncButton
         onClick={() =>
           inject({ kind: 'new_pr', number: nextPr, title: `Feature PR #${nextPr}`, branch: `feature/pr-${nextPr}` })
@@ -62,34 +98,6 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
       >
         Conflict #{firstPr}
       </AsyncButton>
-      <Button ghost onClick={() => setOpen((o) => !o)}>
-        {open ? 'Hide raw' : 'Raw JSON'}
-      </Button>
-      {open && (
-        <form
-          className="raw"
-          onSubmit={(e) => {
-            e.preventDefault();
-            let parsed: unknown;
-            try {
-              parsed = JSON.parse(raw);
-            } catch {
-              alert('Invalid JSON');
-              return;
-            }
-            void rawSubmit.run(() => inject(parsed));
-          }}
-        >
-          <input
-            placeholder='{"kind":"ci_failed","prNumber":42}'
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-          />
-          <SubmitButton phase={rawSubmit.phase} tone="primary">
-            Inject
-          </SubmitButton>
-        </form>
-      )}
-    </div>
+    </>
   );
 }

@@ -10,11 +10,106 @@ import {
 import { NO_STEP_CAPABILITIES } from '../../validation/steps.js';
 import { amendmentNote, validateAmendment, validationAmendIssue, withdrawalReason } from '../../validation/amend.js';
 import { withdrawResourceAsks } from '../../validation/ask.js';
-import type { ValidationCheck } from '../../types.js';
+import type { ValidationAmendResult, ValidationCheck } from '../../types.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
+
+const ValidationAmendInput = z.object({
+  note: z
+    .string()
+    .describe(
+      'Why the plan is changing, in a sentence. This is the whole of what an operator sees when a check ' +
+        'they read yesterday says something else today, so write what changed and why — not "updated".',
+    ),
+  checks: z
+    .array(
+      z.object({
+        id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
+        title: z.string().describe('One line, the headline.'),
+        do: z
+          .string()
+          .describe(
+            'The procedure a person follows, in markdown: the commands, the URL, the clicks. Concrete ' +
+              'steps, written for somebody who has not read the plan.',
+          ),
+        expect: z
+          .string()
+          .describe(
+            'What they would see, and where — the row, the log line, the ref that is gone, the screen. ' +
+              'A check that cannot say this is not a check.',
+          ),
+        proof: z
+          .string()
+          .describe(
+            'What must come **back** for a pass to count — the evidence, not the assertion. Name the ' +
+              'screen and what has to be visible on it. Write it on every check an agent carries out ' +
+              'unwatched: it is the only thing standing between an agent\u2019s word and a green row, ' +
+              'and a check that declares it is refused a pass that hands nothing back. Leave it out ' +
+              'where the assertion is the whole of the evidence \u2014 a store reading, a log line, a ' +
+              'suite area\u2019s own report.',
+          )
+          .optional(),
+        uses: z
+          .array(z.string())
+          .describe('Names of declared resources this check needs. Names, never paths.')
+          .optional(),
+        covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
+        satisfies: z
+          .array(z.string())
+          .describe(
+            'The goal criteria this check answers, each copied exactly as your prompt lists them. Every ' +
+              'criterion needs at least one check naming it.',
+          )
+          .optional(),
+        fleetCandidate: z
+          .boolean()
+          .describe(
+            'Your nomination that an agent could run this rather than a person. A suggestion for whoever ' +
+              'decides — it dispatches nothing, and you cannot know what logins this deployment has.',
+          )
+          .optional(),
+        steps: validationStepsSchema,
+        why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
+      }),
+    )
+    .describe(
+      'Checks to add or amend. An id this goal already has is merged onto that check; a new id is added ' +
+        'and gets the next free letter. Re-use the exact id when you are amending — it is the merge key.',
+    )
+    .optional(),
+  withdraw: z
+    .array(
+      z.object({
+        id: z.string(),
+        reason: z.string().describe('Why this is no longer worth checking.'),
+      }),
+    )
+    .describe(
+      'Checks that should no longer be asked for, each with a reason. Withdrawing keeps the check on the ' +
+        'record, greyed, with your reason on it — it does not delete it. Withdraw a check the goal no longer ' +
+        'needs; do not withdraw one you could not get to pass.',
+    )
+    .optional(),
+  resources: z
+    .array(
+      z.object({
+        name: z.string().describe('A file name, not a path.'),
+        kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
+        note: z.string().optional(),
+        provided: z.boolean().describe('False is "I need this and cannot produce it".').optional(),
+      }),
+    )
+    .describe(
+      'Files a check needs that the repository does not have: a seeded fixture, a reference screenshot, a ' +
+        'dump of real data. Merged by name; nothing here removes one. Not the place for a login, an account ' +
+        'or an environment — what a check needs to be runnable goes in its "do", where the person running it ' +
+        'reads it. Set "provided": false for a file you cannot produce yourself, and the harness asks a ' +
+        'person to put it on disk once the goal is delivered.',
+    )
+    .optional(),
+});
 
 export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -30,102 +125,7 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     'check, and adding one sends a person out to redo work that is done. One run of the thing is one check: ' +
     'if what you are adding would be run in the same sitting as a check that already exists, widen that ' +
     'check instead of adding a second one beside it.',
-  inputSchema: toolSchema(
-    z.object({
-      note: z
-        .string()
-        .describe(
-          'Why the plan is changing, in a sentence. This is the whole of what an operator sees when a check ' +
-            'they read yesterday says something else today, so write what changed and why — not "updated".',
-        ),
-      checks: z
-        .array(
-          z.object({
-            id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
-            title: z.string().describe('One line, the headline.'),
-            do: z
-              .string()
-              .describe(
-                'The procedure a person follows, in markdown: the commands, the URL, the clicks. Concrete ' +
-                  'steps, written for somebody who has not read the plan.',
-              ),
-            expect: z
-              .string()
-              .describe(
-                'What they would see, and where — the row, the log line, the ref that is gone, the screen. ' +
-                  'A check that cannot say this is not a check.',
-              ),
-            proof: z
-              .string()
-              .describe(
-                'What must come **back** for a pass to count — the evidence, not the assertion. Name the ' +
-                  'screen and what has to be visible on it. Write it on every check an agent carries out ' +
-                  'unwatched: it is the only thing standing between an agent\u2019s word and a green row, ' +
-                  'and a check that declares it is refused a pass that hands nothing back. Leave it out ' +
-                  'where the assertion is the whole of the evidence \u2014 a store reading, a log line, a ' +
-                  'suite area\u2019s own report.',
-              )
-              .optional(),
-            uses: z
-              .array(z.string())
-              .describe('Names of declared resources this check needs. Names, never paths.')
-              .optional(),
-            covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
-            satisfies: z
-              .array(z.string())
-              .describe(
-                'The goal criteria this check answers, each copied exactly as your prompt lists them. Every ' +
-                  'criterion needs at least one check naming it.',
-              )
-              .optional(),
-            fleetCandidate: z
-              .boolean()
-              .describe(
-                'Your nomination that an agent could run this rather than a person. A suggestion for whoever ' +
-                  'decides — it dispatches nothing, and you cannot know what logins this deployment has.',
-              )
-              .optional(),
-            steps: validationStepsSchema,
-            why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
-          }),
-        )
-        .describe(
-          'Checks to add or amend. An id this goal already has is merged onto that check; a new id is added ' +
-            'and gets the next free letter. Re-use the exact id when you are amending — it is the merge key.',
-        )
-        .optional(),
-      withdraw: z
-        .array(
-          z.object({
-            id: z.string(),
-            reason: z.string().describe('Why this is no longer worth checking.'),
-          }),
-        )
-        .describe(
-          'Checks that should no longer be asked for, each with a reason. Withdrawing keeps the check on the ' +
-            'record, greyed, with your reason on it — it does not delete it. Withdraw a check the goal no longer ' +
-            'needs; do not withdraw one you could not get to pass.',
-        )
-        .optional(),
-      resources: z
-        .array(
-          z.object({
-            name: z.string().describe('A file name, not a path.'),
-            kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
-            note: z.string().optional(),
-            provided: z.boolean().describe('False is "I need this and cannot produce it".').optional(),
-          }),
-        )
-        .describe(
-          'Files a check needs that the repository does not have: a seeded fixture, a reference screenshot, a ' +
-            'dump of real data. Merged by name; nothing here removes one. Not the place for a login, an account ' +
-            'or an environment — what a check needs to be runnable goes in its "do", where the person running it ' +
-            'reads it. Set "provided": false for a file you cannot produce yourself, and the harness asks a ' +
-            'person to put it on disk once the goal is delivered.',
-        )
-        .optional(),
-    }),
-  ),
+  inputSchema: toolSchema(ValidationAmendInput),
   handler: (args) => {
     const goal = validationAmendIssue(task.originRef);
     if (!goal.ok) return toolError(goal.error);
@@ -171,25 +171,29 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
       note: amendmentNote(amendment.note),
     });
 
-    const named = (checks: ValidationCheck[]): string[] => checks.map((c) => `${c.letter}. ${c.id}`);
-    const withdrew = result.reworded.filter((c) => c.revision?.state != null);
-    return ok({
-      amended: true,
-      added: named(result.added),
-      reworded: named(result.reworded),
-      unchanged: result.unchanged,
-      withdrawn: result.withdrawn,
-      ...(result.unknown.length > 0
-        ? { notFound: result.unknown, notFoundMeans: 'no live check on this goal has that id — nothing was withdrawn' }
-        : {}),
-      ...(withdrew.length > 0
-        ? {
-            withdrewResults: withdrew.map((c) => `${c.letter}. ${c.id} was ${c.revision?.state ?? ''}, now unrun`),
-            withdrewResultsMeans:
-              'you changed what a pass means for these, so the reading somebody had recorded no longer holds ' +
-              'and they are back to unrun. The operator is shown what the check used to say.',
-          }
-        : {}),
-    });
+    return ok(amendReply(result));
   },
 });
+
+function amendReply(result: ValidationAmendResult) {
+  const named = (checks: ValidationCheck[]): string[] => checks.map((c) => `${c.letter}. ${c.id}`);
+  const withdrew = result.reworded.filter((c) => c.revision?.state != null);
+  return {
+    amended: true,
+    added: named(result.added),
+    reworded: named(result.reworded),
+    unchanged: result.unchanged,
+    withdrawn: result.withdrawn,
+    ...(result.unknown.length > 0
+      ? { notFound: result.unknown, notFoundMeans: 'no live check on this goal has that id — nothing was withdrawn' }
+      : {}),
+    ...(withdrew.length > 0
+      ? {
+          withdrewResults: withdrew.map((c) => `${c.letter}. ${c.id} was ${c.revision?.state ?? ''}, now unrun`),
+          withdrewResultsMeans:
+            'you changed what a pass means for these, so the reading somebody had recorded no longer holds ' +
+            'and they are back to unrun. The operator is shown what the check used to say.',
+        }
+      : {}),
+  };
+}

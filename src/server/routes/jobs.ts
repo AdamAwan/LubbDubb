@@ -8,22 +8,40 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness, config } = system;
+const JobBody = z.object({
+  prompt: z
+    .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
+    .trim()
+    .min(1, 'prompt required'),
+  title: optionalText('title'),
+  kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
+  branch: z
+    .union([z.string({ invalid_type_error: 'branch must be a string' }).trim(), z.null()])
+    .optional()
+    .transform((branch) => branch || null),
+  attachments: AttachmentsField,
+});
 
-  const JobBody = z.object({
-    prompt: z
-      .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
-      .trim()
-      .min(1, 'prompt required'),
-    title: optionalText('title'),
-    kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
-    branch: z
-      .union([z.string({ invalid_type_error: 'branch must be a string' }).trim(), z.null()])
-      .optional()
-      .transform((branch) => branch || null),
-    attachments: AttachmentsField,
-  });
+const UpNextOrderBody = z.object({
+  origins: z
+    .array(z.string({ invalid_type_error: 'origins must be an array of strings' }), {
+      required_error: 'origins must be an array of strings',
+      invalid_type_error: 'origins must be an array of strings',
+    })
+    .refine((origins) => new Set(origins).size === origins.length, { message: 'origins must be unique' }),
+});
+
+const UpNextProfileBody = z.object({
+  origin: z
+    .string({ required_error: 'origin required', invalid_type_error: 'origin required' })
+    .trim()
+    .min(1, 'origin required'),
+  profile: optionalText('profile'),
+});
+
+function registerJobSubmit(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, harness, config } = system;
   app.post(
     '/api/jobs',
     { bodyLimit: ATTACHMENT_BODY_LIMIT },
@@ -75,15 +93,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, job, report };
     }),
   );
+}
 
-  const UpNextOrderBody = z.object({
-    origins: z
-      .array(z.string({ invalid_type_error: 'origins must be an array of strings' }), {
-        required_error: 'origins must be an array of strings',
-        invalid_type_error: 'origins must be an array of strings',
-      })
-      .refine((origins) => new Set(origins).size === origins.length, { message: 'origins must be unique' }),
-  });
+function registerQueue(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, harness, config } = system;
   app.post(
     '/api/upnext/order',
     checked({ body: UpNextOrderBody }, async ({ body }) => {
@@ -94,13 +108,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const UpNextProfileBody = z.object({
-    origin: z
-      .string({ required_error: 'origin required', invalid_type_error: 'origin required' })
-      .trim()
-      .min(1, 'origin required'),
-    profile: optionalText('profile'),
-  });
   app.post(
     '/api/upnext/profile',
     checked({ body: UpNextProfileBody }, async ({ body, reply }) => {
@@ -131,4 +138,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, job };
     }),
   );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerJobSubmit(app, ctx);
+  registerQueue(app, ctx);
 }

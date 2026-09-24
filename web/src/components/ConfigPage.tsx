@@ -63,51 +63,9 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
 
   return (
     <div className="cfg">
-      <div className="cfg-head">
-        <div>
-          <h1 className="cfg-title">Config</h1>
-          <span className="cfg-where">
-            <b>{payload.file}</b> · read at boot
-            {/* The team's file, named here rather than only on the rows it sets:
-                an operator whose harness is behaving unlike their config says has
-                to be able to see that a second file is in play at all. */}
-            {payload.projectFile !== null && (
-              <>
-                {' · under '}
-                <b>{payload.projectFile}</b>
-              </>
-            )}
-          </span>
-        </div>
-        <div className="cfg-headacts">
-          <Button ghost size="small" onClick={load}>
-            Reload from disk
-          </Button>
-        </div>
-      </div>
+      <ConfigHead payload={payload} onReload={load} />
 
-      <div className="cfg-tabs" role="tablist">
-        {TABS.map((entry) => (
-          <button
-            key={entry.id}
-            role="tab"
-            aria-selected={tab === entry.id}
-            className={`cfg-tab${tab === entry.id ? ' on' : ''}`}
-            onClick={() => go(entry.id)}
-          >
-            {entry.label}
-            {entry.id === 'values' && dirty > 0 && <i className="cfg-tabn">{dirty}</i>}
-            {/* A dot rather than a count: what the theme is holding is one pending
-                edit, however many tokens it moved. It is what the cog's dot leads
-                to (issue #680). */}
-            {entry.id === 'theme' && themeEdit && (
-              <i className="cfg-tabn" title="An unsaved theme edit is pending">
-                &#9679;
-              </i>
-            )}
-          </button>
-        ))}
-      </div>
+      <ConfigTabs tab={tab} dirty={dirty} themeEdit={themeEdit} onGo={go} />
 
       {reviewing ? (
         <ReviewWrite
@@ -146,6 +104,70 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
           {tab === 'theme' && <ThemeSettings />}
         </>
       )}
+    </div>
+  );
+}
+
+function ConfigHead({ payload, onReload }: { payload: RunningConfigPayload; onReload: () => void }): React.JSX.Element {
+  return (
+    <div className="cfg-head">
+      <div>
+        <h1 className="cfg-title">Config</h1>
+        <span className="cfg-where">
+          <b>{payload.file}</b> · read at boot
+          {/* The team's file, named here rather than only on the rows it sets:
+            an operator whose harness is behaving unlike their config says has
+            to be able to see that a second file is in play at all. */}
+          {payload.projectFile !== null && (
+            <>
+              {' · under '}
+              <b>{payload.projectFile}</b>
+            </>
+          )}
+        </span>
+      </div>
+      <div className="cfg-headacts">
+        <Button ghost size="small" onClick={onReload}>
+          Reload from disk
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ConfigTabs({
+  tab,
+  dirty,
+  themeEdit,
+  onGo,
+}: {
+  tab: ConfigTab;
+  dirty: number;
+  themeEdit: boolean;
+  onGo: (id: ConfigTab) => void;
+}): React.JSX.Element {
+  return (
+    <div className="cfg-tabs" role="tablist">
+      {TABS.map((entry) => (
+        <button
+          key={entry.id}
+          role="tab"
+          aria-selected={tab === entry.id}
+          className={`cfg-tab${tab === entry.id ? ' on' : ''}`}
+          onClick={() => onGo(entry.id)}
+        >
+          {entry.label}
+          {entry.id === 'values' && dirty > 0 && <i className="cfg-tabn">{dirty}</i>}
+          {/* A dot rather than a count: what the theme is holding is one pending
+            edit, however many tokens it moved. It is what the cog's dot leads
+            to (issue #680). */}
+          {entry.id === 'theme' && themeEdit && (
+            <i className="cfg-tabn" title="An unsaved theme edit is pending">
+              &#9679;
+            </i>
+          )}
+        </button>
+      ))}
     </div>
   );
 }

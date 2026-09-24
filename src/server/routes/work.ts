@@ -7,11 +7,10 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, connector, harness, errors } = system;
+const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
 
-  const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
-
+function registerRoots(app: FastifyInstance, ctx: RouteContext): void {
+  const { store, connector } = ctx.system;
   app.get('/api/work', WORK_RATE_LIMIT, async () => {
     const roots = store.graph.listWorkRoots();
     const unrecorded = unrecordedWork(
@@ -27,7 +26,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }
     return { roots, unrecorded, refUrls } satisfies WorkRootsPayload;
   });
+}
 
+function registerIgnores(app: FastifyInstance, ctx: RouteContext): void {
+  const { store } = ctx.system;
   app.post(
     '/api/work/:ref/ignore',
     WORK_RATE_LIMIT,
@@ -47,6 +49,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true };
     }),
   );
+}
+
+function registerFileRoute(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, harness, errors } = system;
 
   app.post(
     '/api/work/:ref/file',
@@ -98,7 +105,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       })(req, reply);
     }),
   );
+}
 
+function registerSubtree(app: FastifyInstance, ctx: RouteContext): void {
+  const { store, connector } = ctx.system;
   app.get(
     '/api/work/:ref',
     WORK_RATE_LIMIT,
@@ -114,4 +124,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { nodes, refUrls } satisfies WorkSubtreePayload;
     }),
   );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerRoots(app, ctx);
+  registerIgnores(app, ctx);
+  registerFileRoute(app, ctx);
+  registerSubtree(app, ctx);
 }

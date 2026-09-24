@@ -16,7 +16,13 @@ const DescriptionBody = z.object({
   text: requiredText('text is required — a description version is what you say the pull request does'),
 });
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerPartRoutes(app, ctx);
+  registerPullRequestRoutes(app, ctx);
+  registerGoalReadRoutes(app, ctx);
+}
+
+function registerPartRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, config } = system;
 
   app.post(
@@ -46,6 +52,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       };
     }),
   );
+}
+
+function registerPullRequestRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, config } = system;
 
   /* Keyed by the pull request, because the pull request's own page is where a
      description is written: it is the page the change is read on, and a field on
@@ -114,6 +124,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, version };
     }),
   );
+}
+
+function registerGoalReadRoutes(app: FastifyInstance, { system }: RouteContext): void {
+  const { store, config } = system;
 
   /* One read for the goal, because the plan draws every part and the page badges
      each with whether it has been described. A panel per part would be five reads

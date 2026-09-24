@@ -46,76 +46,38 @@ function ReviewComments({ labels, windowLabel }: { labels: ReviewLabelInsights; 
     <>
       <p className="sp-sub">Review threads, {windowLabel}</p>
       <table className="sp-tbl">
-        <thead>
-          <tr>
-            <th>Where</th>
-            <th className="n">Threads</th>
-            <th className="n">About a comment</th>
-            <th className="n">Changed code</th>
-          </tr>
-        </thead>
+        <ThreadTableHead first="Where" />
         <tbody>
           <tr>
             <td>
               <span className="nm">Everything answered</span>
             </td>
-            <td className="n b">{labels.threads}</td>
-            <td className="n">
-              {labels.aboutComment} ({fmtShare(labels.aboutComment, labels.threads)})
-            </td>
-            <td className="n">
-              {labels.changedCode} ({fmtShare(labels.changedCode, labels.threads)})
-            </td>
+            <ThreadCountCells counts={labels} />
           </tr>
           {placed.map((area: ReviewAreaTotal) => (
             <tr key={area.area}>
               <td>
                 <span className="nm mono">{area.area}</span>
               </td>
-              <td className="n b">{area.threads}</td>
-              <td className="n">
-                {area.aboutComment} ({fmtShare(area.aboutComment, area.threads)})
-              </td>
-              <td className="n">
-                {area.changedCode} ({fmtShare(area.changedCode, area.threads)})
-              </td>
+              <ThreadCountCells counts={area} />
             </tr>
           ))}
         </tbody>
       </table>
       <table className="sp-tbl">
-        <thead>
-          <tr>
-            <th>Who raised it</th>
-            <th className="n">Threads</th>
-            <th className="n">About a comment</th>
-            <th className="n">Changed code</th>
-          </tr>
-        </thead>
+        <ThreadTableHead first="Who raised it" />
         <tbody>
           <tr>
             <td>
               <span className="nm">People</span>
             </td>
-            <td className="n b">{labels.byPeople.threads}</td>
-            <td className="n">
-              {labels.byPeople.aboutComment} ({fmtShare(labels.byPeople.aboutComment, labels.byPeople.threads)})
-            </td>
-            <td className="n">
-              {labels.byPeople.changedCode} ({fmtShare(labels.byPeople.changedCode, labels.byPeople.threads)})
-            </td>
+            <ThreadCountCells counts={labels.byPeople} />
           </tr>
           <tr>
             <td>
               <span className="nm">Machines</span>
             </td>
-            <td className="n b">{labels.byBots.threads}</td>
-            <td className="n">
-              {labels.byBots.aboutComment} ({fmtShare(labels.byBots.aboutComment, labels.byBots.threads)})
-            </td>
-            <td className="n">
-              {labels.byBots.changedCode} ({fmtShare(labels.byBots.changedCode, labels.byBots.threads)})
-            </td>
+            <ThreadCountCells counts={labels.byBots} />
           </tr>
         </tbody>
       </table>
@@ -127,14 +89,7 @@ function ReviewComments({ labels, windowLabel }: { labels: ReviewLabelInsights; 
       </p>
       {labels.byAuthor.length > 1 && (
         <table className="sp-tbl">
-          <thead>
-            <tr>
-              <th>Who raised it</th>
-              <th className="n">Threads</th>
-              <th className="n">About a comment</th>
-              <th className="n">Changed code</th>
-            </tr>
-          </thead>
+          <ThreadTableHead first="Who raised it" />
           <tbody>
             {labels.byAuthor.map((a) => (
               <tr key={a.author}>
@@ -142,37 +97,68 @@ function ReviewComments({ labels, windowLabel }: { labels: ReviewLabelInsights; 
                   <span className="nm">{a.author}</span>
                   <Tag>{a.kind === 'bot' ? 'machine' : 'person'}</Tag>
                 </td>
-                <td className="n b">{a.threads}</td>
-                <td className="n">
-                  {a.aboutComment} ({fmtShare(a.aboutComment, a.threads)})
-                </td>
-                <td className="n">
-                  {a.changedCode} ({fmtShare(a.changedCode, a.threads)})
-                </td>
+                <ThreadCountCells counts={a} />
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      <MethodNote>
-        <p>
-          <b>The denominator is threads the fleet answered</b>, not review comments left. A thread a reviewer resolved
-          themselves, or one an operator answered, never reaches an agent and is counted nowhere here.
-        </p>
-        <p>
-          <b>A machine is one the provider owns up to</b>, one whose thread carries the stamp this project declared in{' '}
-          <code>review.publishedThreadProperty</code>, or one named in <code>review.machineAuthors</code>. Anything else
-          is counted as a person, which is an assumption rather than a finding &mdash; a machine nobody has named yet
-          sits in the People row until somebody names it. The authors are drawn by name for that reason: one hiding
-          among the people is visible in the rows, where a total would hide it.
-        </p>
-        <p>
-          <b>Both columns are the answering agent&rsquo;s own word</b>, given as it replied. An area is worked out from
-          the file the thread is anchored to, so a thread on no file sits in none, and a file matching two rules is
-          counted under both &mdash; the rows do not sum to the total.
-        </p>
-      </MethodNote>
+      <ReviewMethodNote />
     </>
+  );
+}
+
+function ThreadTableHead({ first }: { first: string }): JSX.Element {
+  return (
+    <thead>
+      <tr>
+        <th>{first}</th>
+        <th className="n">Threads</th>
+        <th className="n">About a comment</th>
+        <th className="n">Changed code</th>
+      </tr>
+    </thead>
+  );
+}
+
+function ThreadCountCells({
+  counts,
+}: {
+  counts: { threads: number; aboutComment: number; changedCode: number };
+}): JSX.Element {
+  return (
+    <>
+      <td className="n b">{counts.threads}</td>
+      <td className="n">
+        {counts.aboutComment} ({fmtShare(counts.aboutComment, counts.threads)})
+      </td>
+      <td className="n">
+        {counts.changedCode} ({fmtShare(counts.changedCode, counts.threads)})
+      </td>
+    </>
+  );
+}
+
+function ReviewMethodNote(): JSX.Element {
+  return (
+    <MethodNote>
+      <p>
+        <b>The denominator is threads the fleet answered</b>, not review comments left. A thread a reviewer resolved
+        themselves, or one an operator answered, never reaches an agent and is counted nowhere here.
+      </p>
+      <p>
+        <b>A machine is one the provider owns up to</b>, one whose thread carries the stamp this project declared in{' '}
+        <code>review.publishedThreadProperty</code>, or one named in <code>review.machineAuthors</code>. Anything else
+        is counted as a person, which is an assumption rather than a finding &mdash; a machine nobody has named yet sits
+        in the People row until somebody names it. The authors are drawn by name for that reason: one hiding among the
+        people is visible in the rows, where a total would hide it.
+      </p>
+      <p>
+        <b>Both columns are the answering agent&rsquo;s own word</b>, given as it replied. An area is worked out from
+        the file the thread is anchored to, so a thread on no file sits in none, and a file matching two rules is
+        counted under both &mdash; the rows do not sum to the total.
+      </p>
+    </MethodNote>
   );
 }
 

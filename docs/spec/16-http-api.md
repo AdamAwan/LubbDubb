@@ -27,6 +27,7 @@ is about.
 | `routes/humanTasks.ts`      | Work only a person can do: filing one, and the two ways it settles                                                                                                         |
 | `routes/ingress.ts`         | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                  |
 | `routes/issues.ts`          | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                  |
+| `routes/upstreamFiling.ts`  | `/api/issues/filing-target` and `POST /api/issues` — filing an issue on the LubbDubb project's own tracker                                                                 |
 | `routes/jobs.ts`            | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                            |
 | `routes/plans.ts`           | Plan history, replan, acceptance ticks, part model pins                                                                                                                    |
 | `routes/validation.ts`      | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                     |

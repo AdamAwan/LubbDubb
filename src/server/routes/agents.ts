@@ -15,9 +15,14 @@ const TranscriptQuery = z.object({
     .default(0),
 });
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, agents, config } = system;
+const RespondBody = z.object({
+  text: z.string({ required_error: 'text required', invalid_type_error: 'text required' }).min(1, 'text required'),
+});
 
+const LiftBody = z.object({ profile: optionalText('profile') });
+
+function registerReads(app: FastifyInstance, ctx: RouteContext): void {
+  const { store } = ctx.system;
   app.get(
     '/api/agents/:id/transcript',
     checked({ params: IdParams, query: TranscriptQuery }, async ({ params, query, reply }) => {
@@ -39,27 +44,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { agentId: id, files: store.agents.listFiles(id) } satisfies AgentFilesPayload;
     }),
   );
+}
 
-  const RespondBody = z.object({
-    text: z.string({ required_error: 'text required', invalid_type_error: 'text required' }).min(1, 'text required'),
-  });
-  app.post(
-    '/api/agents/:id/respond',
-    checked({ params: IdParams, body: RespondBody }, async ({ params, body, reply }) => {
-      const ok = agents.respond(params.id, body.text);
-      return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
-    }),
-  );
-
-  app.post(
-    '/api/agents/:id/kill',
-    checked({ params: IdParams }, async ({ params, reply }) => {
-      const ok = agents.kill(params.id);
-      return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
-    }),
-  );
-
-  const LiftBody = z.object({ profile: optionalText('profile') });
+function registerProfileLift(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, agents, config } = system;
   app.post(
     '/api/agents/:id/profile',
     checked({ params: IdParams, body: LiftBody }, async ({ params, body, reply }) => {
@@ -83,7 +72,30 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, profile: wanted, agentId: result.agentId, taskId: result.taskId };
     }),
   );
+}
 
+function registerLiveControls(app: FastifyInstance, ctx: RouteContext): void {
+  const { agents } = ctx.system;
+  app.post(
+    '/api/agents/:id/respond',
+    checked({ params: IdParams, body: RespondBody }, async ({ params, body, reply }) => {
+      const ok = agents.respond(params.id, body.text);
+      return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
+    }),
+  );
+
+  app.post(
+    '/api/agents/:id/kill',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const ok = agents.kill(params.id);
+      return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
+    }),
+  );
+}
+
+function registerLifecycle(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { agents } = system;
   app.post(
     '/api/agents/:id/complete',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -119,4 +131,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
     }),
   );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerReads(app, ctx);
+  registerLiveControls(app, ctx);
+  registerProfileLift(app, ctx);
+  registerLifecycle(app, ctx);
 }

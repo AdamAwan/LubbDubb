@@ -2,15 +2,146 @@ import { z } from 'zod';
 import {
   GOAL_APPRAISAL_VERDICT_HELP,
   GOAL_APPRAISAL_VERDICTS,
+  type GoalAppraisalVerdictName,
   STORY_RUBRIC,
   validateGoalAppraisal,
 } from '../goalAppraisal.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import { enumOf, toolSchema } from '../schema.js';
-import type { ToolFactory } from './context.js';
+import type { McpToolDeps, ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
+
+type Profiles = NonNullable<McpToolDeps['profiles']>;
+type Areas = ReturnType<typeof truncateAreaPaths>;
+
+function appraisalDescription(profiles: Profiles, areas: Areas): string {
+  const names = profiles.map((p) => p.name);
+  return (
+    'Say whether the ISSUE you were dispatched to appraise can be worked from at all. You are standing in ' +
+    'front of the work, not doing it: nothing has been dispatched for this issue yet, and your verdict ' +
+    'decides whether anything is. Read the ticket against the repository you are in. A story an agent ' +
+    'can start on always says: ' +
+    STORY_RUBRIC.always.join('; ') +
+    '. And, where the ticket implies it: ' +
+    STORY_RUBRIC.whenImplied.join('; ') +
+    '. Judge whether each is *answered*, in whatever words or layout the author used — never whether a ' +
+    'heading is present, since this project has no required template. Say "workable" if every item that ' +
+    'applies is answered well enough that an agent could start — the bar is *actionable*, not *good*, and ' +
+    'a large or opinionated ticket is still workable. Say "unclear" when one is not: starting would be ' +
+    'guessing at what "done" means, at which of two readings was meant, at what the screen or the data ' +
+    'should look like, or the ticket contradicts itself or the repository, or names things that do not ' +
+    'exist. Never mark a ticket unclear for lacking ' +
+    STORY_RUBRIC.neverRequired.join(' or ') +
+    '. An "unclear" verdict stops the harness scheduling anything for this issue until the ticket itself ' +
+    'is rewritten or a human overrides you — so it is a question you are asking a person, and "missing" ' +
+    'is the list they work through. Do not implement anything and do not open a pull request.' +
+    (names.length > 0
+      ? ' You also size the work: say which model profile the rest of this issue should run on. ' +
+        'This deployment has, cheapest first — ' +
+        profiles.map((p) => `"${p.name}": ${p.description}`).join('; ') +
+        '. Judge what the ticket would actually take against this repository, not how long the ' +
+        'ticket is. If your answer differs from what is already set for this issue, a human is ' +
+        'asked to confirm it before anything is dispatched, so say what you think rather than ' +
+        'what you expect to be agreed with.'
+      : '') +
+    ' You also say where this item belongs on the backlog, if it is not already filed. Both are optional' +
+    ' and both are only a proposal: a human confirms each in one click, and the harness does the write —' +
+    ' never you, and never a shell command. Omit either where the item already has one or where you' +
+    ' cannot support an answer from what you have read. Getting it wrong costs nothing; guessing' +
+    ' confidently is what costs, because a plausible answer is the one nobody checks.' +
+    (areas.paths.length > 0
+      ? ` This project's areas are: ${areas.paths.join(', ')}.` +
+        (areas.omitted > 0
+          ? ` (${areas.omitted} more are not listed here — if none of the above is right, omit area_path` +
+            ` rather than picking the nearest.)`
+          : '')
+      : '')
+  );
+}
+
+function appraisalInput(profiles: Profiles, areas: Areas) {
+  const names = profiles.map((p) => p.name);
+  return z.object({
+    status: enumOf(GOAL_APPRAISAL_VERDICTS).describe(
+      GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
+    ),
+    summary: z
+      .string()
+      .describe(
+        'For "unclear": why you could not start, in a sentence or two addressed to the person who ' +
+          'wrote the ticket — the specific gap, not "it is vague". For "workable": one sentence ' +
+          'saying what you understood the goal to be, so a wrong reading is visible before an agent ' +
+          'acts on it.',
+      ),
+    missing: z
+      .array(z.string())
+      .describe(
+        'Required with "unclear", ignored with "workable": one entry per thing the ticket has to say ' +
+          'before an agent could start, each phrased as the question the author has to answer — ' +
+          '"What should happen when the export is empty?", "Attach the mockup for the settings page", ' +
+          '"A sample row of the CSV you expect". It is rendered on the ticket as the checklist they ' +
+          'work through, so keep it to what actually blocks a start.',
+      )
+      .optional(),
+    ...(names.length > 0
+      ? {
+          profile: enumOf(names)
+            .describe(
+              'Which model profile this issue\'s work should run on. Required with "workable"; ' +
+                'ignored with "unclear", since a goal nobody can start from has no work to size. ' +
+                profiles.map((p) => `${p.name}: ${p.description}`).join('. '),
+            )
+            .optional(),
+        }
+      : {}),
+    parent: z
+      .number()
+      .int()
+      .describe(
+        'The number of the container work item this issue should hang off, if it has none and you can ' +
+          'say which. The open containers the harness can see are listed under "Related tracker items" ' +
+          'in your prompt, and you are not limited to them — a board is narrowed by tag and assignee, so ' +
+          'the right one may not be listed. Omit it entirely if the item already belongs to something, ' +
+          'or if none of them fit.',
+      )
+      .optional(),
+    ...(areas.paths.length > 0
+      ? {
+          area_path: enumOf(areas.paths)
+            .describe(
+              'The area path this issue should be filed under, if it is still on the project root. ' +
+                'This is what puts it on a team board, so an item left unfiled is invisible to whoever ' +
+                'plans the backlog. Choose from the list; omit it if none of them is right.',
+            )
+            .optional(),
+        }
+      : {}),
+  });
+}
+
+function recordedNote(
+  parsed: { verdict: GoalAppraisalVerdictName; parent: number | null; areaPath: string | null },
+  result: { profileHeld: boolean },
+): string {
+  return parsed.verdict === 'workable'
+    ? 'Recorded. The issue proceeds exactly as it would have — this verdict schedules nothing ' +
+        'itself, it only stops the appraisal being asked again for this version of the ticket.' +
+        (parsed.parent !== null || parsed.areaPath !== null
+          ? ' Your placement suggestions are held for a human to confirm. They hold nothing up and ' +
+            'they disappear on their own if the item turns out to already have one, so there is ' +
+            'nothing further for you to do about them.'
+          : '') +
+        (result.profileHeld === true
+          ? ' Your profile differs from what is set for this issue, so nothing is dispatched for it ' +
+            'until a human confirms which to use. That is one click and it is not a rejection.'
+          : '')
+    : 'Recorded. Nothing is dispatched for this issue while the verdict stands. It ends by ' +
+        'itself the moment the ticket is rewritten — your list is posted on it, with how to get ' +
+        'help filling it in — and an operator can clear it outright. The ticket is not closed and ' +
+        'nothing is rejected — that stays a human decision.';
+}
 
 export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
   const profiles = deps.profiles ?? [];
@@ -18,104 +149,8 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
   const tree = deps.areaPaths?.() ?? null;
   const areas = tree === null ? { paths: [], omitted: 0 } : truncateAreaPaths(tree);
   return {
-    description:
-      'Say whether the ISSUE you were dispatched to appraise can be worked from at all. You are standing in ' +
-      'front of the work, not doing it: nothing has been dispatched for this issue yet, and your verdict ' +
-      'decides whether anything is. Read the ticket against the repository you are in. A story an agent ' +
-      'can start on always says: ' +
-      STORY_RUBRIC.always.join('; ') +
-      '. And, where the ticket implies it: ' +
-      STORY_RUBRIC.whenImplied.join('; ') +
-      '. Judge whether each is *answered*, in whatever words or layout the author used — never whether a ' +
-      'heading is present, since this project has no required template. Say "workable" if every item that ' +
-      'applies is answered well enough that an agent could start — the bar is *actionable*, not *good*, and ' +
-      'a large or opinionated ticket is still workable. Say "unclear" when one is not: starting would be ' +
-      'guessing at what "done" means, at which of two readings was meant, at what the screen or the data ' +
-      'should look like, or the ticket contradicts itself or the repository, or names things that do not ' +
-      'exist. Never mark a ticket unclear for lacking ' +
-      STORY_RUBRIC.neverRequired.join(' or ') +
-      '. An "unclear" verdict stops the harness scheduling anything for this issue until the ticket itself ' +
-      'is rewritten or a human overrides you — so it is a question you are asking a person, and "missing" ' +
-      'is the list they work through. Do not implement anything and do not open a pull request.' +
-      (names.length > 0
-        ? ' You also size the work: say which model profile the rest of this issue should run on. ' +
-          'This deployment has, cheapest first — ' +
-          profiles.map((p) => `"${p.name}": ${p.description}`).join('; ') +
-          '. Judge what the ticket would actually take against this repository, not how long the ' +
-          'ticket is. If your answer differs from what is already set for this issue, a human is ' +
-          'asked to confirm it before anything is dispatched, so say what you think rather than ' +
-          'what you expect to be agreed with.'
-        : '') +
-      ' You also say where this item belongs on the backlog, if it is not already filed. Both are optional' +
-      ' and both are only a proposal: a human confirms each in one click, and the harness does the write —' +
-      ' never you, and never a shell command. Omit either where the item already has one or where you' +
-      ' cannot support an answer from what you have read. Getting it wrong costs nothing; guessing' +
-      ' confidently is what costs, because a plausible answer is the one nobody checks.' +
-      (areas.paths.length > 0
-        ? ` This project's areas are: ${areas.paths.join(', ')}.` +
-          (areas.omitted > 0
-            ? ` (${areas.omitted} more are not listed here — if none of the above is right, omit area_path` +
-              ` rather than picking the nearest.)`
-            : '')
-        : ''),
-    inputSchema: toolSchema(
-      z.object({
-        status: enumOf(GOAL_APPRAISAL_VERDICTS).describe(
-          GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
-        ),
-        summary: z
-          .string()
-          .describe(
-            'For "unclear": why you could not start, in a sentence or two addressed to the person who ' +
-              'wrote the ticket — the specific gap, not "it is vague". For "workable": one sentence ' +
-              'saying what you understood the goal to be, so a wrong reading is visible before an agent ' +
-              'acts on it.',
-          ),
-        missing: z
-          .array(z.string())
-          .describe(
-            'Required with "unclear", ignored with "workable": one entry per thing the ticket has to say ' +
-              'before an agent could start, each phrased as the question the author has to answer — ' +
-              '"What should happen when the export is empty?", "Attach the mockup for the settings page", ' +
-              '"A sample row of the CSV you expect". It is rendered on the ticket as the checklist they ' +
-              'work through, so keep it to what actually blocks a start.',
-          )
-          .optional(),
-        ...(names.length > 0
-          ? {
-              profile: enumOf(names)
-                .describe(
-                  'Which model profile this issue\'s work should run on. Required with "workable"; ' +
-                    'ignored with "unclear", since a goal nobody can start from has no work to size. ' +
-                    profiles.map((p) => `${p.name}: ${p.description}`).join('. '),
-                )
-                .optional(),
-            }
-          : {}),
-        parent: z
-          .number()
-          .int()
-          .describe(
-            'The number of the container work item this issue should hang off, if it has none and you can ' +
-              'say which. The open containers the harness can see are listed under "Related tracker items" ' +
-              'in your prompt, and you are not limited to them — a board is narrowed by tag and assignee, so ' +
-              'the right one may not be listed. Omit it entirely if the item already belongs to something, ' +
-              'or if none of them fit.',
-          )
-          .optional(),
-        ...(areas.paths.length > 0
-          ? {
-              area_path: enumOf(areas.paths)
-                .describe(
-                  'The area path this issue should be filed under, if it is still on the project root. ' +
-                    'This is what puts it on a team board, so an item left unfiled is invisible to whoever ' +
-                    'plans the backlog. Choose from the list; omit it if none of them is right.',
-                )
-                .optional(),
-            }
-          : {}),
-      }),
-    ),
+    description: appraisalDescription(profiles, areas),
+    inputSchema: toolSchema(appraisalInput(profiles, areas)),
     handler: (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
@@ -133,23 +168,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
         profile: parsed.profile,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
-        note:
-          parsed.verdict === 'workable'
-            ? 'Recorded. The issue proceeds exactly as it would have — this verdict schedules nothing ' +
-              'itself, it only stops the appraisal being asked again for this version of the ticket.' +
-              (parsed.parent !== null || parsed.areaPath !== null
-                ? ' Your placement suggestions are held for a human to confirm. They hold nothing up and ' +
-                  'they disappear on their own if the item turns out to already have one, so there is ' +
-                  'nothing further for you to do about them.'
-                : '') +
-              (result.profileHeld === true
-                ? ' Your profile differs from what is set for this issue, so nothing is dispatched for it ' +
-                  'until a human confirms which to use. That is one click and it is not a rejection.'
-                : '')
-            : 'Recorded. Nothing is dispatched for this issue while the verdict stands. It ends by ' +
-              'itself the moment the ticket is rewritten — your list is posted on it, with how to get ' +
-              'help filling it in — and an operator can clear it outright. The ticket is not closed and ' +
-              'nothing is rejected — that stays a human decision.',
+        note: recordedNote(parsed, result),
       });
     },
   };
