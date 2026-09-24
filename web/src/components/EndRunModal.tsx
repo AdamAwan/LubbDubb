@@ -64,24 +64,53 @@ export function EndRunModal({
         On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher, so
         nothing is scheduled for it again, though the report stays readable.
       </p>
-      <ul className="rb-costs">
-        <li>
-          {agents === 0 ? 'No agent is running on this goal.' : `${count(agents, 'running agent')} killed mid-turn.`}
-        </li>
-        {prAgents > 0 && (
-          <li>
-            {count(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
-            {prAgents === 1 ? ' it' : ' them'} from the fleet if you want {prAgents === 1 ? 'it' : 'them'} stopped too.
-          </li>
-        )}
-        <li>Any queued job standing in for this goal’s work is cancelled.</li>
-        <li>
-          {instructions === 0
-            ? 'Nothing you have asked for is still standing.'
-            : `${count(instructions, 'standing instruction')} settled unread.`}
-        </li>
-      </ul>
+      <RunCosts agents={agents} prAgents={prAgents} instructions={instructions} />
       {outstanding !== null && <p className="rb-intro">{outstanding}</p>}
+      <NoteField required={required} note={note} onNote={setNote} onSubmit={() => void submit()} />
+      {refusal !== null && (
+        <p className="launch-error" role="alert">
+          {refusal}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+function RunCosts({ agents, prAgents, instructions }: { agents: number; prAgents: number; instructions: number }) {
+  return (
+    <ul className="rb-costs">
+      <li>
+        {agents === 0 ? 'No agent is running on this goal.' : `${count(agents, 'running agent')} killed mid-turn.`}
+      </li>
+      {prAgents > 0 && (
+        <li>
+          {count(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
+          {prAgents === 1 ? ' it' : ' them'} from the fleet if you want {prAgents === 1 ? 'it' : 'them'} stopped too.
+        </li>
+      )}
+      <li>Any queued job standing in for this goal’s work is cancelled.</li>
+      <li>
+        {instructions === 0
+          ? 'Nothing you have asked for is still standing.'
+          : `${count(instructions, 'standing instruction')} settled unread.`}
+      </li>
+    </ul>
+  );
+}
+
+function NoteField({
+  required,
+  note,
+  onNote,
+  onSubmit,
+}: {
+  required: boolean;
+  note: string;
+  onNote: (note: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <>
       <label className="rb-label" htmlFor="end-run-note">
         {required ? 'What about the outstanding checks?' : 'Why, for the record? (optional)'}
       </label>
@@ -96,20 +125,15 @@ export function EndRunModal({
             ? 'Shipping it — B and C run on Monday’s regression pass, and A is covered by the smoke test.'
             : 'Superseded by #512; nothing here is worth finishing.'
         }
-        onChange={(e) => setNote(e.target.value)}
+        onChange={(e) => onNote(e.target.value)}
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault();
-            void submit();
+            onSubmit();
           }
         }}
       />
-      {refusal !== null && (
-        <p className="launch-error" role="alert">
-          {refusal}
-        </p>
-      )}
-    </Modal>
+    </>
   );
 }
 

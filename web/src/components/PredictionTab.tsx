@@ -65,42 +65,7 @@ export function PredictionTab({ aggregate }: { aggregate: PredictionAggregate })
         it.
       </p>
 
-      <section className="pred-block">
-        <h3>What happened at the gate</h3>
-        <p className="pred-note">
-          Three outcomes, not two. A goal the gate was put to either carries a prediction or was declined; a goal the
-          gate was never put to is neither, and folding it into the declines would report a decline rate you never
-          earned.
-        </p>
-        <div className="pred-figures">
-          <Figure value={goals.offered} label="goals offered the gate" />
-          <Figure value={goals.predicted} label="predicted" />
-          <Figure value={goals.declined} label="declined" />
-        </div>
-        <p className="pred-apart">
-          <b>{goals.notOffered}</b> planned {goals.notOffered === 1 ? 'goal was' : 'goals were'}{' '}
-          <b>never offered the gate</b> — which is what every goal from before the switch reads as, permanently. They
-          are not declines, and they are in neither rate below.
-        </p>
-        <div className="pred-rates">
-          <RateFigure
-            rate={aggregate.coverageRate}
-            over="goals offered the gate"
-            label="of the goals offered carried a prediction"
-            fallbackCount={goals.offered}
-            fallbackNoun={goals.offered === 1 ? 'goal offered the gate' : 'goals offered the gate'}
-            threshold={aggregate.threshold}
-          />
-          <RateFigure
-            rate={aggregate.declineRate}
-            over="goals offered the gate"
-            label="of the goals offered were declined"
-            fallbackCount={goals.offered}
-            fallbackNoun={goals.offered === 1 ? 'goal offered the gate' : 'goals offered the gate'}
-            threshold={aggregate.threshold}
-          />
-        </div>
-      </section>
+      <GateBlock aggregate={aggregate} />
 
       <section className="pred-block">
         <h3>How many records have been marked</h3>
@@ -133,6 +98,47 @@ export function PredictionTab({ aggregate }: { aggregate: PredictionAggregate })
         </div>
       </section>
     </div>
+  );
+}
+
+function GateBlock({ aggregate }: { aggregate: PredictionAggregate }): JSX.Element {
+  const { goals } = aggregate;
+  return (
+    <section className="pred-block">
+      <h3>What happened at the gate</h3>
+      <p className="pred-note">
+        Three outcomes, not two. A goal the gate was put to either carries a prediction or was declined; a goal the gate
+        was never put to is neither, and folding it into the declines would report a decline rate you never earned.
+      </p>
+      <div className="pred-figures">
+        <Figure value={goals.offered} label="goals offered the gate" />
+        <Figure value={goals.predicted} label="predicted" />
+        <Figure value={goals.declined} label="declined" />
+      </div>
+      <p className="pred-apart">
+        <b>{goals.notOffered}</b> planned {goals.notOffered === 1 ? 'goal was' : 'goals were'}{' '}
+        <b>never offered the gate</b> — which is what every goal from before the switch reads as, permanently. They are
+        not declines, and they are in neither rate below.
+      </p>
+      <div className="pred-rates">
+        <RateFigure
+          rate={aggregate.coverageRate}
+          over="goals offered the gate"
+          label="of the goals offered carried a prediction"
+          fallbackCount={goals.offered}
+          fallbackNoun={goals.offered === 1 ? 'goal offered the gate' : 'goals offered the gate'}
+          threshold={aggregate.threshold}
+        />
+        <RateFigure
+          rate={aggregate.declineRate}
+          over="goals offered the gate"
+          label="of the goals offered were declined"
+          fallbackCount={goals.offered}
+          fallbackNoun={goals.offered === 1 ? 'goal offered the gate' : 'goals offered the gate'}
+          threshold={aggregate.threshold}
+        />
+      </div>
+    </section>
   );
 }
 

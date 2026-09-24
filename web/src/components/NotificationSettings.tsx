@@ -79,32 +79,7 @@ export function NotificationSettings() {
       )}
 
       {permission === 'granted' ? (
-        <>
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={prefs.enabled}
-              onChange={(e) => write({ ...prefs, enabled: e.target.checked })}
-            />
-            <span>Notify me</span>
-          </label>
-          {prefs.enabled &&
-            NOTIFY_CATEGORIES.map((cat) => (
-              <label className="settings-toggle settings-toggle-child" key={cat.id}>
-                <input
-                  type="checkbox"
-                  checked={prefs.categories[cat.id]}
-                  onChange={(e) => write({ ...prefs, categories: { ...prefs.categories, [cat.id]: e.target.checked } })}
-                />
-                <span>
-                  {cat.label} <span className="muted">— {cat.blurb}</span>
-                </span>
-              </label>
-            ))}
-          <Button size="small" className="settings-test" onClick={runTest}>
-            Send a test notification
-          </Button>
-        </>
+        <GrantedControls prefs={prefs} write={write} onTest={runTest} />
       ) : (
         <Button size="small" disabled={permission === 'denied'} onClick={() => void turnOn()}>
           Enable notifications
@@ -113,5 +88,44 @@ export function NotificationSettings() {
 
       {test !== null && <p className="muted settings-hint">{NOTIFY_TEST_WORDING[test]}</p>}
     </div>
+  );
+}
+
+function GrantedControls({
+  prefs,
+  write,
+  onTest,
+}: {
+  prefs: NotifyPrefs;
+  write: (next: NotifyPrefs) => void;
+  onTest: () => void;
+}) {
+  return (
+    <>
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={prefs.enabled}
+          onChange={(e) => write({ ...prefs, enabled: e.target.checked })}
+        />
+        <span>Notify me</span>
+      </label>
+      {prefs.enabled &&
+        NOTIFY_CATEGORIES.map((cat) => (
+          <label className="settings-toggle settings-toggle-child" key={cat.id}>
+            <input
+              type="checkbox"
+              checked={prefs.categories[cat.id]}
+              onChange={(e) => write({ ...prefs, categories: { ...prefs.categories, [cat.id]: e.target.checked } })}
+            />
+            <span>
+              {cat.label} <span className="muted">— {cat.blurb}</span>
+            </span>
+          </label>
+        ))}
+      <Button size="small" className="settings-test" onClick={onTest}>
+        Send a test notification
+      </Button>
+    </>
   );
 }

@@ -69,101 +69,25 @@ export function RaiseIssueModal({
     <Modal
       face="modal"
       title="Raise an issue"
-      chips={
-        <>
-          {/* The destination, stated in the head rather than the body, because it is
-              the thing to have read before typing and not after. */}
-          {gate === 'checking' && <Tag>checking where this would go…</Tag>}
-          {target?.available === true && (
-            <Tag title="Where this issue will be created, and the identity filing it">
-              {target.target}
-              {target.identity !== null && ` as ${target.identity}`}
-            </Tag>
-          )}
-          {gate === 'unavailable' && <Tag tone="red">cannot file from here</Tag>}
-        </>
-      }
+      chips={<FilingChips gate={gate} target={target} />}
       onClose={onClose}
-      foot={
-        <>
-          <span className="spacer" />
-          <Button ghost onClick={onClose}>
-            {filed === null ? 'cancel' : 'close'}
-          </Button>
-          {filed === null && (
-            <AsyncButton tone="primary" disabled={!canSubmit} onClick={submit}>
-              raise issue
-            </AsyncButton>
-          )}
-        </>
-      }
+      foot={<FilingFoot filed={filed} canSubmit={canSubmit} onClose={onClose} onSubmit={submit} />}
     >
       {filed !== null ? (
-        <p className="ri-done">
-          {/* An `ExtLink` and never a `<Ref>`: `issue:<n>` resolves against the
-                tracker the fleet is pointed at, which is the one place this did not
-                go. The route hands back the address for that reason. */}
-          Filed <ExtLink href={filed.url}>#{filed.number}</ExtLink> on LubbDubb’s own tracker.
-        </p>
+        <FiledNote filed={filed} />
       ) : (
         <>
-          {target?.available === false ? (
-            <p className="rb-intro">
-              {target.reason}. Nothing is lost — LubbDubb’s own new-issue form is still one click away, and it needs
-              nothing from this harness.{' '}
-              <ExtLink href={fallbackUrl} title="Raise an issue on the LubbDubb repo">
-                Raise it there instead
-              </ExtLink>
-            </p>
-          ) : (
-            <p className="rb-intro">
-              Creates the issue on LubbDubb’s own tracker directly — this is where a fault in the cockpit goes, whatever
-              repo the fleet is pointed at. No agent writes it up.
-            </p>
-          )}
+          <FilingIntro target={target} fallbackUrl={fallbackUrl} />
 
-          <label className="rb-label" htmlFor="ri-title">
-            Title
-          </label>
-          <input
-            id="ri-title"
-            className="pm-note"
-            autoFocus
-            disabled={!ready}
-            value={title}
-            placeholder="The Tickets tab’s triage count disagrees with the rows under it"
-            onChange={(e) => setTitle(e.target.value)}
+          <IssueFields
+            ready={ready}
+            title={title}
+            onTitle={setTitle}
+            body={body}
+            onBody={setBody}
+            onSubmit={() => void submit()}
           />
-          <label className="rb-label" htmlFor="ri-body">
-            What should happen
-          </label>
-          <textarea
-            id="ri-body"
-            className="rb-text"
-            rows={7}
-            disabled={!ready}
-            value={body}
-            placeholder="The badge counts every unwatched issue; the list under it only draws the ones with a plan."
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                void submit();
-              }
-            }}
-          />
-          {/* Opt-in, and off by default. The watch label is what makes the fleet
-                pick an issue up, so a checked box here would mean agents are working
-                a thought before its author has finished reading it back.
-                Drawn only where this fleet works LubbDubb's own repo: anywhere else
-                the report lands in a tracker these agents never sweep, so the box
-                would be a promise nothing keeps (issue #449). */}
-          {target?.available === true && target.watchable && (
-            <label className="ri-watch">
-              <input type="checkbox" disabled={!ready} checked={watch} onChange={(e) => setWatch(e.target.checked)} />
-              Let the fleet pick this up — otherwise it sits in the tracker until you watch it
-            </label>
-          )}
+          <WatchBox target={target} ready={ready} watch={watch} onWatch={setWatch} />
           {failed !== null && (
             <p className="launch-error" role="alert">
               That didn’t go through: {failed}. Your text is still here — try again.
@@ -172,5 +96,153 @@ export function RaiseIssueModal({
         </>
       )}
     </Modal>
+  );
+}
+
+function FilingChips({ gate, target }: { gate: ReturnType<typeof composeGate>; target: FilingTargetProbe | null }) {
+  return (
+    <>
+      {/* The destination, stated in the head rather than the body, because it is
+          the thing to have read before typing and not after. */}
+      {gate === 'checking' && <Tag>checking where this would go…</Tag>}
+      {target?.available === true && (
+        <Tag title="Where this issue will be created, and the identity filing it">
+          {target.target}
+          {target.identity !== null && ` as ${target.identity}`}
+        </Tag>
+      )}
+      {gate === 'unavailable' && <Tag tone="red">cannot file from here</Tag>}
+    </>
+  );
+}
+
+function FilingIntro({ target, fallbackUrl }: { target: FilingTargetProbe | null; fallbackUrl: string }) {
+  return target?.available === false ? (
+    <p className="rb-intro">
+      {target.reason}. Nothing is lost — LubbDubb’s own new-issue form is still one click away, and it needs nothing
+      from this harness.{' '}
+      <ExtLink href={fallbackUrl} title="Raise an issue on the LubbDubb repo">
+        Raise it there instead
+      </ExtLink>
+    </p>
+  ) : (
+    <p className="rb-intro">
+      Creates the issue on LubbDubb’s own tracker directly — this is where a fault in the cockpit goes, whatever repo
+      the fleet is pointed at. No agent writes it up.
+    </p>
+  );
+}
+
+function IssueFields({
+  ready,
+  title,
+  onTitle,
+  body,
+  onBody,
+  onSubmit,
+}: {
+  ready: boolean;
+  title: string;
+  onTitle: (title: string) => void;
+  body: string;
+  onBody: (body: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <>
+      <label className="rb-label" htmlFor="ri-title">
+        Title
+      </label>
+      <input
+        id="ri-title"
+        className="pm-note"
+        autoFocus
+        disabled={!ready}
+        value={title}
+        placeholder="The Tickets tab’s triage count disagrees with the rows under it"
+        onChange={(e) => onTitle(e.target.value)}
+      />
+      <label className="rb-label" htmlFor="ri-body">
+        What should happen
+      </label>
+      <textarea
+        id="ri-body"
+        className="rb-text"
+        rows={7}
+        disabled={!ready}
+        value={body}
+        placeholder="The badge counts every unwatched issue; the list under it only draws the ones with a plan."
+        onChange={(e) => onBody(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+      />
+    </>
+  );
+}
+
+function FilingFoot({
+  filed,
+  canSubmit,
+  onClose,
+  onSubmit,
+}: {
+  filed: IssueFiled | null;
+  canSubmit: boolean;
+  onClose: () => void;
+  onSubmit: () => Promise<void>;
+}) {
+  return (
+    <>
+      <span className="spacer" />
+      <Button ghost onClick={onClose}>
+        {filed === null ? 'cancel' : 'close'}
+      </Button>
+      {filed === null && (
+        <AsyncButton tone="primary" disabled={!canSubmit} onClick={onSubmit}>
+          raise issue
+        </AsyncButton>
+      )}
+    </>
+  );
+}
+
+function FiledNote({ filed }: { filed: IssueFiled }) {
+  return (
+    <p className="ri-done">
+      {/* An `ExtLink` and never a `<Ref>`: `issue:<n>` resolves against the
+            tracker the fleet is pointed at, which is the one place this did not
+            go. The route hands back the address for that reason. */}
+      Filed <ExtLink href={filed.url}>#{filed.number}</ExtLink> on LubbDubb’s own tracker.
+    </p>
+  );
+}
+
+function WatchBox({
+  target,
+  ready,
+  watch,
+  onWatch,
+}: {
+  target: FilingTargetProbe | null;
+  ready: boolean;
+  watch: boolean;
+  onWatch: (watch: boolean) => void;
+}) {
+  if (target?.available !== true || !target.watchable) return null;
+  return (
+    /* Opt-in, and off by default. The watch label is what makes the fleet
+       pick an issue up, so a checked box here would mean agents are working
+       a thought before its author has finished reading it back.
+       Drawn only where this fleet works LubbDubb's own repo: anywhere else
+       the report lands in a tracker these agents never sweep, so the box
+       would be a promise nothing keeps (issue #449). */
+    <label className="ri-watch">
+      <input type="checkbox" disabled={!ready} checked={watch} onChange={(e) => onWatch(e.target.checked)} />
+      Let the fleet pick this up — otherwise it sits in the tracker until you watch it
+    </label>
   );
 }

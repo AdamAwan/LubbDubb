@@ -54,6 +54,19 @@ async function readImage(file: File): Promise<Attached | null> {
   };
 }
 
+async function readImages(files: FileList): Promise<Attached[]> {
+  const read = await Promise.all(Array.from(files).map(readImage));
+  return read.filter((image): image is Attached => image !== null);
+}
+
+function launchRequest(text: string, kind: 'code' | 'desk', attached: Attached[]) {
+  return {
+    prompt: text,
+    kind,
+    ...(attached.length > 0 ? { attachments: attached.map((a) => ({ name: a.name, data: a.data })) } : {}),
+  };
+}
+
 export function LaunchPanel({
   jobs,
   attachments,
@@ -70,15 +83,13 @@ export function LaunchPanel({
   const [open, setOpen] = useState(false);
   const [attached, setAttached] = useState<Attached[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const picker = useRef<HTMLInputElement>(null);
   const submit = useAsyncAction();
 
   const queued = jobs.filter((j) => j.status === 'queued');
 
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    const read = await Promise.all(Array.from(files).map(readImage));
-    const images = read.filter((image): image is Attached => image !== null);
+    const images = await readImages(files);
     if (images.length > 0) {
       setError(null);
       setAttached((current) => [...current, ...images]);
@@ -89,11 +100,7 @@ export function LaunchPanel({
     const text = prompt.trim();
     if (!text) return;
     try {
-      await api.launchJob({
-        prompt: text,
-        kind,
-        ...(attached.length > 0 ? { attachments: attached.map((a) => ({ name: a.name, data: a.data })) } : {}),
-      });
+      await api.launchJob(launchRequest(text, kind, attached));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Launch failed');
       throw err;
@@ -106,13 +113,7 @@ export function LaunchPanel({
 
   return (
     <div className="launch">
-      <div className="launch-head">
-        <Button ghost onClick={() => setOpen((o) => !o)}>
-          <BriefMark />
-          {open ? '× New brief' : '+ New brief'}
-        </Button>
-        {queued.length > 0 && <Tag title="Briefs waiting for a free slot">{queued.length} queued</Tag>}
-      </div>
+      <LaunchHead open={open} onToggle={() => setOpen((o) => !o)} queued={queued.length} />
 
       {open && (
         <form
@@ -129,114 +130,187 @@ export function LaunchPanel({
             void addFiles(e.dataTransfer.files);
           }}
         >
-          <textarea
-            className="launch-prompt"
-            placeholder="Describe the job — e.g. “Add rate-limiting to the /api/login route and open a PR.” Paste a screenshot to attach it."
-            value={prompt}
-            rows={3}
-            onChange={(e) => setPrompt(e.target.value)}
-            onPaste={(e) => {
-              if (e.clipboardData.files.length > 0) void addFiles(e.clipboardData.files);
-            }}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                void submit.run(launch);
-              }
-            }}
+          <PromptField
+            prompt={prompt}
+            onPrompt={setPrompt}
+            onFiles={(files) => void addFiles(files)}
+            onSubmit={() => void submit.run(launch)}
           />
-          {attached.length > 0 && (
-            <ul className="launch-attachments">
-              {attached.map((image) => (
-                <li key={image.id} className="launch-attachment">
-                  {/* The thumbnail is the same base64 the request carries, scaled by
-                      CSS — the stored bytes are the operator's bytes, and nothing
-                      here re-encodes or resizes them. */}
-                  <img src={`data:${image.mime};base64,${image.data}`} alt={image.name} />
-                  <span className="launch-attachment-name" title={image.name}>
-                    {image.name}
-                  </span>
-                  <Button
-                    ghost
-                    className="launch-attachment-drop"
-                    title="Remove this attachment"
-                    aria-label={`Remove ${image.name}`}
-                    onClick={() => setAttached((current) => current.filter((a) => a.id !== image.id))}
-                  >
-                    ×
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <AttachedList
+            attached={attached}
+            onRemove={(id) => setAttached((current) => current.filter((a) => a.id !== id))}
+          />
           {error && (
             <p className="launch-error" role="alert">
               {error}
             </p>
           )}
-          <div className="launch-controls">
-            <label className="launch-kind" title="A code job runs in a git worktree; a desk job in a scratch dir">
-              <select value={kind} onChange={(e) => setKind(e.target.value as 'code' | 'desk')}>
-                <option value="code">code agent</option>
-                <option value="desk">desk agent</option>
-              </select>
-            </label>
-            {/* The explicit arm of the same act: paste covers a screenshot, this
-                covers a file that is already on disk. Hidden input, visible button,
-                so it wears the cockpit's own chrome rather than the browser's. */}
-            <input
-              ref={picker}
-              type="file"
-              accept="image/*"
-              multiple
-              className="launch-file-input"
-              onChange={(e) => {
-                void addFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-            <Button
-              ghost
-              title="Attach an image — or paste or drop one into the prompt"
-              onClick={() => picker.current?.click()}
-            >
-              Attach image
-            </Button>
-            <SubmitButton phase={submit.phase} tone="primary">
-              Launch
-            </SubmitButton>
-          </div>
+          <LaunchControls kind={kind} onKind={setKind} onFiles={(files) => void addFiles(files)} phase={submit.phase} />
         </form>
       )}
 
-      {queued.length > 0 && (
-        <ul className="launch-queue">
-          {queued.map((job, i) => (
-            <li key={job.id} className="launch-queue-item">
-              <span className="launch-pos" title="Position in the queue">
-                {i + 1}
-              </span>
-              <span className="launch-title" title={job.prompt}>
-                {job.title}
-              </span>
-              <Tag>{job.kind}</Tag>
-              <span className="muted launch-age">{relTime(job.createdAt)}</span>
-              <AsyncButton
-                ghost
-                onClick={() => api.cancelJob(job.id).then(onChanged)}
-                title="Remove this brief from the queue"
-              >
-                cancel
-              </AsyncButton>
-              {/* What the operator attached, still keyed to this brief. When a
-                  code brief is filed as a ticket instead of dispatched, the
-                  images change hands and reappear under the issue — the same strip,
-                  one row down the funnel. */}
-              <AttachmentStrip targetRef={`job:${job.id}`} attachments={attachments} attachmentUrls={attachmentUrls} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <LaunchQueue queued={queued} attachments={attachments} attachmentUrls={attachmentUrls} onChanged={onChanged} />
     </div>
+  );
+}
+
+function LaunchHead({ open, onToggle, queued }: { open: boolean; onToggle: () => void; queued: number }) {
+  return (
+    <div className="launch-head">
+      <Button ghost onClick={onToggle}>
+        <BriefMark />
+        {open ? '× New brief' : '+ New brief'}
+      </Button>
+      {queued > 0 && <Tag title="Briefs waiting for a free slot">{queued} queued</Tag>}
+    </div>
+  );
+}
+
+function PromptField({
+  prompt,
+  onPrompt,
+  onFiles,
+  onSubmit,
+}: {
+  prompt: string;
+  onPrompt: (prompt: string) => void;
+  onFiles: (files: FileList) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <textarea
+      className="launch-prompt"
+      placeholder="Describe the job — e.g. “Add rate-limiting to the /api/login route and open a PR.” Paste a screenshot to attach it."
+      value={prompt}
+      rows={3}
+      onChange={(e) => onPrompt(e.target.value)}
+      onPaste={(e) => {
+        if (e.clipboardData.files.length > 0) onFiles(e.clipboardData.files);
+      }}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          onSubmit();
+        }
+      }}
+    />
+  );
+}
+
+function AttachedList({ attached, onRemove }: { attached: Attached[]; onRemove: (id: string) => void }) {
+  if (attached.length === 0) return null;
+  return (
+    <ul className="launch-attachments">
+      {attached.map((image) => (
+        <li key={image.id} className="launch-attachment">
+          {/* The thumbnail is the same base64 the request carries, scaled by
+              CSS — the stored bytes are the operator's bytes, and nothing
+              here re-encodes or resizes them. */}
+          <img src={`data:${image.mime};base64,${image.data}`} alt={image.name} />
+          <span className="launch-attachment-name" title={image.name}>
+            {image.name}
+          </span>
+          <Button
+            ghost
+            className="launch-attachment-drop"
+            title="Remove this attachment"
+            aria-label={`Remove ${image.name}`}
+            onClick={() => onRemove(image.id)}
+          >
+            ×
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LaunchControls({
+  kind,
+  onKind,
+  onFiles,
+  phase,
+}: {
+  kind: 'code' | 'desk';
+  onKind: (kind: 'code' | 'desk') => void;
+  onFiles: (files: FileList | null) => void;
+  phase: ReturnType<typeof useAsyncAction>['phase'];
+}) {
+  const picker = useRef<HTMLInputElement>(null);
+  return (
+    <div className="launch-controls">
+      <label className="launch-kind" title="A code job runs in a git worktree; a desk job in a scratch dir">
+        <select value={kind} onChange={(e) => onKind(e.target.value as 'code' | 'desk')}>
+          <option value="code">code agent</option>
+          <option value="desk">desk agent</option>
+        </select>
+      </label>
+      {/* The explicit arm of the same act: paste covers a screenshot, this
+          covers a file that is already on disk. Hidden input, visible button,
+          so it wears the cockpit's own chrome rather than the browser's. */}
+      <input
+        ref={picker}
+        type="file"
+        accept="image/*"
+        multiple
+        className="launch-file-input"
+        onChange={(e) => {
+          onFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <Button
+        ghost
+        title="Attach an image — or paste or drop one into the prompt"
+        onClick={() => picker.current?.click()}
+      >
+        Attach image
+      </Button>
+      <SubmitButton phase={phase} tone="primary">
+        Launch
+      </SubmitButton>
+    </div>
+  );
+}
+
+function LaunchQueue({
+  queued,
+  attachments,
+  attachmentUrls,
+  onChanged,
+}: {
+  queued: Job[];
+  attachments: AppState['attachments'];
+  attachmentUrls: AppState['attachmentUrls'];
+  onChanged: () => void;
+}) {
+  if (queued.length === 0) return null;
+  return (
+    <ul className="launch-queue">
+      {queued.map((job, i) => (
+        <li key={job.id} className="launch-queue-item">
+          <span className="launch-pos" title="Position in the queue">
+            {i + 1}
+          </span>
+          <span className="launch-title" title={job.prompt}>
+            {job.title}
+          </span>
+          <Tag>{job.kind}</Tag>
+          <span className="muted launch-age">{relTime(job.createdAt)}</span>
+          <AsyncButton
+            ghost
+            onClick={() => api.cancelJob(job.id).then(onChanged)}
+            title="Remove this brief from the queue"
+          >
+            cancel
+          </AsyncButton>
+          {/* What the operator attached, still keyed to this brief. When a
+                code brief is filed as a ticket instead of dispatched, the
+                images change hands and reappear under the issue — the same strip,
+                one row down the funnel. */}
+          <AttachmentStrip targetRef={`job:${job.id}`} attachments={attachments} attachmentUrls={attachmentUrls} />
+        </li>
+      ))}
+    </ul>
   );
 }

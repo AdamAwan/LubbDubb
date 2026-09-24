@@ -75,28 +75,34 @@ export function McpTab() {
         </p>
       </Panel>
 
-      <Panel density="flush" className="cfg-card mcp-step">
-        <h3>
-          <span className="mcp-n">3</span> What it can do
-        </h3>
-        <p className="cfg-hint">
-          These three, and nothing else. The credential is long-lived and sits in your home directory, so the narrowing
-          is structural rather than a filter — there is no code path from this channel to the tools the fleet gets.
-        </p>
-        {mcp.tools.length === 0 ? (
-          <p className="cfg-hint mcp-foot">No tools to list — this cockpit is running against the demo backend.</p>
-        ) : (
-          <ul className="mcp-tools">
-            {mcp.tools.map((tool) => (
-              <li key={tool.name}>
-                <code className="mcp-tool">{tool.name}</code>
-                <span className="muted">{tool.description}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+      <McpToolsStep tools={mcp.tools} />
     </div>
+  );
+}
+
+function McpToolsStep({ tools }: { tools: McpChannelPayload['tools'] }) {
+  return (
+    <Panel density="flush" className="cfg-card mcp-step">
+      <h3>
+        <span className="mcp-n">3</span> What it can do
+      </h3>
+      <p className="cfg-hint">
+        These three, and nothing else. The credential is long-lived and sits in your home directory, so the narrowing is
+        structural rather than a filter — there is no code path from this channel to the tools the fleet gets.
+      </p>
+      {tools.length === 0 ? (
+        <p className="cfg-hint mcp-foot">No tools to list — this cockpit is running against the demo backend.</p>
+      ) : (
+        <ul className="mcp-tools">
+          {tools.map((tool) => (
+            <li key={tool.name}>
+              <code className="mcp-tool">{tool.name}</code>
+              <span className="muted">{tool.description}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 
