@@ -485,9 +485,6 @@ covers, which is a finer answer than a rule id.
 
 **Rows written before the split keep their shape, forever.** They carry the _outcome_ in `rule` with
 `admission` NULL, and which rule was throttled on one is not recoverable — history is not rewritten.
-Both cockpit renderers resolve a row through the shared `decisionAttribution`, which names such an id
-as an **Outcome** rather than a proposer and states the gap, so the two shapes are told apart instead
-of one being guessed into the other.
 
 `askedAlready(origin, openEscalations, recentDecisions)` is the shared "has this already been put to a
 human" predicate the three escalating rules (`pr-ci-blocked`, `plan-blocked`, `issue-shortfall`'s

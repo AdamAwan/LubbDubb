@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PLAINNESS, plainnessRefusal, readingEase, readingEaseRefusal } from '../src/pr/plainness.js';
+import { PLAINNESS, plainnessRefusal, readingEase } from '../src/pr/plainness.js';
 
 test('a semicolon is refused, because it is a full stop that will not admit it', () => {
   const refusal = plainnessRefusal(
@@ -45,15 +45,14 @@ test('code is never counted — an identifier is not a long word and a grep is n
 test('reading ease scores plain prose above the floor and dense prose below it', () => {
   const plain = ['The guard only fires for an old workflow.', 'One consumer moved. Two kept the old guard.'];
   assert.ok(readingEase(plain).ease > PLAINNESS.readingEase, `plain prose scored ${readingEase(plain).ease}`);
-  assert.equal(readingEaseRefusal(plain), null);
 
   const dense = [
     'Attribution of the consequential reconciliation determines authoritative provenance.',
     'Subsequent verification demonstrates unequivocally incompatible instantiation.',
   ];
-  const refusal = readingEaseRefusal(dense);
-  assert.match(refusal ?? '', /reading ease/);
-  assert.match(refusal ?? '', /Attribution|Subsequent/, 'the hardest sentences are named');
+  const { ease, hardest } = readingEase(dense);
+  assert.ok(ease < PLAINNESS.readingEase, `dense prose scored ${ease}`);
+  assert.match(hardest.join('\n'), /Attribution|Subsequent/, 'the hardest sentences are named');
 });
 
 test('the hardest sentences are the ones named, worst first', () => {
@@ -66,6 +65,5 @@ test('the hardest sentences are the ones named, worst first', () => {
 });
 
 test('an empty set of fields is not a failure', () => {
-  assert.equal(readingEaseRefusal([]), null);
   assert.equal(readingEase([]).ease, 100);
 });

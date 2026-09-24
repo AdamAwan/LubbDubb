@@ -180,34 +180,6 @@ export function timeLeft(iso: string, now: number = Date.now()): string {
   return m < 60 ? `in ${m}m` : `in ${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-export function decisionAttribution(
-  d: { rule: string | null; admission?: string | null },
-  rules: Record<string, { name: string; description: string; kind: string }>,
-): {
-  entries: { label: string; id: string; rule?: { name: string; description: string } }[];
-  note?: string;
-} {
-  const entries: { label: string; id: string; rule?: { name: string; description: string } }[] = [];
-  const proposer = d.rule ? rules[d.rule] : undefined;
-  const outcome = d.admission ? rules[d.admission] : undefined;
-
-  const preSplit = !d.admission && proposer?.kind === 'admission';
-
-  if (d.rule && !preSplit) entries.push({ label: 'Proposed by', id: d.rule, rule: proposer });
-  if (d.admission) entries.push({ label: 'Admitted as', id: d.admission, rule: outcome });
-  if (preSplit) entries.push({ label: 'Outcome', id: d.rule!, rule: proposer });
-
-  if (preSplit)
-    return {
-      entries,
-      note: 'Recorded before proposer and outcome were separate columns — which rule was throttled is not in this row.',
-    };
-  if (entries.length === 0) return { entries, note: 'No dispatcher rule recorded for this decision.' };
-  if (!d.rule)
-    return { entries, note: 'No single proposing rule: this action folds signals from more than one concern.' };
-  return { entries };
-}
-
 export function planIssueOf(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
   return m ? Number(m[1]) : null;

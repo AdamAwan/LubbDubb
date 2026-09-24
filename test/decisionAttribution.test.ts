@@ -7,7 +7,6 @@ import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
-import { decisionAttribution } from '../web/src/components/util.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Agent, Decision, Issue, PullRequest, Task } from '../src/types.js';
 import { pastTheFunnel } from './support/plans.js';
@@ -241,68 +240,4 @@ test('the migration is additive on a database created before the column', () => 
   const both = store.decisions.listDecisions();
   assert.equal(both.length, 2);
   store.close();
-});
-
-const RULES = DISPATCH_RULES as unknown as Record<string, { name: string; description: string; kind: string }>;
-
-test('a new row reads as a proposer plus what became of it', () => {
-  const { entries, note } = decisionAttribution({ rule: 'issue-pickup', admission: 'cooldown-escalate' }, RULES);
-  assert.deepEqual(
-    entries.map((e) => [e.label, e.id]),
-    [
-      ['Proposed by', 'issue-pickup'],
-      ['Admitted as', 'cooldown-escalate'],
-    ],
-  );
-  assert.equal(note, undefined, 'nothing to explain — both facts are present');
-});
-
-test('an old row is rendered as an outcome, and the missing proposer is stated', () => {
-  const { entries, note } = decisionAttribution({ rule: 'cooldown-escalate', admission: null }, RULES);
-  assert.deepEqual(
-    entries.map((e) => [e.label, e.id]),
-    [['Outcome', 'cooldown-escalate']],
-    'the single id is named as what it is — an outcome, never a proposer',
-  );
-  assert.match(note ?? '', /before proposer and outcome were separate/);
-});
-
-test('an old row from a server that never sent the field reads the same', () => {
-  const { entries, note } = decisionAttribution({ rule: 'branch-notify' }, RULES);
-  assert.deepEqual(
-    entries.map((e) => e.label),
-    ['Outcome'],
-  );
-  assert.match(note ?? '', /before proposer and outcome were separate/);
-});
-
-test('a branch note with no proposer explains the gap rather than showing one', () => {
-  const { entries, note } = decisionAttribution({ rule: null, admission: 'branch-notify' }, RULES);
-  assert.deepEqual(
-    entries.map((e) => [e.label, e.id]),
-    [['Admitted as', 'branch-notify']],
-  );
-  assert.match(note ?? '', /more than one concern/);
-});
-
-test('an ordinary rule row is one line, and a row with neither says so', () => {
-  const plain = decisionAttribution({ rule: 'issue-pickup', admission: null }, RULES);
-  assert.deepEqual(
-    plain.entries.map((e) => [e.label, e.id]),
-    [['Proposed by', 'issue-pickup']],
-  );
-  assert.equal(plain.note, undefined);
-
-  const none = decisionAttribution({ rule: null, admission: null }, RULES);
-  assert.deepEqual(none.entries, []);
-  assert.match(none.note ?? '', /No dispatcher rule recorded/);
-});
-
-test('an unknown id still renders, because the row is what it is', () => {
-  const { entries } = decisionAttribution({ rule: 'a-rule-since-renamed', admission: null }, RULES);
-  assert.deepEqual(
-    entries.map((e) => [e.label, e.rule]),
-    [['Proposed by', undefined]],
-    'the renderer names the raw id rather than dropping the row',
-  );
 });

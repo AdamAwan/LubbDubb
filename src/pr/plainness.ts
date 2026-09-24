@@ -70,18 +70,6 @@ export function readingEase(fields: readonly string[]): { ease: number; hardest:
   };
 }
 
-/** The refusal a pack over the reading-ease floor gets, or null. */
-export function readingEaseRefusal(fields: readonly string[]): string | null {
-  const { ease: score, hardest } = readingEase(fields);
-  if (score >= PLAINNESS.readingEase) return null;
-  return (
-    `the pack's prose scores ${Math.round(score)} for reading ease and the floor is ${PLAINNESS.readingEase}, ` +
-    `about a newspaper. Long words are what cost it, more than long sentences: use the plainest word that is ` +
-    `still true, and put the identifiers in the code rather than the prose. These read hardest:\n` +
-    hardest.map((s) => `- "${s}"`).join('\n')
-  );
-}
-
 function ease(wordCount: number, sentenceCount: number, syllableCount: number): number {
   return 206.835 - 1.015 * (wordCount / sentenceCount) - 84.6 * (syllableCount / wordCount);
 }
