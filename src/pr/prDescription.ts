@@ -99,6 +99,17 @@ export function describeBranch(prNumber: number): string {
   return `describe/pr/${prNumber}`;
 }
 
+/** The read-only checkout rule `pr-description-check` reads a pull request's diff from. */
+export function describeCheckBranch(prNumber: number): string {
+  return `describe-check/pr/${prNumber}`;
+}
+
+/** The pull request a `pr-description-check` dispatch was sent for, or null for any other origin. */
+export function describeCheckTargetPr(originRef: string | null): number | null {
+  const check = issueOriginId('describeCheck', originRef);
+  return check === null ? null : Number(check.id);
+}
+
 /** The pull request a `pr-describe` dispatch was sent for, or null for any other origin. */
 export function describeTargetPr(originRef: string | null): number | null {
   const describe = issueOriginId('describe', originRef);

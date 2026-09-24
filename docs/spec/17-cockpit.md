@@ -786,6 +786,11 @@ from another it does not hold. It is `next` and always `yours`: the ask holds no
 feature — but the pull request it is about is already open and already spending a reviewer's hour.
 → [07](07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer)
 
+**`description_wrong` and `description_note` are the automatic check's findings**, one row per
+checked newest version that found something, off `CockpitState.descriptionFeedback`. A contradiction
+is `next`; gaps alone are `later`. Both open the pull request, where the findings are drawn under the
+description. → [07](07-pull-requests.md#what-the-check-raises)
+
 **`assigned` is the one kind that did not come from the harness at all.** Every other row here is
 the fleet saying it is stuck; this one is a pull request a colleague put on the operator, which the
 fleet does not know exists and will never act on. It is read off `attention.assignedToYou`
@@ -862,8 +867,8 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
 `dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
-`close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`. `later` is an ask holding nothing at all —
-`watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
+`close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`. `later` is an ask holding nothing at all —
+`description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
 
 **`limit` is `later` and `blocking` at once, which is the point of having both readings.** An agent is
 parked and its slot is held — the group says so, and its row still draws at full weight — but there is
@@ -906,29 +911,31 @@ and an operator glancing at the rail could not tell a queue of successes from a 
 reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind           | Tag            | Tone  | Glyph | Why that tone                                                 |
-| -------------- | -------------- | ----- | ----- | ------------------------------------------------------------- |
-| `recovery`     | Recovery       | red   | `↺`   | A restart left runs orphaned. Something went wrong.           |
-| `escalation`   | Escalation     | red   | `?`   | An agent hit a question it cannot get past.                   |
-| `permission`   | Permission     | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.          |
-| `limit`        | Usage limit    | amber | `‖`   | Nothing broke; an allowance window has to turn over.          |
-| `burn`         | Runaway        | amber | `▲`   | A heads-up on a run that carries on either way.               |
-| `plan`         | Plan           | blue  | `◇`   | A plan to read and decide on.                                 |
-| `reply`        | Reply          | amber | `↵`   | A drafted reply, held until you send it.                      |
-| `merge`        | Merge          | amber | `⊕`   | A merge waiting on your verdict.                              |
-| `describe`     | Describe       | blue  | `✎`   | An open pull request carries nobody's account of itself.      |
-| `shortfall`    | Shortfall      | blue  | `✗`   | Delivered work that did not reach its goal.                   |
-| `intake`       | Intake         | blue  | `◌`   | The appraisal could not say a goal is workable.               |
-| `profile`      | Profile        | blue  | `⊙`   | Which profile a goal runs on.                                 |
-| `placement`    | Backlog        | amber | `▣`   | Nothing is held; the ticket is off the board.                 |
-| `bench`        | Bench          | blue  | `◆`   | Work only a person can do. Informative, not broken.           |
-| `close_out`    | Close-out      | green | `⚑`   | A goal was **delivered**; this is the step after it.          |
-| `validate`     | Validate       | green | `✓`   | The other step after a delivery — run its checks.             |
-| `watch`        | Watch          | amber | `◎`   | The running system is answering outside what a goal declared. |
-| `unwatched`    | Unseen stories | amber | `○`   | A watched Feature has stories no agent has ever read.         |
-| `dispatch`     | Refused        | red   | `⊠`   | The harness keeps trying this and keeps being told no.        |
-| `upgrade`      | Upgrade        | amber | `↑`   | A newer build exists; nothing broke and nothing is parked.    |
-| `project_pull` | Auto-pull off  | amber | `↥`   | Something is stopping a pull the harness would have done.     |
+| Kind                | Tag              | Tone  | Glyph | Why that tone                                                   |
+| ------------------- | ---------------- | ----- | ----- | --------------------------------------------------------------- |
+| `recovery`          | Recovery         | red   | `↺`   | A restart left runs orphaned. Something went wrong.             |
+| `escalation`        | Escalation       | red   | `?`   | An agent hit a question it cannot get past.                     |
+| `permission`        | Permission       | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.            |
+| `limit`             | Usage limit      | amber | `‖`   | Nothing broke; an allowance window has to turn over.            |
+| `burn`              | Runaway          | amber | `▲`   | A heads-up on a run that carries on either way.                 |
+| `plan`              | Plan             | blue  | `◇`   | A plan to read and decide on.                                   |
+| `reply`             | Reply            | amber | `↵`   | A drafted reply, held until you send it.                        |
+| `merge`             | Merge            | amber | `⊕`   | A merge waiting on your verdict.                                |
+| `describe`          | Describe         | blue  | `✎`   | An open pull request carries nobody's account of itself.        |
+| `description_wrong` | Description      | amber | `≠`   | A check found the description saying what the diff does not do. |
+| `description_note`  | Description note | blue  | `¶`   | The diff raises something the description does not. A note.     |
+| `shortfall`         | Shortfall        | blue  | `✗`   | Delivered work that did not reach its goal.                     |
+| `intake`            | Intake           | blue  | `◌`   | The appraisal could not say a goal is workable.                 |
+| `profile`           | Profile          | blue  | `⊙`   | Which profile a goal runs on.                                   |
+| `placement`         | Backlog          | amber | `▣`   | Nothing is held; the ticket is off the board.                   |
+| `bench`             | Bench            | blue  | `◆`   | Work only a person can do. Informative, not broken.             |
+| `close_out`         | Close-out        | green | `⚑`   | A goal was **delivered**; this is the step after it.            |
+| `validate`          | Validate         | green | `✓`   | The other step after a delivery — run its checks.               |
+| `watch`             | Watch            | amber | `◎`   | The running system is answering outside what a goal declared.   |
+| `unwatched`         | Unseen stories   | amber | `○`   | A watched Feature has stories no agent has ever read.           |
+| `dispatch`          | Refused          | red   | `⊠`   | The harness keeps trying this and keeps being told no.          |
+| `upgrade`           | Upgrade          | amber | `↑`   | A newer build exists; nothing broke and nothing is parked.      |
+| `project_pull`      | Auto-pull off    | amber | `↥`   | Something is stopping a pull the harness would have done.       |
 
 **`upgrade` and `project_pull` are the two kinds derived from a _reading_ rather than from anything
 raised** — `web/src/view/updateAsks.ts`, off `state.build`. They are here for the membership test

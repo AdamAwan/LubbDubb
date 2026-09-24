@@ -3,13 +3,56 @@ import { issueOriginRef } from '../issueOrigins.js';
 import { DESCRIPTION_PROMPTS, descriptionStanding } from '../pr/prDescription.js';
 import { DESCRIPTION_QUESTIONS } from '../store/prDescriptions.js';
 import { toolSchema } from './schema.js';
-import type { DescriptionQuestion } from '../types.js';
+import type { DescriptionFinding, DescriptionQuestion } from '../types.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md#the-desktop-channel
 
 const QUESTION_HELP = DESCRIPTION_QUESTIONS.map((q) => `\`${q}\` — ${DESCRIPTION_PROMPTS[q]}`).join('; ');
+
+/**
+ * The findings argument, shared by the desktop `description_check` and the fleet's
+ * `description_review`, so the two channels cannot describe a finding differently.
+ */
+export const DESCRIPTION_FINDINGS = z
+  .array(
+    z.object({
+      kind: z
+        .enum(['contradicted', 'gap'])
+        .describe(
+          '`contradicted` — the diff does not do what this says. `gap` — the diff raises it and the description does not.',
+        ),
+      note: z
+        .string()
+        .describe(
+          'What you found, in one or two sentences, carrying a coordinate — src/store/sync.ts:41 — ' +
+            'wherever the diff is what settles it. Plain text: it is drawn as written, so backticks ' +
+            'around a path show up as backticks. Written to the operator, who will decide whether you ' +
+            'are right.',
+        ),
+      question: z
+        .enum(['asked-for', 'undone', 'missing', 'reach'])
+        .describe(
+          'Optional, and usually omitted. Tag a finding with one of the four questions under the field ' +
+            'only where it genuinely is one of them — most of what is worth saying about a description ' +
+            `is none of the four. The questions: ${QUESTION_HELP}.`,
+        )
+        .optional(),
+    }),
+  )
+  .describe(
+    'Everything you found, most serious first. An empty list says you checked and it stood up, which ' +
+      'is recorded as a clean check rather than as no check at all.',
+  );
+
+export function readFindings(given: unknown): DescriptionFinding[] | null {
+  if (!Array.isArray(given)) return null;
+  return given.map((raw) => {
+    const f = raw as { kind: 'contradicted' | 'gap'; note: string; question?: DescriptionQuestion };
+    return { kind: f.kind, note: f.note, question: f.question ?? null };
+  });
+}
 
 /**
  * What the operator's own Claude Code reads when they press **Check my description**.
@@ -79,46 +122,13 @@ export const descriptionCheck: DesktopToolFactory = (deps) => ({
             'operator may have edited while you were reading, and a report on "the current one" marks text ' +
             'you never saw.',
         ),
-      findings: z
-        .array(
-          z.object({
-            kind: z
-              .enum(['contradicted', 'gap'])
-              .describe(
-                '`contradicted` — the diff does not do what this says. `gap` — the diff raises it and the description does not.',
-              ),
-            note: z
-              .string()
-              .describe(
-                'What you found, in one or two sentences, carrying a coordinate — src/store/sync.ts:41 — ' +
-                  'wherever the diff is what settles it. Plain text: it is drawn as written, so backticks ' +
-                  'around a path show up as backticks. Written to the operator, who will decide whether you ' +
-                  'are right.',
-              ),
-            question: z
-              .enum(['asked-for', 'undone', 'missing', 'reach'])
-              .describe(
-                'Optional, and usually omitted. Tag a finding with one of the four questions under the field ' +
-                  'only where it genuinely is one of them — most of what is worth saying about a description ' +
-                  `is none of the four. The questions: ${QUESTION_HELP}.`,
-              )
-              .optional(),
-          }),
-        )
-        .describe(
-          'Everything you found, most serious first. An empty list says you checked and it stood up, which ' +
-            'is recorded as a clean check rather than as no check at all.',
-        ),
+      findings: DESCRIPTION_FINDINGS,
     }),
   ),
   handler: async (args) => {
-    const given = Array.isArray(args.findings) ? args.findings : null;
-    if (given === null)
+    const findings = readFindings(args.findings);
+    if (findings === null)
       return toolError('description_check needs a `findings` list. Pass an empty one if the description stood up.');
-    const findings = given.map((raw) => {
-      const f = raw as { kind: 'contradicted' | 'gap'; note: string; question?: DescriptionQuestion };
-      return { kind: f.kind, note: f.note, question: f.question ?? null };
-    });
     const version = deps.store.prDescriptions.recordCheck({ id: String(args.id), findings });
     if (version === null)
       return toolError(

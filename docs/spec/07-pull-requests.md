@@ -851,14 +851,52 @@ bench already uses ([20](20-validation.md#starting-a-run-from-the-cockpit)). Tha
 they wrote and the diff it is already sitting on, and reports through `description_read` and
 `description_check` on the [desktop channel](11-mcp-tools.md#the-desktop-channel).
 
-It has to be that session rather than a dispatched one. What follows the report is an **argument** —
-the session says the diff contradicts a sentence, the operator says the throw is behind a flag that
-defaults off, the session checks and concedes — and that exchange is worth having only at
+The _argument_ has to be that session rather than a dispatched one. What follows a report is an
+**argument** — the session says the diff contradicts a sentence, the operator says the throw is behind
+a flag that defaults off, the session checks and concedes — and that exchange is worth having only at
 conversational speed. A fleet agent answers on the pulse, queued behind the headroom cut, its reply
-arriving as a row on a surface the operator has to go back to; three rounds of that is an afternoon,
-and an instrument that costs an afternoon is one nobody reaches for twice. The fleet's channel must
-also never grow this tool: a dispatched agent marking its own operator's description of its own
-change is the conflict of interest this feature exists to remove, handed back through a side door.
+arriving as a row on a surface the operator has to go back to; three rounds of that is an afternoon.
+
+The _first reading_ is not an argument, and most operators never have the time to start one. So the
+fleet reads every description once by itself ([below](#every-description-is-checked-without-asking)),
+and the desktop session stays the place to push back on what it found. The fleet's tool is a separate
+one, `description_review`, never `description_check`: it can mark only the pull request it was
+dispatched for, and it carries **the same invariant** — findings, never text.
+
+#### Every description is checked without asking
+
+Rule `pr-description-check` (`src/dispatcher/rules/prDescriptionCheck.ts`) dispatches one read-only
+agent on `issue:<n>:describe-check:<pr>` (a detached checkout under `describe-check/pr/<n>`) for the
+**newest** version of every part's description that nobody has checked and whose pull request is still
+open — `PrDescriptionStore.uncheckedDescriptions`. The prompt carries the operator's text verbatim and
+the version id; the agent reads `git diff` and answers through `description_review`, which records onto
+that version exactly as `description_check` does (`recordCheck`, addressed by id).
+
+- **One round per version.** A checked version is never dispatched for again, whoever checked it — a
+  desktop session's check counts. A rewrite is a new, unchecked version and is read again.
+- **It is told not to be picky.** Wording, style, length and details a reviewer would not miss are not
+  findings. An empty list is the ordinary result.
+- **It is refused outside its own dispatch.** `description_review` answers an error to any origin that
+  is not `issue:<n>:describe-check:<pr>`, and to a version id that is not a description of that pull
+  request.
+- **A run that ends without reporting is dispatched again**, as `pr-describe`'s is.
+- **An upgrade checks what is already there.** Every unchecked newest version on a still-open pull
+  request is read once after the rule ships. Only open ones: a merged change is past its review.
+
+#### What the check raises
+
+The findings are drawn under the description on the pull request's page, where they already were for
+a desktop check; until one lands the panel says an agent is reading it. The rail raises one row per
+checked newest version **that found something** — `CockpitState.descriptionFeedback`, filtered to open
+pull requests in `buildStateSnapshot`:
+
+- **`description_wrong`** — at least one `contradicted` finding. The description says something the
+  diff does not do; urgency `next`, because it wants fixing before a reviewer meets it.
+- **`description_note`** — `gap` findings only. Nothing said is wrong, but the diff raises something a
+  reviewer may want told; urgency `later`, a low-priority note the operator may take or leave.
+
+A clean check raises nothing. A rewrite takes the row with it, because the row reads the newest
+version and a new version is unchecked.
 
 **`description_check` takes marks and findings and no text, and that is the invariant.** A session
 that hands back better prose gets it accepted, and then the pull request carries an account that

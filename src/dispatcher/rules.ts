@@ -67,6 +67,13 @@ const RULES = [
       'The operator can hand one pull request back to an agent from its page instead of writing it. One read-only agent reads the diff and writes the body the agent would have written at `open_pr` — the same bullet list, checked by the same rules — and the harness puts it above the footer on the next pulse. Only on a press: nothing hands a description over by itself, so an undescribed pull request still carries the footer alone. It sits above the review so the reviewer reads a body rather than an empty one. Inert where the pull request has merged or closed.',
   },
   {
+    id: 'pr-description-check',
+    kind: 'rule',
+    name: 'Check the description the operator wrote',
+    description:
+      'Every description the operator writes on a pull request is read against its diff by one read-only agent, without anybody asking. It reports findings and never text — `contradicted` where the description says something the diff does not do, `gap` where the diff raises something a reviewer would want to know and the description does not — and is told not to be picky, so a check that finds nothing is the ordinary result. What it finds is drawn under the description on the pull request\u2019s page, and raised on the rail only when there is something: a contradiction asks for a change, gaps alone are a low-priority note. One round per version: a rewrite is checked again, a version already checked — by this rule or by the operator\u2019s own Claude Code — is not. Inert where the pull request has merged or closed.',
+  },
+  {
     id: 'pr-review',
     kind: 'rule',
     emittedBy: 'pr-ci-failing',

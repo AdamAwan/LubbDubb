@@ -244,6 +244,13 @@ export function PrDescription({
           <div className="cn-desc-by">
             {current.author ?? 'author unrecorded'} · {relTime(current.authoredAt, now)}
           </div>
+          {/* Checked without asking: rule pr-description-check reads every version against the diff.
+              → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking */}
+          {current.checkedAt === null && (
+            <p className="cn-desc-pending">
+              An agent is reading this against the diff. It will only flag what matters.
+            </p>
+          )}
           <Checked version={current} now={now} />
         </div>
       )}

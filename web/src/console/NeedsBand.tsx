@@ -394,6 +394,34 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
+  if (row.kind === 'description_wrong' || row.kind === 'description_note') {
+    const feedback = (view.state.descriptionFeedback ?? []).find((f) => `description:${f.versionId}` === row.id);
+    if (feedback === undefined) return null;
+    return (
+      <>
+        <p className="cn-tick">
+          {row.kind === 'description_wrong'
+            ? 'An agent read your description against the diff and found it saying something the change does not do. Worth fixing before a reviewer meets it.'
+            : 'An agent read your description against the diff. Nothing in it is wrong, but the change does something a reviewer may want told. Yours to take or leave.'}
+        </p>
+        {/* → docs/spec/07-pull-requests.md#what-the-check-raises */}
+        <ButtonRow>
+          <Button
+            tone="primary"
+            onClick={() => {
+              actions.openPanel(null);
+              actions.selectPr(feedback.prNumber);
+            }}
+          >
+            Read what it found
+          </Button>
+        </ButtonRow>
+        <div className="cn-refs">
+          <Ref to={`pr:${feedback.prNumber}`} title="Open the pull request" />
+        </div>
+      </>
+    );
+  }
   if (row.kind === 'dispatch') {
     const refusal = refusedDispatchFor(view.state, row.id);
     if (!refusal) return null;
