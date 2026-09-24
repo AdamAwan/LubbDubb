@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { api, type GoalPredictionReading } from '../api.js';
-import type { PlanPart, PlanView, PredictionMark, PredictionOutcomeMarks, PredictionSlot } from '../types.js';
+import type {
+  GoalPrediction,
+  PlanPart,
+  PlanView,
+  PredictionMark,
+  PredictionOutcomeMarks,
+  PredictionSlot,
+} from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { relTime } from './util.js';
@@ -170,6 +177,257 @@ const PLAN_PANES: readonly { label: string; read: (plan: PlanView) => string | n
   { label: 'Open questions', read: (plan) => plan.openQuestions },
 ];
 
+function usePredictionReading(
+  issueNumber: number,
+  revealed: boolean,
+): {
+  reading: GoalPredictionReading | null;
+  write: (slot: PredictionSlot, next: PredictionMark | null) => Promise<void>;
+  writeOutcome: (slot: PredictionSlot, next: PredictionMark | null) => Promise<void>;
+} {
+  const [reading, setReading] = useState<GoalPredictionReading | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const settle = (next: GoalPredictionReading | null): void => {
+      if (live) setReading(next);
+    };
+    void api
+      .getGoalPrediction(issueNumber)
+      .then((answer) => settle(answer))
+      .catch(() => settle(null));
+    return () => {
+      live = false;
+    };
+  }, [issueNumber, revealed]);
+
+  const write = async (slot: PredictionSlot, next: PredictionMark | null): Promise<void> => {
+    const answer = await api.markGoalPrediction(issueNumber, { [slot]: next });
+    setReading((prev) => (prev === null ? prev : { ...prev, prediction: answer.prediction }));
+  };
+
+  const writeOutcome = async (slot: PredictionSlot, next: PredictionMark | null): Promise<void> => {
+    const answer = await api.markGoalPredictionOutcome(issueNumber, { [slot]: next });
+    setReading((prev) => (prev === null ? prev : { ...prev, prediction: answer.prediction }));
+  };
+
+  return { reading, write, writeOutcome };
+}
+
+/* The judge's second reading, only once there is one and never before the
+   operator's own — it is dispatched after their mark, so it cannot anchor it.
+   → docs/spec/17-cockpit.md#moment-one--the-prediction-beside-the-plan */
+function JudgeReading({
+  judged,
+  mark,
+  state,
+}: {
+  judged: PredictionMark | null;
+  mark: PredictionMark | null;
+  state: Record<PredictionMark, string>;
+}): JSX.Element {
+  const apart = mark !== null && judged !== null && judged !== mark;
+  return (
+    <p className={`cn-pmark-judge ${apart ? 'is-apart' : ''}`}>
+      The judge’s reading: {judged === null ? 'left unmarked' : state[judged]}
+      {apart ? ' — it read this differently from you.' : ''}
+    </p>
+  );
+}
+
+function SlotRow({
+  slot,
+  question,
+  prediction,
+  showOutcome,
+  write,
+  writeOutcome,
+}: {
+  slot: PredictionSlot;
+  question: string;
+  prediction: GoalPrediction;
+  showOutcome: boolean;
+  write: (slot: PredictionSlot, next: PredictionMark | null) => Promise<void>;
+  writeOutcome: (slot: PredictionSlot, next: PredictionMark | null) => Promise<void>;
+}): JSX.Element {
+  const said = prediction.slots[slot];
+  const mark = prediction.planMarks[slot];
+  const outcomeMarks: PredictionOutcomeMarks = prediction.outcomeMarks;
+  const outcome = outcomeMarks[slot];
+  if (said === null)
+    return (
+      <div className="cn-pmark-row is-skipped">
+        <div className="cn-pmark-q">{question}</div>
+        <p className="cn-pmark-skipped">Skipped — nothing was written here, so there is nothing to mark.</p>
+      </div>
+    );
+  const pairing = showOutcome ? pairingOf(mark, outcome) : null;
+  const wording = wordingFor(slot);
+  return (
+    <div className={`cn-pmark-row ${mark === null ? 'is-unmarked' : `is-${mark}`}`}>
+      <div className="cn-pmark-q">{question}</div>
+      <blockquote className="cn-pmark-said-text">{said}</blockquote>
+      <Moment
+        moment="one"
+        ask="Did you call it?"
+        about="about your reading of the system"
+        options={wording.options}
+        state={wording.state}
+        unanswered="Not marked yet"
+        question={question}
+        mark={mark}
+        onPick={(next) => write(slot, next)}
+      />
+      {prediction.judgeMarkedAt !== null && (
+        <JudgeReading judged={prediction.judgeMarks[slot]} mark={mark} state={wording.state} />
+      )}
+      {showOutcome && (
+        <Moment
+          moment="two"
+          ask="Was the plan right?"
+          about="about the plan, not about you"
+          options={wording.outcomeOptions}
+          state={wording.outcomeState}
+          unanswered="Not answered yet"
+          question={question}
+          mark={outcome}
+          onPick={(next) => writeOutcome(slot, next)}
+        />
+      )}
+      {pairing !== null && <p className={`cn-pmark-pair ${pairing.apart ? 'is-apart' : ''}`}>{pairing.said}</p>}
+    </div>
+  );
+}
+
+function PlanSide({ plan, parts }: { plan: PlanView | null; parts: readonly PlanPart[] }): JSX.Element {
+  const panes =
+    plan === null
+      ? []
+      : PLAN_PANES.flatMap((pane) => {
+          const body = pane.read(plan)?.trim() ?? '';
+          return body === '' ? [] : [{ label: pane.label, body }];
+        });
+  return (
+    <div className="cn-pmark-plan">
+      <h4>What the plan says</h4>
+      {plan === null && <p className="cn-pmark-skipped">This goal no longer carries a plan to read against.</p>}
+      {plan !== null && (
+        <>
+          <div className="cn-pmark-title">{plan.title}</div>
+          {panes.map((pane) => (
+            <div className="cn-pmark-pane" key={pane.label}>
+              <div className="cn-pmark-pane-label">{pane.label}</div>
+              <div className="cn-pmark-prose">{renderMarkdown(pane.body)}</div>
+            </div>
+          ))}
+          {parts.length > 0 && (
+            <div className="cn-pmark-pane">
+              <div className="cn-pmark-pane-label">The parts</div>
+              <ul className="cn-pmark-parts">
+                {parts.map((part) => (
+                  <li key={part.id}>
+                    {part.title}
+                    {part.touches.length > 0 && <i className="cn-pmark-touches">{part.touches.join(', ')}</i>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {panes.length === 0 && parts.length === 0 && (
+            <p className="cn-pmark-skipped">The plan records no prose and no parts.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PredictionSaid({
+  prediction,
+  showOutcome,
+  now,
+  write,
+  writeOutcome,
+}: {
+  prediction: GoalPrediction;
+  showOutcome: boolean;
+  now: number;
+  write: (slot: PredictionSlot, next: PredictionMark | null) => Promise<void>;
+  writeOutcome: (slot: PredictionSlot, next: PredictionMark | null) => Promise<void>;
+}): JSX.Element {
+  return (
+    <div className="cn-pmark-said">
+      <p className="cn-pmark-why">
+        You wrote this before the plan was lifted. Mark each line against what the plan actually says — a line you leave
+        alone stays unmarked, which is its own answer and never counted as a miss.
+        {prediction.planMarkedAt !== null && <> Last marked {relTime(prediction.planMarkedAt, now)}.</>}
+      </p>
+      {showOutcome && (
+        <p className="cn-pmark-why cn-pmark-why-two">
+          Delivery has landed, so each line now carries a second, separate question: whether the <em>plan</em> turned
+          out right. It is not the same question as whether you called the plan, and answering one says nothing about
+          the other — either may be left alone.
+          {prediction.outcomeMarkedAt !== null && <> Last answered {relTime(prediction.outcomeMarkedAt, now)}.</>}
+        </p>
+      )}
+      {SLOTS.map(({ key, question }) => (
+        <SlotRow
+          key={key}
+          slot={key}
+          question={question}
+          prediction={prediction}
+          showOutcome={showOutcome}
+          write={write}
+          writeOutcome={writeOutcome}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* Nothing in here is still the operator's to do: every slot they wrote is marked
+   against the plan, and moment two is either unasked or answered. The page's
+   default opens this card where the prediction is the live question; once it has
+   been answered it is a record, and a record arrives folded. */
+function progressOf(
+  prediction: GoalPrediction,
+  showOutcome: boolean,
+): { marked: number; askedOf: number; answered: boolean } {
+  const marked = SLOTS.filter(({ key }) => prediction.slots[key] !== null && prediction.planMarks[key] !== null).length;
+  const askedOf = SLOTS.filter(({ key }) => prediction.slots[key] !== null).length;
+  const answered = marked === askedOf && (!showOutcome || prediction.outcomeMarkedAt !== null);
+  return { marked, askedOf, answered };
+}
+
+function FoldHeader({
+  showing,
+  onToggle,
+  marked,
+  askedOf,
+  outcomeOpen,
+}: {
+  showing: boolean;
+  onToggle: (open: boolean) => void;
+  marked: number;
+  askedOf: number;
+  outcomeOpen: boolean;
+}): JSX.Element {
+  return (
+    <h4 className="cn-pmark-hdr">
+      <button type="button" className="cn-disc" aria-expanded={showing} onClick={() => onToggle(!showing)}>
+        <i className="cn-caret">{showing ? '\u25be' : '\u25b8'}</i>
+        What you predicted
+      </button>
+      {askedOf > 0 && (
+        <i className="cn-n">
+          {marked}/{askedOf} marked
+        </i>
+      )}
+      {outcomeOpen && <i className="cn-n">outcome unanswered</i>}
+    </h4>
+  );
+}
+
 /**
  * The card both moments are answered on. Moment one — "did I predict the plan?" —
  * is drawn where the gate stood. Moment two — "was the plan right?" — is the same
@@ -209,62 +467,22 @@ export function PredictionReview({
   onToggle: (open: boolean) => void;
   now: number;
 }): JSX.Element | null {
-  const [reading, setReading] = useState<GoalPredictionReading | null>(null);
+  const { reading, write, writeOutcome } = usePredictionReading(issueNumber, revealed);
   /* Latched at the first reading rather than read live: the panel narrowing its own
      default is a decision about how the page arrives, and one taken again on every
      answer would shut the card under the operator as they marked the last slot.
      → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */
   const arrivedAnswered = useRef<boolean | null>(null);
 
-  useEffect(() => {
-    let live = true;
-    const settle = (next: GoalPredictionReading | null): void => {
-      if (live) setReading(next);
-    };
-    void api
-      .getGoalPrediction(issueNumber)
-      .then((answer) => settle(answer))
-      .catch(() => settle(null));
-    return () => {
-      live = false;
-    };
-  }, [issueNumber, revealed]);
-
   const prediction = reading?.prediction ?? null;
   if (prediction === null || (reading?.reveal ?? null) === null) return null;
-
-  const write = async (slot: PredictionSlot, next: PredictionMark | null): Promise<void> => {
-    const answer = await api.markGoalPrediction(issueNumber, { [slot]: next });
-    setReading((prev) => (prev === null ? prev : { ...prev, prediction: answer.prediction }));
-  };
-
-  const writeOutcome = async (slot: PredictionSlot, next: PredictionMark | null): Promise<void> => {
-    const answer = await api.markGoalPredictionOutcome(issueNumber, { [slot]: next });
-    setReading((prev) => (prev === null ? prev : { ...prev, prediction: answer.prediction }));
-  };
 
   /* Asked, or answered before: a record that carries moment two goes on drawing it
      once the bench row it was asked through has been closed. Neither is a default —
      a goal nobody has been asked about draws moment one alone. */
-  const outcomeMarks: PredictionOutcomeMarks = prediction.outcomeMarks;
   const showOutcome = outcomeAsked || prediction.outcomeMarkedAt !== null;
 
-  const panes =
-    plan === null
-      ? []
-      : PLAN_PANES.flatMap((pane) => {
-          const body = pane.read(plan)?.trim() ?? '';
-          return body === '' ? [] : [{ label: pane.label, body }];
-        });
-
-  const marked = SLOTS.filter(({ key }) => prediction.slots[key] !== null && prediction.planMarks[key] !== null).length;
-  const askedOf = SLOTS.filter(({ key }) => prediction.slots[key] !== null).length;
-
-  /* Nothing in here is still the operator's to do: every slot they wrote is marked
-     against the plan, and moment two is either unasked or answered. The page's
-     default opens this card where the prediction is the live question; once it has
-     been answered it is a record, and a record arrives folded. */
-  const answered = marked === askedOf && (!showOutcome || prediction.outcomeMarkedAt !== null);
+  const { marked, askedOf, answered } = progressOf(prediction, showOutcome);
   if (arrivedAnswered.current === null) arrivedAnswered.current = answered;
   const showing = settled ? open : open && arrivedAnswered.current === false;
 
@@ -276,133 +494,23 @@ export function PredictionReview({
           predicted. The count is drawn closed as well as open, because what a
           folded record owes its reader is whether anything in it is unanswered.
           → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
-      <h4 className="cn-pmark-hdr">
-        <button type="button" className="cn-disc" aria-expanded={showing} onClick={() => onToggle(!showing)}>
-          <i className="cn-caret">{showing ? '\u25be' : '\u25b8'}</i>
-          What you predicted
-        </button>
-        {askedOf > 0 && (
-          <i className="cn-n">
-            {marked}/{askedOf} marked
-          </i>
-        )}
-        {showOutcome && prediction.outcomeMarkedAt === null && <i className="cn-n">outcome unanswered</i>}
-      </h4>
+      <FoldHeader
+        showing={showing}
+        onToggle={onToggle}
+        marked={marked}
+        askedOf={askedOf}
+        outcomeOpen={showOutcome && prediction.outcomeMarkedAt === null}
+      />
       {showing && (
         <div className="cn-pmark">
-          <div className="cn-pmark-said">
-            <p className="cn-pmark-why">
-              You wrote this before the plan was lifted. Mark each line against what the plan actually says — a line you
-              leave alone stays unmarked, which is its own answer and never counted as a miss.
-              {prediction.planMarkedAt !== null && <> Last marked {relTime(prediction.planMarkedAt, now)}.</>}
-            </p>
-            {showOutcome && (
-              <p className="cn-pmark-why cn-pmark-why-two">
-                Delivery has landed, so each line now carries a second, separate question: whether the <em>plan</em>{' '}
-                turned out right. It is not the same question as whether you called the plan, and answering one says
-                nothing about the other — either may be left alone.
-                {prediction.outcomeMarkedAt !== null && <> Last answered {relTime(prediction.outcomeMarkedAt, now)}.</>}
-              </p>
-            )}
-            {SLOTS.map(({ key, question }) => {
-              const said = prediction.slots[key];
-              const mark = prediction.planMarks[key];
-              const outcome = outcomeMarks[key];
-              if (said === null)
-                return (
-                  <div className="cn-pmark-row is-skipped" key={key}>
-                    <div className="cn-pmark-q">{question}</div>
-                    <p className="cn-pmark-skipped">Skipped — nothing was written here, so there is nothing to mark.</p>
-                  </div>
-                );
-              const pairing = showOutcome ? pairingOf(mark, outcome) : null;
-              const wording = wordingFor(key);
-              return (
-                <div className={`cn-pmark-row ${mark === null ? 'is-unmarked' : `is-${mark}`}`} key={key}>
-                  <div className="cn-pmark-q">{question}</div>
-                  <blockquote className="cn-pmark-said-text">{said}</blockquote>
-                  <Moment
-                    moment="one"
-                    ask="Did you call it?"
-                    about="about your reading of the system"
-                    options={wording.options}
-                    state={wording.state}
-                    unanswered="Not marked yet"
-                    question={question}
-                    mark={mark}
-                    onPick={(next) => write(key, next)}
-                  />
-                  {/* The judge's second reading, only once there is one and never before the
-                      operator's own — it is dispatched after their mark, so it cannot anchor it.
-                      → docs/spec/17-cockpit.md#moment-one--the-prediction-beside-the-plan */}
-                  {prediction.judgeMarkedAt !== null && (
-                    <p
-                      className={`cn-pmark-judge ${
-                        mark !== null && prediction.judgeMarks[key] !== null && prediction.judgeMarks[key] !== mark
-                          ? 'is-apart'
-                          : ''
-                      }`}
-                    >
-                      The judge’s reading:{' '}
-                      {prediction.judgeMarks[key] === null
-                        ? 'left unmarked'
-                        : wording.state[prediction.judgeMarks[key]]}
-                      {mark !== null && prediction.judgeMarks[key] !== null && prediction.judgeMarks[key] !== mark
-                        ? ' — it read this differently from you.'
-                        : ''}
-                    </p>
-                  )}
-                  {showOutcome && (
-                    <Moment
-                      moment="two"
-                      ask="Was the plan right?"
-                      about="about the plan, not about you"
-                      options={wording.outcomeOptions}
-                      state={wording.outcomeState}
-                      unanswered="Not answered yet"
-                      question={question}
-                      mark={outcome}
-                      onPick={(next) => writeOutcome(key, next)}
-                    />
-                  )}
-                  {pairing !== null && (
-                    <p className={`cn-pmark-pair ${pairing.apart ? 'is-apart' : ''}`}>{pairing.said}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="cn-pmark-plan">
-            <h4>What the plan says</h4>
-            {plan === null && <p className="cn-pmark-skipped">This goal no longer carries a plan to read against.</p>}
-            {plan !== null && (
-              <>
-                <div className="cn-pmark-title">{plan.title}</div>
-                {panes.map((pane) => (
-                  <div className="cn-pmark-pane" key={pane.label}>
-                    <div className="cn-pmark-pane-label">{pane.label}</div>
-                    <div className="cn-pmark-prose">{renderMarkdown(pane.body)}</div>
-                  </div>
-                ))}
-                {parts.length > 0 && (
-                  <div className="cn-pmark-pane">
-                    <div className="cn-pmark-pane-label">The parts</div>
-                    <ul className="cn-pmark-parts">
-                      {parts.map((part) => (
-                        <li key={part.id}>
-                          {part.title}
-                          {part.touches.length > 0 && <i className="cn-pmark-touches">{part.touches.join(', ')}</i>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {panes.length === 0 && parts.length === 0 && (
-                  <p className="cn-pmark-skipped">The plan records no prose and no parts.</p>
-                )}
-              </>
-            )}
-          </div>
+          <PredictionSaid
+            prediction={prediction}
+            showOutcome={showOutcome}
+            now={now}
+            write={write}
+            writeOutcome={writeOutcome}
+          />
+          <PlanSide plan={plan} parts={parts} />
         </div>
       )}
     </div>

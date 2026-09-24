@@ -133,6 +133,214 @@ function usePrDescription(prNumber: number): { reading: Reading; reload: () => P
   return reading === null ? null : { reading, reload };
 }
 
+function Unwritten(): JSX.Element {
+  return (
+    <>
+      {/* Only where nobody has written one. On a page that already carries a
+          description the argument for writing it has been made and won. */}
+      <p className="cn-desc-why">
+        A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
+        the agent&rsquo;s. Read the change above first; what you write goes to the top of this pull request&rsquo;s
+        body. It holds nothing up: leave it and the pull request carries the evidence alone, or use the agent&rsquo;s
+        draft instead.
+      </p>
+      <p className="cn-empty">Nobody has described this pull request.</p>
+    </>
+  );
+}
+
+function HandedOver({ handedOver, now }: { handedOver: PrDescriptionDraft; now: number }): JSX.Element {
+  if (handedOver.text === null) {
+    return <p className="cn-empty">Handed to an agent. It is reading the diff and writing the description.</p>;
+  }
+  return (
+    <div className="cn-desc-current">
+      <blockquote className="cn-desc-text">{handedOver.text}</blockquote>
+      <div className="cn-desc-by">
+        written by an agent · {relTime(handedOver.writtenAt ?? handedOver.handedAt ?? '', now)}
+        {handedOver.pushedAt === null && ' · not on the pull request yet'}
+      </div>
+    </div>
+  );
+}
+
+function CurrentVersion({ current, now }: { current: PrDescriptionVersion; now: number }): JSX.Element {
+  return (
+    <div className="cn-desc-current">
+      <blockquote className="cn-desc-text">{current.text}</blockquote>
+      <div className="cn-desc-by">
+        {current.author ?? 'author unrecorded'} · {relTime(current.authoredAt, now)}
+      </div>
+      {/* Checked without asking: rule pr-description-check reads every version against the diff.
+          → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking */}
+      {current.checkedAt === null && (
+        <p className="cn-desc-pending">An agent is reading this against the diff. It will only flag what matters.</p>
+      )}
+      <Checked version={current} now={now} />
+    </div>
+  );
+}
+
+function DescriptionReading({
+  current,
+  handedOver,
+  hiddenDraft,
+  revealed,
+  now,
+}: {
+  current: PrDescriptionVersion | null;
+  handedOver: PrDescriptionDraft | null;
+  hiddenDraft: string | null;
+  revealed: boolean;
+  now: number;
+}): JSX.Element {
+  return (
+    <>
+      {current === null && handedOver === null && <Unwritten />}
+
+      {handedOver !== null && <HandedOver handedOver={handedOver} now={now} />}
+
+      {hiddenDraft !== null && revealed && (
+        <div className="cn-desc-current">
+          <blockquote className="cn-desc-text">{hiddenDraft}</blockquote>
+          <div className="cn-desc-by">the agent&rsquo;s draft · not on the pull request</div>
+        </div>
+      )}
+
+      {current !== null && <CurrentVersion current={current} now={now} />}
+    </>
+  );
+}
+
+/* Handed over, and not since overridden by the operator's own version, which
+   outranks it. Before the press the draft is hidden behind a reveal, so the
+   operator can write first. → docs/spec/07-pull-requests.md#the-agents-draft */
+function draftShown(
+  current: PrDescriptionVersion | null,
+  draft: PrDescriptionDraft | null,
+): { handedOver: PrDescriptionDraft | null; hiddenDraft: string | null } {
+  const handedOver = current === null && draft !== null && draft.handedAt !== null ? draft : null;
+  const hiddenDraft = current === null && handedOver === null && draft?.text ? draft.text : null;
+  return { handedOver, hiddenDraft };
+}
+
+function DescriptionForm({
+  text,
+  setText,
+  refusal,
+  onCancel,
+  onSubmit,
+}: {
+  text: string;
+  setText: (text: string) => void;
+  refusal: string | null;
+  onCancel: () => void;
+  onSubmit: () => Promise<void>;
+}): JSX.Element {
+  return (
+    <div className="cn-desc-form">
+      <div className="cn-desc-cols">
+        <label>
+          <span>Say what this pull request does, in your own words</span>
+          <textarea
+            className="cn-desc-write"
+            rows={8}
+            value={text}
+            placeholder="Why it is needed, and what it changes"
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        <div className="cn-desc-hints">
+          <div className="cn-desc-hints-hdr">A reviewer has to be able to answer these</div>
+          <ul>
+            {PROMPTS.map(({ key, ask }) => (
+              <li key={key}>{ask}</li>
+            ))}
+          </ul>
+          <p className="cn-desc-hints-foot">
+            Hints, not boxes. Nothing is required — but a question you cannot answer is worth noticing before a reviewer
+            meets it.
+          </p>
+        </div>
+      </div>
+      {refusal !== null && <p className="cn-desc-refusal">{refusal}</p>}
+      <div className="cn-desc-presses">
+        <button type="button" className={buttonClass({ ghost: true })} onClick={onCancel}>
+          Cancel
+        </button>
+        <AsyncButton tone="primary" onClick={onSubmit}>
+          Save it
+        </AsyncButton>
+      </div>
+    </div>
+  );
+}
+
+function writeLabel(current: PrDescriptionVersion | null, handedOver: PrDescriptionDraft | null): string {
+  if (current !== null) return 'Rewrite it';
+  return handedOver !== null ? 'Write your own instead' : 'Describe it';
+}
+
+function DescriptionPresses({
+  current,
+  handedOver,
+  hiddenDraft,
+  revealed,
+  setRevealed,
+  onWrite,
+  handOff,
+  desktopFolder,
+  part,
+}: {
+  current: PrDescriptionVersion | null;
+  handedOver: PrDescriptionDraft | null;
+  hiddenDraft: string | null;
+  revealed: boolean;
+  setRevealed: (revealed: boolean) => void;
+  onWrite: () => void;
+  handOff: () => Promise<void>;
+  desktopFolder: string | null;
+  part: RegExpExecArray | null;
+}): JSX.Element {
+  return (
+    <div className="cn-desc-presses">
+      {/* Primary only where nobody has written one. A rewrite is one way on from
+          a page that already carries a description, and drawn as the act the
+          page is asking for it reads as work owed on every pull request. */}
+      <button
+        type="button"
+        className={buttonClass(current === null && handedOver === null ? { tone: 'primary' } : {})}
+        onClick={onWrite}
+      >
+        {writeLabel(current, handedOver)}
+      </button>
+      {/* The agent's body, on this one pull request and only on a press. */}
+      {hiddenDraft !== null && (
+        <button type="button" className={buttonClass({ ghost: true })} onClick={() => setRevealed(!revealed)}>
+          {revealed ? 'Hide the agent’s draft' : 'Reveal the agent’s draft'}
+        </button>
+      )}
+      {hiddenDraft !== null && <AsyncButton onClick={handOff}>Use the agent&rsquo;s</AsyncButton>}
+      {/* No draft to use: the agent sent no body, so one is dispatched to write it. */}
+      {current === null && handedOver === null && hiddenDraft === null && (
+        <AsyncButton onClick={handOff}>Hand it to the agent</AsyncButton>
+      )}
+      {/* The check is the operator's own Claude Code rather than a dispatched
+          agent, because what follows the report is an argument and an argument on
+          the pulse costs an afternoon. It contradicts; it never hands back prose.
+          → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts */}
+      {current !== null && desktopFolder !== null && part !== null && (
+        <DesktopLink
+          folder={desktopFolder}
+          prompt={descriptionPrompt(Number(part[1]), part[2] ?? '')}
+          label="Check my description"
+          explain="which reads what you wrote against the diff and says where they disagree. It will not write one for you."
+        />
+      )}
+    </div>
+  );
+}
+
 /**
  * The description an operator writes for a pull request, and the offer to have their
  * own Claude Code argue with it.
@@ -189,11 +397,7 @@ export function PrDescription({
     await held.reload();
   };
 
-  /* Handed over, and not since overridden by the operator's own version, which
-     outranks it. Before the press the draft is hidden behind a reveal, so the
-     operator can write first. → docs/spec/07-pull-requests.md#the-agents-draft */
-  const handedOver = current === null && draft !== null && draft.handedAt !== null ? draft : null;
-  const hiddenDraft = current === null && handedOver === null && draft?.text ? draft.text : null;
+  const { handedOver, hiddenDraft } = draftShown(current, draft);
 
   return (
     <section className="cn-card cn-desc">
@@ -202,133 +406,38 @@ export function PrDescription({
         {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}
       </h3>
 
-      {/* Only where nobody has written one. On a page that already carries a
-          description the argument for writing it has been made and won. */}
-      {current === null && handedOver === null && !writing && (
-        <p className="cn-desc-why">
-          A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
-          the agent&rsquo;s. Read the change above first; what you write goes to the top of this pull request&rsquo;s
-          body. It holds nothing up: leave it and the pull request carries the evidence alone, or use the agent&rsquo;s
-          draft instead.
-        </p>
-      )}
-
-      {current === null && handedOver === null && !writing && (
-        <p className="cn-empty">Nobody has described this pull request.</p>
-      )}
-
-      {handedOver !== null && !writing && handedOver.text === null && (
-        <p className="cn-empty">Handed to an agent. It is reading the diff and writing the description.</p>
-      )}
-
-      {handedOver !== null && !writing && handedOver.text !== null && (
-        <div className="cn-desc-current">
-          <blockquote className="cn-desc-text">{handedOver.text}</blockquote>
-          <div className="cn-desc-by">
-            written by an agent · {relTime(handedOver.writtenAt ?? handedOver.handedAt ?? '', now)}
-            {handedOver.pushedAt === null && ' · not on the pull request yet'}
-          </div>
-        </div>
-      )}
-
-      {hiddenDraft !== null && revealed && !writing && (
-        <div className="cn-desc-current">
-          <blockquote className="cn-desc-text">{hiddenDraft}</blockquote>
-          <div className="cn-desc-by">the agent&rsquo;s draft · not on the pull request</div>
-        </div>
-      )}
-
-      {current !== null && !writing && (
-        <div className="cn-desc-current">
-          <blockquote className="cn-desc-text">{current.text}</blockquote>
-          <div className="cn-desc-by">
-            {current.author ?? 'author unrecorded'} · {relTime(current.authoredAt, now)}
-          </div>
-          {/* Checked without asking: rule pr-description-check reads every version against the diff.
-              → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking */}
-          {current.checkedAt === null && (
-            <p className="cn-desc-pending">
-              An agent is reading this against the diff. It will only flag what matters.
-            </p>
-          )}
-          <Checked version={current} now={now} />
-        </div>
+      {!writing && (
+        <DescriptionReading
+          current={current}
+          handedOver={handedOver}
+          hiddenDraft={hiddenDraft}
+          revealed={revealed}
+          now={now}
+        />
       )}
 
       {writing && (
-        <div className="cn-desc-form">
-          <div className="cn-desc-cols">
-            <label>
-              <span>Say what this pull request does, in your own words</span>
-              <textarea
-                className="cn-desc-write"
-                rows={8}
-                value={text}
-                placeholder="Why it is needed, and what it changes"
-                onChange={(e) => setText(e.target.value)}
-              />
-            </label>
-            <div className="cn-desc-hints">
-              <div className="cn-desc-hints-hdr">A reviewer has to be able to answer these</div>
-              <ul>
-                {PROMPTS.map(({ key, ask }) => (
-                  <li key={key}>{ask}</li>
-                ))}
-              </ul>
-              <p className="cn-desc-hints-foot">
-                Hints, not boxes. Nothing is required — but a question you cannot answer is worth noticing before a
-                reviewer meets it.
-              </p>
-            </div>
-          </div>
-          {refusal !== null && <p className="cn-desc-refusal">{refusal}</p>}
-          <div className="cn-desc-presses">
-            <button type="button" className={buttonClass({ ghost: true })} onClick={() => setWriting(false)}>
-              Cancel
-            </button>
-            <AsyncButton tone="primary" onClick={submit}>
-              Save it
-            </AsyncButton>
-          </div>
-        </div>
+        <DescriptionForm
+          text={text}
+          setText={setText}
+          refusal={refusal}
+          onCancel={() => setWriting(false)}
+          onSubmit={submit}
+        />
       )}
 
       {!writing && (
-        <div className="cn-desc-presses">
-          {/* Primary only where nobody has written one. A rewrite is one way on from
-              a page that already carries a description, and drawn as the act the
-              page is asking for it reads as work owed on every pull request. */}
-          <button
-            type="button"
-            className={buttonClass(current === null && handedOver === null ? { tone: 'primary' } : {})}
-            onClick={() => setWriting(true)}
-          >
-            {current !== null ? 'Rewrite it' : handedOver !== null ? 'Write your own instead' : 'Describe it'}
-          </button>
-          {/* The agent's body, on this one pull request and only on a press. */}
-          {hiddenDraft !== null && (
-            <button type="button" className={buttonClass({ ghost: true })} onClick={() => setRevealed(!revealed)}>
-              {revealed ? 'Hide the agent\u2019s draft' : 'Reveal the agent\u2019s draft'}
-            </button>
-          )}
-          {hiddenDraft !== null && <AsyncButton onClick={handOff}>Use the agent&rsquo;s</AsyncButton>}
-          {/* No draft to use: the agent sent no body, so one is dispatched to write it. */}
-          {current === null && handedOver === null && hiddenDraft === null && (
-            <AsyncButton onClick={handOff}>Hand it to the agent</AsyncButton>
-          )}
-          {/* The check is the operator's own Claude Code rather than a dispatched
-              agent, because what follows the report is an argument and an argument on
-              the pulse costs an afternoon. It contradicts; it never hands back prose.
-              → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts */}
-          {current !== null && desktopFolder !== null && part !== null && (
-            <DesktopLink
-              folder={desktopFolder}
-              prompt={descriptionPrompt(Number(part[1]), part[2] ?? '')}
-              label="Check my description"
-              explain="which reads what you wrote against the diff and says where they disagree. It will not write one for you."
-            />
-          )}
-        </div>
+        <DescriptionPresses
+          current={current}
+          handedOver={handedOver}
+          hiddenDraft={hiddenDraft}
+          revealed={revealed}
+          setRevealed={setRevealed}
+          onWrite={() => setWriting(true)}
+          handOff={handOff}
+          desktopFolder={desktopFolder}
+          part={part}
+        />
       )}
     </section>
   );

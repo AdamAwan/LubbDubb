@@ -225,7 +225,7 @@ function CheckForm({
 }) {
   const [draft, setDraft] = useState<Draft>(initial === undefined ? blankDraft(kind ?? 'signal') : draftOf(initial));
   const [refusals, setRefusals] = useState<string[]>([]);
-  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+  const set: SetField = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
 
   const refusal = refuse(draft, taken, initial !== undefined);
   const rereads =
@@ -240,140 +240,171 @@ function CheckForm({
     >
       <span className="cn-sig-stripe" />
       <div className="cn-sig-form">
-        <label className="cn-sig-field">
-          <span>Id</span>
-          <input
-            className="cn-in"
-            value={draft.id}
-            onChange={(e) => set('id', e.target.value)}
-            disabled={initial !== undefined}
-            placeholder="orders-throw"
-            title={
-              initial === undefined
-                ? 'Lowercase kebab-case. Every writer merges on it, so it has to survive a replan.'
-                : 'The merge key. A replan folds onto it, so it cannot change — delete the check and write another.'
-            }
-          />
-        </label>
-        <label className="cn-sig-field">
-          <span>Title</span>
-          <input
-            className="cn-in"
-            value={draft.title}
-            onChange={(e) => set('title', e.target.value)}
-            placeholder="Order submission stops throwing"
-          />
-        </label>
-        <label className="cn-sig-field">
-          <span title="Bound it with {since} — the harness fills in the moment the work arrived">Query</span>
-          <textarea
-            className="cn-in cn-sig-area"
-            rows={2}
-            value={draft.query}
-            onChange={(e) => set('query', e.target.value)}
-            placeholder="traces | where timestamp > datetime({since}) | where ..."
-          />
-        </label>
-        {draft.kind === 'signal' ? (
-          <>
-            <label className="cn-sig-field">
-              <span title="A second query, whose only job is to prove the code path runs at all">Presence</span>
-              <textarea
-                className="cn-in cn-sig-area"
-                rows={2}
-                value={draft.presence}
-                onChange={(e) => set('presence', e.target.value)}
-                placeholder="traces | where timestamp > datetime({since}) | where ..."
-              />
-            </label>
-            <label className="cn-sig-field cn-sig-narrow">
-              <span>Tolerate</span>
-              <input
-                className="cn-in"
-                value={draft.tolerate}
-                onChange={(e) => set('tolerate', e.target.value)}
-                title="The count this must not exceed. Almost always zero — the thing should not be happening."
-              />
-            </label>
-          </>
-        ) : (
-          <div className="cn-sig-expects">
-            <label className="cn-sig-field cn-sig-narrow">
-              <span>Under</span>
-              <input
-                className="cn-in"
-                value={draft.under}
-                onChange={(e) => set('under', e.target.value)}
-                placeholder="500"
-              />
-            </label>
-            <label className="cn-sig-field cn-sig-narrow">
-              <span>Over</span>
-              <input
-                className="cn-in"
-                value={draft.over}
-                onChange={(e) => set('over', e.target.value)}
-                placeholder="99.5"
-              />
-            </label>
-            <label className="cn-sig-field cn-sig-narrow">
-              <span>Unit</span>
-              <input
-                className="cn-in"
-                value={draft.unit}
-                onChange={(e) => set('unit', e.target.value)}
-                placeholder="ms"
-              />
-            </label>
-            <label
-              className="cn-sig-check"
-              title="Read lower-is-better. A number whose good news is bigger declares an “over” instead."
-            >
-              <input
-                className="cn-sig-box"
-                type="checkbox"
-                checked={draft.baseline}
-                onChange={(e) => set('baseline', e.target.checked)}
-              />
-              <span>No worse than the baseline</span>
-            </label>
-          </div>
-        )}
+        <CommonFields draft={draft} set={set} editing={initial !== undefined} />
+        {draft.kind === 'signal' ? <SignalFields draft={draft} set={set} /> : <MeasureFields draft={draft} set={set} />}
         <label className="cn-sig-field">
           <span>Why (optional)</span>
           <input className="cn-in" value={draft.why} onChange={(e) => set('why', e.target.value)} />
         </label>
-        {rereads && (
-          <p className="cn-sig-warn">
-            The question is changing, so the reading goes with it
-            {initial?.expectBaseline === true && ', and the baseline with that — it was read before the work arrived'}.
-          </p>
-        )}
-        {refusal !== null && <p className="cn-sig-warn">{refusal}</p>}
-        {refusals.map((said) => (
-          <p className="cn-sig-warn" key={said}>
-            {said}
-          </p>
-        ))}
-        <div className="cn-sig-ctrls">
-          <AsyncButton
-            tone="primary"
-            disabled={refusal !== null}
-            onClick={async () => {
-              const said = await onSave(declaration(draft));
-              setRefusals(said);
-              if (said.length === 0) onClose();
-            }}
-          >
-            Save &amp; run
-          </AsyncButton>
-          <Button onClick={onClose}>Cancel</Button>
-          {onDelete !== null && (
-            <ConfirmButton className="cn-sig-spacer" label="Delete" confirmLabel="Delete it" onConfirm={onDelete} />
-          )}
-        </div>
+        <CheckFormFooter
+          initial={initial}
+          rereads={rereads}
+          refusal={refusal}
+          refusals={refusals}
+          onSave={async () => {
+            const said = await onSave(declaration(draft));
+            setRefusals(said);
+            if (said.length === 0) onClose();
+          }}
+          onClose={onClose}
+          onDelete={onDelete}
+        />
       </div>
     </form>
+  );
+}
+
+type SetField = <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+
+function CommonFields({ draft, set, editing }: { draft: Draft; set: SetField; editing: boolean }) {
+  return (
+    <>
+      <label className="cn-sig-field">
+        <span>Id</span>
+        <input
+          className="cn-in"
+          value={draft.id}
+          onChange={(e) => set('id', e.target.value)}
+          disabled={editing}
+          placeholder="orders-throw"
+          title={
+            !editing
+              ? 'Lowercase kebab-case. Every writer merges on it, so it has to survive a replan.'
+              : 'The merge key. A replan folds onto it, so it cannot change — delete the check and write another.'
+          }
+        />
+      </label>
+      <label className="cn-sig-field">
+        <span>Title</span>
+        <input
+          className="cn-in"
+          value={draft.title}
+          onChange={(e) => set('title', e.target.value)}
+          placeholder="Order submission stops throwing"
+        />
+      </label>
+      <label className="cn-sig-field">
+        <span title="Bound it with {since} — the harness fills in the moment the work arrived">Query</span>
+        <textarea
+          className="cn-in cn-sig-area"
+          rows={2}
+          value={draft.query}
+          onChange={(e) => set('query', e.target.value)}
+          placeholder="traces | where timestamp > datetime({since}) | where ..."
+        />
+      </label>
+    </>
+  );
+}
+
+function SignalFields({ draft, set }: { draft: Draft; set: SetField }) {
+  return (
+    <>
+      <label className="cn-sig-field">
+        <span title="A second query, whose only job is to prove the code path runs at all">Presence</span>
+        <textarea
+          className="cn-in cn-sig-area"
+          rows={2}
+          value={draft.presence}
+          onChange={(e) => set('presence', e.target.value)}
+          placeholder="traces | where timestamp > datetime({since}) | where ..."
+        />
+      </label>
+      <label className="cn-sig-field cn-sig-narrow">
+        <span>Tolerate</span>
+        <input
+          className="cn-in"
+          value={draft.tolerate}
+          onChange={(e) => set('tolerate', e.target.value)}
+          title="The count this must not exceed. Almost always zero — the thing should not be happening."
+        />
+      </label>
+    </>
+  );
+}
+
+function MeasureFields({ draft, set }: { draft: Draft; set: SetField }) {
+  return (
+    <div className="cn-sig-expects">
+      <label className="cn-sig-field cn-sig-narrow">
+        <span>Under</span>
+        <input className="cn-in" value={draft.under} onChange={(e) => set('under', e.target.value)} placeholder="500" />
+      </label>
+      <label className="cn-sig-field cn-sig-narrow">
+        <span>Over</span>
+        <input className="cn-in" value={draft.over} onChange={(e) => set('over', e.target.value)} placeholder="99.5" />
+      </label>
+      <label className="cn-sig-field cn-sig-narrow">
+        <span>Unit</span>
+        <input className="cn-in" value={draft.unit} onChange={(e) => set('unit', e.target.value)} placeholder="ms" />
+      </label>
+      <label
+        className="cn-sig-check"
+        title="Read lower-is-better. A number whose good news is bigger declares an “over” instead."
+      >
+        <input
+          className="cn-sig-box"
+          type="checkbox"
+          checked={draft.baseline}
+          onChange={(e) => set('baseline', e.target.checked)}
+        />
+        <span>No worse than the baseline</span>
+      </label>
+    </div>
+  );
+}
+
+function CheckFormFooter({
+  initial,
+  rereads,
+  refusal,
+  refusals,
+  onSave,
+  onClose,
+  onDelete,
+}: {
+  initial: GoalWatch | undefined;
+  rereads: boolean;
+  refusal: string | null;
+  refusals: string[];
+  onSave: () => Promise<void>;
+  onClose: () => void;
+  onDelete: (() => Promise<void>) | null;
+}) {
+  return (
+    <>
+      {rereads && (
+        <p className="cn-sig-warn">
+          The question is changing, so the reading goes with it
+          {initial?.expectBaseline === true && ', and the baseline with that — it was read before the work arrived'}.
+        </p>
+      )}
+      {refusal !== null && <p className="cn-sig-warn">{refusal}</p>}
+      {refusals.map((said) => (
+        <p className="cn-sig-warn" key={said}>
+          {said}
+        </p>
+      ))}
+      <div className="cn-sig-ctrls">
+        <AsyncButton tone="primary" disabled={refusal !== null} onClick={onSave}>
+          Save &amp; run
+        </AsyncButton>
+        <Button onClick={onClose}>Cancel</Button>
+        {onDelete !== null && (
+          <ConfirmButton className="cn-sig-spacer" label="Delete" confirmLabel="Delete it" onConfirm={onDelete} />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -383,13 +414,18 @@ function refuse(draft: Draft, taken: Set<string>, editing: boolean): string | nu
   if (draft.title.trim() === '') return 'A title says what the check is for.';
   if (draft.query.trim() === '') return 'A check is a query.';
   if (!draft.query.includes(SINCE_TOKEN)) return unbounded('query');
-  if (draft.kind === 'signal') {
-    if (draft.presence.trim() === '')
-      return 'A signal needs a presence query. Without one, a typo that matches nothing reads as a clean release.';
-    if (!draft.presence.includes(SINCE_TOKEN)) return unbounded('presence');
-    if (!/^\d+$/.test(draft.tolerate.trim())) return 'Tolerate is a whole number of rows — almost always 0.';
-    return null;
-  }
+  return draft.kind === 'signal' ? refuseSignal(draft) : refuseMeasure(draft);
+}
+
+function refuseSignal(draft: Draft): string | null {
+  if (draft.presence.trim() === '')
+    return 'A signal needs a presence query. Without one, a typo that matches nothing reads as a clean release.';
+  if (!draft.presence.includes(SINCE_TOKEN)) return unbounded('presence');
+  if (!/^\d+$/.test(draft.tolerate.trim())) return 'Tolerate is a whole number of rows — almost always 0.';
+  return null;
+}
+
+function refuseMeasure(draft: Draft): string | null {
   if (draft.under.trim() !== '' && Number.isNaN(Number(draft.under))) return 'Under is a number.';
   if (draft.over.trim() !== '' && Number.isNaN(Number(draft.over))) return 'Over is a number.';
   if (draft.under.trim() === '' && draft.over.trim() === '' && !draft.baseline)
