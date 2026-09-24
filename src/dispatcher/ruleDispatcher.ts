@@ -54,6 +54,7 @@ import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
 import { issueAppraisal } from './rules/issueAppraisal.js';
 import { issuePlan } from './rules/issuePlan.js';
+import { criteriaAlignment } from './rules/criteriaAlignment.js';
 import { issueAssess } from './rules/issueAssess.js';
 import { issueShortfall } from './rules/issueShortfall.js';
 import { issueRetro } from './rules/issueRetro.js';
@@ -86,6 +87,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
   'issue-appraisal': issueAppraisal,
+  'criteria-alignment': criteriaAlignment,
   'issue-plan': issuePlan,
   'issue-assess': issueAssess,
   'issue-shortfall': issueShortfall,

@@ -58,9 +58,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const originRef = issueOriginRef('root', params.number);
       const anchors = criteriaAnchors(system, originRef);
       const versions = store.goalCriteria.listCriteriaVersions(originRef).map((version) => withStanding(version));
+      const current = versions.length === 0 ? null : versions[versions.length - 1]!;
       return {
-        current: versions.length === 0 ? null : versions[versions.length - 1],
+        current,
         versions,
+        alignment: current === null ? null : store.goalCriteria.getAlignment(originRef, current.version),
       };
 
       function withStanding(version: GoalCriteriaVersion): GoalCriteriaVersion & { standing: string } {

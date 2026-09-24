@@ -3,6 +3,7 @@ import type {
   Decision,
   Escalation,
   FeatureSequence,
+  GoalCriteriaAlignment,
   GoalCriteriaVersion,
   GoalPause,
   GoalPriority,
@@ -81,6 +82,7 @@ export interface DispatchContext {
   appraisals?: IssueAppraisal[];
   closedSittings?: ClosedSittings;
   goalCriteria?: GoalCriteriaVersion[];
+  criteriaAlignments?: GoalCriteriaAlignment[];
   retrospectiveOrigins?: string[];
   featureStandings?: { number: number; title: string; key: string }[];
   featureSummaryKeys?: { originRef: string; standingKey: string }[];

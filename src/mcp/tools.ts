@@ -24,6 +24,7 @@ import { retroSubmit } from './tools/retroSubmit.js';
 import { reviewReport } from './tools/reviewReport.js';
 import { reviewRoute } from './tools/reviewRoute.js';
 import { splitAssess } from './tools/splitAssess.js';
+import { criteriaAlignment } from './tools/criteriaAlignment.js';
 import { prDescribe } from './tools/prDescribe.js';
 import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
@@ -75,6 +76,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   review_report: reviewReport,
   review_route: reviewRoute,
   split_assess: splitAssess,
+  criteria_alignment: criteriaAlignment,
   pr_describe: prDescribe,
   report_remedy: reportRemedy,
   raise: raiseFact,

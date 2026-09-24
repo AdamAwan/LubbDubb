@@ -934,6 +934,7 @@ export type {
   ErrorLogEntry,
   Escalation,
   GoalArrival,
+  GoalCriteriaAlignment,
   GoalCriteriaDrift,
   GoalCriteriaVersion,
   CriteriaStanding,

@@ -81,6 +81,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           .code(409)
           .send({ error: 'there is no plan awaiting approval on this goal, so there is nothing to reveal' });
       const reveal = standing ?? predictions.recordReveal(originRef);
+      if (standing === null && sitting) {
+        const criteria = store.goalCriteria.currentCriteria(originRef);
+        if (criteria !== null) store.goalCriteria.recordPressedOn(originRef, criteria.version);
+      }
       if (standing === null) {
         hub.broadcast({ type: 'dirty', sections: ['plans'] });
         if (sitting) await harness.runCycle('manual');

@@ -429,9 +429,9 @@ exactly like an idle fleet.
 Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a goal with no
 plan row and no reveal stamp, that the appraisal does not hold, is held out of rule `issue-plan` until the
 operator closes its [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner),
-and reads `sitting` with the reason `awaiting your prediction and criteria`. (Not yet built: while the
-[alignment check](08-planning.md#the-alignment-check) is out, the reason reads `checking your criteria
-against the ticket`.) It is asked **after** the `appraisal` arm,
+and reads `sitting` with the reason `awaiting your prediction and criteria` — or, while the
+[alignment check](08-planning.md#the-alignment-check) is out, `checking your criteria against the
+ticket`. It is asked **after** the `appraisal` arm,
 because an appraisal still running or holding the goal is the truer reason, and **before** the plan
 funnel, which is what it holds. Unlike every other hold on this page it is a person's, and it is
 reported for the reason the appraisal's pending case is: a goal silently waiting looks exactly like an

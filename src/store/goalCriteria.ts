@@ -1,5 +1,12 @@
 import { nanoid } from 'nanoid';
-import type { GoalCriteriaDrift, GoalCriteriaVersion } from '../types.js';
+import { CRITERIA_ALIGNMENT_VERDICTS, CRITERIA_POINT_TAGS } from '../criteria/alignment.js';
+import type {
+  CriteriaAlignmentPoint,
+  CriteriaAlignmentVerdict,
+  GoalCriteriaAlignment,
+  GoalCriteriaDrift,
+  GoalCriteriaVersion,
+} from '../types.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md#goal-criteria-are-append-only
@@ -120,6 +127,84 @@ export class GoalCriteriaStore {
     return write();
   }
 
+  /**
+   * Records the alignment check's reading of one version. The first reading of a
+   * version stands: a second call answers with it and writes nothing.
+   * → docs/spec/08-planning.md#the-alignment-check
+   */
+  recordAlignment(input: {
+    originRef: string;
+    version: number;
+    verdict: CriteriaAlignmentVerdict;
+    summary: string;
+    points: CriteriaAlignmentPoint[];
+    agentId: string | null;
+  }): GoalCriteriaAlignment | null {
+    const write = this.ctx.db.transaction((): GoalCriteriaAlignment | null => {
+      const criteria = this.ctx
+        .prep(`SELECT id FROM goal_criteria WHERE origin_ref=? AND version=?`)
+        .get(input.originRef, input.version) as { id: string } | undefined;
+      if (!criteria) return null;
+      const standing = this.getAlignment(input.originRef, input.version);
+      if (standing) return standing;
+      const alignment: GoalCriteriaAlignment = {
+        id: `crit_align_${nanoid(10)}`,
+        originRef: input.originRef,
+        version: input.version,
+        criteriaId: criteria.id,
+        verdict: input.verdict,
+        summary: input.summary,
+        points: input.points,
+        agentId: input.agentId,
+        decidedAt: this.ctx.now(),
+        pressedOnAt: null,
+      };
+      this.ctx
+        .prep(
+          `INSERT INTO goal_criteria_alignments
+             (id, origin_ref, version, criteria_id, verdict, summary, points, agent_id, decided_at, pressed_on_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        )
+        .run(
+          alignment.id,
+          alignment.originRef,
+          alignment.version,
+          alignment.criteriaId,
+          alignment.verdict,
+          alignment.summary,
+          JSON.stringify(alignment.points),
+          alignment.agentId,
+          alignment.decidedAt,
+        );
+      return alignment;
+    });
+    return write();
+  }
+
+  getAlignment(originRef: string, version: number): GoalCriteriaAlignment | null {
+    const row = this.ctx
+      .prep(`SELECT * FROM goal_criteria_alignments WHERE origin_ref=? AND version=?`)
+      .get(originRef, version) as AlignmentRow | undefined;
+    return row ? rowToAlignment(row) : null;
+  }
+
+  listAlignments(): GoalCriteriaAlignment[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM goal_criteria_alignments ORDER BY decided_at ASC, rowid ASC`)
+      .all() as AlignmentRow[];
+    return rows.map(rowToAlignment);
+  }
+
+  /** Stamps that the operator closed the sitting over this `conflicting` reading. Once. */
+  recordPressedOn(originRef: string, version: number): void {
+    this.ctx
+      .prep(
+        `UPDATE goal_criteria_alignments SET pressed_on_at=?
+         WHERE origin_ref=? AND version=? AND verdict='conflicting' AND pressed_on_at IS NULL`,
+      )
+      .run(this.ctx.now(), originRef, version);
+  }
+
   /** Every drift record, newest first. The feed's list. */
   listCriteriaDrift(): GoalCriteriaDrift[] {
     const rows = this.ctx
@@ -173,4 +258,50 @@ function rowToVersion(r: CriteriaRow): GoalCriteriaVersion {
     reason: r.reason,
     authoredAt: r.authored_at,
   };
+}
+
+interface AlignmentRow {
+  id: string;
+  origin_ref: string;
+  version: number;
+  criteria_id: string;
+  verdict: string;
+  summary: string;
+  points: string;
+  agent_id: string | null;
+  decided_at: string;
+  pressed_on_at: string | null;
+}
+
+function rowToAlignment(r: AlignmentRow): GoalCriteriaAlignment {
+  return {
+    id: r.id,
+    originRef: r.origin_ref,
+    version: r.version,
+    criteriaId: r.criteria_id,
+    verdict: (CRITERIA_ALIGNMENT_VERDICTS as readonly string[]).includes(r.verdict)
+      ? (r.verdict as CriteriaAlignmentVerdict)
+      : 'partial',
+    summary: r.summary,
+    points: readPoints(r.points),
+    agentId: r.agent_id,
+    decidedAt: r.decided_at,
+    pressedOnAt: r.pressed_on_at,
+  };
+}
+
+function readPoints(json: string): CriteriaAlignmentPoint[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((p: unknown): CriteriaAlignmentPoint[] => {
+    if (typeof p !== 'object' || p === null) return [];
+    const { tag, point, note } = p as { tag?: unknown; point?: unknown; note?: unknown };
+    if (typeof point !== 'string' || !(CRITERIA_POINT_TAGS as readonly string[]).includes(tag as string)) return [];
+    return [{ tag: tag as CriteriaAlignmentPoint['tag'], point, note: typeof note === 'string' ? note : null }];
+  });
 }

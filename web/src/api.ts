@@ -18,6 +18,7 @@ import type {
   CheckDecline,
   Plan,
   CriteriaStanding,
+  GoalCriteriaAlignment,
   GoalCriteriaVersion,
   PrDescriptionDraft,
   PrDescriptionVersion,
@@ -102,6 +103,8 @@ export type CriteriaVersionReading = GoalCriteriaVersion & { standing: CriteriaS
 export interface GoalCriteriaReading {
   current: CriteriaVersionReading | null;
   versions: CriteriaVersionReading[];
+  /** The alignment check's reading of the current version, where one has been taken. */
+  alignment: GoalCriteriaAlignment | null;
 }
 
 export class UnauthorizedError extends Error {

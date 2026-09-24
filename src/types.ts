@@ -2241,6 +2241,34 @@ export interface GoalCriteriaDrift {
   recordedAt: string;
 }
 
+export type CriteriaAlignmentVerdict = 'aligned' | 'partial' | 'conflicting';
+
+type CriteriaPointTag = 'matches' | 'extra' | 'uncovered' | 'contradicts';
+
+export interface CriteriaAlignmentPoint {
+  tag: CriteriaPointTag;
+  point: string;
+  note: string | null;
+}
+
+/**
+ * The alignment check's reading of one criteria version against the ticket's own
+ * criteria. `pressedOnAt` is when the operator closed the sitting over a
+ * `conflicting` verdict. → docs/spec/08-planning.md#the-alignment-check
+ */
+export interface GoalCriteriaAlignment {
+  id: string;
+  originRef: string;
+  version: number;
+  criteriaId: string;
+  verdict: CriteriaAlignmentVerdict;
+  summary: string;
+  points: CriteriaAlignmentPoint[];
+  agentId: string | null;
+  decidedAt: string;
+  pressedOnAt: string | null;
+}
+
 /** One version in a goal's append-only acceptance-criteria chain. */
 export interface GoalCriteriaVersion {
   id: string;

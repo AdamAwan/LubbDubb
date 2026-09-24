@@ -2216,6 +2216,22 @@ CREATE TABLE IF NOT EXISTS goal_criteria (
   UNIQUE (origin_ref, version)
 );
 
+-- The alignment check's reading of one criteria version against the ticket's own
+-- criteria. Keyed on the version it read, so a revision is a new question.
+CREATE TABLE IF NOT EXISTS goal_criteria_alignments (
+  id            TEXT PRIMARY KEY,
+  origin_ref    TEXT NOT NULL,
+  version       INTEGER NOT NULL,
+  criteria_id   TEXT NOT NULL,
+  verdict       TEXT NOT NULL,
+  summary       TEXT NOT NULL,
+  points        TEXT NOT NULL,      -- JSON: CriteriaAlignmentPoint[]
+  agent_id      TEXT,
+  decided_at    TEXT NOT NULL,
+  pressed_on_at TEXT,
+  UNIQUE (origin_ref, version)
+);
+
 CREATE TABLE IF NOT EXISTS goal_criteria_drift (
   id          TEXT PRIMARY KEY,
   origin_ref  TEXT NOT NULL,

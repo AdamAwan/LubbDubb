@@ -802,9 +802,9 @@ one, because a replan resets the row.
 
 ### The intake sitting stands in front of the planner
 
-**Partly built.** The hold on rule `issue-plan`, the stamp that releases it, and the criteria reaching
-the planner and every part are built. Not yet built: the sitting's composer on the goal page and the
-rail's ask ([17](17-cockpit.md#the-reveal-gate)), [the alignment check](#the-alignment-check),
+**Partly built.** The hold on rule `issue-plan`, the stamp that releases it, the alignment check, and
+the criteria reaching the planner and every part are built. Not yet built: the sitting's composer on the goal page and the
+rail's ask ([17](17-cockpit.md#the-reveal-gate)),
 [the prediction judge](#the-prediction-judge) and [the criteria at delivery](#the-criteria-at-delivery),
 each marked where it is described.
 
@@ -847,8 +847,6 @@ and the goals it releases read `not offered`, because they were.
 
 #### The alignment check
 
-**Not yet built.**
-
 Where the goal's ticket carries its **own** acceptance criteria, the operator's are compared against
 them before the sitting can close. The ticket's criteria are the Azure DevOps "Acceptance criteria"
 field, which already reaches the body under its own heading
@@ -856,7 +854,7 @@ field, which already reaches the body under its own heading
 GitHub issue body. A ticket with neither has nothing to compare, and the sitting says so rather than
 dispatching.
 
-Rule `criteria-alignment` dispatches a read-only agent on origin `issue:<n>:criteria-alignment`,
+Rule `criteria-alignment` dispatches a desk agent — no worktree, nothing to read but its prompt — on origin `issue:<n>:criteria-alignment`,
 declared as a family in `src/issueOrigins.ts` with the role of a deliberation, prompted with the ticket
 text and the current criteria version and nothing else. It answers through one tool,
 `criteria_alignment`, tagging every point on either side:

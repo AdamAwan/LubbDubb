@@ -71,5 +71,6 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
     obstacles: store.obstacles.obstacleBoard(),
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
+    criteriaAlignments: store.goalCriteria.listAlignments(),
   };
 }

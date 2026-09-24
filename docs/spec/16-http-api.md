@@ -1845,7 +1845,8 @@ The stamp also closes the
 [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner): on an **open** goal
 with **no plan row**, the press is the sitting's end, it runs a cycle, and the stamp is what releases
 rule `issue-plan`. **409** on a number the world holds no open goal for — there is no sitting there to
-close, and a stamp would read as a decline on a goal never offered. The 409 below stays for a goal
+close, and a stamp would read as a decline on a goal never offered. Closing a sitting over a
+`conflicting` alignment reading stamps `pressed_on_at` on it. The 409 below stays for a goal
 whose plan exists and is not `awaiting_approval`. **Marking is refused (409) until a plan exists**:
 a stamp with no plan behind it is a closed sitting, not a revealed plan.
 
@@ -1914,8 +1915,10 @@ version also writes the drift row.
 
 ### `GET /api/goals/:number/criteria`
 
-`{ current, versions }`, oldest first, each version carrying its **derived** standing.
-→ [14](14-persistence.md#goal-criteria-are-append-only)
+`{ current, versions, alignment }`, oldest first, each version carrying its **derived** standing.
+`alignment` is the [alignment check](08-planning.md#the-alignment-check)'s reading of the **current**
+version, or null where none has been taken — an older version's reading is never served as the
+current one's. → [14](14-persistence.md#goal-criteria-are-append-only)
 
 ### `POST /api/goals/:number/prediction/marks`
 

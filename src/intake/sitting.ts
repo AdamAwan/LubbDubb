@@ -17,6 +17,8 @@ export interface GoalIntake {
 
 export const SITTING_REASON = 'awaiting your prediction and criteria';
 
+export const ALIGNING_REASON = 'checking your criteria against the ticket';
+
 /**
  * Whether the goal's planner waits on its sitting. Only a goal with no plan row: a
  * replan is not a first sight of the goal, and one planned before its sitting meets
