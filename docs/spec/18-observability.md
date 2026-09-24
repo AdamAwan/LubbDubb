@@ -321,6 +321,13 @@ have different oldest members, which no fixture stamping everything at one clock
 that opened before the window and finished inside it spent its money inside it, and counting it at its
 start would leave a nine-hour agent out of the six-hour window it in fact dominated.
 
+**This is the one rule every per-run figure on the page is priced by** — the spend totals and phase rows,
+and reliability's run outcomes and `ciCostUsd` alike. A run's whole `costUsd` lands in the window its
+`runInstant` falls in. CI cost was once summed from dated `usage_events` instead, so one CI run that
+straddled the window's start read $11 on Economics and $1 on Reliability for the same phase, same window,
+same page. Only the spend _timeline_ buckets dated deltas, because a bar is a stretch of time rather than
+a set of runs; its sum is not the headline total and is not meant to be.
+
 **A run that has not ended is inside every window that ends at `now`** (`runInWindow`), whatever its age
 — which is the same sentence read to its conclusion. `runInstant` dates a live run at its start because
 the start is the only end it has, and that is right for placing it on a timeline; it is wrong as a cut,
@@ -953,8 +960,8 @@ the fleet got busy.
 **Cost per red is per verdict, not per fix.** `CiSubject.costUsd` over `reds` is what the panel
 draws, and one CI agent often answers several reds at once — a pull request that went red four times
 and was fixed once divides the same money four ways. It prices the pipeline breaking, not a repair.
-Both figures are windowed off dated `usage_events` rather than whole agent rows, so a run that
-started before the window does not drop its entire cost into a fortnight it barely touched. A CI run
+Both figures are whole agent rows, windowed by [the window's one rule](#the-window), so
+`ciCostUsd` is always the spend panel's `ci` phase row for the same window. A CI run
 whose pull request reported no verdict inside the window reaches `ciCostUsd` and no row: **the total
 is over the fleet, the rows are a ranking**, the same stance every other table here takes about its
 cap.

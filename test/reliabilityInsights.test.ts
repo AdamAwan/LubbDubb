@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildReliabilityInsights, tallyRunOutcomes } from '../src/insights/reliabilityInsights.js';
 import { ciStatusOf, diffWorlds } from '../src/world/worldDiff.js';
-import type { Agent, AgentStatus, Task, UsageEvent, WorldEvent, WorldSnapshot } from '../src/types.js';
+import type { Agent, AgentStatus, Task, WorldEvent, WorldSnapshot } from '../src/types.js';
 import { resolveWindow, type InsightsWindow } from '../src/insights/insightsWindow.js';
 
 const T0 = Date.parse('2026-08-04T00:00:00.000Z');
@@ -58,15 +58,11 @@ function ciEvent(ref: string, status: string, at: number): WorldEvent {
   return { id: `we_${ref}_${at}`, kind: 'pr_ci', ref, summary: `PR #${ref.slice(3)} CI ${status}`, createdAt: iso(at) };
 }
 
-function build(
-  over: { agents?: Agent[]; tasks?: Task[]; ciEvents?: WorldEvent[]; usageEvents?: UsageEvent[] },
-  key: InsightsWindow = '30d',
-) {
+function build(over: { agents?: Agent[]; tasks?: Task[]; ciEvents?: WorldEvent[] }, key: InsightsWindow = '30d') {
   return buildReliabilityInsights({
     agents: over.agents ?? [],
     tasks: over.tasks ?? [],
     ciEvents: over.ciEvents ?? [],
-    usageEvents: over.usageEvents ?? [],
     window: resolveWindow(key, NOW, null),
     now: NOW,
   });
@@ -232,29 +228,40 @@ test('no verdict observed is null, never a clean pipeline', () => {
   assert.equal(ci.flakiest.length, 0);
 });
 
-test('the CI and landing figures are the windowed money, from dated deltas', () => {
-  const agents = [agent('a1', 'done'), agent('a2', 'done'), agent('a3', 'done'), agent('a4', 'done')];
+test('the CI and landing figures are whole runs, priced where they ended', () => {
+  const agents = [
+    agent('a1', 'done', { costUsd: 0.75 }),
+    agent('a2', 'done', { costUsd: 4 }),
+    agent('a3', 'done', { costUsd: 1.5 }),
+    agent('a4', 'done', { costUsd: 0.4 }),
+    agent('a5', 'done', {
+      costUsd: 9,
+      startedAt: iso(NOW - 31 * 24 * 60 * MIN),
+      endedAt: iso(NOW - 30 * 24 * 60 * MIN),
+    }),
+  ];
   const tasks = [
     task('a1', 'pr:41:ci'),
     task('a2', 'issue:12:part:schema'),
     task('a3', 'pr:41:comments'),
     task('a4', 'pr:41:ci-gate'),
+    task('a5', 'pr:41:ci'),
   ];
-  const usageEvents: UsageEvent[] = [
-    { agentId: 'a1', costUsd: 0.5, at: iso(NOW - 60 * MIN) },
-    { agentId: 'a1', costUsd: 0.25, at: iso(NOW - 30 * MIN) },
-    { agentId: 'a1', costUsd: 9, at: iso(NOW - 30 * 24 * 60 * MIN) },
-    { agentId: 'a2', costUsd: 4, at: iso(NOW - 30 * MIN) },
-    { agentId: 'a3', costUsd: 1.5, at: iso(NOW - 30 * MIN) },
-    { agentId: 'a4', costUsd: 0.4, at: iso(NOW - 20 * MIN) },
-  ];
-  const { ci } = build({ agents, tasks, usageEvents }, '7d');
+  const { ci } = build({ agents, tasks }, '7d');
   assert.equal(ci.ciCostUsd, 1.15, 'a blocked gate is the same pipeline’s bill as a failing check');
   assert.equal(ci.landingCostUsd, 1.5, 'answering review is landing, and never in the CI figure');
 });
 
+test('a CI run that straddles the window start charges its whole cost, as the spend panel does', () => {
+  const agents = [
+    agent('a1', 'done', { costUsd: 11, startedAt: iso(NOW - 8 * 60 * MIN), endedAt: iso(NOW - 60 * MIN) }),
+  ];
+  const { ci } = build({ agents, tasks: [task('a1', 'pr:41:ci')] }, '6h');
+  assert.equal(ci.ciCostUsd, 11);
+});
+
 test('CI spend lands on the pull request whose checks it answered', () => {
-  const agents = [agent('a1', 'done'), agent('a2', 'done')];
+  const agents = [agent('a1', 'done', { costUsd: 3 }), agent('a2', 'done', { costUsd: 1 })];
   const tasks = [task('a1', 'pr:41:ci'), task('a2', 'pr:88:ci')];
   const { ci } = build({
     agents,
@@ -267,10 +274,6 @@ test('CI spend lands on the pull request whose checks it answered', () => {
       ciEvent('pr:88', 'failing', NOW - 40 * MIN),
       ciEvent('pr:88', 'passing', NOW - 30 * MIN),
     ],
-    usageEvents: [
-      { agentId: 'a1', costUsd: 3, at: iso(NOW - 55 * MIN) },
-      { agentId: 'a2', costUsd: 1, at: iso(NOW - 35 * MIN) },
-    ],
   });
 
   const byRef = new Map(ci.flakiest.map((s) => [s.ref, s]));
@@ -282,9 +285,8 @@ test('CI spend lands on the pull request whose checks it answered', () => {
 
 test('CI spend on a pull request with no verdict counts in the total and in no row', () => {
   const { ci } = build({
-    agents: [agent('a1', 'done')],
+    agents: [agent('a1', 'done', { costUsd: 2.5 })],
     tasks: [task('a1', 'pr:41:ci')],
-    usageEvents: [{ agentId: 'a1', costUsd: 2.5, at: iso(NOW - 30 * MIN) }],
   });
 
   assert.equal(ci.ciCostUsd, 2.5);

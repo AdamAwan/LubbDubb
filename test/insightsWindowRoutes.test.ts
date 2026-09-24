@@ -5,18 +5,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
+import { Store } from '../src/store/store.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ReliabilityPayload, SpendPayload, SpendTrendPayload, ThroughputPayload } from '../src/wire.js';
 
-function build(): System {
+function build(dbPath = ':memory:'): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-window-'));
   return buildSystem(
     loadConfig({
       auth: { enabled: false } as never,
       labelPrefix: '',
-      dbPath: ':memory:',
+      dbPath,
       agentMode: 'raw',
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
@@ -131,4 +132,40 @@ test('a deployment that has never reported a window still answers, and says it i
     assert.notEqual(window.since, null, url);
   }
   await app.close();
+});
+
+test('a CI run that straddles the window start is priced the same on Economics and on Reliability', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-window-'));
+  const dbPath = join(dir, 'store.db');
+  const now = Date.now();
+  let clock = now - 8 * 60 * 60_000;
+  const seed = new Store(dbPath, () => new Date(clock).toISOString());
+  const task = seed.tasks.createTask({ kind: 'code', title: 'ci', prompt: 'p', branch: null, originRef: 'pr:8:ci' });
+  const agent = seed.agents.createAgent({ taskId: task.id, cwd: '/wt/a', pid: null });
+  const usage = (costUsd: number) => ({
+    costUsd,
+    inputTokens: 1000,
+    outputTokens: 100,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: 2,
+  });
+  seed.agents.recordAgentUsage(agent.id, usage(10));
+  clock = now - 60 * 60_000;
+  seed.agents.recordAgentUsage(agent.id, usage(11));
+  seed.agents.updateAgent(agent.id, { status: 'done', endedAt: new Date(clock).toISOString() });
+  seed.close();
+
+  const system = build(dbPath);
+  const { app } = await buildApp(system);
+  const spend = (await app.inject({ method: 'GET', url: '/api/spend?window=6h' })).json() as SpendPayload;
+  const reliability = (
+    await app.inject({ method: 'GET', url: '/api/reliability?window=6h' })
+  ).json() as ReliabilityPayload;
+
+  const ciPhase = spend.insights.phases.find((p) => p.phase === 'ci');
+  assert.equal(ciPhase?.costUsd, 11);
+  assert.equal(reliability.insights.ci.ciCostUsd, ciPhase?.costUsd, 'one window, one price for the same phase');
+  await app.close();
+  system.store.close();
 });
