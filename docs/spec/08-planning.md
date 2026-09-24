@@ -802,14 +802,6 @@ one, because a replan resets the row.
 
 ### The intake sitting stands in front of the planner
 
-**Partly built.** The hold on rule `issue-plan`, the stamp that releases it, the alignment check, the
-prediction judge, the criteria reaching the planner and every part, and their reading at delivery are
-built. Not yet built: the cockpit's side — the sitting's composer on the goal page, the rail's ask, and
-drawing the alignment, the judge's marks and the criteria's coverage
-([17](17-cockpit.md#the-reveal-gate)).
-
-#### The sitting
-
 Where the [reveal gate](02-configuration.md#the-reveal-gate) is on — `prediction.enabled` or
 `goalCriteria.enabled` — the operator is asked for the goal's prediction and its criteria **after the
 appraisal says `workable` and before the planner is dispatched**, in one sitting on the goal page.

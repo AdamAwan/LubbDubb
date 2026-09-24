@@ -1006,8 +1006,8 @@ One line per criterion — met, not met, waived, or not yet read — is read off
 it by `criteriaCoverage` (`src/criteria/coverage.ts`): any failure is not met, every one passed (or a
 mix of passed and waived) is met, every one waived is waived, anything still out is not yet read, and a
 criterion **no** check names is a **gap**. The close-out row carries those lines under "Your criteria"
-when it is filed, and `GET /api/goals/:number/criteria` serves them as `coverage`; drawing them on the
-sheet is not yet built ([17](17-cockpit.md#goal-criteria-and-drift)).
+when it is filed, `GET /api/goals/:number/criteria` serves them as `coverage`, and the goal page draws
+them on the criteria card ([17](17-cockpit.md#goal-criteria-and-drift)).
 That is the whole of the criteria's reading at delivery, and it holds nothing: a failed check is rule
 `validation-failed`'s, never a shortfall ([When a check fails](#when-a-check-fails)).
 → [08](08-planning.md#the-criteria-at-delivery)

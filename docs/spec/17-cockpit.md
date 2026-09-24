@@ -2751,14 +2751,23 @@ merely not started.
 
 ### The reveal gate
 
-**Not yet built: the sitting moves to the goal page, before the planner.** Where the gate is on, a
-goal appraised `workable` with no stamp draws the same composer — the four slots, the containment
-sentence, and the criteria half behind its rule — on the goal page where the plan card will be, over
-**Write these down** and **Skip, just plan it**, at equal weight. Where the ticket carries its own
-criteria, the [alignment check](08-planning.md#the-alignment-check)'s verdict is drawn under the
-criteria before the stamp, each point with its tag, and a `conflicting` verdict asks the operator to
-revise or press on. The rail's ask leads there. What follows describes the gate as built, which
-remains the path for a plan written before its sitting
+**The sitting is drawn first, on the goal page, before any plan exists.** Where the gate is on and the
+goal's pickup verdict reads `sitting`, the work pane opens with a **Before planning** card
+(`IntakeSitting`) above where the plan will be. It offers **Write these down** and **Skip, just plan
+it** at equal weight, for the gate's own reason. Writing draws the same composer — the four slots, the
+containment sentence, and the criteria half behind its rule, each asked only where it is still owed —
+and **Record these** writes both and keeps the card up rather than closing the sitting, because the
+alignment check has to have its chance first. The card then shows what was recorded; while the pickup
+reason says the check is out it says so, and once a reading lands it draws the verdict and every point
+with its tag, a contradiction in red. **Start planning** — **Plan it anyway** over a `conflicting`
+reading — is the press that stamps the sitting closed; **Revise criteria** appends a version restated in
+full, which is a new question for the check. The goal-page criteria card is not drawn while the sitting
+is open: it asks the same question, and asked twice the operator answers one.
+
+**The rail carries the ask.** A goal whose verdict reads `sitting` is a `sitting` row, `blocking` and
+urgent now, because planning is waiting on the answer; it opens the goal, where the card is.
+
+What follows describes the reveal gate, which remains the path for a plan written before its sitting
 ([08](08-planning.md#the-reveal-gate-on-a-plan-written-before-its-sitting)).
 
 Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan has arrived
@@ -2812,7 +2821,8 @@ is the sitting the operator was already having. A draft with nothing in it is ca
 every refusal the routes can give is drawn inline in the operator's own words rather than thrown.
 
 Under the slots, once, a sentence saying what containment does and does not cover: what is written
-here reaches no agent, but pasting it into the goal's standing instructions would leak it, because
+here reaches no agent but the sealed [judge](08-planning.md#the-prediction-judge), after the operator
+has marked it, but pasting it into the goal's standing instructions would leak it, because
 standing instructions are delivered to agents by design. That is the one hole nothing can close, and
 the operator is told about it at the moment they could fall into it.
 
@@ -2854,9 +2864,9 @@ correctly re-reads the server's fact rather than the page's memory of it.
 
 ### Moment one — the prediction beside the plan
 
-**Not yet built:** once the operator has marked, the
-[prediction judge](08-planning.md#the-prediction-judge)'s marks are drawn beside theirs, slot by slot,
-with a disagreement called out rather than left to be spotted. Never before the operator's mark — the
+Once the judge has read it, the
+[prediction judge](08-planning.md#the-prediction-judge)'s mark is drawn under the operator's on each
+slot, in the same words, and a disagreement is called out rather than left to be spotted. Never before the operator's mark — the
 judge is not dispatched until then, so there is nothing to anchor on.
 
 Where the plan has been revealed on a goal that **has** a prediction, the plan card draws the two side
@@ -2994,7 +3004,13 @@ current criteria version prominently, with the chain behind it collapsed, newest
 **The card is not drawn while the plan is at its gate.** The gate asks what "done" means in the same
 sitting as the prediction ([the criteria half](#the-criteria-half-of-the-gate)); a second field asking
 the same thing lower on the same pane is a question the operator meets twice, and whichever one they
-answer, the other reads as still owed. The card arrives once the plan is revealed.
+answer, the other reads as still owed. The card arrives once the plan is revealed — and, for the same
+reason, not while the goal's [intake sitting](#the-reveal-gate) is open either.
+
+**Once the goal has a check set, each criterion is drawn with its reading** under the current version —
+met, not met, waived, not yet read, or **no check names it**, the last drawn in red beside a failure,
+because an absent check looks exactly like one that passed until someone counts. The letters of the
+checks that name it follow. → [20](20-validation.md#satisfies-and-the-goals-criteria)
 
 **Once anybody has written a version the card arrives folded**, because what is in it is then a
 record and the pane below it is the work. The heading still carries the version count and the drift

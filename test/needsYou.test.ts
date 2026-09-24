@@ -701,3 +701,40 @@ test('the ask is the server\u2019s list, so a cockpit given none draws none', ()
     false,
   );
 });
+
+test('a goal waiting on its intake sitting is a blocking row that opens the goal', () => {
+  const base = buildDemoState();
+  const goal = base.world.issues[0]!;
+  const sitting = (status: 'sitting' | 'planning') =>
+    stateWith({
+      escalations: [],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      world: {
+        ...base.world,
+        pullRequests: unassignedPrs(base),
+        issues: base.world.issues.map((i) =>
+          i.number === goal.number
+            ? {
+                ...i,
+                state: 'open' as const,
+                appraisal: null,
+                pickup: { eligible: false, status, reasons: ['awaiting your prediction and criteria'] },
+              }
+            : { ...i, appraisal: null, pickup: { eligible: false, status: 'planning' as const, reasons: [] } },
+        ),
+      },
+    });
+
+  const rows = buildNeedsYou(sitting('sitting')).filter((r) => r.kind === 'sitting');
+  assert.deepEqual(
+    rows.map((r) => [r.kind, r.group, r.goalRef, r.opens]),
+    [['sitting', 'blocking', `issue:${goal.number}`, 'goal']],
+  );
+  assert.deepEqual(
+    buildNeedsYou(sitting('planning')).filter((r) => r.kind === 'sitting'),
+    [],
+    'a closed sitting asks nothing',
+  );
+});

@@ -87,6 +87,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   describe: 'An open pull request has nobody\u2019s description on it',
   shortfall: 'Delivered work did not reach its goal',
   intake: 'The appraisal could not say a goal is workable',
+  sitting: 'Planning waits on your prediction and criteria',
   permission: 'An agent wants a command',
   profile: 'A goal is waiting on which profile to run on',
   placement: 'A goal is missing from the backlog',

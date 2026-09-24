@@ -852,8 +852,8 @@ goal's [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the
 prediction and the criteria, written before the planner runs — and a goal nobody sits for is not
 planned. That hold is what the keys are the switch for; there is no separate one, and turning both off
 releases every held goal on the next pulse. The sitting is closed through `POST
-/api/goals/:number/reveal` ([16](16-http-api.md#post-apigoalsnumberreveal)); the cockpit's composer for
-it on the goal page is not yet built ([17](17-cockpit.md#the-reveal-gate)).
+/api/goals/:number/reveal` ([16](16-http-api.md#post-apigoalsnumberreveal)), which the goal page's
+**Before planning** card presses ([17](17-cockpit.md#the-reveal-gate)).
 
 Two keys rather than one because the two halves are independently worth being unhappy with, and the
 point of a switch is that it can be thrown for one thing at a time. They are genuinely independent:

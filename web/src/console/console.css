@@ -2210,6 +2210,85 @@ a.cn-qbody {
   color: var(--cn-fg-faint);
 }
 
+/* The intake sitting: the same composer, asked before any plan exists, so there is
+   nothing under it to obscure. → docs/spec/17-cockpit.md#the-reveal-gate */
+.cn-sitting-recorded {
+  display: grid;
+  gap: 10px;
+}
+.cn-sitting-label {
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-sitting-text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  font: 12.5px var(--cn-ui);
+  color: var(--cn-fg);
+}
+.cn-align {
+  border-top: 1px solid var(--cn-line);
+  padding-top: 10px;
+}
+.cn-align-verdict {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg);
+}
+.cn-align-conflicting .cn-align-verdict {
+  color: var(--cn-red-ink);
+}
+.cn-align-points {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-align-tag {
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-align-points .cn-align-matches .cn-align-tag {
+  color: var(--cn-green-ink);
+}
+.cn-align-points .cn-align-contradicts .cn-align-tag {
+  color: var(--cn-red-ink);
+}
+.cn-align-note {
+  color: var(--cn-fg-faint);
+}
+.cn-pmark-judge {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-pmark-judge.is-apart {
+  color: var(--cn-amber-ink);
+}
+.cn-crit-cover {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--cn-fg-dim);
+}
+.cn-crit-cover-reading {
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-crit-cover .is-met .cn-crit-cover-reading {
+  color: var(--cn-green-ink);
+}
+.cn-crit-cover .is-not-met .cn-crit-cover-reading,
+.cn-crit-cover .is-gap .cn-crit-cover-reading {
+  color: var(--cn-red-ink);
+}
+.cn-crit-cover-checks {
+  color: var(--cn-fg-faint);
+}
+
 /* The prediction's own fold. Its position moves — above the parts at the plan's
    gate, at the foot of the card once the work is under way — so the header carries
    the rule above and the panel below it either way.

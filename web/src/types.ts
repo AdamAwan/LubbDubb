@@ -113,6 +113,7 @@ export type {
   CriteriaStanding,
   GoalCriteriaDrift,
   CriterionCoverage,
+  CriteriaAlignmentPoint,
   GoalCriteriaAlignment,
   GoalCriteriaVersion,
   PrDescriptionDraft,

@@ -935,6 +935,7 @@ export type {
   Escalation,
   GoalArrival,
   CriterionCoverage,
+  CriteriaAlignmentPoint,
   GoalCriteriaAlignment,
   GoalCriteriaDrift,
   GoalCriteriaVersion,
