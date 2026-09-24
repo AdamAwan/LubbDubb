@@ -47,9 +47,18 @@ const DRIFT_REASON_HINT =
  * only where the key is on, so a read that does not answer is a deployment with no
  * criteria and the card draws nothing at all.
  */
+const COVERAGE: Record<GoalCriteriaReading['coverage'][number]['reading'], string> = {
+  met: 'met',
+  'not-met': 'not met',
+  waived: 'waived',
+  unread: 'not yet read',
+  gap: 'no check names it',
+};
+
 export function GoalCriteria({
   issueNumber,
   workStarted,
+  hasChecks,
   open,
   settled,
   onToggle,
@@ -57,6 +66,8 @@ export function GoalCriteria({
 }: {
   issueNumber: number;
   workStarted: boolean;
+  /** Whether the goal has a check set, which is when each criterion has a reading to draw. */
+  hasChecks: boolean;
   open: boolean;
   /** Whether `open` is the operator's own answer rather than the page's default. */
   settled: boolean;
@@ -166,6 +177,19 @@ export function GoalCriteria({
 
           {current === null && <p className="cn-empty">No criteria have been written for this goal.</p>}
           {current !== null && <CurrentVersion version={current} now={now} />}
+          {/* Once there is a check set, each criterion reads off the checks that name it —
+              and one nothing names is a gap, drawn as loudly as a failure.
+              → docs/spec/20-validation.md#satisfies-and-the-goals-criteria */}
+          {current !== null && hasChecks && reading.coverage.length > 0 && (
+            <ul className="cn-crit-cover">
+              {reading.coverage.map((c) => (
+                <li key={c.criterion} className={`is-${c.reading}`}>
+                  <span className="cn-crit-cover-reading">{COVERAGE[c.reading]}</span> {c.criterion}
+                  {c.checks.length > 0 && <span className="cn-crit-cover-checks"> · {c.checks.join(', ')}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
 
           {earlier.length > 0 && (
             <details className="cn-crit-chain">

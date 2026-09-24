@@ -76,7 +76,9 @@ report ([14](14-persistence.md#when-a-null-means-something)).
 ## The transaction
 
 `POST /api/agents/:id/eject` (`src/server/routes/ejections.ts`), body `{ reason }`, and the order
-inside it is load-bearing at both ends.
+inside it is load-bearing at both ends. **An agent of a sealed rule is refused before any of it**: an
+ejection hands the brief and the transcript to the operator's Claude Code, and a sealed agent's must
+reach no model but its own ([14](14-persistence.md#the-prediction-judge)).
 
 1. **Kill through `session.kill()`.** Not a direct signal. The injected `ProcessReaper` takes the
    process _subtree_ first, because the agent's shells hold the worktree as their cwd and a reap after

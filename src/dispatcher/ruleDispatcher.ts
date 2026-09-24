@@ -39,6 +39,7 @@ import {
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
+import { sittingHolds } from '../intake/sitting.js';
 import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
 import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 import { isActive, type Candidate, type ConsiderOptions, type RawAction, type StageContext } from './rules/context.js';
@@ -54,6 +55,8 @@ import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
 import { issueAppraisal } from './rules/issueAppraisal.js';
 import { issuePlan } from './rules/issuePlan.js';
+import { criteriaAlignment } from './rules/criteriaAlignment.js';
+import { predictionJudge } from './rules/predictionJudge.js';
 import { issueAssess } from './rules/issueAssess.js';
 import { issueShortfall } from './rules/issueShortfall.js';
 import { issueRetro } from './rules/issueRetro.js';
@@ -87,11 +90,13 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
   'issue-appraisal': issueAppraisal,
+  'criteria-alignment': criteriaAlignment,
   'issue-plan': issuePlan,
   'issue-assess': issueAssess,
   'issue-shortfall': issueShortfall,
   'issue-retro': issueRetro,
   'plan-approval': planApproval,
+  'prediction-judge': predictionJudge,
   'plan-amendment': planAmendment,
   'plan-blocked': planBlocked,
   'plan-part': planPart,
@@ -392,6 +397,8 @@ export class RuleDispatcher implements Dispatcher {
           )
         : [];
 
+    const criteriaByOrigin = new Map((ctx.goalCriteria ?? []).map((c) => [c.originRef, c]));
+
     const validationChecks = new Map<string, ValidationCheck[]>();
     for (const check of ctx.validationChecks ?? []) {
       const group = validationChecks.get(check.originRef);
@@ -440,6 +447,9 @@ export class RuleDispatcher implements Dispatcher {
       },
       deliveryParked,
       appraisalParked,
+      sittingHolds: (issueNumber: number) =>
+        sittingHolds(ctx.closedSittings, issueNumber, plansByOrigin.get(issueOrigin(issueNumber)) ?? null),
+      criteriaFor: (issueNumber: number) => criteriaByOrigin.get(issueOrigin(issueNumber)) ?? null,
       profileOverrides,
       pinFor: (originRef: string | null) =>
         (originRef === null ? undefined : profileOverrides.get(originRef)) ??

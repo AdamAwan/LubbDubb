@@ -17,6 +17,7 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
+import { ALIGNING_REASON, SITTING_REASON, sittingHolds, type ClosedSittings } from '../intake/sitting.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
@@ -116,6 +117,7 @@ type IssuePickupStatusKind =
   | 'planning'
   | 'delivered'
   | 'appraisal'
+  | 'sitting'
   | 'obstacle'
   | 'cooldown'
   | 'escalated'
@@ -140,6 +142,7 @@ export interface IssuePickupContext {
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
   appraisals?: IssueAppraisal[];
+  closedSittings?: ClosedSittings;
   obstacleBlocks?: ObstacleBlock[];
   obstacles?: ObstacleStanding[];
   runs?: IssueRun[];
@@ -244,6 +247,12 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   }
   if (route.route === 'planning') {
     const planner = ctx.tasks.find((t) => t.originRef === planOrigin(issue.number) && isActiveTask(t));
+    if (!planner && sittingHolds(ctx.closedSittings, issue.number, plan)) {
+      const aligning = ctx.tasks.some(
+        (t) => t.originRef === issueOriginRef('criteriaAlignment', issue.number) && isActiveTask(t),
+      );
+      return { eligible: false, status: 'sitting', reasons: [aligning ? ALIGNING_REASON : SITTING_REASON] };
+    }
     const reason = planner
       ? `planning agent ${planner.status === 'waiting' ? 'waiting on you' : planner.status}`
       : route.planner === 'cooldown'

@@ -29,6 +29,8 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `link_ticket`               | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `conclude_work`             | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `appraise_issue`            | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `criteria_alignment`        | The alignment check's reading: how the operator's criteria for a goal line up with the ticket's own, point by point, under one verdict. Fenced to `issue:<n>:criteria-alignment` origins. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `prediction_judge`          | The sealed judge's one tool: `read` hands it the goal's prediction and plan, `mark` takes its moment-one reading. Fenced to `issue:<n>:prediction-judge`. → [14](14-persistence.md#the-prediction-judge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `assess_issue`              | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins. On `delivered` its answer asks for the goal's check set as well, where one is still owed — the half of the fold an operator's prompt override cannot drop. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `conclude_part`             | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `scratch_append`            | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. Takes `note` and an optional `topic` only — it no longer accepts a `decision` ([below](#forks-on-the-pad)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -540,6 +542,26 @@ resolved from the credential.
 
 It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
 repaints on the verdict rather than on the next pulse.
+
+### `prediction_judge`
+
+Arguments `{action: 'read'|'mark', locus?, cause?, split?, avoid?}`. The one tool of the sealed rule
+`prediction-judge`, fenced to its origin. `read` answers with the goal's prediction and its plan — the
+only route by which prediction text reaches a model, through the `judge` seam the composition root hands
+the server. `mark` takes one mark per filled slot, `matched`, `missed` or `not-applicable`, written
+once, beside the operator's; a mark on a skipped slot, a second reading, or a reading before the
+operator has marked is refused, and a refusal names a slot and never its text.
+→ [14](14-persistence.md#the-prediction-judge)
+
+### `criteria_alignment`
+
+Arguments `{version, verdict: 'aligned'|'partial'|'conflicting', summary, points: {tag, point, note?}[]}`.
+Rule `criteria-alignment`'s agent records its reading here, fenced to `issue:<n>:criteria-alignment`
+origins and refused to every other. `version` is the criteria version the prompt named, so a reading
+lands on the text it read even when the operator revised meanwhile, and one naming a version the chain
+does not hold is refused. The verdict and the tags must agree: `conflicting` needs a point tagged
+`contradicts`, and a `contradicts` point makes the verdict `conflicting`. The first reading of a
+version stands. → [08](08-planning.md#the-alignment-check)
 
 ### `appraise_issue`
 
@@ -1409,7 +1431,8 @@ So every tool is named in one of two places, and which one is a decision, not a 
   a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `appraise_issue`, `plan_submit`, `plan_not_needed`, `retro_submit`, `feature_summary`, `link_ticket`,
+  `appraise_issue`, `criteria_alignment`, `plan_submit`, `plan_not_needed`, `retro_submit`,
+  `feature_summary`, `link_ticket`,
   the scratch pair, the validation pair. The planner's **two verdicts** sit here together, and that is the
   rule doing its work rather than an exception to it: `plan_submit` is fenced to `issue:<n>:plan` and
   `plan_not_needed` to the same family, so the addendum — read by every agent there is — was naming a
@@ -1462,6 +1485,12 @@ it scopes, for the reason the naming classification lives there:
   whole set: its prompt is written by an operator and may name anything.
 - `toolsForRule(rule)` — the core plus the extras, and **the whole set for `null`, or for a rule string
   no release ever had**.
+- **A sealed rule is the one exception to all of the above** (`isSealedRule`; today `prediction-judge`
+  alone). Its agent is advertised its own row and **no** core, and `buildTools` builds nothing else for
+  it — the other tools are not hidden but absent, so a call to one is an unknown tool. Advertising is a
+  context question for every other agent; for a sealed one it is an authority question, because what it
+  reads must reach no other agent and every core tool is a way for it to. →
+  [14](14-persistence.md#the-prediction-judge)
 
 **The fail-open default is the load-bearing half.** A task carries no rule when nothing in the pipeline
 dispatched it — rows from before the column existed are backfilled from `dispatchReason` and may stay

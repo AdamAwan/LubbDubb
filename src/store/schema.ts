@@ -1331,6 +1331,7 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   check_expect TEXT NOT NULL,         -- what a pass looks like
   uses        TEXT NOT NULL,          -- JSON array of resource *names*, never paths
   covers      TEXT NOT NULL,          -- JSON array of part slugs this check exercises
+  satisfies   TEXT,                   -- JSON array of goal criteria (their text) this check answers
   fleet_candidate INTEGER NOT NULL DEFAULT 0,  -- the planner's nomination; dispatches nothing
   candidate_why   TEXT,               -- why an agent could run it; kept only with the nomination
   actor       TEXT,                   -- human | fleet — the operator's hand-over; never the planner's
@@ -2176,6 +2177,14 @@ CREATE TABLE IF NOT EXISTS goal_predictions (
   outcome_mark_split TEXT,
   outcome_mark_avoid TEXT,
   outcome_marked_at  TEXT,
+  -- The prediction judge's reading of moment one, beside the operator's. Written once,
+  -- by the one agent that may read a prediction.
+  judge_mark_locus TEXT,
+  judge_mark_cause TEXT,
+  judge_mark_split TEXT,
+  judge_mark_avoid TEXT,
+  judge_marked_at  TEXT,
+  judge_owed       INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -2213,6 +2222,22 @@ CREATE TABLE IF NOT EXISTS goal_criteria (
   author      TEXT,
   reason      TEXT,               -- required when the standing is post-work
   authored_at TEXT NOT NULL,
+  UNIQUE (origin_ref, version)
+);
+
+-- The alignment check's reading of one criteria version against the ticket's own
+-- criteria. Keyed on the version it read, so a revision is a new question.
+CREATE TABLE IF NOT EXISTS goal_criteria_alignments (
+  id            TEXT PRIMARY KEY,
+  origin_ref    TEXT NOT NULL,
+  version       INTEGER NOT NULL,
+  criteria_id   TEXT NOT NULL,
+  verdict       TEXT NOT NULL,
+  summary       TEXT NOT NULL,
+  points        TEXT NOT NULL,      -- JSON: CriteriaAlignmentPoint[]
+  agent_id      TEXT,
+  decided_at    TEXT NOT NULL,
+  pressed_on_at TEXT,
   UNIQUE (origin_ref, version)
 );
 

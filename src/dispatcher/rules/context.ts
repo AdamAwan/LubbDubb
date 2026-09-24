@@ -14,6 +14,7 @@ import type { SequenceWait } from '../../sequence/readiness.js';
 import type {
   Decision,
   FeatureSequence,
+  GoalCriteriaVersion,
   Issue,
   IssueAppraisal,
   IssueConclusion,
@@ -58,6 +59,9 @@ export interface StageContext {
   partsPlanFor: (issueNumber: number) => Plan | null;
   deliveryParked: (issue: Issue) => boolean;
   appraisalParked: (issue: Issue) => boolean;
+  /** → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner */
+  sittingHolds: (issueNumber: number) => boolean;
+  criteriaFor: (issueNumber: number) => GoalCriteriaVersion | null;
   pinFor: (originRef: string | null) => string | null;
   profileOverrides: ReadonlyMap<string, string>;
   eligibleIssues: { issue: Issue; weight: number }[];

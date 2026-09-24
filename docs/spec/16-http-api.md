@@ -1841,6 +1841,15 @@ it for ever.
 
 ### `POST /api/goals/:number/reveal`
 
+The stamp also closes the
+[intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner): on an **open** goal
+with **no plan row**, the press is the sitting's end, it runs a cycle, and the stamp is what releases
+rule `issue-plan`. **409** on a number the world holds no open goal for — there is no sitting there to
+close, and a stamp would read as a decline on a goal never offered. Closing a sitting over a
+`conflicting` alignment reading stamps `pressed_on_at` on it. The 409 below stays for a goal
+whose plan exists and is not `awaiting_approval`. **Marking is refused (409) until a plan exists**:
+a stamp with no plan behind it is a closed sitting, not a revealed plan.
+
 Stamps the reveal server-side and answers `{ ok, reveal, plan }` with the full document. This is the
 call that ends the offer, and the act that ends the opportunity to predict is the same act that would
 have contaminated it — which is why there is no rule against back-filling a prediction to enforce
@@ -1864,7 +1873,10 @@ so it is an invariant of the record rather than a check somebody remembered to w
 its own check only so the refusal can say which rule refused.
 
 Prediction text is served **here and nowhere else**. It reaches no prompt, no tool response, no
-transcript, no retro dossier, no scratchpad and above all no tracker.
+transcript, no retro dossier, no scratchpad and above all no tracker — save the one agent built to read
+it, the [prediction judge](14-persistence.md#the-prediction-judge), which is handed it by its own tool
+and whose output reaches none of those either. The reading `GET /api/goals/:number/prediction` returns
+carries the judge's marks as `judgeMarks` and `judgeMarkedAt`, beside the operator's.
 → [14](14-persistence.md#the-prediction-store-is-not-on-store)
 
 ### `POST /api/goals/:number/prediction/outcome`
@@ -1904,8 +1916,12 @@ version also writes the drift row.
 
 ### `GET /api/goals/:number/criteria`
 
-`{ current, versions }`, oldest first, each version carrying its **derived** standing.
-→ [14](14-persistence.md#goal-criteria-are-append-only)
+`{ current, versions, alignment, coverage }`, oldest first, each version carrying its **derived**
+standing. `coverage` is one reading per criterion of the current version off the checks that name it
+([20](20-validation.md#satisfies-and-the-goals-criteria)), empty with no criteria.
+`alignment` is the [alignment check](08-planning.md#the-alignment-check)'s reading of the **current**
+version, or null where none has been taken — an older version's reading is never served as the
+current one's. → [14](14-persistence.md#goal-criteria-are-append-only)
 
 ### `POST /api/goals/:number/prediction/marks`
 

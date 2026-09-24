@@ -81,7 +81,7 @@ export interface RunwayInput {
 
 const INFLIGHT = new Set(['active', 'has_pr', 'planning']);
 const QUEUED = new Set(['eligible', 'blocked', 'cooldown']);
-const HELD = new Set(['escalated', 'delivered', 'retained']);
+const HELD = new Set(['escalated', 'delivered', 'retained', 'sitting']);
 
 export function readRunway(input: RunwayInput): RunwayReading {
   let inflight = 0;

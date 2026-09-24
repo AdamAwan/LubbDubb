@@ -1,4 +1,6 @@
 import { openedGoals } from '../environments/arrival.js';
+import { criteriaItems } from '../criteria/items.js';
+import { coverageLines, criteriaCoverage } from '../criteria/coverage.js';
 import { watchClearedGoals, watchCloseOutLine, watchWindowReadings } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
@@ -44,6 +46,7 @@ export class DeliveryCloseOutDesk {
       shortfalls: this.store.verdicts.listShortfalls(),
       existing,
       validation: this.validationByOrigin(),
+      criteria: this.criteriaByOrigin(deliveries.map((d) => d.originRef)),
       validating: new Set(
         this.store.humanTasks
           .listHumanTasksOfKind('validate')
@@ -85,6 +88,16 @@ export class DeliveryCloseOutDesk {
       else if (step.kind === 'reopen') this.store.humanTasks.reopenHumanTask(step.taskId, step.detail);
       else this.store.humanTasks.settleHumanTask(step.taskId, step.status, step.resolution);
     }
+  }
+
+  private criteriaByOrigin(origins: readonly string[]): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const originRef of origins) {
+      const items = criteriaItems(this.store.goalCriteria.currentCriteria(originRef)?.text);
+      if (items.length === 0) continue;
+      out.set(originRef, coverageLines(criteriaCoverage(items, this.store.validation.listValidationChecks(originRef))));
+    }
+    return out;
   }
 
   private validationByOrigin(): Map<string, GoalValidation> {

@@ -124,7 +124,7 @@ test('a reveal cannot burn a gate it never opened', async () => {
 
   const noPlan = await app.inject({ method: 'POST', url: '/api/goals/99/reveal' });
   assert.equal(noPlan.statusCode, 409);
-  assert.match((noPlan.json() as { error: string }).error, /nothing to reveal/);
+  assert.match((noPlan.json() as { error: string }).error, /no open goal/);
   assert.equal(system.predictions.getReveal('issue:99'), null, 'a goal never offered the gate is not a decline');
 
   const notProposed = await app.inject({ method: 'POST', url: '/api/goals/13/reveal' });

@@ -7,6 +7,8 @@ import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
+import { SITTING_REASON } from '../../intake/sitting.js';
+import { goalCriteriaNote } from '../../criteria/note.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `issue-plan`)
@@ -27,6 +29,7 @@ export function issuePlan(s: StageContext): void {
       ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
       : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
     const waits = s.sequenceWaits.get(issue.number);
+    const sitting = !supersededBy && s.sittingHolds(issue.number);
     s.candidates.push({
       origin,
       rule: 'issue-plan',
@@ -35,10 +38,20 @@ export function issuePlan(s: StageContext): void {
       branch,
       reason: supersededBy
         ? supersededReason(supersededBy, reason)
-        : waits
-          ? `${reason} ${sequenceHoldReason(waits)}`
-          : reason,
-      held: supersededBy ? 'superseded' : waits ? 'sequenced' : route.planner === 'cooldown' ? 'cooldown' : undefined,
+        : sitting
+          ? `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`
+          : waits
+            ? `${reason} ${sequenceHoldReason(waits)}`
+            : reason,
+      held: supersededBy
+        ? 'superseded'
+        : sitting
+          ? 'sitting'
+          : waits
+            ? 'sequenced'
+            : route.planner === 'cooldown'
+              ? 'cooldown'
+              : undefined,
       action: {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch(branch, s.defaultBranch),
@@ -68,6 +81,7 @@ export function issuePlan(s: StageContext): void {
             `Your plan needs neither: plan_submit records it directly, and ${PLAN_FILE} is read off disk where ` +
               'you write it.',
           ) +
+          goalCriteriaNote(s.criteriaFor(issue.number)) +
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +

@@ -6,6 +6,8 @@ export type IssueOriginFamily =
   | 'root'
   | 'plan'
   | 'appraisal'
+  | 'criteriaAlignment'
+  | 'predictionJudge'
   | 'sequence'
   | 'split'
   | 'summary'
@@ -45,6 +47,8 @@ const FAMILIES = {
   remoteValidation: { suffix: 'validate-remote', id: '[A-Za-z0-9-]+', role: 'evidence' },
   plan: { suffix: 'plan', id: null, role: 'deliberation' },
   appraisal: { suffix: 'appraisal', id: null, role: 'deliberation' },
+  criteriaAlignment: { suffix: 'criteria-alignment', id: null, role: 'deliberation' },
+  predictionJudge: { suffix: 'prediction-judge', id: null, role: 'deliberation' },
   sequence: { suffix: 'sequence', id: null, role: 'deliberation' },
   split: { suffix: 'split', id: '\\d+', role: 'deliberation' },
   summary: { suffix: 'summary', id: null, role: 'unrecognised' },

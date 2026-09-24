@@ -171,6 +171,13 @@ const RULES = [
       'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and posts, on the ticket, the list of what the author has to add and how to get help adding it; it ends by itself the moment the ticket is rewritten, or when an operator confirms the goal. Ranked ahead of the planner, because appraising a goal the planner is about to decompose is the whole point. It is held behind a story\u2019s declared predecessors like the planner and the pickup are: it reads the repository as it stands, so a story whose predecessor has not landed would be judged against a checkout missing what that predecessor was going to build \u2014 and unlike the hold, which is recomputed every pulse, the `unclear` that would come back is a record keyed to the ticket\u2019s text and outlives the reason for it. An appraiser that writes no verdict \u2014 crashed, killed or capped \u2014 leaves the issue to ordinary pickup, so a failure can never park one.',
   },
   {
+    id: 'criteria-alignment',
+    kind: 'rule',
+    name: 'Your criteria against the ticket',
+    description:
+      'While a goal\u2019s intake sitting is open, criteria the operator has written are compared with the acceptance criteria the ticket carries of its own, by one desk agent that sees nothing else. Every point on either side is tagged \u2014 matches, extra, uncovered, contradicts \u2014 under one verdict: aligned, partial or conflicting. It asks for the gist rather than the wording. It informs the sitting and holds nothing: the operator revises or presses on, and an agent that writes no verdict leaves the sitting to close without one. A ticket with no criteria of its own dispatches nothing.',
+  },
+  {
     id: 'issue-plan',
     kind: 'rule',
     name: 'Issue needs a plan',
@@ -205,6 +212,13 @@ const RULES = [
     name: 'Plan needs your approval',
     description:
       '**Every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds a decomposition\'s parts, `issue-pickup` holds a single verdict\'s issue. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. There is no deployment in which a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
+  },
+  {
+    id: 'prediction-judge',
+    kind: 'rule',
+    name: 'Second reading of a prediction',
+    description:
+      'Once the operator has marked what they predicted against the plan the fleet wrote, one sealed desk agent marks the same slots the same way, so the two readings can be compared \u2014 the rows where they disagree are the ones worth reading. It is the one agent that may read a prediction, and it is sealed so nothing it writes reaches another: its one tool hands it the prediction and takes its marks, it has no other tool and no built-in one, no scratchpad and no tracker. Dispatched once per goal and never before the operator has marked, so it cannot anchor them. A judge that writes nothing leaves the operator\u2019s reading standing alone.',
   },
   {
     id: 'plan-amendment',

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { criteriaItems } from '../../criteria/items.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import {
@@ -70,6 +71,13 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
               .describe('Names of declared resources this check needs. Names, never paths.')
               .optional(),
             covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
+            satisfies: z
+              .array(z.string())
+              .describe(
+                'The goal criteria this check answers, each copied exactly as your prompt lists them. Every ' +
+                  'criterion needs at least one check naming it.',
+              )
+              .optional(),
             fleetCandidate: z
               .boolean()
               .describe(
@@ -151,7 +159,13 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
         .map((r) => r.name),
     );
     const result = deps.store.validation.amendValidation(origin, {
-      checks: validationCheckAmendments(amendment.checks, known, slugs, deps.stepCapabilities ?? NO_STEP_CAPABILITIES),
+      checks: validationCheckAmendments(
+        amendment.checks,
+        known,
+        slugs,
+        deps.stepCapabilities ?? NO_STEP_CAPABILITIES,
+        criteriaItems(deps.store.goalCriteria.currentCriteria(origin)?.text),
+      ),
       withdraw: amendment.withdraw.map((w) => ({ id: w.id, reason: withdrawalReason(w.reason) })),
       resources,
       note: amendmentNote(amendment.note),

@@ -31,6 +31,7 @@ export type NeedKind =
   | 'description_note'
   | 'shortfall'
   | 'intake'
+  | 'sitting'
   | 'profile'
   | 'placement'
   | 'bench'
@@ -83,6 +84,7 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   description_note: 'later',
   shortfall: 'next',
   intake: 'next',
+  sitting: 'now',
   profile: 'next',
   close_out: 'next',
   // Moment two is skippable by design and holds nothing: it belongs behind
@@ -647,6 +649,26 @@ export function buildNeedsYou(
       agentLabel: null,
       holding: 0,
       raisedAt: issue.appraisal.decidedAt,
+    });
+  }
+
+  // Planning waits on the operator here, so the ask blocks: nothing is planned for the goal
+  // until the sitting is closed. → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner
+  for (const issue of state.world.issues) {
+    if (issue.state !== 'open' || issue.pickup.status !== 'sitting') continue;
+    const goalRef = `issue:${issue.number}`;
+    rows.push({
+      id: `sitting:${goalRef}`,
+      kind: 'sitting',
+      group: 'blocking',
+      title: askLine('Planning waits on your prediction and criteria', goalRef, state),
+      goalRef,
+      originRef: goalRef,
+      opens: opensAt(goalRef, state),
+      agentId: null,
+      agentLabel: null,
+      holding: 0,
+      raisedAt: issue.appraisal?.decidedAt ?? state.world.takenAt,
     });
   }
 

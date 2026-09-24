@@ -101,6 +101,8 @@ export function authoringBriefing(input: {
   hint: string | null;
   parts: readonly BriefedPart[];
   environments: string;
+  /** The goal's criteria, one per entry, as the current version states them. */
+  criteria?: readonly string[];
 }): string {
   const covering = input.parts.filter((part) => part.coverage !== null && part.coverage !== undefined);
   const lines = ['\n\n---\n', '## What the plan said was worth checking\n'];
@@ -141,6 +143,20 @@ export function authoringBriefing(input: {
         'you**. It may settle the question, in which case declare nothing and say so; it may be worth running ' +
         'once here; or it may be worth running and then looking at more besides. What it must never be is a ' +
         'check nobody chose.\n',
+    );
+  }
+
+  const criteria = input.criteria ?? [];
+  if (criteria.length > 0) {
+    lines.push(
+      '## What the operator said "done" means\n',
+      ...criteria.map((c) => `- ${c}`),
+      '',
+      "These are the goal's own criteria, written by the operator before any plan existed, and they are the " +
+        'authority on the goal. Write **at least one check per criterion**, and name the criteria each check ' +
+        'answers in its `satisfies`, copying each exactly as it is listed above. A criterion no check names is ' +
+        'drawn as a gap on the sheet and on the close-out. The bar for a check still holds: where a criterion ' +
+        'is settled by the diff or the suite, the check that answers it can say so in its `do`.\n',
     );
   }
 

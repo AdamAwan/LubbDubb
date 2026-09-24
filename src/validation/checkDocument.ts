@@ -183,6 +183,13 @@ export const ValidationCheckSchema = z
       ),
     uses: z.array(z.string().min(1)).default([]),
     covers: z.array(z.string().min(1)).default([]),
+    satisfies: z
+      .array(z.string().min(1))
+      .optional()
+      .describe(
+        'The goal criteria this check answers, each copied exactly as the criteria list states it. Every ' +
+          'criterion needs at least one check naming it; one that names nothing is drawn as a gap.',
+      ),
     fleetCandidate: z.boolean().default(false),
     why: z.string().min(1).optional(),
     steps: z
@@ -191,7 +198,7 @@ export const ValidationCheckSchema = z
       .transform((list) => (list !== undefined && list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list)),
   })
   .strict(
-    'a check declares only id/title/do/expect/proof/uses/covers/steps/fleetCandidate/why — who runs it is not yours to say',
+    'a check declares only id/title/do/expect/proof/uses/covers/satisfies/steps/fleetCandidate/why — who runs it is not yours to say',
   );
 
 export const ValidationSchema = z
@@ -244,10 +251,14 @@ type DeclaredResource = z.infer<typeof ValidationResourceSchema>;
  * exists and declares no test plan, and a legacy one that somehow carries steps gets every one of
  * them assigned to a person, which is the direction this fails in everywhere.
  */
-export function validationCheckInputs(block: ValidationBlock, slugs: readonly string[]): ValidationCheckInput[] {
+export function validationCheckInputs(
+  block: ValidationBlock,
+  slugs: readonly string[],
+  criteria: readonly string[] = [],
+): ValidationCheckInput[] {
   const names = new Set((block.resources ?? []).map((r) => r.name));
   return (block.checks ?? []).map((check, index) => ({
-    ...checkAmendment(check, names, new Set(slugs), NO_STEP_CAPABILITIES),
+    ...checkAmendment(check, names, new Set(slugs), new Set(criteria), NO_STEP_CAPABILITIES),
     seq: index + 1,
   }));
 }
@@ -268,10 +279,12 @@ export function validationCheckSetInputs(
   resources: readonly DeclaredResource[],
   slugs: readonly string[],
   caps: StepCapabilities,
+  criteria: readonly string[] = [],
 ): ValidationCheckInput[] {
   const names = new Set(resources.map((r) => r.name));
   const live = new Set(slugs);
-  return checks.map((check, index) => ({ ...checkAmendment(check, names, live, caps), seq: index + 1 }));
+  const stated = new Set(criteria);
+  return checks.map((check, index) => ({ ...checkAmendment(check, names, live, stated, caps), seq: index + 1 }));
 }
 
 export function declaresCheckSet(block: ValidationBlock): boolean {
@@ -283,16 +296,19 @@ export function validationCheckAmendments(
   resourceNames: readonly string[],
   slugs: readonly string[],
   caps: StepCapabilities,
+  criteria: readonly string[] = [],
 ): ValidationCheckAmendment[] {
   const names = new Set(resourceNames);
   const live = new Set(slugs);
-  return checks.map((check) => checkAmendment(check, names, live, caps));
+  const stated = new Set(criteria);
+  return checks.map((check) => checkAmendment(check, names, live, stated, caps));
 }
 
 function checkAmendment(
   check: DeclaredCheck,
   names: ReadonlySet<string>,
   slugs: ReadonlySet<string>,
+  criteria: ReadonlySet<string>,
   caps: StepCapabilities,
 ): ValidationCheckAmendment {
   const steps = resolveSteps(check.steps ?? [], caps);
@@ -304,6 +320,8 @@ function checkAmendment(
     proof: check.proof ?? null,
     uses: check.uses.filter((name) => names.has(name)),
     covers: check.covers.filter((slug) => slugs.has(slug)),
+    satisfies:
+      check.satisfies === undefined ? undefined : check.satisfies.map((c) => c.trim()).filter((c) => criteria.has(c)),
     fleetCandidate: check.fleetCandidate,
     candidateWhy: check.fleetCandidate ? (check.why ?? null) : null,
     // The steps are the whole of it. The area a check is verified against and the spec names it

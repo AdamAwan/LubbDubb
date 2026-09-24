@@ -33,6 +33,14 @@ export const PREDICTION_COLUMNS: ColumnMigrations = {
     outcome_mark_split: 'TEXT',
     outcome_mark_avoid: 'TEXT',
     outcome_marked_at: 'TEXT',
+    judge_mark_locus: 'TEXT',
+    judge_mark_cause: 'TEXT',
+    judge_mark_split: 'TEXT',
+    judge_mark_avoid: 'TEXT',
+    judge_marked_at: 'TEXT',
+    // Set when the operator marks moment one, so a judge is owed for marks made from here on and
+    // none for the marks every database already holds. → docs/spec/14-persistence.md#the-prediction-judge
+    judge_owed: 'INTEGER NOT NULL DEFAULT 0',
   },
 };
 
@@ -144,6 +152,8 @@ export class PredictionStore {
         planMarkedAt: null,
         outcomeMarks: UNMARKED,
         outcomeMarkedAt: null,
+        judgeMarks: UNMARKED,
+        judgeMarkedAt: null,
         createdAt: ts,
         updatedAt: ts,
       };
@@ -222,6 +232,60 @@ export class PredictionStore {
   }
 
   /**
+   * The goals whose operator has marked moment one and whose judge has not, as origin
+   * refs and nothing else — what the dispatcher is handed to know a judge is owed.
+   * → docs/spec/14-persistence.md#the-prediction-judge
+   */
+  listJudgeOwed(): string[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT origin_ref FROM goal_predictions
+          WHERE judge_owed = 1 AND plan_marked_at IS NOT NULL AND judge_marked_at IS NULL`,
+      )
+      .all() as { origin_ref: string }[];
+    return rows.map((r) => r.origin_ref);
+  }
+
+  /**
+   * The judge's reading of moment one. Written once: the judge is dispatched once per
+   * goal, and a second reading would be a second opinion nobody asked for. Refused
+   * before the operator has marked, so the judge can never anchor the operator.
+   */
+  recordJudgeMarks(input: {
+    originRef: string;
+    marks: MarkInput;
+  }): { ok: true; prediction: GoalPrediction } | { ok: false; error: string } {
+    const write = this.ctx.db.transaction(() => {
+      const standing = this.getPrediction(input.originRef);
+      if (standing === null) return { ok: false as const, error: 'there is no prediction on this goal' };
+      if (standing.planMarkedAt === null)
+        return { ok: false as const, error: 'the operator has not marked this prediction yet' };
+      if (standing.judgeMarkedAt !== null)
+        return { ok: false as const, error: 'this prediction already has a judge’s reading, which stands' };
+      const marks: Record<PredictionSlot, PredictionMark | null> = { ...UNMARKED };
+      for (const slot of PREDICTION_SLOTS) {
+        const mark = input.marks[slot] ?? null;
+        if (mark !== null && standing.slots[slot] === null)
+          return { ok: false as const, error: `the ${slot} slot was skipped, so there is nothing there to mark` };
+        marks[slot] = mark;
+      }
+      if (PREDICTION_SLOTS.every((slot) => marks[slot] === null))
+        return { ok: false as const, error: 'mark at least one filled slot' };
+      const ts = this.ctx.now();
+      this.ctx
+        .prep(
+          `UPDATE goal_predictions
+              SET judge_mark_locus=@locus, judge_mark_cause=@cause, judge_mark_split=@split,
+                  judge_mark_avoid=@avoid, judge_marked_at=@markedAt, updated_at=@markedAt
+            WHERE origin_ref=@originRef`,
+        )
+        .run({ ...marks, markedAt: ts, originRef: input.originRef });
+      return { ok: true as const, prediction: { ...standing, judgeMarks: marks, judgeMarkedAt: ts, updatedAt: ts } };
+    });
+    return write();
+  }
+
+  /**
    * Every prediction. The aggregate's read, and it narrows what comes back to marks
    * and counts before anything reads it — the rows themselves still carry the text,
    * so this stays as contained as every other method here: it is reached only as
@@ -297,6 +361,8 @@ export class PredictionStore {
       // close-out bench reads to know the row is still owed.
       const markedAt = PREDICTION_SLOTS.some((slot) => marks[slot] !== null) ? ts : null;
       this.ctx.prep(MOMENT_WRITES[moment]).run({ ...marks, markedAt, updatedAt: ts, originRef: input.originRef });
+      if (moment === 'plan' && markedAt !== null)
+        this.ctx.prep(`UPDATE goal_predictions SET judge_owed = 1 WHERE origin_ref = ?`).run(input.originRef);
       const written: GoalPrediction =
         moment === 'plan'
           ? { ...standing, planMarks: marks, planMarkedAt: markedAt, updatedAt: ts }
@@ -334,6 +400,11 @@ interface PredictionRow {
   outcome_mark_split: string | null;
   outcome_mark_avoid: string | null;
   outcome_marked_at: string | null;
+  judge_mark_locus: string | null;
+  judge_mark_cause: string | null;
+  judge_mark_split: string | null;
+  judge_mark_avoid: string | null;
+  judge_marked_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -366,6 +437,13 @@ function rowToPrediction(r: PredictionRow): GoalPrediction {
     planMarkedAt: r.plan_marked_at,
     outcomeMarks,
     outcomeMarkedAt: r.outcome_marked_at,
+    judgeMarks: {
+      locus: readMark(r.judge_mark_locus),
+      cause: readMark(r.judge_mark_cause),
+      split: readMark(r.judge_mark_split),
+      avoid: readMark(r.judge_mark_avoid),
+    },
+    judgeMarkedAt: r.judge_marked_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

@@ -51,6 +51,7 @@ const STAGE_RANK: Record<NeedKind, number> = {
   limit: 3,
   burn: 3,
   intake: 4,
+  sitting: 3,
   profile: 4,
   placement: 4,
   unwatched: 4,
