@@ -140,6 +140,8 @@ export class DemoPredictions {
         planMarkedAt: answered(planMarks) ? ago(1_800 + at * 400) : null,
         outcomeMarks,
         outcomeMarkedAt: answered(outcomeMarks) ? ago(600 + at * 120) : null,
+        judgeMarks: EMPTY_MARKS(),
+        judgeMarkedAt: null,
         createdAt: when,
         updatedAt: when,
       });
@@ -200,6 +202,8 @@ export class DemoPredictions {
       planMarkedAt: null,
       outcomeMarks: EMPTY_MARKS(),
       outcomeMarkedAt: null,
+      judgeMarks: EMPTY_MARKS(),
+      judgeMarkedAt: null,
       createdAt: now,
       updatedAt: now,
     };

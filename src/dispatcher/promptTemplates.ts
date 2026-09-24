@@ -18,6 +18,7 @@ type PromptId =
   | 'issue-assay'
   | 'issue-appraisal'
   | 'criteria-alignment'
+  | 'prediction-judge'
   | 'issue-retro'
   | 'feature-sequence'
   | 'feature-resequence'
@@ -393,6 +394,12 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       "Issue #{number} (\"{title}\") has acceptance criteria of its own, and the operator has written theirs (version {version}) before any plan exists. Compare the two for the gist, not the wording: the operator's will not touch every point the ticket does and will phrase the ones they share differently, and that is fine.\n\n## The ticket's acceptance criteria\n\n{ticket}\n\n## The operator's criteria (version {version})\n\n{criteria}\n\nTag every point on either side with one of: matches (both say it), extra (only the operator says it), uncovered (only the ticket says it) or contradicts (the two disagree). Then give one verdict: aligned, partial or conflicting — conflicting only where a point contradicts. Record it with criteria_alignment, naming version {version}. You have no worktree, you are not planning or implementing anything, and nothing you write reaches the ticket: your reading is shown to the operator before planning starts.",
     doc: "Sent to a desk agent while a goal's intake sitting is open, when the operator has written criteria and the ticket carries its own (rule `criteria-alignment`). It tags every point on either side — matches, extra, uncovered, contradicts — and gives one verdict through criteria_alignment, against the version it was handed. It informs the sitting and holds nothing: a run that writes no verdict leaves the sitting to close without one. Placeholders: {number} {title} {ticket} {criteria} {version}.",
+  },
+  'prediction-judge': {
+    placeholders: ['number', 'title'],
+    template:
+      'Before any plan existed for issue #{number} ("{title}"), the operator wrote down what they expected the plan to say. A plan has since been written, and the operator has marked their own prediction against it. You give a second, independent reading of the same comparison.\n\nCall prediction_judge with action "read" to be handed the prediction and the plan, then call it with action "mark" to mark each filled slot. That is the whole task: you have no worktree and no other tool, and nothing you write reaches the ticket or any other agent.',
+    doc: 'Sent to the sealed desk agent of rule `prediction-judge`, once the operator has marked moment one. It carries no prediction text: the agent is handed the prediction and the plan by its one tool, `prediction_judge`, so the text is in no task row, decision or launch argument. Placeholders: {number} {title}.',
   },
   'issue-retro': {
     placeholders: ['number', 'title', 'body'],

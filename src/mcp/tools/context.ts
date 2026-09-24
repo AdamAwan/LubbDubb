@@ -176,7 +176,23 @@ export interface McpToolDeps {
    * and blocking nothing. → docs/spec/20-validation.md#who-carries-a-step
    */
   stepCapabilities?: StepCapabilities;
+  /**
+   * The judge's one door to what it judges: the brief, and where its marks go. Handed in
+   * by the composition root so nothing here names the record it reads.
+   * → docs/spec/14-persistence.md#the-prediction-judge
+   */
+  judge?: JudgeChannel;
   errors?: ErrorRecorder;
+}
+
+type JudgeSlot = 'locus' | 'cause' | 'split' | 'avoid';
+
+interface JudgeChannel {
+  brief(originRef: string): string | null;
+  record(
+    originRef: string,
+    marks: Partial<Record<JudgeSlot, 'matched' | 'missed' | 'not-applicable' | null>>,
+  ): { ok: true } | { ok: false; error: string };
 }
 
 interface PrReplyDesk {

@@ -55,6 +55,7 @@ import { workItemInProgress } from './rules/workItemInProgress.js';
 import { issueAppraisal } from './rules/issueAppraisal.js';
 import { issuePlan } from './rules/issuePlan.js';
 import { criteriaAlignment } from './rules/criteriaAlignment.js';
+import { predictionJudge } from './rules/predictionJudge.js';
 import { issueAssess } from './rules/issueAssess.js';
 import { issueShortfall } from './rules/issueShortfall.js';
 import { issueRetro } from './rules/issueRetro.js';
@@ -93,6 +94,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'issue-shortfall': issueShortfall,
   'issue-retro': issueRetro,
   'plan-approval': planApproval,
+  'prediction-judge': predictionJudge,
   'plan-amendment': planAmendment,
   'plan-blocked': planBlocked,
   'plan-part': planPart,

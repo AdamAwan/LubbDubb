@@ -31,6 +31,7 @@ type PulseReadings = Pick<
   | 'agentHeadroom'
   | 'closedSittings'
   | 'goalCriteria'
+  | 'judgeOwed'
 >;
 
 export function buildDispatchInputs(store: Store, pulse: PulseReadings): DispatchContext {

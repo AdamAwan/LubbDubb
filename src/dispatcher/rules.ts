@@ -207,6 +207,13 @@ const RULES = [
       '**Every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds a decomposition\'s parts, `issue-pickup` holds a single verdict\'s issue. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. There is no deployment in which a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
   },
   {
+    id: 'prediction-judge',
+    kind: 'rule',
+    name: 'Second reading of a prediction',
+    description:
+      'Once the operator has marked what they predicted against the plan the fleet wrote, one sealed desk agent marks the same slots the same way, so the two readings can be compared \u2014 the rows where they disagree are the ones worth reading. It is the one agent that may read a prediction, and it is sealed so nothing it writes reaches another: its one tool hands it the prediction and takes its marks, it has no other tool and no built-in one, no scratchpad and no tracker. Dispatched once per goal and never before the operator has marked, so it cannot anchor them. A judge that writes nothing leaves the operator\u2019s reading standing alone.',
+  },
+  {
     id: 'plan-amendment',
     kind: 'rule',
     name: 'Change to a running plan needs your approval',

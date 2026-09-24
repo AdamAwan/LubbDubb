@@ -131,6 +131,7 @@ interface ClaudeArgsOptions {
   fileEvents?: boolean;
   mcpConfigPath?: string | null;
   allowedTools?: string[];
+  disallowedTools?: string[];
   additionalDirectories?: string[];
   permissionPromptTool?: string;
   extraAllowedTools?: string[];
@@ -168,6 +169,30 @@ export function buildResumeMessage(): string {
   return 'You were resumed after a server restart. Continue the task from where you left off.';
 }
 
+/**
+ * Every built-in tool a sealed agent is launched without. A sealed agent works through
+ * its own MCP tools alone, so a shell, a file write or a fetch is a path for what it
+ * read to leave by. → docs/spec/14-persistence.md#the-prediction-judge
+ */
+export const SEALED_DISALLOWED_TOOLS: readonly string[] = [
+  'Bash',
+  'BashOutput',
+  'KillShell',
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'NotebookEdit',
+  'Read',
+  'Glob',
+  'Grep',
+  'WebFetch',
+  'WebSearch',
+  'Task',
+  'Skill',
+  'SlashCommand',
+  'TodoWrite',
+];
+
 export const STREAM_TRANSPORT_ARGS: readonly string[] = [
   '-p',
   '--input-format',
@@ -183,6 +208,7 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   const settings = collectSettings(opts);
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);
+  if (opts.disallowedTools?.length) args.push('--disallowedTools', opts.disallowedTools.join(','));
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.model) args.push('--model', opts.model);
   if (opts.effort) args.push('--effort', opts.effort);

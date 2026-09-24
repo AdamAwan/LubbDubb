@@ -2176,6 +2176,13 @@ CREATE TABLE IF NOT EXISTS goal_predictions (
   outcome_mark_split TEXT,
   outcome_mark_avoid TEXT,
   outcome_marked_at  TEXT,
+  -- The prediction judge's reading of moment one, beside the operator's. Written once,
+  -- by the one agent that may read a prediction.
+  judge_mark_locus TEXT,
+  judge_mark_cause TEXT,
+  judge_mark_split TEXT,
+  judge_mark_avoid TEXT,
+  judge_marked_at  TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

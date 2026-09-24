@@ -1,4 +1,5 @@
 import type { AgentManager } from '../agents/agentManager.js';
+import { isSealedRule } from '../mcp/names.js';
 import type { Store } from '../store/store.js';
 import type { Ejection, EjectionOutcome } from '../types.js';
 import { requeueJobRequest } from '../agents/crashRecovery.js';
@@ -50,6 +51,14 @@ export class EjectionDesk {
         error:
           'This run has no dispatch origin, so there is nothing for a claim to hold: the fleet was never going ' +
           'to staff it again. Kill it instead — the branch and the transcript are unaffected either way.',
+      };
+    }
+    if (isSealedRule(task.rule)) {
+      return {
+        ok: false,
+        error:
+          'This agent is sealed: what it was told may reach no other session, and an ejection hands its brief ' +
+          'and transcript to one. Kill it instead if it needs stopping.',
       };
     }
     const standing = store.ejections.liveEjectionForOrigin(task.originRef);

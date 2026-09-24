@@ -308,7 +308,7 @@ export class Harness extends EventEmitter {
         this.markPass('afterOrigins'),
       );
       const recentDecisions = store.decisions.listDecisions(200);
-      const intake = this.deps.goalIntake?.() ?? { closedSittings: null, criteria: [] };
+      const intake = this.deps.goalIntake?.() ?? { closedSittings: null, criteria: [], judgeOwed: [] };
       const liveAgents = store.agents.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
@@ -365,6 +365,7 @@ export class Harness extends EventEmitter {
           agentHeadroom: headroom,
           closedSittings: intake.closedSittings,
           goalCriteria: intake.criteria,
+          judgeOwed: intake.judgeOwed,
         }),
       );
 

@@ -1874,8 +1874,9 @@ its own check only so the refusal can say which rule refused.
 
 Prediction text is served **here and nowhere else**. It reaches no prompt, no tool response, no
 transcript, no retro dossier, no scratchpad and above all no tracker — save the one agent built to read
-it, the [prediction judge](14-persistence.md#the-prediction-judge), whose own output reaches none of
-those either. Not yet built.
+it, the [prediction judge](14-persistence.md#the-prediction-judge), which is handed it by its own tool
+and whose output reaches none of those either. The reading `GET /api/goals/:number/prediction` returns
+carries the judge's marks as `judgeMarks` and `judgeMarkedAt`, beside the operator's.
 → [14](14-persistence.md#the-prediction-store-is-not-on-store)
 
 ### `POST /api/goals/:number/prediction/outcome`

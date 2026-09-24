@@ -27,7 +27,13 @@ import type { AreaPathTree } from './intake/placement.js';
 import { TicketSweep } from './tickets/sweep.js';
 import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
-import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from './agents/agentProtocol.js';
+import { judgeSeam } from './predictionJudge/seam.js';
+import {
+  SEALED_DISALLOWED_TOOLS,
+  buildClaudeStreamArgs,
+  buildInitialMessage,
+  buildResumeMessage,
+} from './agents/agentProtocol.js';
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
@@ -74,7 +80,7 @@ import { PrWorkItemDesk } from './pr/prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import { UpdateDesk } from './selfUpdate/updateDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
-import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
+import { PERMISSION_PROMPT_TOOL, isSealedRule } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { EjectionDesk } from './ejection/desk.js';
@@ -269,14 +275,16 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     model: string | null;
     effort: string | null;
     permissionMode: string | null;
+    sealed: boolean;
   }) => string[];
   const agentSetup = {
     stream: {
-      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort, permissionMode }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort, permissionMode, sealed }) =>
         buildClaudeStreamArgs({
           permissionMode: permissionMode ?? perm,
           extraArgs,
-          allowedTools,
+          allowedTools: sealed ? [] : allowedTools,
+          disallowedTools: sealed ? [...SEALED_DISALLOWED_TOOLS] : undefined,
           additionalDirectories,
           sessionId,
           resume,
@@ -305,6 +313,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   const fileEvents = new FileEventsSpool(join(tmpdir(), 'lubbdubb', 'events'));
 
+  const predictions = store.openPredictions();
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
     agents: (): AgentManager => agents,
@@ -334,6 +343,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteReadings: (): RemoteReadingDesk => remoteReadings,
     remoteListings: (): RemoteListingDesk => remoteListings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
+    // The one agent that may read a prediction is handed it through this seam, never the store.
+    judge: judgeSeam(predictions, store),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     errors,
   });
@@ -348,7 +359,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }),
   );
 
-  const predictions = store.openPredictions();
   const desktop = new McpDesktopServer({
     store,
     // The desktop channel is the operator's own Claude Code, and it can read a plan
@@ -788,6 +798,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     goalIntake: () => ({
       closedSittings: revealGateOn(config) ? new Set(predictions.listReveals().map((r) => r.originRef)) : null,
       criteria: config.goalCriteria.enabled ? store.goalCriteria.listCurrentCriteria() : [],
+      judgeOwed: config.prediction.enabled ? predictions.listJudgeOwed() : [],
     }),
     remoteRuns: () =>
       remoteRunBriefs({
@@ -829,7 +840,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       context: {
         taskTitle: task?.title,
         originRef: task?.originRef ?? null,
-        recentOutput: recentOutputExcerpt(store.transcripts.getTranscript(agentId)),
+        recentOutput: isSealedRule(task?.rule) ? '' : recentOutputExcerpt(store.transcripts.getTranscript(agentId)),
         ...(ask?.options ? { options: ask.options } : {}),
         ...(ask?.detail ? { detail: ask.detail } : {}),
         ...(ask?.questions ? { questions: ask.questions } : {}),

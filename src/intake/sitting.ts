@@ -13,6 +13,7 @@ export type ClosedSittings = ReadonlySet<string> | null;
 export interface GoalIntake {
   closedSittings: ClosedSittings;
   criteria: GoalCriteriaVersion[];
+  judgeOwed: string[];
 }
 
 export const SITTING_REASON = 'awaiting your prediction and criteria';

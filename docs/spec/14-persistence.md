@@ -1377,7 +1377,7 @@ So the containment is made a property of the composition root rather than a rule
 remember. `buildTools` is handed `deps.store`; the dispatcher is handed the store; `goalRecord` is
 handed the store. None of them can name a prediction, because the member does not exist. The store is
 opened once, by `Store.openPredictions()`, in `src/system.ts`, and handed to the prediction routes and
-to nothing else — so leaking a prediction into a prompt costs somebody a new dependency threaded
+to [the judge's seam](#the-prediction-judge), and to nothing else — so leaking a prediction into a prompt costs somebody a new dependency threaded
 through the composition root, which is a diff a reviewer sees.
 
 `Store.openPredictions()` is the one escape hatch, and it is named so it can be grepped for.
@@ -1402,40 +1402,51 @@ What is **not** guaranteed, stated plainly: an operator who pastes their own pre
 delivered to agents by design.
 
 A prediction is read by **exactly one** agent, the [prediction judge](#the-prediction-judge), and by
-no other model for any purpose.
+no other model for any purpose — including for analysing the aggregate.
 
 ### The prediction judge
 
-**Not yet built.** Today no model reads a prediction; `Store.openPredictions()` is handed to the
-prediction routes alone, and both arms of `test/predictionContainment.test.ts` hold with no exception.
+Rule `prediction-judge` ([08](08-planning.md#the-prediction-judge)) is the one agent that reads a
+prediction, and it reads it through a **seam**, never the store: `judgeSeam`
+(`src/predictionJudge/seam.ts`) is built at the composition root beside the routes and handed to the
+MCP server as `judge`, a brief and a place to put marks. No module in the fleet's directories names the
+store, so the structural scan below stands with no exception — the one new door is a named dependency
+in `src/system.ts`, which is the diff a reviewer is meant to see.
 
-Rule `prediction-judge` ([08](08-planning.md#the-prediction-judge)) is the one reader, and the store
-is handed to it at the composition root beside the routes — a second named dependency, which is the
-diff a reviewer is meant to see. What keeps the record worth anything is not that the judge cannot
-read the prediction but that **nothing the judge produces reaches another agent**, and the harness
-passes an agent's output on by default along several paths, each of which is shut for this origin:
+**The prediction is in no prompt.** The judge's dispatch prompt names the goal and the tool and nothing
+else; the text reaches the judge as the answer to `prediction_judge {action: "read"}`. So it is in no
+task row, no decision, no launch argument and no environment variable — only in the judge's own tool
+response and transcript. A crash requeue of the judge redoes the dispatch on `job:<id>`, whose tool
+calls the origin fence refuses, so a requeue can read nothing either.
 
-- **Tools**: its `RULE_TOOLS` row carries `prediction_judge` alone and `UNIVERSAL_TOOLS` are withheld,
-  so it has no tracker, no scratchpad, no note and no request to file.
-- **The goal scratchpad**: `issue:<n>:prediction-judge` is refused a pad grant, although every other
-  `issue:<n>:…` origin is given the goal's.
-- **The retro dossier**: its decisions are left out of the dossier's notable decisions.
-- **The verdict**: `prediction_judge` writes to the prediction store and nowhere else — `judge_mark_*`
-  beside the operator's `plan_mark_*`, same four-valued shape, same `readMark`, and never folded into
-  them.
+What keeps the record worth anything is not that the judge cannot read the prediction but that
+**nothing the judge produces reaches another agent**, and the harness passes an agent's output on by
+default along several paths. `prediction-judge` is a **sealed** rule (`isSealedRule`,
+`src/mcp/names.ts`), and each path is shut for it:
 
-- **Its transcript and its prompt**: both carry the prediction, and the operator's desktop channel
-  serves both to a model — `agent_read` returns an agent's brief and transcript tail, and
-  `ejection_read` hands a held agent's `prompt` and transcript to the operator's Claude Code
-  ([11](11-mcp-tools.md#the-desktop-channel)). So `agent_read` answers a judge's task with its status
-  and spend and nothing it was told or said, and a judge cannot be ejected. Both are kept, because the
-  cockpit draws them to the operator and the usage metrics read the row; what is shut is every door to
-  a model.
+- **Tools**: `buildTools` hands a sealed agent its own row and nothing else — not advertised-and-hidden,
+  as every other agent's unlisted tools are, but absent, so a call to one is an unknown tool. The
+  judge has `prediction_judge` alone: no scratchpad, no note, no request, no tracker.
+- **Built-in tools**: a sealed agent is launched with `--disallowedTools` naming every built-in tool
+  (`SEALED_DISALLOWED_TOOLS`, `src/agents/agentProtocol.ts`) and without the operator's
+  `agentAllowedTools`, so it has no shell, no file write and no fetch to carry what it read out by.
+- **Its own output, quoted back**: the stall notice drops the agent's last words, the waiting
+  escalation drops its recent output, and a failure record drops the transcript excerpt — each of which
+  every other agent's carries, and each of which the operator's desktop channel serves to a model.
+- **The desktop channel**: `agent_read` answers a sealed agent with its status and spend and nothing it
+  was told or said, and a sealed agent cannot be ejected, because an ejection hands the brief and the
+  transcript to the operator's Claude Code ([11](11-mcp-tools.md#the-desktop-channel)).
+- **The verdict**: `prediction_judge` writes through the seam to the prediction store and nowhere else —
+  `judge_mark_*` and `judge_marked_at` beside the operator's `plan_mark_*`, same four-valued shape,
+  same `readMark`, never folded into them, and written once. Its refusals name slots, never their text.
 
-The containment test keeps both arms and names the one exception: structurally, only the judge's rule
-module may name the store among the listed directories; live, the sentinel is asserted to appear in
-the judge's own prompt and in no other agent's prompt, tool response or transcript, in no desktop
-tool response, and in no outbound sink call.
+Its transcript is kept, because the cockpit draws it to the operator and the usage metrics read the
+row; what is shut is every door from it to a model.
+
+`test/predictionContainment.test.ts` keeps both arms unchanged, and `test/predictionJudge.test.ts`
+holds the seal: the judge's prompt and launch carry no sentinel, its universal tools do not answer, its
+tool hands it the sentinel and nobody else's call can, `agent_read` withholds it, and ejection is
+refused.
 
 **Acceptance criteria are the opposite case and must not inherit this posture.** Criteria are an
 oracle the implementer is _meant_ to be judged against, and today's `plan_parts.acceptance` already

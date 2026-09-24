@@ -802,11 +802,10 @@ one, because a replan resets the row.
 
 ### The intake sitting stands in front of the planner
 
-**Partly built.** The hold on rule `issue-plan`, the stamp that releases it, the alignment check, and
-the criteria reaching the planner and every part are built. Not yet built: the sitting's composer on the goal page and the
-rail's ask ([17](17-cockpit.md#the-reveal-gate)),
-[the prediction judge](#the-prediction-judge) and [the criteria at delivery](#the-criteria-at-delivery),
-each marked where it is described.
+**Partly built.** The hold on rule `issue-plan`, the stamp that releases it, the alignment check, the
+prediction judge, and the criteria reaching the planner and every part are built. Not yet built: the
+sitting's composer on the goal page and the rail's ask ([17](17-cockpit.md#the-reveal-gate)) and
+[the criteria at delivery](#the-criteria-at-delivery), each marked where it is described.
 
 #### The sitting
 
@@ -891,29 +890,27 @@ offers the replan beside the revision.
 
 #### The prediction judge
 
-**Not yet built.**
-
 A prediction is marked against the plan by the operator (moment one), and a **second** reading of the
 same comparison is taken by an agent, so the aggregate can show where the two disagree — the rows the
 record is most worth reading for.
 
 Rule `prediction-judge` dispatches once per goal, **after the operator's moment-one mark lands**, so
 the agent's reading can never anchor the operator's. It is an ordinary fleet dispatch — it counts
-against the cap, its spend and time land in the usage metrics like any other — on origin
-`issue:<n>:prediction-judge`, with a prompt of the four slots and the plan's narrative and parts, and
-nothing else. It answers through one tool, `prediction_judge`, with the same four-valued mark per slot
-the operator gives, written to the prediction store and nowhere else
+against the cap, its spend and time land in the usage metrics like any other — of a desk agent on
+origin `issue:<n>:prediction-judge`. Which goals are owed one is `listJudgeOwed()`, handed to the
+dispatcher as origin refs and nothing else. Its prompt names the goal and its one tool,
+`prediction_judge`, and **carries no prediction text**: the tool hands it the four slots and the plan's
+narrative and parts on `read`, and takes the same four-valued mark per slot the operator gives on
+`mark`, written beside the operator's and never folded into it
 ([14](14-persistence.md#the-prediction-judge)).
 
 The judge is the one agent that may read a prediction, and **everything that makes that safe is about
 its output, not its input**: the harness passes an agent's output on by default, and each default path
-is shut for this origin. No tool but its own (its `RULE_TOOLS` row carries only `prediction_judge`,
-and `UNIVERSAL_TOOLS` are withheld from it), no goal scratchpad, no tracker, no worktree, no row in
-the retro dossier's decisions, and no way onto the operator's desktop channel — `agent_read` withholds
-its brief and transcript, and it cannot be ejected
-([14](14-persistence.md#the-prediction-judge)). Its reading is the same model's as the planner's, so it can share the
-planner's misreading of the story; it is a second opinion, drawn beside the operator's, never in
-place of it.
+is shut for a **sealed** rule — no tool but its own, no built-in tool at launch, its own words never
+quoted back into an escalation or an error, `agent_read` withholding its brief and transcript, and no
+ejection ([14](14-persistence.md#the-prediction-judge)). Its reading is the same model's as the
+planner's, so it can share the planner's misreading of the story; it is a second opinion, drawn beside
+the operator's, never in place of it.
 
 #### The criteria at delivery
 

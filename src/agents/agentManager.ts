@@ -33,7 +33,7 @@ import type {
   Task,
   BugFiling,
 } from '../types.js';
-import { extraMcpGrants } from '../mcp/names.js';
+import { extraMcpGrants, isSealedRule } from '../mcp/names.js';
 
 type LinkTicketResult = { ok: true; bug: BugFiling } | { ok: false; error: string };
 
@@ -86,6 +86,7 @@ interface AgentManagerOptions {
     model: string | null;
     effort: string | null;
     permissionMode: string | null;
+    sealed: boolean;
   }) => string[];
   goalProfile?: {
     effective: (issueOrigin: string) => string | null;
@@ -188,6 +189,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         model: task.model ?? null,
         effort: task.effort ?? null,
         permissionMode: task.permissionMode ?? null,
+        sealed: isSealedRule(task.rule),
       }),
       cwd,
       env: {
@@ -244,6 +246,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         model: task.model ?? null,
         effort: task.effort ?? null,
         permissionMode: task.permissionMode ?? null,
+        sealed: isSealedRule(task.rule),
       }),
       cwd: agent.cwd,
       env: {
@@ -1284,7 +1287,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         // The session went away between the turn ending and the nudge; fall through.
       }
     }
-    this.handleWaiting(agentId, task, stallReason(lastWords));
+    this.handleWaiting(agentId, task, stallReason(isSealedRule(task.rule) ? '' : lastWords));
     this.armStallClock(agentId, this.opts.stallParkMs ?? 0, 'stall');
   }
 
@@ -1407,7 +1410,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         message:
           `Agent ${agentId} failed (task ${taskId})` +
           `${exitCode !== undefined ? `, exit code ${exitCode}` : ''}${failureNote ? `, ${failureNote}` : ''}`,
-        detail: recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
+        detail: isSealedRule(this.store.tasks.getTask(taskId)?.rule)
+          ? null
+          : recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
       });
     }
     this.reflectStatus(agentId, taskId, status);

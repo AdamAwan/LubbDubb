@@ -2171,6 +2171,12 @@ export interface GoalPrediction {
   planMarkedAt: string | null;
   outcomeMarks: PredictionOutcomeMarks;
   outcomeMarkedAt: string | null;
+  /**
+   * The prediction judge's reading of moment one, beside the operator's and never
+   * folded into it. → docs/spec/14-persistence.md#the-prediction-judge
+   */
+  judgeMarks: PredictionPlanMarks;
+  judgeMarkedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

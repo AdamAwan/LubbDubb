@@ -118,6 +118,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
+[--disallowedTools <every built-in tool>]   (a sealed rule only)
 [--permission-mode <mode>]
 [--model <model>]
 [--effort <level>]
@@ -125,6 +126,11 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 ```
 
 Points that are load-bearing:
+
+- **A sealed rule's agent launches with no built-in tool.** `--disallowedTools` names every one
+  (`SEALED_DISALLOWED_TOOLS`) and the operator's `agentAllowedTools` are left out of its `--settings`,
+  so it has no shell, no file write and no fetch. A deny rule outranks an allow, so a `claudeArgs`
+  allow-list appended after it cannot hand one back. → [14](14-persistence.md#the-prediction-judge)
 
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
