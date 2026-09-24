@@ -25,6 +25,7 @@ import { reviewReport } from './tools/reviewReport.js';
 import { reviewRoute } from './tools/reviewRoute.js';
 import { splitAssess } from './tools/splitAssess.js';
 import { prDescribe } from './tools/prDescribe.js';
+import { descriptionReview } from './tools/descriptionReview.js';
 import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
 import { validationAmend } from './tools/validationAmend.js';
@@ -76,6 +77,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   review_route: reviewRoute,
   split_assess: splitAssess,
   pr_describe: prDescribe,
+  description_review: descriptionReview,
   report_remedy: reportRemedy,
   raise: raiseFact,
 };

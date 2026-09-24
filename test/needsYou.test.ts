@@ -701,3 +701,37 @@ test('the ask is the server\u2019s list, so a cockpit given none draws none', ()
     false,
   );
 });
+
+// → docs/spec/07-pull-requests.md#what-the-check-raises
+test('a checked description raises an ask only when it found something, and gaps alone are a low-priority note', () => {
+  const feedback = (versionId: string, prNumber: number, contradicted: number, gaps: number) => ({
+    originRef: `issue:142:part:p${prNumber}`,
+    prNumber,
+    versionId,
+    checkedAt: '2026-01-02T00:00:00.000Z',
+    contradicted,
+    gaps,
+  });
+  const rows = buildNeedsYou(
+    stateWith({
+      escalations: [],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      descriptionFeedback: [feedback('desc_a', 41, 1, 2), feedback('desc_b', 42, 0, 1)],
+    }),
+  );
+
+  const wrong = rows.find((r) => r.id === 'description:desc_a');
+  assert.ok(wrong);
+  assert.equal(wrong.kind, 'description_wrong');
+  assert.equal(wrong.urgency, 'next', 'something untrue is worth fixing before review');
+  assert.equal(wrong.group, 'yours');
+  assert.equal(wrong.opens, 'pr');
+  assert.equal(wrong.prNumber, 41);
+
+  const note = rows.find((r) => r.id === 'description:desc_b');
+  assert.ok(note);
+  assert.equal(note.kind, 'description_note');
+  assert.equal(note.urgency, 'later', 'a gap is a note, folded away with the rest');
+});

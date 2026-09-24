@@ -903,6 +903,8 @@ export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   escalation: 'plan',
   merge: 'plan',
   describe: 'plan',
+  description_wrong: 'plan',
+  description_note: 'plan',
   permission: 'plan',
   plan: 'plan',
   reply: 'plan',

@@ -1,5 +1,11 @@
 import { nanoid } from 'nanoid';
-import type { DescriptionFinding, DescriptionQuestion, PrDescriptionDraft, PrDescriptionVersion } from '../types.js';
+import type {
+  DescriptionAwaitingCheck,
+  DescriptionFinding,
+  DescriptionQuestion,
+  PrDescriptionDraft,
+  PrDescriptionVersion,
+} from '../types.js';
 import { issueOriginRef } from '../issueOrigins.js';
 import { composeDescribedBody } from '../pr/prDescription.js';
 import type { ColumnMigrations } from './migrate.js';
@@ -164,6 +170,69 @@ export class PrDescriptionStore {
       .prep(`SELECT origin_ref FROM pr_description_bodies WHERE pr_number=? ORDER BY opened_at DESC LIMIT 1`)
       .get(prNumber) as { origin_ref: string } | undefined;
     return row?.origin_ref ?? null;
+  }
+
+  /**
+   * The newest version of every part with a pull request on record that nobody has
+   * read against its diff yet. Only the newest: a superseded version is text no
+   * reviewer will meet. The caller drops the parts whose pull request is no longer open.
+   * → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking
+   */
+  uncheckedDescriptions(): DescriptionAwaitingCheck[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT d.id AS id, d.origin_ref AS origin_ref, b.pr_number AS pr_number, d.text AS text
+           FROM pr_descriptions d
+           JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
+          WHERE d.checked_at IS NULL
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
+          ORDER BY d.authored_at ASC`,
+      )
+      .all() as { id: string; origin_ref: string; pr_number: number; text: string }[];
+    return rows.map((r) => ({ versionId: r.id, originRef: r.origin_ref, prNumber: r.pr_number, text: r.text }));
+  }
+
+  /**
+   * The newest version of every part whose check found something, with the counts the
+   * rail raises it by. A clean check is left out: nothing about it asks anything.
+   * → docs/spec/07-pull-requests.md#what-the-check-raises
+   */
+  descriptionFeedback(): {
+    originRef: string;
+    prNumber: number;
+    versionId: string;
+    checkedAt: string;
+    contradicted: number;
+    gaps: number;
+  }[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT d.id AS id, d.origin_ref AS origin_ref, b.pr_number AS pr_number, d.checked_at AS checked_at,
+                SUM(f.kind = 'contradicted') AS contradicted, SUM(f.kind = 'gap') AS gaps
+           FROM pr_descriptions d
+           JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
+           JOIN pr_description_findings f ON f.description_id = d.id
+          WHERE d.checked_at IS NOT NULL
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
+          GROUP BY d.id
+          ORDER BY d.checked_at ASC`,
+      )
+      .all() as {
+      id: string;
+      origin_ref: string;
+      pr_number: number;
+      checked_at: string;
+      contradicted: number;
+      gaps: number;
+    }[];
+    return rows.map((r) => ({
+      originRef: r.origin_ref,
+      prNumber: r.pr_number,
+      versionId: r.id,
+      checkedAt: r.checked_at,
+      contradicted: r.contradicted,
+      gaps: r.gaps,
+    }));
   }
 
   /** Every version that carries a check, newest first. The aggregate's input. */

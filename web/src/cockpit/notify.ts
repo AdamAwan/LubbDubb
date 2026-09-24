@@ -85,6 +85,8 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   reply: 'A drafted reply is waiting to be sent',
   merge: 'A merge is waiting on your verdict',
   describe: 'An open pull request has nobody\u2019s description on it',
+  description_wrong: 'Your description says something the diff does not do',
+  description_note: 'The diff raises something your description does not',
   shortfall: 'Delivered work did not reach its goal',
   intake: 'The appraisal could not say a goal is workable',
   permission: 'An agent wants a command',
