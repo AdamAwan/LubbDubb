@@ -65,7 +65,7 @@ export function attestPet(pet: Pet, ledger: PetLedger): PetFlaw | null {
     return { code: 'misdated', note: 'it hatched at a different moment than the action it names was settled' };
   if (pet.seed !== key)
     return { code: 'impossible', note: 'its markings are drawn from a seed that is not its own origin' };
-  if (!speciesCandidates(pet.originKind, pet.originRef, pet.hatchedAt).has(pet.species))
+  if (!speciesCandidates(pet.originKind, pet.originRef).has(pet.species))
     return {
       code: 'impossible',
       note: `no roll of ${pet.originRef} can produce a ${SPECIES[pet.species].display}`,

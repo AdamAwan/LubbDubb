@@ -1,5 +1,6 @@
 import type { DispatchContext } from '../dispatcher.js';
-import { inheritedCiFailure, isStackedPr } from '../../pr/prHealth.js';
+import { isStackedPr } from '../../pr/prHealth.js';
+import { baseFixingCi } from '../../ci/ciPolicy.js';
 import type { Agent, PullRequest } from '../../types.js';
 import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
 import { dispatchVerdict } from '../dispatchCooldown.js';
@@ -28,7 +29,7 @@ export function prConcerns(s: StageContext): void {
     if (review.concern) concerns.push(review.concern);
     const comment = reviewCommentConcern(pr, s);
     if (comment) concerns.push(comment);
-    const inherited = inheritedCiFailure(pr, s.openPrs) !== null;
+    const inherited = baseFixingCi(pr, s.openPrs, s.ci) !== null;
     const ci = ciFailingConcern(pr, s, inherited);
     if (ci.concern) concerns.push(ci.concern);
     if (ci.escalation) s.raw.push(ci.escalation);

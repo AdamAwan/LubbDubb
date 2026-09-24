@@ -1,4 +1,5 @@
-import type { CiCheck } from '../types.js';
+import { inheritedCiFailure } from '../pr/prHealth.js';
+import type { CiCheck, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#ci
 
@@ -141,6 +142,12 @@ export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPoli
 export interface CiWatchVerdict {
   watched: CiMatch[];
   urgent: boolean;
+}
+
+export function baseFixingCi(pr: PullRequest, openPrs: PullRequest[], policy: CiPolicy): PullRequest | null {
+  const base = inheritedCiFailure(pr, openPrs);
+  if (!base) return null;
+  return classifyCiFailures(base.ciChecks, policy, base.ciChecksWithheld).actionable ? base : null;
 }
 
 export function classifyWatchedChecks(checks: CiCheck[] | undefined, policy: CiPolicy): CiWatchVerdict {

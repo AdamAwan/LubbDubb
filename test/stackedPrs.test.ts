@@ -185,6 +185,59 @@ test('rule `pr-ci-failing` fires on the bottom of a red stack and is suppressed 
   assert.deepEqual(dispatched, ['issue/12/schema'], 'one agent, on the branch whose code is actually broken');
 });
 
+const MUTED = { checks: [{ match: 'Work item linking', onFailure: 'ignore' as const }] };
+const ESCALATED = { checks: [{ match: 'Work item linking', onFailure: 'escalate' as const }] };
+
+function mutedStack(rung: Partial<PullRequest> = {}): PullRequest[] {
+  return [
+    pr(1, 'feature/1', {
+      ciStatus: 'failing',
+      ciChecks: [{ name: 'Work item linking', status: 'failing', blocking: true }],
+    }),
+    pr(2, 'feature/2', {
+      baseBranch: 'feature/1',
+      ciStatus: 'failing',
+      ciChecks: [{ name: 'CI build', status: 'failing', blocking: true }],
+      ...rung,
+    }),
+  ];
+}
+
+test('a base red only on a muted check does not hold the rung above it', async () => {
+  const result = await new RuleDispatcher({ ci: MUTED }).decide({ ...context([]), world: world([], mutedStack()) });
+  const dispatched = result.actions
+    .filter((a) => a.rule === 'pr-ci-failing')
+    .map((a) => (a.type === 'dispatch_code_agent' ? a.originRef : ''));
+  assert.deepEqual(dispatched, ['pr:2:ci'], 'nothing will ever fix the base, so the rung keeps its own build');
+});
+
+test('a base red only on an escalate-only check does not hold the rung above it', async () => {
+  const result = await new RuleDispatcher({ ci: ESCALATED }).decide({
+    ...context([]),
+    world: world([], mutedStack()),
+  });
+  assert.deepEqual(result.actions.map((a) => a.rule).sort(), ['pr-ci-blocked', 'pr-ci-failing']);
+});
+
+test('a rung above a muted base keeps its own expired gate', async () => {
+  const prs = mutedStack({
+    ciChecks: [
+      { name: 'CI build', status: 'failing', blocking: true },
+      { name: 'Example-CI', status: 'pending', blocking: true, expired: true, requeueRef: 'eval-2-ci' },
+    ],
+  });
+  const result = await new RuleDispatcher({
+    ci: { checks: [...MUTED.checks, { match: 'CI build', onFailure: 'ignore' }] },
+  }).decide({
+    ...context([]),
+    world: world([], prs),
+  });
+  assert.deepEqual(
+    result.actions.map((a) => a.type),
+    ['requeue_ci_check'],
+  );
+});
+
 test('an ignored PR still counts as the base its children inherit from', async () => {
   const bottom = pr(40, 'issue/12/schema', { ciStatus: 'failing', labels: [] });
   const child = pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema', ciStatus: 'failing' });

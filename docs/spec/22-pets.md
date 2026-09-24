@@ -164,6 +164,9 @@ comes off the **stored** timestamp rather than the clock, so a scan that reaches
 still draws the animal that 2am earned; taking the hour at scan time would stop the roll being a
 property of the action.
 
+The local reading is the **roll's**, and the check must not depend on it: the zone that resolved the
+hour is not on the row, so `impossible` counts both sides of the gate as candidates (below).
+
 It is the one species whose availability depends on something other than what you were doing.
 
 ## The egg
@@ -1171,6 +1174,12 @@ twenty-seven, one per tier — because stage 3 is the hash either way. Filling e
 this from the two or three a holey pool reached; four in twenty-seven is still tighter than three in
 twenty was, and the property that matters is untouched.
 
+**It checks both sides of the night gate too, not the hour this machine reads.** The gate reads a
+local hour, and the zone that decided it is a fact about the machine that rolled the pet, not one
+the pet carries. Re-read under another `TZ` — a lift into a container, a host move — roughly half the
+uncommon tier would otherwise fail as forgeries. Counting both readings widens the reach to at most
+six in twenty-seven, only on the uncommon rung, and `rollAction` is untouched: the roll stays local.
+
 ### What a flaw costs
 
 **Shown, never deleted.** A flagged pet keeps its row, its species and its origin line, draws with an
@@ -1279,7 +1288,8 @@ pruned a claim or restored an older database has not forged anything.
 - **A check that could accuse a pet must decline on a database it cannot judge.** Three of the six
   already do: `broken-chain` skips a null link — **and the replay behind it skips that row too**, or
   the tolerance stops one row short of its own successors — `unearned` skips anything not stamped by
-  this same clean build, and `impossible` checks every tier's candidate rather than the rolled one. All three
+  this same clean build, and `impossible` checks every tier's candidate, on both sides of the night gate,
+  rather than the rolled one. All three
   exist for one reason — the worst failure this subsystem has is telling an honest operator their
   collection is fake, and it lands on somebody else's machine, months after the change that caused it,
   with nothing red anywhere.
