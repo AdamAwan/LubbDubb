@@ -144,7 +144,39 @@ export function buildStateSections(
   want: ReadonlySet<StateSection>,
   opts?: SnapshotOpts,
 ): Partial<CockpitState> {
-  const { store, connector, config, runtimeControl, harness, recovery, updates, readying, agents: fleet } = system;
+  const r = snapshotReads(system, opts);
+  const out: Partial<CockpitState> = {
+    refUrls: r.refUrls,
+  };
+  if (want.has('harness')) Object.assign(out, harnessSection(r));
+  if (want.has('control')) Object.assign(out, controlSection(r));
+  if (want.has('goals')) Object.assign(out, goalsSection(r));
+  if (want.has('plans')) Object.assign(out, plansSection(r));
+  if (want.has('fleet')) Object.assign(out, fleetSection(r));
+  if (want.has('queue')) Object.assign(out, queueSection(r));
+  if (want.has('inbox')) Object.assign(out, inboxSection(r));
+  if (want.has('activity')) Object.assign(out, activitySection(r));
+  return out;
+}
+
+type BaseReads = ReturnType<typeof baseReads>;
+type PlanReadsOn = BaseReads & ReturnType<typeof planReads>;
+type VerdictReadsOn = PlanReadsOn & ReturnType<typeof verdictReads>;
+type ContextReadsOn = VerdictReadsOn & ReturnType<typeof contextReads>;
+type IssueReadsOn = ContextReadsOn & ReturnType<typeof issueReads>;
+type Reads = IssueReadsOn & ReturnType<typeof prReads>;
+
+function snapshotReads(system: System, opts: SnapshotOpts | undefined): Reads {
+  const base = baseReads(system, opts);
+  const planned = { ...base, ...planReads(base) };
+  const verdicts = { ...planned, ...verdictReads(planned) };
+  const contexts = { ...verdicts, ...contextReads(verdicts) };
+  const issues = { ...contexts, ...issueReads(contexts) };
+  return { ...issues, ...prReads(issues) };
+}
+
+function baseReads(system: System, opts: SnapshotOpts | undefined) {
+  const { store, connector, config, runtimeControl } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
   const stored = store.world.getWorldBaseline();
   const baseline = stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
@@ -181,6 +213,32 @@ export function buildStateSections(
       tasks,
     });
   });
+  return {
+    system,
+    opts,
+    store,
+    connector,
+    config,
+    watchLabel,
+    baseline,
+    world,
+    archivedPullRequests,
+    tasks,
+    agents,
+    history,
+    control,
+    flags,
+    attachments,
+    humanTasks,
+    ejectionViews,
+    allHumanTasks,
+    proposals,
+    bugFilings,
+    overlaps,
+  };
+}
+
+function planReads({ system, store, config, world, tasks }: BaseReads) {
   const plans = store.plans.listPlans();
   const planParts = once(() => store.plans.listAllPlanParts());
   const partsByPlan = once(() => {
@@ -275,6 +333,22 @@ export function buildStateSections(
         outsideScope: drifted.get(part.id) ?? [],
       }));
   });
+  return {
+    plans,
+    planParts,
+    planByOrigin,
+    planPartsOf,
+    stacks,
+    openPrNumbers,
+    mergedPrs,
+    landings,
+    withheld,
+    wirePlans,
+    wirePlanParts,
+  };
+}
+
+function verdictReads({ store, config, opts }: PlanReadsOn) {
   const claimNow = new Date().toISOString();
   const validationChecks = once((): ValidationCheckView[] =>
     store.validation
@@ -320,6 +394,28 @@ export function buildStateSections(
   });
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
+  return {
+    validationChecks,
+    checksByGoal,
+    wireValidationResources,
+    goalWatches,
+    conclusions,
+    deliveries,
+    deliveriesByOrigin,
+    deliverySignals,
+    issueRuns,
+    runByOrigin,
+    shortfallsByOrigin,
+    padsByOrigin,
+    instructionsByOrigin,
+    appraisals,
+    appraisalsByOrigin,
+  };
+}
+
+function contextReads(r: VerdictReadsOn) {
+  const { system, store, connector, config, world, tasks, control, proposals, watchLabel, plans, planParts } = r;
+  const { deliveries, deliverySignals, appraisals, issueRuns, withheld, bugFilings, humanTasks, wirePlans } = r;
   const recentDecisions = once(() => store.decisions.listDecisions(200));
   const pickupCtx = once(
     (): IssuePickupContext => ({
@@ -385,7 +481,7 @@ export function buildStateSections(
       return { ...row, detail: WITHHELD_PLAN, action: withheldAction(d.action) };
     });
   const refUrls = buildRefUrls({
-    pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...archivedPullRequests],
+    pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...r.archivedPullRequests],
     issues: world.issues,
     taskBranches: tasks.map((t) => t.branch),
     refs: [
@@ -403,6 +499,13 @@ export function buildStateSections(
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
+  return { recentDecisions, pickupCtx, reviewRows, attentionCtx, worldEvents, shiftLog, refUrls };
+}
+
+function issueReads(r: ContextReadsOn) {
+  const { system, store, connector, config, opts, world, tasks, agents, issueRuns, runByOrigin, pickupCtx } = r;
+  const { conclusions, planByOrigin, planPartsOf, shortfallsByOrigin, deliveriesByOrigin, appraisalsByOrigin } = r;
+  const { padsByOrigin, instructionsByOrigin, checksByGoal } = r;
   const workNodes = once(() => store.graph.listWorkNodes());
   const spend = once(() =>
     rollUpIssueSpend({
@@ -489,6 +592,10 @@ export function buildStateSections(
       ),
     };
   };
+  return { workNodes, spend, placementCtx, retainedRuns, enrichIssue };
+}
+
+function prReads({ store, config, world, reviewRows, attentionCtx }: IssueReadsOn) {
   const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
     prReviewState(pr.number, reviewReading(reviewRows(), pr.number), config.review, pr.reviewThreads) ?? undefined;
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
@@ -509,18 +616,25 @@ export function buildStateSections(
     for (const pr of [...(world.closedPullRequests ?? []), ...openPullRequests()]) map.set(pr.branch, pr);
     return map;
   });
-  const harnessSection = (): Pick<
-    CockpitState,
-    | 'config'
-    | 'recovery'
-    | 'build'
-    | 'pets'
-    | 'localRun'
-    | 'localRunTargets'
-    | 'tenantCommands'
-    | 'planning'
-    | 'dispatchRules'
-  > => ({
+  return { withReview, openPullRequests, prByBranch };
+}
+
+function harnessSection(
+  r: Reads,
+): Pick<
+  CockpitState,
+  | 'config'
+  | 'recovery'
+  | 'build'
+  | 'pets'
+  | 'localRun'
+  | 'localRunTargets'
+  | 'tenantCommands'
+  | 'planning'
+  | 'dispatchRules'
+> {
+  const { system, store, connector, config, watchLabel, world, tasks, placementCtx, planPartsOf, prByBranch } = r;
+  return {
     config: {
       /* The declaration, in promotion order, and never a goal's reading of it: the goal page's
          obligation tabs are the deployment's shape, so a goal that has reached nothing draws the
@@ -555,8 +669,8 @@ export function buildStateSections(
       areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,
       stateRules: workItemStateRules(config),
     },
-    recovery: recovery.pending(),
-    build: updates.reading(),
+    recovery: system.recovery.pending(),
+    build: system.updates.reading(),
     pets: system.pets.state(),
     localRun: localRunView(system.localRun.current(), system.localRun, system.localRunWatch.reading(), (ref, origin) =>
       localRunRefFacts(ref, planPartsOf(origin), {
@@ -569,215 +683,233 @@ export function buildStateSections(
       issues: world.issues,
       partsOf: planPartsOf,
       prByBranch: prByBranch(),
-      openPrs: openPullRequests(),
+      openPrs: r.openPullRequests(),
       tasks,
       defaultBranch: config.defaultBranch,
     }),
     tenantCommands: tenantCommandViews(config.environments, store.remoteValidation.listTenantPrepares()),
     planning: config.planning,
     dispatchRules: DISPATCH_RULES,
-  });
+  };
+}
 
-  const controlSection = (): Pick<CockpitState, 'control'> => ({
-    control,
-  });
+function controlSection({ control }: Reads): Pick<CockpitState, 'control'> {
+  return { control };
+}
 
+function goalsSection(
+  r: Reads,
+): Pick<
+  CockpitState,
+  | 'worldObservedAt'
+  | 'world'
+  | 'archivedPullRequests'
+  | 'retainedRuns'
+  | 'stacks'
+  | 'environmentReach'
+  | 'featureSequences'
+  | 'environmentHealth'
+  | 'environmentGroups'
+  | 'goalWatchWindows'
+  | 'environmentArrivals'
+  | 'criteriaDrift'
+  | 'remoteSheets'
+  | 'stackLandings'
+> {
+  const { store, config, opts, baseline, world, tasks, stacks, landings, mergedPrs, openPrNumbers, withReview } = r;
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
   const remoteSheets = once(() => buildRemoteSheets(store, config.environments, tasks, opts?.remoteCaptureSigner));
-
-  const goalsSection = (): Pick<
-    CockpitState,
-    | 'worldObservedAt'
-    | 'world'
-    | 'archivedPullRequests'
-    | 'retainedRuns'
-    | 'stacks'
-    | 'environmentReach'
-    | 'featureSequences'
-    | 'environmentHealth'
-    | 'environmentGroups'
-    | 'goalWatchWindows'
-    | 'environmentArrivals'
-    | 'criteriaDrift'
-    | 'remoteSheets'
-    | 'stackLandings'
-  > => {
-    const environments = config.environments;
-    const arrivals = environments.length === 0 ? [] : store.environments.listGoalArrivals();
-    const prByNumber = new Map<number, PullRequest>();
-    for (const pr of world.pullRequests) if (!prByNumber.has(pr.number)) prByNumber.set(pr.number, pr);
-    const stackRungPrs = new Set(stacks().flatMap((s) => s.rungs.map((r) => r.prNumber)));
-    return {
-      worldObservedAt: baseline?.takenAt ?? null,
-      world: {
-        ...world,
-        pullRequests: openPullRequests(),
-        closedPullRequests: world.closedPullRequests?.map(withReview),
-        issues: world.issues.map(enrichIssue),
-        parentCandidates: candidateParents(world.issues, config.issueContainerTypes),
-      },
-      retainedRuns: retainedRuns(),
-      archivedPullRequests: archivedPullRequests.map(withReview),
-      stacks: stacks(),
-      environmentReach:
-        environments.length === 0
-          ? []
-          : buildEnvironmentReach({
-              store,
-              environments,
-              sheets: remoteSheets(),
-              plans,
-              parts: planParts(),
-              arrivals,
-              nodes: workNodes(),
-              delivered: deliveries(),
-              shortfalled: shortfallsByOrigin(),
-            }),
-      featureSequences: store.sequences.listFeatureSequences(),
-      environmentHealth: buildEnvironmentHealth(store, environments),
-      environmentGroups: environmentGroups(environments)
-        .filter((band) => band.declared)
-        .map(({ name, environments: members }) => ({ name, environments: members })),
-      goalWatchWindows: buildGoalWatchWindows(store, environments, goalWatches),
-      environmentArrivals: arrivals.slice(0, 50),
-      ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),
-      remoteSheets: remoteSheets(),
-      stackLandings: [
-        ...stacks().map((stack) => {
-          const rungPrs = stack.rungs.flatMap((rung) => {
-            const pr = prByNumber.get(rung.prNumber);
-            return pr ? [pr] : [];
-          });
-          const landing = landingFor(
-            stack.rungs.map((r) => r.prNumber),
-            landings(),
-            openPrNumbers,
-          );
-          return {
-            ref: stack.ref,
-            ...landingReadiness(rungPrs),
-            landing,
-            landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
-          };
-        }),
-        ...landings()
-          .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
-          .map((landing) => ({
-            ref: landing.ref,
-            offer: false,
-            blockedBy: null,
-            landing,
-            landed: landedCount(landing, { ...world, merged: mergedPrs() }),
-          })),
-      ],
-    };
+  const environments = config.environments;
+  const arrivals = environments.length === 0 ? [] : store.environments.listGoalArrivals();
+  const prByNumber = new Map<number, PullRequest>();
+  for (const pr of world.pullRequests) if (!prByNumber.has(pr.number)) prByNumber.set(pr.number, pr);
+  const stackRungPrs = new Set(stacks().flatMap((s) => s.rungs.map((r) => r.prNumber)));
+  return {
+    worldObservedAt: baseline?.takenAt ?? null,
+    world: {
+      ...world,
+      pullRequests: r.openPullRequests(),
+      closedPullRequests: world.closedPullRequests?.map(withReview),
+      issues: world.issues.map(r.enrichIssue),
+      parentCandidates: candidateParents(world.issues, config.issueContainerTypes),
+    },
+    retainedRuns: r.retainedRuns(),
+    archivedPullRequests: r.archivedPullRequests.map(withReview),
+    stacks: stacks(),
+    environmentReach:
+      environments.length === 0
+        ? []
+        : buildEnvironmentReach({
+            store,
+            environments,
+            sheets: remoteSheets(),
+            plans: r.plans,
+            parts: r.planParts(),
+            arrivals,
+            nodes: r.workNodes(),
+            delivered: r.deliveries(),
+            shortfalled: r.shortfallsByOrigin(),
+          }),
+    featureSequences: store.sequences.listFeatureSequences(),
+    environmentHealth: buildEnvironmentHealth(store, environments),
+    environmentGroups: environmentGroups(environments)
+      .filter((band) => band.declared)
+      .map(({ name, environments: members }) => ({ name, environments: members })),
+    goalWatchWindows: buildGoalWatchWindows(store, environments, r.goalWatches),
+    environmentArrivals: arrivals.slice(0, 50),
+    ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),
+    remoteSheets: remoteSheets(),
+    stackLandings: [
+      ...stacks().map((stack) => {
+        const rungPrs = stack.rungs.flatMap((rung) => {
+          const pr = prByNumber.get(rung.prNumber);
+          return pr ? [pr] : [];
+        });
+        const landing = landingFor(
+          stack.rungs.map((r) => r.prNumber),
+          landings(),
+          openPrNumbers,
+        );
+        return {
+          ref: stack.ref,
+          ...landingReadiness(rungPrs),
+          landing,
+          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
+        };
+      }),
+      ...landings()
+        .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
+        .map((landing) => ({
+          ref: landing.ref,
+          offer: false,
+          blockedBy: null,
+          landing,
+          landed: landedCount(landing, { ...world, merged: mergedPrs() }),
+        })),
+    ],
   };
+}
 
-  /**
-   * Parts with a pull request open and no description written, which is the rail's
-   * ask. Read here rather than derived in the cockpit: the described set is not on
-   * the wire.
-   *
-   * Open is the cut the store cannot make, so it is made here against the world's
-   * own list: a pull request that merged or was closed is not one anybody is going
-   * to describe, and an ask that outlived its review is an ask nobody can answer.
-   * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
-   */
-  const undescribedParts = once((): UndescribedPart[] => {
-    const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
-    return store.prDescriptions.undescribedOpenParts().filter((part) => open.has(part.prNumber));
-  });
+/**
+ * Parts with a pull request open and no description written, which is the rail's
+ * ask. Read here rather than derived in the cockpit: the described set is not on
+ * the wire.
+ *
+ * Open is the cut the store cannot make, so it is made here against the world's
+ * own list: a pull request that merged or was closed is not one anybody is going
+ * to describe, and an ask that outlived its review is an ask nobody can answer.
+ * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
+ */
+function undescribedParts(store: Store, world: WorldSnapshot): UndescribedPart[] {
+  const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+  return store.prDescriptions.undescribedOpenParts().filter((part) => open.has(part.prNumber));
+}
 
-  /**
-   * Checked descriptions that found something, on pull requests still open. The rail
-   * raises each one: a contradiction as an ask, gaps alone as a low-priority note.
-   * → docs/spec/07-pull-requests.md#what-the-check-raises
-   */
-  const descriptionFeedback = once((): DescriptionFeedback[] => {
-    const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
-    return store.prDescriptions.descriptionFeedback().filter((f) => open.has(f.prNumber));
-  });
+/**
+ * Checked descriptions that found something, on pull requests still open. The rail
+ * raises each one: a contradiction as an ask, gaps alone as a low-priority note.
+ * → docs/spec/07-pull-requests.md#what-the-check-raises
+ */
+function descriptionFeedback(store: Store, world: WorldSnapshot): DescriptionFeedback[] {
+  const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+  return store.prDescriptions.descriptionFeedback().filter((f) => open.has(f.prNumber));
+}
 
-  const plansSection = (): Pick<
-    CockpitState,
-    | 'plans'
-    | 'planParts'
-    | 'undescribedParts'
-    | 'descriptionFeedback'
-    | 'planAtoms'
-    | 'planCaveatAnswers'
-    | 'validationChecks'
-    | 'validationPlans'
-    | 'validationResources'
-    | 'goalWatches'
-    | 'stateQueries'
-  > => ({
-    plans: wirePlans,
-    planParts: wirePlanParts(),
-    undescribedParts: undescribedParts(),
-    descriptionFeedback: descriptionFeedback(),
+function plansSection(
+  r: Reads,
+): Pick<
+  CockpitState,
+  | 'plans'
+  | 'planParts'
+  | 'undescribedParts'
+  | 'descriptionFeedback'
+  | 'planAtoms'
+  | 'planCaveatAnswers'
+  | 'validationChecks'
+  | 'validationPlans'
+  | 'validationResources'
+  | 'goalWatches'
+  | 'stateQueries'
+> {
+  const { store, world, withheld } = r;
+  return {
+    plans: r.wirePlans,
+    planParts: r.wirePlanParts(),
+    undescribedParts: undescribedParts(store, world),
+    descriptionFeedback: descriptionFeedback(store, world),
     planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
-    validationChecks: validationChecks(),
+    validationChecks: r.validationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
-    validationResources: wireValidationResources(),
-    goalWatches: [...goalWatches(), ...store.watches.listProposedGoalWatches()],
+    validationResources: r.wireValidationResources(),
+    goalWatches: [...r.goalWatches(), ...store.watches.listProposedGoalWatches()],
     stateQueries: store.remoteValidation.listStateQueries(),
-  });
+  };
+}
 
-  const fleetSection = (): Pick<
-    CockpitState,
-    | 'tasks'
-    | 'agents'
-    | 'endedAgents'
-    | 'ejections'
-    | 'readying'
-    | 'parkedOnLimit'
-    | 'stallParks'
-    | 'flags'
-    | 'artifactUrls'
-    | 'attachments'
-    | 'attachmentUrls'
-    | 'overlaps'
-    | 'usage'
-    | 'runOutcomes'
-  > => ({
+function fleetSection(
+  r: Reads,
+): Pick<
+  CockpitState,
+  | 'tasks'
+  | 'agents'
+  | 'endedAgents'
+  | 'ejections'
+  | 'readying'
+  | 'parkedOnLimit'
+  | 'stallParks'
+  | 'flags'
+  | 'artifactUrls'
+  | 'attachments'
+  | 'attachmentUrls'
+  | 'overlaps'
+  | 'usage'
+  | 'runOutcomes'
+> {
+  const { system, opts, history, flags, attachments } = r;
+  return {
     tasks: history().tasks,
     agents: history().agents,
     endedAgents: history().ended,
-    ejections: ejectionViews(),
-    readying: readying.list(),
-    parkedOnLimit: fleet.limitedAgentIds(),
-    stallParks: fleet.stallDeadlines(),
+    ejections: r.ejectionViews(),
+    readying: system.readying.list(),
+    parkedOnLimit: system.agents.limitedAgentIds(),
+    stallParks: system.agents.stallDeadlines(),
     flags: flags(),
     artifactUrls: artifactUrls(flags(), opts?.artifactSigner),
     attachments: attachments(),
     attachmentUrls: attachmentUrls(attachments(), opts?.attachmentSigner),
-    overlaps: overlaps(),
-    usage: buildUsage(system, spend().unattributedCostUsd),
-    runOutcomes: tallyRunOutcomes(agents()),
-  });
+    overlaps: r.overlaps(),
+    usage: buildUsage(system, r.spend().unattributedCostUsd),
+    runOutcomes: tallyRunOutcomes(r.agents()),
+  };
+}
 
-  const queueSection = (): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> => ({
+function queueSection(r: Reads): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> {
+  const { system, store, config, world, control, allHumanTasks } = r;
+  return {
     jobs: store.jobs.listJobs(),
     schedules: store.schedules.listJobSchedules(),
-    upcoming: harness.upcoming,
+    upcoming: system.harness.upcoming,
     runway: readRunway({
       policy: config.runway,
       issues: world.issues,
-      pickup: pickupCtx(),
-      runs: issueRuns,
+      pickup: r.pickupCtx(),
+      runs: r.issueRuns,
       humanTasks: allHumanTasks(),
       escalations: store.escalations.listEscalationSpans(),
       cap: control.cap,
       standing: allHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
     }),
-  });
+  };
+}
 
-  const inboxSection = (): Pick<CockpitState, 'bugFilings' | 'humanTasks' | 'escalations' | 'proposals'> => ({
-    bugFilings,
-    humanTasks,
+function inboxSection(r: Reads): Pick<CockpitState, 'bugFilings' | 'humanTasks' | 'escalations' | 'proposals'> {
+  const { store, withheld } = r;
+  return {
+    bugFilings: r.bugFilings,
+    humanTasks: r.humanTasks,
     escalations: store.escalations.listOpenEscalations().map((e) => {
       if (!withheld(e.context.planId)) return e;
       return {
@@ -786,30 +918,19 @@ export function buildStateSections(
         context: { ...e.context, detail: WITHHELD_PLAN, detailFrom: 'Withheld until the plan is revealed' },
       };
     }),
-    proposals: proposals.map((p) => {
+    proposals: r.proposals.map((p) => {
       if (!withheld(p.action.planId)) return p;
       return { ...p, action: withheldAction(p.action) };
     }),
-  });
-
-  const activitySection = (): Pick<CockpitState, 'decisions' | 'worldEvents' | 'errors'> => ({
-    decisions: shiftLog,
-    worldEvents,
-    errors: store.errors.listErrors(100),
-  });
-
-  const out: Partial<CockpitState> = {
-    refUrls,
   };
-  if (want.has('harness')) Object.assign(out, harnessSection());
-  if (want.has('control')) Object.assign(out, controlSection());
-  if (want.has('goals')) Object.assign(out, goalsSection());
-  if (want.has('plans')) Object.assign(out, plansSection());
-  if (want.has('fleet')) Object.assign(out, fleetSection());
-  if (want.has('queue')) Object.assign(out, queueSection());
-  if (want.has('inbox')) Object.assign(out, inboxSection());
-  if (want.has('activity')) Object.assign(out, activitySection());
-  return out;
+}
+
+function activitySection(r: Reads): Pick<CockpitState, 'decisions' | 'worldEvents' | 'errors'> {
+  return {
+    decisions: r.shiftLog,
+    worldEvents: r.worldEvents,
+    errors: r.store.errors.listErrors(100),
+  };
 }
 
 function artifactUrls(
