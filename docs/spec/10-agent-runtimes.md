@@ -118,7 +118,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
-[--strict-mcp-config --disallowedTools <every built-in tool>]   (a sealed rule only)
+[--strict-mcp-config --tools ""]   (a sealed rule only)
 [--permission-mode <mode>]
 [--model <model>]
 [--effort <level>]
@@ -128,11 +128,10 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 Points that are load-bearing:
 
 - **A sealed rule's agent launches with no built-in tool and no server but the harness's.**
-  `--disallowedTools` names every built-in (`SEALED_DISALLOWED_TOOLS`), `--strict-mcp-config` keeps the
-  operator's own MCP servers out, the operator's `agentAllowedTools` are left out of its `--settings`,
-  and no `--permission-prompt-tool` is named, because its channel serves no permission tool. A deny rule outranks an allow, so a `claudeArgs`
-  allow-list appended after it cannot hand one back. → [14](14-persistence.md#the-prediction-judge)
-
+  `--tools ""` is an empty allow-list of built-in tools — never a deny-list, which a new CLI build's
+  new tool slips past — `--strict-mcp-config` keeps the operator's own MCP servers out, the operator's
+  `agentAllowedTools` are left out of its `--settings`, and no `--permission-prompt-tool` is named.
+  → [14](14-persistence.md#the-prediction-judge)
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
 - `--session-id` and `--resume` are mutually exclusive, and the launch carries the pair (issue #318 —

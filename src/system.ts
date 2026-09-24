@@ -28,12 +28,7 @@ import { TicketSweep } from './tickets/sweep.js';
 import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
 import { judgeSeam } from './predictionJudge/seam.js';
-import {
-  SEALED_DISALLOWED_TOOLS,
-  buildClaudeStreamArgs,
-  buildInitialMessage,
-  buildResumeMessage,
-} from './agents/agentProtocol.js';
+import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from './agents/agentProtocol.js';
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
@@ -284,7 +279,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           permissionMode: permissionMode ?? perm,
           extraArgs,
           allowedTools: sealed ? [] : allowedTools,
-          disallowedTools: sealed ? [...SEALED_DISALLOWED_TOOLS] : undefined,
           additionalDirectories,
           sessionId,
           resume,
@@ -292,7 +286,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           mcpConfigPath,
           extraAllowedTools,
           permissionPromptTool: sealed ? undefined : permissionPromptTool,
-          strictMcpConfig: sealed,
+          sealed,
           model: model ?? undefined,
           effort: effort ?? undefined,
         })) as ArgsBuilder,

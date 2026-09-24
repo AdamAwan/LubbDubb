@@ -38,6 +38,9 @@ export const PREDICTION_COLUMNS: ColumnMigrations = {
     judge_mark_split: 'TEXT',
     judge_mark_avoid: 'TEXT',
     judge_marked_at: 'TEXT',
+    // Set when the operator marks moment one, so a judge is owed for marks made from here on and
+    // none for the marks every database already holds. → docs/spec/14-persistence.md#the-prediction-judge
+    judge_owed: 'INTEGER NOT NULL DEFAULT 0',
   },
 };
 
@@ -235,7 +238,10 @@ export class PredictionStore {
    */
   listJudgeOwed(): string[] {
     const rows = this.ctx
-      .prep(`SELECT origin_ref FROM goal_predictions WHERE plan_marked_at IS NOT NULL AND judge_marked_at IS NULL`)
+      .prep(
+        `SELECT origin_ref FROM goal_predictions
+          WHERE judge_owed = 1 AND plan_marked_at IS NOT NULL AND judge_marked_at IS NULL`,
+      )
       .all() as { origin_ref: string }[];
     return rows.map((r) => r.origin_ref);
   }
@@ -355,6 +361,8 @@ export class PredictionStore {
       // close-out bench reads to know the row is still owed.
       const markedAt = PREDICTION_SLOTS.some((slot) => marks[slot] !== null) ? ts : null;
       this.ctx.prep(MOMENT_WRITES[moment]).run({ ...marks, markedAt, updatedAt: ts, originRef: input.originRef });
+      if (moment === 'plan' && markedAt !== null)
+        this.ctx.prep(`UPDATE goal_predictions SET judge_owed = 1 WHERE origin_ref = ?`).run(input.originRef);
       const written: GoalPrediction =
         moment === 'plan'
           ? { ...standing, planMarks: marks, planMarkedAt: markedAt, updatedAt: ts }

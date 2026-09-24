@@ -1427,13 +1427,12 @@ default along several paths. `prediction-judge` is a **sealed** rule (`isSealedR
 - **Tools**: `buildTools` hands a sealed agent its own row and nothing else — not advertised-and-hidden,
   as every other agent's unlisted tools are, but absent, so a call to one is an unknown tool. The
   judge has `prediction_judge` alone: no scratchpad, no note, no request, no tracker.
-- **Built-in tools and other servers**: a sealed agent is launched with `--disallowedTools` naming
-  every built-in tool (`SEALED_DISALLOWED_TOOLS`, `src/agents/agentProtocol.ts`) — `AskUserQuestion`,
-  `Agent`/`Task` and the MCP resource readers among them, because a question is an escalation others
-  read — with `--strict-mcp-config`, so no MCP server from the operator's user or project settings loads
-  into it, without the operator's `agentAllowedTools`, and without `--permission-prompt-tool`, which
-  names a tool its channel no longer serves. It has no shell, no file write, no fetch and no
-  third-party tool to carry what it read out by.
+- **Built-in tools and other servers**: a sealed agent is launched with `--tools ""` — an **allow-list**
+  of built-in tools, and an empty one, because what a CLI build ships changes release to release and a
+  deny-list is always one outbound tool behind — and `--strict-mcp-config`, so no MCP server from the
+  operator's user or project settings loads into it. It is also launched without the operator's
+  `agentAllowedTools` and without `--permission-prompt-tool`. What it can call is
+  `mcp__lubbdubb__prediction_judge` and nothing else.
 - **Its own output, quoted back**: whatever it says or asks when it stops, its waiting reason is a
   fixed sentence and its ask is dropped, the waiting escalation drops its recent output, and a failure
   record drops the transcript excerpt — each of which
@@ -1444,6 +1443,10 @@ default along several paths. `prediction-judge` is a **sealed** rule (`isSealedR
 - **The verdict**: `prediction_judge` writes through the seam to the prediction store and nowhere else —
   `judge_mark_*` and `judge_marked_at` beside the operator's `plan_mark_*`, same four-valued shape,
   same `readMark`, never folded into them, and written once. Its refusals name slots, never their text.
+- **Who is owed one**: `judge_owed`, set when the operator's moment-one mark lands. It arrived with a
+  `DEFAULT 0`, so every mark already on a database from before the judge owes nothing — null in
+  `judge_marked_at` means _not read_, and without the flag it would also have meant _owed_ on every
+  past goal at once, queuing a judge for each on the first pulse after the upgrade.
 
 Its transcript is kept, because the cockpit draws it to the operator and the usage metrics read the
 row; what is shut is every door from it to a model.

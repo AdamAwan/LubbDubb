@@ -870,7 +870,9 @@ ticket does and will phrase the ones they share differently; `partial` is an ord
 before the stamp; on `conflicting` the operator either revises (a new version, a new check) or
 presses on, and pressing on is recorded beside the verdict. **Silence holds nothing**, the appraisal's
 rule exactly ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)): a crashed, killed or
-capped alignment agent writes no row, and the sitting closes without one.
+capped alignment agent writes no row, and the sitting closes without one. Its cooldown and attempt cap
+count only the dispatches made since the current version was written, so a revision is checked at
+once and gets its own attempts rather than inheriting the spent ones of the text it replaced.
 
 #### What the fleet is handed
 
@@ -888,7 +890,8 @@ same comparison is taken by an agent, so the aggregate can show where the two di
 record is most worth reading for.
 
 Rule `prediction-judge` dispatches once per goal, **after the operator's moment-one mark lands**, so
-the agent's reading can never anchor the operator's. It is an ordinary fleet dispatch — it counts
+the agent's reading can never anchor the operator's — and only on an open goal, and only for a mark
+made since the judge existed (`judge_owed`, [14](14-persistence.md#the-prediction-judge)). It is an ordinary fleet dispatch — it counts
 against the cap, its spend and time land in the usage metrics like any other — of a desk agent on
 origin `issue:<n>:prediction-judge`. Which goals are owed one is `listJudgeOwed()`, handed to the
 dispatcher as origin refs and nothing else. Its prompt names the goal and its one tool,

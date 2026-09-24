@@ -20,29 +20,33 @@ export function criteriaAlignment(s: StageContext): void {
     const reason =
       `Issue #${issue.number} carries acceptance criteria of its own and yours (version ${criteria.version}) ` +
       'have not been compared with them.';
-    s.consider({
-      origin,
-      rule: 'criteria-alignment',
-      title,
-      kind: 'desk',
-      branch: null,
-      reason,
-      action: {
-        type: 'dispatch_desk_agent',
-        title,
-        prompt: s.templates.render('criteria-alignment', {
-          number: issue.number,
-          title: issue.title,
-          ticket,
-          criteria: criteria.text,
-          version: criteria.version,
-        }),
-        originRef: origin,
-        originTitle: issue.title,
-        originSummary: ticket,
+    const since = Date.parse(criteria.authoredAt);
+    s.consider(
+      {
+        origin,
         rule: 'criteria-alignment',
+        title,
+        kind: 'desk',
+        branch: null,
         reason,
-      } satisfies RawAction,
-    });
+        action: {
+          type: 'dispatch_desk_agent',
+          title,
+          prompt: s.templates.render('criteria-alignment', {
+            number: issue.number,
+            title: issue.title,
+            ticket,
+            criteria: criteria.text,
+            version: criteria.version,
+          }),
+          originRef: origin,
+          originTitle: issue.title,
+          originSummary: ticket,
+          rule: 'criteria-alignment',
+          reason,
+        } satisfies RawAction,
+      },
+      { decisions: s.ctx.recentDecisions.filter((d) => Date.parse(d.createdAt) > since) },
+    );
   }
 }

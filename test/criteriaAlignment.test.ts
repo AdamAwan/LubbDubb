@@ -68,7 +68,7 @@ function context(body: string, extra: Partial<DispatchContext> = {}): DispatchCo
     closedSittings: new Set(),
     goalCriteria: [criteria],
     ...extra,
-    recentDecisions: spentAppraisalAttempts(12),
+    recentDecisions: [...spentAppraisalAttempts(12), ...(extra.recentDecisions ?? [])],
   };
 }
 
@@ -207,4 +207,40 @@ test('the whole round: dispatched in the sitting, recorded by the tool, shown, a
 
   await app.close();
   system.store.close();
+});
+
+test('each criteria version gets its own attempts: runs on an earlier version neither cool nor cap it', async () => {
+  const origin = issueOriginRef('criteriaAlignment', 12);
+  const spent = (at: string) =>
+    [0, 1, 2].map((i) => ({
+      id: `dec_align_${at}_${i}`,
+      cycleId: `cyc_align_${i}`,
+      action: {
+        type: 'dispatch_desk_agent' as const,
+        title: 'Check',
+        prompt: 'check it',
+        originRef: origin,
+        rule: 'criteria-alignment' as const,
+        reason: 'check',
+      },
+      outcome: 'executed' as const,
+      detail: '',
+      rule: 'criteria-alignment',
+      admission: null,
+      createdAt: at,
+    }));
+  const revised = { ...criteria, version: 2, authoredAt: '2026-07-25T11:00:00.000Z' };
+  assert.ok(
+    alignmentAction(
+      await decide(TICKET, { goalCriteria: [revised], recentDecisions: spent('2026-07-25T10:00:00.000Z') as never }),
+    ),
+    'three runs on version 1 leave version 2 its own attempts',
+  );
+  assert.equal(
+    alignmentAction(
+      await decide(TICKET, { goalCriteria: [revised], recentDecisions: spent('2026-07-25T11:30:00.000Z') as never }),
+    ),
+    undefined,
+    'three runs on this version spend its cap',
+  );
 });

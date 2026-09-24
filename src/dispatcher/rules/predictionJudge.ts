@@ -10,7 +10,8 @@ export function predictionJudge(s: StageContext): void {
     const origin = issueOriginRef('predictionJudge', parsed.issueNumber);
     if (s.activeOrigins.has(origin)) continue;
     const issue = s.ctx.world.issues.find((i) => i.number === parsed.issueNumber) ?? null;
-    const issueTitle = issue?.title ?? `Issue #${parsed.issueNumber}`;
+    if (issue === null || issue.state !== 'open') continue;
+    const issueTitle = issue.title;
     const title = `Second reading of issue #${parsed.issueNumber}'s prediction`;
     const reason = `The operator has marked their prediction for issue #${parsed.issueNumber}; take the judge's reading.`;
     s.consider({

@@ -105,12 +105,15 @@ test('the judge is sealed: handed its one tool, launched with no built-in tool, 
     assert.equal(full.prompt.includes(SENTINEL), false, 'the prompt carries no prediction text');
     const agent = system.store.agents.listAgents().find((a) => a.taskId === task.id)!;
 
-    const launch = launches.find((args) => args.includes('--disallowedTools'));
-    assert.ok(launch, 'the judge is launched with its built-in tools taken away');
-    assert.match(launch[launch.indexOf('--disallowedTools') + 1]!, /(^|,)Bash(,|$)/);
+    const launch = launches.find((args) => args.includes('--tools'));
+    assert.ok(launch, 'the judge is launched with an allow-list of built-in tools');
+    assert.equal(launch[launch.indexOf('--tools') + 1], '', 'and that list is empty');
+    assert.equal(
+      launches.filter((args) => args.includes('--tools')).length,
+      1,
+      'only the sealed launch carries it — every other agent keeps its tools',
+    );
     assert.equal(text(launch).includes('Bash(npm'), false, "the operator's allow-list is not handed to it");
-    for (const tool of ['AskUserQuestion', 'Agent', 'ListMcpResourcesTool', 'ReadMcpResourceTool'])
-      assert.match(launch[launch.indexOf('--disallowedTools') + 1]!, new RegExp(`(^|,)${tool}(,|$)`));
     assert.ok(launch.includes('--strict-mcp-config'), 'no MCP server from the operator’s own settings loads');
     assert.equal(
       launch.includes('--permission-prompt-tool'),
@@ -171,6 +174,44 @@ test('the judge is sealed: handed its one tool, launched with no built-in tool, 
   } finally {
     await desktop.close();
     await app.close();
+    system.store.close();
+  }
+});
+
+test('a judge is owed only for a mark made after the feature arrived, and never for a closed goal', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-judge-owed-'));
+  const system = buildSystem(
+    loadConfig({
+      selfUpdate: { enabled: false } as never,
+      auth: { enabled: false } as never,
+      labelPrefix: '',
+      dbPath: ':memory:',
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      repoRoot: dir,
+      heartbeatIntervalMs: 999_999,
+      prediction: { enabled: true },
+    }),
+    { worktrees: new FakeWorktreeManager(), gitObserver: new FakeGitObserver(), errorMirror: () => {} },
+  );
+  try {
+    system.predictions.recordPrediction({ originRef: 'issue:5', author: null, slots: { locus: 'here' } });
+    system.predictions.recordReveal('issue:5');
+    assert.deepEqual(system.predictions.listJudgeOwed(), [], 'an unmarked prediction owes nothing');
+    system.predictions.recordPlanMarks({ originRef: 'issue:5', marks: { locus: 'matched' } });
+    assert.deepEqual(system.predictions.listJudgeOwed(), ['issue:5'], 'the mark is what makes one owed');
+
+    system.connector.inject({ kind: 'new_issue', number: 5, title: 'Closed already', body: '' });
+    system.connector.inject({ kind: 'issue_state', number: 5, state: 'closed' });
+    planWithOnePart(system.store, 5);
+    await system.harness.runCycle('manual');
+    assert.equal(
+      system.store.tasks.listTasks().some((t) => t.originRef === issueOriginRef('predictionJudge', 5)),
+      false,
+      'a closed goal gets no judge',
+    );
+  } finally {
     system.store.close();
   }
 });

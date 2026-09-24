@@ -2184,6 +2184,7 @@ CREATE TABLE IF NOT EXISTS goal_predictions (
   judge_mark_split TEXT,
   judge_mark_avoid TEXT,
   judge_marked_at  TEXT,
+  judge_owed       INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
