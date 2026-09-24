@@ -21,7 +21,7 @@ import type { GoalAgentsPayload } from '../../wire.js';
 
 // → docs/spec/16-http-api.md
 
-const MAX_BUG_SUMMARY = 4000;
+export const MAX_BUG_SUMMARY = 4000;
 
 export function register(app: FastifyInstance, ctx: RouteContext): void {
   registerWatchAndState(app, ctx);

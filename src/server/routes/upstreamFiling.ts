@@ -4,11 +4,10 @@ import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
+import { MAX_BUG_SUMMARY } from './issues.js';
 import type { FilingTargetProbe, IssueFiled } from '../../wire.js';
 
 // → docs/spec/16-http-api.md
-
-const MAX_ISSUE_BODY = 4000;
 
 const MAX_ISSUE_TITLE = 200;
 
@@ -50,7 +49,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       .string({ required_error: 'body is required', invalid_type_error: 'body must be a string' })
       .trim()
       .min(1, 'body is required — say what should happen')
-      .max(MAX_ISSUE_BODY, `body is too long (max ${MAX_ISSUE_BODY} characters)`),
+      .max(MAX_BUG_SUMMARY, `body is too long (max ${MAX_BUG_SUMMARY} characters)`),
     watch: z.boolean({ invalid_type_error: 'watch must be a boolean' }).optional().default(false),
   });
   app.post(
