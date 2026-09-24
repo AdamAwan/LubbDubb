@@ -19,7 +19,7 @@ import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
 import { ALIGNING_REASON, SITTING_REASON, sittingHolds, type ClosedSittings } from '../intake/sitting.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
-import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute } from '../plans/planning.js';
+import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
 import { isActiveTask } from '../tasks.js';
 import type { IssueSequencing } from '../sequence/readiness.js';
@@ -150,31 +150,27 @@ export interface IssuePickupContext {
   paused: boolean;
 }
 
-export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
-  if (issue.state !== 'open') {
-    const run = ctx.runs?.find((r) => r.issueNumber === issue.number) ?? null;
-    if (run !== null && run.dismissedAt === null) {
-      return {
-        eligible: false,
-        status: 'retained',
-        reasons: [
-          run.completedAt !== null
-            ? 'closed; run kept until you dismiss it'
-            : 'closed mid-run; kept until you dismiss it',
-        ],
-      };
-    }
-    return { eligible: false, status: 'done', reasons: ['closed'] };
-  }
+type HeldStatus = IssuePickupStatus | null;
 
-  const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
-  const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
-  const planVerdict = resolvePlanRoute({
-    plan,
-    verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
-    existingParts: liveParts(parts).length,
-  });
-  if (planVerdict.route === 'awaiting_approval' && plan) {
+function closedStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
+  const run = ctx.runs?.find((r) => r.issueNumber === issue.number) ?? null;
+  if (run !== null && run.dismissedAt === null) {
+    return {
+      eligible: false,
+      status: 'retained',
+      reasons: [
+        run.completedAt !== null
+          ? 'closed; run kept until you dismiss it'
+          : 'closed mid-run; kept until you dismiss it',
+      ],
+    };
+  }
+  return { eligible: false, status: 'done', reasons: ['closed'] };
+}
+
+function planGateStatus(planVerdict: PlanRouteVerdict, plan: Plan | null, parts: PlanPart[]): HeldStatus {
+  if (!plan) return null;
+  if (planVerdict.route === 'awaiting_approval') {
     const total = liveParts(parts).length;
     return {
       eligible: false,
@@ -186,33 +182,30 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
       ],
     };
   }
+  if (planVerdict.route !== 'parts') return null;
+  const { settled, total } = planProgress(parts);
+  const reason =
+    total === 0
+      ? 'plan split this into parts'
+      : plan.status === 'complete'
+        ? `plan complete — all ${total} part${total === 1 ? '' : 's'} finished; close the issue or replan`
+        : `${settled}/${total} parts done`;
+  return { eligible: false, status: 'planning', reasons: [reason] };
+}
 
-  if (planVerdict.route === 'parts' && plan) {
-    const { settled, total } = planProgress(parts);
-    const reason =
-      total === 0
-        ? 'plan split this into parts'
-        : plan.status === 'complete'
-          ? `plan complete — all ${total} part${total === 1 ? '' : 's'} finished; close the issue or replan`
-          : `${settled}/${total} parts done`;
-    return { eligible: false, status: 'planning', reasons: [reason] };
-  }
-
-  const openPr = openPrForIssue(issue, ctx.openPrs);
-  if (openPr) return { eligible: false, status: 'has_pr', reasons: [`has open PR #${openPr.number}`] };
-
-  const origin = issueOriginRef('root', issue.number);
+function activeStatus(origin: string, ctx: IssuePickupContext): HeldStatus {
   const active = ctx.tasks.find((t) => t.originRef === origin && isActiveTask(t));
-  if (active) {
-    const reason =
-      active.status === 'running'
-        ? 'agent running'
-        : active.status === 'queued'
-          ? 'agent queued'
-          : 'agent waiting on you';
-    return { eligible: false, status: 'active', reasons: [reason] };
-  }
+  if (!active) return null;
+  const reason =
+    active.status === 'running'
+      ? 'agent running'
+      : active.status === 'queued'
+        ? 'agent queued'
+        : 'agent waiting on you';
+  return { eligible: false, status: 'active', reasons: [reason] };
+}
 
+function standingHoldStatus(issue: Issue, origin: string, ctx: IssuePickupContext): HeldStatus {
   const held = deliveryHold(ctx.deliveries?.find((d) => d.originRef === origin) ?? null, issue, {
     pickupStates: ctx.policy.pickupStates,
     signals: ctx.deliverySignals,
@@ -240,27 +233,35 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   const appraisal = appraisalFor(issue, ctx);
   if (appraisal) return { eligible: false, status: 'appraisal', reasons: [appraisal] };
+  return null;
+}
 
-  const route = planVerdict;
+function planningRouteStatus(
+  issue: Issue,
+  ctx: IssuePickupContext,
+  route: PlanRouteVerdict,
+  plan: Plan | null,
+): HeldStatus {
   if (route.route === 'parts') {
     return { eligible: false, status: 'planning', reasons: ['plan split this into parts'] };
   }
-  if (route.route === 'planning') {
-    const planner = ctx.tasks.find((t) => t.originRef === planOrigin(issue.number) && isActiveTask(t));
-    if (!planner && sittingHolds(ctx.closedSittings, issue.number, plan)) {
-      const aligning = ctx.tasks.some(
-        (t) => t.originRef === issueOriginRef('criteriaAlignment', issue.number) && isActiveTask(t),
-      );
-      return { eligible: false, status: 'sitting', reasons: [aligning ? ALIGNING_REASON : SITTING_REASON] };
-    }
-    const reason = planner
-      ? `planning agent ${planner.status === 'waiting' ? 'waiting on you' : planner.status}`
-      : route.planner === 'cooldown'
-        ? 'planning on cooldown'
-        : 'awaiting a planning agent';
-    return { eligible: false, status: 'planning', reasons: [reason] };
+  if (route.route !== 'planning') return null;
+  const planner = ctx.tasks.find((t) => t.originRef === planOrigin(issue.number) && isActiveTask(t));
+  if (!planner && sittingHolds(ctx.closedSittings, issue.number, plan)) {
+    const aligning = ctx.tasks.some(
+      (t) => t.originRef === issueOriginRef('criteriaAlignment', issue.number) && isActiveTask(t),
+    );
+    return { eligible: false, status: 'sitting', reasons: [aligning ? ALIGNING_REASON : SITTING_REASON] };
   }
+  const reason = planner
+    ? `planning agent ${planner.status === 'waiting' ? 'waiting on you' : planner.status}`
+    : route.planner === 'cooldown'
+      ? 'planning on cooldown'
+      : 'awaiting a planning agent';
+  return { eligible: false, status: 'planning', reasons: [reason] };
+}
 
+function attemptStatus(origin: string, ctx: IssuePickupContext): HeldStatus {
   const verdict = dispatchVerdict(origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
   if (verdict.kind === 'cooldown') {
     const attempts = countAttempts(origin, ctx.recentDecisions);
@@ -278,6 +279,32 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
       reasons: [`${attempts} failed attempt${attempts === 1 ? '' : 's'} — escalated to a human`],
     };
   }
+  return null;
+}
+
+export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
+  if (issue.state !== 'open') return closedStatus(issue, ctx);
+
+  const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
+  const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
+  const planVerdict = resolvePlanRoute({
+    plan,
+    verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
+    existingParts: liveParts(parts).length,
+  });
+  const gated = planGateStatus(planVerdict, plan, parts);
+  if (gated) return gated;
+
+  const openPr = openPrForIssue(issue, ctx.openPrs);
+  if (openPr) return { eligible: false, status: 'has_pr', reasons: [`has open PR #${openPr.number}`] };
+
+  const origin = issueOriginRef('root', issue.number);
+  const held =
+    activeStatus(origin, ctx) ??
+    standingHoldStatus(issue, origin, ctx) ??
+    planningRouteStatus(issue, ctx, planVerdict, plan) ??
+    attemptStatus(origin, ctx);
+  if (held) return held;
 
   if (ctx.paused) return { eligible: false, status: 'blocked', reasons: ['dispatch paused'] };
   if (ctx.headroom <= 0) return { eligible: false, status: 'blocked', reasons: ['no agent capacity'] };

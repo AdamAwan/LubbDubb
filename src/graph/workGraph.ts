@@ -3,6 +3,7 @@ import type {
   Job,
   Plan,
   PlanPart,
+  PullRequest,
   TaskSummary,
   WorkItemFiling,
   WorkNode,
@@ -27,9 +28,7 @@ export interface WorkGraphInput {
   existing: WorkNode[];
 }
 
-export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
-  const out: WorkNodeObservation[] = [];
-
+function foldIssues(input: WorkGraphInput, out: WorkNodeObservation[]): void {
   for (const issue of input.world.issues) {
     const closed = issue.state === 'closed';
     out.push({
@@ -41,7 +40,9 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       terminal: closed,
     });
   }
+}
 
+function foldPlansAndParts(input: WorkGraphInput, out: WorkNodeObservation[]): Map<string, number> {
   const issueOfPlan = new Map<string, number>();
   for (const plan of input.plans) {
     const n = planIssueNumber(plan.originRef);
@@ -69,19 +70,30 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       terminal: partSettled(part) || part.status === 'retired',
     });
   }
+  return issueOfPlan;
+}
 
+function jobsByBranch(jobs: Job[]): Map<string, string> {
+  const jobOfBranch = new Map<string, string>();
+  for (const job of jobs) {
+    const branch = jobBranch(job);
+    if (branch !== null) jobOfBranch.set(branch, `job:${job.id}`);
+  }
+  return jobOfBranch;
+}
+
+function prParents(
+  input: WorkGraphInput,
+  issueOfPlan: ReadonlyMap<string, number>,
+  jobOfBranch: ReadonlyMap<string, string>,
+  allPrs: PullRequest[],
+): Map<number, string> {
   const prParent = new Map<number, string>();
   for (const part of input.parts) {
     const n = issueOfPlan.get(part.planId);
     if (n === undefined) continue;
     if (part.prNumber !== null) prParent.set(part.prNumber, partOrigin(n, part.slug));
   }
-  const jobOfBranch = new Map<string, string>();
-  for (const job of input.jobs) {
-    const branch = jobBranch(job);
-    if (branch !== null) jobOfBranch.set(branch, `job:${job.id}`);
-  }
-  const allPrs = [...input.world.pullRequests, ...(input.world.closedPullRequests ?? [])];
   for (const pr of allPrs) {
     const owner = jobOfBranch.get(pr.branch);
     if (owner !== undefined && !prParent.has(pr.number)) prParent.set(pr.number, owner);
@@ -94,7 +106,14 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       if (mine && !prParent.has(pr.number)) prParent.set(pr.number, issueOrigin(issue.number));
     }
   }
+  return prParent;
+}
 
+function jobParents(
+  input: WorkGraphInput,
+  jobOfBranch: ReadonlyMap<string, string>,
+  allPrs: PullRequest[],
+): Map<string, string> {
   const jobParent = new Map<string, string>();
   for (const issue of input.world.issues) {
     if (issue.linkedPrNumber === null || issue.linkedPrNumber === undefined) continue;
@@ -104,7 +123,14 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       if (owner !== undefined && !jobParent.has(owner)) jobParent.set(owner, issueOrigin(issue.number));
     }
   }
+  return jobParent;
+}
 
+function foldPrs(
+  input: WorkGraphInput,
+  prParent: ReadonlyMap<number, string>,
+  out: WorkNodeObservation[],
+): Set<string> {
   const priorPr = new Map(input.existing.filter((n) => n.kind === 'pr').map((n) => [n.ref, n]));
   const seen = new Set<string>();
 
@@ -153,74 +179,60 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       provenance: 'inferred',
     });
   }
+  return seen;
+}
 
-  for (const job of input.jobs) {
-    const ref = `job:${job.id}`;
-    out.push({
-      ref,
-      kind: 'job',
-      parentRef: jobParent.get(ref) ?? null,
-      title: job.title,
-      status: job.status,
-      terminal: job.status === 'cancelled',
-    });
-  }
-
-  const assessTasks = new Map<string, TaskSummary[]>();
-  for (const task of input.tasks) {
+function tasksByOrigin(tasks: TaskSummary[], matches: (originRef: string) => boolean): Map<string, TaskSummary[]> {
+  const byOrigin = new Map<string, TaskSummary[]>();
+  for (const task of tasks) {
     if (task.originRef === null) continue;
-    if (issueOriginNumber('assess', task.originRef) === null) continue;
-    const bucket = assessTasks.get(task.originRef);
+    if (!matches(task.originRef)) continue;
+    const bucket = byOrigin.get(task.originRef);
     if (bucket) bucket.push(task);
-    else assessTasks.set(task.originRef, [task]);
+    else byOrigin.set(task.originRef, [task]);
   }
+  return byOrigin;
+}
+
+function attemptsLive(attempts: TaskSummary[]): boolean {
+  return attempts.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting');
+}
+
+function foldAttempts(input: WorkGraphInput, seen: ReadonlySet<string>, out: WorkNodeObservation[]): void {
+  const assessTasks = tasksByOrigin(input.tasks, (ref) => issueOriginNumber('assess', ref) !== null);
   for (const [ref, attempts] of assessTasks) {
     const issueRef = ref.slice(0, ref.lastIndexOf(':'));
-    const live = attempts.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting');
     out.push({
       ref,
       kind: 'assess',
       parentRef: issueRef,
       title: attempts[0]?.title ?? ref,
-      status: live ? 'live' : 'done',
+      status: attemptsLive(attempts) ? 'live' : 'done',
       terminal: false,
     });
   }
 
-  const concernTasks = new Map<string, TaskSummary[]>();
-  for (const task of input.tasks) {
-    if (task.originRef === null) continue;
-    if (!/^pr:\d+:.+$/.test(task.originRef)) continue;
-    const bucket = concernTasks.get(task.originRef);
-    if (bucket) bucket.push(task);
-    else concernTasks.set(task.originRef, [task]);
-  }
+  const concernTasks = tasksByOrigin(input.tasks, (ref) => /^pr:\d+:.+$/.test(ref));
   for (const [ref, attempts] of concernTasks) {
     const prRef = ref.slice(0, ref.indexOf(':', 3));
     if (!seen.has(prRef)) continue;
-    const live = attempts.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting');
     out.push({
       ref,
       kind: 'concern',
       parentRef: prRef,
       title: attempts[0]?.title ?? ref,
-      status: live ? 'live' : 'done',
+      status: attemptsLive(attempts) ? 'live' : 'done',
       terminal: false,
     });
   }
+}
 
-  const emitted = new Map(out.map((o) => [o.ref, o]));
-
-  const nodeRefs = new Set([...emitted.keys(), ...input.existing.map((n) => n.ref)]);
-  for (const job of input.jobs) {
-    if (job.originRef === null) continue;
-    const ref = `job:${job.id}`;
-    const node = emitted.get(ref);
-    if (!node || node.parentRef !== null) continue;
-    const parent = originAncestor(job.originRef, ref, nodeRefs);
-    if (parent !== null) node.parentRef = parent;
-  }
-
+function applyFilings(
+  input: WorkGraphInput,
+  out: WorkNodeObservation[],
+  emitted: Map<string, WorkNodeObservation>,
+  nodeRefs: Set<string>,
+): void {
   const existingByRef = new Map(input.existing.map((n) => [n.ref, n]));
 
   for (const filing of input.filings) {
@@ -248,6 +260,47 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       nodeRefs.add(placeholder.ref);
     }
   }
+}
+
+export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
+  const out: WorkNodeObservation[] = [];
+
+  foldIssues(input, out);
+  const issueOfPlan = foldPlansAndParts(input, out);
+
+  const allPrs = [...input.world.pullRequests, ...(input.world.closedPullRequests ?? [])];
+  const jobOfBranch = jobsByBranch(input.jobs);
+  const prParent = prParents(input, issueOfPlan, jobOfBranch, allPrs);
+  const jobParent = jobParents(input, jobOfBranch, allPrs);
+  const seen = foldPrs(input, prParent, out);
+
+  for (const job of input.jobs) {
+    const ref = `job:${job.id}`;
+    out.push({
+      ref,
+      kind: 'job',
+      parentRef: jobParent.get(ref) ?? null,
+      title: job.title,
+      status: job.status,
+      terminal: job.status === 'cancelled',
+    });
+  }
+
+  foldAttempts(input, seen, out);
+
+  const emitted = new Map(out.map((o) => [o.ref, o]));
+
+  const nodeRefs = new Set([...emitted.keys(), ...input.existing.map((n) => n.ref)]);
+  for (const job of input.jobs) {
+    if (job.originRef === null) continue;
+    const ref = `job:${job.id}`;
+    const node = emitted.get(ref);
+    if (!node || node.parentRef !== null) continue;
+    const parent = originAncestor(job.originRef, ref, nodeRefs);
+    if (parent !== null) node.parentRef = parent;
+  }
+
+  applyFilings(input, out, emitted, nodeRefs);
 
   return out;
 }

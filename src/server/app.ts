@@ -9,7 +9,7 @@ import type { System } from '../system.js';
 import { Hub } from './hub.js';
 import { authRefusalHint, createAuthThrottle, describeAuthAttempt, guardRequest, resolveCockpitToken } from './auth.js';
 import { debugLog } from '../debug.js';
-import type { RouteModule } from './routes/context.js';
+import type { RouteContext, RouteModule } from './routes/context.js';
 import { register as registerAgents } from './routes/agents.js';
 import { register as registerAllowance } from './routes/allowance.js';
 import {
@@ -116,58 +116,87 @@ interface BuiltApp {
   tokenPath: string | null;
 }
 
+function installAuthGuard(app: FastifyInstance, system: System, token: string): void {
+  const requireLoopbackHost = LOOPBACK_HOSTS.has(system.config.host);
+  const throttle = createAuthThrottle();
+  let refused = false;
+  app.addHook('onRequest', async (req, reply) => {
+    const now = Date.now();
+    const attempt = {
+      url: req.url,
+      host: req.headers.host,
+      origin: req.headers.origin,
+      authorization: req.headers.authorization,
+      queryToken:
+        typeof (req.query as { t?: unknown } | undefined)?.t === 'string' ? (req.query as { t: string }).t : undefined,
+    };
+    const verdict = guardRequest(attempt, {
+      token,
+      requireLoopbackHost,
+      throttle,
+      key: req.ip,
+      now,
+    });
+    if (verdict.ok) return;
+    const summary = `${verdict.code} ${verdict.error} — ${describeAuthAttempt(attempt)}`;
+    if (refused) {
+      debugLog('auth', summary);
+    } else {
+      refused = true;
+      const hint = authRefusalHint(attempt);
+      system.errors.record({
+        source: 'server',
+        message: 'cockpit refused a request — the first of this run',
+        detail: [
+          JSON.stringify(summary),
+          ...(hint ? [hint] : []),
+          'Set LUBBDUBB_DEBUG=1 to log every refusal, not just the first.',
+        ].join('\n'),
+      });
+    }
+    if (req.headers.upgrade) {
+      reply.header('connection', 'close');
+      reply.raw.once('finish', () => reply.raw.socket?.destroy());
+    }
+    return reply.code(verdict.code).send({ error: verdict.error });
+  });
+}
+
+function routeContext(system: System, hub: Hub, artifactKey: Buffer | null): RouteContext {
+  return {
+    system,
+    hub,
+    artifactKey,
+    artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
+    attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
+    localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
+    validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
+    remoteCaptureSigner: artifactKey ? remoteCaptureSignerFor(artifactKey) : undefined,
+  };
+}
+
+function installCaptureLinks(system: System, artifactKey: Buffer | null): void {
+  // The one link the harness puts somewhere it cannot reach. The desk is built before this app is, so
+  // the signer is installed rather than constructed — and a deployment that has declared no address
+  // for itself gets a comment carrying the prose alone.
+  // → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+  const linkBase = system.config.remoteValidation.captureLinkBase;
+  if (linkBase !== null) {
+    const sign = artifactKey ? remoteCaptureLinkSignerFor(artifactKey) : null;
+    system.remoteValidation.linkCapturesWith((runId, rowId) => {
+      const path = `/validation-captures/run/${encodeURIComponent(runId)}/${encodeURIComponent(rowId)}`;
+      const url = `${linkBase.replace(/\/+$/, '')}${path}`;
+      return sign ? `${url}?tk=${encodeURIComponent(sign(runId, rowId))}` : url;
+    });
+  }
+}
+
 export async function buildApp(system: System): Promise<BuiltApp> {
   const app = Fastify({ logger: false });
   const hub = new Hub(system);
 
   const auth = system.config.auth.enabled ? resolveCockpitToken(system.config.auth.tokenFile) : null;
-  if (auth) {
-    const requireLoopbackHost = LOOPBACK_HOSTS.has(system.config.host);
-    const throttle = createAuthThrottle();
-    let refused = false;
-    app.addHook('onRequest', async (req, reply) => {
-      const now = Date.now();
-      const attempt = {
-        url: req.url,
-        host: req.headers.host,
-        origin: req.headers.origin,
-        authorization: req.headers.authorization,
-        queryToken:
-          typeof (req.query as { t?: unknown } | undefined)?.t === 'string'
-            ? (req.query as { t: string }).t
-            : undefined,
-      };
-      const verdict = guardRequest(attempt, {
-        token: auth.token,
-        requireLoopbackHost,
-        throttle,
-        key: req.ip,
-        now,
-      });
-      if (verdict.ok) return;
-      const summary = `${verdict.code} ${verdict.error} — ${describeAuthAttempt(attempt)}`;
-      if (refused) {
-        debugLog('auth', summary);
-      } else {
-        refused = true;
-        const hint = authRefusalHint(attempt);
-        system.errors.record({
-          source: 'server',
-          message: 'cockpit refused a request — the first of this run',
-          detail: [
-            JSON.stringify(summary),
-            ...(hint ? [hint] : []),
-            'Set LUBBDUBB_DEBUG=1 to log every refusal, not just the first.',
-          ].join('\n'),
-        });
-      }
-      if (req.headers.upgrade) {
-        reply.header('connection', 'close');
-        reply.raw.once('finish', () => reply.raw.socket?.destroy());
-      }
-      return reply.code(verdict.code).send({ error: verdict.error });
-    });
-  }
+  if (auth) installAuthGuard(app, system, auth.token);
 
   await app.register(websocket);
   await app.register(rateLimit, { global: false });
@@ -205,31 +234,10 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     });
   });
 
-  const ctx = {
-    system,
-    hub,
-    artifactKey,
-    artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
-    attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
-    localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
-    validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
-    remoteCaptureSigner: artifactKey ? remoteCaptureSignerFor(artifactKey) : undefined,
-  };
+  const ctx = routeContext(system, hub, artifactKey);
   for (const registerRoutes of ROUTE_MODULES) registerRoutes(app, ctx);
 
-  // The one link the harness puts somewhere it cannot reach. The desk is built before this app is, so
-  // the signer is installed rather than constructed — and a deployment that has declared no address
-  // for itself gets a comment carrying the prose alone.
-  // → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
-  const linkBase = config.remoteValidation.captureLinkBase;
-  if (linkBase !== null) {
-    const sign = artifactKey ? remoteCaptureLinkSignerFor(artifactKey) : null;
-    system.remoteValidation.linkCapturesWith((runId, rowId) => {
-      const path = `/validation-captures/run/${encodeURIComponent(runId)}/${encodeURIComponent(rowId)}`;
-      const url = `${linkBase.replace(/\/+$/, '')}${path}`;
-      return sign ? `${url}?tk=${encodeURIComponent(sign(runId, rowId))}` : url;
-    });
-  }
+  installCaptureLinks(system, artifactKey);
 
   const distDir = resolve(process.cwd(), 'web/dist');
   if (existsSync(distDir)) {

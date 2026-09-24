@@ -27,8 +27,141 @@ async function waitFor(label: string, pred: () => boolean, timeoutMs = 10_000): 
   }
 }
 
+type Frame = { id?: number; result?: unknown };
+type ToolResult = { isError?: boolean; content: { text: string }[] };
+
+interface Bridge {
+  frames: Frame[];
+  send(frame: unknown): void;
+  kill(): void;
+}
+
+const log = (m: string): void => console.log(`  ${m}`);
+
+function spawnBridge(configPath: string): Bridge {
+  const launch = JSON.parse(readFileSync(configPath, 'utf8')) as {
+    mcpServers: { lubbdubb: { command: string; args: string[]; env: Record<string, string> } };
+  };
+  const server = launch.mcpServers.lubbdubb;
+  log(`✓ launch config written: ${server.command} ${server.args.join(' ')}`);
+
+  const bridge = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: 'pipe' });
+  const frames: Frame[] = [];
+  let buffer = '';
+  bridge.stdout.setEncoding('utf8');
+  bridge.stdout.on('data', (chunk: string) => {
+    buffer += chunk;
+    let nl: number;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (line) frames.push(JSON.parse(line) as { id?: number });
+    }
+  });
+
+  const send = (frame: unknown): void => void bridge.stdin.write(JSON.stringify(frame) + '\n');
+  return { frames, send, kill: () => void bridge.kill() };
+}
+
+async function smokeNegotiate({ frames, send }: Bridge): Promise<void> {
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize' });
+  send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  await waitFor('initialize + tools/list', () => frames.length >= 2, 5_000);
+  const tools = (frames[1]?.result as { tools: { name: string }[] }).tools.map((t) => t.name);
+  log(`✓ bridge negotiated MCP and advertised: ${tools.join(', ')}`);
+}
+
+async function smokePlanSubmit(system: System, { frames, send }: Bridge): Promise<void> {
+  send({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/call',
+    params: {
+      name: 'plan_submit',
+      arguments: { verdict: 'parts', reason: 'Schema before reader.', parts: SMOKE_PARTS },
+    },
+  });
+  await waitFor('plan_submit', () => frames.length >= 3, 5_000);
+  const call = frames[2]?.result as ToolResult;
+  if (call.isError) throw new Error(`plan_submit failed: ${call.content[0]?.text}`);
+
+  const plan = system.store.plans.getPlanByOrigin('issue:12');
+  if (!plan) throw new Error('plan_submit returned success but wrote nothing');
+  const parts = system.store.plans.listPlanParts(plan.id).map((p) => p.slug);
+  log(`✓ plan persisted through the tool: status=${plan.status} parts=${parts.join(',')}`);
+
+  send({
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: { name: 'plan_submit', arguments: { verdict: 'parts', reason: 'No parts.', parts: [] } },
+  });
+  await waitFor('plan_submit rejection', () => frames.length >= 4, 5_000);
+  const rejected = frames[3]?.result as ToolResult;
+  if (!rejected.isError) throw new Error('an empty parts list should have been rejected');
+  log(`✓ validation error returned to the caller: "${rejected.content[0]?.text.trim()}"`);
+}
+
+async function smokeWorldRead({ frames, send }: Bridge): Promise<void> {
+  send({
+    jsonrpc: '2.0',
+    id: 5,
+    method: 'tools/call',
+    params: { name: 'world_read', arguments: { kind: 'pr', ref: 'pr:42' } },
+  });
+  await waitFor('world_read', () => frames.length >= 5, 5_000);
+  const read = frames[4]?.result as ToolResult;
+  if (read.isError) throw new Error(`world_read failed: ${read.content[0]?.text}`);
+  const view = JSON.parse(read.content[0]?.text ?? '{}') as {
+    item: { number: number; ciStatus: string; health: { reasons: string[] } };
+  };
+  if (view.item.number !== 42 || view.item.ciStatus !== 'failing') {
+    throw new Error(`world_read returned the wrong view: ${JSON.stringify(view.item)}`);
+  }
+  log(`✓ world_read saw the harness's own PR #42: ci=${view.item.ciStatus} health=[${view.item.health.reasons}]`);
+}
+
+async function smokeReportFinding(system: System, agentId: string, { frames, send }: Bridge): Promise<void> {
+  const queuedBefore = system.store.jobs.listQueuedJobs().length;
+  send({
+    jsonrpc: '2.0',
+    id: 6,
+    method: 'tools/call',
+    params: {
+      name: 'report_finding',
+      arguments: { kind: 'duplicate', ref: 'issue:41', summary: 'Issue #12 asks for the same work as #41.' },
+    },
+  });
+  await waitFor('report_finding', () => frames.length >= 6, 5_000);
+  const filed = frames[5]?.result as ToolResult;
+  if (filed.isError) throw new Error(`report_finding failed: ${filed.content[0]?.text}`);
+  const finding = system.store.listFindings()[0];
+  if (!finding || finding.agentId !== agentId || finding.originRef !== 'issue:12:plan') {
+    throw new Error(`report_finding wrote the wrong attribution: ${JSON.stringify(finding)}`);
+  }
+  if (system.store.jobs.listQueuedJobs().length !== queuedBefore) {
+    throw new Error('report_finding queued work by itself — promotion must be the operator’s');
+  }
+  log(`✓ finding filed as ${finding.kind} on ${finding.ref} by ${finding.originRef}, and queued no work`);
+}
+
+async function smokeNoteProgress(system: System, agentId: string, { frames, send }: Bridge): Promise<void> {
+  const notes = ['Reading the store schema', 'Running the full suite after the rename'];
+  for (const [i, note] of notes.entries()) {
+    const before = frames.length;
+    send({ jsonrpc: '2.0', id: 7 + i, method: 'tools/call', params: { name: 'note_progress', arguments: { note } } });
+    await waitFor(`note_progress ${i + 1}`, () => frames.length > before, 5_000);
+    const noteFrame = frames[frames.length - 1]?.result as ToolResult;
+    if (noteFrame.isError) throw new Error(`note_progress failed: ${noteFrame.content[0]?.text}`);
+  }
+  const noted = system.store.agents.getAgent(agentId);
+  if (noted?.note !== 'Running the full suite after the rename' || !noted.notedAt) {
+    throw new Error(`note_progress left the wrong note: ${JSON.stringify(noted?.note)}`);
+  }
+  log(`✓ progress note on the agent row: "${noted.note}" (${noted.notedAt})`);
+}
+
 async function smokeToolCall(system: System): Promise<void> {
-  const log = (m: string): void => console.log(`  ${m}`);
   if (!(await system.mcp.listen())) throw new Error('MCP bridge server would not listen');
 
   const task = system.store.tasks.createTask({
@@ -44,114 +177,12 @@ async function smokeToolCall(system: System): Promise<void> {
   if (!credential.configPath) throw new Error('no launch config was written');
   system.mcp.bind(credential.token, agent.id);
 
-  const launch = JSON.parse(readFileSync(credential.configPath, 'utf8')) as {
-    mcpServers: { lubbdubb: { command: string; args: string[]; env: Record<string, string> } };
-  };
-  const server = launch.mcpServers.lubbdubb;
-  log(`✓ launch config written: ${server.command} ${server.args.join(' ')}`);
-
-  const bridge = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: 'pipe' });
-  const frames: { id?: number; result?: unknown }[] = [];
-  let buffer = '';
-  bridge.stdout.setEncoding('utf8');
-  bridge.stdout.on('data', (chunk: string) => {
-    buffer += chunk;
-    let nl: number;
-    while ((nl = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (line) frames.push(JSON.parse(line) as { id?: number });
-    }
-  });
-
-  const send = (frame: unknown): void => bridge.stdin.write(JSON.stringify(frame) + '\n');
-  send({ jsonrpc: '2.0', id: 1, method: 'initialize' });
-  send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-  await waitFor('initialize + tools/list', () => frames.length >= 2, 5_000);
-  const tools = (frames[1]?.result as { tools: { name: string }[] }).tools.map((t) => t.name);
-  log(`✓ bridge negotiated MCP and advertised: ${tools.join(', ')}`);
-
-  send({
-    jsonrpc: '2.0',
-    id: 3,
-    method: 'tools/call',
-    params: {
-      name: 'plan_submit',
-      arguments: { verdict: 'parts', reason: 'Schema before reader.', parts: SMOKE_PARTS },
-    },
-  });
-  await waitFor('plan_submit', () => frames.length >= 3, 5_000);
-  const call = frames[2]?.result as { isError?: boolean; content: { text: string }[] };
-  if (call.isError) throw new Error(`plan_submit failed: ${call.content[0]?.text}`);
-
-  const plan = system.store.plans.getPlanByOrigin('issue:12');
-  if (!plan) throw new Error('plan_submit returned success but wrote nothing');
-  const parts = system.store.plans.listPlanParts(plan.id).map((p) => p.slug);
-  log(`✓ plan persisted through the tool: status=${plan.status} parts=${parts.join(',')}`);
-
-  send({
-    jsonrpc: '2.0',
-    id: 4,
-    method: 'tools/call',
-    params: { name: 'plan_submit', arguments: { verdict: 'parts', reason: 'No parts.', parts: [] } },
-  });
-  await waitFor('plan_submit rejection', () => frames.length >= 4, 5_000);
-  const rejected = frames[3]?.result as { isError?: boolean; content: { text: string }[] };
-  if (!rejected.isError) throw new Error('an empty parts list should have been rejected');
-  log(`✓ validation error returned to the caller: "${rejected.content[0]?.text.trim()}"`);
-
-  send({
-    jsonrpc: '2.0',
-    id: 5,
-    method: 'tools/call',
-    params: { name: 'world_read', arguments: { kind: 'pr', ref: 'pr:42' } },
-  });
-  await waitFor('world_read', () => frames.length >= 5, 5_000);
-  const read = frames[4]?.result as { isError?: boolean; content: { text: string }[] };
-  if (read.isError) throw new Error(`world_read failed: ${read.content[0]?.text}`);
-  const view = JSON.parse(read.content[0]?.text ?? '{}') as {
-    item: { number: number; ciStatus: string; health: { reasons: string[] } };
-  };
-  if (view.item.number !== 42 || view.item.ciStatus !== 'failing') {
-    throw new Error(`world_read returned the wrong view: ${JSON.stringify(view.item)}`);
-  }
-  log(`✓ world_read saw the harness's own PR #42: ci=${view.item.ciStatus} health=[${view.item.health.reasons}]`);
-
-  const queuedBefore = system.store.jobs.listQueuedJobs().length;
-  send({
-    jsonrpc: '2.0',
-    id: 6,
-    method: 'tools/call',
-    params: {
-      name: 'report_finding',
-      arguments: { kind: 'duplicate', ref: 'issue:41', summary: 'Issue #12 asks for the same work as #41.' },
-    },
-  });
-  await waitFor('report_finding', () => frames.length >= 6, 5_000);
-  const filed = frames[5]?.result as { isError?: boolean; content: { text: string }[] };
-  if (filed.isError) throw new Error(`report_finding failed: ${filed.content[0]?.text}`);
-  const finding = system.store.listFindings()[0];
-  if (!finding || finding.agentId !== agent.id || finding.originRef !== 'issue:12:plan') {
-    throw new Error(`report_finding wrote the wrong attribution: ${JSON.stringify(finding)}`);
-  }
-  if (system.store.jobs.listQueuedJobs().length !== queuedBefore) {
-    throw new Error('report_finding queued work by itself — promotion must be the operator’s');
-  }
-  log(`✓ finding filed as ${finding.kind} on ${finding.ref} by ${finding.originRef}, and queued no work`);
-
-  const notes = ['Reading the store schema', 'Running the full suite after the rename'];
-  for (const [i, note] of notes.entries()) {
-    const before = frames.length;
-    send({ jsonrpc: '2.0', id: 7 + i, method: 'tools/call', params: { name: 'note_progress', arguments: { note } } });
-    await waitFor(`note_progress ${i + 1}`, () => frames.length > before, 5_000);
-    const noteFrame = frames[frames.length - 1]?.result as { isError?: boolean; content: { text: string }[] };
-    if (noteFrame.isError) throw new Error(`note_progress failed: ${noteFrame.content[0]?.text}`);
-  }
-  const noted = system.store.agents.getAgent(agent.id);
-  if (noted?.note !== 'Running the full suite after the rename' || !noted.notedAt) {
-    throw new Error(`note_progress left the wrong note: ${JSON.stringify(noted?.note)}`);
-  }
-  log(`✓ progress note on the agent row: "${noted.note}" (${noted.notedAt})`);
+  const bridge = spawnBridge(credential.configPath);
+  await smokeNegotiate(bridge);
+  await smokePlanSubmit(system, bridge);
+  await smokeWorldRead(bridge);
+  await smokeReportFinding(system, agent.id, bridge);
+  await smokeNoteProgress(system, agent.id, bridge);
 
   bridge.kill();
   system.mcp.release(credential.token);
@@ -182,7 +213,6 @@ async function main(): Promise<void> {
   });
 
   const system = buildSystem(config);
-  const log = (m: string) => console.log(`  ${m}`);
 
   console.log('1. Inject a PR and a CI failure, then pulse the harness.');
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'Add caching', branch: 'feature/caching' });

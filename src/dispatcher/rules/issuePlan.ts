@@ -9,16 +9,55 @@ import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import { SITTING_REASON } from '../../intake/sitting.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
+import type { RuleHeld } from '../admission.js';
+import type { Issue, Plan } from '../../types.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `issue-plan`)
 
+function planHold(
+  s: StageContext,
+  issueNumber: number,
+  reason: string,
+  planner: 'dispatch' | 'cooldown',
+): { reason: string; held: RuleHeld | undefined } {
+  const supersededBy = s.appraising.has(issueNumber) ? ('issue-appraisal' as const) : null;
+  const waits = s.sequenceWaits.get(issueNumber);
+  const sitting = !supersededBy && s.sittingHolds(issueNumber);
+  if (supersededBy) return { reason: supersededReason(supersededBy, reason), held: 'superseded' };
+  if (sitting) return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
+  if (waits) return { reason: `${reason} ${sequenceHoldReason(waits)}`, held: 'sequenced' };
+  return { reason, held: planner === 'cooldown' ? 'cooldown' : undefined };
+}
+
+function planTemplate(s: StageContext, issue: Issue, branch: string, replanOf: Plan | null): string {
+  if (!replanOf) {
+    return s.templates.render('issue-plan', {
+      number: issue.number,
+      title: issue.title,
+      body: issue.body,
+      branch,
+      planFile: PLAN_FILE,
+    });
+  }
+  return s.templates.render('issue-replan', {
+    number: issue.number,
+    title: issue.title,
+    body: issue.body,
+    branch,
+    planFile: PLAN_FILE,
+    current: currentPlanSummary(
+      replanOf,
+      (s.ctx.planParts ?? []).filter((p) => p.planId === replanOf.id),
+      s.prRefStyle,
+    ),
+  });
+}
+
 export function issuePlan(s: StageContext): void {
-  const { ctx } = s;
   for (const { issue } of s.eligibleIssues) {
     const route = s.routes.get(issue.number);
     if (route?.route !== 'planning') continue;
-    const supersededBy = s.appraising.has(issue.number) ? ('issue-appraisal' as const) : null;
     const origin = planOrigin(issue.number);
     if (s.activeOrigins.has(origin)) continue;
     const branch = planBranch(issue.number);
@@ -28,55 +67,21 @@ export function issuePlan(s: StageContext): void {
     const reason = replan
       ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
       : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
-    const waits = s.sequenceWaits.get(issue.number);
-    const sitting = !supersededBy && s.sittingHolds(issue.number);
+    const hold = planHold(s, issue.number, reason, route.planner);
     s.candidates.push({
       origin,
       rule: 'issue-plan',
       title,
       kind: 'code',
       branch,
-      reason: supersededBy
-        ? supersededReason(supersededBy, reason)
-        : sitting
-          ? `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`
-          : waits
-            ? `${reason} ${sequenceHoldReason(waits)}`
-            : reason,
-      held: supersededBy
-        ? 'superseded'
-        : sitting
-          ? 'sitting'
-          : waits
-            ? 'sequenced'
-            : route.planner === 'cooldown'
-              ? 'cooldown'
-              : undefined,
+      reason: hold.reason,
+      held: hold.held,
       action: {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch(branch, s.defaultBranch),
         title,
         prompt:
-          (replan
-            ? s.templates.render('issue-replan', {
-                number: issue.number,
-                title: issue.title,
-                body: issue.body,
-                branch,
-                planFile: PLAN_FILE,
-                current: currentPlanSummary(
-                  existing!,
-                  (ctx.planParts ?? []).filter((p) => p.planId === existing!.id),
-                  s.prRefStyle,
-                ),
-              })
-            : s.templates.render('issue-plan', {
-                number: issue.number,
-                title: issue.title,
-                body: issue.body,
-                branch,
-                planFile: PLAN_FILE,
-              })) +
+          planTemplate(s, issue, branch, replan ? existing : null) +
           readOnlyNote(
             `Your plan needs neither: plan_submit records it directly, and ${PLAN_FILE} is read off disk where ` +
               'you write it.',

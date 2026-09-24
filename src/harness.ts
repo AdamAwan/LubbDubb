@@ -2,27 +2,24 @@ import { EventEmitter } from 'node:events';
 import { nanoid } from 'nanoid';
 import { Heartbeat } from './heartbeat.js';
 import type { Connector } from './connector/connector.js';
-import type { Dispatcher } from './dispatcher/dispatcher.js';
+import type { DispatchResult, Dispatcher } from './dispatcher/dispatcher.js';
 import { buildDispatchInputs } from './dispatcher/dispatchInputs.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
-import { isPrWatched } from './pr/prHealth.js';
-import { isSomeoneElsesPr } from './pr/prOwnership.js';
 
-import { deliverySignalQuery } from './delivery/delivery.js';
-import { retainedRunIssues } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
 import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
-import type { Action, PullRequest, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
+import type { Action, IssueRun, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
 import { runPulse, type PulseDeps, type PulsePhase } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { GoalIntake } from './intake/sitting.js';
+import { dispatchView, readCycle, type CycleReadings } from './harnessCycleReadings.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -210,47 +207,15 @@ export class Harness extends EventEmitter {
 
   async runCycle(source: CycleSource = 'manual'): Promise<CycleReport> {
     this.deps.localRun?.noteAlive();
-    const awaiting = this.deps.recovery?.pendingCount() ?? 0;
-    if (awaiting > 0) {
-      const rationale = `held: ${awaiting} agent(s) from the previous run await a recovery decision`;
-      return {
-        cycleId: 'held',
-        source,
-        readWorld: false,
-        nextIntervalMs: this.intervalMs(),
-        rationale,
-        summary: { cycleId: 'held', executed: 0, deferred: 0, rejected: 0 },
-        at: new Date().toISOString(),
-      };
-    }
-    if (this.cycleInFlight) {
-      if (source === 'manual') this.pendingManual = true;
-      const standing = this.inFlightCycle;
-      return {
-        cycleId: 'coalesced',
-        source,
-        readWorld: false,
-        nextIntervalMs: this.intervalMs(),
-        rationale:
-          standing?.overdue === true
-            ? `cycle ${standing.cycleId} has been running for ${Math.round(standing.elapsedMs / 1000)}s at ${standing.where}`
-            : 'cycle already running',
-        summary: { cycleId: 'coalesced', executed: 0, deferred: 0, rejected: 0 },
-        at: new Date().toISOString(),
-      };
-    }
+    const declined = this.declined(source);
+    if (declined) return declined;
     const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.world.getWorldBaseline()) : null;
     if (source === 'local' && cached === null) {
-      return {
-        cycleId: 'unbaselined',
+      return this.skipped(
+        'unbaselined',
         source,
-        readWorld: false,
-        nextIntervalMs: this.intervalMs(),
-        rationale:
-          "no world baseline: a local cycle decides against the last real cycle's reading, and there is none yet",
-        summary: { cycleId: 'unbaselined', executed: 0, deferred: 0, rejected: 0 },
-        at: new Date().toISOString(),
-      };
+        "no world baseline: a local cycle decides against the last real cycle's reading, and there is none yet",
+      );
     }
     const readWorld = cached === null;
     this.cycleInFlight = true;
@@ -259,178 +224,7 @@ export class Harness extends EventEmitter {
     this.armWatchdog();
     this.emit('cycle:start', { cycleId, source });
     try {
-      const { store } = this.deps;
-      const readPlan = readWorld
-        ? buildReadPlan({
-            previous: this.prevWorld ?? store.world.getWorldBaseline(),
-            tasks: store.tasks.listTasks(),
-            events: store.world.listWorldEvents(READ_PLAN_EVENTS),
-            now: Date.now(),
-            lanes: this.deps.readLanes,
-            fresh: this.deps.freshReads?.drain(),
-          })
-        : undefined;
-      this.at('reading the world');
-      const observed = cached ?? (await this.deps.connector.getState(readPlan));
-      const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
-      if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
-      const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
-      await runPulse(
-        'reconcile',
-        this.deps,
-        { world, previousWorld, readWorld },
-        readWorld,
-        this.markPass('reconcile'),
-      );
-      await runPulse('open', this.deps, {}, readWorld, this.markPass('open'));
-      const tasks = store.tasks.listTasks();
-      await runPulse('afterTasks', this.deps, { world, tasks }, readWorld, this.markPass('afterTasks'));
-      const agents = store.agents.listAgents();
-      await runPulse('afterAgents', this.deps, { tasks, agents }, readWorld, this.markPass('afterAgents'));
-      const queuedJobs = store.jobs.listQueuedJobs();
-      const plans = store.plans.listPlans();
-      const planParts = store.plans.listAllPlanParts();
-      const conclusions = store.verdicts.listIssueConclusions();
-      const deliveries = store.verdicts.listDeliveries();
-      const deliveryWindow = deliverySignalQuery(deliveries);
-      const shortfalls = store.verdicts.listShortfalls();
-      const deliverySignals = deliveryWindow
-        ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
-        : [];
-      const appraisals = store.verdicts.listAppraisals();
-      await runPulse('afterVerdicts', this.deps, { world }, readWorld, this.markPass('afterVerdicts'));
-      const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
-      await runPulse(
-        'afterOrigins',
-        this.deps,
-        { world, tasks, signals: { retrospectiveOrigins, conclusions, deliveries, shortfalls, plans, planParts } },
-        readWorld,
-        this.markPass('afterOrigins'),
-      );
-      const recentDecisions = store.decisions.listDecisions(200);
-      const intake = this.deps.goalIntake?.() ?? { closedSittings: null, criteria: [], judgeOwed: [] };
-      const liveAgents = store.agents.countLiveAgents();
-      const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
-
-      const label = this.deps.prWatchLabel;
-      const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
-      const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
-
-      const issueRuns = store.floor.listIssueRuns();
-      const retainedIssues = retainedRunIssues(issueRuns, world.issues);
-      const dispatchWorld: WorldSnapshot =
-        hiddenPrs.length > 0 || retainedIssues.length > 0
-          ? {
-              ...world,
-              pullRequests: world.pullRequests.filter(actedOn),
-              issues: [...world.issues, ...retainedIssues],
-            }
-          : world;
-
-      const featureStandings = this.deps.featureStandings?.() ?? [];
-
-      const prReviews = store.prReviews.listPrReviews();
-      const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
-      await runPulse(
-        'afterReviews',
-        this.deps,
-        { dispatchWorld, prReviews, prReviewRoutes },
-        readWorld,
-        this.markPass('afterReviews'),
-      );
-
-      this.at('the dispatch decision');
-      const plan = await this.deps.dispatcher.decide(
-        buildDispatchInputs(store, {
-          world: dispatchWorld,
-          retainedIssues: retainedIssues.map((i) => i.number),
-          hiddenPrs,
-          tasks,
-          agents,
-          queuedJobs,
-          plans,
-          planParts,
-          conclusions,
-          deliveries,
-          deliverySignals,
-          shortfalls,
-          appraisals,
-          retrospectiveOrigins,
-          recentDecisions,
-          prReviews,
-          prReviewRoutes,
-          featureStandings,
-          remoteRuns: this.deps.remoteRuns?.() ?? [],
-          modelPins: this.deps.modelPins,
-          agentHeadroom: headroom,
-          closedSittings: intake.closedSittings,
-          goalCriteria: intake.criteria,
-          judgeOwed: intake.judgeOwed,
-        }),
-      );
-
-      this.lastPlan = plan.upcoming ? { cycleId, at: world.takenAt, items: plan.upcoming } : null;
-
-      const working = (plan.upcoming ?? []).some(
-        (item) => item.status !== 'unapproved' && item.status !== 'superseded',
-      );
-      this.busy =
-        liveAgents > 0 ||
-        queuedJobs.length > 0 ||
-        working ||
-        world.pullRequests.some((pr) => pr.ciStatus === 'pending');
-
-      const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
-      for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
-      store.priority.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
-      store.profileOverrides.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
-
-      if (this.deps.runway && this.deps.issuePickup)
-        this.deps.runway.run({
-          issues: world.issues,
-          pickup: {
-            policy: this.deps.issuePickup,
-            cooldown: DEFAULT_COOLDOWN,
-            now: world.takenAt,
-            tasks,
-            recentDecisions,
-            openPrs: world.pullRequests,
-            plans,
-            planParts,
-            deliveries,
-            deliverySignals,
-            appraisals,
-            closedSittings: intake.closedSittings,
-            runs: issueRuns,
-            headroom,
-            paused: this.deps.runtime.paused,
-          },
-          cap: this.deps.runtime.cap,
-        });
-
-      const stale = world.staleSources ?? [];
-      const caveat = stale.length > 0 ? `[stale: ${stale.join(', ')}] ` : '';
-      store.decisions.recordDecision({
-        cycleId,
-        action: { type: 'no_op', reason: 'cycle rationale' } as Action,
-        outcome: 'skipped',
-        detail: `[${source}] ${caveat}${plan.rationale}`,
-      });
-
-      this.at('executing the plan');
-      const summary = await this.deps.executor.execute(cycleId, plan);
-      await runPulse('afterExecute', this.deps, {}, readWorld, this.markPass('afterExecute'));
-      const report: CycleReport = {
-        cycleId,
-        source,
-        readWorld,
-        nextIntervalMs: this.intervalMs(),
-        rationale: plan.rationale,
-        summary,
-        at: new Date().toISOString(),
-      };
-      this.emit('cycle:end', report);
-      return report;
+      return await this.pulseCycle(cycleId, source, cached, readWorld);
     } catch (err) {
       this.deps.errors.record({
         source: 'cycle',
@@ -457,6 +251,180 @@ export class Harness extends EventEmitter {
         void this.runCycle('manual');
       }
     }
+  }
+
+  private declined(source: CycleSource): CycleReport | null {
+    const awaiting = this.deps.recovery?.pendingCount() ?? 0;
+    if (awaiting > 0) {
+      return this.skipped('held', source, `held: ${awaiting} agent(s) from the previous run await a recovery decision`);
+    }
+    if (!this.cycleInFlight) return null;
+    if (source === 'manual') this.pendingManual = true;
+    const standing = this.inFlightCycle;
+    return this.skipped(
+      'coalesced',
+      source,
+      standing?.overdue === true
+        ? `cycle ${standing.cycleId} has been running for ${Math.round(standing.elapsedMs / 1000)}s at ${standing.where}`
+        : 'cycle already running',
+    );
+  }
+
+  private skipped(cycleId: string, source: CycleSource, rationale: string): CycleReport {
+    return {
+      cycleId,
+      source,
+      readWorld: false,
+      nextIntervalMs: this.intervalMs(),
+      rationale,
+      summary: { cycleId, executed: 0, deferred: 0, rejected: 0 },
+      at: new Date().toISOString(),
+    };
+  }
+
+  private async observe(cached: WorldSnapshot | null, readWorld: boolean): Promise<WorldSnapshot> {
+    const { store } = this.deps;
+    const readPlan = readWorld
+      ? buildReadPlan({
+          previous: this.prevWorld ?? store.world.getWorldBaseline(),
+          tasks: store.tasks.listTasks(),
+          events: store.world.listWorldEvents(READ_PLAN_EVENTS),
+          now: Date.now(),
+          lanes: this.deps.readLanes,
+          fresh: this.deps.freshReads?.drain(),
+        })
+      : undefined;
+    this.at('reading the world');
+    const observed = cached ?? (await this.deps.connector.getState(readPlan));
+    const previousWorld = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : observed;
+    if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
+    const world = applyThreadReopens(observed, store.threadReopens.prThreadReopens());
+    await runPulse('reconcile', this.deps, { world, previousWorld, readWorld }, readWorld, this.markPass('reconcile'));
+    return world;
+  }
+
+  private async pulseCycle(
+    cycleId: string,
+    source: CycleSource,
+    cached: WorldSnapshot | null,
+    readWorld: boolean,
+  ): Promise<CycleReport> {
+    const { store } = this.deps;
+    const world = await this.observe(cached, readWorld);
+    const r = await readCycle(this.deps, world, readWorld, (phase) => this.markPass(phase));
+    const issueRuns = store.floor.listIssueRuns();
+    const { hiddenPrs, retainedIssues, dispatchWorld } = dispatchView(world, this.deps.prWatchLabel, issueRuns);
+
+    const featureStandings = this.deps.featureStandings?.() ?? [];
+
+    const prReviews = store.prReviews.listPrReviews();
+    const prReviewRoutes = store.prReviewRoutes.listPrReviewRoutes();
+    await runPulse(
+      'afterReviews',
+      this.deps,
+      { dispatchWorld, prReviews, prReviewRoutes },
+      readWorld,
+      this.markPass('afterReviews'),
+    );
+
+    this.at('the dispatch decision');
+    const plan = await this.deps.dispatcher.decide(
+      buildDispatchInputs(store, {
+        world: dispatchWorld,
+        retainedIssues: retainedIssues.map((i) => i.number),
+        hiddenPrs,
+        tasks: r.tasks,
+        agents: r.agents,
+        queuedJobs: r.queuedJobs,
+        plans: r.plans,
+        planParts: r.planParts,
+        conclusions: r.conclusions,
+        deliveries: r.deliveries,
+        deliverySignals: r.deliverySignals,
+        shortfalls: r.shortfalls,
+        appraisals: r.appraisals,
+        retrospectiveOrigins: r.retrospectiveOrigins,
+        recentDecisions: r.recentDecisions,
+        prReviews,
+        prReviewRoutes,
+        featureStandings,
+        remoteRuns: this.deps.remoteRuns?.() ?? [],
+        modelPins: this.deps.modelPins,
+        agentHeadroom: r.headroom,
+        closedSittings: r.intake.closedSittings,
+        goalCriteria: r.intake.criteria,
+        judgeOwed: r.intake.judgeOwed,
+      }),
+    );
+
+    this.settlePlan(cycleId, plan, world, r);
+    this.runRunway(world, r, issueRuns);
+
+    const stale = world.staleSources ?? [];
+    const caveat = stale.length > 0 ? `[stale: ${stale.join(', ')}] ` : '';
+    store.decisions.recordDecision({
+      cycleId,
+      action: { type: 'no_op', reason: 'cycle rationale' } as Action,
+      outcome: 'skipped',
+      detail: `[${source}] ${caveat}${plan.rationale}`,
+    });
+
+    this.at('executing the plan');
+    const summary = await this.deps.executor.execute(cycleId, plan);
+    await runPulse('afterExecute', this.deps, {}, readWorld, this.markPass('afterExecute'));
+    const report: CycleReport = {
+      cycleId,
+      source,
+      readWorld,
+      nextIntervalMs: this.intervalMs(),
+      rationale: plan.rationale,
+      summary,
+      at: new Date().toISOString(),
+    };
+    this.emit('cycle:end', report);
+    return report;
+  }
+
+  private settlePlan(cycleId: string, plan: DispatchResult, world: WorldSnapshot, r: CycleReadings): void {
+    const { store } = this.deps;
+    this.lastPlan = plan.upcoming ? { cycleId, at: world.takenAt, items: plan.upcoming } : null;
+
+    const working = (plan.upcoming ?? []).some((item) => item.status !== 'unapproved' && item.status !== 'superseded');
+    this.busy =
+      r.liveAgents > 0 ||
+      r.queuedJobs.length > 0 ||
+      working ||
+      world.pullRequests.some((pr) => pr.ciStatus === 'pending');
+
+    const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
+    for (const t of r.tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
+    store.priority.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+    store.profileOverrides.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+  }
+
+  private runRunway(world: WorldSnapshot, r: CycleReadings, issueRuns: IssueRun[]): void {
+    if (!this.deps.runway || !this.deps.issuePickup) return;
+    this.deps.runway.run({
+      issues: world.issues,
+      pickup: {
+        policy: this.deps.issuePickup,
+        cooldown: DEFAULT_COOLDOWN,
+        now: world.takenAt,
+        tasks: r.tasks,
+        recentDecisions: r.recentDecisions,
+        openPrs: world.pullRequests,
+        plans: r.plans,
+        planParts: r.planParts,
+        deliveries: r.deliveries,
+        deliverySignals: r.deliverySignals,
+        appraisals: r.appraisals,
+        closedSittings: r.intake.closedSittings,
+        runs: issueRuns,
+        headroom: r.headroom,
+        paused: this.deps.runtime.paused,
+      },
+      cap: this.deps.runtime.cap,
+    });
   }
 
   private recordWorldChanges(store: HarnessDeps['store'], world: WorldSnapshot, prev: WorldSnapshot | null): void {

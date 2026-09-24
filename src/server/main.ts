@@ -1,8 +1,9 @@
-import { loadDeploymentConfig } from '../config/config.js';
+import type { OrphanedWork } from '../agents/crashRecovery.js';
+import { loadDeploymentConfig, type Config } from '../config/config.js';
 import { watchConfigFile } from '../config/configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
-import { buildSystem } from '../system.js';
+import { buildSystem, type System } from '../system.js';
 import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
 
@@ -10,10 +11,7 @@ import { buildApp } from './app.js';
 
 const HANDOFF_GRACE_MS = 250;
 
-async function main(): Promise<void> {
-  const config = loadDeploymentConfig();
-  const system = buildSystem(config);
-
+function clearVivarium(system: System): void {
   try {
     const reset = system.pets.resetOnce();
     if (reset)
@@ -21,16 +19,9 @@ async function main(): Promise<void> {
   } catch (err) {
     system.errors.record({ source: 'server', message: `Vivarium clearance failed: ${(err as Error).message}` });
   }
+}
 
-  const mcpReady = await system.mcp.listen();
-
-  const desktopReady = await system.desktop.listen();
-  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors, installRoot());
-
-  const crashed = system.recovery.detect();
-
-  const { app, hub, cockpitUrl, tokenPath } = await buildApp(system);
-  await app.listen({ port: config.port, host: config.host });
+function announceCockpit(config: Config, cockpitUrl: string | null, tokenPath: string | null, mcpReady: boolean): void {
   console.log(`[lubbdubb] cockpit listening on ${config.host}:${config.port}`);
   if (cockpitUrl) {
     console.log(`[lubbdubb] open the cockpit: ${cockpitUrl}`);
@@ -40,6 +31,9 @@ async function main(): Promise<void> {
   }
   console.log(`[lubbdubb] heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`);
   console.log(`[lubbdubb] agent tools: ${mcpReady ? 'on' : 'unavailable — sentinels only'}`);
+}
+
+function announceDesktop(system: System, config: Config, desktopReady: boolean): void {
   if (desktopReady) {
     const { command, args } = system.desktop.registration();
     console.log(`[lubbdubb] desktop validation channel on — register it in Claude Code once with:`);
@@ -51,6 +45,56 @@ async function main(): Promise<void> {
       `[lubbdubb] desktop validation channel unavailable — nothing is listening on ${config.validation.desktopSocketPath}; see the error log`,
     );
   }
+}
+
+function settleRecovery(system: System, crashed: OrphanedWork[]): void {
+  const upgrade = system.recovery.settleUpgrade();
+  system.updates.clearIntent();
+  for (const item of upgrade.restored)
+    console.log(`[lubbdubb] restored ${item.taskId} (${item.agentId}) after the upgrade — ${item.title}`);
+  const held = upgrade.restored.length > 0 ? upgrade.left : crashed;
+
+  if (held.length > 0) {
+    console.log(
+      `[lubbdubb] ${held.length} piece(s) of work did not survive the last run — the pulse is HELD until ` +
+        'you restore, requeue or remove each of them in the cockpit',
+    );
+    for (const c of held)
+      console.log(
+        `[lubbdubb]   ${c.taskId}${c.agentId ? ` (${c.agentId})` : ' — no agent ever started'} — ${c.title}` +
+          `${c.originRef ? ` (${c.originRef})` : ''}`,
+      );
+  }
+}
+
+function resumeLocalRun(system: System): void {
+  const interrupted = system.localRun.resumeInterrupted();
+  if (interrupted.outcome === 'resumed')
+    console.log(
+      `[lubbdubb] bringing the local run of ${interrupted.run.originRef} back up at ${interrupted.run.ref} — ` +
+        'watch the running-locally panel',
+    );
+  else if (interrupted.outcome === 'settled')
+    console.log(`[lubbdubb] the local run of ${interrupted.run.originRef} did not survive: ${interrupted.reason}`);
+}
+
+async function main(): Promise<void> {
+  const config = loadDeploymentConfig();
+  const system = buildSystem(config);
+
+  clearVivarium(system);
+
+  const mcpReady = await system.mcp.listen();
+
+  const desktopReady = await system.desktop.listen();
+  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors, installRoot());
+
+  const crashed = system.recovery.detect();
+
+  const { app, hub, cockpitUrl, tokenPath } = await buildApp(system);
+  await app.listen({ port: config.port, host: config.host });
+  announceCockpit(config, cockpitUrl, tokenPath, mcpReady);
+  announceDesktop(system, config, desktopReady);
 
   const stopConfigWatch = watchConfigFile({
     filePath: system.configFile,
@@ -98,32 +142,8 @@ async function main(): Promise<void> {
   if (pausedBack !== null && pausedBack)
     console.log('[lubbdubb] dispatch is still paused after the upgrade — it was paused before it');
 
-  const upgrade = system.recovery.settleUpgrade();
-  system.updates.clearIntent();
-  for (const item of upgrade.restored)
-    console.log(`[lubbdubb] restored ${item.taskId} (${item.agentId}) after the upgrade — ${item.title}`);
-  const held = upgrade.restored.length > 0 ? upgrade.left : crashed;
-
-  if (held.length > 0) {
-    console.log(
-      `[lubbdubb] ${held.length} piece(s) of work did not survive the last run — the pulse is HELD until ` +
-        'you restore, requeue or remove each of them in the cockpit',
-    );
-    for (const c of held)
-      console.log(
-        `[lubbdubb]   ${c.taskId}${c.agentId ? ` (${c.agentId})` : ' — no agent ever started'} — ${c.title}` +
-          `${c.originRef ? ` (${c.originRef})` : ''}`,
-      );
-  }
-
-  const interrupted = system.localRun.resumeInterrupted();
-  if (interrupted.outcome === 'resumed')
-    console.log(
-      `[lubbdubb] bringing the local run of ${interrupted.run.originRef} back up at ${interrupted.run.ref} — ` +
-        'watch the running-locally panel',
-    );
-  else if (interrupted.outcome === 'settled')
-    console.log(`[lubbdubb] the local run of ${interrupted.run.originRef} did not survive: ${interrupted.reason}`);
+  settleRecovery(system, crashed);
+  resumeLocalRun(system);
   system.localRunWatch.start();
 
   system.harness.start();
