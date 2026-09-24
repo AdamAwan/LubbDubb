@@ -109,18 +109,15 @@ export class RemoteReadingDesk {
     const moved = run.startedSha !== null && endedSha !== null && endedSha !== run.startedSha;
 
     const rows = confirmedCheckRows(store.remoteValidation.listRemoteSheetRows(), run);
-    const checks = new Map(store.validation.listValidationChecks(run.goalRef).map((check) => [check.id, check]));
-
-    // **A `blocked` reading the listing took is never overwritten by a later pass.** The agent picks
-    // which selectors it invokes, so it can invoke one the listing did not survive — and this fold
-    // reads the report against `area` alone, which would let exactly that row come back green over
-    // the block the harness already wrote on it.
-    const listingBlocked = new Set(
-      store.remoteValidation
-        .listRemoteReadings()
-        .filter((reading) => reading.runId === run.id && reading.outcome === 'blocked')
-        .map((reading) => reading.rowId),
-    );
+    const pass: SettlePass = {
+      run,
+      report,
+      moved,
+      endedSha,
+      artefacts: input.artefacts,
+      checks: new Map(store.validation.listValidationChecks(run.goalRef).map((check) => [check.id, check])),
+      listingBlocked: listingBlockedRows(store, run),
+    };
 
     let read = 0;
     let blocked = 0;
@@ -129,87 +126,12 @@ export class RemoteReadingDesk {
     const kept: string[] = [];
 
     for (const row of rows) {
-      if (listingBlocked.has(row.rowId)) {
-        blocked += 1;
-        continue;
-      }
-      const check = checks.get(row.sourceId);
-      if (check === undefined) continue;
-      // Three instruments, and which one this row ran decides both what the report is read against
-      // and what the reading is worth. A `suite` step's area selects reviewed code and is verified
-      // against the pre-flight's listing; a one-off script has no listing — it was written for this
-      // check — and reports under the check's own id; and a `browser` step the fleet carries is the
-      // agent itself at the browser, which reports the same way and is worth `agent`. A check
-      // declaring more than one is read as the strongest: the reviewed instrument over the throwaway,
-      // and a program anybody can read afterwards over an agent's afternoon. They are never folded
-      // into one word. → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
-      const area = stepArea(check.steps);
-      const instrument =
-        area !== null
-          ? ('spec' as const)
-          : stepScript(check.steps) !== null
-            ? ('script' as const)
-            : stepDriven(check.steps)
-              ? ('agent' as const)
-              : null;
-      // A `screenshot` step is none of them: it asserts nothing, so it is not a fourth instrument and
-      // it never decides what a reading is worth. A check that only hands a screen back still runs
-      // here — this is the only channel with a browser and a tenant — and one that also asserts
-      // hands its screen back beside the assertion.
-      const screen = handsBackAScreen(check.steps);
-      if (instrument === null && !screen) continue;
-      const asserted =
-        instrument === null
-          ? null
-          : this.moveAware(
-              foldRowOutcome({
-                environment: run.environment,
-                area: instrument === 'spec' && area !== null ? area : check.id,
-                matched: row.matched,
-                instrument,
-                report,
-              }),
-              moved,
-              run,
-              endedSha,
-            );
-      // `proof` is the author's demand for evidence, written before anybody ran this, and it is read
-      // here for the same reason the report tool reads it: a row the fleet drove unwatched goes green
-      // on an agent's word unless something makes it hand the screen back. It tightens an instrument
-      // that already ran and never creates a row of its own, so a check with no instrument is
-      // untouched by it. → docs/spec/20-validation.md#proof
-      const owes = instrument !== null && demandsProof(check);
-      const folded =
-        screen || owes ? await this.withScreen(run, check, asserted, report, screen) : (asserted as RowOutcome);
-      const settling =
-        folded.outcome === 'blocked' ? null : this.writeCheck(run, check, folded, instrument, folded.capture ?? null);
-      if (settling !== null && settling.kept !== null) kept.push(settling.kept);
-      if (settling?.wrote === true) wrote += 1;
-      if (settling?.wrote === true && folded.outcome === 'captured') captured += 1;
-
-      store.remoteValidation.recordRemoteReading({
-        goalRef: run.goalRef,
-        environment: run.environment,
-        rowId: row.rowId,
-        runId: run.id,
-        outcome: folded.outcome,
-        rows: row.matched,
-        value: null,
-        detail: joined(folded.detail, settling?.kept ?? null),
-        startedSha: run.startedSha,
-        endedSha,
-        executed: folded.executed,
-        retries: folded.retries,
-        durationMs: folded.durationMs,
-        artefacts: input.artefacts,
-        // **The reading carries the screen whether or not the check row did.** `writeCheck` declines
-        // a check somebody else settled — a reading somebody took is theirs — and until this column
-        // existed that decline also threw the image away, because the only URL the cockpit could
-        // build came off the check row. The file is kept either way, so the row that actually holds
-        // it names it. → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
-        capture: folded.capture ?? null,
-      });
-      if (folded.outcome === 'blocked') blocked += 1;
+      const tally = await this.settleRow(pass, row);
+      if (tally === null) continue;
+      if (tally.kept !== null) kept.push(tally.kept);
+      if (tally.wrote) wrote += 1;
+      if (tally.wrote && tally.outcome === 'captured') captured += 1;
+      if (tally.outcome === 'blocked') blocked += 1;
       else read += 1;
     }
 
@@ -224,6 +146,82 @@ export class RemoteReadingDesk {
       artefacts: input.artefacts,
     });
     return { ok: true, run: ended ?? run, read, blocked, wrote, captured, kept, moved };
+  }
+
+  private async settleRow(pass: SettlePass, row: RemoteSheetRow): Promise<RowTally | null> {
+    if (pass.listingBlocked.has(row.rowId)) return { outcome: 'blocked', wrote: false, kept: null };
+    const check = pass.checks.get(row.sourceId);
+    if (check === undefined) return null;
+    const instrument = rowInstrument(check.steps);
+    // A `screenshot` step is none of them: it asserts nothing, so it is not a fourth instrument and
+    // it never decides what a reading is worth. A check that only hands a screen back still runs
+    // here — this is the only channel with a browser and a tenant — and one that also asserts
+    // hands its screen back beside the assertion.
+    const screen = handsBackAScreen(check.steps);
+    if (instrument === null && !screen) return null;
+    const asserted = instrument === null ? null : this.assertRow(pass, row, check, instrument);
+    // `proof` is the author's demand for evidence, written before anybody ran this, and it is read
+    // here for the same reason the report tool reads it: a row the fleet drove unwatched goes green
+    // on an agent's word unless something makes it hand the screen back. It tightens an instrument
+    // that already ran and never creates a row of its own, so a check with no instrument is
+    // untouched by it. → docs/spec/20-validation.md#proof
+    const owes = instrument !== null && demandsProof(check);
+    const folded =
+      screen || owes ? await this.withScreen(pass.run, check, asserted, pass.report, screen) : (asserted as RowOutcome);
+    const settling =
+      folded.outcome === 'blocked'
+        ? null
+        : this.writeCheck(pass.run, check, folded, instrument, folded.capture ?? null);
+    const kept = settling?.kept ?? null;
+    this.recordReading(pass, row, folded, kept);
+    return { outcome: folded.outcome, wrote: settling?.wrote === true, kept };
+  }
+
+  private assertRow(
+    pass: SettlePass,
+    row: RemoteSheetRow,
+    check: ValidationCheck,
+    instrument: 'spec' | 'script' | 'agent',
+  ): RowOutcome {
+    const area = stepArea(check.steps);
+    return this.moveAware(
+      foldRowOutcome({
+        environment: pass.run.environment,
+        area: instrument === 'spec' && area !== null ? area : check.id,
+        matched: row.matched,
+        instrument,
+        report: pass.report,
+      }),
+      pass.moved,
+      pass.run,
+      pass.endedSha,
+    );
+  }
+
+  private recordReading(pass: SettlePass, row: RemoteSheetRow, folded: RowOutcome, kept: string | null): void {
+    const { run } = pass;
+    this.deps.store.remoteValidation.recordRemoteReading({
+      goalRef: run.goalRef,
+      environment: run.environment,
+      rowId: row.rowId,
+      runId: run.id,
+      outcome: folded.outcome,
+      rows: row.matched,
+      value: null,
+      detail: joined(folded.detail, kept),
+      startedSha: run.startedSha,
+      endedSha: pass.endedSha,
+      executed: folded.executed,
+      retries: folded.retries,
+      durationMs: folded.durationMs,
+      artefacts: pass.artefacts,
+      // **The reading carries the screen whether or not the check row did.** `writeCheck` declines
+      // a check somebody else settled — a reading somebody took is theirs — and until this column
+      // existed that decline also threw the image away, because the only URL the cockpit could
+      // build came off the check row. The file is kept either way, so the row that actually holds
+      // it names it. → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
+      capture: folded.capture ?? null,
+    });
   }
 
   /**
@@ -415,6 +413,49 @@ export class RemoteReadingDesk {
       };
     return { run };
   }
+}
+
+interface SettlePass {
+  run: RemoteRun;
+  report: RunReport;
+  moved: boolean;
+  endedSha: string | null;
+  artefacts: string | null;
+  checks: ReadonlyMap<string, ValidationCheck>;
+  listingBlocked: ReadonlySet<string>;
+}
+
+interface RowTally {
+  outcome: RowOutcome['outcome'];
+  wrote: boolean;
+  kept: string | null;
+}
+
+// **A `blocked` reading the listing took is never overwritten by a later pass.** The agent picks
+// which selectors it invokes, so it can invoke one the listing did not survive — and this fold
+// reads the report against `area` alone, which would let exactly that row come back green over
+// the block the harness already wrote on it.
+function listingBlockedRows(store: Store, run: RemoteRun): Set<string> {
+  return new Set(
+    store.remoteValidation
+      .listRemoteReadings()
+      .filter((reading) => reading.runId === run.id && reading.outcome === 'blocked')
+      .map((reading) => reading.rowId),
+  );
+}
+
+// Three instruments, and which one this row ran decides both what the report is read against
+// and what the reading is worth. A `suite` step's area selects reviewed code and is verified
+// against the pre-flight's listing; a one-off script has no listing — it was written for this
+// check — and reports under the check's own id; and a `browser` step the fleet carries is the
+// agent itself at the browser, which reports the same way and is worth `agent`. A check
+// declaring more than one is read as the strongest: the reviewed instrument over the throwaway,
+// and a program anybody can read afterwards over an agent's afternoon. They are never folded
+// into one word. → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
+function rowInstrument(steps: ValidationCheck['steps']): 'spec' | 'script' | 'agent' | null {
+  if (stepArea(steps) !== null) return 'spec';
+  if (stepScript(steps) !== null) return 'script';
+  return stepDriven(steps) ? 'agent' : null;
 }
 
 /** The rows this run is for: this sheet's `check` rows, selected and with nothing already blocking them. */

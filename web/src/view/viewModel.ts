@@ -249,39 +249,11 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     goalPage,
     selectedPr,
     prPage,
-    consolePanel: input.consolePanel,
-    tab: input.tab,
-    insightsView: input.insightsView,
-    insightsScope: input.insightsScope ?? 'mine',
-    insightsWindow: input.insightsWindow,
-    poolProject: input.poolProject ?? null,
-    sheetEnvironment: input.sheetEnvironment ?? null,
-    collapsedFeatures: new Set(input.collapsed ?? []),
-    goalTab: input.goalTab ?? null,
-    goalOpen: new Set(input.goalOpen ?? []),
-    goalShut: new Set(input.goalShut ?? []),
-    configTab: input.configTab ?? 'values',
-    configGroup: input.configGroup ?? null,
-    ticketWatch: input.ticketWatch ?? 'any',
-    ticketTracking: input.ticketTracking ?? 'live',
-    ticketState: input.ticketState ?? 'any',
-    ticketFeature: input.ticketFeature ?? null,
-    ticketGroup: input.ticketGroup ?? 'feature',
-    ticketOrder: input.ticketOrder ?? 'added',
-    ticketView: input.ticketView ?? 'table',
-    ticketColumns: input.ticketColumns ?? [],
-    featureCard: input.featureCard ?? null,
-    featureSort: input.featureSort ?? 'wants-you',
-    featureDensity: input.featureDensity ?? 'auto',
-    petsBlended: input.petsBlended ?? false,
-    overviewShape: input.overviewShape ?? 'cards',
-    featureMode: input.featureMode ?? 'board',
-    featurePrs: input.featurePrs ?? 'open',
+    ...placeView(input),
+    ...ticketsView(input),
+    ...featuresView(input),
 
-    selectedAgent:
-      state.agents.find((a) => a.id === selected) ??
-      (input.goalAgents?.agents ?? []).find((a) => a.id === selected) ??
-      null,
+    selectedAgent: selectedAgentOf(input),
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,
 
     nextPulseIn: Math.max(0, Math.ceil((interval - (sincePulse % interval)) / 1000)),
@@ -298,6 +270,66 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     flagsByAgent: groupByAgent(state.flags),
     tailByAgent: input.tails,
 
+    ...agentLookups(input),
+    ...modalView(input),
+  };
+}
+
+function placeView(input: ViewInputs) {
+  return {
+    consolePanel: input.consolePanel,
+    tab: input.tab,
+    insightsView: input.insightsView,
+    insightsScope: input.insightsScope ?? 'mine',
+    insightsWindow: input.insightsWindow,
+    poolProject: input.poolProject ?? null,
+    sheetEnvironment: input.sheetEnvironment ?? null,
+    collapsedFeatures: new Set(input.collapsed ?? []),
+    goalTab: input.goalTab ?? null,
+    goalOpen: new Set(input.goalOpen ?? []),
+    goalShut: new Set(input.goalShut ?? []),
+    configTab: input.configTab ?? 'values',
+    configGroup: input.configGroup ?? null,
+  } satisfies Partial<CockpitView>;
+}
+
+function ticketsView(input: ViewInputs) {
+  return {
+    ticketWatch: input.ticketWatch ?? 'any',
+    ticketTracking: input.ticketTracking ?? 'live',
+    ticketState: input.ticketState ?? 'any',
+    ticketFeature: input.ticketFeature ?? null,
+    ticketGroup: input.ticketGroup ?? 'feature',
+    ticketOrder: input.ticketOrder ?? 'added',
+    ticketView: input.ticketView ?? 'table',
+    ticketColumns: input.ticketColumns ?? [],
+  } satisfies Partial<CockpitView>;
+}
+
+function featuresView(input: ViewInputs) {
+  return {
+    featureCard: input.featureCard ?? null,
+    featureSort: input.featureSort ?? 'wants-you',
+    featureDensity: input.featureDensity ?? 'auto',
+    petsBlended: input.petsBlended ?? false,
+    overviewShape: input.overviewShape ?? 'cards',
+    featureMode: input.featureMode ?? 'board',
+    featurePrs: input.featurePrs ?? 'open',
+  } satisfies Partial<CockpitView>;
+}
+
+function selectedAgentOf(input: ViewInputs): CockpitView['selectedAgent'] {
+  const { state, selected } = input;
+  return (
+    state.agents.find((a) => a.id === selected) ??
+    (input.goalAgents?.agents ?? []).find((a) => a.id === selected) ??
+    null
+  );
+}
+
+function agentLookups(input: ViewInputs) {
+  const { state } = input;
+  return {
     taskFor: (agent) =>
       state.tasks.find((t) => t.id === agent.taskId) ??
       (input.goalAgents?.tasks ?? []).find((t) => t.id === agent.taskId) ??
@@ -317,6 +349,11 @@ export function buildViewModel(input: ViewInputs): CockpitView {
         return goal === null ? [] : ([[goal, agent]] as [string, Agent][]);
       }),
     ),
+  } satisfies Partial<CockpitView>;
+}
+
+function modalView(input: ViewInputs) {
+  return {
     viewingPlan: input.viewingPlan,
     regroupingPlan: input.regroupingPlan === true,
     viewingRetro: input.viewingRetro,
@@ -324,5 +361,5 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingScratchpad: input.viewingScratchpad,
     viewingObstacle: input.viewingObstacle ?? null,
     obstacleEnded: input.obstacleEnded ?? false,
-  };
+  } satisfies Partial<CockpitView>;
 }

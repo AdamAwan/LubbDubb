@@ -68,6 +68,63 @@ export class RemoteRunDesk extends EventEmitter {
 
   /** @public the seam the press route runs a cycle through */
   async press(goalRef: string, environmentName: string): Promise<PressResult | PressRefusal> {
+    const pressable = this.pressable(goalRef, environmentName);
+    if (!pressable.ok) return pressable;
+    const { environment, rows } = pressable;
+    const { store } = this.deps;
+
+    const tenant = resolveTenant({
+      environment,
+      stamped: store.remoteValidation.listRemoteTenants(),
+      now: this.now(),
+      env: this.deps.env,
+    });
+    if (tenant.standing.blockedReason !== null) {
+      for (const row of rows)
+        store.remoteValidation.blockRemoteSheetRow(goalRef, environmentName, row.rowId, tenant.standing.blockedReason);
+      return { ok: false, code: 400, error: tenant.standing.blockedReason };
+    }
+    const key = tenant.standing.tenant ?? '';
+
+    const pin = await this.pin(goalRef, environment);
+
+    const { run, live } = store.remoteValidation.beginRemoteRun({
+      goalRef,
+      environment: environmentName,
+      tenant: key,
+      startedSha: pin.deployedSha,
+    });
+    if (run === null) return liveRefusal(environmentName, live, key);
+
+    if (pin.abandon !== null) {
+      const ended = store.remoteValidation.endRemoteRun(run.id, { status: 'abandoned', note: pin.abandon });
+      return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
+    }
+
+    const read = await this.readAll(environment, goalRef, run, rows, tenant.standing);
+
+    // The deterministic rows are read here, synchronously and under the pin: they are read-only,
+    // consented and cheap, and the agent is for the browser half. The run the rule dispatches for is
+    // **this** row — it is left `pending` where a confirmed `check` row is owed one, and settled here
+    // where none is, which is a run nothing will ever report against.
+    // Both browser instruments count, and so does a screen. A sheet whose only confirmed check
+    // carries a one-off script names no selector at all, and one whose check only hands a screen back
+    // names neither, and one the agent drives itself at the browser names none of the three — a press
+    // counting selectors alone would settle that run on the spot with its whole browser half still
+    // owed, which is a press that quietly did less than it said.
+    const owed = owedToAgent(store, environment, goalRef, rows);
+    if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
+
+    const endedSha = await this.deployedSha(environment);
+    store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
+    const ended = store.remoteValidation.endRemoteRun(run.id, { status: 'ended', endedSha });
+    return { ok: true, run: ended ?? run, abandoned: null, read, owed: 0 };
+  }
+
+  private pressable(
+    goalRef: string,
+    environmentName: string,
+  ): { ok: true; environment: EnvironmentConfig; rows: RemoteSheetRow[] } | PressRefusal {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     if (environment?.validate === undefined)
       return {
@@ -92,65 +149,7 @@ export class RemoteRunDesk extends EventEmitter {
           'nothing on this sheet is selected. A press with no row selected would open a run that learns ' +
           'nothing — take a row back first.',
       };
-
-    const tenant = resolveTenant({
-      environment,
-      stamped: store.remoteValidation.listRemoteTenants(),
-      now: this.now(),
-      env: this.deps.env,
-    });
-    if (tenant.standing.blockedReason !== null) {
-      for (const row of rows)
-        store.remoteValidation.blockRemoteSheetRow(goalRef, environmentName, row.rowId, tenant.standing.blockedReason);
-      return { ok: false, code: 400, error: tenant.standing.blockedReason };
-    }
-    const key = tenant.standing.tenant ?? '';
-
-    const pin = await this.pin(goalRef, environment);
-
-    const { run, live } = store.remoteValidation.beginRemoteRun({
-      goalRef,
-      environment: environmentName,
-      tenant: key,
-      startedSha: pin.deployedSha,
-    });
-    if (run === null)
-      return {
-        ok: false,
-        code: 409,
-        error:
-          `a run is already live on "${environmentName}" against ${named(live?.tenant ?? key)} — it started at ` +
-          `${live?.startedAt ?? 'an earlier moment'}. Call that one off first if you want to press again.`,
-        ...(live === null || live === undefined ? {} : { live }),
-      };
-
-    if (pin.abandon !== null) {
-      const ended = store.remoteValidation.endRemoteRun(run.id, { status: 'abandoned', note: pin.abandon });
-      return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
-    }
-
-    const read = await this.readAll(environment, goalRef, run, rows, tenant.standing);
-
-    // The deterministic rows are read here, synchronously and under the pin: they are read-only,
-    // consented and cheap, and the agent is for the browser half. The run the rule dispatches for is
-    // **this** row — it is left `pending` where a confirmed `check` row is owed one, and settled here
-    // where none is, which is a run nothing will ever report against.
-    // Both browser instruments count, and so does a screen. A sheet whose only confirmed check
-    // carries a one-off script names no selector at all, and one whose check only hands a screen back
-    // names neither, and one the agent drives itself at the browser names none of the three — a press
-    // counting selectors alone would settle that run on the spot with its whole browser half still
-    // owed, which is a press that quietly did less than it said.
-    const owed =
-      runnableSelectors(store, environment, goalRef, rows).length +
-      runnableScripts(store, environment, goalRef, rows).length +
-      runnableScreens(store, environment, goalRef, rows).length +
-      runnableDrives(store, environment, goalRef, rows).length;
-    if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
-
-    const endedSha = await this.deployedSha(environment);
-    store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
-    const ended = store.remoteValidation.endRemoteRun(run.id, { status: 'ended', endedSha });
-    return { ok: true, run: ended ?? run, abandoned: null, read, owed: 0 };
+    return { ok: true, environment, rows };
   }
 
   /** @public the seam the cancel route settles a run an operator abandoned by hand through */
@@ -285,7 +284,7 @@ export class RemoteRunDesk extends EventEmitter {
   async prepareTenant(
     environmentName: string,
     resumed: { call: TenantCall; launch: TenantLaunch } | null = null,
-  ): Promise<{ ok: boolean | null; detail: string; standing: TenantStanding }> {
+  ): Promise<Prepared> {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     const validate = environment?.validate;
     if (environment === undefined || validate === undefined)
@@ -295,39 +294,11 @@ export class RemoteRunDesk extends EventEmitter {
         standing: absent(),
       };
 
-    const standing = (): TenantStanding => this.standing(environmentName);
-    const launched =
-      (call: TenantCall) =>
-      (launch: TenantLaunch): void =>
-        this.deps.store.remoteValidation.recordTenantLaunch(environmentName, call, launch);
-    const gone = (): { ok: null; detail: string; standing: TenantStanding } => ({
-      ok: null,
-      detail:
-        'The harness restarted while this was running, and the command is no longer running. Whether it ' +
-        'finished is not known from here — read its output and the tenant’s age, or run it again.',
-      standing: standing(),
-    });
-
     const said: string[] = [];
     if (validate.ensureTenant !== undefined && resumed?.call !== 'reseed') {
-      const request = { environment: environmentName, command: validate.ensureTenant, tenant: standing().tenant };
-      const provisioned =
-        resumed === null
-          ? await this.deps.tenants.ensure(request, launched('ensure'))
-          : await this.deps.tenants.follow('ensure', request, resumed.launch);
-      if (provisioned === null) return gone();
-      if (provisioned.detail !== null || provisioned.tenant === null)
-        return {
-          ok: false,
-          detail: `the "ensureTenant" command did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
-          standing: standing(),
-        };
-      this.deps.store.remoteValidation.stampRemoteTenant({
-        environment: environmentName,
-        tenant: provisioned.tenant,
-        ensured: true,
-      });
-      said.push(`\`${provisioned.tenant}\` is provisioned`);
+      const ensured = await this.ensureStep(environmentName, validate.ensureTenant, resumed);
+      if (!('said' in ensured)) return ensured;
+      said.push(ensured.said);
     }
 
     const resolved = resolveTenant({
@@ -337,28 +308,9 @@ export class RemoteRunDesk extends EventEmitter {
       env: this.deps.env,
     });
     if (validate.reseed !== undefined) {
-      if (resolved.standing.tenant === null || resolved.value === null)
-        return {
-          ok: false,
-          detail:
-            resolved.standing.blockedReason ??
-            `"${environmentName}" declares a reseed and nothing has supplied a tenant to reseed.`,
-          standing: resolved.standing,
-        };
-      const request = { environment: environmentName, command: validate.reseed, tenant: resolved.value };
-      const reseeded =
-        resumed?.call === 'reseed'
-          ? await this.deps.tenants.follow('reseed', request, resumed.launch)
-          : await this.deps.tenants.reseed(request, launched('reseed'));
-      if (reseeded === null) return gone();
-      if (reseeded.detail !== null)
-        return { ok: false, detail: `the reseed did not run — ${reseeded.detail}`, standing: resolved.standing };
-      this.deps.store.remoteValidation.stampRemoteTenant({
-        environment: environmentName,
-        tenant: resolved.standing.tenant,
-        reseeded: true,
-      });
-      said.push(`\`${resolved.standing.tenant}\` is reseeded`);
+      const reseeded = await this.reseedStep(environmentName, validate.reseed, resolved, resumed);
+      if (!('said' in reseeded)) return reseeded;
+      said.push(reseeded.said);
     }
 
     if (said.length === 0)
@@ -367,7 +319,76 @@ export class RemoteRunDesk extends EventEmitter {
         detail: `"${environmentName}" declares neither an "ensureTenant" nor a "reseed", so there is nothing to run.`,
         standing: resolved.standing,
       };
-    return { ok: true, detail: `${said.join(' and ')}.`, standing: standing() };
+    return { ok: true, detail: `${said.join(' and ')}.`, standing: this.standing(environmentName) };
+  }
+
+  private async ensureStep(
+    environmentName: string,
+    command: string,
+    resumed: { call: TenantCall; launch: TenantLaunch } | null,
+  ): Promise<Prepared | { said: string }> {
+    const request = { environment: environmentName, command, tenant: this.standing(environmentName).tenant };
+    const provisioned =
+      resumed === null
+        ? await this.deps.tenants.ensure(request, this.launched(environmentName, 'ensure'))
+        : await this.deps.tenants.follow('ensure', request, resumed.launch);
+    if (provisioned === null) return this.gone(environmentName);
+    if (provisioned.detail !== null || provisioned.tenant === null)
+      return {
+        ok: false,
+        detail: `the "ensureTenant" command did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
+        standing: this.standing(environmentName),
+      };
+    this.deps.store.remoteValidation.stampRemoteTenant({
+      environment: environmentName,
+      tenant: provisioned.tenant,
+      ensured: true,
+    });
+    return { said: `\`${provisioned.tenant}\` is provisioned` };
+  }
+
+  private async reseedStep(
+    environmentName: string,
+    command: string,
+    resolved: ReturnType<typeof resolveTenant>,
+    resumed: { call: TenantCall; launch: TenantLaunch } | null,
+  ): Promise<Prepared | { said: string }> {
+    if (resolved.standing.tenant === null || resolved.value === null)
+      return {
+        ok: false,
+        detail:
+          resolved.standing.blockedReason ??
+          `"${environmentName}" declares a reseed and nothing has supplied a tenant to reseed.`,
+        standing: resolved.standing,
+      };
+    const request = { environment: environmentName, command, tenant: resolved.value };
+    const reseeded =
+      resumed?.call === 'reseed'
+        ? await this.deps.tenants.follow('reseed', request, resumed.launch)
+        : await this.deps.tenants.reseed(request, this.launched(environmentName, 'reseed'));
+    if (reseeded === null) return this.gone(environmentName);
+    if (reseeded.detail !== null)
+      return { ok: false, detail: `the reseed did not run — ${reseeded.detail}`, standing: resolved.standing };
+    this.deps.store.remoteValidation.stampRemoteTenant({
+      environment: environmentName,
+      tenant: resolved.standing.tenant,
+      reseeded: true,
+    });
+    return { said: `\`${resolved.standing.tenant}\` is reseeded` };
+  }
+
+  private launched(environmentName: string, call: TenantCall): (launch: TenantLaunch) => void {
+    return (launch) => this.deps.store.remoteValidation.recordTenantLaunch(environmentName, call, launch);
+  }
+
+  private gone(environmentName: string): { ok: null; detail: string; standing: TenantStanding } {
+    return {
+      ok: null,
+      detail:
+        'The harness restarted while this was running, and the command is no longer running. Whether it ' +
+        'finished is not known from here — read its output and the tenant’s age, or run it again.',
+      standing: this.standing(environmentName),
+    };
   }
 
   /**
@@ -488,6 +509,37 @@ export class RemoteRunDesk extends EventEmitter {
     const head = await this.deps.prober.at(environment.name, environment.at);
     return head.commits?.[0] ?? null;
   }
+}
+
+interface Prepared {
+  ok: boolean | null;
+  detail: string;
+  standing: TenantStanding;
+}
+
+function liveRefusal(environmentName: string, live: RemoteRun | null | undefined, key: string): PressRefusal {
+  return {
+    ok: false,
+    code: 409,
+    error:
+      `a run is already live on "${environmentName}" against ${named(live?.tenant ?? key)} — it started at ` +
+      `${live?.startedAt ?? 'an earlier moment'}. Call that one off first if you want to press again.`,
+    ...(live === null || live === undefined ? {} : { live }),
+  };
+}
+
+function owedToAgent(
+  store: Store,
+  environment: EnvironmentConfig,
+  goalRef: string,
+  rows: readonly RemoteSheetRow[],
+): number {
+  return (
+    runnableSelectors(store, environment, goalRef, rows).length +
+    runnableScripts(store, environment, goalRef, rows).length +
+    runnableScreens(store, environment, goalRef, rows).length +
+    runnableDrives(store, environment, goalRef, rows).length
+  );
 }
 
 /**

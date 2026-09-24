@@ -101,11 +101,30 @@ function prHold(state: AppState, pr: OpenPullRequest, court: HoldCourt, goal: nu
 
 export function featureHolds(state: AppState, needs: readonly NeedRow[], goals: readonly number[]): FeatureHolds {
   const wanted = new Set(goals);
-  const you: FeatureHold[] = [];
+  const covered = new Set<number>();
+  const you = needHolds(state, needs, wanted, covered);
   const fleet: FeatureHold[] = [];
   const world: FeatureHold[] = [];
 
-  const covered = new Set<number>();
+  const rest: Record<HoldCourt, FeatureHold[]> = { you: [], fleet: [], world: [] };
+  prHolds(state, wanted, covered, rest);
+  goalHolds(state, goals, rest);
+  limitHolds(state, needs, wanted, rest);
+
+  you.push(...rest.you.sort(bySinceDesc));
+  fleet.push(...rest.fleet.sort(bySinceDesc));
+  world.push(...rest.world.sort(bySinceDesc));
+
+  return { you, fleet, world, agents: presence(state, wanted) };
+}
+
+function needHolds(
+  state: AppState,
+  needs: readonly NeedRow[],
+  wanted: ReadonlySet<number>,
+  covered: Set<number>,
+): FeatureHold[] {
+  const you: FeatureHold[] = [];
   for (const row of needs) {
     if (FLEET_WIDE.has(row.kind)) continue;
     const goal = goalNumber(row.goalRef) ?? goalNumberOf(state, row.originRef);
@@ -125,9 +144,15 @@ export function featureHolds(state: AppState, needs: readonly NeedRow[], goals: 
       tone: null,
     });
   }
+  return you;
+}
 
-  const rest: Record<HoldCourt, FeatureHold[]> = { you: [], fleet: [], world: [] };
-
+function prHolds(
+  state: AppState,
+  wanted: ReadonlySet<number>,
+  covered: ReadonlySet<number>,
+  rest: Record<HoldCourt, FeatureHold[]>,
+): void {
   for (const pr of state.world.pullRequests) {
     const goal = goalNumber(goalOfPr(state, pr.number));
     if (goal === null || !wanted.has(goal)) continue;
@@ -140,7 +165,9 @@ export function featureHolds(state: AppState, needs: readonly NeedRow[], goals: 
       rest.world.push(prHold(state, pr, 'world', goal));
     }
   }
+}
 
+function goalHolds(state: AppState, goals: readonly number[], rest: Record<HoldCourt, FeatureHold[]>): void {
   for (const goal of goals) {
     const ref = `issue:${goal}`;
     const issue = state.world.issues.find((i) => i.number === goal);
@@ -174,7 +201,14 @@ export function featureHolds(state: AppState, needs: readonly NeedRow[], goals: 
       });
     }
   }
+}
 
+function limitHolds(
+  state: AppState,
+  needs: readonly NeedRow[],
+  wanted: ReadonlySet<number>,
+  rest: Record<HoldCourt, FeatureHold[]>,
+): void {
   for (const agentId of state.parkedOnLimit ?? []) {
     const agent = state.agents.find((a) => a.id === agentId);
     if (!agent) continue;
@@ -182,25 +216,29 @@ export function featureHolds(state: AppState, needs: readonly NeedRow[], goals: 
     const goal = goalNumberOf(state, task?.originRef ?? null);
     if (goal === null || !wanted.has(goal)) continue;
     const row = needs.find((n) => n.kind === 'limit' && n.id === agentId);
-    rest.fleet.push({
-      court: 'fleet',
-      kind: 'limit',
-      title: row?.title ?? agent.waitingReason ?? 'Parked: no usage allowance left right now.',
-      detail: task?.title ?? null,
-      ref: task?.originRef === undefined ? null : refOf(state, task.originRef, goal),
-      goal,
-      needId: row?.id ?? null,
-      agentId,
-      since: agent.startedAt,
-      tone: null,
-    });
+    rest.fleet.push(limitHold(state, agent, task, goal, row));
   }
+}
 
-  you.push(...rest.you.sort(bySinceDesc));
-  fleet.push(...rest.fleet.sort(bySinceDesc));
-  world.push(...rest.world.sort(bySinceDesc));
-
-  return { you, fleet, world, agents: presence(state, wanted) };
+function limitHold(
+  state: AppState,
+  agent: Agent,
+  task: TaskSummary | undefined,
+  goal: number,
+  row: NeedRow | undefined,
+): FeatureHold {
+  return {
+    court: 'fleet',
+    kind: 'limit',
+    title: row?.title ?? agent.waitingReason ?? 'Parked: no usage allowance left right now.',
+    detail: task?.title ?? null,
+    ref: task?.originRef === undefined ? null : refOf(state, task.originRef, goal),
+    goal,
+    needId: row?.id ?? null,
+    agentId: agent.id,
+    since: agent.startedAt,
+    tone: null,
+  };
 }
 
 function refOf(state: AppState, originRef: string | null, goal: number): string {
