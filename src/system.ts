@@ -533,9 +533,9 @@ function buildAgentManager(
   { mcp }: Channels,
   late: Late,
 ) {
-  const { store, connector, errors } = base;
+  const { store, connector, errors, watchLabel } = base;
   const sequenceWatchPolicy: IssuePickupPolicy = {
-    watchLabel: watchLabelFor(config.labelPrefix),
+    watchLabel,
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
     priorityLabels: {},
     defaultPriority: 0,
@@ -545,7 +545,7 @@ function buildAgentManager(
     featureSummariesOn(config, connector)
       ? {
           containerTypes: config.issueContainerTypes,
-          watchLabel: watchLabelFor(config.labelPrefix),
+          watchLabel,
           environments: config.environments,
         }
       : null;
@@ -865,11 +865,10 @@ function buildBenchDesks(
   { sequenceWatchPolicy, agents }: Fleet,
 ) {
   const { store, connector, sink, errors, runtimeControl, watchLabel } = base;
-  const closeOutSink = sink;
   const closeOuts = new DeliveryCloseOutDesk(
     store,
     config.environments,
-    () => closeOutSink.canCloseIssue(),
+    () => sink.canCloseIssue(),
     // The one place the close-out bench and the prediction record meet, and it
     // hands over origin refs alone. With the gate off the set is empty, which is
     // also what settles any row that was standing when it was turned off.

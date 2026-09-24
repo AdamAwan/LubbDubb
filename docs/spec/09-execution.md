@@ -21,9 +21,10 @@ reason, so "why did (or didn't) this happen" is always answerable.
    error and the raw JSON, and never run.
 2. The live count (`live.count`) is read once from `store.agents.countLiveAgents()` and incremented locally
    as agents spawn, so the cap holds within a single cycle's plan.
-3. Each validated action is handled by type: `perform` routes it to that type's own private handler
-   (`dispatchAgent`, `updatePrBranch`, `proposeShortfall`, …), handed the cycle's shared `ActionRun` —
-   its readying hold, the live count and the `record` / `tally` that write the decision and count it.
+3. Each validated action is handled by type: `perform` switches on the action's `type` and hands it
+   to the one handler for that type — both agent dispatches share one, as do the two outbound acts
+   (`reply_on_pr`, `merge_pr`) — together with the cycle's shared `ActionRun`: its readying hold, the
+   live count and the `record` / `tally` that write the decision and count it.
 
 The loop is **strictly serial**, and that is what
 [What is being readied](#what-is-being-readied) exists to make visible: an action holds it for as long

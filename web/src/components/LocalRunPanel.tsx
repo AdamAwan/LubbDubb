@@ -8,6 +8,7 @@ import { ValidateLocallyModal } from './ValidateLocallyModal.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { MessageForm, Readings, RefLine, StatusLine, summaryClick } from './LocalRunReadings.js';
 import { GoalPicker } from './LocalRunPicker.js';
+import { planIssueOf } from './util.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -152,7 +153,7 @@ function isBehind(run: LocalRunView): boolean {
 }
 
 function runNumberOf(run: LocalRunView | null): number | null {
-  return run === null ? null : Number(/^issue:(\d+)$/.exec(run.originRef)?.[1] ?? Number.NaN);
+  return run === null ? null : planIssueOf(run.originRef);
 }
 
 function validatable(
@@ -160,7 +161,7 @@ function validatable(
   targets: LocalRunTargetView[],
   validation: LocalValidationView | null,
 ): boolean {
-  if (runNumber === null || !Number.isFinite(runNumber) || inFlight(validation)) return false;
+  if (runNumber === null || inFlight(validation)) return false;
   return targets.find((t) => t.issueNumber === runNumber)?.runnable ?? false;
 }
 

@@ -842,8 +842,7 @@ function stackLandingViews(
  * to describe, and an ask that outlived its review is an ask nobody can answer.
  * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
  */
-function undescribedParts(store: Store, world: WorldSnapshot): UndescribedPart[] {
-  const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+function undescribedParts(store: Store, open: Set<number>): UndescribedPart[] {
   return store.prDescriptions.undescribedOpenParts().filter((part) => open.has(part.prNumber));
 }
 
@@ -852,8 +851,7 @@ function undescribedParts(store: Store, world: WorldSnapshot): UndescribedPart[]
  * raises each one: a contradiction as an ask, gaps alone as a low-priority note.
  * → docs/spec/07-pull-requests.md#what-the-check-raises
  */
-function descriptionFeedback(store: Store, world: WorldSnapshot): DescriptionFeedback[] {
-  const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+function descriptionFeedback(store: Store, open: Set<number>): DescriptionFeedback[] {
   return store.prDescriptions.descriptionFeedback().filter((f) => open.has(f.prNumber));
 }
 
@@ -873,12 +871,12 @@ function plansSection(
   | 'goalWatches'
   | 'stateQueries'
 > {
-  const { store, world, withheld } = r;
+  const { store, withheld, openPrNumbers } = r;
   return {
     plans: r.wirePlans,
     planParts: r.wirePlanParts(),
-    undescribedParts: undescribedParts(store, world),
-    descriptionFeedback: descriptionFeedback(store, world),
+    undescribedParts: undescribedParts(store, openPrNumbers),
+    descriptionFeedback: descriptionFeedback(store, openPrNumbers),
     planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks: r.validationChecks(),

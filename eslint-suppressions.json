@@ -147,14 +147,8 @@
     }
   },
   "src/executor/actionExecutor.ts": {
-    "complexity": {
-      "count": 4
-    },
     "max-lines": {
       "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 3
     }
   },
   "src/features/featureBoard.ts": {

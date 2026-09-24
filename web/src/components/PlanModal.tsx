@@ -106,7 +106,6 @@ export function PlanModal(props: PlanModalProps) {
   const regroup = regrouping === true && regroupable;
   const [focused, setFocused] = useState<string | null>(null);
   const history = usePlanHistory(plan.id, plan.updatedAt);
-  const body = useRef<HTMLDivElement>(null);
   const sections = useRef<Record<string, HTMLElement | null>>({});
 
   const live = parts.filter((p) => p.status !== 'retired');
@@ -166,7 +165,7 @@ export function PlanModal(props: PlanModalProps) {
         setView={setView}
       />
 
-      <div className="pm-body" ref={body}>
+      <div className="pm-body">
         {regroup ? (
           <PlanRegroup
             parts={live}

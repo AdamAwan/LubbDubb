@@ -175,9 +175,8 @@ function taskBody(row: NeedRow, view: CockpitView, actions: CockpitActions, chec
     case 'watch':
       return <WatchFinding task={task} view={view} actions={actions} />;
     case 'validate':
-      return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} closeOut={false} />;
     case 'close_out':
-      return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} closeOut />;
+      return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
     case 'supply':
       return <SupplyAsk task={task} view={view} actions={actions} />;
     default:
@@ -529,30 +528,25 @@ function TaskLede({ task, view }: { task: HumanTask; view: CockpitView }): JSX.E
   );
 }
 
-/** `closeOut` offers the close-out verbs — the note owed on Done and closing the ticket — where they apply. */
 function TaskAnswers({
   task,
   view,
   actions,
-  closeOut,
   extra,
 }: {
   task: HumanTask;
   view: CockpitView;
   actions: CockpitActions;
-  closeOut: boolean;
   extra?: ReactNode;
 }): JSX.Element {
   return (
     <HumanTaskActions
       task={task}
       look={{ tone: 'secondary' }}
-      noteOnDone={closeOut ? noteOwedOnDone(task, view) : null}
+      noteOnDone={noteOwedOnDone(task, view)}
       onDone={(id, note) => actions.completeHumanTask(id, note)}
       onDecline={(id, note) => actions.declineHumanTask(id, note)}
-      onCloseTicket={
-        closeOut && closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null
-      }
+      onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
       extra={extra}
     />
   );
@@ -584,7 +578,7 @@ function BenchAsk({
           </AsyncButton>
         </ButtonRow>
       )}
-      <TaskAnswers task={task} view={view} actions={actions} closeOut />
+      <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
 }
@@ -616,19 +610,17 @@ function ChecksAsk({
   view,
   actions,
   checksBelow,
-  closeOut,
 }: {
   task: HumanTask;
   view: CockpitView;
   actions: CockpitActions;
   checksBelow: boolean;
-  closeOut: boolean;
 }): JSX.Element {
   return (
     <>
       <TaskLede task={task} view={view} />
       <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
-      <TaskAnswers task={task} view={view} actions={actions} closeOut={closeOut} />
+      <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
 }
@@ -771,7 +763,7 @@ function SupplyAsk({
           )}
         </ul>
       )}
-      <TaskAnswers task={task} view={view} actions={actions} closeOut={false} />
+      <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
 }
@@ -802,7 +794,6 @@ function WatchFinding({
         task={task}
         view={view}
         actions={actions}
-        closeOut={false}
         extra={
           canRaise ? (
             <Button
