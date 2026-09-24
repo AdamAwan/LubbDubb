@@ -124,25 +124,33 @@ export function retroDossier(input: RetroDossierInput): string {
   ];
 
   lines.push(...planSection(input));
-  lines.push('', '### Pull requests');
+  lines.push(...pullRequestSection(input));
+  lines.push(...decisionSection(input.decisions));
+  lines.push(...humanSection(input));
+  lines.push(...verdictSection(input));
+  lines.push(...costSection(input));
+
+  return lines.join('\n');
+}
+
+function pullRequestSection(input: RetroDossierInput): string[] {
+  const lines = ['', '### Pull requests'];
   const prs = cap([...input.closedPullRequests, ...input.pullRequests], MAX_PULL_REQUESTS, 'oldest');
   if (prs.total === 0) lines.push('- No pull requests are recorded for this goal.');
   for (const pr of prs.shown) lines.push(`- #${pr.number} ${pr.title} — ${pr.state ?? 'merged'}`);
   lines.push(...droppedNote(prs, 'pull requests', 'oldest'));
+  return lines;
+}
 
-  lines.push(...decisionSection(input.decisions));
-  lines.push(...humanSection(input));
-  lines.push(...verdictSection(input));
-
-  lines.push('', '### What it cost');
-  lines.push(`- ${input.agentCount} agent${input.agentCount === 1 ? '' : 's'} were spawned under this goal.`);
-  lines.push(
+function costSection(input: RetroDossierInput): string[] {
+  return [
+    '',
+    '### What it cost',
+    `- ${input.agentCount} agent${input.agentCount === 1 ? '' : 's'} were spawned under this goal.`,
     input.costUsd === null
       ? '- Spend was not reported by the runtime (PTY mode reports none) — that is missing detail, not zero.'
       : `- Reported spend: $${input.costUsd.toFixed(2)}.`,
-  );
-
-  return lines.join('\n');
+  ];
 }
 
 function planSection(input: RetroDossierInput): string[] {

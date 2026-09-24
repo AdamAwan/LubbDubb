@@ -3,8 +3,9 @@ import { isContainerType } from '../issueRelations.js';
 import { allGoalReach } from '../environments/reach.js';
 import { isWatched } from '../watchLabels.js';
 import type { Store } from '../store/store.js';
-import type { Escalation, GoalEnvironmentReach, GoalLanding } from '../types.js';
+import type { Escalation, GoalEnvironmentReach } from '../types.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
+import { lastLandingByGoal } from '../features/featureBoard.js';
 import { featureStandingKey, type FeatureChildStandingFacts } from './featureSummary.js';
 
 // → docs/spec/14-persistence.md
@@ -73,15 +74,6 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
     key: featureStandingKey(group.children),
     children: group.children.sort((a, b) => a.number - b.number),
   }));
-}
-
-function lastLandingByGoal(landings: readonly GoalLanding[]): Map<string, string> {
-  const landedAt = new Map<string, string>();
-  for (const landing of landings) {
-    const seen = landedAt.get(landing.goalRef);
-    if (seen === undefined || landing.recordedAt > seen) landedAt.set(landing.goalRef, landing.recordedAt);
-  }
-  return landedAt;
 }
 
 function openQuestionsByGoal(escalations: readonly Escalation[]): Map<number, { prompt: string; since: string }[]> {

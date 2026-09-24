@@ -381,7 +381,7 @@ interface GoalWatchRow {
   dry_run_detail: string | null;
 }
 
-function keptAnswers(row: GoalWatchRow | null): Record<string, unknown> {
+function keptAnswers(row: GoalWatchRow | null) {
   if (row === null)
     return {
       baselineValue: null,

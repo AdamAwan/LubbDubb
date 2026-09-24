@@ -410,15 +410,9 @@ function measuredParts(row: RemoteSheetRowView): string[] {
         ? `${String(row.matched)} matched`
         : `${String(reading.executed)} of ${String(row.matched)} run`,
     );
-  if (reading != null) parts.push(...costParts(reading));
-  return parts;
-}
-
-function costParts(reading: RemoteReadingView): string[] {
-  const parts: string[] = [];
-  if (reading.retries !== null && reading.retries !== undefined && reading.retries > 0)
-    parts.push(`${String(reading.retries)} ${reading.retries === 1 ? 'retry' : 'retries'}`);
-  if (reading.durationMs !== null && reading.durationMs !== undefined) parts.push(clock(reading.durationMs));
+  const retries = reading?.retries ?? 0;
+  if (retries > 0) parts.push(`${String(retries)} ${retries === 1 ? 'retry' : 'retries'}`);
+  if (reading?.durationMs != null) parts.push(clock(reading.durationMs));
   return parts;
 }
 

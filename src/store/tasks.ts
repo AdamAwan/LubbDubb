@@ -284,7 +284,7 @@ function parseMcpServers(raw: string | null): ExtraMcpServer[] | null {
   }
 }
 
-function taskToRow(task: Task): Record<string, unknown> {
+function taskToRow(task: Task) {
   return {
     ...task,
     ciChecks: task.ciChecks === null ? null : JSON.stringify(task.ciChecks),

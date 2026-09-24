@@ -328,7 +328,7 @@ function latestLanding(rows: readonly FeatureChildRow[], landedAt: ReadonlyMap<s
   return latest;
 }
 
-function lastLandingByGoal(landings: readonly GoalLanding[]): Map<string, string> {
+export function lastLandingByGoal(landings: readonly GoalLanding[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const landing of landings) {
     const seen = out.get(landing.goalRef);
