@@ -47,52 +47,59 @@ export function validateCiPolicy(policy: CiPolicy): void {
     if (typeof rule.match !== 'string' || rule.match.trim() === '') {
       throw new Error(`${where}: "match" must be a non-empty glob matching a CI check name.`);
     }
-    if (rule.states !== undefined) {
-      if (!Array.isArray(rule.states) || rule.states.length === 0) {
-        throw new Error(
-          `${where} ("${rule.match}"): "states" must name at least one check state (${CI_WATCH_STATES.join(' | ')}). ` +
-            'An empty list claims nothing, so the rule could never fire — omit it to take the default ["failing"].',
-        );
-      }
-      for (const state of rule.states) {
-        if ((CI_WATCH_STATES as readonly string[]).includes(state)) continue;
-        const why =
-          String(state) === 'passing'
-            ? ' A passing check asks nothing of anyone, so a rule watching one could never fire.'
-            : '';
-        throw new Error(
-          `${where} ("${rule.match}"): state "${String(state)}" is not one of ${CI_WATCH_STATES.join(' | ')}.${why}`,
-        );
-      }
-    }
-    if (rule.onFailure !== undefined && !CI_FAILURE_ACTIONS.includes(rule.onFailure)) {
-      throw new Error(
-        `${where} ("${rule.match}"): onFailure "${rule.onFailure}" is not one of ${CI_FAILURE_ACTIONS.join(' | ')}.`,
-      );
-    }
-    if (rule.guidance !== undefined && (rule.onFailure ?? 'ignore') !== 'dispatch') {
-      throw new Error(
-        `${where} ("${rule.match}"): "guidance" is written for an agent, but onFailure is ` +
-          `"${rule.onFailure ?? 'ignore'}" (the default), so no agent is dispatched and the guidance would be ` +
-          `discarded. Set onFailure to "dispatch", or drop the guidance.`,
-      );
-    }
-    if (rule.urgent && (rule.onFailure ?? 'ignore') !== 'dispatch') {
-      throw new Error(
-        `${where} ("${rule.match}"): "urgent" orders the dispatch queue, but onFailure is ` +
-          `"${rule.onFailure ?? 'ignore'}" (the default), so nothing is queued.`,
-      );
-    }
-    if (!ruleStates(rule).includes('failing') && (rule.onFailure ?? 'ignore') === 'escalate') {
-      throw new Error(
-        `${where} ("${rule.match}"): "states" is [${ruleStates(rule).join(', ')}], which never includes a failing ` +
-          'check, but onFailure is "escalate". The harness has no escalation arm for a check that is merely ' +
-          'waiting — rule `pr-ci-blocked` asks a human about a red pull request whose failures are all held — so ' +
-          'this rule could never fire. Use "dispatch" to send an agent for the waiting check, "ignore" to mute it, ' +
-          'or add "failing" to "states".',
-      );
-    }
+    validateRuleStates(rule, where);
+    validateRuleAction(rule, where);
   });
+}
+
+function validateRuleStates(rule: CiCheckRule, where: string): void {
+  if (rule.states === undefined) return;
+  if (!Array.isArray(rule.states) || rule.states.length === 0) {
+    throw new Error(
+      `${where} ("${rule.match}"): "states" must name at least one check state (${CI_WATCH_STATES.join(' | ')}). ` +
+        'An empty list claims nothing, so the rule could never fire — omit it to take the default ["failing"].',
+    );
+  }
+  for (const state of rule.states) {
+    if ((CI_WATCH_STATES as readonly string[]).includes(state)) continue;
+    const why =
+      String(state) === 'passing'
+        ? ' A passing check asks nothing of anyone, so a rule watching one could never fire.'
+        : '';
+    throw new Error(
+      `${where} ("${rule.match}"): state "${String(state)}" is not one of ${CI_WATCH_STATES.join(' | ')}.${why}`,
+    );
+  }
+}
+
+function validateRuleAction(rule: CiCheckRule, where: string): void {
+  if (rule.onFailure !== undefined && !CI_FAILURE_ACTIONS.includes(rule.onFailure)) {
+    throw new Error(
+      `${where} ("${rule.match}"): onFailure "${rule.onFailure}" is not one of ${CI_FAILURE_ACTIONS.join(' | ')}.`,
+    );
+  }
+  if (rule.guidance !== undefined && (rule.onFailure ?? 'ignore') !== 'dispatch') {
+    throw new Error(
+      `${where} ("${rule.match}"): "guidance" is written for an agent, but onFailure is ` +
+        `"${rule.onFailure ?? 'ignore'}" (the default), so no agent is dispatched and the guidance would be ` +
+        `discarded. Set onFailure to "dispatch", or drop the guidance.`,
+    );
+  }
+  if (rule.urgent && (rule.onFailure ?? 'ignore') !== 'dispatch') {
+    throw new Error(
+      `${where} ("${rule.match}"): "urgent" orders the dispatch queue, but onFailure is ` +
+        `"${rule.onFailure ?? 'ignore'}" (the default), so nothing is queued.`,
+    );
+  }
+  if (!ruleStates(rule).includes('failing') && (rule.onFailure ?? 'ignore') === 'escalate') {
+    throw new Error(
+      `${where} ("${rule.match}"): "states" is [${ruleStates(rule).join(', ')}], which never includes a failing ` +
+        'check, but onFailure is "escalate". The harness has no escalation arm for a check that is merely ' +
+        'waiting — rule `pr-ci-blocked` asks a human about a red pull request whose failures are all held — so ' +
+        'this rule could never fire. Use "dispatch" to send an agent for the waiting check, "ignore" to mute it, ' +
+        'or add "failing" to "states".',
+    );
+  }
 }
 
 export function ruleStates(rule: CiCheckRule): readonly CiWatchState[] {

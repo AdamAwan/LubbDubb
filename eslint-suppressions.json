@@ -20,11 +20,6 @@
       "count": 2
     }
   },
-  "src/agents/processTree.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/agents/recoveryDesk.ts": {
     "complexity": {
       "count": 1
@@ -33,11 +28,6 @@
   "src/agents/streamJsonSession.ts": {
     "complexity": {
       "count": 2
-    }
-  },
-  "src/ci/ciPolicy.ts": {
-    "complexity": {
-      "count": 1
     }
   },
   "src/config/config.ts": {
@@ -56,11 +46,6 @@
   "src/delivery/closeOut.ts": {
     "complexity": {
       "count": 2
-    }
-  },
-  "src/dispatcher/dispatchCooldown.ts": {
-    "complexity": {
-      "count": 1
     }
   },
   "src/dispatcher/issuePickup.ts": {
@@ -429,11 +414,6 @@
       "count": 1
     }
   },
-  "src/pool/document.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/pr/prAttention.ts": {
     "complexity": {
       "count": 1
@@ -480,11 +460,6 @@
     }
   },
   "src/retro/dossier.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/schedules/cron.ts": {
     "complexity": {
       "count": 1
     }
