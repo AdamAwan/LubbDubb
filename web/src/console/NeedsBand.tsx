@@ -63,10 +63,7 @@ export function NeedsBand({
         </span>
         <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
         <span className="cn-needs-what">{oneLine(row.title)}</span>
-        <span className="cn-age">
-          {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
-          {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
-        </span>
+        <NeedAge row={row} now={view.now} />
         {/* The verb, drawn as the press it is. A faint "Open" beside a pane's own
             filled primary is a row that loses the page to the one control on it
             that nothing is waiting on. It is a span rather than a button because
@@ -83,10 +80,7 @@ export function NeedsBand({
           {KIND_SYMBOL[row.kind]}
         </span>
         Needs you · {KIND_LABEL[row.kind]}
-        <span className="cn-age">
-          {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
-          {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
-        </span>
+        <NeedAge row={row} now={view.now} />
         {/* The same ask, alone and in front — for a goal carrying several, or a
             page scrolled past this one. It is the panel the rail opens for an ask
             with no goal page, drawn from the same `needBody`, so there is one
@@ -98,6 +92,15 @@ export function NeedsBand({
       </header>
       <div className="cn-in">{body}</div>
     </div>
+  );
+}
+
+function NeedAge({ row, now }: { row: NeedRow; now: number }): JSX.Element {
+  return (
+    <span className="cn-age">
+      {row.raisedAt !== '' && relTime(row.raisedAt, now)}
+      {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
+    </span>
   );
 }
 
@@ -114,15 +117,6 @@ function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
   return view.state.config.canCloseIssue;
 }
 
-/**
- * What answers this ask — the shared component that owns its verdict. `look` is
- * the one seam a station passes, [`Button`](../components/button.tsx)'s own props.
- *
- * Null means the row's source is no longer in the snapshot, which is also how the
- * ask panel closes itself.
- *
- * @public shared with the ask panel, which draws the body under its own header
- */
 const LIVE_AGENT: readonly string[] = ['starting', 'running', 'waiting'];
 
 /**
@@ -141,313 +135,295 @@ function liftTargetFor(task: HumanTask, view: CockpitView): string | null {
   return at < 0 || at + 1 >= ladder.length ? null : (ladder[at + 1] ?? null);
 }
 
+type BodyOf = (row: NeedRow, view: CockpitView, actions: CockpitActions, checksBelow: boolean) => ReactNode;
+
+const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
+  watch: taskBody,
+  validate: taskBody,
+  close_out: taskBody,
+  supply: taskBody,
+  bench: taskBody,
+  burn: taskBody,
+  intake: intakeBody,
+  profile: profileBody,
+  placement: placementBody,
+  limit: limitBody,
+  assigned: assignedBody,
+  describe: describeBody,
+  description_wrong: descriptionFeedbackBody,
+  description_note: descriptionFeedbackBody,
+  dispatch: dispatchBody,
+};
+
+/**
+ * What answers this ask — the shared component that owns its verdict. `look` is
+ * the one seam a station passes, [`Button`](../components/button.tsx)'s own props.
+ *
+ * Null means the row's source is no longer in the snapshot, which is also how the
+ * ask panel closes itself.
+ *
+ * @public shared with the ask panel, which draws the body under its own header
+ */
 export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions, checksBelow = false): ReactNode {
-  if (row.kind === 'watch') {
-    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
-    if (!task) return null;
-    return <WatchFinding task={task} view={view} actions={actions} />;
-  }
-  if (row.kind === 'validate') {
-    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
-    if (!task) return null;
-    return <ValidateAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
-  }
-  if (row.kind === 'close_out') {
-    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
-    if (!task) return null;
-    return <CloseOutAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
-  }
-  if (row.kind === 'supply') {
-    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
-    if (!task) return null;
-    return <SupplyAsk task={task} view={view} actions={actions} />;
-  }
-  if (row.kind === 'bench' || row.kind === 'burn') {
-    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
-    if (!task) return null;
-    const liftTo = row.kind === 'burn' ? liftTargetFor(task, view) : null;
-    const liftAgentId = task.agentId;
-    return (
-      <>
-        <p className="cn-lede">{task.title}</p>
-        {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-        {liftTo !== null && liftAgentId !== null && (
-          <ButtonRow>
-            <AsyncButton
-              tone="primary"
-              onClick={() => actions.liftAgentProfile(liftAgentId, liftTo)}
-              title={`Stop this run where it stands and hand the same task to “${liftTo}”`}
-            >
-              Lift to “{liftTo}”
-            </AsyncButton>
-          </ButtonRow>
-        )}
-        <HumanTaskActions
+  return (BODY_OF[row.kind] ?? escalationBody)(row, view, actions, checksBelow);
+}
+
+function taskBody(row: NeedRow, view: CockpitView, actions: CockpitActions, checksBelow: boolean): ReactNode {
+  const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
+  if (!task) return null;
+  switch (row.kind) {
+    case 'watch':
+      return <WatchFinding task={task} view={view} actions={actions} />;
+    case 'validate':
+    case 'close_out':
+      return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
+    case 'supply':
+      return <SupplyAsk task={task} view={view} actions={actions} />;
+    default:
+      return (
+        <BenchAsk
           task={task}
-          look={{ tone: 'secondary' }}
-          noteOnDone={noteOwedOnDone(task, view)}
-          onDone={(id, note) => actions.completeHumanTask(id, note)}
-          onDecline={(id, note) => actions.declineHumanTask(id, note)}
-          onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+          liftTo={row.kind === 'burn' ? liftTargetFor(task, view) : null}
+          view={view}
+          actions={actions}
         />
-      </>
-    );
+      );
   }
-  if (row.kind === 'intake') {
-    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-    const appraisal = issue?.appraisal;
-    if (!issue || appraisal?.verdict !== 'unclear') return null;
-    return (
-      <>
+}
+
+function rowIssue(row: NeedRow, view: CockpitView): Issue | undefined {
+  return row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
+}
+
+function intakeBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const issue = rowIssue(row, view);
+  const appraisal = issue?.appraisal;
+  if (!issue || appraisal?.verdict !== 'unclear') return null;
+  return (
+    <>
+      <p>
+        <strong>The goal appraisal could not say this is workable</strong> — nothing is dispatched for it until the
+        verdict moves.
+      </p>
+      <p className="cn-tick">“{appraisal.summary}”</p>
+      <Lines items={appraisal.missing} className="cn-tick" />
+      <p className="cn-tick">
+        The hold clears by itself when the goal&rsquo;s own text changes, so answering those on the ticket is the other
+        way out and costs no click here. Overriding says the brief is good enough as it stands.
+      </p>
+      <ButtonRow bar>
+        <AsyncButton
+          tone="primary"
+          onClick={() => actions.setIssueAppraisal(issue.number, 'workable')}
+          title="Work it anyway — the harness stops holding pickup and runs a cycle now"
+        >
+          Override → workable
+        </AsyncButton>
+        <DesktopLink
+          folder={view.state.config.desktopFolder}
+          prompt={discussPrompt(issue.number)}
+          explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."
+        />
+      </ButtonRow>
+    </>
+  );
+}
+
+function profileBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const issue = rowIssue(row, view);
+  const appraisal = issue?.appraisal;
+  if (!issue || !appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) return null;
+  const { config } = view.state;
+  const proposed = appraisal.proposedProfile;
+  const pinned = issue.modelPin.profile;
+  const standing = pinned ?? config.defaultProfile;
+  const described = config.profiles.find((p) => p.name === proposed)?.description;
+  return (
+    <>
+      <p>
+        <strong>The goal appraisal wants this run on “{proposed}”</strong>
+        {standing !== null && ` — ${pinned === null ? 'it would otherwise run on' : 'you pinned it to'} “${standing}”`}
+        {standing === null && ' — nothing is pinned to it yet'}
+      </p>
+      <p className="cn-tick">
+        {described ?? appraisal.summary} Nothing is dispatched for this goal until you say which to use — that is one
+        click either way, and it is not a rejection.
+      </p>
+      <ButtonRow bar>
+        <AsyncButton
+          tone="primary"
+          onClick={() => actions.setIssueProfile(issue.number, proposed)}
+          title={`Pin this goal to “${proposed}” and let the funnel move`}
+        >
+          Use “{proposed}”
+        </AsyncButton>
+        <AsyncButton
+          onClick={() => actions.setIssueProfile(issue.number, pinned)}
+          title={
+            pinned === null
+              ? 'Leave this goal unpinned, so each rule runs on its own profile'
+              : `Keep “${pinned}” and let the funnel move`
+          }
+        >
+          {pinned === null ? 'Leave it unpinned' : `Keep “${pinned}”`}
+        </AsyncButton>
+      </ButtonRow>
+    </>
+  );
+}
+
+function placementBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const issue = rowIssue(row, view);
+  const ask = (issue?.appraisal?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
+  if (!issue || !ask) return null;
+  return ask.field === 'parent' ? (
+    <ParentAsk issue={issue} proposed={ask.proposedParent} view={view} actions={actions} />
+  ) : (
+    <AreaPathAsk issue={issue} proposed={ask.proposedAreaPath} view={view} actions={actions} />
+  );
+}
+
+function limitBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const agent = row.agentId ? view.agentById.get(row.agentId) : undefined;
+  if (!agent || !view.limitParked.has(agent.id)) return null;
+  return (
+    <>
+      <p>{agent.waitingReason ?? 'This account has no usage allowance left right now.'}</p>
+      <p className="cn-tick">
+        Nothing failed and nothing is lost: the branch, the worktree and the conversation are as the agent left them.
+        Resuming re-opens that conversation where it stopped.
+      </p>
+      <ButtonRow bar>
+        <AsyncButton tone="primary" onClick={() => actions.resumeAgent(agent.id)} pendingLabel="Resuming…">
+          Resume
+        </AsyncButton>
+        <Button onClick={() => actions.select(agent.id)}>Open transcript</Button>
+      </ButtonRow>
+    </>
+  );
+}
+
+function assignedBody(row: NeedRow, view: CockpitView): ReactNode {
+  const number = Number(/^assigned:pr:(\d+)$/.exec(row.id)?.[1]);
+  const pr = view.state.world.pullRequests.find((p) => p.number === number);
+  if (!pr) return null;
+  /* The threads waiting on a reply, because that is what somebody assigning a
+     pull request to you is usually asking for, and a count of them is the one
+     fact that says how much of an evening this is. Drawn through `buildPrPage`,
+     the pull request page's own reading, so the two cannot disagree about which
+     thread is still open.
+     → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
+  const page = buildPrPage(view.state, pr.number);
+  const waiting = (page?.threads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened');
+  return (
+    <>
+      <p>
+        <strong>{pr.title}</strong>
+      </p>
+      {/* One reason per line, not joined: they are separate facts about why this
+          is in front of you — who put it there, what the harness is not doing
+          about it — and a `·` between them reads as one sentence nobody wrote. */}
+      <Lines items={pr.attention?.reasons ?? []} className="cn-tick cn-ask-why" />
+      {waiting.length > 0 && (
+        <ul className="cn-ask-threads">
+          {waiting.slice(0, THREADS_SHOWN).map((thread) => (
+            <li key={thread.id}>
+              <b>{thread.author}</b>
+              <span className="cn-grow">{oneLine(thread.body)}</span>
+              {thread.path !== undefined && <i className="cn-n">{thread.path}</i>}
+            </li>
+          ))}
+          {waiting.length > THREADS_SHOWN && (
+            <li className="cn-ask-supply-rest">{waiting.length - THREADS_SHOWN} more waiting on the pull request.</li>
+          )}
+        </ul>
+      )}
+      <p className="cn-tick">
+        Nothing in the harness will act on this. It is here because somebody put it on you where the fleet cannot see
+        it, and it stops being drawn the moment they take it off you again.
+      </p>
+      <RefLine to={`pr:${pr.number}`} title="Open the pull request" />
+    </>
+  );
+}
+
+function describeBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const waiting = (view.state.undescribedParts ?? []).find((p) => `describe:${p.originRef}` === row.id);
+  if (waiting === undefined) return null;
+  const part = (view.state.planParts ?? []).find((p) => waiting.originRef.endsWith(`:part:${p.slug}`));
+  return (
+    <>
+      {part !== undefined && (
         <p>
-          <strong>The goal appraisal could not say this is workable</strong> — nothing is dispatched for it until the
-          verdict moves.
+          <strong>{part.title}</strong>
         </p>
-        <p className="cn-tick">“{appraisal.summary}”</p>
-        {appraisal.missing.length > 0 && (
-          <ul className="cn-tick">
-            {appraisal.missing.map((q) => (
-              <li key={q}>{q}</li>
-            ))}
-          </ul>
-        )}
-        <p className="cn-tick">
-          The hold clears by itself when the goal&rsquo;s own text changes, so answering those on the ticket is the
-          other way out and costs no click here. Overriding says the brief is good enough as it stands.
-        </p>
-        <ButtonRow bar>
-          <AsyncButton
-            tone="primary"
-            onClick={() => actions.setIssueAppraisal(issue.number, 'workable')}
-            title="Work it anyway — the harness stops holding pickup and runs a cycle now"
-          >
-            Override → workable
-          </AsyncButton>
-          <DesktopLink
-            folder={view.state.config.desktopFolder}
-            prompt={discussPrompt(issue.number)}
-            explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."
-          />
-        </ButtonRow>
-      </>
-    );
-  }
-  if (row.kind === 'profile') {
-    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-    const appraisal = issue?.appraisal;
-    if (!issue || !appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) return null;
-    const { config } = view.state;
-    const proposed = appraisal.proposedProfile;
-    const pinned = issue.modelPin.profile;
-    const standing = pinned ?? config.defaultProfile;
-    const described = config.profiles.find((p) => p.name === proposed)?.description;
-    return (
-      <>
-        <p>
-          <strong>The goal appraisal wants this run on “{proposed}”</strong>
-          {standing !== null &&
-            ` — ${pinned === null ? 'it would otherwise run on' : 'you pinned it to'} “${standing}”`}
-          {standing === null && ' — nothing is pinned to it yet'}
-        </p>
-        <p className="cn-tick">
-          {described ?? appraisal.summary} Nothing is dispatched for this goal until you say which to use — that is one
-          click either way, and it is not a rejection.
-        </p>
-        <ButtonRow bar>
-          <AsyncButton
-            tone="primary"
-            onClick={() => actions.setIssueProfile(issue.number, proposed)}
-            title={`Pin this goal to “${proposed}” and let the funnel move`}
-          >
-            Use “{proposed}”
-          </AsyncButton>
-          <AsyncButton
-            onClick={() => actions.setIssueProfile(issue.number, pinned)}
-            title={
-              pinned === null
-                ? 'Leave this goal unpinned, so each rule runs on its own profile'
-                : `Keep “${pinned}” and let the funnel move`
-            }
-          >
-            {pinned === null ? 'Leave it unpinned' : `Keep “${pinned}”`}
-          </AsyncButton>
-        </ButtonRow>
-      </>
-    );
-  }
-  if (row.kind === 'placement') {
-    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-    const ask = (issue?.appraisal?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
-    if (!issue || !ask) return null;
-    return ask.field === 'parent' ? (
-      <ParentAsk issue={issue} proposed={ask.proposedParent} view={view} actions={actions} />
-    ) : (
-      <AreaPathAsk issue={issue} proposed={ask.proposedAreaPath} view={view} actions={actions} />
-    );
-  }
-  if (row.kind === 'limit') {
-    const agent = row.agentId ? view.agentById.get(row.agentId) : undefined;
-    if (!agent || !view.limitParked.has(agent.id)) return null;
-    return (
-      <>
-        <p>{agent.waitingReason ?? 'This account has no usage allowance left right now.'}</p>
-        <p className="cn-tick">
-          Nothing failed and nothing is lost: the branch, the worktree and the conversation are as the agent left them.
-          Resuming re-opens that conversation where it stopped.
-        </p>
-        <ButtonRow bar>
-          <AsyncButton tone="primary" onClick={() => actions.resumeAgent(agent.id)} pendingLabel="Resuming…">
-            Resume
-          </AsyncButton>
-          <Button onClick={() => actions.select(agent.id)}>Open transcript</Button>
-        </ButtonRow>
-      </>
-    );
-  }
-  if (row.kind === 'assigned') {
-    const number = Number(/^assigned:pr:(\d+)$/.exec(row.id)?.[1]);
-    const pr = view.state.world.pullRequests.find((p) => p.number === number);
-    if (!pr) return null;
-    /* The threads waiting on a reply, because that is what somebody assigning a
-       pull request to you is usually asking for, and a count of them is the one
-       fact that says how much of an evening this is. Drawn through `buildPrPage`,
-       the pull request page's own reading, so the two cannot disagree about which
-       thread is still open.
-       → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
-    const page = buildPrPage(view.state, pr.number);
-    const waiting = (page?.threads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened');
-    return (
-      <>
-        <p>
-          <strong>{pr.title}</strong>
-        </p>
-        {/* One reason per line, not joined: they are separate facts about why this
-            is in front of you — who put it there, what the harness is not doing
-            about it — and a `·` between them reads as one sentence nobody wrote. */}
-        {(pr.attention?.reasons ?? []).length > 0 && (
-          <ul className="cn-tick cn-ask-why">
-            {(pr.attention?.reasons ?? []).map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
-        )}
-        {waiting.length > 0 && (
-          <ul className="cn-ask-threads">
-            {waiting.slice(0, THREADS_SHOWN).map((thread) => (
-              <li key={thread.id}>
-                <b>{thread.author}</b>
-                <span className="cn-grow">{oneLine(thread.body)}</span>
-                {thread.path !== undefined && <i className="cn-n">{thread.path}</i>}
-              </li>
-            ))}
-            {waiting.length > THREADS_SHOWN && (
-              <li className="cn-ask-supply-rest">{waiting.length - THREADS_SHOWN} more waiting on the pull request.</li>
-            )}
-          </ul>
-        )}
-        <p className="cn-tick">
-          Nothing in the harness will act on this. It is here because somebody put it on you where the fleet cannot see
-          it, and it stops being drawn the moment they take it off you again.
-        </p>
-        <div className="cn-refs">
-          <Ref to={`pr:${pr.number}`} title="Open the pull request" />
-        </div>
-      </>
-    );
-  }
-  if (row.kind === 'describe') {
-    const waiting = (view.state.undescribedParts ?? []).find((p) => `describe:${p.originRef}` === row.id);
-    if (waiting === undefined) return null;
-    const part = (view.state.planParts ?? []).find((p) => waiting.originRef.endsWith(`:part:${p.slug}`));
-    return (
-      <>
-        {part !== undefined && (
-          <p>
-            <strong>{part.title}</strong>
-          </p>
-        )}
-        <p className="cn-tick">
-          The pull request is open and carries the agent&rsquo;s evidence and the reference, and nothing else. Nothing
-          fills the gap and nothing is held up by it — the reviewer simply meets a change with nobody&rsquo;s account of
-          it above the coordinates.
-        </p>
-        <p className="cn-tick">
-          Read the change first, then write it in your own words on the pull request&rsquo;s own page — what you write
-          goes to the top of its body.
-        </p>
-        {/* The act, not just the situation, and it lands on the page the field is on.
-            → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */}
-        <ButtonRow>
-          <Button
-            tone="primary"
-            onClick={() => {
-              actions.openPanel(null);
-              actions.selectPr(waiting.prNumber);
-            }}
-          >
-            Describe it
-          </Button>
-        </ButtonRow>
-        <div className="cn-refs">
-          <Ref to={`pr:${waiting.prNumber}`} title="Read the change you are describing" />
-        </div>
-      </>
-    );
-  }
-  if (row.kind === 'description_wrong' || row.kind === 'description_note') {
-    const feedback = (view.state.descriptionFeedback ?? []).find((f) => `description:${f.versionId}` === row.id);
-    if (feedback === undefined) return null;
-    return (
-      <>
-        <p className="cn-tick">
-          {row.kind === 'description_wrong'
-            ? 'An agent read your description against the diff and found it saying something the change does not do. Worth fixing before a reviewer meets it.'
-            : 'An agent read your description against the diff. Nothing in it is wrong, but the change does something a reviewer may want told. Yours to take or leave.'}
-        </p>
-        {/* → docs/spec/07-pull-requests.md#what-the-check-raises */}
-        <ButtonRow>
-          <Button
-            tone="primary"
-            onClick={() => {
-              actions.openPanel(null);
-              actions.selectPr(feedback.prNumber);
-            }}
-          >
-            Read what it found
-          </Button>
-        </ButtonRow>
-        <div className="cn-refs">
-          <Ref to={`pr:${feedback.prNumber}`} title="Open the pull request" />
-        </div>
-      </>
-    );
-  }
-  if (row.kind === 'dispatch') {
-    const refusal = refusedDispatchFor(view.state, row.id);
-    if (!refusal) return null;
-    const rule = refusal.rule === null ? undefined : view.state.dispatchRules[refusal.rule];
-    return (
-      <>
-        <p>
-          <strong>
-            Nothing has dispatched for this since {relTime(refusal.since, view.now)} — {refusal.pulses} pulses, each
-            refused.
-          </strong>
-        </p>
-        <p className="cn-tick">{refusal.detail}</p>
-        <p className="cn-tick">
-          The harness is proposing it again on every pulse and will go on doing so; it is not paused, and nothing about
-          it is retried differently. Clearing what the refusal names is the whole of the fix.
-          {rule && ` The rule proposing it is “${rule.name}”.`}
-        </p>
-        {refusal.originRef !== null && (
-          <div className="cn-refs">
-            <Ref to={refusal.originRef} title="Open what the refused dispatch is about" />
-          </div>
-        )}
-      </>
-    );
-  }
+      )}
+      <p className="cn-tick">
+        The pull request is open and carries the agent&rsquo;s evidence and the reference, and nothing else. Nothing
+        fills the gap and nothing is held up by it — the reviewer simply meets a change with nobody&rsquo;s account of
+        it above the coordinates.
+      </p>
+      <p className="cn-tick">
+        Read the change first, then write it in your own words on the pull request&rsquo;s own page — what you write
+        goes to the top of its body.
+      </p>
+      {/* The act, not just the situation, and it lands on the page the field is on.
+          → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */}
+      <PrPress
+        prNumber={waiting.prNumber}
+        label="Describe it"
+        refTitle="Read the change you are describing"
+        actions={actions}
+      />
+    </>
+  );
+}
+
+function descriptionFeedbackBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const feedback = (view.state.descriptionFeedback ?? []).find((f) => `description:${f.versionId}` === row.id);
+  if (feedback === undefined) return null;
+  return (
+    <>
+      <p className="cn-tick">
+        {row.kind === 'description_wrong'
+          ? 'An agent read your description against the diff and found it saying something the change does not do. Worth fixing before a reviewer meets it.'
+          : 'An agent read your description against the diff. Nothing in it is wrong, but the change does something a reviewer may want told. Yours to take or leave.'}
+      </p>
+      {/* → docs/spec/07-pull-requests.md#what-the-check-raises */}
+      <PrPress
+        prNumber={feedback.prNumber}
+        label="Read what it found"
+        refTitle="Open the pull request"
+        actions={actions}
+      />
+    </>
+  );
+}
+
+function dispatchBody(row: NeedRow, view: CockpitView): ReactNode {
+  const refusal = refusedDispatchFor(view.state, row.id);
+  if (!refusal) return null;
+  const rule = refusal.rule === null ? undefined : view.state.dispatchRules[refusal.rule];
+  return (
+    <>
+      <p>
+        <strong>
+          Nothing has dispatched for this since {relTime(refusal.since, view.now)} — {refusal.pulses} pulses, each
+          refused.
+        </strong>
+      </p>
+      <p className="cn-tick">{refusal.detail}</p>
+      <p className="cn-tick">
+        The harness is proposing it again on every pulse and will go on doing so; it is not paused, and nothing about it
+        is retried differently. Clearing what the refusal names is the whole of the fix.
+        {rule && ` The rule proposing it is “${rule.name}”.`}
+      </p>
+      {refusal.originRef !== null && <RefLine to={refusal.originRef} title="Open what the refused dispatch is about" />}
+    </>
+  );
+}
+
+function escalationBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
   const escalation = view.state.escalations.find((e) => e.id === row.id);
   if (!escalation) return null;
   /* `PlanView.revealed` is the server's fact about whether the plan behind this ask
@@ -495,21 +471,141 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   );
 }
 
+function Lines({ items, className }: { items: readonly string[]; className: string }): JSX.Element | null {
+  if (items.length === 0) return null;
+  return (
+    <ul className={className}>
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+function RefLine({ to, title }: { to: string; title: string }): JSX.Element {
+  return (
+    <div className="cn-refs">
+      <Ref to={to} title={title} />
+    </div>
+  );
+}
+
+function PrPress({
+  prNumber,
+  label,
+  refTitle,
+  actions,
+}: {
+  prNumber: number;
+  label: string;
+  refTitle: string;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <>
+      <ButtonRow>
+        <Button
+          tone="primary"
+          onClick={() => {
+            actions.openPanel(null);
+            actions.selectPr(prNumber);
+          }}
+        >
+          {label}
+        </Button>
+      </ButtonRow>
+      <RefLine to={`pr:${prNumber}`} title={refTitle} />
+    </>
+  );
+}
+
+function TaskLede({ task, view }: { task: HumanTask; view: CockpitView }): JSX.Element {
+  return (
+    <>
+      <p className="cn-lede">{task.title}</p>
+      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+    </>
+  );
+}
+
+function TaskAnswers({
+  task,
+  view,
+  actions,
+  extra,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+  extra?: ReactNode;
+}): JSX.Element {
+  return (
+    <HumanTaskActions
+      task={task}
+      look={{ tone: 'secondary' }}
+      noteOnDone={noteOwedOnDone(task, view)}
+      onDone={(id, note) => actions.completeHumanTask(id, note)}
+      onDecline={(id, note) => actions.declineHumanTask(id, note)}
+      onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+      extra={extra}
+    />
+  );
+}
+
+function BenchAsk({
+  task,
+  liftTo,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  liftTo: string | null;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const liftAgentId = task.agentId;
+  return (
+    <>
+      <TaskLede task={task} view={view} />
+      {liftTo !== null && liftAgentId !== null && (
+        <ButtonRow>
+          <AsyncButton
+            tone="primary"
+            onClick={() => actions.liftAgentProfile(liftAgentId, liftTo)}
+            title={`Stop this run where it stands and hand the same task to “${liftTo}”`}
+          >
+            Lift to “{liftTo}”
+          </AsyncButton>
+        </ButtonRow>
+      )}
+      <TaskAnswers task={task} view={view} actions={actions} />
+    </>
+  );
+}
+
 /**
- * The bench row that asks for the goal's checks, drawn as the checks themselves.
+ * The bench rows that ask for the goal's checks — `validate` — and that say the goal
+ * is delivered and its ticket is still open — `close_out` — drawn as the checks
+ * themselves.
  *
  * Every other ask on this surface is answered by the ask: a verdict, a pick, a
- * sentence. This one is answered somewhere else — somebody runs the checks and
+ * sentence. `validate` is answered somewhere else — somebody runs the checks and
  * records what they saw — so a body that only names them is a page that tells the
  * operator to go and find the work, on the one surface whose whole argument is
  * that the thing to do is in front of you.
+ *
+ * The decision `close_out` asks for is *what to do about the checks*: the desk's own
+ * note on `Done` says so in as many words — closing a goal whose validation is flagged
+ * costs a sentence about the outstanding ones, or waiving them first. It said it
+ * about a list drawn as prose. So the rows come with it, and both answers the note
+ * offers are controls on this page rather than a trip to the goal.
  *
  * The desk's prose stays above the rows. It is its own refreshed statement of what
  * the goal owes — the sheet assembled for an environment, the ticket's link — and
  * it is what the row says everywhere the rows are not in front of the reader.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
-function ValidateAsk({
+function ChecksAsk({
   task,
   view,
   actions,
@@ -522,55 +618,9 @@ function ValidateAsk({
 }): JSX.Element {
   return (
     <>
-      <p className="cn-lede">{task.title}</p>
-      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+      <TaskLede task={task} view={view} />
       <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
-      <HumanTaskActions
-        task={task}
-        look={{ tone: 'secondary' }}
-        noteOnDone={null}
-        onDone={(id, note) => actions.completeHumanTask(id, note)}
-        onDecline={(id, note) => actions.declineHumanTask(id, note)}
-        onCloseTicket={null}
-      />
-    </>
-  );
-}
-
-/**
- * The ask that says the goal is delivered and its ticket is still open.
- *
- * The decision it asks for is *what to do about the checks*: the desk's own note
- * on `Done` says so in as many words — closing a goal whose validation is flagged
- * costs a sentence about the outstanding ones, or waiving them first. It said it
- * about a list drawn as prose. So the rows come with it, and both answers the note
- * offers are controls on this page rather than a trip to the goal.
- * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
- */
-function CloseOutAsk({
-  task,
-  view,
-  actions,
-  checksBelow,
-}: {
-  task: HumanTask;
-  view: CockpitView;
-  actions: CockpitActions;
-  checksBelow: boolean;
-}): JSX.Element {
-  return (
-    <>
-      <p className="cn-lede">{task.title}</p>
-      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-      <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
-      <HumanTaskActions
-        task={task}
-        look={{ tone: 'secondary' }}
-        noteOnDone={noteOwedOnDone(task, view)}
-        onDone={(id, note) => actions.completeHumanTask(id, note)}
-        onDecline={(id, note) => actions.declineHumanTask(id, note)}
-        onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
-      />
+      <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
 }
@@ -688,8 +738,7 @@ function SupplyAsk({
   const showing = unwatched.slice(0, SUPPLY_SHOWN);
   return (
     <>
-      <p className="cn-lede">{task.title}</p>
-      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+      <TaskLede task={task} view={view} />
       {showing.length > 0 && (
         <ul className="cn-ask-supply">
           {showing.map((issue) => (
@@ -714,14 +763,7 @@ function SupplyAsk({
           )}
         </ul>
       )}
-      <HumanTaskActions
-        task={task}
-        look={{ tone: 'secondary' }}
-        noteOnDone={null}
-        onDone={(id, note) => actions.completeHumanTask(id, note)}
-        onDecline={(id, note) => actions.declineHumanTask(id, note)}
-        onCloseTicket={null}
-      />
+      <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
 }
@@ -747,15 +789,11 @@ function WatchFinding({
   const canRaise = issue !== undefined && view.state.config.canFileTickets;
   return (
     <>
-      <p className="cn-lede">{task.title}</p>
-      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-      <HumanTaskActions
+      <TaskLede task={task} view={view} />
+      <TaskAnswers
         task={task}
-        look={{ tone: 'secondary' }}
-        noteOnDone={null}
-        onDone={(id, note) => actions.completeHumanTask(id, note)}
-        onDecline={(id, note) => actions.declineHumanTask(id, note)}
-        onCloseTicket={null}
+        view={view}
+        actions={actions}
         extra={
           canRaise ? (
             <Button

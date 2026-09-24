@@ -2527,7 +2527,10 @@ of the deployment.
 
 #### How a patch reaches the cockpit
 
-`buildStateSections(system, want, opts)` assembles one section literal per requested name. What it
+`buildStateSections(system, want, opts)` assembles one section literal per requested name. It first
+takes the shared readings — `snapshotReads`, a chain of read phases (base, plans, verdicts, contexts,
+issues, PRs), each handed what the phases before it produced — and then calls one top-level builder
+per requested section (`harnessSection`, `goalsSection`, …) over that one set of readings. What it
 reads eagerly is only what every call owes whatever `want` says — the world baseline and the rows
 `refUrls` is keyed from. **Everything else is a `once()` thunk, called at its use site**, so a store
 read happens only when a requested section actually needs it, while the snapshot's "read once and

@@ -147,17 +147,8 @@
     }
   },
   "src/executor/actionExecutor.ts": {
-    "complexity": {
-      "count": 4
-    },
-    "max-depth": {
-      "count": 10
-    },
     "max-lines": {
       "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 3
     }
   },
   "src/features/featureBoard.ts": {
@@ -615,9 +606,6 @@
   "src/server/stateSnapshot.ts": {
     "max-lines": {
       "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
     }
   },
   "src/server/validation.ts": {
@@ -708,13 +696,7 @@
     }
   },
   "src/system.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -860,14 +842,6 @@
       "count": 1
     }
   },
-  "web/src/components/EscalationCard.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/components/FeatureBoard.tsx": {
     "complexity": {
       "count": 4
@@ -924,17 +898,6 @@
       "count": 1
     }
   },
-  "web/src/components/LocalRunPanel.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/components/McpTab.tsx": {
     "max-lines-per-function": {
       "count": 1
@@ -985,14 +948,8 @@
     }
   },
   "web/src/components/PlanModal.tsx": {
-    "complexity": {
-      "count": 2
-    },
     "max-lines": {
       "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
     }
   },
   "web/src/components/PlanRegroup.tsx": {
@@ -1184,13 +1141,7 @@
     }
   },
   "web/src/console/NeedsBand.tsx": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },

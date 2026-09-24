@@ -386,7 +386,13 @@ what settle whether a new cut is worth making.
   the cockpit re-exports through `web/src/types.ts`. Both are declaration-only and type-imported, so the
   SPA still bundles no server code — `test/wireContract.test.ts` enforces it.
 - **`src/system.ts` is the composition root.** Every module is wired there through its interface, so
-  any one is swappable. A new component is threaded through it.
+  any one is swappable. A new component is threaded through it. `buildSystem` is a sequence of
+  per-area phases — foundation (store, connector, worktrees), agent runtime, the two MCP channels,
+  the agent manager, the fleet desks, intake/PR desks, environment desks, bench desks, the harness,
+  the pulse wiring, local runs — called in construction order, which is load-bearing: a component
+  goes after everything it reads at construction, and desks keep the pulse order their specs state. A
+  closure that needs a component a _later_ phase builds reads it off the `late` holder, which each
+  phase fills as it returns; nothing may call such a closure during construction.
 
 ## Testing seams
 

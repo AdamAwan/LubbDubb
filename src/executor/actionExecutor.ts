@@ -12,7 +12,7 @@ import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js'
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
-import { readyingBreakdown, type ReadyingBoard } from './readying.js';
+import { readyingBreakdown, type ReadyingBoard, type ReadyingHold } from './readying.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
   authorityOf,
@@ -102,6 +102,23 @@ export interface ExecutionSummary {
   rejected: number;
 }
 
+type DispatchAction = ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' };
+
+type ProposedAct = Extract<ReturnType<typeof readProposedAct>, { ok: true }>['act'];
+
+interface AdmissionRefusal {
+  outcome: 'skipped' | 'deferred';
+  detail: string;
+}
+
+interface ActionRun {
+  cycleId: string;
+  hold: ReadyingHold;
+  live: { count: number };
+  record: (outcome: DecisionOutcome, detail: string) => void;
+  tally: (outcome: DecisionOutcome) => void;
+}
+
 export class ActionExecutor {
   constructor(private readonly deps: ExecutorDeps) {}
 
@@ -119,7 +136,7 @@ export class ActionExecutor {
       summary.rejected += 1;
     }
 
-    let liveCount = store.agents.countLiveAgents();
+    const live = { count: store.agents.countLiveAgents() };
 
     for (const action of plan.actions) {
       const tally = (outcome: DecisionOutcome): void => {
@@ -139,385 +156,429 @@ export class ActionExecutor {
         branch: action.type === 'dispatch_code_agent' ? action.branch : null,
       });
       try {
-        switch (action.type) {
-          case 'dispatch_code_agent':
-          case 'dispatch_desk_agent': {
-            const origin = action.originRef;
-            if (origin && (store.tasks.findActiveTaskByOrigin(origin) || store.jobs.findStandingJobByOrigin(origin))) {
-              record('skipped', `Skipped: work for ${origin} is already in flight.`);
-              break;
-            }
-            if (origin && store.ejections.liveEjectionForOrigin(origin)) {
-              record('skipped', `Skipped: an operator holds ${origin} at their own keyboard.`);
-              break;
-            }
-            if (action.type === 'dispatch_code_agent') {
-              const ejected = store.ejections.ejectionOnBranch(action.branch);
-              if (ejected) {
-                record(
-                  'deferred',
-                  `Deferred: branch ${action.branch} is held by an ejection (${ejected.id}); an operator has its ` +
-                    'worktree at their own keyboard. Will retry when they hand it back.',
-                );
-                break;
-              }
-              const held = store.tasks.findActiveTaskByBranch(action.branch);
-              if (held) {
-                record(
-                  'deferred',
-                  `Deferred: branch ${action.branch} is held by active task ${held.id}` +
-                    `${held.originRef ? ` (${held.originRef})` : ''}; a second agent would share its worktree. Will retry when it frees.`,
-                );
-                break;
-              }
-            }
-            if (this.deps.runtime.paused) {
-              record('deferred', `Deferred: dispatch is paused; will retry when resumed.`);
-              break;
-            }
-            if (liveCount >= this.deps.runtime.cap) {
-              record('deferred', `Deferred: concurrency cap ${this.deps.runtime.cap} reached; will retry next cycle.`);
-              break;
-            }
-            let task: Task | null = null;
-            let evidence = '';
-            let retry: RetryResume | null = null;
-            try {
-              hold.at('ci-evidence');
-              evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
-              retry = retryResumeFor(origin, store);
-              const handover =
-                action.type === 'dispatch_code_agent' && retry === null
-                  ? handoverResumeFor(origin, store, store.world.getWorldBaseline()?.issues ?? [])
-                  : null;
-              hold.at('slot-handover');
-              const slot =
-                action.type === 'dispatch_code_agent'
-                  ? await this.codeWorkingDirectory(action)
-                  : (retry?.previous.cwd ?? null);
-              const inherit = retry
-                ? slot !== null && retry.previous.cwd === slot
-                  ? retry.previous.sessionId
-                  : null
-                : handover !== null && handover.previous.cwd === slot
-                  ? handover.previous.sessionId
-                  : null;
-              task = this.recordDispatchTask(action, evidence, retry, inherit === null ? null : handover);
-              const cwd = slot ?? this.deskScratch(task);
-              const agent = this.deps.agents.spawn(task, cwd, inherit);
-              const resumed = inherit !== null && agent.sessionId === inherit;
-              liveCount += 1;
-              if (action.jobId) store.jobs.markJobDispatched(action.jobId, task.id);
-              if (action.type === 'dispatch_code_agent' && action.partId)
-                store.plans.markPartDispatched(action.partId, task.id, action.branch);
-              if (action.type === 'dispatch_code_agent' && action.localValidation) {
-                if (action.localValidation.as === 'fix')
-                  store.localValidations.markLocalValidationFix(action.localValidation.id, task.id);
-                else store.localValidations.markLocalValidationDispatched(action.localValidation.id, task.id);
-              }
-              // One agent per run, across a restart: the conditional `WHERE status = 'pending'` is
-              // the store's own and never a check made here first.
-              if (action.type === 'dispatch_code_agent' && action.remoteRun)
-                store.remoteValidation.claimRemoteRun(action.remoteRun.id, task.id);
-              const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
-              record(
-                'executed',
-                (resumed
-                  ? handover
-                    ? `Handed ${handover.from}'s conversation on to a ${kind} agent on task ${task.id} in ${cwd}.`
-                    : `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
-                  : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`) + readyingBreakdown(hold.timings()),
-              );
-            } catch (err) {
-              this.abandonUnstarted(task ?? this.recordDispatchTask(action, evidence, retry, null));
-              record(
-                'rejected',
-                `Failed to start agent: ${(err as Error).message}${readyingBreakdown(hold.timings())}`,
-              );
-            }
-            break;
-          }
-
-          case 'escalate_to_human': {
-            const esc = this.deps.escalations.create({
-              type: action.escalationType,
-              prompt: action.prompt,
-              context: action.context,
-              taskId: action.taskId,
-              agentId: action.agentId,
-            });
-            record('executed', `Escalated to human: ${esc.id} (${action.escalationType}).`);
-            break;
-          }
-
-          case 'respond_to_agent': {
-            const ok = this.deps.agents.respond(action.agentId, action.response);
-            record(
-              ok ? 'executed' : 'skipped',
-              ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`,
-            );
-            break;
-          }
-
-          case 'reply_on_pr':
-          case 'merge_pr': {
-            hold.at('authorizing');
-            const outbound = await this.authorize(cycleId, action);
-            if (outbound.recorded) tally(outbound.outcome);
-            else record(outbound.outcome, outbound.detail);
-            break;
-          }
-
-          case 'propose_plan': {
-            const ref = planProposalRef(action.originRef);
-            const heldBy = planProposalHold(ref, store.escalations.listProposals());
-            if (heldBy) {
-              record('skipped', `Skipped proposing the plan for ${action.originRef}: ${heldBy}.`);
-              break;
-            }
-            const esc = this.deps.escalations.create({
-              type: 'approve_change',
-              prompt: action.prompt,
-              context: {
-                originRef: action.originRef,
-                planId: action.planId,
-                ...(action.detail ? { detail: action.detail, detailFrom: 'What the plan says' } : {}),
-              },
-            });
-            const proposal = store.escalations.createProposal({
-              kind: 'plan',
-              ref,
-              action: action as unknown as Action,
-              escalationId: esc.id,
-            });
-            record(
-              'executed',
-              `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
-                `Accepting releases its parts; nothing is scheduled until then.`,
-            );
-            break;
-          }
-
-          case 'propose_validation_plan': {
-            const ref = validationPlanProposalRef(action.issueNumber);
-            const heldBy = validationPlanProposalHold(ref, store.escalations.listProposals());
-            if (heldBy) {
-              record('skipped', `Skipped proposing the validation check set for ${action.originRef}: ${heldBy}.`);
-              break;
-            }
-            const esc = this.deps.escalations.create({
-              type: 'approve_change',
-              prompt: action.prompt,
-              context: {
-                originRef: action.originRef,
-                issueNumber: action.issueNumber,
-                ...(action.note === null ? {} : { detail: action.note, detailFrom: 'What the planner says' }),
-              },
-            });
-            const proposal = store.escalations.createProposal({
-              kind: 'validation_plan',
-              ref,
-              action: action as unknown as Action,
-              escalationId: esc.id,
-            });
-            record(
-              'executed',
-              `Proposed the validation check set for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
-                `Accepting releases its ${action.checks} check(s); nothing runs them until then.`,
-            );
-            break;
-          }
-
-          case 'propose_plan_amendment': {
-            const ref = planAmendmentProposalRef(action.amendmentId);
-            const heldBy = planAmendmentHold(ref, store.escalations.listProposals());
-            if (heldBy) {
-              record('skipped', `Skipped proposing the amendment to the plan for ${action.originRef}: ${heldBy}.`);
-              break;
-            }
-            const amendment = store.plans.getPlanAmendment(action.amendmentId);
-            if (!amendment || amendment.status !== 'pending') {
-              record(
-                'skipped',
-                `Skipped proposing the amendment to the plan for ${action.originRef}: it is ` +
-                  `${amendment ? `"${amendment.status}"` : 'gone'}.`,
-              );
-              break;
-            }
-            const esc = this.deps.escalations.create({
-              type: 'approve_change',
-              prompt: action.prompt,
-              context: {
-                originRef: action.originRef,
-                planId: action.planId,
-                amendmentId: amendment.id,
-                detail: describeAmendmentFor(store, amendment),
-                detailFrom: 'What the amendment changes',
-              },
-            });
-            const proposal = store.escalations.createProposal({
-              kind: 'plan_amendment',
-              ref,
-              action: action as unknown as Action,
-              escalationId: esc.id,
-            });
-            record(
-              'executed',
-              `Proposed a change to the running plan for ${action.originRef} for approval: ${esc.id} / ` +
-                `${proposal.id}. The plan keeps scheduling either way; accepting amends it in place.`,
-            );
-            break;
-          }
-
-          case 'propose_shortfall': {
-            const ref = shortfallRef(action.issueNumber);
-            const proposals = store.escalations.listProposals();
-            const signals = this.rejectionSignals(proposals);
-            const heldBy = proposalHold('shortfall', ref, proposals, { rejectionSignals: signals });
-            if (heldBy) {
-              record('skipped', `Skipped proposing a response to the assessment of ${action.originRef}: ${heldBy}.`);
-              break;
-            }
-            const again = reaskContext('shortfall', ref, proposals, { rejectionSignals: signals });
-            const esc = this.deps.escalations.create({
-              type: 'approve_change',
-              prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
-              context: {
-                originRef: action.originRef,
-                issueNumber: action.issueNumber,
-                planId: action.planId,
-                detail: action.detail,
-                detailFrom: 'What the assessor found',
-              },
-            });
-            const proposal = store.escalations.createProposal({
-              kind: 'shortfall',
-              ref,
-              action: action as unknown as Action,
-              escalationId: esc.id,
-            });
-            record(
-              'executed',
-              `Proposed a response to the failed assessment of ${action.originRef}: ${esc.id} / ${proposal.id}. ` +
-                `Accepting ${action.cause === 'plan' ? 'sends the plan back to a planner' : `appends a follow-up part for "${action.partSlug}"`}; nothing happens until then.`,
-            );
-            break;
-          }
-
-          case 'update_pr_branch': {
-            const ejected = store.ejections.ejectionOnBranch(action.branch);
-            if (ejected) {
-              record(
-                'deferred',
-                `Deferred: branch ${action.branch} is held by an ejection (${ejected.id}); merging ` +
-                  `${action.base} in under an operator's own checkout would move it beneath them. ` +
-                  'Will retry when they hand it back.',
-              );
-              break;
-            }
-            const staffed = store.tasks.findActiveTaskByBranch(action.branch);
-            if (staffed) {
-              record(
-                'deferred',
-                `Deferred: branch ${action.branch} is held by active task ${staffed.id}; ` +
-                  `merging ${action.base} in under it would move the commit its worktree was cut from. ` +
-                  `Will retry when it frees.`,
-              );
-              break;
-            }
-            try {
-              const res = await this.deps.sink.updatePrBranch({ prNumber: action.prNumber, base: action.base });
-              if (!res.ok) {
-                record(
-                  'skipped',
-                  `This provider cannot merge ${action.base} into PR #${action.prNumber} itself; ` +
-                    `a code agent will be dispatched to do it.`,
-                );
-                break;
-              }
-              record(
-                'executed',
-                `Brought PR #${action.prNumber} up to date with ${action.base} — no agent spent.${res.ref ? ` ref=${res.ref}` : ''}`,
-              );
-            } catch (err) {
-              const message = (err as Error).message;
-              this.deps.errors.record({
-                source: 'provider',
-                message: `Updating PR #${action.prNumber} from ${action.base} failed: ${message}`,
-                detail: 'Rule pr-base-update will dispatch a code agent to merge the base in instead.',
-              });
-              record(
-                'rejected',
-                `Failed to merge ${action.base} into PR #${action.prNumber}: ${message}. ` +
-                  `A code agent will be dispatched to do it.`,
-              );
-            }
-            break;
-          }
-
-          case 'requeue_ci_check': {
-            const unperformed: string[] = [];
-            try {
-              for (const check of action.checks) {
-                const res = await this.deps.sink.requeueCiCheck({
-                  prNumber: action.prNumber,
-                  check: check.name,
-                  requeueRef: check.requeueRef,
-                });
-                if (!res.ok) unperformed.push(check.name);
-              }
-            } catch (err) {
-              const message = (err as Error).message;
-              this.deps.errors.record({
-                source: 'provider',
-                message: `Requeueing the expired check(s) on PR #${action.prNumber} failed: ${message}`,
-                detail: 'Rule pr-ci-gate will dispatch a code agent to queue the build instead.',
-              });
-              record(
-                'rejected',
-                `Failed to requeue the expired check(s) on PR #${action.prNumber}: ${message}. ` +
-                  `A code agent will be dispatched to queue the build.`,
-              );
-              break;
-            }
-            if (unperformed.length > 0) {
-              record(
-                'skipped',
-                `This provider did not requeue ${unperformed.join(', ')} on PR #${action.prNumber}; ` +
-                  `a code agent will be dispatched to queue the build.`,
-              );
-              break;
-            }
-            record(
-              'executed',
-              `Queued a fresh run of ${action.checks.map((c) => c.name).join(', ')} on PR #${action.prNumber} — no agent spent.`,
-            );
-            break;
-          }
-
-          case 'set_work_item_state': {
-            try {
-              const res = await this.deps.sink.setWorkItemState({ number: action.number, state: action.state });
-              record(
-                'executed',
-                `Set work item #${action.number} to "${action.state}".${res.ref ? ` ref=${res.ref}` : ''}`,
-              );
-            } catch (err) {
-              record('rejected', `Failed to set work item #${action.number} state: ${(err as Error).message}`);
-            }
-            break;
-          }
-
-          case 'no_op':
-            record('executed', `No-op: ${action.reason}`);
-            break;
-        }
+        await this.perform(action, { cycleId, hold, live, record, tally });
       } finally {
         hold.release();
       }
     }
 
     return summary;
+  }
+
+  private async perform(action: ValidatedAction, run: ActionRun): Promise<void> {
+    switch (action.type) {
+      case 'dispatch_code_agent':
+      case 'dispatch_desk_agent':
+        return this.dispatchAgent(action, run);
+      case 'escalate_to_human':
+        return this.escalate(action, run);
+      case 'respond_to_agent':
+        return this.respondToAgent(action, run);
+      case 'reply_on_pr':
+      case 'merge_pr':
+        return this.sendOutbound(action, run);
+      case 'propose_plan':
+        return this.proposePlan(action, run);
+      case 'propose_validation_plan':
+        return this.proposeValidationPlan(action, run);
+      case 'propose_plan_amendment':
+        return this.proposePlanAmendment(action, run);
+      case 'propose_shortfall':
+        return this.proposeShortfall(action, run);
+      case 'update_pr_branch':
+        return this.updatePrBranch(action, run);
+      case 'requeue_ci_check':
+        return this.requeueCiCheck(action, run);
+      case 'set_work_item_state':
+        return this.setWorkItemState(action, run);
+      case 'no_op':
+        return run.record('executed', `No-op: ${action.reason}`);
+    }
+  }
+
+  private async dispatchAgent(action: DispatchAction, run: ActionRun): Promise<void> {
+    const { store } = this.deps;
+    const { hold, live, record } = run;
+    const refusal = this.admissionRefusal(action, live.count);
+    if (refusal) {
+      record(refusal.outcome, refusal.detail);
+      return;
+    }
+    let task: Task | null = null;
+    let evidence = '';
+    let retry: RetryResume | null = null;
+    try {
+      hold.at('ci-evidence');
+      evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
+      retry = retryResumeFor(action.originRef, store);
+      const { slot, inherit, handover } = await this.inheritedSession(action, retry, hold);
+      task = this.recordDispatchTask(action, evidence, retry, inherit === null ? null : handover);
+      const cwd = slot ?? this.deskScratch(task);
+      const agent = this.deps.agents.spawn(task, cwd, inherit);
+      const resumed = inherit !== null && agent.sessionId === inherit;
+      live.count += 1;
+      this.markDispatched(action, task.id);
+      const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
+      record('executed', spawnDetail(kind, task.id, cwd, resumed, handover) + readyingBreakdown(hold.timings()));
+    } catch (err) {
+      this.abandonUnstarted(task ?? this.recordDispatchTask(action, evidence, retry, null));
+      record('rejected', `Failed to start agent: ${(err as Error).message}${readyingBreakdown(hold.timings())}`);
+    }
+  }
+
+  private admissionRefusal(action: DispatchAction, liveCount: number): AdmissionRefusal | null {
+    const { store, runtime } = this.deps;
+    const origin = action.originRef;
+    if (origin && (store.tasks.findActiveTaskByOrigin(origin) || store.jobs.findStandingJobByOrigin(origin)))
+      return { outcome: 'skipped', detail: `Skipped: work for ${origin} is already in flight.` };
+    if (origin && store.ejections.liveEjectionForOrigin(origin))
+      return { outcome: 'skipped', detail: `Skipped: an operator holds ${origin} at their own keyboard.` };
+    const branchHeld = action.type === 'dispatch_code_agent' ? this.branchRefusal(action.branch) : null;
+    if (branchHeld) return branchHeld;
+    if (runtime.paused)
+      return { outcome: 'deferred', detail: `Deferred: dispatch is paused; will retry when resumed.` };
+    if (liveCount >= runtime.cap)
+      return {
+        outcome: 'deferred',
+        detail: `Deferred: concurrency cap ${runtime.cap} reached; will retry next cycle.`,
+      };
+    return null;
+  }
+
+  private branchRefusal(branch: string): AdmissionRefusal | null {
+    const { store } = this.deps;
+    const ejected = store.ejections.ejectionOnBranch(branch);
+    if (ejected)
+      return {
+        outcome: 'deferred',
+        detail:
+          `Deferred: branch ${branch} is held by an ejection (${ejected.id}); an operator has its ` +
+          'worktree at their own keyboard. Will retry when they hand it back.',
+      };
+    const held = store.tasks.findActiveTaskByBranch(branch);
+    if (held)
+      return {
+        outcome: 'deferred',
+        detail:
+          `Deferred: branch ${branch} is held by active task ${held.id}` +
+          `${held.originRef ? ` (${held.originRef})` : ''}; a second agent would share its worktree. Will retry when it frees.`,
+      };
+    return null;
+  }
+
+  private async inheritedSession(
+    action: DispatchAction,
+    retry: RetryResume | null,
+    hold: ReadyingHold,
+  ): Promise<{ slot: string | null; inherit: string | null; handover: HandoverResume | null }> {
+    const { store } = this.deps;
+    const handover =
+      action.type === 'dispatch_code_agent' && retry === null
+        ? handoverResumeFor(action.originRef, store, store.world.getWorldBaseline()?.issues ?? [])
+        : null;
+    hold.at('slot-handover');
+    const slot =
+      action.type === 'dispatch_code_agent' ? await this.codeWorkingDirectory(action) : (retry?.previous.cwd ?? null);
+    const inherit = retry
+      ? slot !== null && retry.previous.cwd === slot
+        ? retry.previous.sessionId
+        : null
+      : handover !== null && handover.previous.cwd === slot
+        ? handover.previous.sessionId
+        : null;
+    return { slot, inherit, handover };
+  }
+
+  private markDispatched(action: DispatchAction, taskId: string): void {
+    const { store } = this.deps;
+    if (action.jobId) store.jobs.markJobDispatched(action.jobId, taskId);
+    if (action.type !== 'dispatch_code_agent') return;
+    if (action.partId) store.plans.markPartDispatched(action.partId, taskId, action.branch);
+    if (action.localValidation) {
+      if (action.localValidation.as === 'fix')
+        store.localValidations.markLocalValidationFix(action.localValidation.id, taskId);
+      else store.localValidations.markLocalValidationDispatched(action.localValidation.id, taskId);
+    }
+    // One agent per run, across a restart: the conditional `WHERE status = 'pending'` is
+    // the store's own and never a check made here first.
+    if (action.remoteRun) store.remoteValidation.claimRemoteRun(action.remoteRun.id, taskId);
+  }
+
+  private escalate(action: ValidatedAction & { type: 'escalate_to_human' }, run: ActionRun): void {
+    const { record } = run;
+    const esc = this.deps.escalations.create({
+      type: action.escalationType,
+      prompt: action.prompt,
+      context: action.context,
+      taskId: action.taskId,
+      agentId: action.agentId,
+    });
+    record('executed', `Escalated to human: ${esc.id} (${action.escalationType}).`);
+  }
+
+  private respondToAgent(action: ValidatedAction & { type: 'respond_to_agent' }, run: ActionRun): void {
+    const { record } = run;
+    const ok = this.deps.agents.respond(action.agentId, action.response);
+    record(
+      ok ? 'executed' : 'skipped',
+      ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`,
+    );
+  }
+
+  private async sendOutbound(
+    action: ValidatedAction & { type: 'reply_on_pr' | 'merge_pr' },
+    run: ActionRun,
+  ): Promise<void> {
+    const { cycleId, hold, record, tally } = run;
+    hold.at('authorizing');
+    const outbound = await this.authorize(cycleId, action);
+    if (outbound.recorded) tally(outbound.outcome);
+    else record(outbound.outcome, outbound.detail);
+  }
+
+  private proposePlan(action: ValidatedAction & { type: 'propose_plan' }, run: ActionRun): void {
+    const { store } = this.deps;
+    const { record } = run;
+    const ref = planProposalRef(action.originRef);
+    const heldBy = planProposalHold(ref, store.escalations.listProposals());
+    if (heldBy) {
+      record('skipped', `Skipped proposing the plan for ${action.originRef}: ${heldBy}.`);
+      return;
+    }
+    const esc = this.deps.escalations.create({
+      type: 'approve_change',
+      prompt: action.prompt,
+      context: {
+        originRef: action.originRef,
+        planId: action.planId,
+        ...(action.detail ? { detail: action.detail, detailFrom: 'What the plan says' } : {}),
+      },
+    });
+    const proposal = store.escalations.createProposal({
+      kind: 'plan',
+      ref,
+      action: action as unknown as Action,
+      escalationId: esc.id,
+    });
+    record(
+      'executed',
+      `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
+        `Accepting releases its parts; nothing is scheduled until then.`,
+    );
+  }
+
+  private proposeValidationPlan(action: ValidatedAction & { type: 'propose_validation_plan' }, run: ActionRun): void {
+    const { store } = this.deps;
+    const { record } = run;
+    const ref = validationPlanProposalRef(action.issueNumber);
+    const heldBy = validationPlanProposalHold(ref, store.escalations.listProposals());
+    if (heldBy) {
+      record('skipped', `Skipped proposing the validation check set for ${action.originRef}: ${heldBy}.`);
+      return;
+    }
+    const esc = this.deps.escalations.create({
+      type: 'approve_change',
+      prompt: action.prompt,
+      context: {
+        originRef: action.originRef,
+        issueNumber: action.issueNumber,
+        ...(action.note === null ? {} : { detail: action.note, detailFrom: 'What the planner says' }),
+      },
+    });
+    const proposal = store.escalations.createProposal({
+      kind: 'validation_plan',
+      ref,
+      action: action as unknown as Action,
+      escalationId: esc.id,
+    });
+    record(
+      'executed',
+      `Proposed the validation check set for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
+        `Accepting releases its ${action.checks} check(s); nothing runs them until then.`,
+    );
+  }
+
+  private proposePlanAmendment(action: ValidatedAction & { type: 'propose_plan_amendment' }, run: ActionRun): void {
+    const { store } = this.deps;
+    const { record } = run;
+    const ref = planAmendmentProposalRef(action.amendmentId);
+    const heldBy = planAmendmentHold(ref, store.escalations.listProposals());
+    if (heldBy) {
+      record('skipped', `Skipped proposing the amendment to the plan for ${action.originRef}: ${heldBy}.`);
+      return;
+    }
+    const amendment = store.plans.getPlanAmendment(action.amendmentId);
+    if (!amendment || amendment.status !== 'pending') {
+      record(
+        'skipped',
+        `Skipped proposing the amendment to the plan for ${action.originRef}: it is ` +
+          `${amendment ? `"${amendment.status}"` : 'gone'}.`,
+      );
+      return;
+    }
+    const esc = this.deps.escalations.create({
+      type: 'approve_change',
+      prompt: action.prompt,
+      context: {
+        originRef: action.originRef,
+        planId: action.planId,
+        amendmentId: amendment.id,
+        detail: describeAmendmentFor(store, amendment),
+        detailFrom: 'What the amendment changes',
+      },
+    });
+    const proposal = store.escalations.createProposal({
+      kind: 'plan_amendment',
+      ref,
+      action: action as unknown as Action,
+      escalationId: esc.id,
+    });
+    record(
+      'executed',
+      `Proposed a change to the running plan for ${action.originRef} for approval: ${esc.id} / ` +
+        `${proposal.id}. The plan keeps scheduling either way; accepting amends it in place.`,
+    );
+  }
+
+  private proposeShortfall(action: ValidatedAction & { type: 'propose_shortfall' }, run: ActionRun): void {
+    const { store } = this.deps;
+    const { record } = run;
+    const ref = shortfallRef(action.issueNumber);
+    const proposals = store.escalations.listProposals();
+    const signals = this.rejectionSignals(proposals);
+    const heldBy = proposalHold('shortfall', ref, proposals, { rejectionSignals: signals });
+    if (heldBy) {
+      record('skipped', `Skipped proposing a response to the assessment of ${action.originRef}: ${heldBy}.`);
+      return;
+    }
+    const again = reaskContext('shortfall', ref, proposals, { rejectionSignals: signals });
+    const esc = this.deps.escalations.create({
+      type: 'approve_change',
+      prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
+      context: {
+        originRef: action.originRef,
+        issueNumber: action.issueNumber,
+        planId: action.planId,
+        detail: action.detail,
+        detailFrom: 'What the assessor found',
+      },
+    });
+    const proposal = store.escalations.createProposal({
+      kind: 'shortfall',
+      ref,
+      action: action as unknown as Action,
+      escalationId: esc.id,
+    });
+    record(
+      'executed',
+      `Proposed a response to the failed assessment of ${action.originRef}: ${esc.id} / ${proposal.id}. ` +
+        `Accepting ${action.cause === 'plan' ? 'sends the plan back to a planner' : `appends a follow-up part for "${action.partSlug}"`}; nothing happens until then.`,
+    );
+  }
+
+  private async updatePrBranch(action: ValidatedAction & { type: 'update_pr_branch' }, run: ActionRun): Promise<void> {
+    const { store } = this.deps;
+    const { record } = run;
+    const ejected = store.ejections.ejectionOnBranch(action.branch);
+    if (ejected) {
+      record(
+        'deferred',
+        `Deferred: branch ${action.branch} is held by an ejection (${ejected.id}); merging ` +
+          `${action.base} in under an operator's own checkout would move it beneath them. ` +
+          'Will retry when they hand it back.',
+      );
+      return;
+    }
+    const staffed = store.tasks.findActiveTaskByBranch(action.branch);
+    if (staffed) {
+      record(
+        'deferred',
+        `Deferred: branch ${action.branch} is held by active task ${staffed.id}; ` +
+          `merging ${action.base} in under it would move the commit its worktree was cut from. ` +
+          `Will retry when it frees.`,
+      );
+      return;
+    }
+    try {
+      const res = await this.deps.sink.updatePrBranch({ prNumber: action.prNumber, base: action.base });
+      if (!res.ok) {
+        record(
+          'skipped',
+          `This provider cannot merge ${action.base} into PR #${action.prNumber} itself; ` +
+            `a code agent will be dispatched to do it.`,
+        );
+        return;
+      }
+      record(
+        'executed',
+        `Brought PR #${action.prNumber} up to date with ${action.base} — no agent spent.${res.ref ? ` ref=${res.ref}` : ''}`,
+      );
+    } catch (err) {
+      const message = (err as Error).message;
+      this.deps.errors.record({
+        source: 'provider',
+        message: `Updating PR #${action.prNumber} from ${action.base} failed: ${message}`,
+        detail: 'Rule pr-base-update will dispatch a code agent to merge the base in instead.',
+      });
+      record(
+        'rejected',
+        `Failed to merge ${action.base} into PR #${action.prNumber}: ${message}. ` +
+          `A code agent will be dispatched to do it.`,
+      );
+    }
+  }
+
+  private async requeueCiCheck(action: ValidatedAction & { type: 'requeue_ci_check' }, run: ActionRun): Promise<void> {
+    const { record } = run;
+    const unperformed: string[] = [];
+    try {
+      for (const check of action.checks) {
+        const res = await this.deps.sink.requeueCiCheck({
+          prNumber: action.prNumber,
+          check: check.name,
+          requeueRef: check.requeueRef,
+        });
+        if (!res.ok) unperformed.push(check.name);
+      }
+    } catch (err) {
+      const message = (err as Error).message;
+      this.deps.errors.record({
+        source: 'provider',
+        message: `Requeueing the expired check(s) on PR #${action.prNumber} failed: ${message}`,
+        detail: 'Rule pr-ci-gate will dispatch a code agent to queue the build instead.',
+      });
+      record(
+        'rejected',
+        `Failed to requeue the expired check(s) on PR #${action.prNumber}: ${message}. ` +
+          `A code agent will be dispatched to queue the build.`,
+      );
+      return;
+    }
+    if (unperformed.length > 0) {
+      record(
+        'skipped',
+        `This provider did not requeue ${unperformed.join(', ')} on PR #${action.prNumber}; ` +
+          `a code agent will be dispatched to queue the build.`,
+      );
+      return;
+    }
+    record(
+      'executed',
+      `Queued a fresh run of ${action.checks.map((c) => c.name).join(', ')} on PR #${action.prNumber} — no agent spent.`,
+    );
+  }
+
+  private async setWorkItemState(
+    action: ValidatedAction & { type: 'set_work_item_state' },
+    run: ActionRun,
+  ): Promise<void> {
+    const { record } = run;
+    try {
+      const res = await this.deps.sink.setWorkItemState({ number: action.number, state: action.state });
+      record('executed', `Set work item #${action.number} to "${action.state}".${res.ref ? ` ref=${res.ref}` : ''}`);
+    } catch (err) {
+      record('rejected', `Failed to set work item #${action.number} state: ${(err as Error).message}`);
+    }
   }
 
   private async authorize(
@@ -557,9 +618,17 @@ export class ActionExecutor {
     }
 
     const again = reaskContext(kind, ref, proposals, { rejectionSignals: signals });
-    const preamble = again ? `${again}\n\n` : '';
+    return { ...this.proposeOutbound(action, kind, ref, again ? `${again}\n\n` : ''), recorded: false };
+  }
+
+  private proposeOutbound(
+    action: ValidatedAction & { type: 'reply_on_pr' | 'merge_pr' },
+    kind: ProposalKind,
+    ref: string,
+    preamble: string,
+  ): { outcome: DecisionOutcome; detail: string } {
     const esc = this.deps.escalations.create(
-      merge
+      action.type === 'merge_pr'
         ? {
             type: 'approve_change',
             prompt: `${preamble}PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
@@ -571,7 +640,7 @@ export class ActionExecutor {
             context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft },
           },
     );
-    const proposal = store.escalations.createProposal({
+    const proposal = this.deps.store.escalations.createProposal({
       kind,
       ref,
       action: action as unknown as Action,
@@ -579,10 +648,10 @@ export class ActionExecutor {
     });
     return {
       outcome: 'executed',
-      detail: merge
-        ? `PR #${action.prNumber} is merge-ready; proposed the merge for approval: ${esc.id} / ${proposal.id}. Accepting merges it.`
-        : `Drafted PR reply and proposed it for approval: ${esc.id} / ${proposal.id}. Accepting sends it.`,
-      recorded: false,
+      detail:
+        action.type === 'merge_pr'
+          ? `PR #${action.prNumber} is merge-ready; proposed the merge for approval: ${esc.id} / ${proposal.id}. Accepting merges it.`
+          : `Drafted PR reply and proposed it for approval: ${esc.id} / ${proposal.id}. Accepting sends it.`,
     };
   }
 
@@ -643,30 +712,52 @@ export class ActionExecutor {
     declined: readonly CheckDecline[] = [],
   ): Promise<{ outcome: DecisionOutcome; detail: string }> {
     const { store } = this.deps;
-    const { cycleId, by, approved } = authorityOf(proposal, pulseCycleId ?? null);
+    const authority = authorityOf(proposal, pulseCycleId ?? null);
     const audit = (outcome: DecisionOutcome, detail: string): { outcome: DecisionOutcome; detail: string } => {
-      store.decisions.recordDecision({ cycleId, action: proposal.action, outcome, detail });
+      store.decisions.recordDecision({ cycleId: authority.cycleId, action: proposal.action, outcome, detail });
       return { outcome, detail };
     };
 
     const read = readProposedAct(proposal);
     if (!read.ok) return audit('rejected', `Cannot run the accepted proposal: ${read.error}.`);
     const act = read.act;
+    if (act.kind === 'merge' || act.kind === 'reply_draft') {
+      const sent = await this.sendAuthorized(act, proposal, authority);
+      return audit(sent.outcome, sent.detail);
+    }
+    const settled = this.settleAuthorized(act, proposal, authority.by, declined);
+    return audit(settled.outcome, settled.detail);
+  }
+
+  private settleAuthorized(
+    act: Exclude<ProposedAct, { kind: 'merge' | 'reply_draft' }>,
+    proposal: Proposal,
+    by: string,
+    declined: readonly CheckDecline[],
+  ): { outcome: DecisionOutcome; detail: string } {
+    const { store } = this.deps;
+    const verdict = (outcome: DecisionOutcome, detail: string): { outcome: DecisionOutcome; detail: string } => ({
+      outcome,
+      detail,
+    });
     if (act.kind === 'plan') {
       const settled = releasePlan(store, act.planId, act.originRef);
       return settled.ok
-        ? audit('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
-        : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+        ? verdict('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
+        : verdict('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
     if (act.kind === 'validation_plan') {
       const released = store.validation.releaseValidationPlan(act.originRef);
       if (released?.releasedAt == null)
-        return audit('skipped', `Nothing to release for ${act.originRef}: no check set is authored (${proposal.id}).`);
+        return verdict(
+          'skipped',
+          `Nothing to release for ${act.originRef}: no check set is authored (${proposal.id}).`,
+        );
       // Struck after the release and not instead of it: the press releases the set and settles the
       // rows the operator said no to, which is one verdict on one set rather than two.
       const resolution = resolveDeclines(store.validation.listValidationChecks(act.originRef), declined);
       const struck = applyDeclines(store, act.originRef, resolution.resolved);
-      return audit(
+      return verdict(
         'executed',
         `Released the validation check set for ${act.originRef} — authorized by ${by} (${proposal.id})` +
           `${declineDetail(struck, resolution.unknown)}.`,
@@ -675,31 +766,35 @@ export class ActionExecutor {
     if (act.kind === 'plan_amendment') {
       const settled = applyPlanAmendment(store, act.amendmentId);
       return settled.ok
-        ? audit(
+        ? verdict(
             'executed',
             `Approved the change to the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`,
           )
-        : audit('skipped', `Nothing to amend for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+        : verdict('skipped', `Nothing to amend for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
-    if (act.kind === 'shortfall') {
-      const settled = actOnShortfall(store, act);
-      if (settled.ok) store.verdicts.clearShortfall(act.originRef);
-      return settled.ok
-        ? audit(
-            'executed',
-            `Acted on the assessment of ${act.originRef}: ${settled.detail} — authorized by ${by} (${proposal.id}).`,
-          )
-        : audit('skipped', `Nothing to act on for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
-    }
-    const because = proposal.note ? ` (${proposal.note})` : '';
+    const settled = actOnShortfall(store, act);
+    if (settled.ok) store.verdicts.clearShortfall(act.originRef);
+    return settled.ok
+      ? verdict(
+          'executed',
+          `Acted on the assessment of ${act.originRef}: ${settled.detail} — authorized by ${by} (${proposal.id}).`,
+        )
+      : verdict('skipped', `Nothing to act on for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+  }
 
+  private async sendAuthorized(
+    act: Extract<ProposedAct, { kind: 'merge' | 'reply_draft' }>,
+    proposal: Proposal,
+    { by, approved }: { by: string; approved: string },
+  ): Promise<{ outcome: DecisionOutcome; detail: string }> {
+    const because = proposal.note ? ` (${proposal.note})` : '';
     try {
       if (act.kind === 'merge') {
         const res = await this.deps.sink.mergePr({ prNumber: act.prNumber, method: act.method });
-        return audit(
-          'executed',
-          `Merged PR #${act.prNumber} via ${act.method} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
-        );
+        return {
+          outcome: 'executed',
+          detail: `Merged PR #${act.prNumber} via ${act.method} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+        };
       }
       const res = await this.deps.sink.postPrReply({
         prNumber: act.prNumber,
@@ -712,30 +807,37 @@ export class ActionExecutor {
       }
       this.recordReviewPublished(act, res.threadRef);
       const resolution = await this.resolveAnswered(act);
-      return audit(
-        'executed',
-        `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}${resolution}`,
-      );
+      return {
+        outcome: 'executed',
+        detail: `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}${resolution}`,
+      };
     } catch (err) {
-      const message = (err as Error).message;
-      if (act.kind === 'merge') this.deps.landings.stopForFailedMerge(act.prNumber, message);
-      const esc =
-        act.kind === 'merge'
-          ? this.deps.escalations.create({
-              type: 'approve_change',
-              prompt: `${approved} merging PR #${act.prNumber}, but the merge failed (${message}); merge it manually or wait for the harness to re-propose it.`,
-              context: { prNumber: act.prNumber, method: act.method, autoMergeFailed: true },
-            })
-          : this.deps.escalations.create({
-              type: 'review_reply',
-              prompt: `${approved} this reply, but sending it failed (${message}); send it manually.\n\nDraft reply for PR #${act.prNumber}:\n\n${act.body}`,
-              context: { prNumber: act.prNumber, commentId: act.commentId, draft: act.body },
-            });
-      return audit(
-        'rejected',
-        `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
-      );
+      return this.escalateFailedSend(act, approved, (err as Error).message);
     }
+  }
+
+  private escalateFailedSend(
+    act: Extract<ProposedAct, { kind: 'merge' | 'reply_draft' }>,
+    approved: string,
+    message: string,
+  ): { outcome: DecisionOutcome; detail: string } {
+    if (act.kind === 'merge') this.deps.landings.stopForFailedMerge(act.prNumber, message);
+    const esc =
+      act.kind === 'merge'
+        ? this.deps.escalations.create({
+            type: 'approve_change',
+            prompt: `${approved} merging PR #${act.prNumber}, but the merge failed (${message}); merge it manually or wait for the harness to re-propose it.`,
+            context: { prNumber: act.prNumber, method: act.method, autoMergeFailed: true },
+          })
+        : this.deps.escalations.create({
+            type: 'review_reply',
+            prompt: `${approved} this reply, but sending it failed (${message}); send it manually.\n\nDraft reply for PR #${act.prNumber}:\n\n${act.body}`,
+            context: { prNumber: act.prNumber, commentId: act.commentId, draft: act.body },
+          });
+    return {
+      outcome: 'rejected',
+      detail: `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
+    };
   }
 
   private recordReplySent(prNumber: number, threadId: string, commentRef: string | undefined): void {
@@ -824,35 +926,77 @@ export class ActionExecutor {
   }
 
   private recordDispatchTask(
-    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+    action: DispatchAction,
     evidence: string,
     retry: RetryResume | null,
     handover: HandoverResume | null,
   ): Task {
     const { store } = this.deps;
+    const prompt = this.dispatchPrompt(action, evidence, retry, handover);
+    const common = {
+      title: action.title,
+      prompt,
+      originRef: action.originRef,
+      originTitle: action.originTitle,
+      originSummary: action.originSummary,
+      dispatchReason: action.reason,
+      rule: action.rule,
+      ...this.profileFields(action),
+    };
+    if (action.type === 'dispatch_code_agent')
+      return store.tasks.createTask({
+        kind: 'code',
+        ...common,
+        branch: action.branch,
+        ciChecks: action.ciChecks ?? null,
+        mcpServers: action.mcpServers?.length ? action.mcpServers : null,
+      });
+    return store.tasks.createTask({ kind: 'desk', ...common, branch: null });
+  }
+
+  private profileFields(action: DispatchAction) {
+    const profile = resolveAgentProfile(this.deps.agentModels, action.rule, action.profile);
+    return {
+      model: profile?.model ?? null,
+      effort: profile?.effort ?? null,
+      permissionMode: profile?.permissionMode ?? this.deps.agentPermissionMode ?? null,
+      permissionAutoApprove: profile?.autoApprove ?? false,
+      profile: profile?.name ?? null,
+      profileSource: profile?.source ?? null,
+    };
+  }
+
+  private dispatchPrompt(
+    action: DispatchAction,
+    evidence: string,
+    retry: RetryResume | null,
+    handover: HandoverResume | null,
+  ): string {
+    const { store } = this.deps;
+    const origin = action.originRef;
     const guidance = rejectionGuidance(
-      [action.originRef, ...(action.type === 'dispatch_code_agent' ? (action.signalRefs ?? []) : [])],
+      [origin, ...(action.type === 'dispatch_code_agent' ? (action.signalRefs ?? []) : [])],
       store.escalations.listProposals(),
     );
-    const outstanding = outstandingForOrigin(action.originRef, store);
-    const prior = priorWorkFor(action.originRef, store, outstanding !== null);
-    const delivered = deliveredWorkFor(action.originRef, store);
-    const briefing = retroBriefing(action.originRef, store);
-    const feature = featureBriefing(action.originRef, store, this.deps.featureBoard?.() ?? undefined);
+    const outstanding = outstandingForOrigin(origin, store);
+    const prior = priorWorkFor(origin, store, outstanding !== null);
+    const delivered = deliveredWorkFor(origin, store);
+    const briefing = retroBriefing(origin, store);
+    const feature = featureBriefing(origin, store, this.deps.featureBoard?.() ?? undefined);
     const sequence = sequenceBriefing(
-      action.originRef,
+      origin,
       store.world.getWorldBaseline()?.issues ?? [],
-      sequenceFeatureOrigin(action.originRef, store),
+      sequenceFeatureOrigin(origin, store),
     );
-    const attachments = attachmentsFor(action.originRef, store);
+    const attachments = attachmentsFor(origin, store);
     const note = retry
       ? retryNote(retry.priorAttempts + 1, action.type === 'dispatch_code_agent')
       : handover
         ? handoverNote()
         : null;
-    const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
+    const instructions = instructionsFor(origin, store, this.deps.instructionTracker);
     const obstacles = obstaclesFor(action, store);
-    const prompt = [
+    return [
       note,
       action.prompt,
       instructions,
@@ -869,44 +1013,6 @@ export class ActionExecutor {
     ]
       .filter(Boolean)
       .join('\n\n');
-    const profile = resolveAgentProfile(this.deps.agentModels, action.rule, action.profile);
-    if (action.type === 'dispatch_code_agent')
-      return store.tasks.createTask({
-        kind: 'code',
-        title: action.title,
-        prompt,
-        branch: action.branch,
-        originRef: action.originRef,
-        originTitle: action.originTitle,
-        originSummary: action.originSummary,
-        dispatchReason: action.reason,
-        rule: action.rule,
-        ciChecks: action.ciChecks ?? null,
-        mcpServers: action.mcpServers?.length ? action.mcpServers : null,
-        model: profile?.model ?? null,
-        effort: profile?.effort ?? null,
-        permissionMode: profile?.permissionMode ?? this.deps.agentPermissionMode ?? null,
-        permissionAutoApprove: profile?.autoApprove ?? false,
-        profile: profile?.name ?? null,
-        profileSource: profile?.source ?? null,
-      });
-    return store.tasks.createTask({
-      kind: 'desk',
-      title: action.title,
-      prompt,
-      branch: null,
-      originRef: action.originRef,
-      originTitle: action.originTitle,
-      originSummary: action.originSummary,
-      dispatchReason: action.reason,
-      rule: action.rule,
-      model: profile?.model ?? null,
-      effort: profile?.effort ?? null,
-      permissionMode: profile?.permissionMode ?? this.deps.agentPermissionMode ?? null,
-      permissionAutoApprove: profile?.autoApprove ?? false,
-      profile: profile?.name ?? null,
-      profileSource: profile?.source ?? null,
-    });
   }
 
   private codeWorkingDirectory(action: ValidatedAction & { type: 'dispatch_code_agent' }): Promise<string> {
@@ -921,6 +1027,19 @@ export class ActionExecutor {
     mkdirSync(cwd, { recursive: true });
     return cwd;
   }
+}
+
+function spawnDetail(
+  kind: 'code' | 'desk',
+  taskId: string,
+  cwd: string,
+  resumed: boolean,
+  handover: HandoverResume | null,
+): string {
+  if (!resumed) return `Spawned ${kind} agent for task ${taskId} in ${cwd}.`;
+  return handover
+    ? `Handed ${handover.from}'s conversation on to a ${kind} agent on task ${taskId} in ${cwd}.`
+    : `Resumed the previous agent's conversation for a ${kind} agent on task ${taskId} in ${cwd}.`;
 }
 
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {

@@ -196,7 +196,99 @@ interface BuildOptions {
   stuckCycleAfterMs?: number;
 }
 
+/** Components a later phase builds, reached only from closures that run after that phase. */
+interface Late {
+  agents: AgentManager;
+  escalations: EscalationInbox;
+  permissions: PermissionDesk;
+  recovery: RecoveryDesk;
+  ejections: EjectionDesk;
+  proposals: ProposalDesk;
+  executor: ActionExecutor;
+  filing: TicketFiler;
+  watchDryRun: WatchDryRun;
+  stateQueries: StateQueryDesk;
+  remoteReadings: RemoteReadingDesk;
+  remoteListings: RemoteListingDesk;
+  harness: Harness;
+  localRun: LocalRunner;
+  localRunWatch: LocalRunWatch;
+  localValidations: LocalValidationDesk;
+}
+
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
+  const late = {} as Late;
+  const base = buildFoundation(config, opts);
+  const runtime = buildAgentRuntime(config, opts, base);
+  const channels = buildChannels(config, base, late);
+  const crew = buildAgentManager(config, base, runtime, channels, late);
+  const fleet = buildFleet(config, opts, base, runtime, channels, crew);
+  Object.assign(late, fleet);
+  const intake = buildIntakeDesks(config, opts, base, channels);
+  const envs = buildEnvironmentDesks(config, opts, base);
+  Object.assign(late, envs);
+  const bench = buildBenchDesks(config, opts, base, channels, fleet);
+  Object.assign(late, bench);
+  const harness = buildHarness(config, opts, base, channels, fleet, intake, envs, bench, late);
+  late.harness = harness;
+  const pulse = wirePulse(config, opts, base, fleet, harness);
+  const local = buildLocalRuns(config, opts, base, runtime);
+  Object.assign(late, local);
+  return {
+    config,
+    store: base.store,
+    connector: base.connector,
+    agents: fleet.agents,
+    escalations: fleet.escalations,
+    proposals: fleet.proposals,
+    landings: fleet.landings,
+    permissions: fleet.permissions,
+    areaPaths: base.areaPaths,
+    recovery: fleet.recovery,
+    ejections: fleet.ejections,
+    executor: fleet.executor,
+    readying: fleet.readying,
+    dispatcher: fleet.dispatcher,
+    harness,
+    localCycles: pulse.localCycles,
+    ingress: pulse.ingress,
+    ingressCycles: pulse.ingressCycles,
+    graph: bench.graph,
+    tickets: bench.tickets,
+    pool: bench.pool,
+    filing: bench.filing,
+    upstream: bench.upstream,
+    watch: envs.watchDryRun,
+    stateQueries: envs.stateQueries,
+    remoteValidation: envs.remoteValidation,
+    validationReady: bench.validationReady,
+    remoteRuns: envs.remoteRuns,
+    remoteReadings: envs.remoteReadings,
+    remoteListings: envs.remoteListings,
+    updates: bench.updates,
+    runtimeControl: base.runtimeControl,
+    pets: pulse.pets,
+    predictions: channels.predictions,
+    localRun: local.localRun,
+    localRunWatch: local.localRunWatch,
+    localValidations: local.localValidations,
+    liveConfig: fleet.liveConfig,
+    configFile: opts.configFile ?? configFilePath(),
+    projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),
+    issuePickup: fleet.issuePickup,
+    prompts: channels.prompts,
+    fileEvents: runtime.fileEvents,
+    attachments: runtime.attachments,
+    mcp: channels.mcp,
+    desktop: channels.desktop,
+    worktrees: base.worktrees,
+    errors: base.errors,
+  };
+}
+
+type Foundation = ReturnType<typeof buildFoundation>;
+
+function buildFoundation(config: Config, opts: BuildOptions) {
   const store = new Store(config.dbPath);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
@@ -231,7 +323,36 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       errors,
     );
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot, errors);
+  return {
+    store,
+    now,
+    errors,
+    ingressInbox,
+    connector,
+    sink: opts.sink ?? connector,
+    areaPaths,
+    backend,
+    runtimeControl,
+    worktrees,
+    gitObserver,
+    watchLabel: watchLabelFor(config.labelPrefix),
+  };
+}
 
+type ArgsBuilder = (opts: {
+  sessionId: string;
+  resume: boolean;
+  mcpConfigPath: string | null;
+  extraAllowedTools: string[];
+  model: string | null;
+  effort: string | null;
+  permissionMode: string | null;
+  sealed: boolean;
+}) => string[];
+
+type AgentRuntime = ReturnType<typeof buildAgentRuntime>;
+
+function buildAgentRuntime(config: Config, opts: BuildOptions, { backend, errors }: Foundation) {
   const realTransport = opts.backend === undefined && opts.streamSpawner === undefined;
   const reapTree: ProcessReaper =
     opts.reapProcessTree ??
@@ -262,16 +383,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const allowedTools = config.agentAllowedTools;
   const permissionPromptTool = PERMISSION_PROMPT_TOOL;
 
-  type ArgsBuilder = (opts: {
-    sessionId: string;
-    resume: boolean;
-    mcpConfigPath: string | null;
-    extraAllowedTools: string[];
-    model: string | null;
-    effort: string | null;
-    permissionMode: string | null;
-    sealed: boolean;
-  }) => string[];
   const agentSetup = {
     stream: {
       buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort, permissionMode, sealed }) =>
@@ -307,11 +418,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   }[config.agentMode];
 
   const fileEvents = new FileEventsSpool(join(tmpdir(), 'lubbdubb', 'events'));
+  return { realTransport, reapTree, attachments, agentSetup, fileEvents };
+}
 
+type Channels = ReturnType<typeof buildChannels>;
+
+function buildChannels(config: Config, base: Foundation, late: Late) {
+  const { store, errors, sink, areaPaths, watchLabel } = base;
   const predictions = store.openPredictions();
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
-    agents: (): AgentManager => agents,
+    agents: (): AgentManager => late.agents,
     argsRetentionDays: config.mcpArgsRetentionDays,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
@@ -322,22 +439,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     autoUseAgentDescriptions: config.autoUseAgentDescriptions,
     repoRoot: config.repoRoot,
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
-    permissions: (): PermissionDesk => permissions,
+    permissions: (): PermissionDesk => late.permissions,
     openPr: (): McpToolDeps['openPr'] => ({
-      sink: opts.sink ?? connector,
+      sink,
       defaultBranch: config.defaultBranch,
       prompts,
       watchLabel,
       prRefStyle: prRefStyle(config.integrations.sourceControl),
     }),
-    filing: (): McpToolDeps['filing'] => filing,
-    prReply: (): McpToolDeps['prReply'] => executor,
-    watch: (): McpToolDeps['watch'] => watchDryRun,
-    state: (): McpToolDeps['state'] => stateQueries,
-    localValidations: (): LocalValidationDesk => localValidations,
-    remoteReadings: (): RemoteReadingDesk => remoteReadings,
-    remoteListings: (): RemoteListingDesk => remoteListings,
-    localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
+    filing: (): McpToolDeps['filing'] => late.filing,
+    prReply: (): McpToolDeps['prReply'] => late.executor,
+    watch: (): McpToolDeps['watch'] => late.watchDryRun,
+    state: (): McpToolDeps['state'] => late.stateQueries,
+    localValidations: (): LocalValidationDesk => late.localValidations,
+    remoteReadings: (): RemoteReadingDesk => late.remoteReadings,
+    remoteListings: (): RemoteListingDesk => late.remoteListings,
+    localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({
+      runner: late.localRun,
+      watch: late.localRunWatch,
+    }),
     // The one agent that may read a prediction is handed it through this seam, never the store.
     judge: judgeSeam(predictions, store),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
@@ -354,7 +474,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }),
   );
 
-  const desktop = new McpDesktopServer({
+  const desktop = buildDesktop(config, base, predictions, prompts, late);
+  return { predictions, mcp, prompts, reviewCharters, desktop };
+}
+
+function buildDesktop(
+  config: Config,
+  { store, connector, runtimeControl, errors }: Foundation,
+  predictions: PredictionStore,
+  prompts: PromptTemplates,
+  late: Late,
+): McpDesktopServer {
+  return new McpDesktopServer({
     store,
     // The desktop channel is the operator's own Claude Code, and it can read a plan
     // aloud. It is handed the *answer* to whether a plan is withheld, never the means
@@ -365,16 +496,16 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationRoot: config.validationRoot,
     environments: config.environments,
     prRefStyle: prRefStyle(config.integrations.sourceControl),
-    localRun: (): LocalRunner => localRun,
-    localRunWatch: (): LocalRunWatch => localRunWatch,
+    localRun: (): LocalRunner => late.localRun,
+    localRunWatch: (): LocalRunWatch => late.localRunWatch,
     runtimeControl,
-    harness: () => harness,
-    escalations: () => escalations,
-    permissions: () => permissions,
-    recovery: () => recovery,
-    ejections: () => ejections,
-    agents: () => agents,
-    filing: () => filing,
+    harness: () => late.harness,
+    escalations: () => late.escalations,
+    permissions: () => late.permissions,
+    recovery: () => late.recovery,
+    ejections: () => late.ejections,
+    agents: () => late.agents,
+    filing: () => late.filing,
     briefConfig: () => config,
     renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
     profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
@@ -382,16 +513,29 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,
     agentModels: config.agentModels,
-    proposals: () => proposals,
-    runCycle: () => harness.runCycle('manual').then(() => undefined),
+    proposals: () => late.proposals,
+    runCycle: () => late.harness.runCycle('manual').then(() => undefined),
     now: () => new Date().toISOString(),
     socketPath: config.validation.desktopSocketPath,
     credentialPath: config.validation.desktopCredentialPath,
     errors,
   });
+}
 
+type Fleet = ReturnType<typeof buildFleet>;
+
+type Crew = ReturnType<typeof buildAgentManager>;
+
+function buildAgentManager(
+  config: Config,
+  base: Foundation,
+  { agentSetup, fileEvents }: AgentRuntime,
+  { mcp }: Channels,
+  late: Late,
+) {
+  const { store, connector, errors, watchLabel } = base;
   const sequenceWatchPolicy: IssuePickupPolicy = {
-    watchLabel: watchLabelFor(config.labelPrefix),
+    watchLabel,
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
     priorityLabels: {},
     defaultPriority: 0,
@@ -401,7 +545,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     featureSummariesOn(config, connector)
       ? {
           containerTypes: config.issueContainerTypes,
-          watchLabel: watchLabelFor(config.labelPrefix),
+          watchLabel,
           environments: config.environments,
         }
       : null;
@@ -451,9 +595,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
     mcp,
-    watch: { run: (originRef: string): Promise<string[]> => watchDryRun.run(originRef) },
+    watch: { run: (originRef: string): Promise<string[]> => late.watchDryRun.run(originRef) },
     errors,
   });
+  return { sequenceWatchPolicy, featureBoard, agents };
+}
+
+function buildFleet(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  { agentSetup }: AgentRuntime,
+  { prompts, reviewCharters }: Channels,
+  crew: Crew,
+) {
+  const { store, connector, sink, now, errors, worktrees, runtimeControl } = base;
+  const { sequenceWatchPolicy, featureBoard, agents } = crew;
   const escalations = new EscalationInbox(store, agents);
   const permissions = new PermissionDesk(escalations);
   const recovery = new RecoveryDesk({
@@ -483,7 +640,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     worktrees,
     escalations,
     readying,
-    sink: opts.sink ?? connector,
+    sink,
     agentModels: config.agentModels,
     agentPermissionMode: config.agentPermissionMode,
     deskRoot: config.deskRoot,
@@ -497,12 +654,33 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const proposals = new ProposalDesk(store, escalations, executor, {
-    sink: opts.sink ?? connector,
+    sink,
     config,
     errors,
   });
 
-  const watchLabel = watchLabelFor(config.labelPrefix);
+  return {
+    sequenceWatchPolicy,
+    featureBoard,
+    agents,
+    escalations,
+    permissions,
+    recovery,
+    ejections,
+    landings,
+    readying,
+    executor,
+    proposals,
+    ...buildDispatch(config, base, prompts, reviewCharters),
+  };
+}
+
+function buildDispatch(
+  config: Config,
+  { runtimeControl, watchLabel }: Foundation,
+  prompts: PromptTemplates,
+  reviewCharters: Channels['reviewCharters'],
+) {
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
@@ -539,11 +717,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const dispatcher: Dispatcher = rules;
 
   const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });
+  return { issuePickup, dispatcher, liveConfig };
+}
 
+type IntakeDesks = ReturnType<typeof buildIntakeDesks>;
+
+function buildIntakeDesks(config: Config, opts: BuildOptions, base: Foundation, { prompts }: Channels) {
+  const { store, sink, errors, gitObserver, worktrees, watchLabel } = base;
   const plans = new PlanReconciler({
     store,
     git: gitObserver,
-    sink: opts.sink ?? connector,
+    sink,
     planning: config.planning,
     defaultBranch: config.defaultBranch,
     prRefStyle: prRefStyle(config.integrations.sourceControl),
@@ -551,19 +735,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  const appraisals = new AppraisalDesk({ store, sink: opts.sink ?? connector, errors });
+  const appraisals = new AppraisalDesk({ store, sink, errors });
   const prAuthorConfigured = config.ownWorkOnly && config.userId !== undefined;
   const naming = new PrNamingDesk({
-    sink: opts.sink ?? connector,
+    sink,
     defaultBranch: config.defaultBranch,
     prAuthorConfigured,
     template: prompts.render('pr-title', {}),
     errors,
   });
-  const prDescriptions = new PrDescriptionDesk({ sink: opts.sink ?? connector, store, errors });
+  const prDescriptions = new PrDescriptionDesk({ sink, store, errors });
 
   const prWatch = new PrWatchDesk({
-    sink: opts.sink ?? connector,
+    sink,
     store,
     watchLabel,
     legacyIgnoreLabel: config.labelPrefix ? `${config.labelPrefix}-ignore` : '',
@@ -571,21 +755,27 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   const prWorkItems = new PrWorkItemDesk({
-    sink: opts.sink ?? connector,
+    sink,
     store,
     prAuthorConfigured,
     errors,
   });
 
   const branchReaps = new BranchReapDesk({
-    sink: opts.sink ?? connector,
+    sink,
     store,
     worktrees,
     defaultBranch: config.defaultBranch,
     prAuthorConfigured,
     errors,
   });
+  return { plans, appraisals, naming, prDescriptions, prWatch, prWorkItems, branchReaps };
+}
 
+type EnvironmentDesks = ReturnType<typeof buildEnvironmentDesks>;
+
+function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: Foundation) {
+  const { store, sink, errors, gitObserver } = base;
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
   const environments = new EnvironmentDesk({
     store,
@@ -593,7 +783,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     git: gitObserver,
-    sink: opts.sink ?? connector,
+    sink,
     integrationBranch: config.defaultBranch,
     probeIntervalMs: config.environmentProbeIntervalMs,
     healthIntervalMs: config.environmentHealthIntervalMs,
@@ -627,7 +817,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     queries: stateQueries,
     scriptGraceMs: config.remoteValidation.scriptGraceMs,
     probeIntervalMs: config.environmentProbeIntervalMs,
-    sink: opts.sink ?? connector,
+    sink,
     validationRoot: config.validationRoot,
     errors,
   });
@@ -662,12 +852,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationRoot: config.validationRoot,
     errors,
   });
+  return { environments, watchDryRun, stateQueries, remoteValidation, remoteRuns, remoteListings, remoteReadings };
+}
 
-  const closeOutSink = opts.sink ?? connector;
+type BenchDesks = ReturnType<typeof buildBenchDesks>;
+
+function buildBenchDesks(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  { prompts, predictions }: Channels,
+  { sequenceWatchPolicy, agents }: Fleet,
+) {
+  const { store, connector, sink, errors, runtimeControl, watchLabel } = base;
   const closeOuts = new DeliveryCloseOutDesk(
     store,
     config.environments,
-    () => closeOutSink.canCloseIssue(),
+    () => sink.canCloseIssue(),
     // The one place the close-out bench and the prediction record meet, and it
     // hands over origin refs alone. With the gate off the set is empty, which is
     // also what settles any row that was standing when it was turned off.
@@ -705,7 +906,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     project: { root: config.repoRoot, remote: 'origin', branch: config.defaultBranch },
   });
 
-  const filing = ticketFiler(config, opts.sink ?? connector);
+  const filing = ticketFiler(config, sink);
   const upstream = opts.upstream ?? ghCliUpstreamIssues();
   const graph = new WorkGraphRecorder({ store, errors });
 
@@ -725,6 +926,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  return {
+    closeOuts,
+    unwatchedChildren,
+    validationAsks,
+    validationReady,
+    burn,
+    runway,
+    schedules,
+    updates,
+    filing,
+    upstream,
+    graph,
+    tickets,
+    obstacles,
+    pool: buildPool(config, opts, base),
+  };
+}
+
+function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: Foundation): PoolDesk | undefined {
   const fleetId = config.fleetId ?? '';
   const poolTransport =
     opts.poolTransport ??
@@ -745,48 +965,91 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
           errors,
         });
+  return pool;
+}
 
-  const harness = new Harness({
+function buildHarness(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  { predictions }: Channels,
+  fleet: Fleet,
+  intake: IntakeDesks,
+  envs: EnvironmentDesks,
+  bench: BenchDesks,
+  late: Late,
+): Harness {
+  const { store, connector, areaPaths, errors, runtimeControl, ingressInbox, watchLabel } = base;
+  const reads = harnessReads(config, store, predictions, fleet.featureBoard);
+  return new Harness({
     store,
     connector,
-    dispatcher,
-    executor,
-    featureStandings: (): { number: number; title: string; key: string }[] => {
-      const facts = featureBoard();
-      if (!facts) return [];
-      return featureRecords(store, facts).map((f) => ({ number: f.number, title: f.title, key: f.key }));
-    },
-    plans,
-    appraisals,
+    dispatcher: fleet.dispatcher,
+    executor: fleet.executor,
+    featureStandings: reads.featureStandings,
+    plans: intake.plans,
+    appraisals: intake.appraisals,
     areaPaths,
-    naming,
-    prDescriptions,
-    closeOuts,
-    unwatchedChildren,
-    validationAsks,
-    validationReady,
-    burn,
-    runway,
-    issuePickup,
-    branchReaps,
-    environments,
-    remoteValidation,
-    prWatch,
-    prWorkItems,
+    naming: intake.naming,
+    prDescriptions: intake.prDescriptions,
+    closeOuts: bench.closeOuts,
+    unwatchedChildren: bench.unwatchedChildren,
+    validationAsks: bench.validationAsks,
+    validationReady: bench.validationReady,
+    burn: bench.burn,
+    runway: bench.runway,
+    issuePickup: fleet.issuePickup,
+    branchReaps: intake.branchReaps,
+    environments: envs.environments,
+    remoteValidation: envs.remoteValidation,
+    prWatch: intake.prWatch,
+    prWorkItems: intake.prWorkItems,
     review: config.review,
     reviewProber:
       config.review.reviewedElsewhere === null
         ? undefined
         : (opts.reviewProber ?? new CommandReviewProber(config.repoRoot)),
-    schedules,
-    updates: config.selfUpdate.enabled ? updates : undefined,
-    graph,
-    tickets,
-    localRun: { noteAlive: () => localRun.noteAlive() },
+    schedules: bench.schedules,
+    updates: config.selfUpdate.enabled ? bench.updates : undefined,
+    graph: bench.graph,
+    tickets: bench.tickets,
+    localRun: { noteAlive: () => late.localRun.noteAlive() },
     localValidations: {
       sweep: () => {
-        localValidations.sweep();
+        late.localValidations.sweep();
       },
+    },
+    goalIntake: reads.goalIntake,
+    remoteRuns: reads.remoteRuns,
+    landings: fleet.landings,
+    recovery: fleet.recovery,
+    ejections: fleet.ejections,
+    escalations: fleet.escalations,
+    fleet: fleet.agents,
+    obstacles: bench.obstacles,
+    pool: bench.pool,
+    heartbeatIntervalMs: config.heartbeatIntervalMs,
+    idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
+    stuckCycleAfterMs: opts.stuckCycleAfterMs,
+    readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
+    errors,
+    runtime: runtimeControl,
+    prWatchLabel: watchLabel,
+    modelPins:
+      config.labelPrefix && config.agentModels
+        ? { labelPrefix: config.labelPrefix, models: config.agentModels }
+        : undefined,
+    upNextOverrideTtlMs: config.upNextOverrideTtlMs,
+    freshReads: ingressInbox,
+  });
+}
+
+function harnessReads(config: Config, store: Store, predictions: PredictionStore, featureBoard: Fleet['featureBoard']) {
+  return {
+    featureStandings: (): { number: number; title: string; key: string }[] => {
+      const facts = featureBoard();
+      if (!facts) return [];
+      return featureRecords(store, facts).map((f) => ({ number: f.number, title: f.title, key: f.key }));
     },
     // Computed here rather than in the rule: `src/remoteValidation/` is a lens as far as the
     // dispatcher is concerned, so what reaches it is a run row and a rendered string.
@@ -804,28 +1067,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         // operator who configures one does not have to restart the harness to use it.
         browser: config.localValidation.browser,
       }),
-    landings,
-    recovery,
-    ejections,
-    escalations,
-    fleet: agents,
-    obstacles,
-    pool,
-    heartbeatIntervalMs: config.heartbeatIntervalMs,
-    idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
-    stuckCycleAfterMs: opts.stuckCycleAfterMs,
-    readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
-    errors,
-    runtime: runtimeControl,
-    prWatchLabel: watchLabel,
-    modelPins:
-      config.labelPrefix && config.agentModels
-        ? { labelPrefix: config.labelPrefix, models: config.agentModels }
-        : undefined,
-    upNextOverrideTtlMs: config.upNextOverrideTtlMs,
-    freshReads: ingressInbox,
-  });
+  };
+}
 
+function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, escalations }: Fleet): void {
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
     if (store.escalations.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.tasks.getTask(taskId);
@@ -870,6 +1115,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       errors.record({ source: 'agent', message: `Failed to release the worktree slot for ${branch}: ${err.message}` });
     });
   });
+}
+
+function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
+  const { store, errors, worktrees, runtimeControl, ingressInbox } = base;
+  const { agents } = fleet;
+  wireAgentEvents(base, fleet);
 
   const localCycles = new CycleTrigger({
     run: () => harness.runCycle('local'),
@@ -910,7 +1161,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // exists to remove back onto the critical path. → docs/spec/09-execution.md
     prewarm.run();
   });
+  return { localCycles, ingressCycles, ingress, pets };
+}
 
+function buildLocalRuns(config: Config, opts: BuildOptions, base: Foundation, runtime: AgentRuntime) {
+  const { store, worktrees, gitObserver, errors } = base;
+  const { agentSetup, reapTree, realTransport } = runtime;
   const localRun = new LocalRunner({
     store,
     worktrees,
@@ -957,54 +1213,5 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   localRun.on('changed', () => {
     localValidations.sweep();
   });
-  return {
-    config,
-    store,
-    connector,
-    agents,
-    escalations,
-    proposals,
-    landings,
-    permissions,
-    areaPaths,
-    recovery,
-    ejections,
-    executor,
-    readying,
-    dispatcher,
-    harness,
-    localCycles,
-    ingress,
-    ingressCycles,
-    graph,
-    tickets,
-    pool,
-    filing,
-    upstream,
-    watch: watchDryRun,
-    stateQueries,
-    remoteValidation,
-    validationReady,
-    remoteRuns,
-    remoteReadings,
-    remoteListings,
-    updates,
-    runtimeControl,
-    pets,
-    predictions,
-    localRun,
-    localRunWatch,
-    localValidations,
-    liveConfig,
-    configFile: opts.configFile ?? configFilePath(),
-    projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),
-    issuePickup,
-    prompts,
-    fileEvents,
-    attachments,
-    mcp,
-    desktop,
-    worktrees,
-    errors,
-  };
+  return { localRun, localRunWatch, localValidations };
 }
