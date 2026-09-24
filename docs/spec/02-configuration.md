@@ -1394,6 +1394,10 @@ than an invitation to dispatch, and an `onFailure: "ignore"` rule beside it says
 }
 ```
 
+A hand-made pull request sits red on that muted check until someone links it, and a stack built on
+it does not wait for that: a rung above a base red only on a muted check keeps its own CI concern
+([07](07-pull-requests.md#inheritedcifailurepr-openprs)).
+
 Routing it to `dispatch` instead puts a code agent on a link the desk is about to write anyway — a
 model call and a worktree spent rediscovering a number in the branch name. That was the only way to
 clear the gate before the desk existed, and it is what the desk replaced.

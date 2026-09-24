@@ -48,26 +48,29 @@ export function rollAction(
  * tuned them is still an honestly earned pet, and a check that called it a forgery
  * would take something away from the one operator who had done nothing wrong.
  *
- * Weight-independent and still narrow: an origin key reaches exactly four species
- * out of twenty-seven — one per tier, because stage 3 is a hash of that same key
- * and the tiers hold disjoint members. It reached two or three when pools had
- * holes in them, so filling every ladder did widen this slightly; four in
- * twenty-seven is still narrower than three in twenty, and the property that
- * matters is untouched. **You cannot choose which animal an action gives you**,
- * which is the whole of what the check is for.
+ * Zone-independent for the same reason: the night gate reads a local hour, and the
+ * zone that resolved it is a fact about the machine that rolled the pet, not one the
+ * pet carries — so both sides of the gate are candidates, not this machine's reading.
+ *
+ * Still narrow: an origin key reaches at most six species out of twenty-seven — one
+ * per tier on each side of the gate, and only the uncommon rung moves with it.
+ * **You cannot choose which animal an action gives you**, which is the whole of
+ * what the check is for.
  *
  * @public — read by `src/pets/attest.ts` across the roll/attest seam.
  */
-export function speciesCandidates(kind: PetActionKind, ref: string, at: string): Set<PetSpecies> {
+export function speciesCandidates(kind: PetActionKind, ref: string): Set<PetSpecies> {
   const key = `${kind}:${ref}`;
-  const hour = hourOf(at);
   const out = new Set<PetSpecies>();
-  for (const tier of RARITIES) {
-    const landed = resolveTier(kind, tier, hour);
-    if (landed !== null) out.add(pickSpecies(key, landed.members));
-  }
+  for (const hour of GATE_HOURS)
+    for (const tier of RARITIES) {
+      const landed = resolveTier(kind, tier, hour);
+      if (landed !== null) out.add(pickSpecies(key, landed.members));
+    }
   return out;
 }
+
+const GATE_HOURS = [2, 12] as const;
 
 function pickSpecies(key: string, members: readonly PetSpecies[]): PetSpecies {
   return members[hash32(`${key}:species`) % members.length]!;

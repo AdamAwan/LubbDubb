@@ -300,8 +300,8 @@ before `states` there was no way to say so. Three choices carry this rule:
   origin's own cap: three attempts, then `cooldown-escalate` hands it to a human on `pr:<n>:ci-gate`.
   That is why the origin split matters twice over — the escalation names the gate, and the gate's
   attempts are not spent by a build. Pinned by `test/ciPolicy.test.ts`.
-- **Stacks: the same guard as CI, and no more.** The concern is suppressed when `inheritedCiFailure`
-  attributes the PR's failure to a rung below it, so a PR whose real problem is the red base does not
+- **Stacks: the same guard as CI, and no more.** The concern is suppressed when `baseFixingCi`
+  attributes the PR's failure to a rung below it that has a fix coming, so a PR whose real problem is the red base does not
   also collect an agent for its gate. It is _not_ suppressed merely for being stacked: a status policy
   is evaluated per pull request, so each rung of an otherwise-healthy stack genuinely has its own gate
   to clear, and suppressing those would park the whole stack on the bottom one.

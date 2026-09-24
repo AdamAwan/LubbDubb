@@ -1,4 +1,10 @@
-import { ciNeedsHuman, classifyCiFailures, classifyWatchedChecks, type CiPolicy } from '../ci/ciPolicy.js';
+import {
+  baseFixingCi,
+  ciNeedsHuman,
+  classifyCiFailures,
+  classifyWatchedChecks,
+  type CiPolicy,
+} from '../ci/ciPolicy.js';
 import { dispatchVerdict, type CooldownPolicy } from '../dispatcher/dispatchCooldown.js';
 import { prCommentsOrigin } from '../dispatcher/reviewThreads.js';
 import { concernUrgency, type StageRuleId } from '../dispatcher/rules.js';
@@ -225,7 +231,7 @@ interface CiReading {
 
 function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
   const none: CiReading = { heldByPolicy: [], muted: [], mutedOnly: false, actionable: false, watched: [] };
-  if (inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
+  if (baseFixingCi(pr, ctx.openPrs, ctx.ci) !== null) return none;
   const watched = classifyWatchedChecks(pr.ciChecks, ctx.ci).watched.map((m) => m.name);
   if (!ciNeedsAttention(pr)) return { ...none, watched };
   const verdict = classifyCiFailures(pr.ciChecks, ctx.ci, pr.ciChecksWithheld);

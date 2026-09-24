@@ -734,18 +734,38 @@ test('no configuration key can reach the roll', () => {
   );
 });
 
-test('an action reaches one species per tier, and never the one you wanted', () => {
+test('an action reaches one species per tier on each side of the night gate, and never the one you wanted', () => {
   for (const kind of KINDS) {
-    const reach = speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z');
-    assert.equal(reach.size, 4, `${kind} must reach one species per tier, saw ${reach.size}`);
+    const reach = speciesCandidates(kind, 'ref_c0ffee');
+    assert.ok(
+      reach.size >= 4 && reach.size <= 6,
+      `${kind} must reach one species per tier per gate, saw ${reach.size}`,
+    );
     assert.ok(reach.size < Object.keys(SPECIES).length, 'and never the whole catalogue');
   }
   for (const kind of KINDS)
     if (kind !== 'upgrade')
       assert.ok(
-        !speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z').has('ouroboros'),
+        !speciesCandidates(kind, 'ref_c0ffee').has('ouroboros'),
         `${kind} must not be a route to another action's mythic`,
       );
+});
+
+test('a roll on either side of the night gate is a candidate, whatever zone the check runs in', () => {
+  const night = new Date(2026, 3, 12, 2, 0).toISOString();
+  const day = new Date(2026, 3, 12, 14, 0).toISOString();
+  for (const kind of LIVE_KINDS)
+    for (let i = 0; i < 200; i++) {
+      const ref = `ref_${i}`;
+      for (const firstEver of [false, true])
+        for (const at of [night, day]) {
+          const { species } = rollAction(kind, ref, at, { rules: PET_RULES, forced: true, firstEver });
+          assert.ok(
+            speciesCandidates(kind, ref).has(species),
+            `${kind}:${ref} rolled ${species} at ${at}, which another zone reads across the gate`,
+          );
+        }
+    }
 });
 
 test('a pet the scan hatched checks out, and one written straight into the table does not', () => {
@@ -851,7 +871,7 @@ test('the replay accuses only what this same clean build hatched', () => {
   const barren = replayBarren(log, PET_RULES, started(store));
   assert.ok(barren.has('escalation:esc_barren'), 'at the shipped chance, this one hatches nothing');
 
-  const plausible = [...speciesCandidates('escalation', 'esc_barren', at)][0]!;
+  const plausible = [...speciesCandidates('escalation', 'esc_barren')][0]!;
   for (const [claim, expected] of [
     [{ sha: 'build_one', clean: true }, 'unearned'],
     [{ sha: 'build_two', clean: true }, undefined],

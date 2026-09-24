@@ -224,10 +224,18 @@ Two properties of the fix:
   re-raised on the base. The failing PR at the bottom is in the same world and rule `pr-ci-failing` fires on it
   unaided; pushing would only duplicate it (and land on the `respond_to_agent` path if that branch is
   already staffed).
+- **Only while the base has a fix coming.** The dispatcher suppresses through `baseFixingCi`
+  (`src/ci/ciPolicy.ts`), which returns the base only when `classifyCiFailures` finds it
+  `actionable` under the CI policy. A base red only on checks the policy mutes (`onFailure: 'ignore'`)
+  or hands to a human (`escalate`) gets no dispatch at all, so "fires on it unaided" is false there:
+  suppressing the rung would park it, and every rung above it, for good — no CI fix, no gate, nothing
+  red. The rung keeps its own concern instead, and only its own actionable checks dispatch, so a
+  muted check the base passed up the stack stays muted on the rung too. `inheritedCiFailure` itself
+  stays policy-free: the display reason "CI failing on base PR #n" is true either way.
 - **Only the CI concern is suppressed.** Rule `pr-base-update` still fires, which is what keeps a stack restacking
   the moment its parent pushes.
 
-Rule `pr-ci-gate` is held by the same attribution and no more: a rung whose real problem is the red
+Rule `pr-ci-gate` is held by the same attribution (`baseFixingCi`) and no more: a rung whose real problem is the red
 base below it does not also collect an agent for its waiting gate, but a rung of an otherwise-healthy
 stack keeps its own. A status policy is evaluated per pull request, so each rung genuinely has a gate
 of its own to clear — suppressing those would park the whole stack on the bottom one, which is the
@@ -1912,7 +1920,7 @@ its own warrant a code agent, in urgency order:
    request yet. See [the fleet review](#the-fleet-review).
 2. **Comments** (`pr:<n>:comments`) — **one concern for every unhandled thread on the PR**, not one per
    thread.
-3. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
+3. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `baseFixingCi` returns null.
 4. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
    A concern either way, because a staffed branch is _told_ about its base moving whichever arm it is
    on; only the free-branch outcome differs, and only for `behind`, which is settled by an act rather
