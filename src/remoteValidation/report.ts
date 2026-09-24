@@ -9,7 +9,7 @@ import type { RemoteRowOutcome } from '../types.js';
  * count is the thing being checked.
  */
 interface ReportTest {
-  /** The area this test belongs to. It is compared against `validation_checks.area` and nothing else. */
+  /** The area this test belongs to. It is compared against the area a check's `suite` step names and nothing else. */
   selector: string;
   status: 'passed' | 'failed' | 'skipped';
   retries: number;

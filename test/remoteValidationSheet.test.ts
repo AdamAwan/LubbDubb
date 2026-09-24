@@ -109,9 +109,9 @@ interface Bench {
 function bench(
   environments: EnvironmentConfig[] = [ACCEPTANCE],
   now: () => number = () => NOW,
-  opts: { reader?: FakeStateReader; observer?: FakeEnvironmentObserver; file?: string } = {},
+  opts: { reader?: FakeStateReader; observer?: FakeEnvironmentObserver } = {},
 ): Bench {
-  const store = new Store(opts.file ?? ':memory:');
+  const store = new Store(':memory:');
   const stateReader = opts.reader ?? reader();
   const env = opts.observer ?? observer();
   const desk = new RemoteValidationDesk({
@@ -481,23 +481,6 @@ const NO_BROWSER: EnvironmentConfig = {
   validate: { permits: ['check'], state: { run: './query.sh acceptance' } },
 };
 
-/** The `area` column, set the way a build from before the step set it — and read by nothing now. */
-function setAreaColumn(file: string, goalRef: string, checkId: string, area: string): void {
-  const db = new Database(file);
-  try {
-    db.prepare(`UPDATE validation_checks SET area=? WHERE origin_ref=? AND id=?`).run(area, goalRef, checkId);
-  } finally {
-    db.close();
-  }
-}
-
-/** A bench on a file, so a test can write the column a build from before the step wrote. */
-function fileBench(environments: EnvironmentConfig[]): Bench & { file: string; dir: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-sheet-idle-'));
-  const file = join(dir, 'harness.sqlite');
-  return { ...bench(environments, () => NOW, { file }), file, dir };
-}
-
 function suiteStep(area: string): ValidationStep {
   return {
     kind: 'suite',
@@ -520,11 +503,10 @@ async function checkRow(store: Store, desk: RemoteValidationDesk): Promise<Remot
   return row;
 }
 
-test('a check with an area in the column and no steps says what is missing, and is not blocked for it', async () => {
-  const { store, desk, file, dir } = fileBench([BROWSER]);
+test('a check with no steps says what is missing, and is not blocked for it', async () => {
+  const { store, desk } = bench([BROWSER]);
   try {
     seedGoal(store);
-    setAreaColumn(file, 'issue:12', CHECK.id, 'Checkout Tests');
     const row = await checkRow(store, desk);
 
     assert.equal(
@@ -543,7 +525,6 @@ test('a check with an area in the column and no steps says what is missing, and 
       assert.match(row.idleReason ?? '', new RegExp(kind), `and it names the ${kind} step that would carry it`);
   } finally {
     store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 });
 
@@ -594,10 +575,9 @@ test('a check whose every step is a person’s names the configuration block tha
 });
 
 test('the gate counts what a press will read, and a row nothing will run is not among them', async () => {
-  const { store, desk, file, dir } = fileBench([BROWSER]);
+  const { store, desk } = bench([BROWSER]);
   try {
     seedGoal(store);
-    setAreaColumn(file, 'issue:12', CHECK.id, 'Checkout Tests');
     await checkRow(store, desk);
     const rows = store.remoteValidation.listRemoteSheetRows();
     assert.ok(rows.length > 0, 'the sheet is assembled');
@@ -609,7 +589,6 @@ test('the gate counts what a press will read, and a row nothing will run is not 
     );
   } finally {
     store.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   }
 });
 

@@ -53,11 +53,16 @@ export function rebuildTables(
     createTables();
     for (const r of stale) db.exec(r.copy(`${r.table}__old`, db));
     for (const r of stale) db.exec(`DROP TABLE ${r.table}__old`);
+    createTables();
   })();
 }
 
 function hasColumn(db: Database.Database, table: string, column: string): boolean {
   return tableColumns(db, table).some((c) => c.name === column);
+}
+
+export function columnNames(db: Database.Database, table: string): string[] {
+  return tableColumns(db, table).map((c) => c.name);
 }
 
 function tableColumns(db: Database.Database, table: string): { name: string; notnull: number }[] {
