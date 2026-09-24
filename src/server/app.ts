@@ -116,50 +116,38 @@ interface BuiltApp {
   tokenPath: string | null;
 }
 
-function installAuthGuard(app: FastifyInstance, system: System, token: string): void {
-  const requireLoopbackHost = LOOPBACK_HOSTS.has(system.config.host);
-  const throttle = createAuthThrottle();
-  let refused = false;
-  app.addHook('onRequest', async (req, reply) => {
-    const now = Date.now();
-    const attempt = {
-      url: req.url,
-      host: req.headers.host,
-      origin: req.headers.origin,
-      authorization: req.headers.authorization,
-      queryToken:
-        typeof (req.query as { t?: unknown } | undefined)?.t === 'string' ? (req.query as { t: string }).t : undefined,
-    };
-    const verdict = guardRequest(attempt, {
-      token,
-      requireLoopbackHost,
-      throttle,
-      key: req.ip,
-      now,
+function installFailureHandling(app: FastifyInstance, system: System): void {
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = clientRefusalStatus(err);
+    if (status !== null) return reply.code(status).send({ error: message });
+    system.errors.record({
+      source: 'server',
+      message: `${req.method} ${req.url} failed: ${message}`,
+      detail: err instanceof Error ? (err.stack ?? null) : null,
     });
-    if (verdict.ok) return;
-    const summary = `${verdict.code} ${verdict.error} — ${describeAuthAttempt(attempt)}`;
-    if (refused) {
-      debugLog('auth', summary);
-    } else {
-      refused = true;
-      const hint = authRefusalHint(attempt);
-      system.errors.record({
-        source: 'server',
-        message: 'cockpit refused a request — the first of this run',
-        detail: [
-          JSON.stringify(summary),
-          ...(hint ? [hint] : []),
-          'Set LUBBDUBB_DEBUG=1 to log every refusal, not just the first.',
-        ].join('\n'),
-      });
-    }
-    if (req.headers.upgrade) {
-      reply.header('connection', 'close');
-      reply.raw.once('finish', () => reply.raw.socket?.destroy());
-    }
-    return reply.code(verdict.code).send({ error: verdict.error });
+    return reply.code(500).send({ error: message });
   });
+
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.method !== 'POST' || reply.statusCode >= 400) return;
+    try {
+      system.pets.scan();
+    } catch (err) {
+      system.errors.record({ source: 'server', message: `Pet scan failed: ${(err as Error).message}` });
+    }
+  });
+}
+
+async function serveCockpitBuild(app: FastifyInstance): Promise<void> {
+  const distDir = resolve(process.cwd(), 'web/dist');
+  if (existsSync(distDir)) {
+    await app.register(fastifyStatic, { root: distDir });
+    app.setNotFoundHandler((req, reply) => {
+      if (!wantsAppShell(req.url)) return reply.code(404).send({ error: 'not found' });
+      return reply.sendFile('index.html');
+    });
+  }
 }
 
 function routeContext(system: System, hub: Hub, artifactKey: Buffer | null): RouteContext {
@@ -196,35 +184,62 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   const hub = new Hub(system);
 
   const auth = system.config.auth.enabled ? resolveCockpitToken(system.config.auth.tokenFile) : null;
-  if (auth) installAuthGuard(app, system, auth.token);
+  if (auth) {
+    const requireLoopbackHost = LOOPBACK_HOSTS.has(system.config.host);
+    const throttle = createAuthThrottle();
+    let refused = false;
+    app.addHook('onRequest', async (req, reply) => {
+      const now = Date.now();
+      const attempt = {
+        url: req.url,
+        host: req.headers.host,
+        origin: req.headers.origin,
+        authorization: req.headers.authorization,
+        queryToken:
+          typeof (req.query as { t?: unknown } | undefined)?.t === 'string'
+            ? (req.query as { t: string }).t
+            : undefined,
+      };
+      const verdict = guardRequest(attempt, {
+        token: auth.token,
+        requireLoopbackHost,
+        throttle,
+        key: req.ip,
+        now,
+      });
+      if (verdict.ok) return;
+      const summary = `${verdict.code} ${verdict.error} — ${describeAuthAttempt(attempt)}`;
+      if (refused) {
+        debugLog('auth', summary);
+      } else {
+        refused = true;
+        const hint = authRefusalHint(attempt);
+        system.errors.record({
+          source: 'server',
+          message: 'cockpit refused a request — the first of this run',
+          detail: [
+            JSON.stringify(summary),
+            ...(hint ? [hint] : []),
+            'Set LUBBDUBB_DEBUG=1 to log every refusal, not just the first.',
+          ].join('\n'),
+        });
+      }
+      if (req.headers.upgrade) {
+        reply.header('connection', 'close');
+        reply.raw.once('finish', () => reply.raw.socket?.destroy());
+      }
+      return reply.code(verdict.code).send({ error: verdict.error });
+    });
+  }
 
   await app.register(websocket);
   await app.register(rateLimit, { global: false });
 
-  const { config, errors } = system;
+  const { config } = system;
 
   const artifactKey = auth ? randomBytes(32) : null;
 
-  app.setErrorHandler((err: unknown, req, reply) => {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = clientRefusalStatus(err);
-    if (status !== null) return reply.code(status).send({ error: message });
-    errors.record({
-      source: 'server',
-      message: `${req.method} ${req.url} failed: ${message}`,
-      detail: err instanceof Error ? (err.stack ?? null) : null,
-    });
-    return reply.code(500).send({ error: message });
-  });
-
-  app.addHook('onResponse', async (req, reply) => {
-    if (req.method !== 'POST' || reply.statusCode >= 400) return;
-    try {
-      system.pets.scan();
-    } catch (err) {
-      errors.record({ source: 'server', message: `Pet scan failed: ${(err as Error).message}` });
-    }
-  });
+  installFailureHandling(app, system);
 
   app.register(async (scoped) => {
     scoped.get('/ws', { websocket: true }, (socket) => {
@@ -239,14 +254,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
 
   installCaptureLinks(system, artifactKey);
 
-  const distDir = resolve(process.cwd(), 'web/dist');
-  if (existsSync(distDir)) {
-    await app.register(fastifyStatic, { root: distDir });
-    app.setNotFoundHandler((req, reply) => {
-      if (!wantsAppShell(req.url)) return reply.code(404).send({ error: 'not found' });
-      return reply.sendFile('index.html');
-    });
-  }
+  await serveCockpitBuild(app);
 
   const urlHost = LOOPBACK_HOSTS.has(config.host) ? config.host : '127.0.0.1';
   return {
