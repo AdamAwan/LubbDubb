@@ -803,9 +803,10 @@ one, because a replan resets the row.
 ### The intake sitting stands in front of the planner
 
 **Partly built.** The hold on rule `issue-plan`, the stamp that releases it, the alignment check, the
-prediction judge, and the criteria reaching the planner and every part are built. Not yet built: the
-sitting's composer on the goal page and the rail's ask ([17](17-cockpit.md#the-reveal-gate)) and
-[the criteria at delivery](#the-criteria-at-delivery), each marked where it is described.
+prediction judge, the criteria reaching the planner and every part, and their reading at delivery are
+built. Not yet built: the cockpit's side — the sitting's composer on the goal page, the rail's ask, and
+drawing the alignment, the judge's marks and the criteria's coverage
+([17](17-cockpit.md#the-reveal-gate)).
 
 #### The sitting
 
@@ -913,8 +914,6 @@ planner's, so it can share the planner's misreading of the story; it is a second
 the operator's, never in place of it.
 
 #### The criteria at delivery
-
-**Not yet built.**
 
 The validation planner, writing the check set on `delivered`
 ([20](20-validation.md#when-the-check-set-is-written)), writes **at least one check per criterion** of

@@ -990,16 +990,24 @@ like a check that passed until someone counts.
 
 ### `satisfies`, and the goal's criteria
 
-**Not yet built.** Where the goal has
+Where the goal has
 [human-authored criteria](08-planning.md#goal-criteria-beside-the-planners-acceptance), the validation
-planner writes at least one check per criterion of the current version, and a check names the
+planner is handed them in its briefing (`authoringBriefing`, appended rather than interpolated) and writes at least one check per criterion of the current version, and a check names the
 criteria it answers in `satisfies` — each entry a criterion's **text**, keyed the way
 `acceptanceCriteria` keys a part's, so a reworded criterion loses its checks rather than having them
-silently carried onto a claim nobody checked. An entry naming no criterion of the current version is
-dropped at ingestion, as `covers` drops an unknown slug.
+silently carried onto a claim nobody checked. A version is read as its list by `criteriaItems`
+(`src/criteria/items.ts`): one criterion per non-blank line, list markers stripped. An entry naming no
+criterion of the current version is dropped at ingestion, as `covers` drops an unknown slug — by
+`validation_plan` and `validation_amend` alike, both of which declare the field in their own tool
+schema as well as reaching `ValidationCheckSchema`. The column is `validation_checks.satisfies`, JSON,
+and null reads as none, which is true of every row before it.
 
-The sheet and the close-out draw one line per criterion — met, not met, waived, or not yet read —
-off the readings of the checks that name it, and a criterion **no** check names is drawn as a gap.
+One line per criterion — met, not met, waived, or not yet read — is read off the live checks that name
+it by `criteriaCoverage` (`src/criteria/coverage.ts`): any failure is not met, every one passed (or a
+mix of passed and waived) is met, every one waived is waived, anything still out is not yet read, and a
+criterion **no** check names is a **gap**. The close-out row carries those lines under "Your criteria"
+when it is filed, and `GET /api/goals/:number/criteria` serves them as `coverage`; drawing them on the
+sheet is not yet built ([17](17-cockpit.md#goal-criteria-and-drift)).
 That is the whole of the criteria's reading at delivery, and it holds nothing: a failed check is rule
 `validation-failed`'s, never a shortfall ([When a check fails](#when-a-check-fails)).
 → [08](08-planning.md#the-criteria-at-delivery)

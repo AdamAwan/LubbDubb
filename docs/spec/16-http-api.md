@@ -1916,7 +1916,9 @@ version also writes the drift row.
 
 ### `GET /api/goals/:number/criteria`
 
-`{ current, versions, alignment }`, oldest first, each version carrying its **derived** standing.
+`{ current, versions, alignment, coverage }`, oldest first, each version carrying its **derived**
+standing. `coverage` is one reading per criterion of the current version off the checks that name it
+([20](20-validation.md#satisfies-and-the-goals-criteria)), empty with no criteria.
 `alignment` is the [alignment check](08-planning.md#the-alignment-check)'s reading of the **current**
 version, or null where none has been taken — an older version's reading is never served as the
 current one's. → [14](14-persistence.md#goal-criteria-are-append-only)

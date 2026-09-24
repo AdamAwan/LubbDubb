@@ -112,6 +112,7 @@ export type {
   PlanPartView,
   CriteriaStanding,
   GoalCriteriaDrift,
+  CriterionCoverage,
   GoalCriteriaAlignment,
   GoalCriteriaVersion,
   PrDescriptionDraft,

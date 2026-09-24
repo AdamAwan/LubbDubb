@@ -1331,6 +1331,7 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   check_expect TEXT NOT NULL,         -- what a pass looks like
   uses        TEXT NOT NULL,          -- JSON array of resource *names*, never paths
   covers      TEXT NOT NULL,          -- JSON array of part slugs this check exercises
+  satisfies   TEXT,                   -- JSON array of goal criteria (their text) this check answers
   fleet_candidate INTEGER NOT NULL DEFAULT 0,  -- the planner's nomination; dispatches nothing
   candidate_why   TEXT,               -- why an agent could run it; kept only with the nomination
   actor       TEXT,                   -- human | fleet — the operator's hand-over; never the planner's

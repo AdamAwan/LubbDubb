@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { criteriaItems } from '../../criteria/items.js';
+import { criteriaCoverage } from '../../criteria/coverage.js';
 import { z } from 'zod';
 import { criteriaAnchors, criteriaStanding } from '../../criteria/standing.js';
 import { issueOriginRef } from '../../issueOrigins.js';
@@ -63,6 +65,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         current,
         versions,
         alignment: current === null ? null : store.goalCriteria.getAlignment(originRef, current.version),
+        coverage:
+          current === null
+            ? []
+            : criteriaCoverage(criteriaItems(current.text), store.validation.listValidationChecks(originRef)),
       };
 
       function withStanding(version: GoalCriteriaVersion): GoalCriteriaVersion & { standing: string } {

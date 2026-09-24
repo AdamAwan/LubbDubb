@@ -18,6 +18,7 @@ import type {
   CheckDecline,
   Plan,
   CriteriaStanding,
+  CriterionCoverage,
   GoalCriteriaAlignment,
   GoalCriteriaVersion,
   PrDescriptionDraft,
@@ -105,6 +106,8 @@ export interface GoalCriteriaReading {
   versions: CriteriaVersionReading[];
   /** The alignment check's reading of the current version, where one has been taken. */
   alignment: GoalCriteriaAlignment | null;
+  /** One reading per criterion of the current version, off the checks that name it. */
+  coverage: CriterionCoverage[];
 }
 
 export class UnauthorizedError extends Error {

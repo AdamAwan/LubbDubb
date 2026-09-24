@@ -54,6 +54,9 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // whose assertion is the whole of its evidence — so nothing is backfilled, and null must never
     // be read as "evidence was demanded and none came". → docs/spec/20-validation.md#proof
     proof: 'TEXT',
+    // The goal criteria the check answers, JSON. Null reads as none, which is true of every row
+    // written before the column and needs no backfill. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
+    satisfies: 'TEXT',
   },
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
@@ -204,6 +207,7 @@ export class ValidationStore {
       proof: input.proof,
       uses: input.uses,
       covers: input.covers,
+      satisfies: input.satisfies ?? [],
       fleetCandidate: input.fleetCandidate,
       candidateWhy: input.candidateWhy,
       actor: keep ? prev.actor : 'human',
@@ -531,16 +535,16 @@ export class ValidationStore {
         // TECHDEBT: `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and unquoted it
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
-           fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
+           satisfies, fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
            result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note,
            steps, capture, proof, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
-           @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
+           @satisfies, @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
            @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote,
            @steps, @capture, @proof, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
-           covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
+           covers=excluded.covers, satisfies=excluded.satisfies, fleet_candidate=excluded.fleet_candidate,
            candidate_why=excluded.candidate_why, actor=excluded.actor,
            handback_note=excluded.handback_note, claimed_by=excluded.claimed_by,
            claimed_at=excluded.claimed_at, state=excluded.state, result_note=excluded.result_note,
@@ -554,6 +558,7 @@ export class ValidationStore {
         ...check,
         uses: JSON.stringify(check.uses),
         covers: JSON.stringify(check.covers),
+        satisfies: JSON.stringify(check.satisfies ?? []),
         fleetCandidate: check.fleetCandidate ? 1 : 0,
         revision: check.revision === null ? null : JSON.stringify(check.revision),
         steps: check.steps.length === 0 ? null : JSON.stringify(check.steps),
@@ -601,6 +606,7 @@ interface ValidationCheckRow {
   proof: string | null | undefined;
   uses: string;
   covers: string;
+  satisfies: string | null | undefined;
   fleet_candidate: number;
   candidate_why: string | null;
   actor: string | null | undefined;
@@ -643,6 +649,7 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     proof: r.proof ?? null,
     uses: parseStringArray(r.uses),
     covers: parseStringArray(r.covers),
+    satisfies: parseStringArray(r.satisfies ?? null),
     fleetCandidate: r.fleet_candidate === 1,
     candidateWhy: r.candidate_why,
     actor: r.actor === 'fleet' ? 'fleet' : 'human',
