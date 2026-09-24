@@ -36,7 +36,7 @@ export function reviewConcern(
       rule: 'pr-review',
       origin,
       dispatch: readOnlyDispatch(branch, pr.branch),
-      profile: (mode === null ? null : (s.review.modes[mode]?.profile ?? null)) ?? undefined,
+      profile: modeProfile(s, mode),
       title: mode === null ? `Review PR #${pr.number}` : `Review PR #${pr.number} (${mode})`,
       prompt:
         s.templates.render('pr-review', {
@@ -55,6 +55,11 @@ export function reviewConcern(
       originSummary: `PR #${pr.number} on branch ${pr.branch} · awaiting the fleet's review`,
     },
   };
+}
+
+function modeProfile(s: StageContext, mode: string | null): string | undefined {
+  if (mode === null) return undefined;
+  return s.review.modes[mode]?.profile ?? undefined;
 }
 
 function triageSpent(s: StageContext, prNumber: number): boolean {

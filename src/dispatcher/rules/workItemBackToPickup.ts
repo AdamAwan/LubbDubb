@@ -31,14 +31,14 @@ export function workItemBackToPickup(s: StageContext): void {
       rule: 'work-item-back-to-pickup',
       reason:
         `Work item #${issue.number} is open in "${inReviewState}" with no open PR, and ` +
-        `${
-          conclusion.by === 'plan'
-            ? conclusion.note
-            : conclusion.by === 'assessor'
-              ? 'an assessment of the delivered work found the goal is not reached'
-              : `${conclusion.by === 'operator' ? 'you' : 'the agent that worked it'} reported work outstanding`
-        }` +
+        outstandingBy(conclusion) +
         `; move it back to "${returnState}" so the rest can be picked up.`,
     } satisfies RawAction);
   }
+}
+
+function outstandingBy(conclusion: ReturnType<typeof resolveIssueConclusion>): string {
+  if (conclusion.by === 'plan') return conclusion.note;
+  if (conclusion.by === 'assessor') return 'an assessment of the delivered work found the goal is not reached';
+  return `${conclusion.by === 'operator' ? 'you' : 'the agent that worked it'} reported work outstanding`;
 }

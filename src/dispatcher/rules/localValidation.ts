@@ -12,19 +12,17 @@ import { issueWatchGateReason } from '../issuePickup.js';
 import { liveChecks } from '../../validation/verdict.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { partBase } from '../../plans/parts.js';
+import type { ExtraMcpServer, LocalRun, LocalValidation, Plan, PlanPart } from '../../types.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `local-validation`)
 
 export function localValidation(s: StageContext): void {
-  const { ctx } = s;
   for (const row of s.localValidations) {
     if (row.status !== 'pending') continue;
 
-    if (validationRunStale(row, s.liveLocalRun) !== null) continue;
-    const run = s.liveLocalRun;
+    const run = runToValidate(s, row);
     if (run === null) continue;
-    if (run.status !== 'starting' && run.status !== 'running') continue;
 
     const issueNumber = issueOriginNumber('root', row.originRef);
     if (issueNumber === null) continue;
@@ -36,13 +34,7 @@ export function localValidation(s: StageContext): void {
     if (s.activeOrigins.has(origin)) continue;
 
     const outputDir = localValidationOutputDir(s.validationRoot, row.originRef, row.id);
-    const browser =
-      s.localValidation.browser === null
-        ? null
-        : substituteBrowserArgs(s.localValidation.browser, {
-            outputDir,
-            profileDir: localValidationProfileDir(s.validationRoot),
-          });
+    const browser = browserFor(s, outputDir);
 
     const title = `Validate #${String(issueNumber)} locally`;
     const reason = `The operator asked for #${String(issueNumber)} to be validated against the local environment, which is running ${row.ref}.`;
@@ -63,7 +55,7 @@ export function localValidation(s: StageContext): void {
           localValidationBriefing({
             issue: { number: issueNumber, title: issue.title, body: issue.body },
             plan,
-            parts: plan === null ? [] : (ctx.planParts ?? []).filter((part) => part.planId === plan.id),
+            parts: partsOf(s, plan),
             checks: liveChecks(s.validationChecks.get(row.originRef) ?? []),
             run,
             base: partBaseOf(s, row.ref, issueNumber),
@@ -81,6 +73,27 @@ export function localValidation(s: StageContext): void {
       } satisfies RawAction,
     });
   }
+}
+
+function runToValidate(s: StageContext, row: LocalValidation): LocalRun | null {
+  if (validationRunStale(row, s.liveLocalRun) !== null) return null;
+  const run = s.liveLocalRun;
+  if (run === null) return null;
+  if (run.status !== 'starting' && run.status !== 'running') return null;
+  return run;
+}
+
+function browserFor(s: StageContext, outputDir: string): ExtraMcpServer | null {
+  if (s.localValidation.browser === null) return null;
+  return substituteBrowserArgs(s.localValidation.browser, {
+    outputDir,
+    profileDir: localValidationProfileDir(s.validationRoot),
+  });
+}
+
+function partsOf(s: StageContext, plan: Plan | null): PlanPart[] {
+  if (plan === null) return [];
+  return (s.ctx.planParts ?? []).filter((part) => part.planId === plan.id);
 }
 
 function partBaseOf(s: StageContext, ref: string, issueNumber: number): string | null {
