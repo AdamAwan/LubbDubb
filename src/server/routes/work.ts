@@ -7,10 +7,10 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, connector, harness, errors } = system;
+const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
 
-  const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  const { store, connector } = ctx.system;
 
   app.get('/api/work', WORK_RATE_LIMIT, async () => {
     const roots = store.graph.listWorkRoots();
@@ -47,6 +47,28 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true };
     }),
   );
+
+  registerFileRoute(app, ctx);
+
+  app.get(
+    '/api/work/:ref',
+    WORK_RATE_LIMIT,
+    checked({ params: RefParams }, async ({ params, reply }) => {
+      const nodes = store.graph.listWorkSubtree(params.ref);
+      if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
+      const refUrls: Record<string, string> = {};
+      for (const ref of nodes.flatMap((node) => [node.ref, node.baseRef])) {
+        if (!ref || ref in refUrls) continue;
+        const url = connector.resolveRefUrl(ref);
+        if (url) refUrls[ref] = url;
+      }
+      return { nodes, refUrls } satisfies WorkSubtreePayload;
+    }),
+  );
+}
+
+function registerFileRoute(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, harness, errors } = system;
 
   app.post(
     '/api/work/:ref/file',
@@ -96,22 +118,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         const report = await harness.runCycle('manual');
         return { ok: true, filing: filed ?? filing, report };
       })(req, reply);
-    }),
-  );
-
-  app.get(
-    '/api/work/:ref',
-    WORK_RATE_LIMIT,
-    checked({ params: RefParams }, async ({ params, reply }) => {
-      const nodes = store.graph.listWorkSubtree(params.ref);
-      if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
-      const refUrls: Record<string, string> = {};
-      for (const ref of nodes.flatMap((node) => [node.ref, node.baseRef])) {
-        if (!ref || ref in refUrls) continue;
-        const url = connector.resolveRefUrl(ref);
-        if (url) refUrls[ref] = url;
-      }
-      return { nodes, refUrls } satisfies WorkSubtreePayload;
     }),
   );
 }

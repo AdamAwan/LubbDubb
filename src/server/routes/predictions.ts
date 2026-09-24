@@ -21,16 +21,16 @@ const Mark = z.enum(['matched', 'missed', 'not-applicable']).nullable().optional
 
 const MarkBody = z.object({ locus: Mark, cause: Mark, split: Mark, avoid: Mark });
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  if (!revealGateOn(system.config)) return;
-  const { store, predictions, config, harness } = system;
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  if (!revealGateOn(ctx.system.config)) return;
+  registerPredictionRoute(app, ctx);
+  registerRevealRoute(app, ctx);
+  registerMarkRoutes(app, ctx);
+  registerReadRoutes(app, ctx);
+}
 
-  /**
-   * Whether this goal owes the second moment, asked of the record rather than
-   * restated here: it is the one predicate the close-out bench files and settles the
-   * `outcome` row on, and a second copy of it in a route is a copy that drifts.
-   */
-  const owesOutcome = (originRef: string): boolean => predictions.listOutcomeOwed().includes(originRef);
+function registerPredictionRoute(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { predictions, config } = system;
 
   app.post(
     '/api/goals/:number/prediction',
@@ -55,43 +55,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, prediction };
     }),
   );
+}
 
-  app.post(
-    '/api/goals/:number/reveal',
-    checked({ params: IssueNumberParams }, async ({ params, reply }) => {
-      const originRef = issueOriginRef('root', params.number);
-      const plan = store.plans.getPlanByOrigin(originRef);
-      const standing = predictions.getReveal(originRef);
-      // With no plan row the stamp closes the goal's intake sitting, which is what
-      // releases its planner. With one, the goal is offered the gate once, when its
-      // plan is ready: stamping a plan that is not awaiting approval would burn the
-      // gate over a press that revealed nothing, and read as a decline rather than as
-      // never offered.
-      const sitting = plan === null;
-      if (
-        standing === null &&
-        sitting &&
-        store.world.getWorldBaseline()?.issues.some((i) => i.number === params.number && i.state === 'open') !== true
-      )
-        return reply
-          .code(409)
-          .send({ error: 'there is no open goal with this number, so there is no sitting to close' });
-      if (standing === null && !sitting && plan.status !== 'awaiting_approval')
-        return reply
-          .code(409)
-          .send({ error: 'there is no plan awaiting approval on this goal, so there is nothing to reveal' });
-      const reveal = standing ?? predictions.recordReveal(originRef);
-      if (standing === null && sitting) {
-        const criteria = store.goalCriteria.currentCriteria(originRef);
-        if (criteria !== null) store.goalCriteria.recordPressedOn(originRef, criteria.version);
-      }
-      if (standing === null) {
-        hub.broadcast({ type: 'dirty', sections: ['plans'] });
-        if (sitting) await harness.runCycle('manual');
-      }
-      return { ok: true, reveal, plan };
-    }),
-  );
+function registerMarkRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, predictions, harness } = system;
+
+  /**
+   * Whether this goal owes the second moment, asked of the record rather than
+   * restated here: it is the one predicate the close-out bench files and settles the
+   * `outcome` row on, and a second copy of it in a route is a copy that drifts.
+   */
+  const owesOutcome = (originRef: string): boolean => predictions.listOutcomeOwed().includes(originRef);
 
   // The two moments are two routes over the same slots, because they are two
   // records: moment one is a claim about the operator's model of the system and
@@ -139,6 +113,51 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }),
     );
   }
+}
+
+function registerRevealRoute(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, predictions, harness } = system;
+
+  app.post(
+    '/api/goals/:number/reveal',
+    checked({ params: IssueNumberParams }, async ({ params, reply }) => {
+      const originRef = issueOriginRef('root', params.number);
+      const plan = store.plans.getPlanByOrigin(originRef);
+      const standing = predictions.getReveal(originRef);
+      // With no plan row the stamp closes the goal's intake sitting, which is what
+      // releases its planner. With one, the goal is offered the gate once, when its
+      // plan is ready: stamping a plan that is not awaiting approval would burn the
+      // gate over a press that revealed nothing, and read as a decline rather than as
+      // never offered.
+      const sitting = plan === null;
+      if (
+        standing === null &&
+        sitting &&
+        store.world.getWorldBaseline()?.issues.some((i) => i.number === params.number && i.state === 'open') !== true
+      )
+        return reply
+          .code(409)
+          .send({ error: 'there is no open goal with this number, so there is no sitting to close' });
+      if (standing === null && !sitting && plan.status !== 'awaiting_approval')
+        return reply
+          .code(409)
+          .send({ error: 'there is no plan awaiting approval on this goal, so there is nothing to reveal' });
+      const reveal = standing ?? predictions.recordReveal(originRef);
+      if (standing === null && sitting) {
+        const criteria = store.goalCriteria.currentCriteria(originRef);
+        if (criteria !== null) store.goalCriteria.recordPressedOn(originRef, criteria.version);
+      }
+      if (standing === null) {
+        hub.broadcast({ type: 'dirty', sections: ['plans'] });
+        if (sitting) await harness.runCycle('manual');
+      }
+      return { ok: true, reveal, plan };
+    }),
+  );
+}
+
+function registerReadRoutes(app: FastifyInstance, { system }: RouteContext): void {
+  const { store, predictions, config } = system;
 
   /**
    * The aggregate is its own read rather than a section on the state payload, on

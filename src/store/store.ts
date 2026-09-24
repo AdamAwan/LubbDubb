@@ -73,6 +73,65 @@ import type { Job, CostDelta } from '../types.js';
 
 const REVIEW_PACK_RETIRED_TABLES: readonly string[] = ['review_packs', 'review_marks', 'review_pack_shares'];
 
+function migrate(db: Database.Database, clock: Clock): void {
+  renameTables(db, ISSUE_VERDICT_RENAMES);
+  dropRetiredTables(db, [...POOL_RETIRED_TABLES, ...REMOTE_VALIDATION_RETIRED_TABLES, ...REVIEW_PACK_RETIRED_TABLES]);
+  rebuildTables(db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...PREDICTION_REBUILDS], () => db.exec(SCHEMA));
+  const addedColumns: string[] = [];
+  for (const columns of [
+    TASK_COLUMNS,
+    AGENT_COLUMNS,
+    DECISION_COLUMNS,
+    HUMAN_TASK_COLUMNS,
+    PLAN_COLUMNS,
+    VALIDATION_COLUMNS,
+    JOB_COLUMNS,
+    JOB_SCHEDULE_COLUMNS,
+    ISSUE_VERDICT_COLUMNS,
+    FLOOR_COLUMNS,
+    TICKET_COLUMNS,
+    PET_COLUMNS,
+    LOCAL_RUN_COLUMNS,
+    LOCAL_VALIDATION_COLUMNS,
+    ENVIRONMENT_COLUMNS,
+    WATCH_COLUMNS,
+    REMOTE_VALIDATION_COLUMNS,
+    PR_REVIEW_ROUTE_COLUMNS,
+    PR_REVIEW_COLUMNS,
+    PR_THREAD_LABEL_COLUMNS,
+    SCRATCH_COLUMNS,
+    OBSTACLE_COLUMNS,
+    SEQUENCE_COLUMNS,
+    EJECTION_COLUMNS,
+    PREDICTION_COLUMNS,
+    PR_DESCRIPTION_COLUMNS,
+  ]) {
+    addedColumns.push(...ensureColumns(db, columns));
+  }
+  if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(db);
+  if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(db);
+  if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(db, clock());
+  adoptFloorCompletions(db);
+  absorbSinglePlanStatus(db);
+  backfillWholePlanParts(db, clock());
+  backfillTaskDispatchKind(db);
+  repairPartRefGoals(db);
+  const partialGoalRefs = db
+    .prepare(
+      `SELECT DISTINCT plans.origin_ref AS goal_ref
+       FROM plan_parts
+       JOIN plans ON plans.id = plan_parts.plan_id
+       WHERE plans.status <> 'abandoned'
+         AND plan_parts.status NOT IN ('retired', 'merged', 'concluded')
+         AND (plan_parts.expected_kind IS NULL OR plan_parts.expected_kind = 'code')`,
+    )
+    .all() as { goal_ref: string }[];
+  dropPartialGoalArrivals(
+    db,
+    partialGoalRefs.map((row) => row.goal_ref),
+  );
+}
+
 export class Store {
   private readonly db: Database.Database;
   readonly tasks: TaskStore;
@@ -135,68 +194,7 @@ export class Store {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    renameTables(this.db, ISSUE_VERDICT_RENAMES);
-    dropRetiredTables(this.db, [
-      ...POOL_RETIRED_TABLES,
-      ...REMOTE_VALIDATION_RETIRED_TABLES,
-      ...REVIEW_PACK_RETIRED_TABLES,
-    ]);
-    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...PREDICTION_REBUILDS], () =>
-      this.db.exec(SCHEMA),
-    );
-    const addedColumns: string[] = [];
-    for (const columns of [
-      TASK_COLUMNS,
-      AGENT_COLUMNS,
-      DECISION_COLUMNS,
-      HUMAN_TASK_COLUMNS,
-      PLAN_COLUMNS,
-      VALIDATION_COLUMNS,
-      JOB_COLUMNS,
-      JOB_SCHEDULE_COLUMNS,
-      ISSUE_VERDICT_COLUMNS,
-      FLOOR_COLUMNS,
-      TICKET_COLUMNS,
-      PET_COLUMNS,
-      LOCAL_RUN_COLUMNS,
-      LOCAL_VALIDATION_COLUMNS,
-      ENVIRONMENT_COLUMNS,
-      WATCH_COLUMNS,
-      REMOTE_VALIDATION_COLUMNS,
-      PR_REVIEW_ROUTE_COLUMNS,
-      PR_REVIEW_COLUMNS,
-      PR_THREAD_LABEL_COLUMNS,
-      SCRATCH_COLUMNS,
-      OBSTACLE_COLUMNS,
-      SEQUENCE_COLUMNS,
-      EJECTION_COLUMNS,
-      PREDICTION_COLUMNS,
-      PR_DESCRIPTION_COLUMNS,
-    ]) {
-      addedColumns.push(...ensureColumns(this.db, columns));
-    }
-    if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
-    if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(this.db);
-    if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(this.db, clock());
-    adoptFloorCompletions(this.db);
-    absorbSinglePlanStatus(this.db);
-    backfillWholePlanParts(this.db, clock());
-    backfillTaskDispatchKind(this.db);
-    repairPartRefGoals(this.db);
-    const partialGoalRefs = this.db
-      .prepare(
-        `SELECT DISTINCT plans.origin_ref AS goal_ref
-         FROM plan_parts
-         JOIN plans ON plans.id = plan_parts.plan_id
-         WHERE plans.status <> 'abandoned'
-           AND plan_parts.status NOT IN ('retired', 'merged', 'concluded')
-           AND (plan_parts.expected_kind IS NULL OR plan_parts.expected_kind = 'code')`,
-      )
-      .all() as { goal_ref: string }[];
-    dropPartialGoalArrivals(
-      this.db,
-      partialGoalRefs.map((row) => row.goal_ref),
-    );
+    migrate(this.db, clock);
     const ctx: StoreContext = { db: this.db, now: clock, prep: createPrepare(this.db) };
     this.tasks = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
