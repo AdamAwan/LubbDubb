@@ -19,9 +19,11 @@ reason, so "why did (or didn't) this happen" is always answerable.
 
 1. **Rejected items first.** Everything `parseActions` refused is audited as `rejected` with the zod
    error and the raw JSON, and never run.
-2. `liveCount` is read once from `store.agents.countLiveAgents()` and incremented locally as agents spawn, so
-   the cap holds within a single cycle's plan.
-3. Each validated action is handled by type.
+2. The live count (`live.count`) is read once from `store.agents.countLiveAgents()` and incremented locally
+   as agents spawn, so the cap holds within a single cycle's plan.
+3. Each validated action is handled by type: `perform` routes it to that type's own private handler
+   (`dispatchAgent`, `updatePrBranch`, `proposeShortfall`, …), handed the cycle's shared `ActionRun` —
+   its readying hold, the live count and the `record` / `tally` that write the decision and count it.
 
 The loop is **strictly serial**, and that is what
 [What is being readied](#what-is-being-readied) exists to make visible: an action holds it for as long
@@ -124,7 +126,7 @@ runtime change takes effect immediately.
 
 ### 4. Cap gate — `deferred`
 
-`liveCount >= runtime.cap` → `Deferred: concurrency cap N reached; will retry next cycle.` The harness
+`live.count >= runtime.cap` → `Deferred: concurrency cap N reached; will retry next cycle.` The harness
 also advertises zero headroom while paused, so this is belt and braces.
 
 ### 5. Spawn
@@ -133,7 +135,7 @@ also advertises zero headroom while paused, so this is belt and braces.
 with the readying board moved to `ci-evidence` and then `slot-handover` as the two awaited steps are
 entered, so the wait is visible while it is happening. On success:
 
-- `liveCount` increments.
+- `live.count` increments.
 - `if (action.jobId) store.jobs.markJobDispatched(jobId, task.id)`.
 - `if (action.partId) store.plans.markPartDispatched(partId, task.id, branch)`.
 
