@@ -18,13 +18,22 @@ export function readRequest<P = undefined, B = undefined, Q = undefined>(
     query?: z.ZodType<Q, z.ZodTypeDef, unknown>;
   },
 ): RequestRead<P, B, Q> {
-  const params = schemas.params?.safeParse(req.params ?? {});
-  if (params && !params.success) return { ok: false, error: refusalMessage(params.error) };
-  const query = schemas.query?.safeParse(req.query ?? {});
-  if (query && !query.success) return { ok: false, error: refusalMessage(query.error) };
-  const body = schemas.body?.safeParse(req.body ?? {});
-  if (body && !body.success) return { ok: false, error: refusalMessage(body.error) };
-  return { ok: true, params: params?.data as P, body: body?.data as B, query: query?.data as Q };
+  const params = readPart(schemas.params, req.params);
+  if (!params.ok) return params;
+  const query = readPart(schemas.query, req.query);
+  if (!query.ok) return query;
+  const body = readPart(schemas.body, req.body);
+  if (!body.ok) return body;
+  return { ok: true, params: params.data as P, body: body.data as B, query: query.data as Q };
+}
+
+function readPart<T>(
+  schema: z.ZodType<T, z.ZodTypeDef, unknown> | undefined,
+  raw: unknown,
+): { ok: true; data: T | undefined } | Refused {
+  const parsed = schema?.safeParse(raw ?? {});
+  if (parsed && !parsed.success) return { ok: false, error: refusalMessage(parsed.error) };
+  return { ok: true, data: parsed?.data };
 }
 
 export function checked<P = undefined, B = undefined, Q = undefined>(

@@ -52,34 +52,9 @@ export function buildTicketPage(input: BuildInput): TicketPage {
 
   const matching: TicketRow[] = [];
   let totalCostUsd = 0;
-  let live = 0;
-  const stateCounts = new Map<string, { count: number; live: number }>();
-  const featureCounts = new Map<number, { title: string; count: number }>();
-  let orphanCount = 0;
 
   for (const item of items) {
-    if (item.tracking === 'live') live += 1;
-    if (item.workItemState !== null) {
-      const seen = stateCounts.get(item.workItemState);
-      stateCounts.set(item.workItemState, {
-        count: (seen?.count ?? 0) + 1,
-        live: (seen?.live ?? 0) + (item.tracking === 'live' ? 1 : 0),
-      });
-    }
-    if (item.parent) {
-      const seen = featureCounts.get(item.parent.number);
-      featureCounts.set(item.parent.number, { title: item.parent.title, count: (seen?.count ?? 0) + 1 });
-    } else if (item.parent === null) {
-      orphanCount += 1;
-    }
-
-    if (query.tracking !== 'any' && item.tracking !== query.tracking) continue;
-    if (query.state !== 'any' && item.workItemState !== query.state) continue;
-    if (query.feature !== null) {
-      if (query.feature === NO_FEATURE) {
-        if (item.parent !== null) continue;
-      } else if (item.parent?.number !== query.feature) continue;
-    }
+    if (!matchesFilters(item, query)) continue;
     const watch = isWatched(item.labels, watchLabel) ? 'watched' : 'unwatched';
     if (query.watch !== 'any' && watch !== query.watch) continue;
     const costUsd = costs.get(item.number) ?? null;
@@ -102,16 +77,13 @@ export function buildTicketPage(input: BuildInput): TicketPage {
     });
   }
 
-  if (query.order === 'cost') {
-    matching.sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1) || b.number - a.number);
-  } else if (query.order === 'changed') {
-    matching.sort((a, b) => (a.changedAt < b.changedAt ? 1 : a.changedAt > b.changedAt ? -1 : b.number - a.number));
-  }
+  sortTickets(matching, query.order);
 
   const start = query.cursor === null ? 0 : afterCursor(matching, query.cursor, query.order);
   const rows = matching.slice(start, start + TICKET_PAGE);
   const end = start + rows.length;
   const last = rows[rows.length - 1];
+  const { live, states, features, orphanCount } = facets(items, pickupStates, featureSlots);
   return {
     rows,
     total: matching.length,
@@ -119,6 +91,41 @@ export function buildTicketPage(input: BuildInput): TicketPage {
     live,
     totalCostUsd: round(totalCostUsd),
     nextCursor: end < matching.length && last ? cursorFor(last, query.order) : null,
+    states,
+    features,
+    orphanCount,
+  };
+}
+
+function facets(
+  items: readonly MirroredTicket[],
+  pickupStates: readonly string[],
+  featureSlots: ReadonlyMap<number, number>,
+): Pick<TicketPage, 'live' | 'states' | 'features' | 'orphanCount'> {
+  let live = 0;
+  const stateCounts = new Map<string, { count: number; live: number }>();
+  const featureCounts = new Map<number, { title: string; count: number }>();
+  let orphanCount = 0;
+
+  for (const item of items) {
+    if (item.tracking === 'live') live += 1;
+    if (item.workItemState !== null) {
+      const seen = stateCounts.get(item.workItemState);
+      stateCounts.set(item.workItemState, {
+        count: (seen?.count ?? 0) + 1,
+        live: (seen?.live ?? 0) + (item.tracking === 'live' ? 1 : 0),
+      });
+    }
+    if (item.parent) {
+      const seen = featureCounts.get(item.parent.number);
+      featureCounts.set(item.parent.number, { title: item.parent.title, count: (seen?.count ?? 0) + 1 });
+    } else if (item.parent === null) {
+      orphanCount += 1;
+    }
+  }
+
+  return {
+    live,
     states: [...stateCounts]
       .map(([state, seen]) => ({ ...seen, state, pickup: pickupStates.includes(state) }))
       .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state)),
@@ -127,6 +134,22 @@ export function buildTicketPage(input: BuildInput): TicketPage {
       .sort((a, b) => b.count - a.count || a.number - b.number),
     orphanCount,
   };
+}
+
+function matchesFilters(item: MirroredTicket, query: TicketQuery): boolean {
+  if (query.tracking !== 'any' && item.tracking !== query.tracking) return false;
+  if (query.state !== 'any' && item.workItemState !== query.state) return false;
+  if (query.feature === null) return true;
+  if (query.feature === NO_FEATURE) return item.parent === null;
+  return item.parent?.number === query.feature;
+}
+
+function sortTickets(matching: TicketRow[], order: TicketOrder): void {
+  if (order === 'cost') {
+    matching.sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1) || b.number - a.number);
+  } else if (order === 'changed') {
+    matching.sort((a, b) => (a.changedAt < b.changedAt ? 1 : a.changedAt > b.changedAt ? -1 : b.number - a.number));
+  }
 }
 
 function cursorFor(row: TicketRow, order: TicketOrder): string {

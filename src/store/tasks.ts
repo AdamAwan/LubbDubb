@@ -93,12 +93,7 @@ export class TaskStore {
         `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, permission_mode, permission_auto_approve, profile, profile_source, status, agent_id, created_at, updated_at)
          VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @permissionMode, @permissionAutoApprove, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
-      .run({
-        ...task,
-        ciChecks: task.ciChecks === null ? null : JSON.stringify(task.ciChecks),
-        permissionAutoApprove: task.permissionAutoApprove === null ? null : task.permissionAutoApprove ? 1 : 0,
-        mcpServers: task.mcpServers === null ? null : JSON.stringify(task.mcpServers),
-      });
+      .run(taskToRow(task));
     return task;
   }
 
@@ -287,6 +282,15 @@ function parseMcpServers(raw: string | null): ExtraMcpServer[] | null {
   } catch {
     return null;
   }
+}
+
+function taskToRow(task: Task): Record<string, unknown> {
+  return {
+    ...task,
+    ciChecks: task.ciChecks === null ? null : JSON.stringify(task.ciChecks),
+    permissionAutoApprove: task.permissionAutoApprove === null ? null : task.permissionAutoApprove ? 1 : 0,
+    mcpServers: task.mcpServers === null ? null : JSON.stringify(task.mcpServers),
+  };
 }
 
 function rowToTask(r: TaskRow): Task {

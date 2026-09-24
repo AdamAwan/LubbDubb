@@ -2,12 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueOriginNumber, issueOriginRef } from '../../issueOrigins.js';
 import { checked, IssueNumberParams } from '../validation.js';
+import type { System } from '../../system.js';
+import type { LocalRun } from '../../types.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { localRun, localValidations, store, harness, worktrees } = system;
+  const { localRun, localValidations, store, harness } = system;
 
   const Body = z.object({
     swap: z.boolean().optional(),
@@ -46,11 +48,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         const started = await localRun.start(origin);
         if (!started.ok) return reply.code(400).send({ error: started.error });
       } else if (body.refresh === true) {
-        const tip = await worktrees.previewCommit(live.ref).catch(() => null);
-        if (tip !== null && tip !== live.commit) {
-          const refreshed = await localRun.refresh();
-          if (!refreshed.ok) return reply.code(400).send({ error: refreshed.error });
-        }
+        const refreshed = await refreshIfMoved(system, live);
+        if (!refreshed.ok) return reply.code(400).send({ error: refreshed.error });
       }
 
       const run = store.localRuns.liveLocalRun();
@@ -76,4 +75,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, validation: cancelled };
     }),
   );
+}
+
+async function refreshIfMoved(
+  { localRun, worktrees }: Pick<System, 'localRun' | 'worktrees'>,
+  live: LocalRun,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const tip = await worktrees.previewCommit(live.ref).catch(() => null);
+  if (tip === null || tip === live.commit) return { ok: true };
+  return localRun.refresh();
 }
