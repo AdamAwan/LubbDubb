@@ -67,10 +67,10 @@ export function parsePoolDocument(text: string, expectFleetId?: string): PoolPar
       detail: `a document addressed to ${expectFleetId} names ${fleetId} in its body`,
     };
   }
-  return readBody(raw);
+  return readDigest(raw);
 }
 
-function readBody(raw: Record<string, unknown>): PoolParse {
+function readDigest(raw: Record<string, unknown>): PoolParse {
   if (typeof raw.project !== 'string' || raw.project === '') {
     return { ok: false, reason: 'malformed', detail: 'no "project" in the body' };
   }
@@ -81,14 +81,10 @@ function readBody(raw: Record<string, unknown>): PoolParse {
   if (Number.isNaN(publishedAt.getTime())) {
     return { ok: false, reason: 'malformed', detail: `"publishedAt" is not a timestamp: ${raw.publishedAt}` };
   }
-  return readDigest(raw, publishedAt.toISOString());
-}
-
-function readDigest(raw: Record<string, unknown>, publishedAt: string): PoolParse {
   const document: PoolDigestDocument = {
     ...(raw as unknown as PoolDigestDocument),
     kind: 'digest',
-    publishedAt,
+    publishedAt: publishedAt.toISOString(),
     byPhase: readRows(raw.byPhase),
     byCause: readRows(raw.byCause),
     byCheck: readRows(raw.byCheck),
