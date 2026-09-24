@@ -32,40 +32,13 @@ interface BriefInput {
 }
 
 export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise<BriefOutcome> {
-  const { store, config, errors } = ctx;
+  const { store, config } = ctx;
   const { prompt, kind } = input;
   const providedTitle = input.title ?? null;
   const branch = input.branch ?? null;
 
   const tracker = kind === 'code' ? trackerCoordinates(config) : null;
-  if (tracker) {
-    const watchLabel = watchLabelFor(config.labelPrefix);
-    const derived = briefTicketFields(prompt);
-    let ticketRef: string;
-    try {
-      ticketRef = await ctx.filing({
-        title: providedTitle ?? derived.title,
-        body: ctx.renderTicketBody(derived.vars),
-        labels: watchLabel ? [watchLabel] : [],
-      });
-    } catch (err) {
-      errors.record({ source: 'provider', message: `filing a brief as a ticket failed: ${(err as Error).message}` });
-      return {
-        ok: false,
-        reason: 'tracker_refused',
-        error: `the tracker refused the ticket: ${(err as Error).message}`,
-      };
-    }
-    try {
-      ctx.attach?.(ticketRef);
-    } catch (err) {
-      errors.record({
-        source: 'server',
-        message: `The ticket ${ticketRef} was filed but its attachment(s) could not be stored: ${(err as Error).message}. Agents working it will not see them.`,
-      });
-    }
-    return { ok: true, kind: 'ticket', ticketRef };
-  }
+  if (tracker) return fileBrief(ctx, prompt, providedTitle);
 
   if (kind === 'code' && branch) {
     const ejected = store.ejections.ejectionOnBranch(branch);
@@ -92,4 +65,34 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
     throw err;
   }
   return { ok: true, kind: 'job', job };
+}
+
+async function fileBrief(ctx: BriefContext, prompt: string, providedTitle: string | null): Promise<BriefOutcome> {
+  const { config, errors } = ctx;
+  const watchLabel = watchLabelFor(config.labelPrefix);
+  const derived = briefTicketFields(prompt);
+  let ticketRef: string;
+  try {
+    ticketRef = await ctx.filing({
+      title: providedTitle ?? derived.title,
+      body: ctx.renderTicketBody(derived.vars),
+      labels: watchLabel ? [watchLabel] : [],
+    });
+  } catch (err) {
+    errors.record({ source: 'provider', message: `filing a brief as a ticket failed: ${(err as Error).message}` });
+    return {
+      ok: false,
+      reason: 'tracker_refused',
+      error: `the tracker refused the ticket: ${(err as Error).message}`,
+    };
+  }
+  try {
+    ctx.attach?.(ticketRef);
+  } catch (err) {
+    errors.record({
+      source: 'server',
+      message: `The ticket ${ticketRef} was filed but its attachment(s) could not be stored: ${(err as Error).message}. Agents working it will not see them.`,
+    });
+  }
+  return { ok: true, kind: 'ticket', ticketRef };
 }

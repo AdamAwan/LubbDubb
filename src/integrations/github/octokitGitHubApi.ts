@@ -54,16 +54,18 @@ interface GqlThread {
   isResolved: boolean;
 }
 
+interface GqlThreadNode {
+  id?: string | null;
+  isResolved?: boolean;
+  comments?: { nodes?: Array<{ databaseId?: number | null }> };
+}
+
 interface GqlReviewThreadPage {
   repository?: {
     pullRequest?: {
       reviewThreads?: {
         pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
-        nodes?: Array<{
-          id?: string | null;
-          isResolved?: boolean;
-          comments?: { nodes?: Array<{ databaseId?: number | null }> };
-        } | null>;
+        nodes?: Array<GqlThreadNode | null>;
       };
     };
   };
@@ -254,12 +256,7 @@ export class OctokitGitHubApi implements GitHubApi {
       });
       const connection = page.repository?.pullRequest?.reviewThreads;
       if (!connection) break;
-      for (const node of connection.nodes ?? []) {
-        if (!node) continue;
-        const rootCommentId = node.comments?.nodes?.[0]?.databaseId;
-        if (typeof rootCommentId !== 'number' || typeof node.id !== 'string') continue;
-        threads.push({ nodeId: node.id, rootCommentId, isResolved: node.isResolved === true });
-      }
+      threads.push(...threadsOnPage(connection.nodes ?? []));
       cursor = connection.pageInfo?.hasNextPage ? (connection.pageInfo.endCursor ?? null) : null;
     } while (cursor !== null);
     return threads;
@@ -478,6 +475,17 @@ export class OctokitGitHubApi implements GitHubApi {
       }
     }
   }
+}
+
+function threadsOnPage(nodes: Array<GqlThreadNode | null>): GqlThread[] {
+  const threads: GqlThread[] = [];
+  for (const node of nodes) {
+    if (!node) continue;
+    const rootCommentId = node.comments?.nodes?.[0]?.databaseId;
+    if (typeof rootCommentId !== 'number' || typeof node.id !== 'string') continue;
+    threads.push({ nodeId: node.id, rootCommentId, isResolved: node.isResolved === true });
+  }
+  return threads;
 }
 
 function mapIssue(i: {

@@ -62,7 +62,7 @@ interface BuildInput {
 }
 
 export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 'backfilling' | 'refUrls'> {
-  const { items, outcomes, costs, featureSlots, running, containerTypes, watchLabel } = input;
+  const { items, outcomes, costs, running, containerTypes, watchLabel } = input;
 
   const reachByGoal = new Map(input.reach.map((r) => [r.goalRef, r.environments]));
   const landedAt = lastLandingByGoal(input.landings);
@@ -100,29 +100,10 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
   const containers = new Map<number, MirroredTicket>();
   for (const item of items) if (isContainerType(item.issueType, containerTypes)) containers.set(item.number, item);
 
+  const lenses: RollupLenses = { brief, reachByGoal, landedAt, landingsByGoal };
   const features: FeatureRollup[] = [];
-  for (const [number, group] of groups) {
-    const self = containers.get(number);
-    features.push({
-      number,
-      title: group.title,
-      slot: featureSlots.get(number) ?? 0,
-      workItemState: self?.workItemState ?? null,
-      issueType: self?.issueType ?? null,
-      counts: countStandings(group.rows),
-      briefing: briefingFor(group.rows, brief),
-      summary: input.summaries.get(issueOriginRef('root', number)) ?? null,
-      sequence: input.sequences.get(issueOriginRef('root', number)) ?? null,
-      children: orderChildren(group.rows).slice(0, FEATURE_CHILDREN),
-      costUsd: totalCost(group.rows),
-      reach: foldReach(group.rows, reachByGoal, input.environments),
-      lastLandingAt: latestLanding(group.rows, landedAt),
-      landings: landingsUnder(group.rows, landingsByGoal),
-      standingKey: input.standingKeys.get(number) ?? '',
-      paused: input.pauses?.get(issueOriginRef('root', number)) ?? null,
-      priority: input.priorities?.get(issueOriginRef('root', number)) ?? null,
-    });
-  }
+  for (const [number, group] of groups)
+    features.push(featureRollup(number, group, containers.get(number), input, lenses));
 
   return {
     features: features.sort(byWantsYouThenSize),
@@ -139,6 +120,41 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
           },
     unresolved,
     environments: input.environments.map((band) => band.name),
+  };
+}
+
+interface RollupLenses {
+  brief: BriefingContext;
+  reachByGoal: ReadonlyMap<string, GoalEnvironmentReach[]>;
+  landedAt: ReadonlyMap<string, string>;
+  landingsByGoal: ReadonlyMap<number, FeatureLandingRow[]>;
+}
+
+function featureRollup(
+  number: number,
+  group: { title: string; rows: FeatureChildRow[] },
+  self: MirroredTicket | undefined,
+  input: BuildInput,
+  lenses: RollupLenses,
+): FeatureRollup {
+  return {
+    number,
+    title: group.title,
+    slot: input.featureSlots.get(number) ?? 0,
+    workItemState: self?.workItemState ?? null,
+    issueType: self?.issueType ?? null,
+    counts: countStandings(group.rows),
+    briefing: briefingFor(group.rows, lenses.brief),
+    summary: input.summaries.get(issueOriginRef('root', number)) ?? null,
+    sequence: input.sequences.get(issueOriginRef('root', number)) ?? null,
+    children: orderChildren(group.rows).slice(0, FEATURE_CHILDREN),
+    costUsd: totalCost(group.rows),
+    reach: foldReach(group.rows, lenses.reachByGoal, input.environments),
+    lastLandingAt: latestLanding(group.rows, lenses.landedAt),
+    landings: landingsUnder(group.rows, lenses.landingsByGoal),
+    standingKey: input.standingKeys.get(number) ?? '',
+    paused: input.pauses?.get(issueOriginRef('root', number)) ?? null,
+    priority: input.priorities?.get(issueOriginRef('root', number)) ?? null,
   };
 }
 

@@ -56,10 +56,8 @@ export const criteriaAlignment: ToolFactory = ({ deps, agent, task, ok }) => ({
     const points = readPoints(input.points);
     if (points.length === 0) return toolError('Rejected: tag at least one point.');
     const verdict = input.verdict as CriteriaAlignmentVerdict;
-    if (verdict === 'conflicting' && !points.some((p) => p.tag === 'contradicts'))
-      return toolError('Rejected: "conflicting" needs at least one point tagged "contradicts".');
-    if (verdict !== 'conflicting' && points.some((p) => p.tag === 'contradicts'))
-      return toolError('Rejected: a point tagged "contradicts" makes the verdict "conflicting".');
+    const mismatch = verdictMismatch(verdict, points);
+    if (mismatch !== null) return toolError(mismatch);
 
     const recorded = deps.store.goalCriteria.recordAlignment({
       originRef: issueOriginRef('root', parsed.issueNumber),
@@ -82,6 +80,14 @@ export const criteriaAlignment: ToolFactory = ({ deps, agent, task, ok }) => ({
     });
   },
 });
+
+function verdictMismatch(verdict: CriteriaAlignmentVerdict, points: CriteriaAlignmentPoint[]): string | null {
+  if (verdict === 'conflicting' && !points.some((p) => p.tag === 'contradicts'))
+    return 'Rejected: "conflicting" needs at least one point tagged "contradicts".';
+  if (verdict !== 'conflicting' && points.some((p) => p.tag === 'contradicts'))
+    return 'Rejected: a point tagged "contradicts" makes the verdict "conflicting".';
+  return null;
+}
 
 function readPoints(value: unknown): CriteriaAlignmentPoint[] {
   if (!Array.isArray(value)) return [];

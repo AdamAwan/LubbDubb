@@ -115,42 +115,11 @@ export class FakeGitHubIntegration
             pr.unresolvedComments = threadComments(threads);
           });
           break;
-        case 'pr_closed': {
-          const idx = world.pullRequests.findIndex((p) => p.number === event.prNumber);
-          if (idx === -1) break;
-          const [pr] = world.pullRequests.splice(idx, 1);
-          const merged = event.merged ?? pr!.merged ?? false;
-          world.closedPullRequests.push({
-            ...pr!,
-            merged,
-            state: merged ? 'merged' : 'closed',
-            closedAt: new Date().toISOString(),
-            ...(merged ? { mergeCommitSha: event.mergeCommitSha ?? mergeShaFor(event.prNumber) } : {}),
-          });
+        case 'pr_closed':
+          closeFromEvent(world, event);
           break;
-        }
         case 'new_pr':
-          if (!world.pullRequests.some((p) => p.number === event.number)) {
-            world.pullRequests.push({
-              id: `pr_${nanoid(6)}`,
-              number: event.number,
-              title: event.title,
-              branch: event.branch,
-              baseBranch: event.baseBranch ?? this.defaultBranch,
-              ciStatus: 'pending',
-              unresolvedComments: [],
-              reviewThreads: [],
-              approved: false,
-              mergeableState: 'unknown',
-              merged: false,
-              labels: event.labels ?? [],
-              ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
-              ...(event.author === undefined ? {} : { author: event.author }),
-              ...(event.viewerAuthored === undefined ? {} : { viewerAuthored: event.viewerAuthored }),
-              ...(event.viewerAssignment === undefined ? {} : { viewerAssignment: event.viewerAssignment }),
-              ...(event.viewerApproved === undefined ? {} : { viewerApproved: event.viewerApproved }),
-            });
-          }
+          openFromEvent(world, event, this.defaultBranch);
           break;
       }
     });
@@ -297,6 +266,47 @@ export class FakeGitHubIntegration
 function mutatePr(world: FakeWorld, prNumber: number, fn: (pr: PullRequest) => void): void {
   const pr = world.pullRequests.find((p) => p.number === prNumber);
   if (pr) fn(pr);
+}
+
+function closeFromEvent(world: FakeWorld, event: Extract<InjectableEvent, { kind: 'pr_closed' }>): void {
+  const idx = world.pullRequests.findIndex((p) => p.number === event.prNumber);
+  if (idx === -1) return;
+  const [pr] = world.pullRequests.splice(idx, 1);
+  const merged = event.merged ?? pr!.merged ?? false;
+  world.closedPullRequests.push({
+    ...pr!,
+    merged,
+    state: merged ? 'merged' : 'closed',
+    closedAt: new Date().toISOString(),
+    ...(merged ? { mergeCommitSha: event.mergeCommitSha ?? mergeShaFor(event.prNumber) } : {}),
+  });
+}
+
+function openFromEvent(
+  world: FakeWorld,
+  event: Extract<InjectableEvent, { kind: 'new_pr' }>,
+  defaultBranch: string,
+): void {
+  if (world.pullRequests.some((p) => p.number === event.number)) return;
+  world.pullRequests.push({
+    id: `pr_${nanoid(6)}`,
+    number: event.number,
+    title: event.title,
+    branch: event.branch,
+    baseBranch: event.baseBranch ?? defaultBranch,
+    ciStatus: 'pending',
+    unresolvedComments: [],
+    reviewThreads: [],
+    approved: false,
+    mergeableState: 'unknown',
+    merged: false,
+    labels: event.labels ?? [],
+    ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
+    ...(event.author === undefined ? {} : { author: event.author }),
+    ...(event.viewerAuthored === undefined ? {} : { viewerAuthored: event.viewerAuthored }),
+    ...(event.viewerAssignment === undefined ? {} : { viewerAssignment: event.viewerAssignment }),
+    ...(event.viewerApproved === undefined ? {} : { viewerApproved: event.viewerApproved }),
+  });
 }
 
 export function mergeShaFor(prNumber: number): string {

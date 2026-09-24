@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { remoteValidationOriginParts } from '../../remoteValidation/origin.js';
+import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
 import { toolSchema } from '../schema.js';
-import { toolError } from '../protocol.js';
+import { toolError, type ToolCallResult } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -110,20 +111,30 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
           'there is no third answer here: what each row came back as is the report’s to say, not yours.',
       );
 
-    const settled = await desk.settle(target.runId, { reportPath, artefacts: artefacts ?? null });
-    if (!settled.ok) return toolError(settled.error);
-    return ok({
-      reported: 'report',
-      run: settled.run.id,
-      reportPath,
-      artefacts: artefacts ?? null,
-      state: settled.run.status,
-      rows: { read: settled.read, blocked: settled.blocked },
-      checks: { written: settled.wrote, kept: settled.kept.length },
-      means:
-        'the run is settled and the harness has read that file. Every row’s outcome came out of it and out ' +
-        'of nothing else — you were not asked, and an opinion from here would be a guess wearing a ' +
-        'reading’s clothes. Your run is over.',
-    });
+    return settleReport(desk, target.runId, reportPath, artefacts, ok);
   },
 });
+
+async function settleReport(
+  desk: RemoteReadingDesk,
+  runId: string,
+  reportPath: string,
+  artefacts: string | undefined,
+  ok: (payload: Record<string, unknown>) => ToolCallResult,
+): Promise<ToolCallResult> {
+  const settled = await desk.settle(runId, { reportPath, artefacts: artefacts ?? null });
+  if (!settled.ok) return toolError(settled.error);
+  return ok({
+    reported: 'report',
+    run: settled.run.id,
+    reportPath,
+    artefacts: artefacts ?? null,
+    state: settled.run.status,
+    rows: { read: settled.read, blocked: settled.blocked },
+    checks: { written: settled.wrote, kept: settled.kept.length },
+    means:
+      'the run is settled and the harness has read that file. Every row’s outcome came out of it and out ' +
+      'of nothing else — you were not asked, and an opinion from here would be a guess wearing a ' +
+      'reading’s clothes. Your run is over.',
+  });
+}
