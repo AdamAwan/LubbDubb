@@ -10,6 +10,17 @@ import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
+const PlanCorrectionInput = z.object({
+  note: z
+    .string()
+    .describe(
+      'Why the plan must change, in a few sentences. This is the whole of what the operator reads beside ' +
+        'the diff, so say what you found and where — a correction with no reason on it is one they cannot ' +
+        'answer.',
+    ),
+  ...PLAN_DOCUMENT_SHAPE,
+});
+
 export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Propose a correction to the delivery plan for the goal you are working on, when what you have found in ' +
@@ -22,18 +33,7 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
     'a part you cannot finish is an escalation, and one that turns out not to need building is ' +
     'conclude_part with a determination. Validated immediately: on rejection you get the reason back and can ' +
     'fix and resubmit in this same turn.',
-  inputSchema: toolSchema(
-    z.object({
-      note: z
-        .string()
-        .describe(
-          'Why the plan must change, in a few sentences. This is the whole of what the operator reads beside ' +
-            'the diff, so say what you found and where — a correction with no reason on it is one they cannot ' +
-            'answer.',
-        ),
-      ...PLAN_DOCUMENT_SHAPE,
-    }),
-  ),
+  inputSchema: toolSchema(PlanCorrectionInput),
   handler: (args) => {
     const issue = issueSubtreeNumber(task.originRef);
     if (issue === null) {
