@@ -41,6 +41,7 @@ export const MCP_TOOL_NAMES = [
   'review_route',
   'split_assess',
   'pr_describe',
+  'description_review',
   'report_remedy',
   'raise',
 ] as const;
@@ -80,6 +81,7 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   review_route: 'point-of-use',
   split_assess: 'point-of-use',
   pr_describe: 'point-of-use',
+  description_review: 'point-of-use',
   validation_amend: 'point-of-use',
   validation_plan: 'point-of-use',
   watch_declare: 'point-of-use',
@@ -110,6 +112,7 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   'pr-review-triage': ['review_route'],
   'pr-split': ['split_assess'],
   'pr-describe': ['pr_describe'],
+  'pr-description-check': ['description_review'],
   'pr-review': ['review_report', 'reply_to_review'],
   'pr-review-comment': ['report_remedy', 'reply_to_review'],
   'pr-ci-failing': ['report_remedy'],

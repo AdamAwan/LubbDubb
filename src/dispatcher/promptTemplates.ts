@@ -40,6 +40,7 @@ type PromptId =
   | 'pr-review-triage'
   | 'pr-split'
   | 'pr-describe'
+  | 'pr-description-check'
   | 'pr-review'
   | 'pr-review-comment'
   | 'review-pack-author'
@@ -651,6 +652,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'harness writes what you send onto it. A run that ends without `pr_describe` has written nothing and ' +
       'is dispatched again.',
     doc: 'Sent to a read-only agent when the operator hands a pull request\u2019s description back from its page (rule pr-describe). It writes the body the agent would have sent to `open_pr`, through `pr_describe`, under the same checks. Placeholders: {number} {title} {branch} {base}.',
+  },
+  'pr-description-check': {
+    placeholders: ['number', 'title', 'branch', 'base', 'id', 'description'],
+    template:
+      'Check the description the operator wrote for PR #{number} ("{title}") — branch {branch}, targeting ' +
+      '{base}. A person wrote it, in their own words, and a reviewer will read it before the diff. Your job ' +
+      'is to tell them, before that reviewer does, where it and the change disagree.\n\n' +
+      'The description (version {id}):\n\n{description}\n\n' +
+      'Read the diff with `git diff {base}...HEAD`, and enough of the surrounding code to judge it. Then ' +
+      'report with `description_review`, addressing version {id}.\n\n' +
+      '**Do not be picky.** This is not a review of the code and not an edit of their prose. Wording, ' +
+      'style, length, tone and small details a reviewer would not miss are not findings. Report only:\n' +
+      '- **contradicted** — the description says something the diff does not do, or says it wrongly. ' +
+      'These ask them to change it.\n' +
+      '- **gap** — the diff does something a reviewer would want to know going in and the description ' +
+      'does not say: something that cannot be undone, a behaviour change, a wide reach. These are ' +
+      'low-priority notes, so only the ones worth a reader\u2019s minute.\n\n' +
+      'A description that stands up is reported with an empty list — that is the ordinary result, not a ' +
+      'failure. Never send a rewritten description or suggested wording: the tool has no field for one and ' +
+      'the operator writes their own. Your checkout is read-only: do not commit, do not push, and do not ' +
+      'edit the pull request. A run that ends without `description_review` has checked nothing and is ' +
+      'dispatched again.',
+    doc: 'Sent to a read-only agent when the operator writes or rewrites a pull request\u2019s description (rule pr-description-check). It reads the description against the diff and reports findings through `description_review`, never text. {id} is the version it read and {description} the operator\u2019s text, verbatim. Placeholders: {number} {title} {branch} {base} {id} {description}.',
   },
   'pr-review': {
     placeholders: ['number', 'title', 'branch', 'base'],

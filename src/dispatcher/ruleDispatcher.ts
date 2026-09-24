@@ -49,6 +49,7 @@ import { prConcerns } from './rules/prConcerns.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
 import { prSplit } from './rules/prSplit.js';
 import { prDescribe } from './rules/prDescribe.js';
+import { prDescriptionCheck } from './rules/prDescriptionCheck.js';
 import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
@@ -83,6 +84,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'pr-review-triage': prReviewTriage,
   'pr-split': prSplit,
   'pr-describe': prDescribe,
+  'pr-description-check': prDescriptionCheck,
   'pr-ci-failing': prConcerns,
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
@@ -487,6 +489,7 @@ export class RuleDispatcher implements Dispatcher {
       prReviewRoutes: new Map((ctx.prReviewRoutes ?? []).map((route) => [route.prNumber, route])),
       prSplits: new Map((ctx.prSplits ?? []).map((v) => [v.prNumber, v])),
       descriptionDrafts: ctx.descriptionDrafts ?? [],
+      uncheckedDescriptions: ctx.uncheckedDescriptions ?? [],
       prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
       prReviewedElsewhere: ctx.prReviewedElsewhere ?? new Set<number>(),
       defaultBranch: this.defaultBranch,

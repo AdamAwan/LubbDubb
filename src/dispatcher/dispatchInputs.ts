@@ -69,6 +69,7 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     ],
     prSplits: store.prSplits.listPrSplitVerdicts(),
     descriptionDrafts: store.prDescriptions.pendingDrafts(),
+    uncheckedDescriptions: store.prDescriptions.uncheckedDescriptions(),
     prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
     obstacles: store.obstacles.obstacleBoard(),
     obstacleBlocks: store.obstacles.listObstacleBlocks(),

@@ -269,6 +269,20 @@ export interface UndescribedPart {
   openedAt: string;
 }
 
+/**
+ * A checked description that found something, as the rail raises it. `contradicted`
+ * is the count that asks for a change; a version with only `gaps` is a low-priority
+ * note. → docs/spec/07-pull-requests.md#what-the-check-raises
+ */
+export interface DescriptionFeedback {
+  originRef: string;
+  prNumber: number;
+  versionId: string;
+  checkedAt: string;
+  contradicted: number;
+  gaps: number;
+}
+
 export interface PlanPartView extends PlanPart {
   depth: number;
   acceptanceCriteria: AcceptanceCriterion[];
@@ -416,6 +430,8 @@ export interface CockpitState {
    * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
    */
   undescribedParts: UndescribedPart[];
+  /** Checked descriptions on open pull requests that found something. */
+  descriptionFeedback: DescriptionFeedback[];
   planAtoms: PlanAtom[];
   planCaveatAnswers: PlanCaveatAnswer[];
   validationChecks: ValidationCheckView[];

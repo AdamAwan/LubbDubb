@@ -25,6 +25,7 @@ import type {
   PrReviewRoute,
   PrSplitVerdict,
   PrDescriptionDraft,
+  DescriptionAwaitingCheck,
   PullRequest,
   Remedy,
   TaskSummary,
@@ -55,6 +56,7 @@ export interface DispatchContext {
   prReviewRoutes?: PrReviewRoute[];
   prSplits?: PrSplitVerdict[];
   descriptionDrafts?: PrDescriptionDraft[];
+  uncheckedDescriptions?: DescriptionAwaitingCheck[];
   prReviewedElsewhere?: ReadonlySet<number>;
   tasks: TaskSummary[];
   agents: Agent[];

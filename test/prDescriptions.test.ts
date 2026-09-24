@@ -797,3 +797,82 @@ test('with auto-use on, the agent\u2019s draft goes on the pull request with no 
     system.store.close();
   }
 });
+
+// → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking
+test('every description the operator writes is checked by an agent without asking, and raised only when it found something', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    system.connector.inject({ kind: 'new_pr', number: 1, title: 'read the cursor back', branch: 'issue/182/cursor' });
+    await system.harness.runCycle('manual');
+    assert.equal(
+      findTask(system.store, (t) => t.rule === 'pr-description-check'),
+      undefined,
+      'nothing to check before anybody writes',
+    );
+
+    const written = await app.inject({
+      method: 'POST',
+      url: '/api/prs/1/description',
+      payload: { text: 'The cursor is read back at startup, so a restart no longer replays the feed.' },
+    });
+    assert.equal(written.statusCode, 200, written.body);
+    const versionId = (written.json() as { version: { id: string } }).version.id;
+
+    await system.harness.runCycle('manual');
+    const task = findTask(system.store, (t) => t.originRef === 'issue:182:describe-check:1');
+    assert.ok(task, 'the write alone puts one agent on it');
+    assert.equal(task!.rule, 'pr-description-check');
+    assert.match(task!.prompt, /restart no longer replays the feed/, 'the agent is given what the operator wrote');
+    assert.match(task!.prompt, new RegExp(versionId), 'and the version it is reading');
+
+    const stray = await callTool(system, 'issue:182:describe:1', 'description_review', { id: versionId, findings: [] });
+    assert.equal(stray.isError, true, 'only a check dispatch may report one');
+    const wrongId = await callTool(system, 'issue:182:describe-check:1', 'description_review', {
+      id: 'desc_nope',
+      findings: [],
+    });
+    assert.equal(wrongId.isError, true, 'a version that is not this pull request’s is refused');
+    assert.deepEqual(buildStateSnapshot(system).descriptionFeedback, [], 'unchecked raises nothing');
+
+    const reported = await callTool(system, 'issue:182:describe-check:1', 'description_review', {
+      id: versionId,
+      findings: [
+        { kind: 'contradicted', note: 'The cursor is written but never read — src/sync.ts:12.' },
+        { kind: 'gap', note: 'The migration drops the old column.' },
+      ],
+    });
+    assert.equal(reported.isError, false, reported.text);
+
+    const feedback = buildStateSnapshot(system).descriptionFeedback;
+    assert.equal(feedback.length, 1);
+    assert.equal(feedback[0]!.prNumber, 1);
+    assert.equal(feedback[0]!.contradicted, 1);
+    assert.equal(feedback[0]!.gaps, 1);
+
+    const read = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
+    const current = (read.json() as { current: { checkedAt: string | null; findings: unknown[] } }).current;
+    assert.notEqual(current.checkedAt, null, 'the findings are on the pull request’s page');
+    assert.equal(current.findings.length, 2);
+
+    const clean = system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'The cursor is now written; reading it back is the next part.',
+      author: 'operator',
+    });
+    assert.deepEqual(buildStateSnapshot(system).descriptionFeedback, [], 'a rewrite takes the old findings with it');
+    system.store.prDescriptions.recordCheck({ id: clean.id, findings: [] });
+    assert.deepEqual(buildStateSnapshot(system).descriptionFeedback, [], 'a clean check raises nothing');
+    assert.deepEqual(system.store.prDescriptions.uncheckedDescriptions(), [], 'and is not checked again');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});

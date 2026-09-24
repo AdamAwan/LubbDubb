@@ -27,6 +27,7 @@ import { splitAssess } from './tools/splitAssess.js';
 import { criteriaAlignment } from './tools/criteriaAlignment.js';
 import { predictionJudge } from './tools/predictionJudge.js';
 import { prDescribe } from './tools/prDescribe.js';
+import { descriptionReview } from './tools/descriptionReview.js';
 import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
 import { validationAmend } from './tools/validationAmend.js';
@@ -80,6 +81,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   criteria_alignment: criteriaAlignment,
   prediction_judge: predictionJudge,
   pr_describe: prDescribe,
+  description_review: descriptionReview,
   report_remedy: reportRemedy,
   raise: raiseFact,
 };

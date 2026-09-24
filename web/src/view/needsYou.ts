@@ -27,6 +27,8 @@ export type NeedKind =
   | 'reply'
   | 'merge'
   | 'describe'
+  | 'description_wrong'
+  | 'description_note'
   | 'shortfall'
   | 'intake'
   | 'sitting'
@@ -75,6 +77,11 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   // so it is not an ask that keeps. `yours`, never `blocking`: nothing on the
   // fleet is waiting on it. → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
   describe: 'next',
+  // A check found the description saying something the diff does not do: worth fixing
+  // before the reviewer meets it. Gaps alone are a note, folded away with the rest.
+  // → docs/spec/07-pull-requests.md#what-the-check-raises
+  description_wrong: 'next',
+  description_note: 'later',
   shortfall: 'next',
   intake: 'next',
   sitting: 'now',
@@ -177,6 +184,41 @@ function undescribedPartRows(state: AppState): NeedDraft[] {
       agentLabel: null,
       holding: 0,
       raisedAt: waiting.openedAt,
+    });
+  }
+  return rows;
+}
+
+/**
+ * One row per checked description that found something. A contradiction is an ask to
+ * change it; gaps alone are a low-priority note. A clean check raises nothing.
+ * → docs/spec/07-pull-requests.md#what-the-check-raises
+ */
+function descriptionFeedbackRows(state: AppState): NeedDraft[] {
+  const rows: NeedDraft[] = [];
+  for (const feedback of state.descriptionFeedback ?? []) {
+    const wrong = feedback.contradicted > 0;
+    const count = wrong ? feedback.contradicted : feedback.gaps;
+    const goalRef = goalOf(feedback.originRef, state);
+    rows.push({
+      id: `description:${feedback.versionId}`,
+      kind: wrong ? 'description_wrong' : 'description_note',
+      group: 'yours',
+      title: askLine(
+        wrong
+          ? `Your description of PR #${feedback.prNumber} says ${count === 1 ? 'something' : `${count} things`} the diff does not do`
+          : `The diff of PR #${feedback.prNumber} raises ${count === 1 ? 'something' : `${count} things`} your description does not`,
+        goalRef,
+        state,
+      ),
+      goalRef,
+      originRef: feedback.originRef,
+      opens: 'pr',
+      prNumber: feedback.prNumber,
+      agentId: null,
+      agentLabel: null,
+      holding: 0,
+      raisedAt: feedback.checkedAt,
     });
   }
   return rows;
@@ -532,6 +574,7 @@ export function buildNeedsYou(
   rows.push(...refusedDispatchRows(state));
   rows.push(...assignedPrRows(state));
   rows.push(...undescribedPartRows(state));
+  rows.push(...descriptionFeedbackRows(state));
 
   if ((state.recovery ?? []).length > 0) {
     rows.push({

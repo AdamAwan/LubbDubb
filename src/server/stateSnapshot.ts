@@ -44,6 +44,7 @@ import type {
   OpenPullRequest,
   PlanPartView,
   UndescribedPart,
+  DescriptionFeedback,
   PlanView,
   PullRequest,
   RemoteReadingView,
@@ -688,11 +689,22 @@ export function buildStateSections(
     return store.prDescriptions.undescribedOpenParts().filter((part) => open.has(part.prNumber));
   });
 
+  /**
+   * Checked descriptions that found something, on pull requests still open. The rail
+   * raises each one: a contradiction as an ask, gaps alone as a low-priority note.
+   * → docs/spec/07-pull-requests.md#what-the-check-raises
+   */
+  const descriptionFeedback = once((): DescriptionFeedback[] => {
+    const open = new Set(world.pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+    return store.prDescriptions.descriptionFeedback().filter((f) => open.has(f.prNumber));
+  });
+
   const plansSection = (): Pick<
     CockpitState,
     | 'plans'
     | 'planParts'
     | 'undescribedParts'
+    | 'descriptionFeedback'
     | 'planAtoms'
     | 'planCaveatAnswers'
     | 'validationChecks'
@@ -704,6 +716,7 @@ export function buildStateSections(
     plans: wirePlans,
     planParts: wirePlanParts(),
     undescribedParts: undescribedParts(),
+    descriptionFeedback: descriptionFeedback(),
     planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks: validationChecks(),

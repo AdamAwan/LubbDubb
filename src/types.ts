@@ -2355,6 +2355,18 @@ export interface PrDescriptionVersion {
 }
 
 /**
+ * The operator's newest description of a part whose pull request is open, not yet read
+ * against its diff. What rule `pr-description-check` dispatches for.
+ * → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking
+ */
+export interface DescriptionAwaitingCheck {
+  versionId: string;
+  originRef: string;
+  prNumber: number;
+  text: string;
+}
+
+/**
  * The body the agent wrote for a part's pull request, kept rather than shipped.
  * `text` is null only where the agent sent none and the
  * operator handed it over anyway; `handedAt` is the operator's press; `pushedAt` is
