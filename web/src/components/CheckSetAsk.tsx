@@ -124,50 +124,68 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
       {/* The brake, on the row it applies to. Whole-set reject is too blunt to be one: using it
           costs the operator the rows they were happy with, which is why an expensive row gets
           accepted instead of struck. → docs/spec/20-validation.md#declining-a-single-row */}
-      {declines !== undefined && (
-        <div className="vp-decline">
-          {struck === undefined ? (
-            <Button
-              size="small"
-              ghost
-              title="Drop this one check — the rest go ahead, and no planner is asked again"
-              onClick={() => declines.decline(check.letter)}
-            >
-              Decline
-            </Button>
-          ) : (
-            <>
-              <input
-                className="vp-why"
-                autoFocus
-                placeholder="Why this one is not worth running — required"
-                value={struck}
-                onChange={(e) => declines.say(check.letter, e.target.value)}
-              />
-              <Button size="small" ghost title="Put this check back" onClick={() => declines.keep(check.letter)}>
-                Keep it
-              </Button>
-            </>
-          )}
-        </div>
-      )}
+      {declines !== undefined && <RowDecline letter={check.letter} struck={struck} declines={declines} />}
       {/* Only what the steps beside them do *not* already say. A chip repeating the
           actor of every step is a second reading of the same fact, stranded at the
           far edge of a wide card; the nomination has its own line under the steps. */}
-      <div className="vp-flags">
-        {check.carriesQuery && (
-          <Tag
-            tone="amber"
-            title="This check reads live data from the deployment; the query it uses is approved separately, on its own dry run"
-          >
-            reads live data
-          </Tag>
-        )}
-        {check.fleetBlocked && (
-          <Tag title="A person carries the first step, so the fleet can never start this one">yours to start</Tag>
-        )}
-      </div>
+      <RowFlags check={check} />
     </li>
+  );
+}
+
+function RowDecline({
+  letter,
+  struck,
+  declines,
+}: {
+  letter: string;
+  struck: string | undefined;
+  declines: CheckDeclines;
+}): JSX.Element {
+  return (
+    <div className="vp-decline">
+      {struck === undefined ? (
+        <Button
+          size="small"
+          ghost
+          title="Drop this one check — the rest go ahead, and no planner is asked again"
+          onClick={() => declines.decline(letter)}
+        >
+          Decline
+        </Button>
+      ) : (
+        <>
+          <input
+            className="vp-why"
+            autoFocus
+            placeholder="Why this one is not worth running — required"
+            value={struck}
+            onChange={(e) => declines.say(letter, e.target.value)}
+          />
+          <Button size="small" ghost title="Put this check back" onClick={() => declines.keep(letter)}>
+            Keep it
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RowFlags({ check }: { check: ProposedCheck }): JSX.Element {
+  return (
+    <div className="vp-flags">
+      {check.carriesQuery && (
+        <Tag
+          tone="amber"
+          title="This check reads live data from the deployment; the query it uses is approved separately, on its own dry run"
+        >
+          reads live data
+        </Tag>
+      )}
+      {check.fleetBlocked && (
+        <Tag title="A person carries the first step, so the fleet can never start this one">yours to start</Tag>
+      )}
+    </div>
   );
 }
 

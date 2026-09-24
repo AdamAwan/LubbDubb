@@ -1,21 +1,13 @@
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import { api } from '../api.js';
-import type {
-  PetActionKind,
-  PetCatalogue,
-  PetCatalogueEntry,
-  PetCatalogueSource,
-  PetRarity,
-  PetSpecies,
-  PetStage,
-  PetState,
-} from '../types.js';
+import type { PetActionKind, PetCatalogue, PetCatalogueEntry, PetRarity, PetStage, PetState } from '../types.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { PET_STAGES, speciesSeen } from '../pets/reveal.js';
 import { PetsCollection } from './PetsCollection.js';
 import { SpeciesSprite } from './SpeciesSprite.js';
 import { absDate } from './util.js';
 import { Panel } from './panel.js';
+import { KIND_LABEL, KIND_NOTE, SourceTable } from './PetsPageSources.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -58,7 +50,7 @@ export function PetsPage({
   );
 }
 
-function Catalogue({ pets }: { pets: PetState }): JSX.Element {
+function usePetCatalogue() {
   const [catalogue, setCatalogue] = useState<PetCatalogue | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -77,6 +69,11 @@ function Catalogue({ pets }: { pets: PetState }): JSX.Element {
     };
   }, []);
 
+  return { catalogue, failed };
+}
+
+function Catalogue({ pets }: { pets: PetState }): JSX.Element {
+  const { catalogue, failed } = usePetCatalogue();
   const seen = useMemo(() => speciesSeen(pets.pets), [pets.pets]);
   const found = useMemo(
     () => new Set([...seen].filter(([, stages]) => stages.has('juvenile')).map(([species]) => species)),
@@ -101,33 +98,117 @@ function Catalogue({ pets }: { pets: PetState }): JSX.Element {
   return (
     <div className="species">
       <h3 className="species-h">The catalogue</h3>
-      <div className="species-intro">
-        <p>
-          Every pet you can get, how often it drops, and what each one looks like as it grows. Rates are set in the code
-          and cannot be changed.
-        </p>
-        <p className="muted small">
-          You have found <b>{found.size}</b> of {species.length}. A pet you have not found keeps its rate and its
-          sources, and withholds its name, its forms and its colours. An egg you have not opened counts for none of
-          them, and each age appears once one of yours has reached it.
-        </p>
-        {/* The one thing on this page that is about *this* deployment rather than
-            about the tables. Every rate above is a claim about what an action is
-            worth, and on a harness that took pets long after it started working
-            there is a whole history of actions those rates visibly did not pay
-            for — which reads as the feature being broken. It is not: the vivarium
-            counts from a start, and this says when that was. Drawn only once the
-            start exists, because a sentence about a boundary nothing has decided
-            yet would be worse than the silence. */}
-        {pets.startedAt === null ? null : (
-          <p className="muted small">
-            This vivarium has been counting since <b>{absDate(pets.startedAt)}</b>. Anything done before then is on
-            record and pays nothing — otherwise a harness that took pets years in would roll all of it in one pass, and
-            spend its first pet on something nobody remembers doing.
-          </p>
-        )}
-      </div>
+      <CatalogueIntro found={found.size} total={species.length} startedAt={pets.startedAt} />
 
+      <DropRates rules={rules} rarities={rarities} kinds={kinds} weighed={weighed} />
+
+      <h3 className="species-h">All {species.length} pets</h3>
+      {rarities.map((tier) => {
+        const members = species.filter((entry) => entry.rarity === tier).sort((a, b) => b.share - a.share);
+        if (members.length === 0) return null;
+        return (
+          <section key={tier} className={`species-band is-${tier}`}>
+            <div className="species-band-head">
+              <h4>{tier}</h4>
+              <span>
+                {members.filter((entry) => found.has(entry.species)).length} of {members.length} found ·{' '}
+                {pct(members.reduce((sum, entry) => sum + entry.share, 0))} of drops
+              </span>
+              <hr />
+            </div>
+            <div className="species-grid">
+              {members.map((entry) => (
+                <SpeciesCard
+                  key={entry.species}
+                  entry={entry}
+                  known={found.has(entry.species)}
+                  seen={seen.get(entry.species) ?? EMPTY}
+                  rules={rules}
+                  everyKind={everyKind}
+                  meanDrop={meanDrop}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      <h3 className="species-h">
+        Where each pet comes from
+        {sources.some((row) => row.landed !== row.rolled) ? (
+          <span
+            className="species-legend"
+            title="If an action has no pet at the tier you rolled, the roll steps down a tier — never up."
+          >
+            ↓ = stepped down a tier
+          </span>
+        ) : null}
+      </h3>
+      <SourceTable sources={sources} rarities={rarities} species={species} found={found} kinds={kinds} />
+
+      <p className="muted small species-foot">
+        A pet&rsquo;s share of drops assumes you do all seven actions about equally often, and weighs each action by its
+        own drop chance — so an upgrade counts for more of the catalogue than a job launch does. The two tables are
+        exact per action. Every pet of a tier hatches as the same egg, so you find out what you got at the juvenile
+        stage — and each age is drawn once a pet of yours has grown that far. ☾ marks a pet that can only drop in
+        certain hours, going by the time of the action rather than the time you look.
+      </p>
+    </div>
+  );
+}
+
+function CatalogueIntro({
+  found,
+  total,
+  startedAt,
+}: {
+  found: number;
+  total: number;
+  startedAt: PetState['startedAt'];
+}): JSX.Element {
+  return (
+    <div className="species-intro">
+      <p>
+        Every pet you can get, how often it drops, and what each one looks like as it grows. Rates are set in the code
+        and cannot be changed.
+      </p>
+      <p className="muted small">
+        You have found <b>{found}</b> of {total}. A pet you have not found keeps its rate and its sources, and withholds
+        its name, its forms and its colours. An egg you have not opened counts for none of them, and each age appears
+        once one of yours has reached it.
+      </p>
+      {/* The one thing on this page that is about *this* deployment rather than
+          about the tables. Every rate above is a claim about what an action is
+          worth, and on a harness that took pets long after it started working
+          there is a whole history of actions those rates visibly did not pay
+          for — which reads as the feature being broken. It is not: the vivarium
+          counts from a start, and this says when that was. Drawn only once the
+          start exists, because a sentence about a boundary nothing has decided
+          yet would be worse than the silence. */}
+      {startedAt === null ? null : (
+        <p className="muted small">
+          This vivarium has been counting since <b>{absDate(startedAt)}</b>. Anything done before then is on record and
+          pays nothing — otherwise a harness that took pets years in would roll all of it in one pass, and spend its
+          first pet on something nobody remembers doing.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DropRates({
+  rules,
+  rarities,
+  kinds,
+  weighed,
+}: {
+  rules: PetCatalogue['rules'];
+  rarities: PetRarity[];
+  kinds: PetActionKind[];
+  weighed: number;
+}): JSX.Element {
+  return (
+    <>
       <h3 className="species-h">Drop rates</h3>
       <dl className="species-odds">
         <Odd
@@ -196,59 +277,7 @@ function Catalogue({ pets }: { pets: PetState }): JSX.Element {
           </span>
         ))}
       </p>
-
-      <h3 className="species-h">All {species.length} pets</h3>
-      {rarities.map((tier) => {
-        const members = species.filter((entry) => entry.rarity === tier).sort((a, b) => b.share - a.share);
-        if (members.length === 0) return null;
-        return (
-          <section key={tier} className={`species-band is-${tier}`}>
-            <div className="species-band-head">
-              <h4>{tier}</h4>
-              <span>
-                {members.filter((entry) => found.has(entry.species)).length} of {members.length} found ·{' '}
-                {pct(members.reduce((sum, entry) => sum + entry.share, 0))} of drops
-              </span>
-              <hr />
-            </div>
-            <div className="species-grid">
-              {members.map((entry) => (
-                <SpeciesCard
-                  key={entry.species}
-                  entry={entry}
-                  known={found.has(entry.species)}
-                  seen={seen.get(entry.species) ?? EMPTY}
-                  rules={rules}
-                  everyKind={everyKind}
-                  meanDrop={meanDrop}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-
-      <h3 className="species-h">
-        Where each pet comes from
-        {sources.some((row) => row.landed !== row.rolled) ? (
-          <span
-            className="species-legend"
-            title="If an action has no pet at the tier you rolled, the roll steps down a tier — never up."
-          >
-            ↓ = stepped down a tier
-          </span>
-        ) : null}
-      </h3>
-      <SourceTable sources={sources} rarities={rarities} species={species} found={found} kinds={kinds} />
-
-      <p className="muted small species-foot">
-        A pet&rsquo;s share of drops assumes you do all seven actions about equally often, and weighs each action by its
-        own drop chance — so an upgrade counts for more of the catalogue than a job launch does. The two tables are
-        exact per action. Every pet of a tier hatches as the same egg, so you find out what you got at the juvenile
-        stage — and each age is drawn once a pet of yours has grown that far. ☾ marks a pet that can only drop in
-        certain hours, going by the time of the action rather than the time you look.
-      </p>
-    </div>
+    </>
   );
 }
 
@@ -276,27 +305,9 @@ function SpeciesCard({
   everyKind: number;
   meanDrop: number;
 }): JSX.Element {
-  const window = entry.hours === null ? null : hourWindow(entry.hours);
-  const oneIn = Math.round(1 / (entry.share * meanDrop)).toLocaleString();
   return (
     <Panel density="flush" className={`species-card is-${entry.rarity}${known ? '' : ' is-unknown'}`}>
-      <div className="species-top">
-        <h5>{known ? entry.display : '???'}</h5>
-        <span className="species-spacer" />
-        {entry.hours === null ? null : (
-          <span
-            className="species-night"
-            title={
-              window === null
-                ? 'Only drops in certain hours, going by the time of the action rather than the time you look.'
-                : `Only drops between ${clock(window.from)} and ${clock(window.to)}, going by the time of the action rather than the time you look.`
-            }
-          >
-            ☾ {window === null ? 'some hours' : `${clock(window.from)}–${clock(window.to)}`}
-          </span>
-        )}
-        <span className={`pet-rarity is-${entry.rarity}`}>{entry.rarity}</span>
-      </div>
+      <SpeciesTop entry={entry} known={known} />
 
       <div className="species-ages">
         {PET_STAGES.map((stage) => {
@@ -319,26 +330,7 @@ function SpeciesCard({
         })}
       </div>
 
-      <div className="species-stats">
-        <div
-          className="species-stat"
-          title={`Share of all pet drops — about 1 in ${oneIn} actions. Assumes you do the seven actions about equally often.`}
-        >
-          <b>{pct(entry.share)}</b>
-          <span>drop</span>
-        </div>
-        <div
-          className="species-stat"
-          title={`Beats to feed it from hatchling to adult — about $${Math.round(entry.adultAt / rules.beatsPerDollar).toLocaleString()} of fleet spend. Juvenile at ${entry.juvenileAt.toLocaleString()}.`}
-        >
-          <b>{entry.adultAt.toLocaleString()}</b>
-          <span>to adult</span>
-        </div>
-        <div className="species-stat" title="Beats returned for dissolving a spare. Only available if you have two.">
-          <b>{entry.blend.toLocaleString()}</b>
-          <span>blend</span>
-        </div>
-      </div>
+      <SpeciesStats entry={entry} rules={rules} meanDrop={meanDrop} />
 
       <div className="species-srcs" title="Actions that can drop this pet.">
         {entry.kinds.length === everyKind ? (
@@ -372,72 +364,59 @@ function SpeciesCard({
   );
 }
 
-function SourceTable({
-  sources,
-  rarities,
-  species,
-  found,
-  kinds,
-}: {
-  sources: PetCatalogueSource[];
-  rarities: PetRarity[];
-  species: PetCatalogueEntry[];
-  found: Set<PetSpecies>;
-  kinds: PetActionKind[];
-}): JSX.Element {
-  const display = new Map(species.map((entry) => [entry.species, entry.display]));
-  const gated = new Set(species.filter((entry) => entry.hours !== null).map((entry) => entry.species));
-  const cell = (kind: PetActionKind, rolled: PetRarity) => sources.find((r) => r.kind === kind && r.rolled === rolled);
+function SpeciesTop({ entry, known }: { entry: PetCatalogueEntry; known: boolean }): JSX.Element {
+  const window = entry.hours === null ? null : hourWindow(entry.hours);
   return (
-    <div className="species-scroll">
-      <table className="species-table">
-        <thead>
-          <tr>
-            <th>What you did</th>
-            {rarities.map((tier) => (
-              <th key={tier}>rolled {tier}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {kinds.map((kind) => (
-            <tr key={kind}>
-              <td className="species-kind" title={KIND_NOTE[kind]}>
-                {KIND_LABEL[kind]}
-              </td>
-              {rarities.map((tier) => {
-                const row = cell(kind, tier);
-                if (row === undefined)
-                  return (
-                    <td key={tier}>
-                      <span className="species-landed">nothing</span>
-                    </td>
-                  );
-                const stepped = rarities.indexOf(row.landed) < rarities.indexOf(row.rolled);
-                return (
-                  <td key={tier}>
-                    <span
-                      className={`species-landed is-${row.landed}${stepped ? ' is-stepped' : ''}`}
-                      title={stepped ? `No ${row.rolled} here, so the roll steps down.` : undefined}
-                    >
-                      {row.landed}
-                      {stepped ? ' ↓' : ''}
-                    </span>
-                    <span className="species-members">
-                      {row.members
-                        .map(
-                          (member) =>
-                            `${found.has(member) ? (display.get(member) ?? member) : '???'}${gated.has(member) ? ' ☾' : ''}`,
-                        )
-                        .join(' · ')}
-                    </span>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="species-top">
+      <h5>{known ? entry.display : '???'}</h5>
+      <span className="species-spacer" />
+      {entry.hours === null ? null : (
+        <span
+          className="species-night"
+          title={
+            window === null
+              ? 'Only drops in certain hours, going by the time of the action rather than the time you look.'
+              : `Only drops between ${clock(window.from)} and ${clock(window.to)}, going by the time of the action rather than the time you look.`
+          }
+        >
+          ☾ {window === null ? 'some hours' : `${clock(window.from)}–${clock(window.to)}`}
+        </span>
+      )}
+      <span className={`pet-rarity is-${entry.rarity}`}>{entry.rarity}</span>
+    </div>
+  );
+}
+
+function SpeciesStats({
+  entry,
+  rules,
+  meanDrop,
+}: {
+  entry: PetCatalogueEntry;
+  rules: PetCatalogue['rules'];
+  meanDrop: number;
+}): JSX.Element {
+  const oneIn = Math.round(1 / (entry.share * meanDrop)).toLocaleString();
+  return (
+    <div className="species-stats">
+      <div
+        className="species-stat"
+        title={`Share of all pet drops — about 1 in ${oneIn} actions. Assumes you do the seven actions about equally often.`}
+      >
+        <b>{pct(entry.share)}</b>
+        <span>drop</span>
+      </div>
+      <div
+        className="species-stat"
+        title={`Beats to feed it from hatchling to adult — about $${Math.round(entry.adultAt / rules.beatsPerDollar).toLocaleString()} of fleet spend. Juvenile at ${entry.juvenileAt.toLocaleString()}.`}
+      >
+        <b>{entry.adultAt.toLocaleString()}</b>
+        <span>to adult</span>
+      </div>
+      <div className="species-stat" title="Beats returned for dissolving a spare. Only available if you have two.">
+        <b>{entry.blend.toLocaleString()}</b>
+        <span>blend</span>
+      </div>
     </div>
   );
 }
@@ -445,28 +424,6 @@ function SourceTable({
 const EMPTY: ReadonlySet<PetStage> = new Set();
 
 const VARY_SEEDS: readonly string[] = ['escalation:esc_1', 'human-task:htk_2', 'plan:plan_3', 'landing:land_4'];
-
-const KIND_LABEL: Record<PetActionKind, string> = {
-  escalation: 'escalation',
-  'human-task': 'task',
-  plan: 'plan',
-  landing: 'landing',
-  job: 'job',
-  claim: 'claim',
-  finding: 'finding',
-  upgrade: 'upgrade',
-};
-
-const KIND_NOTE: Record<PetActionKind, string> = {
-  escalation: 'Answering an escalation',
-  'human-task': 'Settling a task',
-  plan: 'Accepting a plan',
-  landing: 'Landing a stack',
-  job: 'Launching a job',
-  claim: 'Ruling on a claim',
-  finding: 'Triaging a finding',
-  upgrade: 'The harness updating itself',
-};
 
 function pct(share: number): string {
   return `${(share * 100).toFixed(share < 0.01 ? 2 : 1).replace(/\.0+$/, '')}%`;

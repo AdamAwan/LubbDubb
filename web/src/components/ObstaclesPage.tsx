@@ -30,31 +30,7 @@ export function ObstaclesPage({
   now: number;
   actions: CockpitActions;
 }): JSX.Element {
-  const [board, setBoard] = useState<ObstacleBoardPayload | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setBoard(await api.getObstacles());
-      setFailed(false);
-    } catch {
-      setFailed(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const act = useCallback(
-    async (run: Promise<void>) => {
-      setRefusal(null);
-      await run;
-      await load();
-    },
-    [load],
-  );
+  const { board, failed, refusal, setRefusal, act } = useObstacleBoard();
 
   if (failed) {
     return (
@@ -89,14 +65,7 @@ export function ObstaclesPage({
 
   return (
     <div className="ob">
-      <header className="ob-head">
-        <h2>Obstacles</h2>
-        <p className="ob-blurb">
-          What the fleet has run into that is not its work, and what owns each one. Every row has a way out that is not
-          a person, so this stays a reading rather than a queue — a bug proposed for one is the single thing you are
-          asked about, and a proposal nobody answers decays with the row.
-        </p>
-      </header>
+      <BoardHead />
 
       <Counts counts={board.counts} now={now} />
 
@@ -131,26 +100,85 @@ export function ObstaclesPage({
       {/* The fold states its own size, which is the whole of what makes it safe: a
           tail that names itself and its count cannot be read as rows that went
           missing. Shut by default, so the page as it stands is a bare URL. */}
-      <section className="ob-section">
-        <button
-          type="button"
-          className="ob-fold"
-          aria-expanded={ended}
-          onClick={() => actions.setObstacleQuery({ obstacleEnded: !ended })}
-        >
-          {ended ? '▾' : '▸'} Over and silenced <span className="ob-n">{over.length}</span>
-        </button>
-        {ended && (
-          <>
-            <p className="ob-note">
-              Resolved, decayed, retired and muted. None is deleted — each keeps its keys, and a matching report reopens
-              it at standing with its whole history.
-            </p>
-            {over.length === 0 ? <p className="empty">Nothing has ended yet.</p> : section(over, true)}
-          </>
-        )}
-      </section>
+      <EndedFold
+        ended={ended}
+        count={over.length}
+        onToggle={() => actions.setObstacleQuery({ obstacleEnded: !ended })}
+        rows={() => section(over, true)}
+      />
     </div>
+  );
+}
+
+function BoardHead(): JSX.Element {
+  return (
+    <header className="ob-head">
+      <h2>Obstacles</h2>
+      <p className="ob-blurb">
+        What the fleet has run into that is not its work, and what owns each one. Every row has a way out that is not a
+        person, so this stays a reading rather than a queue — a bug proposed for one is the single thing you are asked
+        about, and a proposal nobody answers decays with the row.
+      </p>
+    </header>
+  );
+}
+
+function useObstacleBoard() {
+  const [board, setBoard] = useState<ObstacleBoardPayload | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setBoard(await api.getObstacles());
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const act = useCallback(
+    async (run: Promise<void>) => {
+      setRefusal(null);
+      await run;
+      await load();
+    },
+    [load],
+  );
+
+  return { board, failed, refusal, setRefusal, act };
+}
+
+function EndedFold({
+  ended,
+  count,
+  onToggle,
+  rows,
+}: {
+  ended: boolean;
+  count: number;
+  onToggle: () => void;
+  rows: () => JSX.Element[];
+}): JSX.Element {
+  return (
+    <section className="ob-section">
+      <button type="button" className="ob-fold" aria-expanded={ended} onClick={onToggle}>
+        {ended ? '▾' : '▸'} Over and silenced <span className="ob-n">{count}</span>
+      </button>
+      {ended && (
+        <>
+          <p className="ob-note">
+            Resolved, decayed, retired and muted. None is deleted — each keeps its keys, and a matching report reopens
+            it at standing with its whole history.
+          </p>
+          {count === 0 ? <p className="empty">Nothing has ended yet.</p> : rows()}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -261,26 +289,7 @@ function Row({
         )}
       </HeadRow>
 
-      <div className="ob-row-meta">
-        <span className="ob-keys">
-          {row.keys.length === 0 ? (
-            <span className="ob-key none">no keys — it can be delivered to nobody</span>
-          ) : (
-            row.keys.map((key) => <Key key={key.id} entry={key} />)
-          )}
-        </span>
-        <span className="ob-cost">
-          {row.goalRefs.length} goal{row.goalRefs.length === 1 ? '' : 's'} · {row.voices} voice
-          {row.voices === 1 ? '' : 's'}
-        </span>
-        <span className="ob-seen" title={absDate(obstacle.lastSeenAt)}>
-          last seen {relTime(obstacle.lastSeenAt, now)}
-        </span>
-        {obstacle.state === 'sighted' && (
-          <span className="ob-decay">dormant in {untilTime(dormantAt(obstacle.lastSeenAt, dormantMs), now)}</span>
-        )}
-        {obstacle.endedBy !== null && <span className="ob-ended">{ENDING_WORDS[obstacle.endedBy]}</span>}
-      </div>
+      <RowMeta row={row} now={now} dormantMs={dormantMs} />
 
       {open && (
         <div className="ob-open">
@@ -295,6 +304,32 @@ function Row({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function RowMeta({ row, now, dormantMs }: { row: ObstacleBoardRow; now: number; dormantMs: number }): JSX.Element {
+  const { obstacle } = row;
+  return (
+    <div className="ob-row-meta">
+      <span className="ob-keys">
+        {row.keys.length === 0 ? (
+          <span className="ob-key none">no keys — it can be delivered to nobody</span>
+        ) : (
+          row.keys.map((key) => <Key key={key.id} entry={key} />)
+        )}
+      </span>
+      <span className="ob-cost">
+        {row.goalRefs.length} goal{row.goalRefs.length === 1 ? '' : 's'} · {row.voices} voice
+        {row.voices === 1 ? '' : 's'}
+      </span>
+      <span className="ob-seen" title={absDate(obstacle.lastSeenAt)}>
+        last seen {relTime(obstacle.lastSeenAt, now)}
+      </span>
+      {obstacle.state === 'sighted' && (
+        <span className="ob-decay">dormant in {untilTime(dormantAt(obstacle.lastSeenAt, dormantMs), now)}</span>
+      )}
+      {obstacle.endedBy !== null && <span className="ob-ended">{ENDING_WORDS[obstacle.endedBy]}</span>}
     </div>
   );
 }
@@ -376,53 +411,16 @@ function Controls({
   const [ownerRef, setOwnerRef] = useState('');
   const { obstacle } = row;
   const live = obstacle.state === 'sighted' || obstacle.state === 'standing' || obstacle.state === 'owned';
+  const fileable = obstacle.state === 'standing' && obstacle.kind === 'obstacle' && canFileTickets;
   return (
     <div className="ob-controls">
-      {obstacle.state === 'muted' ? (
-        <AsyncButton onClick={() => act(actions.muteObstacle(obstacle.id, false))} onRefused={onRefused}>
-          Tell the fleet again
-        </AsyncButton>
-      ) : (
-        live && (
-          <AsyncButton
-            onClick={() => act(actions.muteObstacle(obstacle.id, true))}
-            onRefused={onRefused}
-            title="Never tell the fleet this. The one state whose exit is a person."
-          >
-            Mute
-          </AsyncButton>
-        )
+      <MuteControl obstacle={obstacle} live={live} actions={actions} act={act} onRefused={onRefused} />
+
+      {fileable && ticketApproval && (
+        <TicketDecision obstacle={obstacle} actions={actions} act={act} onRefused={onRefused} />
       )}
 
-      {obstacle.state === 'standing' &&
-        obstacle.kind === 'obstacle' &&
-        canFileTickets &&
-        ticketApproval &&
-        obstacle.ticketDecision !== 'approved' && (
-          <AsyncButton
-            onClick={() => act(actions.decideObstacleTicket(obstacle.id, true))}
-            onRefused={onRefused}
-            title="File the bug. The pulse files it on the next cycle, with the sightings behind it, and the row takes the ticket as its owner."
-          >
-            File the bug
-          </AsyncButton>
-        )}
-
-      {obstacle.state === 'standing' &&
-        obstacle.kind === 'obstacle' &&
-        canFileTickets &&
-        ticketApproval &&
-        obstacle.ticketDecision === null && (
-          <AsyncButton
-            onClick={() => act(actions.decideObstacleTicket(obstacle.id, false))}
-            onRefused={onRefused}
-            title="No bug for this. The fleet is still told about it and told not to go fixing it; nothing is filed, and the row decays as it would have."
-          >
-            No bug
-          </AsyncButton>
-        )}
-
-      {obstacle.state === 'standing' && obstacle.kind === 'obstacle' && canFileTickets && (
+      {fileable && (
         <span className="ob-own">
           <input
             type="text"
@@ -461,5 +459,64 @@ function Controls({
         />
       )}
     </div>
+  );
+}
+
+type ControlProps = {
+  obstacle: ObstacleBoardRow['obstacle'];
+  actions: CockpitActions;
+  act: (run: Promise<void>) => Promise<void>;
+  onRefused: (message: string) => void;
+};
+
+function MuteControl({
+  obstacle,
+  live,
+  actions,
+  act,
+  onRefused,
+}: ControlProps & { live: boolean }): JSX.Element | null {
+  if (obstacle.state === 'muted') {
+    return (
+      <AsyncButton onClick={() => act(actions.muteObstacle(obstacle.id, false))} onRefused={onRefused}>
+        Tell the fleet again
+      </AsyncButton>
+    );
+  }
+  if (!live) return null;
+  return (
+    <AsyncButton
+      onClick={() => act(actions.muteObstacle(obstacle.id, true))}
+      onRefused={onRefused}
+      title="Never tell the fleet this. The one state whose exit is a person."
+    >
+      Mute
+    </AsyncButton>
+  );
+}
+
+function TicketDecision({ obstacle, actions, act, onRefused }: ControlProps): JSX.Element {
+  return (
+    <>
+      {obstacle.ticketDecision !== 'approved' && (
+        <AsyncButton
+          onClick={() => act(actions.decideObstacleTicket(obstacle.id, true))}
+          onRefused={onRefused}
+          title="File the bug. The pulse files it on the next cycle, with the sightings behind it, and the row takes the ticket as its owner."
+        >
+          File the bug
+        </AsyncButton>
+      )}
+
+      {obstacle.ticketDecision === null && (
+        <AsyncButton
+          onClick={() => act(actions.decideObstacleTicket(obstacle.id, false))}
+          onRefused={onRefused}
+          title="No bug for this. The fleet is still told about it and told not to go fixing it; nothing is filed, and the row decays as it would have."
+        >
+          No bug
+        </AsyncButton>
+      )}
+    </>
   );
 }
