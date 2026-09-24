@@ -67,6 +67,10 @@ export function parsePoolDocument(text: string, expectFleetId?: string): PoolPar
       detail: `a document addressed to ${expectFleetId} names ${fleetId} in its body`,
     };
   }
+  return readBody(raw);
+}
+
+function readBody(raw: Record<string, unknown>): PoolParse {
   if (typeof raw.project !== 'string' || raw.project === '') {
     return { ok: false, reason: 'malformed', detail: 'no "project" in the body' };
   }

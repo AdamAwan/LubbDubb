@@ -113,23 +113,28 @@ function parseField(raw: string, field: (typeof FIELDS)[number]): { values: Set<
       if (!isCount(stepText) || Number(stepText) < 1) return bad;
       step = Number(stepText);
     }
-    let from: number;
-    let to: number;
-    if (spec === '*') {
-      from = field.min;
-      to = field.max;
-    } else {
-      const [lowText, highText, ...extra] = spec.split('-');
-      if (extra.length > 0 || !isCount(lowText)) return bad;
-      if (highText === undefined ? stepText !== undefined : !isCount(highText)) return bad;
-      from = Number(lowText);
-      to = highText === undefined ? from : Number(highText);
-      if (from < field.min || to > field.max || from > to)
-        return { error: `cron ${field.label} must be between ${field.min} and ${field.max} (got "${raw}")` };
-    }
-    for (let v = from; v <= to; v += step) values.add(v);
+    const range = spec === '*' ? { from: field.min, to: field.max } : parseRange(raw, spec, stepText, field);
+    if (range === null) return bad;
+    if ('error' in range) return range;
+    for (let v = range.from; v <= range.to; v += step) values.add(v);
   }
   return { values };
+}
+
+function parseRange(
+  raw: string,
+  spec: string,
+  stepText: string | undefined,
+  field: (typeof FIELDS)[number],
+): { from: number; to: number } | { error: string } | null {
+  const [lowText, highText, ...extra] = spec.split('-');
+  if (extra.length > 0 || !isCount(lowText)) return null;
+  if (highText === undefined ? stepText !== undefined : !isCount(highText)) return null;
+  const from = Number(lowText);
+  const to = highText === undefined ? from : Number(highText);
+  if (from < field.min || to > field.max || from > to)
+    return { error: `cron ${field.label} must be between ${field.min} and ${field.max} (got "${raw}")` };
+  return { from, to };
 }
 
 function refusal(raw: string, field: (typeof FIELDS)[number]): string {

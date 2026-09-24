@@ -15,6 +15,13 @@ export type DispatchVerdict =
   | { kind: 'escalate'; attempts: number }
   | { kind: 'hold' };
 
+const ATTEMPT_TYPES: ReadonlySet<string> = new Set([
+  'dispatch_code_agent',
+  'dispatch_desk_agent',
+  'update_pr_branch',
+  'requeue_ci_check',
+]);
+
 export function dispatchVerdict(
   origin: string,
   now: string,
@@ -27,20 +34,12 @@ export function dispatchVerdict(
 
   for (const d of recentDecisions) {
     if (d.outcome !== 'executed') continue;
-    const a = d.action;
-    if (
-      (a.type === 'dispatch_code_agent' ||
-        a.type === 'dispatch_desk_agent' ||
-        a.type === 'update_pr_branch' ||
-        a.type === 'requeue_ci_check') &&
-      a.originRef === origin
-    ) {
+    if (isAttempt(d, origin)) {
       attempts += 1;
       const t = Date.parse(d.createdAt);
       if (!Number.isNaN(t) && t > lastAttemptMs) lastAttemptMs = t;
-    } else if (a.type === 'escalate_to_human') {
-      const context = a.context as { originRef?: unknown } | undefined;
-      if (context && context.originRef === origin) escalated = true;
+    } else if (isEscalation(d, origin)) {
+      escalated = true;
     }
   }
 
@@ -52,4 +51,15 @@ export function dispatchVerdict(
     return { kind: 'cooldown' };
   }
   return { kind: 'dispatch' };
+}
+
+function isAttempt(d: Decision, origin: string): boolean {
+  const a = d.action;
+  return ATTEMPT_TYPES.has(a.type) && 'originRef' in a && a.originRef === origin;
+}
+
+function isEscalation(d: Decision, origin: string): boolean {
+  if (d.action.type !== 'escalate_to_human') return false;
+  const context = d.action.context as { originRef?: unknown } | undefined;
+  return context?.originRef === origin;
 }
