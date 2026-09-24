@@ -35,6 +35,22 @@ const TURN_LABEL: Record<LocalRunTurn, string> = {
   message: 'replying',
 };
 
+type Act = () => Promise<unknown> | unknown;
+
+interface RunReading {
+  live: boolean;
+  turn: LocalRunTurn | null;
+  phase: string | null;
+  said: string | null;
+  stale: boolean;
+  idle: boolean;
+  canRefresh: boolean;
+  canMessage: boolean;
+  runNumber: number | null;
+  canValidate: boolean;
+  goalTitle: string | null;
+}
+
 export function LocalRunPanel({
   run,
   configured,
@@ -68,12 +84,8 @@ export function LocalRunPanel({
   validationConfigured: boolean;
   fetchOutput: () => Promise<string[]>;
 }): JSX.Element {
-  const [picked, setPicked] = useState<Pick | null>(null);
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [showAll, setShowAll] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [outputOpen, setOutputOpen] = useState<boolean | null>(null);
-  const [pickerOpen, setPickerOpen] = useState<boolean | null>(null);
   const [askRefresh, setAskRefresh] = useState(false);
 
   const tick = run?.live === true ? Math.floor(now / POLL_MS) : 0;
@@ -87,6 +99,67 @@ export function LocalRunPanel({
     };
   }, [fetchOutput, run?.id, run?.status, run?.note, run?.turn, tick]);
 
+  const reading = readRun(run, lines, goals, targets, validation, validationConfigured);
+  const { runNumber, goalTitle } = reading;
+  const outOpen = outputOpen ?? !reading.idle;
+
+  return (
+    <div className="lrun">
+      <ConfigNotes configured={configured} stopConfigured={stopConfigured} />
+
+      {/* The environment: the subject of the panel, and the only thing that changes
+          while somebody is watching. */}
+      <section className="lrun-env" aria-label="The local environment">
+        <header className="lrun-head">
+          <div className="lrun-status">
+            <span className={`lrun-dot ${tone(run)}`} aria-hidden />
+            <h3>{run === null ? 'Nothing has been run locally' : <StatusLine run={run} now={now} />}</h3>
+          </div>
+          {run !== null && (
+            <RunActions
+              run={run}
+              reading={reading}
+              stopConfigured={stopConfigured}
+              refreshConfigured={refreshConfigured}
+              onRefresh={onRefresh}
+              onStop={onStop}
+              onValidate={(n) => (reading.stale ? setAskRefresh(true) : onValidate(n, {}))}
+            />
+          )}
+        </header>
+
+        {askRefresh && run !== null && runNumber !== null && (
+          <ValidateLocallyModal
+            mode="refresh"
+            issueNumber={runNumber}
+            issueTitle={goalTitle ?? `#${String(runNumber)}`}
+            targetRef={run.ref}
+            run={run}
+            runTitle={goalTitle}
+            onSubmit={(opts) => Promise.resolve(onValidate(runNumber, opts))}
+            onClose={() => setAskRefresh(false)}
+          />
+        )}
+        {run !== null && (
+          <RunDetails run={run} reading={reading} now={now} validation={validation} onMessage={onMessage} />
+        )}
+      </section>
+
+      {run !== null && <OutputFold run={run} lines={lines} open={outOpen} onFlip={() => setOutputOpen(!outOpen)} />}
+
+      <GoalPicker run={run} live={reading.live} goals={goals} targets={targets} now={now} onStart={onStart} />
+    </div>
+  );
+}
+
+function readRun(
+  run: LocalRunView | null,
+  lines: string[],
+  goals: Issue[],
+  targets: LocalRunTargetView[],
+  validation: LocalValidationView | null,
+  validationConfigured: boolean,
+): RunReading {
   const live = run !== null && run.live;
   const turn = run === null ? null : run.turn;
   const phase = turn !== null && run !== null ? run.phase : null;
@@ -107,24 +180,12 @@ export function LocalRunPanel({
     (runNumber === null ? false : (targets.find((t) => t.issueNumber === runNumber)?.runnable ?? false));
   const goalTitle =
     run === null ? null : (goals.find((g) => `issue:${String(g.number)}` === run.originRef)?.title ?? null);
+  return { live, turn, phase, said, stale, idle, canRefresh, canMessage, runNumber, canValidate, goalTitle };
+}
 
-  const byNumber = new Map(targets.map((t) => [t.issueNumber, t]));
-  const candidates = goals.flatMap((goal) => {
-    const target = byNumber.get(goal.number);
-    return target === undefined ? [] : [{ goal, target }];
-  });
-  const rows = showAll ? candidates : candidates.filter((row) => row.target.runnable);
-  const holdingBack = candidates.length - rows.length;
-  const chosen = picked === null ? null : (byNumber.get(picked.issueNumber) ?? null);
-  const chosenFacts =
-    chosen === null
-      ? null
-      : picked?.ref === undefined
-        ? chosen.target
-        : (chosen.options.find((o) => o.option.ref === picked.ref)?.facts ?? chosen.target);
-
+function ConfigNotes({ configured, stopConfigured }: { configured: boolean; stopConfigured: boolean }): JSX.Element {
   return (
-    <div className="lrun">
+    <>
       {!configured && (
         <p className="lrun-note">
           Nothing is configured to start. Set <code>localRun.instruction</code> on the Config page — what you would tell
@@ -137,246 +198,329 @@ export function LocalRunPanel({
           Stop kills the session but whatever it started keeps running.
         </p>
       )}
+    </>
+  );
+}
 
-      {/* The environment: the subject of the panel, and the only thing that changes
-          while somebody is watching. */}
-      <section className="lrun-env" aria-label="The local environment">
-        <header className="lrun-head">
-          <div className="lrun-status">
-            <span className={`lrun-dot ${tone(run)}`} aria-hidden />
-            <h3>{run === null ? 'Nothing has been run locally' : <StatusLine run={run} now={now} />}</h3>
-          </div>
-          {run !== null && (canRefresh || canValidate || (live && run.status !== 'stopping')) && (
-            <div className="lrun-actions">
-              {canRefresh && (
-                <AsyncButton
-                  tone="primary"
-                  onClick={() => onRefresh()}
-                  title={
-                    refreshConfigured
-                      ? `Move the checkout to the tip of ${run.ref} and run the refresh instruction`
-                      : `Move the checkout to the tip of ${run.ref} and tell the session what moved — set localRun.refreshInstruction to say what to do about it`
-                  }
-                >
-                  Refresh
-                </AsyncButton>
-              )}
-              {canValidate && runNumber !== null && (
-                <AsyncButton
-                  className="primary"
-                  onClick={() => (stale ? setAskRefresh(true) : onValidate(runNumber, {}))}
-                  title="Send one agent to write a test plan against what is running, drive it in a browser, and report on the goal's page"
-                >
-                  Validate #{runNumber}
-                </AsyncButton>
-              )}
-              {live && run.status !== 'stopping' && (
-                <ConfirmButton
-                  label="Stop"
-                  confirmLabel="Stop it — really"
-                  pendingLabel="Stopping…"
-                  onConfirm={() => onStop()}
-                  title={
-                    stopConfigured
-                      ? 'Run the stop instruction, then take the session down'
-                      : 'Kills the session — nothing is configured to stop what it started'
-                  }
-                />
-              )}
-            </div>
-          )}
-        </header>
+function RunActions({
+  run,
+  reading,
+  stopConfigured,
+  refreshConfigured,
+  onRefresh,
+  onStop,
+  onValidate,
+}: {
+  run: LocalRunView;
+  reading: RunReading;
+  stopConfigured: boolean;
+  refreshConfigured: boolean;
+  onRefresh: Act;
+  onStop: Act;
+  onValidate: (runNumber: number) => unknown;
+}): JSX.Element | null {
+  const { live, canRefresh, canValidate, runNumber } = reading;
+  const canStop = live && run.status !== 'stopping';
+  if (!canRefresh && !canValidate && !canStop) return null;
+  return (
+    <div className="lrun-actions">
+      {canRefresh && (
+        <AsyncButton
+          tone="primary"
+          onClick={() => onRefresh()}
+          title={
+            refreshConfigured
+              ? `Move the checkout to the tip of ${run.ref} and run the refresh instruction`
+              : `Move the checkout to the tip of ${run.ref} and tell the session what moved — set localRun.refreshInstruction to say what to do about it`
+          }
+        >
+          Refresh
+        </AsyncButton>
+      )}
+      {canValidate && runNumber !== null && (
+        <AsyncButton
+          className="primary"
+          onClick={() => onValidate(runNumber)}
+          title="Send one agent to write a test plan against what is running, drive it in a browser, and report on the goal's page"
+        >
+          Validate #{runNumber}
+        </AsyncButton>
+      )}
+      {canStop && (
+        <ConfirmButton
+          label="Stop"
+          confirmLabel="Stop it — really"
+          pendingLabel="Stopping…"
+          onConfirm={() => onStop()}
+          title={
+            stopConfigured
+              ? 'Run the stop instruction, then take the session down'
+              : 'Kills the session — nothing is configured to stop what it started'
+          }
+        />
+      )}
+    </div>
+  );
+}
 
-        {askRefresh && run !== null && runNumber !== null && (
-          <ValidateLocallyModal
-            mode="refresh"
-            issueNumber={runNumber}
-            issueTitle={goalTitle ?? `#${String(runNumber)}`}
-            targetRef={run.ref}
-            run={run}
-            runTitle={goalTitle}
-            onSubmit={(opts) => Promise.resolve(onValidate(runNumber, opts))}
-            onClose={() => setAskRefresh(false)}
-          />
-        )}
-        {run !== null && (
+function RunDetails({
+  run,
+  reading,
+  now,
+  validation,
+  onMessage,
+}: {
+  run: LocalRunView;
+  reading: RunReading;
+  now: number;
+  validation: LocalValidationView | null;
+  onMessage: (text: string) => Promise<unknown> | unknown;
+}): JSX.Element {
+  const { turn, phase, said, goalTitle, live, stale, canMessage } = reading;
+  return (
+    <>
+      <p className="lrun-meta">
+        <Ref to={run.originRef} />
+        {goalTitle !== null && <span className="lrun-title"> {goalTitle}</span>}
+        {run.refFacts?.part != null && ` · part ${String(run.refFacts.part.seq)} of ${String(run.refFacts.part.total)}`}
+      </p>
+      <p className="lrun-meta lrun-where">
+        <code>{run.ref}</code>
+        {run.commit !== null && (
           <>
-            <p className="lrun-meta">
-              <Ref to={run.originRef} />
-              {goalTitle !== null && <span className="lrun-title"> {goalTitle}</span>}
-              {run.refFacts?.part != null &&
-                ` · part ${String(run.refFacts.part.seq)} of ${String(run.refFacts.part.total)}`}
-            </p>
-            <p className="lrun-meta lrun-where">
-              <code>{run.ref}</code>
-              {run.commit !== null && (
-                <>
-                  {' @ '}
-                  <code title={run.commit}>{run.commit.slice(0, 7)}</code>
-                </>
-              )}
-            </p>
-            {/* What is on the branch that is up — the same reading the rows below
-                carry, so "what am I looking at" is answered in one vocabulary. */}
-            {run.refFacts != null && <RefLine facts={run.refFacts} now={now} />}
-            {turn !== null && (
-              <p className={`lrun-stage${phase === null && said !== null ? ' lrun-stage-said' : ''}`}>
-                <span className="lrun-stage-turn">{TURN_LABEL[turn]}</span>
-                {phase !== null ? ` · ${phase}` : said !== null ? ` · ${said}` : '…'}
-              </p>
-            )}
-            {/* A validation in flight, in the same stage line the run's own turns
-                use: it is the other thing that takes minutes with somebody
-                watching, and it belongs beside the environment it is being run
-                against rather than only on the goal's page. */}
-            {validation !== null && inFlight(validation) && (
-              <p className="lrun-stage">
-                <span className="lrun-stage-turn">validating</span>
-                {` · ${localValidationSaid(validation)}`}
-              </p>
-            )}
-            {/* What the session said — its own account of the run, which is the only
-                account of a failure there is. Not while a teardown is in flight: the
-                note still holds the bring-up's last words, and "Up on :5173" under
-                "Stopping…" reads as a panel contradicting itself. */}
-            {run.note !== null && run.status !== 'stopping' && <p className="lrun-note">{run.note}</p>}
-            {live && <Readings run={run} now={now} stale={stale} />}
-            {canMessage && <MessageForm onMessage={onMessage} />}
+            {' @ '}
+            <code title={run.commit}>{run.commit.slice(0, 7)}</code>
           </>
         )}
-      </section>
-
-      {/* The session's own words, in the pane the fleet's transcripts use. These are
-          the same bytes off the same `output` event, so anything else here shows the
-          operator the SGR escapes raw and every tool call at full length — which is
-          the whole of what there is to read when a bring-up did not work. Open while
-          a turn is in flight or the run has settled — the cases with something to
-          read — and folded under a steady environment. A `details`, so the browser
-          draws the fold and the content is in the markup whichever way it stands. */}
-      {run !== null && (
-        <details
-          className="lrun-fold lrun-out"
-          open={outputOpen ?? !idle}
-          onClick={(e) => summaryClick(e, () => setOutputOpen(!(outputOpen ?? !idle)))}
-        >
-          <summary>
-            <span>Output</span>
-            {lines.length > 0 && <span className="lrun-fold-hint">{lines[lines.length - 1]}</span>}
-          </summary>
-          {lines.length > 0 ? (
-            <TranscriptPane text={lines.join('\n')} streamId={run.id} label="Local run output" className="compact" />
-          ) : (
-            <p className="lrun-note">Nothing printed yet.</p>
-          )}
-        </details>
+      </p>
+      {/* What is on the branch that is up — the same reading the rows below
+          carry, so "what am I looking at" is answered in one vocabulary. */}
+      {run.refFacts != null && <RefLine facts={run.refFacts} now={now} />}
+      {turn !== null && (
+        <p className={`lrun-stage${phase === null && said !== null ? ' lrun-stage-said' : ''}`}>
+          <span className="lrun-stage-turn">{TURN_LABEL[turn]}</span>
+          {phase !== null ? ` · ${phase}` : said !== null ? ` · ${said}` : '…'}
+        </p>
       )}
+      {/* A validation in flight, in the same stage line the run's own turns
+          use: it is the other thing that takes minutes with somebody
+          watching, and it belongs beside the environment it is being run
+          against rather than only on the goal's page. */}
+      {validation !== null && inFlight(validation) && (
+        <p className="lrun-stage">
+          <span className="lrun-stage-turn">validating</span>
+          {` · ${localValidationSaid(validation)}`}
+        </p>
+      )}
+      {/* What the session said — its own account of the run, which is the only
+          account of a failure there is. Not while a teardown is in flight: the
+          note still holds the bring-up's last words, and "Up on :5173" under
+          "Stopping…" reads as a panel contradicting itself. */}
+      {run.note !== null && run.status !== 'stopping' && <p className="lrun-note">{run.note}</p>}
+      {live && <Readings run={run} now={now} stale={stale} />}
+      {canMessage && <MessageForm onMessage={onMessage} />}
+    </>
+  );
+}
 
-      {/* The picker, folded while something is up. Rows rather than a `select`: what
-          a row has to say does not fit in an option's label, and a choice you cannot
-          see is what this panel got wrong first. */}
-      <details
-        className="lrun-fold lrun-pick"
-        open={pickerOpen ?? !live}
-        onClick={(e) => summaryClick(e, () => setPickerOpen(!(pickerOpen ?? !live)))}
-      >
-        <summary>
-          <span>{live ? 'Run a different goal' : 'Run a goal'}</span>
-          {live && <span className="lrun-fold-hint">stops what is running now</span>}
-        </summary>
-        <div className="lrun-pick-body">
-          {(holdingBack > 0 || showAll) && (
-            <label className="lrun-filter">
-              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              show every goal
-            </label>
-          )}
+/* The session's own words, in the pane the fleet's transcripts use. These are
+   the same bytes off the same `output` event, so anything else here shows the
+   operator the SGR escapes raw and every tool call at full length — which is
+   the whole of what there is to read when a bring-up did not work. Open while
+   a turn is in flight or the run has settled — the cases with something to
+   read — and folded under a steady environment. A `details`, so the browser
+   draws the fold and the content is in the markup whichever way it stands. */
+function OutputFold({
+  run,
+  lines,
+  open,
+  onFlip,
+}: {
+  run: LocalRunView;
+  lines: string[];
+  open: boolean;
+  onFlip: () => void;
+}): JSX.Element {
+  return (
+    <details className="lrun-fold lrun-out" open={open} onClick={(e) => summaryClick(e, onFlip)}>
+      <summary>
+        <span>Output</span>
+        {lines.length > 0 && <span className="lrun-fold-hint">{lines[lines.length - 1]}</span>}
+      </summary>
+      {lines.length > 0 ? (
+        <TranscriptPane text={lines.join('\n')} streamId={run.id} label="Local run output" className="compact" />
+      ) : (
+        <p className="lrun-note">Nothing printed yet.</p>
+      )}
+    </details>
+  );
+}
 
-          {rows.length === 0 && (
-            <p className="lrun-note">
-              {holdingBack > 0
-                ? `No goal has a branch of its own yet. ${String(holdingBack)} would run the integration branch — tick “show every goal” to pick one.`
-                : goals.length === 0
-                  ? 'The cockpit is not drawing any goals yet, so there is nothing to run.'
-                  : 'None of these goals has anywhere to run yet.'}
-            </p>
-          )}
+/* The picker, folded while something is up. Rows rather than a `select`: what
+   a row has to say does not fit in an option's label, and a choice you cannot
+   see is what this panel got wrong first. */
+function GoalPicker({
+  run,
+  live,
+  goals,
+  targets,
+  now,
+  onStart,
+}: {
+  run: LocalRunView | null;
+  live: boolean;
+  goals: Issue[];
+  targets: LocalRunTargetView[];
+  now: number;
+  onStart: (issueNumber: number, ref?: string) => Promise<unknown> | unknown;
+}): JSX.Element {
+  const [picked, setPicked] = useState<Pick | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState<boolean | null>(null);
 
-          {rows.map(({ goal, target }) => {
-            const running = live && run.originRef === target.originRef;
-            const isPicked = picked?.issueNumber === goal.number;
-            const others = target.options.filter((o) => o.option.ref !== target.target.ref);
-            return (
-              <div className={`lrun-row${isPicked ? ' on' : ''}`} key={goal.number}>
-                <div className="lrun-row-top">
-                  {/* The row's name is the control; its refs sit beside it. One click
-                      cannot have two destinations. */}
-                  <button
-                    type="button"
-                    className="lrun-row-pick"
-                    onClick={() => setPicked({ issueNumber: goal.number })}
-                    aria-pressed={isPicked && picked?.ref === undefined}
-                  >
-                    <span className="lrun-row-name">
-                      #{goal.number} {goal.title}
-                    </span>
-                    <RefSummary facts={target.target} now={now} />
-                  </button>
-                  <span className="lrun-refs">
-                    {running && <Tag tone="green">running</Tag>}
-                    <Ref to={target.originRef} />
-                    {target.target.pr !== null && <Ref to={`pr:${String(target.target.pr.number)}`} />}
-                  </span>
-                </div>
+  const byNumber = new Map(targets.map((t) => [t.issueNumber, t]));
+  const candidates = goals.flatMap((goal) => {
+    const target = byNumber.get(goal.number);
+    return target === undefined ? [] : [{ goal, target }];
+  });
+  const rows = showAll ? candidates : candidates.filter((row) => row.target.runnable);
+  const holdingBack = candidates.length - rows.length;
+  const chosenFacts = factsOf(picked, byNumber);
+  const runningOrigin = live && run !== null ? run.originRef : null;
+  const open = pickerOpen ?? !live;
 
-                {others.length > 0 && (
-                  <button
-                    type="button"
-                    className="lrun-more"
-                    onClick={() => setExpanded(expanded === goal.number ? null : goal.number)}
-                  >
-                    {expanded === goal.number ? '▾' : '▸'} run an earlier part ({others.length})
-                  </button>
-                )}
-                {expanded === goal.number &&
-                  others.map(({ option, facts }) => (
-                    <div className="lrun-row-top lrun-sub" key={option.ref}>
-                      <button
-                        type="button"
-                        className="lrun-row-pick"
-                        onClick={() => setPicked({ issueNumber: goal.number, ref: option.ref })}
-                        aria-pressed={isPicked && picked?.ref === option.ref}
-                      >
-                        <span className="lrun-row-name">
-                          {option.part === null
-                            ? 'the goal’s own branch'
-                            : `part ${String(option.part.seq)} · ${option.part.title}`}
-                        </span>
-                        <RefSummary facts={facts} now={now} />
-                      </button>
-                      <span className="lrun-refs">
-                        {facts.pr !== null && <Ref to={`pr:${String(facts.pr.number)}`} />}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            );
-          })}
+  return (
+    <details className="lrun-fold lrun-pick" open={open} onClick={(e) => summaryClick(e, () => setPickerOpen(!open))}>
+      <summary>
+        <span>{live ? 'Run a different goal' : 'Run a goal'}</span>
+        {live && <span className="lrun-fold-hint">stops what is running now</span>}
+      </summary>
+      <div className="lrun-pick-body">
+        {(holdingBack > 0 || showAll) && (
+          <label className="lrun-filter">
+            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+            show every goal
+          </label>
+        )}
 
-          {/* The Start button appears with a choice, not before it: a disabled "Pick a
-              goal" is a control that cannot be used, standing where the instruction
-              should be. The rows are the instruction. */}
-          {picked !== null && chosenFacts !== null && (
-            <div className="lrun-go">
-              <AsyncButton tone="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
-                {`${live ? 'Swap to' : 'Start'} #${String(picked.issueNumber)}`}
-              </AsyncButton>
-              {/* The ref, on the button's own line: this is the last chance to see what
-                  is about to be checked out, and the goal number does not say it. */}
-              <code className="lrun-go-ref">{chosenFacts.ref}</code>
-            </div>
-          )}
-        </div>
-      </details>
+        {rows.length === 0 && <p className="lrun-note">{emptyPickerNote(holdingBack, goals.length)}</p>}
+
+        {rows.map(({ goal, target }) => (
+          <GoalRow
+            key={goal.number}
+            goal={goal}
+            target={target}
+            now={now}
+            running={runningOrigin === target.originRef}
+            picked={picked?.issueNumber === goal.number ? picked : null}
+            expanded={expanded === goal.number}
+            onPick={(ref) =>
+              setPicked(ref === undefined ? { issueNumber: goal.number } : { issueNumber: goal.number, ref })
+            }
+            onExpand={() => setExpanded(expanded === goal.number ? null : goal.number)}
+          />
+        ))}
+
+        {/* The Start button appears with a choice, not before it: a disabled "Pick a
+            goal" is a control that cannot be used, standing where the instruction
+            should be. The rows are the instruction. */}
+        {picked !== null && chosenFacts !== null && (
+          <div className="lrun-go">
+            <AsyncButton tone="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
+              {`${live ? 'Swap to' : 'Start'} #${String(picked.issueNumber)}`}
+            </AsyncButton>
+            {/* The ref, on the button's own line: this is the last chance to see what
+                is about to be checked out, and the goal number does not say it. */}
+            <code className="lrun-go-ref">{chosenFacts.ref}</code>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function factsOf(picked: Pick | null, byNumber: Map<number, LocalRunTargetView>): LocalRunRefFacts | null {
+  const chosen = picked === null ? null : (byNumber.get(picked.issueNumber) ?? null);
+  if (chosen === null) return null;
+  if (picked?.ref === undefined) return chosen.target;
+  return chosen.options.find((o) => o.option.ref === picked.ref)?.facts ?? chosen.target;
+}
+
+function emptyPickerNote(holdingBack: number, goalCount: number): string {
+  if (holdingBack > 0)
+    return `No goal has a branch of its own yet. ${String(holdingBack)} would run the integration branch — tick “show every goal” to pick one.`;
+  if (goalCount === 0) return 'The cockpit is not drawing any goals yet, so there is nothing to run.';
+  return 'None of these goals has anywhere to run yet.';
+}
+
+function GoalRow({
+  goal,
+  target,
+  now,
+  running,
+  picked,
+  expanded,
+  onPick,
+  onExpand,
+}: {
+  goal: Issue;
+  target: LocalRunTargetView;
+  now: number;
+  running: boolean;
+  picked: Pick | null;
+  expanded: boolean;
+  onPick: (ref?: string) => void;
+  onExpand: () => void;
+}): JSX.Element {
+  const others = target.options.filter((o) => o.option.ref !== target.target.ref);
+  return (
+    <div className={`lrun-row${picked !== null ? ' on' : ''}`}>
+      <div className="lrun-row-top">
+        {/* The row's name is the control; its refs sit beside it. One click
+            cannot have two destinations. */}
+        <button
+          type="button"
+          className="lrun-row-pick"
+          onClick={() => onPick()}
+          aria-pressed={picked !== null && picked.ref === undefined}
+        >
+          <span className="lrun-row-name">
+            #{goal.number} {goal.title}
+          </span>
+          <RefSummary facts={target.target} now={now} />
+        </button>
+        <span className="lrun-refs">
+          {running && <Tag tone="green">running</Tag>}
+          <Ref to={target.originRef} />
+          {target.target.pr !== null && <Ref to={`pr:${String(target.target.pr.number)}`} />}
+        </span>
+      </div>
+
+      {others.length > 0 && (
+        <button type="button" className="lrun-more" onClick={onExpand}>
+          {expanded ? '▾' : '▸'} run an earlier part ({others.length})
+        </button>
+      )}
+      {expanded &&
+        others.map(({ option, facts }) => (
+          <div className="lrun-row-top lrun-sub" key={option.ref}>
+            <button
+              type="button"
+              className="lrun-row-pick"
+              onClick={() => onPick(option.ref)}
+              aria-pressed={picked !== null && picked.ref === option.ref}
+            >
+              <span className="lrun-row-name">
+                {option.part === null
+                  ? 'the goal’s own branch'
+                  : `part ${String(option.part.seq)} · ${option.part.title}`}
+              </span>
+              <RefSummary facts={facts} now={now} />
+            </button>
+            <span className="lrun-refs">{facts.pr !== null && <Ref to={`pr:${String(facts.pr.number)}`} />}</span>
+          </div>
+        ))}
     </div>
   );
 }

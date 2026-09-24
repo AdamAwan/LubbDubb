@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import type { AgentAskQuestion, CaveatAnswerInput, CheckDecline, Escalation, Proposal } from '../types.js';
 import { relTime, untilTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
@@ -16,28 +16,7 @@ import { Tag } from './tag.js';
 
 // → docs/spec/17-cockpit.md
 
-export function EscalationCard({
-  escalation,
-  proposal,
-  resumedAt,
-  now,
-  refUrls,
-  desktopFolder,
-  onAnswer,
-  onAnswerQuestions,
-  onDecide,
-  onBackOut,
-  onOverrule,
-  onPermission,
-  onDismiss,
-  onOpenAgent,
-  onComplete,
-  onExtend,
-  stallExpiresAt,
-  onViewPlan,
-  withheld,
-  onReveal,
-}: {
+interface CardProps {
   escalation: Escalation;
   proposal?: Proposal;
   resumedAt?: string | null;
@@ -71,98 +50,241 @@ export function EscalationCard({
   withheld?: boolean;
   /** Opens the goal on the pane the gate is drawn in. → docs/spec/17-cockpit.md#the-reveal-gate */
   onReveal?: () => void;
-}) {
+}
+
+type Card = ReturnType<typeof readCard>;
+type Acknowledgements = ReturnType<typeof useAcknowledgements>;
+type Declines = ReturnType<typeof useCheckDeclines>;
+type Send = ReturnType<typeof useAsyncAction>;
+
+export function EscalationCard(props: CardProps) {
+  const { escalation, now, refUrls, onAnswer, onAnswerQuestions, onDismiss, onViewPlan } = props;
   const [text, setText] = useState('');
   const [asking, setAsking] = useState(false);
   const send = useAsyncAction();
-  const { context } = escalation;
-  const signal = describeSignal(context.originRef, context.prNumber);
-  const permission = context.permission && onPermission ? context.permission : null;
-  const offered = agentOptions(context.options);
-  const quick = offered ?? quickAnswers(escalation.prompt);
-  const questions = onAnswerQuestions ? questionnaire(context.questions) : null;
-  const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
-  const caveats = planCaveatsOf(decidable ?? undefined);
-  const ack = useAcknowledgements(caveats);
-  const held = ack.outstanding.length > 0;
-  const planDecidable = decidable?.kind === 'plan' && onDecide && onBackOut ? decidable : null;
-  /* While the gate stands there is exactly one thing to do here and it is not on
-     this card: approving, refusing and backing out are all refused server-side, and
-     the sheet behind "Read the full plan" answers 409 — so the verdict row and both
-     doors into the document are replaced by the one press that leads to the gate.
-     A card offering four answers that each end in a refusal is the ask telling the
-     operator to guess. → docs/spec/17-cockpit.md#the-reveal-gate */
-  const gated = planDecidable !== null && withheld === true && onReveal !== undefined;
-  const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
-  const expiring = escalation.agentId && stallExpiresAt ? stallExpiresAt : null;
-  const [headline, prose] = splitPrompt(escalation.prompt);
-  const [ask, caution] = splitCaution(prose);
-  const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
-  const body = proposal?.kind === 'plan' || draftedBody ? (caveats.length > 0 ? '' : caution) : prose;
-  const planId = proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null;
-  /* A check set is a set, not a paragraph: it rides on the proposal as structure and is drawn as rows
-     rather than through `context.detail`'s markdown. → docs/spec/17-cockpit.md */
-  const checkSet = checkSetOf(proposal);
+  const card = readCard(props);
+  const { permission, questions, decidable, planDecidable, gated, planId, quick } = card;
+  const ack = useAcknowledgements(card.caveats);
   /* The rows the operator is striking out of the set. Held on the card rather than in `CheckSetAsk`,
      because the control is drawn on the row and the verdict is sent by the button at the foot.
      → docs/spec/20-validation.md#declining-a-single-row */
-  const declines = useCheckDeclines(checkSet);
-  /* The goal number, from the escalation's context or from the origin it was
-     raised on. Both spell the same goal, and only the first is always set: a card
-     that has just the origin was dropping the Claude Code hand-off, which is the
-     one answer here that needs the number. */
-  const issueNumber = goalNumber(context);
-  const overrulable =
-    decidable?.kind === 'shortfall' && onOverrule && typeof context.issueNumber === 'number'
-      ? { proposalId: decidable.id, issueNumber: context.issueNumber }
-      : null;
+  const declines = useCheckDeclines(card.checkSet);
 
   return (
     <Panel density="padded" className="card escalation">
-      <div className="card-head">
-        <Tag tone="accent" fill>
-          {escalation.type.replace(/_/g, ' ')}
+      <CardHead escalation={escalation} card={card} resumedAt={props.resumedAt} now={now} refUrls={refUrls} />
+      <CardProse escalation={escalation} card={card} refUrls={refUrls} />
+      <CardDetail escalation={escalation} card={card} refUrls={refUrls} declines={declines} />
+
+      {/*
+        Both act on the *agent*, not on the question — which is why "Mark work
+        done" sits here beside the transcript link rather than among the quick
+        answers below. A quick answer routes through `answer` -> `agents.respond`,
+        which types text into the session and flips the agent back to running: the
+        opposite of finishing it. This ends the agent on the done terminal and
+        settles this item on the way out.
+      */}
+      {escalation.agentId ? (
+        <AgentActions
+          agentId={escalation.agentId}
+          expiring={card.expiring}
+          onOpenAgent={props.onOpenAgent}
+          onComplete={props.onComplete}
+          onExtend={props.onExtend}
+        />
+      ) : null}
+
+      {planId && !planDecidable && !gated ? (
+        <Button className="esc-plan-open" onClick={() => onViewPlan!(planId)}>
+          <span className="esc-plan-open-label">Read the full plan</span>
+          <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
+        </Button>
+      ) : null}
+
+      {permission ? <pre className="esc-output">{permission.summary}</pre> : null}
+
+      {!decidable && !permission && !questions && quick.length > 0 && (
+        <div className="esc-quick">
+          {quick.map((q) => (
+            <AsyncButton key={q} size="small" onClick={() => onAnswer(q)}>
+              {q}
+            </AsyncButton>
+          ))}
+        </div>
+      )}
+
+      <CardAnswer
+        props={props}
+        card={card}
+        text={text}
+        setText={setText}
+        send={send}
+        ack={ack}
+        declines={declines}
+        onAsk={() => setAsking(true)}
+      />
+
+      {/* Not on a card that asks for a verdict: those already carry the answer
+          that clears them — Reject, or the ticket answers under a plan — and a
+          second control that rejects by another name is one an operator presses
+          meaning "not now". */}
+      {onDismiss && !decidable && (
+        <div className="esc-dismiss">
+          <AsyncButton
+            ghost
+            size="small"
+            title={DISMISS_HINT[permission ? 'permission' : 'question']}
+            onClick={() => onDismiss(escalation.id, text.trim() || undefined)}
+          >
+            {permission ? 'Dismiss (denies)' : 'Dismiss'}
+          </AsyncButton>
+          {card.resumed && <span className="muted small">the agent moved on without this</span>}
+        </div>
+      )}
+
+      {asking && questions && onAnswerQuestions ? (
+        <QuestionnaireModal
+          prompt={escalation.prompt}
+          questions={questions}
+          onClose={() => setAsking(false)}
+          onSend={onAnswerQuestions}
+        />
+      ) : null}
+    </Panel>
+  );
+}
+
+function readCard({
+  escalation,
+  proposal,
+  resumedAt,
+  stallExpiresAt,
+  onAnswerQuestions,
+  onDecide,
+  onBackOut,
+  onOverrule,
+  onPermission,
+  onViewPlan,
+  withheld,
+  onReveal,
+}: CardProps) {
+  const { context } = escalation;
+  const offered = agentOptions(context.options);
+  const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
+  const caveats = planCaveatsOf(decidable ?? undefined);
+  const planDecidable = decidable?.kind === 'plan' && onDecide && onBackOut ? decidable : null;
+  const [headline, prose] = splitPrompt(escalation.prompt);
+  const [ask, caution] = splitCaution(prose);
+  const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
+  return {
+    signal: describeSignal(context.originRef, context.prNumber),
+    permission: context.permission && onPermission ? context.permission : null,
+    quick: offered ?? quickAnswers(escalation.prompt),
+    questions: onAnswerQuestions ? questionnaire(context.questions) : null,
+    decidable,
+    caveats,
+    planDecidable,
+    /* While the gate stands there is exactly one thing to do here and it is not on
+       this card: approving, refusing and backing out are all refused server-side, and
+       the sheet behind "Read the full plan" answers 409 — so the verdict row and both
+       doors into the document are replaced by the one press that leads to the gate.
+       A card offering four answers that each end in a refusal is the ask telling the
+       operator to guess. → docs/spec/17-cockpit.md#the-reveal-gate */
+    gated: planDecidable !== null && withheld === true && onReveal !== undefined,
+    resumed: resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt),
+    expiring: escalation.agentId && stallExpiresAt ? stallExpiresAt : null,
+    headline,
+    body: proposal?.kind === 'plan' || draftedBody ? (caveats.length > 0 ? '' : caution) : prose,
+    planId: proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null,
+    /* A check set is a set, not a paragraph: it rides on the proposal as structure and is drawn as rows
+       rather than through `context.detail`'s markdown. → docs/spec/17-cockpit.md */
+    checkSet: checkSetOf(proposal),
+    /* The goal number, from the escalation's context or from the origin it was
+       raised on. Both spell the same goal, and only the first is always set: a card
+       that has just the origin was dropping the Claude Code hand-off, which is the
+       one answer here that needs the number. */
+    issueNumber: goalNumber(context),
+    overrulable:
+      decidable?.kind === 'shortfall' && onOverrule && typeof context.issueNumber === 'number'
+        ? { proposalId: decidable.id, issueNumber: context.issueNumber }
+        : null,
+  };
+}
+
+function CardHead({
+  escalation,
+  card,
+  resumedAt,
+  now,
+  refUrls,
+}: {
+  escalation: Escalation;
+  card: Card;
+  resumedAt: string | null | undefined;
+  now: number | undefined;
+  refUrls: Record<string, string>;
+}): JSX.Element {
+  const { questions, decidable, permission, resumed, expiring, signal } = card;
+  return (
+    <div className="card-head">
+      <Tag tone="accent" fill>
+        {escalation.type.replace(/_/g, ' ')}
+      </Tag>
+      {questions && (
+        <Tag tone="blue" title="Answered together, in one reply">
+          {questions.length} questions
         </Tag>
-        {questions && (
-          <Tag tone="blue" title="Answered together, in one reply">
-            {questions.length} questions
-          </Tag>
-        )}
-        {decidable && (
-          <Tag tone="amber" title="Accepting performs this act; nothing happens until you do">
-            needs your decision
-          </Tag>
-        )}
-        {permission && (
-          <Tag tone="amber" title="An agent is blocked on this command until you allow or deny it">
-            wants permission
-          </Tag>
-        )}
-        {resumed && (
-          <Tag
-            tone="green"
-            title={`The agent has made tool calls since asking (last ${relTime(resumedAt!, now)}), so it carried on rather than waiting. Probably safe to dismiss.`}
-          >
-            agent resumed
-          </Tag>
-        )}
-        {expiring && (
-          <span
-            className="tag t-amber esc-expiry"
-            title="This agent stopped without saying whether it had finished, and did not answer when asked. Unless you say otherwise, the harness records it done when this runs out — its branch, commits and pull request are kept, and its worktree slot goes back to the fleet."
-          >
-            done in {untilTime(expiring, now)}
-          </span>
-        )}
-        {signal && <Tag>{linkify(signal, refUrls)}</Tag>}
-        <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
-      </div>
-      <div className="escalation-prompt">{linkify(headline, refUrls)}</div>
+      )}
+      {decidable && (
+        <Tag tone="amber" title="Accepting performs this act; nothing happens until you do">
+          needs your decision
+        </Tag>
+      )}
+      {permission && (
+        <Tag tone="amber" title="An agent is blocked on this command until you allow or deny it">
+          wants permission
+        </Tag>
+      )}
+      {resumed && (
+        <Tag
+          tone="green"
+          title={`The agent has made tool calls since asking (last ${relTime(resumedAt!, now)}), so it carried on rather than waiting. Probably safe to dismiss.`}
+        >
+          agent resumed
+        </Tag>
+      )}
+      {expiring && (
+        <span
+          className="tag t-amber esc-expiry"
+          title="This agent stopped without saying whether it had finished, and did not answer when asked. Unless you say otherwise, the harness records it done when this runs out — its branch, commits and pull request are kept, and its worktree slot goes back to the fleet."
+        >
+          done in {untilTime(expiring, now)}
+        </span>
+      )}
+      {signal && <Tag>{linkify(signal, refUrls)}</Tag>}
+      <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
+    </div>
+  );
+}
+
+function CardProse({
+  escalation,
+  card,
+  refUrls,
+}: {
+  escalation: Escalation;
+  card: Card;
+  refUrls: Record<string, string>;
+}): JSX.Element {
+  const { context } = escalation;
+  return (
+    <>
+      <div className="escalation-prompt">{linkify(card.headline, refUrls)}</div>
       {/* The rest of the harness's own prose, paragraph breaks kept. They were
           always in the string and the renderer was eating them — `plan-approval`
           and a wedged plan both write what accepting and rejecting do as their own
           paragraphs, and both arrived as one run-on sentence. */}
-      {body ? <div className="escalation-body">{renderMarkdown(body, refUrls)}</div> : null}
+      {card.body ? <div className="escalation-body">{renderMarkdown(card.body, refUrls)}</div> : null}
 
       {context.taskTitle ? <div className="muted small">re: {linkify(String(context.taskTitle), refUrls)}</div> : null}
 
@@ -172,7 +294,25 @@ export function EscalationCard({
           <pre className="esc-output">{context.recentOutput}</pre>
         </details>
       ) : null}
+    </>
+  );
+}
 
+function CardDetail({
+  escalation,
+  card,
+  refUrls,
+  declines,
+}: {
+  escalation: Escalation;
+  card: Card;
+  refUrls: Record<string, string>;
+  declines: Declines;
+}): JSX.Element {
+  const { context } = escalation;
+  const { checkSet, gated, decidable } = card;
+  return (
+    <>
       {/* Markdown, unlike `recentOutput` above it: that is terminal output and
           preformatted is what it *is*, while this is someone writing to a human
           and a `<pre>` flattens its structure into one grey block.
@@ -211,239 +351,227 @@ export function EscalationCard({
           <pre className="esc-output">{context.draft}</pre>
         </details>
       ) : null}
+    </>
+  );
+}
 
-      {/*
-        Both act on the *agent*, not on the question — which is why "Mark work
-        done" sits here beside the transcript link rather than among the quick
-        answers below. A quick answer routes through `answer` -> `agents.respond`,
-        which types text into the session and flips the agent back to running: the
-        opposite of finishing it. This ends the agent on the done terminal and
-        settles this item on the way out.
-      */}
-      {escalation.agentId ? (
-        <div className="esc-agent-actions">
-          {onOpenAgent ? (
-            <Button ghost size="small" className="esc-open" onClick={() => onOpenAgent(escalation.agentId!)}>
-              Open agent transcript →
-            </Button>
-          ) : null}
-          {onComplete ? (
-            <AsyncButton
-              ghost
-              size="small"
-              title="The agent is finished: record it done, reclaim its worktree, and close this out"
-              onClick={() => onComplete(escalation.agentId!)}
-            >
-              Mark work done
-            </AsyncButton>
-          ) : null}
-          {/* Only where a clock is actually running: an Extend button on a card with
-              no countdown would offer to postpone nothing, and 409. */}
-          {expiring && onExtend ? (
-            <AsyncButton
-              ghost
-              size="small"
-              title="Hold the countdown for another fifteen minutes while you read the transcript. Nothing is decided by this."
-              onClick={() => onExtend(escalation.agentId!)}
-            >
-              Give me 15 minutes
-            </AsyncButton>
-          ) : null}
-        </div>
-      ) : null}
-
-      {planId && !planDecidable && !gated ? (
-        <Button className="esc-plan-open" onClick={() => onViewPlan!(planId)}>
-          <span className="esc-plan-open-label">Read the full plan</span>
-          <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
+function AgentActions({
+  agentId,
+  expiring,
+  onOpenAgent,
+  onComplete,
+  onExtend,
+}: {
+  agentId: string;
+  expiring: string | null;
+  onOpenAgent?: ((agentId: string) => void) | undefined;
+  onComplete?: ((agentId: string) => Promise<unknown> | unknown) | undefined;
+  onExtend?: ((agentId: string) => Promise<unknown> | unknown) | undefined;
+}): JSX.Element {
+  return (
+    <div className="esc-agent-actions">
+      {onOpenAgent ? (
+        <Button ghost size="small" className="esc-open" onClick={() => onOpenAgent(agentId)}>
+          Open agent transcript →
         </Button>
       ) : null}
+      {onComplete ? (
+        <AsyncButton
+          ghost
+          size="small"
+          title="The agent is finished: record it done, reclaim its worktree, and close this out"
+          onClick={() => onComplete(agentId)}
+        >
+          Mark work done
+        </AsyncButton>
+      ) : null}
+      {/* Only where a clock is actually running: an Extend button on a card with
+          no countdown would offer to postpone nothing, and 409. */}
+      {expiring && onExtend ? (
+        <AsyncButton
+          ghost
+          size="small"
+          title="Hold the countdown for another fifteen minutes while you read the transcript. Nothing is decided by this."
+          onClick={() => onExtend(agentId)}
+        >
+          Give me 15 minutes
+        </AsyncButton>
+      ) : null}
+    </div>
+  );
+}
 
-      {permission ? <pre className="esc-output">{permission.summary}</pre> : null}
+interface AnswerProps {
+  props: CardProps;
+  card: Card;
+  text: string;
+  setText: (text: string) => void;
+  send: Send;
+  ack: Acknowledgements;
+  declines: Declines;
+  onAsk: () => void;
+}
 
-      {!decidable && !permission && !questions && quick.length > 0 && (
-        <div className="esc-quick">
-          {quick.map((q) => (
-            <AsyncButton key={q} size="small" onClick={() => onAnswer(q)}>
-              {q}
-            </AsyncButton>
-          ))}
-        </div>
-      )}
+function CardAnswer(answer: AnswerProps): JSX.Element {
+  const { props, card, text, setText, send, onAsk } = answer;
+  const { escalation, onPermission, onReveal, onAnswer } = props;
+  if (card.permission)
+    return (
+      <div className="esc-decide">
+        <input
+          placeholder="Why (optional) — recorded either way"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <AsyncButton
+          tone="primary"
+          title="Run this command; the same agent continues"
+          onClick={() => onPermission!(escalation.id, true, text.trim() || undefined)}
+        >
+          Allow
+        </AsyncButton>
+        <AsyncButton
+          ghost
+          title="Refuse this command; the agent is told and carries on"
+          onClick={() => onPermission!(escalation.id, false, text.trim() || undefined)}
+        >
+          Deny
+        </AsyncButton>
+      </div>
+    );
+  if (card.gated)
+    return (
+      <Button className="esc-plan-open" onClick={onReveal}>
+        <span className="esc-plan-open-label">Reveal the plan</span>
+        <span className="esc-plan-open-hint">
+          the prediction and what “done” means are asked first, on the goal — then it is yours to read →
+        </span>
+      </Button>
+    );
+  if (card.decidable) return <DecisionAnswer {...answer} decidable={card.decidable} />;
+  if (card.questions)
+    return (
+      <div className="esc-quick">
+        <AsyncButton tone="primary" onClick={onAsk}>
+          Answer {card.questions.length} questions →
+        </AsyncButton>
+      </div>
+    );
+  return (
+    <form
+      className="reply"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const value = text.trim();
+        if (!value) return;
+        void send.run(async () => {
+          await onAnswer(value);
+          setText('');
+        });
+      }}
+    >
+      <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
+      <SubmitButton phase={send.phase} tone="primary">
+        Send
+      </SubmitButton>
+    </form>
+  );
+}
 
-      {permission ? (
+function DecisionAnswer({
+  props,
+  card,
+  text,
+  setText,
+  ack,
+  declines,
+  decidable,
+}: AnswerProps & { decidable: Proposal }): JSX.Element {
+  const { refUrls, desktopFolder, onDecide, onBackOut, onOverrule, onViewPlan } = props;
+  const { caveats, planDecidable, planId, issueNumber, overrulable } = card;
+  const held = ack.outstanding.length > 0;
+  return (
+    <>
+      <CaveatChecklist
+        caveats={caveats}
+        ticked={ack.ticked}
+        answers={ack.written}
+        onToggle={ack.toggle}
+        onAnswer={ack.answer}
+        refUrls={refUrls}
+      />
+      {planDecidable ? (
+        <PlanAnswers
+          proposalId={planDecidable.id}
+          issueNumber={issueNumber}
+          approveLabel={ACCEPT_LABEL.plan ?? 'Approve'}
+          outstanding={ack.outstanding}
+          acknowledged={ack.acknowledged}
+          answers={ack.answers}
+          desktopFolder={desktopFolder}
+          {...(planId ? { onReadPlan: () => onViewPlan!(planId) } : {})}
+          discussExplain="so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does."
+          onDecide={onDecide!}
+          onBackOut={onBackOut!}
+        />
+      ) : (
         <div className="esc-decide">
           <input
-            placeholder="Why (optional) — recorded either way"
+            placeholder={
+              overrulable ? 'Why — optional to decide, required to overrule' : 'Why (optional) — recorded either way'
+            }
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
           <AsyncButton
             tone="primary"
-            title="Run this command; the same agent continues"
-            onClick={() => onPermission!(escalation.id, true, text.trim() || undefined)}
+            disabled={held || declines.unsaid.length > 0}
+            title={acceptTitle(decidable, held, ack, declines)}
+            onClick={() =>
+              onDecide!(
+                decidable.id,
+                'accept',
+                text.trim() || undefined,
+                ack.acknowledged,
+                ack.answers,
+                declines.declined,
+              )
+            }
           >
-            Allow
+            {declines.whole ? 'Send them back' : (ACCEPT_LABEL[decidable.kind] ?? 'Approve')}
           </AsyncButton>
           <AsyncButton
             ghost
-            title="Refuse this command; the agent is told and carries on"
-            onClick={() => onPermission!(escalation.id, false, text.trim() || undefined)}
+            title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
+            onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
           >
-            Deny
+            Reject
           </AsyncButton>
-        </div>
-      ) : gated ? (
-        <Button className="esc-plan-open" onClick={onReveal}>
-          <span className="esc-plan-open-label">Reveal the plan</span>
-          <span className="esc-plan-open-hint">
-            the prediction and what “done” means are asked first, on the goal — then it is yours to read →
-          </span>
-        </Button>
-      ) : planDecidable ? (
-        <>
-          <CaveatChecklist
-            caveats={caveats}
-            ticked={ack.ticked}
-            answers={ack.written}
-            onToggle={ack.toggle}
-            onAnswer={ack.answer}
-            refUrls={refUrls}
-          />
-          <PlanAnswers
-            proposalId={planDecidable.id}
-            issueNumber={issueNumber}
-            approveLabel={ACCEPT_LABEL.plan ?? 'Approve'}
-            outstanding={ack.outstanding}
-            acknowledged={ack.acknowledged}
-            answers={ack.answers}
-            desktopFolder={desktopFolder}
-            {...(planId ? { onReadPlan: () => onViewPlan!(planId) } : {})}
-            discussExplain="so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does."
-            onDecide={onDecide!}
-            onBackOut={onBackOut!}
-          />
-        </>
-      ) : decidable ? (
-        <>
-          <CaveatChecklist
-            caveats={caveats}
-            ticked={ack.ticked}
-            answers={ack.written}
-            onToggle={ack.toggle}
-            onAnswer={ack.answer}
-            refUrls={refUrls}
-          />
-          <div className="esc-decide">
-            <input
-              placeholder={
-                overrulable ? 'Why — optional to decide, required to overrule' : 'Why (optional) — recorded either way'
-              }
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            <AsyncButton
-              tone="primary"
-              disabled={held || declines.unsaid.length > 0}
-              title={
-                declines.unsaid.length > 0
-                  ? unsaidTitle(declines.unsaid)
-                  : declines.whole
-                    ? 'You have struck out every check, so this sends them back to be written again'
-                    : held
-                      ? heldTitle(ack.outstanding)
-                      : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')
-              }
-              onClick={() =>
-                onDecide!(
-                  decidable.id,
-                  'accept',
-                  text.trim() || undefined,
-                  ack.acknowledged,
-                  ack.answers,
-                  declines.declined,
-                )
-              }
-            >
-              {declines.whole ? 'Send them back' : (ACCEPT_LABEL[decidable.kind] ?? 'Approve')}
-            </AsyncButton>
+          {overrulable && (
             <AsyncButton
               ghost
-              title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
-              onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
+              disabled={text.trim().length === 0}
+              title={
+                text.trim().length === 0
+                  ? 'Say why the assessment is wrong — it becomes the delivery’s reason and the correction the ticket gets'
+                  : 'Records the goal delivered with your reason, and puts the same words in front of the retrospective to get them onto the ticket'
+              }
+              onClick={() => onOverrule!(overrulable.issueNumber, overrulable.proposalId, text.trim())}
             >
-              Reject
+              Overrule the assessment
             </AsyncButton>
-            {overrulable && (
-              <AsyncButton
-                ghost
-                disabled={text.trim().length === 0}
-                title={
-                  text.trim().length === 0
-                    ? 'Say why the assessment is wrong — it becomes the delivery’s reason and the correction the ticket gets'
-                    : 'Records the goal delivered with your reason, and puts the same words in front of the retrospective to get them onto the ticket'
-                }
-                onClick={() => onOverrule!(overrulable.issueNumber, overrulable.proposalId, text.trim())}
-              >
-                Overrule the assessment
-              </AsyncButton>
-            )}
-          </div>
-        </>
-      ) : questions ? (
-        <div className="esc-quick">
-          <AsyncButton tone="primary" onClick={() => setAsking(true)}>
-            Answer {questions.length} questions →
-          </AsyncButton>
-        </div>
-      ) : (
-        <form
-          className="reply"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const value = text.trim();
-            if (!value) return;
-            void send.run(async () => {
-              await onAnswer(value);
-              setText('');
-            });
-          }}
-        >
-          <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
-          <SubmitButton phase={send.phase} tone="primary">
-            Send
-          </SubmitButton>
-        </form>
-      )}
-
-      {/* Not on a card that asks for a verdict: those already carry the answer
-          that clears them — Reject, or the ticket answers under a plan — and a
-          second control that rejects by another name is one an operator presses
-          meaning "not now". */}
-      {onDismiss && !decidable && (
-        <div className="esc-dismiss">
-          <AsyncButton
-            ghost
-            size="small"
-            title={DISMISS_HINT[permission ? 'permission' : 'question']}
-            onClick={() => onDismiss(escalation.id, text.trim() || undefined)}
-          >
-            {permission ? 'Dismiss (denies)' : 'Dismiss'}
-          </AsyncButton>
-          {resumed && <span className="muted small">the agent moved on without this</span>}
+          )}
         </div>
       )}
-
-      {asking && questions && onAnswerQuestions ? (
-        <QuestionnaireModal
-          prompt={escalation.prompt}
-          questions={questions}
-          onClose={() => setAsking(false)}
-          onSend={onAnswerQuestions}
-        />
-      ) : null}
-    </Panel>
+    </>
   );
+}
+
+function acceptTitle(decidable: Proposal, held: boolean, ack: Acknowledgements, declines: Declines): string {
+  if (declines.unsaid.length > 0) return unsaidTitle(declines.unsaid);
+  if (declines.whole) return 'You have struck out every check, so this sends them back to be written again';
+  if (held) return heldTitle(ack.outstanding);
+  return ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now';
 }
 
 function splitPrompt(prompt: string): [headline: string, body: string] {
