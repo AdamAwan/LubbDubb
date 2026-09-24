@@ -77,10 +77,3 @@ export function scalarShaped(rows: readonly WatchRow[]): boolean {
   const columns = Object.entries(rows[0]!).filter(([name]) => name !== WATCH_ID_COLUMN);
   return columns.length === 1 && typeof columns[0]![1] === 'number';
 }
-
-export function watchRowLabels(row: WatchRow): { name: string; value: string }[] {
-  return Object.entries(row)
-    .filter(([name]) => name !== WATCH_ID_COLUMN)
-    .slice(0, 2)
-    .map(([name, value]) => ({ name, value: String(value) }));
-}
