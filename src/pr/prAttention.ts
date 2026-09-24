@@ -26,7 +26,7 @@ import {
   reviewOrigin,
   reviewPendingLabel,
   reviewReading,
-  reviewSatisfied,
+  isMergeReady,
   reviewTriageOrigin,
   triageRuns,
   triagePendingLabel,
@@ -116,7 +116,7 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
     };
   }
 
-  if (isMergeReady(pr, ctx)) return mergeVerdict(pr, ctx);
+  if (isMergeReady(pr, ctx.defaultBranch, reading(pr, ctx), reviewPolicy(ctx))) return mergeVerdict(pr, ctx);
   return waitingVerdict(pr, ctx, ci);
 }
 
@@ -174,20 +174,6 @@ function concernVerdict(concerns: PrConcern[], ci: CiReading, ctx: PrAttentionCo
     return { status: 'harness', reasons: [`${top.label} — on cooldown, retrying`, ...others] };
   }
   return { status: 'harness', reasons: [`${top.label} — an agent will be dispatched`, ...others] };
-}
-
-function isMergeReady(pr: PullRequest, ctx: PrAttentionContext): boolean {
-  return (
-    !isStackedPr(pr, ctx.defaultBranch) &&
-    pr.ciStatus === 'passing' &&
-    pr.approved === true &&
-    pr.mergeable === true &&
-    pr.mergeableState !== 'behind' &&
-    pr.mergeableState !== 'blocked' &&
-    pr.mergeableState !== 'dirty' &&
-    pr.unresolvedComments.every((c) => c.handled) &&
-    reviewSatisfied(pr, reading(pr, ctx), reviewPolicy(ctx))
-  );
 }
 
 function mergeVerdict(pr: PullRequest, ctx: PrAttentionContext): PrAttention {

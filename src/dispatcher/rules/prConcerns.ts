@@ -1,11 +1,10 @@
 import type { DispatchContext } from '../dispatcher.js';
-import { isStackedPr } from '../../pr/prHealth.js';
 import { baseFixingCi } from '../../ci/ciPolicy.js';
 import type { Agent, PullRequest } from '../../types.js';
 import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { concernUrgency } from '../rules.js';
-import { reviewReading, reviewSatisfied } from '../../review/prReview.js';
+import { isMergeReady, reviewReading } from '../../review/prReview.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
 import { signalsOf, type PrConcern } from './prConcerns/concern.js';
 import { reviewConcern } from './prConcerns/review.js';
@@ -65,20 +64,6 @@ function notifyBranchAgent(s: StageContext, pr: PullRequest, concerns: PrConcern
     admission: 'branch-notify',
     reason: `New PR signal(s) for a branch already staffed by agent ${agent.id}.`,
   } satisfies RawAction);
-}
-
-function isMergeReady(s: StageContext, pr: PullRequest, reading: ReviewReading): boolean {
-  return (
-    !isStackedPr(pr, s.defaultBranch) &&
-    pr.ciStatus === 'passing' &&
-    pr.approved === true &&
-    pr.mergeable === true &&
-    pr.mergeableState !== 'behind' &&
-    pr.mergeableState !== 'blocked' &&
-    pr.mergeableState !== 'dirty' &&
-    pr.unresolvedComments.every((c) => c.handled) &&
-    reviewSatisfied(pr, reading, s.review)
-  );
 }
 
 function stageConcern(s: StageContext, pr: PullRequest, top: PrConcern): void {
@@ -149,7 +134,7 @@ export function prConcerns(s: StageContext): void {
       }
     }
 
-    const mergeReady = isMergeReady(s, pr, reading);
+    const mergeReady = isMergeReady(pr, s.defaultBranch, reading, s.review);
     const mergeHeld = proposalHold('merge', mergeProposalRef(pr.number), ctx.proposals ?? [], {
       rejectionSignals: ctx.rejectionSignals,
     });
