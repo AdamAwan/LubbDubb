@@ -9,7 +9,7 @@ import type { RouteContext } from './context.js';
 // → docs/spec/16-http-api.md
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness, connector, errors } = system;
+  const { store, harness } = system;
 
   const CreateBody = z.object({
     title: requiredText('title is required'),
@@ -58,7 +58,23 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const CloseTicketBody = z.object({ note: optionalText('note') });
+  registerCloseTicket(app, { system, hub });
+
+  app.post(
+    '/api/human-tasks/:id/dismiss',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const task = store.humanTasks.dismissHumanTask(params.id);
+      if (!task) return reply.code(409).send({ error: 'human task not found, still open, or already dismissed' });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, humanTask: task };
+    }),
+  );
+}
+
+const CloseTicketBody = z.object({ note: optionalText('note') });
+
+function registerCloseTicket(app: FastifyInstance, { system, hub }: Pick<RouteContext, 'system' | 'hub'>): void {
+  const { store, harness, connector, errors } = system;
   app.post(
     '/api/human-tasks/:id/close-ticket',
     checked({ params: IdParams, body: CloseTicketBody }, async ({ params, body, reply }) => {
@@ -94,16 +110,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, humanTask: settled, report };
-    }),
-  );
-
-  app.post(
-    '/api/human-tasks/:id/dismiss',
-    checked({ params: IdParams }, async ({ params, reply }) => {
-      const task = store.humanTasks.dismissHumanTask(params.id);
-      if (!task) return reply.code(409).send({ error: 'human task not found, still open, or already dismissed' });
-      hub.broadcast({ type: 'dirty' });
-      return { ok: true, humanTask: task };
     }),
   );
 }

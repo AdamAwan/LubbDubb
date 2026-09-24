@@ -4,51 +4,121 @@ import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecov
 import { formatAnswers } from '../../escalation/questionnaire.js';
 import { withheldPlanRefusal } from '../planReveal.js';
 import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
+import type { System } from '../../system.js';
+import type { Escalation } from '../../types.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness, escalations, proposals, permissions, recovery } = system;
+/** → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed */
+function refuseUnrevealed(system: System, proposalId: string): string | null {
+  const proposal = system.store.escalations.listProposals().find((p) => p.id === proposalId);
+  return withheldPlanRefusal(system, proposal?.action.planId);
+}
 
-  /** → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed */
-  const refuseUnrevealed = (proposalId: string): string | null => {
-    const proposal = store.escalations.listProposals().find((p) => p.id === proposalId);
-    return withheldPlanRefusal(system, proposal?.action.planId);
-  };
+function answerRefusal({ store, recovery }: System, id: string, item: Escalation | null): string | null {
+  const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+  if (pending)
+    return `this item is a proposal (${pending.id}) — accept or reject it via /api/proposals/${pending.id}/accept|reject`;
+  if (item?.context?.permission)
+    return `this item is a permission request — allow or deny it via /api/escalations/${id}/permission`;
+  const orphaned = item?.agentId ? recovery.pendingForAgent(item.agentId) : null;
+  if (orphaned)
+    return (
+      `the agent that asked this crashed — decide its recovery via ` +
+      `/api/recovery/${orphaned.taskId} first (restore keeps this question open)`
+    );
+  return null;
+}
 
-  const AnswerBody = z
-    .object({
-      response: requiredText('response required').optional(),
-      answers: z
-        .array(z.string({ invalid_type_error: 'each answer must be a string or null' }).nullable())
-        .min(1, 'answers required')
-        .optional(),
-    })
-    .refine((b) => (b.response === undefined) !== (b.answers === undefined), {
-      message: 'send either response (free text) or answers (one per question)',
-    });
+const AnswerBody = z
+  .object({
+    response: requiredText('response required').optional(),
+    answers: z
+      .array(z.string({ invalid_type_error: 'each answer must be a string or null' }).nullable())
+      .min(1, 'answers required')
+      .optional(),
+  })
+  .refine((b) => (b.response === undefined) !== (b.answers === undefined), {
+    message: 'send either response (free text) or answers (one per question)',
+  });
+
+const NoteBody = z.object({ note: optionalText('note') });
+
+const PermissionBody = NoteBody.extend({ allow: requiredBoolean('allow (boolean) required') });
+
+const AcceptBody = NoteBody.extend({
+  acknowledged: z
+    .array(z.string().min(1), { invalid_type_error: 'acknowledged must be an array of caveat ids' })
+    .optional(),
+  answers: z
+    .array(
+      z.object(
+        {
+          id: z
+            .string({ invalid_type_error: 'each answer names the caveat id it answers' })
+            .min(1, 'each answer names the caveat id it answers'),
+          answer: z.string({ invalid_type_error: "each answer is the operator's words, as text" }),
+        },
+        { invalid_type_error: 'each answer must be an object of {id, answer}' },
+      ),
+      { invalid_type_error: 'answers must be an array of {id, answer}' },
+    )
+    .optional(),
+  // One entry per row the operator struck out of the set they are accepting. The reason is
+  // required for the same reason `validation_plan` requires a note on every call: a null with no
+  // account of itself is the failure that document keeps meeting.
+  // → docs/spec/20-validation.md#declining-a-single-row
+  declined: z
+    .array(
+      z.object(
+        {
+          letter: z
+            .string({ invalid_type_error: 'each decline names the check letter it declines' })
+            .min(1, 'each decline names the check letter it declines'),
+          reason: z
+            .string({ invalid_type_error: 'each decline carries your reason, as text' })
+            .trim()
+            .min(1, 'a declined check carries your reason — it is the only account of why it is not being run'),
+        },
+        { invalid_type_error: 'each decline must be an object of {letter, reason}' },
+      ),
+      { invalid_type_error: 'declined must be an array of {letter, reason}' },
+    )
+    .optional(),
+});
+
+const BackOutBody = z
+  .object({
+    verdict: z.enum(['close', 'hold'], { errorMap: () => ({ message: "verdict must be 'close' or 'hold'" }) }),
+    note: optionalText('note'),
+  })
+  .refine((b) => b.verdict !== 'close' || (b.note !== undefined && b.note.trim() !== ''), {
+    message: 'note is required to close a ticket — it is posted on the ticket as the reason',
+  });
+
+const RecoveryBody = z.object({
+  verdict: z.custom<RecoveryVerdict>(isRecoveryVerdict, {
+    message: "verdict must be 'restore', 'requeue' or 'remove'",
+  }),
+});
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerAnswer(app, ctx);
+  registerEscalationDecisions(app, ctx);
+  registerProposalDecisions(app, ctx);
+  registerRecovery(app, ctx);
+}
+
+function registerAnswer(app: FastifyInstance, { system }: RouteContext): void {
+  const { store, escalations } = system;
   app.post(
     '/api/escalations/:id/answer',
     checked({ params: IdParams, body: AnswerBody }, async ({ params, body, reply }) => {
       const { id } = params;
-      const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
-      if (pending)
-        return reply.code(409).send({
-          error: `this item is a proposal (${pending.id}) — accept or reject it via /api/proposals/${pending.id}/accept|reject`,
-        });
       const item = store.escalations.getEscalation(id);
-      if (item?.context?.permission)
-        return reply.code(409).send({
-          error: `this item is a permission request — allow or deny it via /api/escalations/${id}/permission`,
-        });
-      const orphaned = item?.agentId ? recovery.pendingForAgent(item.agentId) : null;
-      if (orphaned)
-        return reply.code(409).send({
-          error:
-            `the agent that asked this crashed — decide its recovery via ` +
-            `/api/recovery/${orphaned.taskId} first (restore keeps this question open)`,
-        });
+      const refusal = answerRefusal(system, id, item);
+      if (refusal !== null) return reply.code(409).send({ error: refusal });
       let response: string;
       if (body.answers) {
         const questions = item?.context?.questions;
@@ -72,9 +142,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       }
     }),
   );
+}
 
-  const NoteBody = z.object({ note: optionalText('note') });
-
+function registerEscalationDecisions(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, escalations, proposals, permissions } = system;
   app.post(
     '/api/escalations/:id/dismiss',
     checked({ params: IdParams, body: NoteBody }, async ({ params, body, reply }) => {
@@ -83,7 +154,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
       const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
       if (pending) {
-        const unrevealed = refuseUnrevealed(pending.id);
+        const unrevealed = refuseUnrevealed(system, pending.id);
         if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
         const result = proposals.reject(pending.id, reason);
         if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
@@ -107,7 +178,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const PermissionBody = NoteBody.extend({ allow: requiredBoolean('allow (boolean) required') });
   app.post(
     '/api/escalations/:id/permission',
     checked({ params: IdParams, body: PermissionBody }, async ({ params, body, reply }) => {
@@ -119,51 +189,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, allowed: allow };
     }),
   );
+}
 
-  const AcceptBody = NoteBody.extend({
-    acknowledged: z
-      .array(z.string().min(1), { invalid_type_error: 'acknowledged must be an array of caveat ids' })
-      .optional(),
-    answers: z
-      .array(
-        z.object(
-          {
-            id: z
-              .string({ invalid_type_error: 'each answer names the caveat id it answers' })
-              .min(1, 'each answer names the caveat id it answers'),
-            answer: z.string({ invalid_type_error: "each answer is the operator's words, as text" }),
-          },
-          { invalid_type_error: 'each answer must be an object of {id, answer}' },
-        ),
-        { invalid_type_error: 'answers must be an array of {id, answer}' },
-      )
-      .optional(),
-    // One entry per row the operator struck out of the set they are accepting. The reason is
-    // required for the same reason `validation_plan` requires a note on every call: a null with no
-    // account of itself is the failure that document keeps meeting.
-    // → docs/spec/20-validation.md#declining-a-single-row
-    declined: z
-      .array(
-        z.object(
-          {
-            letter: z
-              .string({ invalid_type_error: 'each decline names the check letter it declines' })
-              .min(1, 'each decline names the check letter it declines'),
-            reason: z
-              .string({ invalid_type_error: 'each decline carries your reason, as text' })
-              .trim()
-              .min(1, 'a declined check carries your reason — it is the only account of why it is not being run'),
-          },
-          { invalid_type_error: 'each decline must be an object of {letter, reason}' },
-        ),
-        { invalid_type_error: 'declined must be an array of {letter, reason}' },
-      )
-      .optional(),
-  });
+function registerProposalDecisions(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { proposals } = system;
   app.post(
     '/api/proposals/:id/accept',
     checked({ params: IdParams, body: AcceptBody }, async ({ params, body, reply }) => {
-      const unrevealed = refuseUnrevealed(params.id);
+      const unrevealed = refuseUnrevealed(system, params.id);
       if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
       const result = await proposals.accept(
         params.id,
@@ -186,7 +219,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/proposals/:id/reject',
     checked({ params: IdParams, body: NoteBody }, async ({ params, body, reply }) => {
-      const unrevealed = refuseUnrevealed(params.id);
+      const unrevealed = refuseUnrevealed(system, params.id);
       if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
       const result = proposals.reject(params.id, body.note);
       if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
@@ -195,18 +228,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  const BackOutBody = z
-    .object({
-      verdict: z.enum(['close', 'hold'], { errorMap: () => ({ message: "verdict must be 'close' or 'hold'" }) }),
-      note: optionalText('note'),
-    })
-    .refine((b) => b.verdict !== 'close' || (b.note !== undefined && b.note.trim() !== ''), {
-      message: 'note is required to close a ticket — it is posted on the ticket as the reason',
-    });
   app.post(
     '/api/proposals/:id/back-out',
     checked({ params: IdParams, body: BackOutBody }, async ({ params, body, reply }) => {
-      const unrevealed = refuseUnrevealed(params.id);
+      const unrevealed = refuseUnrevealed(system, params.id);
       if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
       const result = await proposals.backOut(params.id, body.verdict, body.note);
       if (!result)
@@ -217,12 +242,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, ...result };
     }),
   );
+}
 
-  const RecoveryBody = z.object({
-    verdict: z.custom<RecoveryVerdict>(isRecoveryVerdict, {
-      message: "verdict must be 'restore', 'requeue' or 'remove'",
-    }),
-  });
+function registerRecovery(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { harness, recovery } = system;
   app.post(
     '/api/recovery/:id',
     checked({ params: IdParams, body: RecoveryBody }, async ({ params, body, reply }) => {

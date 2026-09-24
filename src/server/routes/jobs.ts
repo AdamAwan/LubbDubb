@@ -8,22 +8,22 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness, config } = system;
+const JobBody = z.object({
+  prompt: z
+    .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
+    .trim()
+    .min(1, 'prompt required'),
+  title: optionalText('title'),
+  kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
+  branch: z
+    .union([z.string({ invalid_type_error: 'branch must be a string' }).trim(), z.null()])
+    .optional()
+    .transform((branch) => branch || null),
+  attachments: AttachmentsField,
+});
 
-  const JobBody = z.object({
-    prompt: z
-      .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
-      .trim()
-      .min(1, 'prompt required'),
-    title: optionalText('title'),
-    kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
-    branch: z
-      .union([z.string({ invalid_type_error: 'branch must be a string' }).trim(), z.null()])
-      .optional()
-      .transform((branch) => branch || null),
-    attachments: AttachmentsField,
-  });
+function registerJobSubmit(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, harness, config } = system;
   app.post(
     '/api/jobs',
     { bodyLimit: ATTACHMENT_BODY_LIMIT },
@@ -75,6 +75,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, job, report };
     }),
   );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { store, harness, config } = system;
+
+  registerJobSubmit(app, ctx);
 
   const UpNextOrderBody = z.object({
     origins: z

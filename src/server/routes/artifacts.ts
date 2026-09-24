@@ -10,7 +10,13 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system, artifactKey }: RouteContext): void {
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerArtifactFiles(app, ctx);
+  registerLocalValidationFiles(app, ctx);
+  registerValidationCaptures(app, ctx);
+}
+
+function registerArtifactFiles(app: FastifyInstance, { system, artifactKey }: RouteContext): void {
   const { store, config } = system;
 
   const artifactRoots = absolutePrefixes(config.docsFolderPrefix);
@@ -63,7 +69,10 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       return reply.send(readFileSync(file));
     }),
   );
+}
 
+function registerLocalValidationFiles(app: FastifyInstance, { system, artifactKey }: RouteContext): void {
+  const { store, config } = system;
   app.get(
     '/local-validations/:id/files/:name',
     { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
@@ -90,6 +99,10 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       return reply.send(readFileSync(file));
     }),
   );
+}
+
+function registerValidationCaptures(app: FastifyInstance, { system, artifactKey }: RouteContext): void {
+  const { store, config } = system;
 
   /**
    * The screen a `screenshot` step handed back. The file **name** is never a parameter: it is read
