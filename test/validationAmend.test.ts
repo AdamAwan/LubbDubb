@@ -425,6 +425,64 @@ test('the band clears when the operator records a reading against the new wordin
   assert.equal(after.amendNote, null);
 });
 
+test('a second rewording before any reading keeps the withdrawn pass and the wording that was passed', async () => {
+  const system = build();
+  const plan = planWith(system, [check()]);
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'passed',
+    note: 'Opened in Excel 2019, columns intact.',
+    by: 'operator',
+  });
+  await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
+    note: 'it is XLSX now',
+    checks: [check({ expect: 'It opens as a workbook.' })],
+  });
+  await callTool(system, spawnAgent(system, 'issue:12:part:writer'), 'validation_amend', {
+    note: 'the workbook has two sheets',
+    checks: [check({ expect: 'It opens as a workbook with two sheets.' })],
+  });
+
+  const after = byId(system, plan, 'csv-opens');
+  assert.equal(after.state, 'unrun');
+  assert.equal(after.revision?.state, 'passed');
+  assert.match(after.revision?.expect ?? '', /columns intact/);
+  assert.match(after.revision?.note ?? '', /Excel 2019/);
+  assert.match(after.amendNote ?? '', /two sheets/);
+
+  const checks = checksOf(system, plan);
+  assert.match(outstandingChecks(checks)[0] ?? '', /amended since you recorded \*\*passed\*\*/);
+  const comment = renderPlanComment(system.store.plans.getPlanByOrigin('issue:12')!, [], '#', checks);
+  assert.match(comment, /amended after it was passed/);
+});
+
+test('a reading between two rewordings answers the first, so the second withdraws only what it took', async () => {
+  const system = build();
+  const plan = planWith(system, [check()]);
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'passed',
+    note: 'ran it',
+    by: 'operator',
+  });
+  await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
+    note: 'it is XLSX now',
+    checks: [check({ expect: 'It opens as a workbook.' })],
+  });
+  system.store.validation.recordValidationResult(plan, 'csv-opens', {
+    state: 'failed',
+    note: 'the workbook is empty',
+    by: 'operator',
+  });
+  await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
+    note: 'the workbook has two sheets',
+    checks: [check({ expect: 'It opens as a workbook with two sheets.' })],
+  });
+
+  const after = byId(system, plan, 'csv-opens');
+  assert.equal(after.revision?.state, 'failed');
+  assert.match(after.revision?.expect ?? '', /as a workbook\.$/);
+  assert.match(after.revision?.note ?? '', /empty/);
+});
+
 test('a replan bands what it changed, and a plan first declaring its checks bands nothing', () => {
   const system = build();
   const plan = planWith(system, [check({ id: 'a' }), check({ id: 'b', title: 'Second' })]);

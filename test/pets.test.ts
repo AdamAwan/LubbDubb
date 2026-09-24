@@ -296,6 +296,20 @@ test('a vivarium carried over from before the boundary keeps every pet it has', 
   }
 });
 
+test('a row stamped inert does not drag the vivarium’s start behind it', () => {
+  const now = '2026-09-24T12:00:00.000Z';
+  const store = new Store(':memory:', () => now);
+  store.pets.recordPetAction({ kind: 'claim', ref: 'ruled_old', at: '2025-01-10T10:00:00.000Z', petId: null });
+  store.pets.recordPetAction({ kind: 'claim', ref: 'ruled_new', at: '2025-06-01T10:00:00.000Z', petId: null });
+  assert.equal(store.pets.beginVivarium(), now, 'nothing has hatched, so nothing is being cut off');
+
+  const carried = new Store(':memory:', () => now);
+  carried.pets.recordPetAction({ kind: 'claim', ref: 'ruled_old', at: '2025-01-10T10:00:00.000Z', petId: null });
+  carried.pets.recordPetAction({ kind: 'escalation', ref: 'esc_1', at: '2025-03-02T08:00:00.000Z', petId: 'pet_a' });
+  carried.pets.recordPetAction({ kind: 'escalation', ref: 'esc_2', at: '2025-04-02T08:00:00.000Z', petId: null });
+  assert.equal(carried.pets.beginVivarium(), '2025-03-02T08:00:00.000Z', 'the start is the earliest row that hatched');
+});
+
 test('nocturne is drawn only by an action taken at night, in the action’s own hours', () => {
   const day = resolveTier('escalation', 'uncommon', 14)?.members ?? [];
   const night = resolveTier('escalation', 'uncommon', 2)?.members ?? [];

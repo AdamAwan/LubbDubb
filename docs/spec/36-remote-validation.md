@@ -55,9 +55,9 @@
 > browser command at all** and a selector mismatch is found one press later, by the run
 > ([What runs at assembly](#when-a-sheet-is-assembled-and-what-runs-without-asking)); and — as of the
 > area being read off the step — **`validation_checks.area` and `.expects` are read by nothing**: both
-> are named by a `suite` step and by nothing else, every reader calls `stepArea` or `stepExpects`, and
-> the two columns keep their data and have no reader and no writer left
-> ([How a check comes to have an area](#how-a-check-comes-to-have-an-area),
+> are named by a `suite` step and by nothing else, and every reader calls `stepArea` or `stepExpects`;
+> and — as of the retirement — **both columns are gone**, dropped by a rebuild on the boot that takes
+> the build ([How a check comes to have an area](#how-a-check-comes-to-have-an-area),
 > [Migrations](#migrations)). With that, nothing pre-resolves an area at plan time: the **offering
 > cache is gone** — `remote_selector_offerings` dropped, `refreshSelectorOfferings` and the
 > `RemoteRunner` seam deleted with it ([The desk](#the-desk)) — and a check written before test plans
@@ -376,9 +376,10 @@ because of it. The two landed **together**, deliberately: withdrawing the inheri
 could name an area would have left every check with a null one, which is this document's own quietest
 failure.
 
-The area already written on a deployment's existing checks stays where it is — nothing clears the
-column — so a goal mid-flight keeps its browser half. It is recomputed from the steps the next time
-the check is authored or amended, which is the change taking effect rather than a row going quiet.
+A check written before the step names no area, and it stopped having one the moment every reader
+moved to `stepArea` — not when the old column was later dropped, which took nothing a reader could
+see ([Migrations](#migrations)). It gains one the next time the check is authored or amended with a
+`suite` step, which is the change taking effect rather than a row going quiet.
 
 A check's `area` is set by a validation planner
 writing a `suite` step that names one ([20](20-validation.md#the-test-plan)); it is no longer
@@ -403,10 +404,9 @@ It reads as a misconfiguration and is not one, which is why the row now says so 
 **The area is on the step, and there is no column.** `validation_checks.area` and `.expects` are read
 by nothing and written by nothing: every reader — the run's listing read, the briefing, the sheet, the
 report fold, the cockpit's proof band — calls `stepArea` or `stepExpects`
-(`src/validation/steps.ts`) on the check's own steps. One fact, one home. The columns keep the data
-they were given and are still declared in `VALIDATION_COLUMNS`, because dropping a column while it is
-still declared adds it straight back on the next boot and dropping it from both rebuilds the table on
-every boot for ever; retiring them is its own change ([Migrations](#migrations)). Deleting the fields
+(`src/validation/steps.ts`) on the check's own steps. One fact, one home. The columns that once held
+both are retired — dropped from the schema and from `VALIDATION_COLUMNS` together, and taken off every
+older database by a rebuild ([Migrations](#migrations)). Deleting the fields
 from `ValidationCheck` rather than deprecating them is what found every reader: a reader left on the
 column would consult a string no author has touched since, which is the withdrawn `covers`
 inheritance coming back through a side door.
@@ -2283,16 +2283,14 @@ environment moves. A reading with no commit beside it is a reading of a product 
   of them: it is a column _value_, and the vocabulary widening needed no migration
   ([the vocabulary](#a-runs-status-vocabulary)) — what it did need was the partial unique index
   dropped by name and re-declared, because `IF NOT EXISTS` never re-predicates one that is there.
-- **`validation_checks.area` and `.expects` are columns nothing reads and nothing writes**, and they
-  **stay declared** in `VALIDATION_COLUMNS` (`src/store/validation.ts`) exactly as they were. Both
-  facts live on a `suite` step now
-  ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)), so the columns hold only
-  what builds before that wrote on them. They are not dropped here, and the order of the boot passes
-  is why: `rebuildTables` runs **before** `ensureColumns`, so a column dropped from the schema while
-  still declared in `VALIDATION_COLUMNS` is added straight back on the next boot, and one dropped from
-  both rebuilds the table on every boot for ever — losing whatever the copy list forgets. Retiring
-  them is a separate change with its own review. **Nothing repairs them and nothing is backfilled**: a
-  boot pass that recomputed a derived column would overwrite what a `suite` step named, on every boot,
+- **`validation_checks.area` and `.expects` are retired.** Both facts live on a `suite` step
+  ([How a check comes to have an area](#how-a-check-comes-to-have-an-area)), so the columns held only
+  what builds before that wrote on them, and nothing read it. They left the schema and
+  `VALIDATION_COLUMNS` in the same change — `rebuildTables` runs **before** `ensureColumns`, so either
+  half alone rebuilds the table on every boot for ever — and a second `validation_checks` entry in
+  `VALIDATION_REBUILDS`, detected by either column's presence, copies every column the old and new
+  shapes share ([14](14-persistence.md#retiring-a-column)). **Nothing re-derives an area into any
+  column**: a boot pass that recomputed one would overwrite what a `suite` step named, on every boot,
   with nothing red.
   `remote_sheet_rows.matched` is the same case one table over, declared in
   `REMOTE_VALIDATION_COLUMNS` — a column on a table that was new one release ago, which is exactly
@@ -2610,9 +2608,9 @@ silently. The parameters of a run are asserted where they are now written, in th
 (`test/remoteValidationDispatch.test.ts`): they ride in the environment and the command names none of
 them. The four arms a listing blocks on are asserted where they live, against the **run's** listing
 (`test/remoteValidationListing.test.ts`) and against `preflightRows` directly
-(`test/validationExpects.test.ts`), which also asserts the shape this increment has to get right: a
-row carrying the old `area` and `expects` columns and **no steps** declares no area, is asked nothing
-of a listing, and has neither column rewritten nor cleared on the boot that read it.
+(`test/validationExpects.test.ts`). The retirement of the old `area` and `expects` columns is
+asserted in `test/validationColumnRetirement.test.ts`: an older database loses both on its first boot
+with every other column intact, and a second boot rebuilds nothing.
 
 `test/planCoverageArea.test.ts` covers the join: the test-part bar asks for the coverage **in words**
 and names no listing to copy from, asserted in both directions so a reword cannot quietly put a pick

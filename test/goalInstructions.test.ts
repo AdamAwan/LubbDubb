@@ -89,7 +89,9 @@ test('the amend commands name the configured tracker, and nothing under the fake
     77,
   );
   assert.match(azure ?? '', /az boards work-item update --org https:\/\/dev\.azure\.com\/acme --id 77/);
-  assert.match(azure ?? '', /description is HTML/, 'so an agent does not flatten the markup');
+  assert.match(azure ?? '', /body is HTML/, 'so an agent does not flatten the markup');
+  assert.match(azure ?? '', /Microsoft\.VSTS\.TCM\.ReproSteps` when `System\.WorkItemType` is Bug/);
+  assert.doesNotMatch(azure ?? '', /--query "fields\.\\"System\.Description/, 'a Bug body is not in Description');
 });
 
 function githubConfig(): Config {

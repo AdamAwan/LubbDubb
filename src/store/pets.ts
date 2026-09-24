@@ -176,7 +176,9 @@ export class PetStore {
     const begin = this.ctx.db.transaction((): string => {
       const existing = this.vivariumStart();
       if (existing !== null) return existing;
-      const row = this.ctx.prep(`SELECT MIN(at) AS at FROM pet_actions`).get() as { at: string | null };
+      const row = this.ctx.prep(`SELECT MIN(at) AS at FROM pet_actions WHERE pet_id IS NOT NULL`).get() as {
+        at: string | null;
+      };
       const at = row.at ?? this.ctx.now();
       this.ctx.prep(`INSERT OR IGNORE INTO pet_vivarium (id, started_at) VALUES (1, ?)`).run(at);
       return at;

@@ -1,12 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import Database from 'better-sqlite3';
+import { readFileSync } from 'node:fs';
 import { Store } from '../src/store/store.js';
-import { SCHEMA } from '../src/store/schema.js';
-import { VALIDATION_COLUMNS } from '../src/store/validation.js';
 import { preflightRows } from '../src/remoteValidation/preflight.js';
 import { stepExpects } from '../src/validation/steps.js';
 import type { SelectorListing } from '../src/remoteValidation/runner.js';
@@ -22,9 +17,8 @@ import type { RemoteSheetRow, ValidationCheck, ValidationCheckInput, ValidationS
  * Null is *the planner named no expectation* and must never fold into *expected nothing*: the first
  * is every check whose author named none, and the two readings are a pass and a block apart.
  *
- * Both the area and the expectation are read off the step and off nothing else. The columns
- * `validation_checks.area` and `.expects` still hold what was written on them and nothing reads
- * them, which is the shape the last section here is about.
+ * Both the area and the expectation are read off the step and off nothing else; the columns that
+ * once held them are retired (`test/validationColumnRetirement.test.ts`).
  *
  * → docs/spec/36-remote-validation.md#an-expected-spec-the-runner-does-not-offer
  */
@@ -32,7 +26,6 @@ import type { RemoteSheetRow, ValidationCheck, ValidationCheckInput, ValidationS
 const ENVIRONMENT = 'acceptance';
 const AREA = 'checkout';
 const GOAL = 'issue:12';
-const NOW = '2026-09-09T09:00:00.000Z';
 
 /** The area, and two of the specs it holds, exactly as a runner lists them. */
 const LISTING: SelectorListing = {
@@ -246,63 +239,7 @@ test('an expectation written on a check is the list that is read back, and an em
   }
 });
 
-// --------------------------------------------------- the columns nothing reads any more
-
-/** A database written while the area and the expectation were columns: both set, and no steps. */
-function beforeTheStep(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-expects-'));
-  const path = join(dir, 'old.db');
-  const db = new Database(path);
-  db.exec(SCHEMA);
-  db.prepare(
-    `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
-       fleet_candidate, state, area, expects, created_at, updated_at)
-     VALUES (?, 'an-order-places', 'A', 1, 'An order still places', 'Place one.', 'It places.', '[]', '[]',
-       0, 'passed', ?, ?, ?, ?)`,
-  ).run(GOAL, AREA, JSON.stringify(['checkout/places-an-order.spec.ts']), NOW, NOW);
-  db.close();
-  return path;
-}
-
-test('the area and the expectation columns stay declared, keep their data, and are read by nothing', () => {
-  assert.equal(
-    VALIDATION_COLUMNS.validation_checks?.area,
-    'TEXT',
-    'a column dropped from the schema while still declared here is added straight back on the next boot, ' +
-      'and one dropped from both rebuilds the table on every boot forever — retiring them is its own change',
-  );
-  assert.equal(VALIDATION_COLUMNS.validation_checks?.expects, 'TEXT');
-
-  const path = beforeTheStep();
-  const store = new Store(path);
-  try {
-    const checks = store.validation.listValidationChecks(GOAL);
-    assert.equal(checks.length, 1);
-    assert.deepEqual(checks[0]?.steps, [], 'the row declares no test plan, so it names no area and no expectation');
-    assert.deepEqual(
-      preflightRows({ environment: ENVIRONMENT, rows: rows(), checks, listing: LISTING }),
-      [],
-      'and the listing is asked nothing about it: an area comes off a `suite` step and off nothing else, so a ' +
-        'check written before the step falls to a person rather than being matched against a stale column',
-    );
-  } finally {
-    store.close();
-  }
-
-  const inspect = new Database(path);
-  const stored = inspect.prepare(`SELECT area, expects, updated_at FROM validation_checks`).all() as {
-    area: string | null;
-    expects: string | null;
-    updated_at: string;
-  }[];
-  inspect.close();
-  assert.deepEqual(
-    stored,
-    [{ area: AREA, expects: JSON.stringify(['checkout/places-an-order.spec.ts']), updated_at: NOW }],
-    'nothing was rewritten and nothing was cleared: no boot repair recomputes what a `suite` step named, ' +
-      'because a pass that did would overwrite the author on every boot with nothing red',
-  );
-});
+// --------------------------------------------------- the columns that were retired
 
 test('no backfill and no runOnce id came with any of it', () => {
   const source = readFileSync('src/store/store.ts', 'utf8');

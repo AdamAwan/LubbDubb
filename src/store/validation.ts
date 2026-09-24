@@ -15,7 +15,7 @@ import type {
   ValidationResourceKind,
   ValidationRevision,
 } from '../types.js';
-import type { ColumnMigrations, TableRebuild } from './migrate.js';
+import { columnNames, type ColumnMigrations, type TableRebuild } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
@@ -29,14 +29,6 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     handback_note: 'TEXT',
     claimed_by: 'TEXT',
     claimed_at: 'TEXT',
-    // Both are **read by nothing and written by nothing**: the area a check is verified against and
-    // the spec names it expects are read off its own `suite` step, which is the one place either can
-    // be authored. The columns keep their data and stay declared here, because a column dropped
-    // while still named in this map is added back by `ensureColumns` on the next boot, and one
-    // dropped from both rebuilds the table on every boot forever. Dropping them is its own change.
-    // → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
-    area: 'TEXT',
-    expects: 'TEXT',
     // The check's test plan, JSON. Null means *no steps* — true of every row written before the
     // column existed and of every check whose author declared only prose, and it stays true, so
     // nothing is backfilled. A null read as `[]` and a null read as "unknown" are the same answer
@@ -82,6 +74,20 @@ export const VALIDATION_REBUILDS: readonly TableRebuild[] = [
              c.state, c.result_note, c.result_by, c.result_at, c.defer_until, c.superseded_reason,
              c.revision, c.amended_at, c.amend_note, c.created_at, c.updated_at
         FROM ${old} c JOIN plans p ON p.id = c.plan_id`,
+  },
+  {
+    table: 'validation_checks',
+    detect: (db) => {
+      const columns = columnNames(db, 'validation_checks');
+      return (columns.includes('area') || columns.includes('expects')) && !columns.includes('plan_id');
+    },
+    copy: (old, db) => {
+      const carried = new Set(columnNames(db, old));
+      const columns = columnNames(db, 'validation_checks')
+        .filter((c) => carried.has(c))
+        .join(', ');
+      return `INSERT INTO validation_checks (${columns}) SELECT ${columns} FROM ${old}`;
+    },
   },
   {
     table: 'validation_resources',
@@ -220,7 +226,11 @@ export class ValidationStore {
       resultAt: keep ? prev.resultAt : null,
       deferUntil: keep ? prev.deferUntil : null,
       supersededReason: null,
-      revision: band ? (reworded && prev !== undefined ? priorWording(prev) : null) : (prev?.revision ?? null),
+      revision: band
+        ? reworded && prev !== undefined
+          ? (unanswered(prev) ?? priorWording(prev))
+          : null
+        : (prev?.revision ?? null),
       amendedAt: band ? ts : (prev?.amendedAt ?? null),
       amendNote: band ? amendNote : (prev?.amendNote ?? null),
       // Resolved from the configuration at ingestion and recomputed on every amendment — a check's
@@ -582,6 +592,10 @@ interface ValidationCheckAmendmentLike {
   do: string;
   expect: string;
   proof: string | null;
+}
+
+function unanswered(prev: ValidationCheck): ValidationRevision | null {
+  return prev.state === 'unrun' && prev.revision !== null && prev.revision.state !== null ? prev.revision : null;
 }
 
 function priorWording(prev: ValidationCheck): ValidationRevision {

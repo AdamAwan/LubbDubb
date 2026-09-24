@@ -1272,19 +1272,29 @@ the half that makes correctability safe: a check quietly rewritten under an oper
 it is worse than one that cannot change at all, because they would go on believing they had checked
 something the plan no longer asks for.
 
-| Case                             | `amendedAt`            | `revision`                            |
-| -------------------------------- | ---------------------- | ------------------------------------- |
-| A plan's **first** check set     | unset                  | null                                  |
-| Added by an amendment            | set                    | null                                  |
-| Reworded, check was `unrun`      | set                    | `state: null`                         |
-| Reworded over a recorded reading | set                    | the wording and the withdrawn reading |
-| Re-declared word for word        | carried, never cleared | carried                               |
+| Case                                    | `amendedAt`            | `revision`                            |
+| --------------------------------------- | ---------------------- | ------------------------------------- |
+| A plan's **first** check set            | unset                  | null                                  |
+| Added by an amendment                   | set                    | null                                  |
+| Reworded, check was `unrun`             | set                    | `state: null`                         |
+| Reworded over a recorded reading        | set                    | the wording and the withdrawn reading |
+| Reworded again before any reading since | set to the latest      | carried                               |
+| Re-declared word for word               | carried, never cleared | carried                               |
 
 A plan's opening declaration bands nothing: every check in it is new, and banding all of them would
 fire the one signal that means "this is not the check you read" on a plan nobody has read yet. A
 re-declaration with identical wording carries the previous band forward rather than clearing it —
 an operator who has not yet seen the last amendment must not have it wiped by the next replan that
 happens to restate the same words.
+
+A **second rewording** of a check whose band still holds a withdrawn reading carries that revision
+forward rather than capturing the row it replaces. Between two amendments the check reads `unrun`
+while still owing the operator the reading the first one took; capturing that `unrun` would write
+`state: null` and erase the withdrawn pass without anybody having recorded anything. The carried
+revision keeps the wording the operator actually ran, not the intermediate wording nobody read —
+the band is about what they checked, not a diff of the last edit. `amendedAt` and `amendNote` still
+advance to the latest amendment. A reading recorded between the two answers the first band, so the
+second captures that reading instead (`mergeCheck` in `src/store/validation.ts`).
 
 **The band clears when the operator records a reading against the new wording**, in
 `recordValidationResult`, and by nothing else. That is the only acknowledgement worth having: a
@@ -1848,12 +1858,11 @@ from a check forever.
 
 `result_by` needed no migration when it gained `agent`, nor again when it gained `desktop`, nor a
 third time for `spec` — the column existed and only gained values it may hold. `validation_checks.area`
-and `.expects` are a different case: they are **columns nothing reads and nothing writes**, kept
-declared in `VALIDATION_COLUMNS` and holding whatever builds before the step wrote on them. A column
-dropped while still declared is added back on the next boot, and one dropped from both rebuilds the
-table on every boot for ever, so retiring them is its own change; and **nothing repairs them**, because
-a boot pass recomputing a derived column overwrites what a `suite` step named, every boot, with nothing
-red ([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
+and `.expects` were a different case: **columns nothing read once the `suite` step held both**, and so
+retired — dropped from the schema and `VALIDATION_COLUMNS` together and taken off older databases by a
+rebuild ([14](14-persistence.md#retiring-a-column)). Nothing re-derives an area into a column, because
+a boot pass recomputing one overwrites what a `suite` step named, every boot, with nothing red
+([36](36-remote-validation.md#how-a-check-comes-to-have-an-area)).
 `steps` is what both facts moved onto, and its null is the same kind of fact: a check written
 before test plans existed genuinely had none, so null reads as `[]` and stays that way. `parseSteps`
 answers `[]` for anything it cannot read back, which is the reading rule this column shares with

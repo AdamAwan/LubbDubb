@@ -1352,16 +1352,6 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   revision    TEXT,                   -- JSON: the wording an amendment replaced, and the reading it withdrew
   amended_at  TEXT,                   -- when an amendment last changed it; cleared by the next reading
   amend_note  TEXT,                   -- why it changed, in the amender's words
-  area        TEXT,                   -- the selector a runner offers for this check; NULL is "no
-                                      -- area declared", which is a check a person carries out.
-                                      -- It comes from a "suite" step and from nothing else.
-  expects     TEXT,                   -- JSON array: the concrete spec names the planner expected the
-                                      -- area to run. NULL is "no expectation was named" — true of
-                                      -- every row from before the column and of every check whose
-                                      -- author named none — and it NEVER folds into "expected
-                                      -- nothing": the difference is computed only where there is an
-                                      -- expectation, so nothing is backfilled. It comes from the
-                                      -- same "suite" step the area does and from nothing else
   steps       TEXT,                   -- JSON: the check's test plan, one ordered journey through the
                                       -- delivered goal, each step with the actor read off the
                                       -- configuration. NULL is "no steps", which is every row from

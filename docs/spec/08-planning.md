@@ -409,8 +409,8 @@ is a plan with one part`), because the deployments most likely to submit a partl
   refused only for being empty: nothing here compares it against what the deployed suite offers,
   because a part is declared before its spec exists and the area it adds is new by definition, so a
   refusal against today's listing would refuse exactly the declaration the bar asks for. The string a
-  sheet's selectors are resolved against is `validation_checks.area`, picked from the runner's own
-  offering by the validation planner, with the merged code in front of it.
+  sheet's selectors are resolved against is the area a check's `suite` step names, written by the
+  validation planner with the merged code in front of it.
   → [36](36-remote-validation.md#how-a-check-comes-to-have-an-area)
 - `atoms` is optional and defaults to empty, and each part's `atoms` likewise. The refusals over them
   are in [Atoms](#atoms--the-pieces-a-part-is-made-of) above; an atom's `slug`, `title` and `intent`

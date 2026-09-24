@@ -20,7 +20,7 @@ import type {
 } from './azureDevOpsApi.js';
 import { mergeStrategyFor, stripRef } from './sourceControl.js';
 import { parseTags } from './workItems.js';
-import { composeWorkItemBody } from './workItemBody.js';
+import { composeWorkItemBody, workItemBodyField } from './workItemBody.js';
 import { AzureEtagCache } from './conditionalRequests.js';
 
 // → docs/spec/15-integrations.md
@@ -737,7 +737,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     const url = `${this.projectUrl}/_apis/wit/workitems/$${encodeURIComponent(input.type)}`;
     const patch: { op: string; path: string; value: string }[] = [
       { op: 'add', path: '/fields/System.Title', value: input.title },
-      { op: 'add', path: '/fields/System.Description', value: input.description },
+      { op: 'add', path: `/fields/${workItemBodyField(input.type)}`, value: input.description },
     ];
     if (input.tags.length > 0) patch.push({ op: 'add', path: '/fields/System.Tags', value: input.tags.join('; ') });
     if (input.assignedTo) patch.push({ op: 'add', path: '/fields/System.AssignedTo', value: input.assignedTo });
