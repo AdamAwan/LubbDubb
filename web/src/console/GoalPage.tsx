@@ -20,6 +20,7 @@ import {
   splitGoalAsks,
   GOAL_ANCHOR,
   goalLanding,
+  goalPaneOf,
   goalPanes,
   reachBands,
   reachCount,
@@ -445,6 +446,9 @@ function ClosePane({
         </div>
       </div>
       <Reference page={page} view={view} fold={folds.record} />
+      {goalPaneOf(page, 'signals') === 'close' && (
+        <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
+      )}
     </>
   );
 }

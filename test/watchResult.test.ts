@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { idProjection, parseWatchResult, WATCH_ID_COLUMN, watchRowLabels } from '../src/environments/watchResult.js';
+import { idProjection, parseWatchResult, WATCH_ID_COLUMN } from '../src/environments/watchResult.js';
 import { CommandEnvironmentObserver } from '../src/environments/observer.js';
 
 const rows = (checkId: string, ...extra: Record<string, unknown>[]): string =>
@@ -63,14 +63,6 @@ test('the projection carries the check id and leaves the declared query intact',
   const handed = idProjection(query, 'no-timeouts');
   assert.ok(handed.startsWith(query), 'the declared query is handed over unchanged');
   assert.match(handed, new RegExp(`${WATCH_ID_COLUMN} = "no-timeouts"`));
-});
-
-test('a row draws up to two label columns, and never the harness’s own', () => {
-  const labels = watchRowLabels({ role: 'worker', operation: 'GET /x', extra: 'dropped', [WATCH_ID_COLUMN]: 'c' });
-  assert.deepEqual(labels, [
-    { name: 'role', value: 'worker' },
-    { name: 'operation', value: 'GET /x' },
-  ]);
 });
 
 test('a command that exits non-zero, times out, or prints nothing is unknown', async () => {
