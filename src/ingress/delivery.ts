@@ -25,45 +25,54 @@ export function githubEffect(event: string, payload: unknown): IngressEffect {
     case 'pull_request':
     case 'pull_request_review':
     case 'pull_request_review_comment':
-    case 'pull_request_review_thread': {
-      const shape = z.object({
-        number: EntityNumber.optional(),
-        pull_request: z.object({ number: EntityNumber }).optional(),
-      });
-      const read = shape.safeParse(data);
-      const number = read.success ? (read.data.pull_request?.number ?? read.data.number) : undefined;
-      return refs(event, number === undefined ? [] : [prReadRef(number)]);
-    }
+    case 'pull_request_review_thread':
+      return githubPullRequest(event, data);
     case 'issues':
-    case 'issue_comment': {
-      const shape = z.object({
-        issue: z.object({ number: EntityNumber, pull_request: z.unknown().optional() }),
-      });
-      const read = shape.safeParse(data);
-      if (!read.success) return NOTHING(`${event} (no issue number)`);
-      const { number, pull_request: pr } = read.data.issue;
-      return refs(event, [pr === undefined ? issueReadRef(number) : prReadRef(number)]);
-    }
+    case 'issue_comment':
+      return githubIssue(event, data);
     case 'check_run':
     case 'check_suite':
-    case 'workflow_run': {
-      const list = z.object({ pull_requests: z.array(z.object({ number: EntityNumber })).optional() });
-      const shape = z.object({
-        check_run: list.optional(),
-        check_suite: list.optional(),
-        workflow_run: list.optional(),
-      });
-      const read = shape.safeParse(data);
-      if (!read.success) return NOTHING(`${event} (no pull requests)`);
-      const inner = read.data.check_run ?? read.data.check_suite ?? read.data.workflow_run;
-      return refs(
-        event,
-        (inner?.pull_requests ?? []).map((p) => prReadRef(p.number)),
-      );
-    }
+    case 'workflow_run':
+      return githubChecks(event, data);
     default:
       return NOTHING(event);
   }
+}
+
+function githubPullRequest(event: string, data: unknown): IngressEffect {
+  const shape = z.object({
+    number: EntityNumber.optional(),
+    pull_request: z.object({ number: EntityNumber }).optional(),
+  });
+  const read = shape.safeParse(data);
+  const number = read.success ? (read.data.pull_request?.number ?? read.data.number) : undefined;
+  return refs(event, number === undefined ? [] : [prReadRef(number)]);
+}
+
+function githubIssue(event: string, data: unknown): IngressEffect {
+  const shape = z.object({
+    issue: z.object({ number: EntityNumber, pull_request: z.unknown().optional() }),
+  });
+  const read = shape.safeParse(data);
+  if (!read.success) return NOTHING(`${event} (no issue number)`);
+  const { number, pull_request: pr } = read.data.issue;
+  return refs(event, [pr === undefined ? issueReadRef(number) : prReadRef(number)]);
+}
+
+function githubChecks(event: string, data: unknown): IngressEffect {
+  const list = z.object({ pull_requests: z.array(z.object({ number: EntityNumber })).optional() });
+  const shape = z.object({
+    check_run: list.optional(),
+    check_suite: list.optional(),
+    workflow_run: list.optional(),
+  });
+  const read = shape.safeParse(data);
+  if (!read.success) return NOTHING(`${event} (no pull requests)`);
+  const inner = read.data.check_run ?? read.data.check_suite ?? read.data.workflow_run;
+  return refs(
+    event,
+    (inner?.pull_requests ?? []).map((p) => prReadRef(p.number)),
+  );
 }
 
 const PULL_BRANCH = /^refs\/pull\/(\d{1,9})\/(?:merge|head)$/;
@@ -74,32 +83,40 @@ export function azureEffect(payload: unknown): IngressEffect {
   const { eventType, resource } = body.data;
   if (resource === undefined) return NOTHING(eventType);
 
-  if (eventType.startsWith('git.pullrequest.')) {
-    const read = z
-      .object({
-        pullRequestId: EntityNumber.optional(),
-        pullRequest: z.object({ pullRequestId: EntityNumber }).optional(),
-      })
-      .safeParse(resource);
-    const number = read.success ? (read.data.pullRequestId ?? read.data.pullRequest?.pullRequestId) : undefined;
-    return refs(eventType, number === undefined ? [] : [prReadRef(number)]);
-  }
-  if (eventType.includes('git-pullrequest-comment')) {
-    const read = z.object({ pullRequest: z.object({ pullRequestId: EntityNumber }) }).safeParse(resource);
-    return refs(eventType, read.success ? [prReadRef(read.data.pullRequest.pullRequestId)] : []);
-  }
-  if (eventType.startsWith('workitem.')) {
-    const read = z.object({ id: EntityNumber.optional(), workItemId: EntityNumber.optional() }).safeParse(resource);
-    const number = read.success ? (read.data.id ?? read.data.workItemId) : undefined;
-    return refs(eventType, number === undefined ? [] : [issueReadRef(number)]);
-  }
-  if (eventType === 'build.complete') {
-    const read = z.object({ sourceBranch: z.string().max(400).optional() }).safeParse(resource);
-    const branch = read.success ? (read.data.sourceBranch ?? '') : '';
-    const number = PULL_BRANCH.exec(branch)?.[1];
-    return refs(eventType, number === undefined ? [] : [prReadRef(Number(number))]);
-  }
+  if (eventType.startsWith('git.pullrequest.')) return azurePullRequest(eventType, resource);
+  if (eventType.includes('git-pullrequest-comment')) return azurePullRequestComment(eventType, resource);
+  if (eventType.startsWith('workitem.')) return azureWorkItem(eventType, resource);
+  if (eventType === 'build.complete') return azureBuild(eventType, resource);
   return NOTHING(eventType);
+}
+
+function azurePullRequest(eventType: string, resource: unknown): IngressEffect {
+  const read = z
+    .object({
+      pullRequestId: EntityNumber.optional(),
+      pullRequest: z.object({ pullRequestId: EntityNumber }).optional(),
+    })
+    .safeParse(resource);
+  const number = read.success ? (read.data.pullRequestId ?? read.data.pullRequest?.pullRequestId) : undefined;
+  return refs(eventType, number === undefined ? [] : [prReadRef(number)]);
+}
+
+function azurePullRequestComment(eventType: string, resource: unknown): IngressEffect {
+  const read = z.object({ pullRequest: z.object({ pullRequestId: EntityNumber }) }).safeParse(resource);
+  return refs(eventType, read.success ? [prReadRef(read.data.pullRequest.pullRequestId)] : []);
+}
+
+function azureWorkItem(eventType: string, resource: unknown): IngressEffect {
+  const read = z.object({ id: EntityNumber.optional(), workItemId: EntityNumber.optional() }).safeParse(resource);
+  const number = read.success ? (read.data.id ?? read.data.workItemId) : undefined;
+  return refs(eventType, number === undefined ? [] : [issueReadRef(number)]);
+}
+
+function azureBuild(eventType: string, resource: unknown): IngressEffect {
+  const read = z.object({ sourceBranch: z.string().max(400).optional() }).safeParse(resource);
+  const branch = read.success ? (read.data.sourceBranch ?? '') : '';
+  const number = PULL_BRANCH.exec(branch)?.[1];
+  return refs(eventType, number === undefined ? [] : [prReadRef(Number(number))]);
 }
 
 function refs(summary: string, found: string[]): IngressEffect {

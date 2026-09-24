@@ -39,59 +39,72 @@ export function planPart(s: StageContext): void {
     if (!issue || issue.state !== 'open') continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
 
-    const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
-    const atoms = (ctx.planAtoms ?? []).filter((a) => a.planId === plan.id);
-    const index = bySlug(parts);
-    const inFlight = parts.filter((p) => s.activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
-    let room = s.planning.maxConcurrentPartsPerIssue - inFlight;
-    const ready = parts
-      .filter((p) => !partIsHuman(p))
-      .filter((p) => p.status === 'ready' && !s.activeOrigins.has(partOrigin(issueNumber, p.slug)))
-      .map((part) => ({ part, depth: partDepth(part, index) }))
-      .sort((a, b) => a.depth - b.depth || a.part.seq - b.part.seq);
-    for (const { part, depth } of ready) {
-      const origin = partOrigin(issueNumber, part.slug);
-      if (unapproved) {
-        partCandidates.push({
-          depth,
-          issueNumber,
-          seq: part.seq,
-          candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, 'unapproved'),
-        });
-        continue;
-      }
-      const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-      if (verdict.kind === 'hold') continue;
-      if (verdict.kind === 'escalate') {
-        s.raw.push({
-          type: 'escalate_to_human',
-          escalationType: 'resolve_ambiguity',
-          prompt: s.templates.render('plan-part-escalation', {
-            number: issueNumber,
-            part: part.title,
-            attempts: verdict.attempts,
-          }),
-          context: { originRef: origin, taskTitle: part.title },
-          rule: 'plan-part',
-          admission: 'cooldown-escalate',
-          reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
-        } satisfies RawAction);
-        continue;
-      }
-      const cooling = verdict.kind === 'cooldown';
-      const capped = !cooling && room <= 0;
-      if (!cooling && !capped) room -= 1;
-      const held = cooling ? 'cooldown' : capped ? 'capped' : undefined;
-      partCandidates.push({
-        depth,
-        issueNumber,
-        seq: part.seq,
-        candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, held),
-      });
-    }
+    partCandidates.push(...planCandidates(s, plan, issue, issueNumber));
   }
   partCandidates.sort((a, b) => a.depth - b.depth || a.issueNumber - b.issueNumber || a.seq - b.seq);
   for (const c of partCandidates) s.candidates.push(c.candidate);
+}
+
+function planCandidates(
+  s: StageContext,
+  plan: Plan,
+  issue: { number: number; title: string },
+  issueNumber: number,
+): PartCandidate[] {
+  const { ctx } = s;
+  const unapproved = plan.status === 'awaiting_approval';
+  const candidates: PartCandidate[] = [];
+  const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
+  const atoms = (ctx.planAtoms ?? []).filter((a) => a.planId === plan.id);
+  const index = bySlug(parts);
+  const inFlight = parts.filter((p) => s.activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
+  let room = s.planning.maxConcurrentPartsPerIssue - inFlight;
+  const ready = parts
+    .filter((p) => !partIsHuman(p))
+    .filter((p) => p.status === 'ready' && !s.activeOrigins.has(partOrigin(issueNumber, p.slug)))
+    .map((part) => ({ part, depth: partDepth(part, index) }))
+    .sort((a, b) => a.depth - b.depth || a.part.seq - b.part.seq);
+  for (const { part, depth } of ready) {
+    const origin = partOrigin(issueNumber, part.slug);
+    if (unapproved) {
+      candidates.push({
+        depth,
+        issueNumber,
+        seq: part.seq,
+        candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, 'unapproved'),
+      });
+      continue;
+    }
+    const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
+    if (verdict.kind === 'hold') continue;
+    if (verdict.kind === 'escalate') {
+      s.raw.push({
+        type: 'escalate_to_human',
+        escalationType: 'resolve_ambiguity',
+        prompt: s.templates.render('plan-part-escalation', {
+          number: issueNumber,
+          part: part.title,
+          attempts: verdict.attempts,
+        }),
+        context: { originRef: origin, taskTitle: part.title },
+        rule: 'plan-part',
+        admission: 'cooldown-escalate',
+        reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
+      } satisfies RawAction);
+      continue;
+    }
+    const cooling = verdict.kind === 'cooldown';
+    const capped = !cooling && room <= 0;
+    if (!cooling && !capped) room -= 1;
+    const held = cooling ? 'cooldown' : capped ? 'capped' : undefined;
+    candidates.push({
+      depth,
+      issueNumber,
+      seq: part.seq,
+      candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, held),
+    });
+  }
+  return candidates;
 }
 
 function partCandidate(

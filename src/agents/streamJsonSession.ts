@@ -126,51 +126,53 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       return;
     }
 
-    if (ev.type === 'assistant') {
-      const blocks = contentBlocks(ev);
-      const raw = assistantText(blocks);
-      this.turnText += raw;
-      for (const flag of extractFlags(raw)) this.emit('flag', flag);
-      if (blocks.some((b) => b.type === 'tool_use')) this.emit('activity');
-      const display = renderBlocks(blocks, new Date().toISOString());
-      if (display) this.emit('output', display);
+    if (ev.type === 'assistant') this.onAssistant(ev);
+    else if (ev.type === 'user') this.onToolResults(ev);
+    else if (ev.type === 'rate_limit_event') this.onRateLimit(ev);
+    else if (ev.type === 'result') this.onResult(ev);
+  }
+
+  private onAssistant(ev: StreamEvent): void {
+    const blocks = contentBlocks(ev);
+    const raw = assistantText(blocks);
+    this.turnText += raw;
+    for (const flag of extractFlags(raw)) this.emit('flag', flag);
+    if (blocks.some((b) => b.type === 'tool_use')) this.emit('activity');
+    const display = renderBlocks(blocks, new Date().toISOString());
+    if (display) this.emit('output', display);
+  }
+
+  private onToolResults(ev: StreamEvent): void {
+    const results = contentBlocks(ev).filter((b) => b.type === 'tool_result');
+    const display = renderBlocks(results, new Date().toISOString());
+    if (display) this.emit('output', display);
+  }
+
+  private onRateLimit(ev: StreamEvent): void {
+    const reading = rateLimitReading(ev.rate_limit_info, new Date().toISOString());
+    if (reading) this.emit('limits', reading);
+    this.limit = rateLimitPark(ev.rate_limit_info);
+  }
+
+  private onResult(ev: StreamEvent): void {
+    const usage = resultUsage(ev);
+    if (usage) this.emit('usage', usage);
+    const turnText = this.turnText;
+    this.turnText = '';
+    const apiError = apiErrorOf(typeof ev.result === 'string' ? ev.result : turnText);
+    if (apiError) this.emit('apiError', apiError);
+    if (this.pendingTurns > 0) this.pendingTurns -= 1;
+    if (turnText.includes(DONE_SENTINEL)) {
+      this.finish('done');
       return;
     }
-
-    if (ev.type === 'user') {
-      const results = contentBlocks(ev).filter((b) => b.type === 'tool_result');
-      const display = renderBlocks(results, new Date().toISOString());
-      if (display) this.emit('output', display);
-      return;
-    }
-
-    if (ev.type === 'rate_limit_event') {
-      const reading = rateLimitReading(ev.rate_limit_info, new Date().toISOString());
-      if (reading) this.emit('limits', reading);
-      this.limit = rateLimitPark(ev.rate_limit_info);
-      return;
-    }
-
-    if (ev.type === 'result') {
-      const usage = resultUsage(ev);
-      if (usage) this.emit('usage', usage);
-      const turnText = this.turnText;
-      this.turnText = '';
-      const apiError = apiErrorOf(typeof ev.result === 'string' ? ev.result : turnText);
-      if (apiError) this.emit('apiError', apiError);
-      if (this.pendingTurns > 0) this.pendingTurns -= 1;
-      if (turnText.includes(DONE_SENTINEL)) {
-        this.finish('done');
-        return;
-      }
-      if (this.pendingTurns > 0) return;
-      if (this.limit) {
-        this.parkOnLimit();
-      } else {
-        const reason = extractWaitingReason(turnText);
-        if (reason !== null) this.setWaiting(reason);
-        else this.stall(turnText);
-      }
+    if (this.pendingTurns > 0) return;
+    if (this.limit) {
+      this.parkOnLimit();
+    } else {
+      const reason = extractWaitingReason(turnText);
+      if (reason !== null) this.setWaiting(reason);
+      else this.stall(turnText);
     }
   }
 
@@ -302,13 +304,20 @@ function resultUsage(ev: StreamEvent): AgentUsage | null {
   if (ev.total_cost_usd === undefined && ev.num_turns === undefined && u === undefined) return null;
   return {
     costUsd: ev.total_cost_usd ?? null,
-    inputTokens: u
-      ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
-      : null,
-    outputTokens: u?.output_tokens ?? null,
-    cacheReadTokens: u ? (u.cache_read_input_tokens ?? 0) : null,
-    cacheCreationTokens: u ? (u.cache_creation_input_tokens ?? 0) : null,
+    ...tokenUsage(u),
     numTurns: ev.num_turns ?? null,
+  };
+}
+
+function tokenUsage(
+  u: StreamEvent['usage'],
+): Pick<AgentUsage, 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheCreationTokens'> {
+  if (!u) return { inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheCreationTokens: null };
+  return {
+    inputTokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+    outputTokens: u.output_tokens ?? null,
+    cacheReadTokens: u.cache_read_input_tokens ?? 0,
+    cacheCreationTokens: u.cache_creation_input_tokens ?? 0,
   };
 }
 

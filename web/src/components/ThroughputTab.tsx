@@ -115,7 +115,6 @@ function countOf(totals: readonly ThroughputTotal[], measure: string): Throughpu
 function Tiles({ insights }: { insights: ThroughputInsights }): JSX.Element {
   const { totals, landing, conversation } = insights;
   const merged = countOf(totals, 'pr-merged');
-  const closedIssues = countOf(totals, 'issue-closed');
   return (
     <div className="sp-tiles">
       <div className="sp-tile sp-well">
@@ -155,14 +154,21 @@ function Tiles({ insights }: { insights: ThroughputInsights }): JSX.Element {
               } repl${conversation.replied === 1 ? 'y' : 'ies'} sent`}
         </span>
       </div>
-      <div className="sp-tile sp-well">
-        <Label dense>Issues closed</Label>
-        <span className="vl">{closedIssues?.count ?? 0}</span>
-        <span className="sb">
-          {countOf(totals, 'issue-opened')?.count ?? 0} opened · {countOf(totals, 'pr-approved')?.count ?? 0} approval
-          {(countOf(totals, 'pr-approved')?.count ?? 0) === 1 ? '' : 's'}
-        </span>
-      </div>
+      <IssuesTile totals={totals} />
+    </div>
+  );
+}
+
+function IssuesTile({ totals }: { totals: readonly ThroughputTotal[] }): JSX.Element {
+  const closedIssues = countOf(totals, 'issue-closed');
+  return (
+    <div className="sp-tile sp-well">
+      <Label dense>Issues closed</Label>
+      <span className="vl">{closedIssues?.count ?? 0}</span>
+      <span className="sb">
+        {countOf(totals, 'issue-opened')?.count ?? 0} opened · {countOf(totals, 'pr-approved')?.count ?? 0} approval
+        {(countOf(totals, 'pr-approved')?.count ?? 0) === 1 ? '' : 's'}
+      </span>
     </div>
   );
 }

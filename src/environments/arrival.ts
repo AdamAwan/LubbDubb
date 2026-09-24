@@ -45,47 +45,17 @@ export function announceableArrivals(input: {
   landings: readonly { goalRef: string; recordedAt: string }[];
   probeIntervalMs: number;
   now: number;
-}): { arrival: GoalArrival; comment: boolean; workItemState: string | null; said: string }[] {
+}): Announcement[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
   const bands = bandOfEnvironment(input.environments);
-  const arrivedAt = new Map<string, Set<string>>();
-  for (const a of input.arrivals) {
-    const held = arrivedAt.get(a.goalRef);
-    if (held === undefined) arrivedAt.set(a.goalRef, new Set([a.environment]));
-    else held.add(a.environment);
-  }
+  const arrivedAt = environmentsByGoal(input.arrivals);
   const floor = input.now - input.probeIntervalMs * ANNOUNCE_WINDOW_INTERVALS;
-  const startedAsking = new Map<string, number>();
-  for (const r of input.readings) {
-    const at = Date.parse(r.observedAt);
-    if (!Number.isFinite(at)) continue;
-    const held = startedAsking.get(r.environment);
-    if (held === undefined || at < held) startedAsking.set(r.environment, at);
-  }
-  const landedAt = new Map<string, number>();
-  for (const l of input.landings) {
-    const at = Date.parse(l.recordedAt);
-    if (!Number.isFinite(at)) continue;
-    const held = landedAt.get(l.goalRef);
-    if (held === undefined || at > held) landedAt.set(l.goalRef, at);
-  }
-  /* Of the band's arrivals still unsaid, the one that completed it — the latest to be read,
-     and the only one that speaks. Both regions announcing in the pulse they finish together
-     would be the same sentence said twice on one ticket. */
-  const speaker = new Map<string, string>();
+  const startedAsking = earliestReadings(input.readings);
+  const landedAt = latestLandings(input.landings);
+  const speaker = speakers(input.arrivals, bands);
+  const out: Announcement[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
-    const band = bands.get(arrival.environment);
-    if (band?.declared !== true) continue;
-    const key = `${arrival.goalRef} ${band.name}`;
-    const held = speaker.get(key);
-    const heldAt = held === undefined ? null : (input.arrivals.find((a) => a.environment === held)?.arrivedAt ?? null);
-    if (heldAt === null || arrival.arrivedAt >= heldAt) speaker.set(key, arrival.environment);
-  }
-  const out: { arrival: GoalArrival; comment: boolean; workItemState: string | null; said: string }[] = [];
-  for (const arrival of input.arrivals) {
-    if (arrival.announcedAt !== null) continue;
-    const environment = byName.get(arrival.environment);
     const band = bands.get(arrival.environment);
     const seen = Date.parse(arrival.arrivedAt);
     const fresh = Number.isFinite(seen) && seen >= floor;
@@ -97,14 +67,79 @@ export function announceableArrivals(input: {
     const whole = band === undefined || band.environments.every((n) => arrivedAt.get(arrival.goalRef)?.has(n) === true);
     const speaks = band?.declared !== true || speaker.get(`${arrival.goalRef} ${band.name}`) === arrival.environment;
     const watched = fresh && whole && speaks && (established || justLanded);
-    out.push({
-      arrival,
-      comment: watched && environment?.arrival?.comment === true,
-      workItemState: watched ? (environment?.arrival?.workItemState ?? null) : null,
-      said: band?.declared === true ? band.name : arrival.environment,
-    });
+    out.push(announcement(arrival, watched, byName.get(arrival.environment), band));
   }
   return out;
+}
+
+interface Announcement {
+  arrival: GoalArrival;
+  comment: boolean;
+  workItemState: string | null;
+  said: string;
+}
+
+function environmentsByGoal(arrivals: readonly GoalArrival[]): Map<string, Set<string>> {
+  const arrivedAt = new Map<string, Set<string>>();
+  for (const a of arrivals) {
+    const held = arrivedAt.get(a.goalRef);
+    if (held === undefined) arrivedAt.set(a.goalRef, new Set([a.environment]));
+    else held.add(a.environment);
+  }
+  return arrivedAt;
+}
+
+function earliestReadings(readings: readonly { environment: string; observedAt: string }[]): Map<string, number> {
+  const startedAsking = new Map<string, number>();
+  for (const r of readings) {
+    const at = Date.parse(r.observedAt);
+    if (!Number.isFinite(at)) continue;
+    const held = startedAsking.get(r.environment);
+    if (held === undefined || at < held) startedAsking.set(r.environment, at);
+  }
+  return startedAsking;
+}
+
+function latestLandings(landings: readonly { goalRef: string; recordedAt: string }[]): Map<string, number> {
+  const landedAt = new Map<string, number>();
+  for (const l of landings) {
+    const at = Date.parse(l.recordedAt);
+    if (!Number.isFinite(at)) continue;
+    const held = landedAt.get(l.goalRef);
+    if (held === undefined || at > held) landedAt.set(l.goalRef, at);
+  }
+  return landedAt;
+}
+
+/* Of the band's arrivals still unsaid, the one that completed it — the latest to be read,
+   and the only one that speaks. Both regions announcing in the pulse they finish together
+   would be the same sentence said twice on one ticket. */
+function speakers(arrivals: readonly GoalArrival[], bands: Map<string, EnvironmentGroup>): Map<string, string> {
+  const speaker = new Map<string, string>();
+  for (const arrival of arrivals) {
+    if (arrival.announcedAt !== null) continue;
+    const band = bands.get(arrival.environment);
+    if (band?.declared !== true) continue;
+    const key = `${arrival.goalRef} ${band.name}`;
+    const held = speaker.get(key);
+    const heldAt = held === undefined ? null : (arrivals.find((a) => a.environment === held)?.arrivedAt ?? null);
+    if (heldAt === null || arrival.arrivedAt >= heldAt) speaker.set(key, arrival.environment);
+  }
+  return speaker;
+}
+
+function announcement(
+  arrival: GoalArrival,
+  watched: boolean,
+  environment: EnvironmentConfig | undefined,
+  band: EnvironmentGroup | undefined,
+): Announcement {
+  return {
+    arrival,
+    comment: watched && environment?.arrival?.comment === true,
+    workItemState: watched ? (environment?.arrival?.workItemState ?? null) : null,
+    said: band?.declared === true ? band.name : arrival.environment,
+  };
 }
 
 const MARKER = '<!-- lubbdubb:arrival -->\n_LubbDubb environments_';
@@ -132,12 +167,7 @@ export function openedGoals(
 ): ReadonlySet<string> | null {
   const gating = gatingBands(gate, environments);
   if (gating.length === 0) return null;
-  const arrivedAt = new Map<string, Set<string>>();
-  for (const arrival of arrivals) {
-    const held = arrivedAt.get(arrival.goalRef);
-    if (held === undefined) arrivedAt.set(arrival.goalRef, new Set([arrival.environment]));
-    else held.add(arrival.environment);
-  }
+  const arrivedAt = environmentsByGoal(arrivals);
   const open = new Set(releases.map((r) => r.goalRef));
   for (const [goalRef, reached] of arrivedAt)
     if (gating.some((band) => band.environments.every((name) => reached.has(name)))) open.add(goalRef);

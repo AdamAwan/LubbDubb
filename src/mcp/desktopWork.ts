@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import type { AgentManager } from '../agents/agentManager.js';
 import { submitBrief } from '../jobs/brief.js';
 import { ticketFilingTarget } from '../tickets/target.js';
 import { enumOf, toolSchema } from './schema.js';
 import type { DesktopToolFactory } from './desktopContext.js';
-import { toolError, toolJson } from './protocol.js';
+import { toolError, toolJson, type ToolCallResult } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -121,35 +122,38 @@ export const agentControl: DesktopToolFactory = (deps) => ({
     const agent = deps.store.agents.getAgent(id);
     if (!agent) return toolError(`No agent "${id}". Call fleet_status for the ones that are running.`);
 
-    const fleet = deps.agents();
-    if (action === 'respond') {
-      const text = typeof args.text === 'string' ? args.text : '';
-      if (!text.trim()) return toolError('text required for "respond" — it is typed into the agent verbatim.');
-      if (!fleet.respond(id, text)) return toolError(notLive(agent.status, 'typed into'));
-      return toolJson({ agentId: id, action, means: AGENT_ACTIONS.respond });
-    }
-    if (action === 'interrupt') {
-      if (!fleet.interrupt(id)) return toolError(notLive(agent.status, 'interrupted'));
-      return toolJson({ agentId: id, action, means: AGENT_ACTIONS.interrupt });
-    }
-    if (action === 'complete') {
-      if (!fleet.complete(id)) return toolError(notLive(agent.status, 'completed'));
-      return toolJson({ agentId: id, action, means: AGENT_ACTIONS.complete });
-    }
-    if (action === 'kill') {
-      if (!fleet.kill(id)) return toolError(notLive(agent.status, 'stopped'));
-      return toolJson({ agentId: id, action, means: AGENT_ACTIONS.kill });
-    }
-    if (action === 'extend_stall') {
-      const result = fleet.extendStallPark(id);
-      if (!result.ok) return toolError(result.error);
-      return toolJson({ agentId: id, action, expiresAt: result.expiresAt, means: AGENT_ACTIONS.extend_stall });
-    }
-    const result = fleet.resumeParked(id);
-    if (!result.ok) return toolError(result.error);
-    return toolJson({ agentId: id, action, means: AGENT_ACTIONS.resume });
+    return actOn(deps.agents(), id, agent.status, action, args.text);
   },
 });
+
+function actOn(fleet: AgentManager, id: string, status: string, action: AgentAction, rawText: unknown): ToolCallResult {
+  if (action === 'respond') {
+    const text = typeof rawText === 'string' ? rawText : '';
+    if (!text.trim()) return toolError('text required for "respond" — it is typed into the agent verbatim.');
+    if (!fleet.respond(id, text)) return toolError(notLive(status, 'typed into'));
+    return toolJson({ agentId: id, action, means: AGENT_ACTIONS.respond });
+  }
+  if (action === 'interrupt') {
+    if (!fleet.interrupt(id)) return toolError(notLive(status, 'interrupted'));
+    return toolJson({ agentId: id, action, means: AGENT_ACTIONS.interrupt });
+  }
+  if (action === 'complete') {
+    if (!fleet.complete(id)) return toolError(notLive(status, 'completed'));
+    return toolJson({ agentId: id, action, means: AGENT_ACTIONS.complete });
+  }
+  if (action === 'kill') {
+    if (!fleet.kill(id)) return toolError(notLive(status, 'stopped'));
+    return toolJson({ agentId: id, action, means: AGENT_ACTIONS.kill });
+  }
+  if (action === 'extend_stall') {
+    const result = fleet.extendStallPark(id);
+    if (!result.ok) return toolError(result.error);
+    return toolJson({ agentId: id, action, expiresAt: result.expiresAt, means: AGENT_ACTIONS.extend_stall });
+  }
+  const result = fleet.resumeParked(id);
+  if (!result.ok) return toolError(result.error);
+  return toolJson({ agentId: id, action, means: AGENT_ACTIONS.resume });
+}
 
 function notLive(status: string, verb: string): string {
   return (

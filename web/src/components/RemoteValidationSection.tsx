@@ -373,16 +373,7 @@ function Measured({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
   const reading = row.reading;
   const artefacts = reading?.artefacts ?? null;
   const agentId = reading?.agentId ?? null;
-  const parts: string[] = [];
-  if (row.matched !== null)
-    parts.push(
-      reading?.executed === null || reading?.executed === undefined
-        ? `${String(row.matched)} matched`
-        : `${String(reading.executed)} of ${String(row.matched)} run`,
-    );
-  if (reading?.retries !== null && reading?.retries !== undefined && reading.retries > 0)
-    parts.push(`${String(reading.retries)} ${reading.retries === 1 ? 'retry' : 'retries'}`);
-  if (reading?.durationMs !== null && reading?.durationMs !== undefined) parts.push(clock(reading.durationMs));
+  const parts = measuredParts(row);
   if (parts.length === 0 && artefacts === null && agentId === null) return null;
   return (
     <div className="cn-sig-add">
@@ -408,6 +399,21 @@ function Measured({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
       )}
     </div>
   );
+}
+
+function measuredParts(row: RemoteSheetRowView): string[] {
+  const reading = row.reading;
+  const parts: string[] = [];
+  if (row.matched !== null)
+    parts.push(
+      reading?.executed === null || reading?.executed === undefined
+        ? `${String(row.matched)} matched`
+        : `${String(reading.executed)} of ${String(row.matched)} run`,
+    );
+  const retries = reading?.retries ?? 0;
+  if (retries > 0) parts.push(`${String(retries)} ${retries === 1 ? 'retry' : 'retries'}`);
+  if (reading?.durationMs != null) parts.push(clock(reading.durationMs));
+  return parts;
 }
 
 function clock(ms: number): string {

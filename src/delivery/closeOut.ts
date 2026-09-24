@@ -47,75 +47,91 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
     const originRef = delivery.originRef;
     if (closeOutIssueNumber(originRef) === null) continue;
     if (shortfalls.has(originRef)) continue;
-    const existing = byOrigin.get(originRef);
-    const issue = inWorld.get(originRef);
-
-    if (existing && existing.status !== 'open') {
-      if (deskSettled(existing) && issue && issue.state !== 'closed')
-        steps.push({
-          kind: 'reopen',
-          taskId: existing.id,
-          detail: closeOutDetail(
-            issue,
-            delivery,
-            input.validation.get(originRef) ?? null,
-            input.canClose,
-            input.watch.get(originRef) ?? null,
-            input.criteria?.get(originRef) ?? [],
-          ),
-        });
-      continue;
-    }
-
-    if (issue?.state === 'closed') {
-      if (existing)
-        steps.push({ kind: 'settle', taskId: existing.id, status: 'done', resolution: 'the tracker shows it closed' });
-      continue;
-    }
-    if (!issue) {
-      if (existing && input.issues.length > 0)
-        steps.push({
-          kind: 'settle',
-          taskId: existing.id,
-          status: 'done',
-          resolution: 'the tracker no longer lists it open',
-        });
-      continue;
-    }
-
-    if (!existing) {
-      if (input.opened !== null && !input.opened.has(originRef)) continue;
-      if (input.validating.has(originRef)) continue;
-      if (input.watchCleared !== null && !input.watchCleared.has(originRef)) continue;
-    }
-
-    steps.push({
-      kind: 'file',
-      originRef,
-      title: closeOutTitle(issue.number),
-      detail: closeOutDetail(
-        issue,
-        delivery,
-        input.validation.get(originRef) ?? null,
-        input.canClose,
-        input.watch.get(originRef) ?? null,
-        input.criteria?.get(originRef) ?? [],
-      ),
-    });
+    const step = closeOutStep(input, delivery, byOrigin.get(originRef), inWorld.get(originRef));
+    if (step) steps.push(step);
   }
 
-  for (const task of input.existing) {
-    if (task.status !== 'open' || !task.originRef || delivered.has(task.originRef)) continue;
-    steps.push({
-      kind: 'settle',
-      taskId: task.id,
-      status: 'declined',
-      resolution: DESK_SETTLED + 'the goal went back into production — there is no delivery to close it out',
-    });
-  }
+  steps.push(
+    ...declineUndelivered(
+      input.existing,
+      delivered,
+      'the goal went back into production — there is no delivery to close it out',
+    ),
+  );
 
   steps.push(...outcomePass(input, { inWorld, shortfalls, delivered, closeOuts: steps }));
 
+  return steps;
+}
+
+function closeOutStep(
+  input: CloseOutInput,
+  delivery: IssueDelivery,
+  existing: HumanTask | undefined,
+  issue: Issue | undefined,
+): CloseOutStep | null {
+  const originRef = delivery.originRef;
+  if (existing && existing.status !== 'open') {
+    if (deskSettled(existing) && issue && issue.state !== 'closed')
+      return { kind: 'reopen', taskId: existing.id, detail: deliveryDetail(input, issue, delivery) };
+    return null;
+  }
+
+  if (issue?.state === 'closed') {
+    if (existing)
+      return { kind: 'settle', taskId: existing.id, status: 'done', resolution: 'the tracker shows it closed' };
+    return null;
+  }
+  if (!issue) {
+    if (existing && input.issues.length > 0)
+      return {
+        kind: 'settle',
+        taskId: existing.id,
+        status: 'done',
+        resolution: 'the tracker no longer lists it open',
+      };
+    return null;
+  }
+
+  if (!existing && !readyToFile(input, originRef)) return null;
+
+  return {
+    kind: 'file',
+    originRef,
+    title: closeOutTitle(issue.number),
+    detail: deliveryDetail(input, issue, delivery),
+  };
+}
+
+function readyToFile(input: CloseOutInput, originRef: string): boolean {
+  if (input.opened !== null && !input.opened.has(originRef)) return false;
+  if (input.validating.has(originRef)) return false;
+  if (input.watchCleared !== null && !input.watchCleared.has(originRef)) return false;
+  return true;
+}
+
+function deliveryDetail(input: CloseOutInput, issue: Issue, delivery: IssueDelivery): string {
+  const originRef = delivery.originRef;
+  return closeOutDetail(
+    issue,
+    delivery,
+    input.validation.get(originRef) ?? null,
+    input.canClose,
+    input.watch.get(originRef) ?? null,
+    input.criteria?.get(originRef) ?? [],
+  );
+}
+
+function declineUndelivered(
+  tasks: readonly HumanTask[],
+  delivered: ReadonlySet<string>,
+  resolution: string,
+): CloseOutStep[] {
+  const steps: CloseOutStep[] = [];
+  for (const task of tasks) {
+    if (task.status !== 'open' || !task.originRef || delivered.has(task.originRef)) continue;
+    steps.push({ kind: 'settle', taskId: task.id, status: 'declined', resolution: DESK_SETTLED + resolution });
+  }
   return steps;
 }
 
@@ -159,6 +175,7 @@ function outcomePass(
     if (closeOutIssueNumber(originRef) === null) continue;
     if (seen.shortfalls.has(originRef)) continue;
     const existing = byOrigin.get(originRef);
+    const issue = seen.inWorld.get(originRef) ?? null;
 
     if (!owed.has(originRef)) {
       // Answered, or never asked — and those are the same step, because a row is
@@ -174,7 +191,7 @@ function outcomePass(
     }
     if (existing) {
       if (existing.status !== 'open' && deskSettled(existing))
-        steps.push({ kind: 'reopen', taskId: existing.id, detail: outcomeDetail(seen.inWorld.get(originRef) ?? null) });
+        steps.push({ kind: 'reopen', taskId: existing.id, detail: outcomeDetail(issue) });
       continue;
     }
     if (closingOut.has(originRef)) continue;
@@ -183,19 +200,17 @@ function outcomePass(
       kind: 'file-outcome',
       originRef,
       title: outcomeTitle(closeOutIssueNumber(originRef)!),
-      detail: outcomeDetail(seen.inWorld.get(originRef) ?? null),
+      detail: outcomeDetail(issue),
     });
   }
 
-  for (const task of existingOutcome) {
-    if (task.status !== 'open' || !task.originRef || seen.delivered.has(task.originRef)) continue;
-    steps.push({
-      kind: 'settle',
-      taskId: task.id,
-      status: 'declined',
-      resolution: DESK_SETTLED + 'the goal went back into production — the plan it delivered is not the one to judge',
-    });
-  }
+  steps.push(
+    ...declineUndelivered(
+      existingOutcome,
+      seen.delivered,
+      'the goal went back into production — the plan it delivered is not the one to judge',
+    ),
+  );
 
   return steps;
 }

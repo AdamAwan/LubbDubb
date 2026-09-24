@@ -3,7 +3,7 @@ import type { Store } from '../store/store.js';
 import type { AgentManager } from './agentManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ErrorRecorder } from '../errorLog.js';
-import type { Job, Task } from '../types.js';
+import type { Agent, Job, Task } from '../types.js';
 import {
   describeOrphan,
   isAgentlessCandidate,
@@ -151,34 +151,9 @@ export class RecoveryDesk {
     const task = this.deps.store.tasks.getTask(item.taskId);
     if (!task || (agentId && !agent)) return { ok: false, error: 'agent or task no longer exists' };
 
-    if (verdict === 'restore') {
-      if (!item.restorable || !agent)
-        return { ok: false, error: item.restoreBlocked ?? 'this work cannot be restored' };
-      let resumed = false;
-      try {
-        resumed = this.deps.agents.resume(agent, task);
-      } catch (err) {
-        this.deps.errors?.record({ source: 'boot', message: `Crash restore failed: ${(err as Error).message}` });
-        return { ok: false, error: `restore failed: ${(err as Error).message}` };
-      }
-      if (!resumed) return { ok: false, error: 'the runtime refused to resume this session' };
-      return this.settled({
-        verdict,
-        agentId,
-        taskId: task.id,
-        detail: `Restored agent ${agentId} into its existing session and worktree`,
-      });
-    }
+    if (verdict === 'restore') return this.restore(item, agent, task);
 
-    const at = new Date().toISOString();
-    if (agent) {
-      this.deps.store.agents.updateAgent(agent.id, { status: 'interrupted', endedAt: agent.endedAt ?? at, pid: null });
-      this.deps.escalations.dismissEscalationsForAgent(
-        agent.id,
-        verdict === 'requeue' ? 'agent crashed; work requeued' : 'agent crashed; work dropped',
-      );
-    }
-    this.deps.store.tasks.updateTask(task.id, { status: 'interrupted' });
+    this.standDown(agent, task, verdict);
 
     if (verdict === 'remove')
       return this.settled({
@@ -190,6 +165,41 @@ export class RecoveryDesk {
           : `Dropped task ${task.id}, which no agent ever started; its origin and branch are free again`,
       });
 
+    return this.requeue(verdict, agentId, agent, task);
+  }
+
+  private restore(item: OrphanedWork, agent: Agent | null, task: Task): RecoveryResult {
+    const agentId = item.agentId;
+    if (!item.restorable || !agent) return { ok: false, error: item.restoreBlocked ?? 'this work cannot be restored' };
+    let resumed = false;
+    try {
+      resumed = this.deps.agents.resume(agent, task);
+    } catch (err) {
+      this.deps.errors?.record({ source: 'boot', message: `Crash restore failed: ${(err as Error).message}` });
+      return { ok: false, error: `restore failed: ${(err as Error).message}` };
+    }
+    if (!resumed) return { ok: false, error: 'the runtime refused to resume this session' };
+    return this.settled({
+      verdict: 'restore',
+      agentId,
+      taskId: task.id,
+      detail: `Restored agent ${agentId} into its existing session and worktree`,
+    });
+  }
+
+  private standDown(agent: Agent | null, task: Task, verdict: RecoveryVerdict): void {
+    const at = new Date().toISOString();
+    if (agent) {
+      this.deps.store.agents.updateAgent(agent.id, { status: 'interrupted', endedAt: agent.endedAt ?? at, pid: null });
+      this.deps.escalations.dismissEscalationsForAgent(
+        agent.id,
+        verdict === 'requeue' ? 'agent crashed; work requeued' : 'agent crashed; work dropped',
+      );
+    }
+    this.deps.store.tasks.updateTask(task.id, { status: 'interrupted' });
+  }
+
+  private requeue(verdict: RecoveryVerdict, agentId: string | null, agent: Agent | null, task: Task): RecoveryResult {
     const standing = stillQueuedJobBehind(task, this.deps.store);
     if (standing)
       return this.settled({

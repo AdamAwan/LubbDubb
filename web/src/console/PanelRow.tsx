@@ -246,7 +246,6 @@ function StackedRow({
   sub: boolean;
 }): JSX.Element {
   const subject = 1 + [has.lamp, has.who].filter(Boolean).length;
-  const readings = has.toggle || has.why || has.reading || has.chips || has.action || has.facts;
   const rails = {
     '--cn-cols-stacked': columns,
     '--cn-cols-line': line,
@@ -263,27 +262,33 @@ function StackedRow({
       {has.who && <span className="cn-slot">{row.who}</span>}
       <Subject row={row} facts={false} />
       {/* A card where no row has anything to report draws no strip, keeping the one-line shape. */}
-      {readings && (
-        <span className="cn-rowreads">
-          {has.toggle && <span className="cn-slot">{row.toggle}</span>}
-          {has.reading && <span className="cn-slot cn-slot-read">{row.reading}</span>}
-          {has.why && (
-            <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>
-              <Why row={row} />
-            </span>
-          )}
-          {has.chips && <span className="cn-slot">{row.chips}</span>}
-          {has.action && <span className="cn-slot">{row.action}</span>}
-          {has.facts && (
-            <span className="cn-slot">
-              <Facts facts={row.facts} />
-            </span>
-          )}
-        </span>
-      )}
+      <Readings row={row} has={has} />
       {has.refs && <span className="cn-refs">{row.refs}</span>}
       {sub && <SubLine row={row} />}
     </div>
+  );
+}
+
+function Readings({ row, has }: { row: PanelRowModel; has: SlotsUsed }): JSX.Element | null {
+  const readings = has.toggle || has.why || has.reading || has.chips || has.action || has.facts;
+  if (!readings) return null;
+  return (
+    <span className="cn-rowreads">
+      {has.toggle && <span className="cn-slot">{row.toggle}</span>}
+      {has.reading && <span className="cn-slot cn-slot-read">{row.reading}</span>}
+      {has.why && (
+        <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>
+          <Why row={row} />
+        </span>
+      )}
+      {has.chips && <span className="cn-slot">{row.chips}</span>}
+      {has.action && <span className="cn-slot">{row.action}</span>}
+      {has.facts && (
+        <span className="cn-slot">
+          <Facts facts={row.facts} />
+        </span>
+      )}
+    </span>
   );
 }
 

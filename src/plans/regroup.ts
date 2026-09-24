@@ -92,12 +92,7 @@ export function regroupedDocument(input: {
       scope: part?.scope ?? group.scope?.trim(),
       atoms: group.atoms,
       dependsOn: [...new Set([...declared, ...implied])].sort((a, b) => a.localeCompare(b)),
-      ...(part === undefined ? {} : statedTouches(part, byAtom)),
-      ...(part?.rationale ? { rationale: part.rationale } : {}),
-      ...(part?.acceptance ? { acceptance: part.acceptance } : {}),
-      ...(part?.size ? { size: part.size } : {}),
-      ...(part?.expectedKind ? { expectedKind: part.expectedKind } : {}),
-      ...(part?.profile ? { profile: part.profile } : {}),
+      ...(part === undefined ? {} : carriedOver(part, byAtom)),
     };
   });
 
@@ -122,6 +117,17 @@ export function regroupedDocument(input: {
     parts,
   });
   return parsed.ok ? parsed : { ok: false, error: `Regroup refused: ${parsed.error}` };
+}
+
+function carriedOver(part: PlanPart, byAtom: Map<string, PlanAtom>) {
+  return {
+    ...statedTouches(part, byAtom),
+    ...(part.rationale ? { rationale: part.rationale } : {}),
+    ...(part.acceptance ? { acceptance: part.acceptance } : {}),
+    ...(part.size ? { size: part.size } : {}),
+    ...(part.expectedKind ? { expectedKind: part.expectedKind } : {}),
+    ...(part.profile ? { profile: part.profile } : {}),
+  };
 }
 
 function statedTouches(part: PlanPart, byAtom: Map<string, PlanAtom>): { touches?: string[] } {

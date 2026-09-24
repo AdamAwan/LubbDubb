@@ -71,7 +71,6 @@ function forks(bottom: PullRequest, childrenOf: (pr: PullRequest) => PullRequest
 }
 
 function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: boolean): Stack {
-  const bottom = prs[0];
   const partByPr = new Map<number, PlanPart>();
   for (const part of parts) if (part.prNumber !== null) partByPr.set(part.prNumber, part);
 
@@ -90,14 +89,19 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
   const planId = planIds.size === 1 ? [...planIds][0]! : null;
   const plan = planId !== null ? (plans.find((p) => p.id === planId) ?? null) : null;
 
-  const leaf = prs[prs.length - 1];
   return {
-    ref: forked ? `stack:${bottom?.number ?? 0}:${leaf?.number ?? 0}` : `stack:${bottom?.number ?? 0}`,
+    ref: stackRef(prs, forked),
     issueNumber: plan ? issueNumberOf(plan.originRef) : null,
     issueTitle: plan?.title ?? null,
     planId,
     rungs,
   };
+}
+
+function stackRef(prs: PullRequest[], forked: boolean): string {
+  const bottom = prs[0];
+  const leaf = prs[prs.length - 1];
+  return forked ? `stack:${bottom?.number ?? 0}:${leaf?.number ?? 0}` : `stack:${bottom?.number ?? 0}`;
 }
 
 function issueNumberOf(originRef: string): number | null {

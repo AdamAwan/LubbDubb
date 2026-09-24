@@ -39,45 +39,60 @@ export function validateAgentModels(models: AgentModels | undefined): void {
   const profiles = models.profiles;
   if (typeof profiles !== 'object' || profiles === null)
     throw new Error('Refusing to start: agentModels.profiles must be an object of profile name to model string.');
-  for (const [name, profile] of Object.entries(profiles)) {
-    if (typeof profile !== 'object' || profile === null)
-      throw new Error(
-        `Refusing to start: agentModels.profiles."${name}" must be an object — {"model": "...", "effort": "..."}. ` +
-          `A bare model string is no longer accepted; write {"model": ${JSON.stringify(profile)}} instead.`,
-      );
-    if (typeof profile.model !== 'string' || profile.model.length === 0)
-      throw new Error(`Refusing to start: agentModels.profiles."${name}".model must be a non-empty model string.`);
-    if (profile.effort !== undefined && !EFFORT_LEVELS.includes(profile.effort))
-      throw new Error(
-        `Refusing to start: agentModels.profiles."${name}".effort is "${profile.effort}", which is not an effort ` +
-          `level. Known levels: ${EFFORT_LEVELS.join(', ')}.`,
-      );
-    if (
-      profile.permissionMode !== undefined &&
-      (typeof profile.permissionMode !== 'string' || profile.permissionMode.length === 0)
-    )
-      throw new Error(
-        `Refusing to start: agentModels.profiles."${name}".permissionMode must be a non-empty mode string — ` +
-          `it is handed to \`claude --permission-mode\` in place of agentPermissionMode for this profile.`,
-      );
-    if (profile.autoApprove !== undefined && typeof profile.autoApprove !== 'boolean')
-      throw new Error(
-        `Refusing to start: agentModels.profiles."${name}".autoApprove must be true or false — it decides whether ` +
-          `the permission backstop allows this profile's requests itself instead of asking the operator.`,
-      );
-    if (typeof profile.rank !== 'number' || !Number.isFinite(profile.rank))
-      throw new Error(
-        `Refusing to start: agentModels.profiles."${name}".rank must be a number — where this profile sits on ` +
-          `the cheap-to-deep ladder, low first. It is what lets the goal-profile gate say whether a proposal ` +
-          `is cheaper or deeper than what is standing.`,
-      );
-    if (typeof profile.description !== 'string' || profile.description.trim().length === 0)
-      throw new Error(
-        `Refusing to start: agentModels.profiles."${name}".description must be a non-empty sentence saying what ` +
-          `this profile is for. It is the whole of what the appraiser is told about your profiles when it ` +
-          `proposes one, so a missing or empty one makes every proposal a guess.`,
-      );
-  }
+  for (const [name, profile] of Object.entries(profiles)) validateProfile(name, profile);
+  validateRanks(profiles);
+  validateProfileReferences(models, profiles);
+}
+
+function validateProfile(name: string, profile: AgentProfile): void {
+  if (typeof profile !== 'object' || profile === null)
+    throw new Error(
+      `Refusing to start: agentModels.profiles."${name}" must be an object — {"model": "...", "effort": "..."}. ` +
+        `A bare model string is no longer accepted; write {"model": ${JSON.stringify(profile)}} instead.`,
+    );
+  validateProfileLaunch(name, profile);
+  validateProfileLadder(name, profile);
+}
+
+function validateProfileLaunch(name: string, profile: AgentProfile): void {
+  if (typeof profile.model !== 'string' || profile.model.length === 0)
+    throw new Error(`Refusing to start: agentModels.profiles."${name}".model must be a non-empty model string.`);
+  if (profile.effort !== undefined && !EFFORT_LEVELS.includes(profile.effort))
+    throw new Error(
+      `Refusing to start: agentModels.profiles."${name}".effort is "${profile.effort}", which is not an effort ` +
+        `level. Known levels: ${EFFORT_LEVELS.join(', ')}.`,
+    );
+  if (
+    profile.permissionMode !== undefined &&
+    (typeof profile.permissionMode !== 'string' || profile.permissionMode.length === 0)
+  )
+    throw new Error(
+      `Refusing to start: agentModels.profiles."${name}".permissionMode must be a non-empty mode string — ` +
+        `it is handed to \`claude --permission-mode\` in place of agentPermissionMode for this profile.`,
+    );
+  if (profile.autoApprove !== undefined && typeof profile.autoApprove !== 'boolean')
+    throw new Error(
+      `Refusing to start: agentModels.profiles."${name}".autoApprove must be true or false — it decides whether ` +
+        `the permission backstop allows this profile's requests itself instead of asking the operator.`,
+    );
+}
+
+function validateProfileLadder(name: string, profile: AgentProfile): void {
+  if (typeof profile.rank !== 'number' || !Number.isFinite(profile.rank))
+    throw new Error(
+      `Refusing to start: agentModels.profiles."${name}".rank must be a number — where this profile sits on ` +
+        `the cheap-to-deep ladder, low first. It is what lets the goal-profile gate say whether a proposal ` +
+        `is cheaper or deeper than what is standing.`,
+    );
+  if (typeof profile.description !== 'string' || profile.description.trim().length === 0)
+    throw new Error(
+      `Refusing to start: agentModels.profiles."${name}".description must be a non-empty sentence saying what ` +
+        `this profile is for. It is the whole of what the appraiser is told about your profiles when it ` +
+        `proposes one, so a missing or empty one makes every proposal a guess.`,
+    );
+}
+
+function validateRanks(profiles: Record<string, AgentProfile>): void {
   const byRank = new Map<number, string>();
   for (const [name, profile] of Object.entries(profiles)) {
     const clash = byRank.get(profile.rank);
@@ -88,6 +103,9 @@ export function validateAgentModels(models: AgentModels | undefined): void {
       );
     byRank.set(profile.rank, name);
   }
+}
+
+function validateProfileReferences(models: AgentModels, profiles: Record<string, AgentProfile>): void {
   const known = (name: string): boolean => Object.hasOwn(profiles, name);
   if (models.default !== undefined && !known(models.default))
     throw new Error(
@@ -113,8 +131,9 @@ export function resolveAgentProfile(
 ): ResolvedProfile | null {
   if (!models) return null;
   const pin = pinned && Object.hasOwn(models.profiles, pinned) ? pinned : undefined;
-  const source: ProfileSource = pin ? 'pin' : rule && models.byRule?.[rule] ? 'rule' : 'default';
-  const name = pin ?? (rule ? models.byRule?.[rule] : undefined) ?? models.default;
+  const byRule = ruleProfile(models, rule);
+  const source: ProfileSource = pin ? 'pin' : byRule ? 'rule' : 'default';
+  const name = pin ?? byRule ?? models.default;
   if (name === undefined) return null;
   const profile = models.profiles[name];
   if (profile === undefined) return null;
@@ -126,6 +145,10 @@ export function resolveAgentProfile(
     autoApprove: profile.autoApprove === true,
     source,
   };
+}
+
+function ruleProfile(models: AgentModels, rule: string | null | undefined): string | undefined {
+  return rule ? models.byRule?.[rule] : undefined;
 }
 
 export function orderedProfiles(models: AgentModels | undefined): { name: string; description: string }[] {

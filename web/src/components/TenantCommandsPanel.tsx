@@ -73,6 +73,29 @@ function TenantCommands({
           </h3>
         </div>
       </header>
+      <Declared view={view} />
+      {quiet && (
+        <p className="lrun-note lrun-warn">
+          Nothing printed for {elapsed(output.lastOutputAt ?? '', null, now)} — it may be waiting on something.
+        </p>
+      )}
+      {prep?.detail != null && <p className="lrun-note">{prep.detail}</p>}
+      {prep?.launchedAt != null && (
+        <OutputFold
+          environment={view.environment}
+          launchedAt={prep.launchedAt}
+          lines={output.lines}
+          open={open ?? running}
+          onToggle={setOpen}
+        />
+      )}
+    </section>
+  );
+}
+
+function Declared({ view }: { view: TenantCommandView }): JSX.Element {
+  return (
+    <>
       {view.ensureTenant !== null && (
         <p className="lrun-meta lrun-where">
           ensureTenant <code>{view.ensureTenant}</code>
@@ -83,31 +106,40 @@ function TenantCommands({
           reseed <code>{view.reseed}</code>
         </p>
       )}
-      {quiet && (
-        <p className="lrun-note lrun-warn">
-          Nothing printed for {elapsed(output.lastOutputAt ?? '', null, now)} — it may be waiting on something.
-        </p>
+    </>
+  );
+}
+
+function OutputFold({
+  environment,
+  launchedAt,
+  lines,
+  open,
+  onToggle,
+}: {
+  environment: string;
+  launchedAt: string;
+  lines: string[];
+  open: boolean;
+  onToggle: (open: boolean) => void;
+}): JSX.Element {
+  return (
+    <details className="lrun-fold lrun-out" open={open} onToggle={(e) => onToggle(e.currentTarget.open)}>
+      <summary>
+        <span>Output</span>
+        {lines.length > 0 && <span className="lrun-fold-hint">{lines[lines.length - 1]}</span>}
+      </summary>
+      {lines.length > 0 ? (
+        <TranscriptPane
+          text={lines.join('\n')}
+          streamId={`${environment} ${launchedAt}`}
+          label={`Tenant command output on ${environment}`}
+          className="compact"
+        />
+      ) : (
+        <p className="lrun-note">Nothing printed yet.</p>
       )}
-      {prep?.detail != null && <p className="lrun-note">{prep.detail}</p>}
-      {prep?.launchedAt != null && (
-        <details className="lrun-fold lrun-out" open={open ?? running} onToggle={(e) => setOpen(e.currentTarget.open)}>
-          <summary>
-            <span>Output</span>
-            {output.lines.length > 0 && <span className="lrun-fold-hint">{output.lines[output.lines.length - 1]}</span>}
-          </summary>
-          {output.lines.length > 0 ? (
-            <TranscriptPane
-              text={output.lines.join('\n')}
-              streamId={`${view.environment} ${prep.launchedAt}`}
-              label={`Tenant command output on ${view.environment}`}
-              className="compact"
-            />
-          ) : (
-            <p className="lrun-note">Nothing printed yet.</p>
-          )}
-        </details>
-      )}
-    </section>
+    </details>
   );
 }
 

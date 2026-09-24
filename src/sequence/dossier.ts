@@ -42,22 +42,25 @@ export function sequenceBriefing(
         'Order the ones you were given and say nothing about the rest.)',
     );
   }
-  for (const child of shown) {
-    lines.push('', `### #${child.number} — ${child.title}${fresh.has(child.number) ? ' — **new**' : ''}`);
-    if (child.issueType) lines.push(`_${child.issueType}${child.workItemState ? ` · ${child.workItemState}` : ''}_`);
-    const stated = (child.dependsOn ?? []).filter((d) => children.some((c) => c.number === d.number));
-    if (stated.length > 0) {
-      lines.push(
-        `**The board already states** that this waits on ${stated.map((d) => `#${d.number}`).join(', ')}. ` +
-          'Somebody drew that link; it is not yours to contradict, and you do not need to restate it.',
-      );
-    }
-    lines.push(child.body ? child.body.trim().slice(0, MAX_BODY) : '_No description._');
-  }
+  for (const child of shown) lines.push(...storyLines(child, children, fresh));
   if (standing !== null && standing.status !== 'declined') {
     lines.push('', ...standingOrder(standing, fresh));
   }
   return lines.join('\n');
+}
+
+function storyLines(child: Issue, children: readonly Issue[], fresh: ReadonlySet<number>): string[] {
+  const lines = ['', `### #${child.number} — ${child.title}${fresh.has(child.number) ? ' — **new**' : ''}`];
+  if (child.issueType) lines.push(`_${child.issueType}${child.workItemState ? ` · ${child.workItemState}` : ''}_`);
+  const stated = (child.dependsOn ?? []).filter((d) => children.some((c) => c.number === d.number));
+  if (stated.length > 0) {
+    lines.push(
+      `**The board already states** that this waits on ${stated.map((d) => `#${d.number}`).join(', ')}. ` +
+        'Somebody drew that link; it is not yours to contradict, and you do not need to restate it.',
+    );
+  }
+  lines.push(child.body ? child.body.trim().slice(0, MAX_BODY) : '_No description._');
+  return lines;
 }
 
 function standingOrder(standing: FeatureSequence, fresh: ReadonlySet<number>): string[] {

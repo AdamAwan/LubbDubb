@@ -59,12 +59,7 @@ export function issueShortfall(s: StageContext): void {
       prompt: s.templates.render('issue-shortfall', {
         number: issueNumber,
         title: issue.title,
-        consequence:
-          cause === 'plan'
-            ? 'Accepting sends the plan back to a planner, which sees the current decomposition and this ' +
-              'assessment and amends it. Nothing already in flight is retired.'
-            : `Accepting appends one new part to the plan for the scope "${shortfall.partSlug}" fell short of. ` +
-              `That part is left exactly as it is — its branch is spent — and no other part is touched.`,
+        consequence: shortfallConsequence(cause, shortfall.partSlug),
       }),
       rule: 'issue-shortfall',
       reason:
@@ -72,4 +67,16 @@ export function issueShortfall(s: StageContext): void {
         `acting on it spends agents, so it goes to you first.`,
     } satisfies RawAction);
   }
+}
+
+function shortfallConsequence(cause: 'plan' | 'part', partSlug: string | null): string {
+  if (cause === 'plan')
+    return (
+      'Accepting sends the plan back to a planner, which sees the current decomposition and this ' +
+      'assessment and amends it. Nothing already in flight is retired.'
+    );
+  return (
+    `Accepting appends one new part to the plan for the scope "${partSlug}" fell short of. ` +
+    `That part is left exactly as it is — its branch is spent — and no other part is touched.`
+  );
 }

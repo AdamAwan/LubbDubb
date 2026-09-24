@@ -147,16 +147,7 @@ function refineAtoms(doc: { atoms: AtomInput[]; parts: { slug: string; atoms: st
     }
   }
 
-  const carriers = new Map<string, string[]>();
-  for (const part of doc.parts) {
-    for (const slug of part.atoms) {
-      if (!known.has(slug)) {
-        refuse(`part "${part.slug}" carries unknown atom "${slug}"`, 'parts');
-        continue;
-      }
-      carriers.set(slug, [...(carriers.get(slug) ?? []), part.slug]);
-    }
-  }
+  const carriers = atomCarriers(doc.parts, known, refuse);
   for (const atom of doc.atoms) {
     const holders = carriers.get(atom.slug) ?? [];
     if (holders.length === 0) {
@@ -180,6 +171,24 @@ function refineAtoms(doc: { atoms: AtomInput[]; parts: { slug: string; atoms: st
       'parts',
     );
   }
+}
+
+function atomCarriers(
+  parts: { slug: string; atoms: string[] }[],
+  known: ReadonlySet<string>,
+  refuse: (message: string, path: 'atoms' | 'parts') => void,
+): Map<string, string[]> {
+  const carriers = new Map<string, string[]>();
+  for (const part of parts) {
+    for (const slug of part.atoms) {
+      if (!known.has(slug)) {
+        refuse(`part "${part.slug}" carries unknown atom "${slug}"`, 'parts');
+        continue;
+      }
+      carriers.set(slug, [...(carriers.get(slug) ?? []), part.slug]);
+    }
+  }
+  return carriers;
 }
 
 interface InducedCycle {

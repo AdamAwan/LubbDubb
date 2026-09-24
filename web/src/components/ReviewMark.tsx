@@ -63,6 +63,13 @@ function reviewSaidMore(review: PrReviewState): string | null {
   }
 }
 
+function reviewFoot(review: PrReviewState, now: number | undefined): string {
+  if (review.status === 'skipped') return 'a skip is a decision — the merge is not held';
+  const stamp = review.reviewedAt ?? review.routedAt;
+  if (stamp === null) return 'nothing recorded yet';
+  return `${review.reviewedAt !== null ? 'reviewed' : 'routed'} ${relTime(stamp, now)}`;
+}
+
 const TIP_FINDINGS = 2;
 
 export function ReviewMark({
@@ -81,7 +88,6 @@ export function ReviewMark({
   if (review === undefined) return reserve ? <span className="rv rv-none" aria-hidden="true" /> : null;
   const mark = badge(review);
   const more = reviewSaidMore(review);
-  const stamp = review.reviewedAt ?? review.routedAt;
   const shown = review.findings.slice(0, TIP_FINDINGS);
   const rest = review.findings.length - shown.length;
   const Tag = onOpen === undefined ? 'span' : 'button';
@@ -111,11 +117,7 @@ export function ReviewMark({
           )}
           {rest > 0 && <span className="rv-more">{`and ${rest} more`}</span>}
           <span className="rv-foot">
-            {review.status === 'skipped'
-              ? 'a skip is a decision — the merge is not held'
-              : stamp !== null
-                ? `${review.reviewedAt !== null ? 'reviewed' : 'routed'} ${relTime(stamp, now)}`
-                : 'nothing recorded yet'}
+            {reviewFoot(review, now)}
             {onOpen !== undefined && ' · click for the whole reading'}
           </span>
         </Tip>

@@ -139,26 +139,8 @@ const SETTLED: readonly Agent['status'][] = ['done', 'failed', 'crashed', 'kille
 export function burnPass(input: BurnInput): BurnStep[] {
   const nowMs = Date.parse(input.now);
   const taskOf = new Map(input.tasks.map((t) => [t.id, t]));
-  const openByAgent = new Map<string, HumanTask>();
-  const settledAgents = new Set<string>();
-  for (const t of input.existing) {
-    if (t.agentId === null) continue;
-    if (t.status === 'open') openByAgent.set(t.agentId, t);
-    else settledAgents.add(t.agentId);
-  }
-  const steps: BurnStep[] = [];
-
-  for (const agent of input.agents) {
-    if (LIVE.includes(agent.status)) continue;
-    const standing = openByAgent.get(agent.id);
-    if (!standing) continue;
-    steps.push({
-      kind: 'settle',
-      taskId: standing.id,
-      status: 'done',
-      resolution: settleResolution(agent, nowMs),
-    });
-  }
+  const { openByAgent, settledAgents } = indexNotices(input.existing);
+  const steps = settleSteps(input.agents, openByAgent, nowMs);
   if (!input.policy.enabled) return steps;
   if (Number.isNaN(nowMs)) return steps;
 
@@ -179,6 +161,36 @@ export function burnPass(input: BurnInput): BurnStep[] {
     });
   }
 
+  return steps;
+}
+
+function indexNotices(existing: readonly HumanTask[]): {
+  openByAgent: Map<string, HumanTask>;
+  settledAgents: Set<string>;
+} {
+  const openByAgent = new Map<string, HumanTask>();
+  const settledAgents = new Set<string>();
+  for (const t of existing) {
+    if (t.agentId === null) continue;
+    if (t.status === 'open') openByAgent.set(t.agentId, t);
+    else settledAgents.add(t.agentId);
+  }
+  return { openByAgent, settledAgents };
+}
+
+function settleSteps(agents: readonly Agent[], openByAgent: ReadonlyMap<string, HumanTask>, nowMs: number): BurnStep[] {
+  const steps: BurnStep[] = [];
+  for (const agent of agents) {
+    if (LIVE.includes(agent.status)) continue;
+    const standing = openByAgent.get(agent.id);
+    if (!standing) continue;
+    steps.push({
+      kind: 'settle',
+      taskId: standing.id,
+      status: 'done',
+      resolution: settleResolution(agent, nowMs),
+    });
+  }
   return steps;
 }
 

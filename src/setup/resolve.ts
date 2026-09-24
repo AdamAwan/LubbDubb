@@ -40,14 +40,7 @@ export async function resolveFromRepo(
   const target = originUrl === null ? null : parseRemote(originUrl);
 
   const projectFile = projectConfigFilePath(repoRoot);
-  let projectLayer: Partial<Config> = {};
-  let projectPresent = false;
-  try {
-    projectLayer = projectConfigLayer(projectFile);
-    projectPresent = Object.keys(projectLayer).length > 0;
-  } catch {
-    projectLayer = {};
-  }
+  const { projectLayer, projectPresent } = readProjectLayer(projectFile);
   const projectKeys = Object.keys(projectLayer).sort();
 
   const branchName = (await probes.remoteHead(repoRoot)) ?? projectLayer.defaultBranch ?? config.defaultBranch;
@@ -58,9 +51,7 @@ export async function resolveFromRepo(
   const token = variable === null ? undefined : probes.env(variable);
   const identity = await resolveIdentity(input.email, target, token, probes);
 
-  const hasToken = token !== undefined && token !== '';
-  const azCli = !hasToken && target?.provider === 'azure' && (await probes.azSignedIn());
-  const source = hasToken ? 'env' : azCli ? 'az-cli' : null;
+  const source = await credentialSource(target, token, probes);
 
   const prefix = projectLayer.labelPrefix ?? config.labelPrefix;
   const watch = { label: watchLabelFor(prefix), fromProject: projectLayer.labelPrefix !== undefined };
@@ -68,21 +59,7 @@ export async function resolveFromRepo(
   const writes: Record<string, unknown> = { repoRoot, ...FIRST_RUN_AGENTS };
   if (defaultBranch) writes.defaultBranch = defaultBranch.name;
   if (identity.userId !== null) writes.userId = identity.userId;
-  if (target !== null) {
-    if (projectLayer.integrations === undefined) {
-      writes['integrations.sourceControl'] = target.provider;
-      writes['integrations.issues'] = target.provider;
-    }
-    if (target.provider === 'github' && projectLayer.github === undefined) {
-      writes['github.owner'] = target.parts[0];
-      writes['github.repo'] = target.parts[1];
-    }
-    if (target.provider === 'azure' && projectLayer.azureDevOps === undefined) {
-      writes['azureDevOps.organization'] = target.parts[0];
-      writes['azureDevOps.project'] = target.parts[1];
-      writes['azureDevOps.repository'] = target.parts[2];
-    }
-  }
+  if (target !== null) addTargetWrites(writes, target, projectLayer);
 
   const install = probes.installRoot();
   return {
@@ -98,6 +75,41 @@ export async function resolveFromRepo(
     watch,
     writes,
   };
+}
+
+function readProjectLayer(projectFile: string): { projectLayer: Partial<Config>; projectPresent: boolean } {
+  try {
+    const projectLayer = projectConfigLayer(projectFile);
+    return { projectLayer, projectPresent: Object.keys(projectLayer).length > 0 };
+  } catch {
+    return { projectLayer: {}, projectPresent: false };
+  }
+}
+
+async function credentialSource(
+  target: RemoteTarget | null,
+  token: string | undefined,
+  probes: SetupProbes,
+): Promise<'env' | 'az-cli' | null> {
+  const hasToken = token !== undefined && token !== '';
+  const azCli = !hasToken && target?.provider === 'azure' && (await probes.azSignedIn());
+  return hasToken ? 'env' : azCli ? 'az-cli' : null;
+}
+
+function addTargetWrites(writes: Record<string, unknown>, target: RemoteTarget, projectLayer: Partial<Config>): void {
+  if (projectLayer.integrations === undefined) {
+    writes['integrations.sourceControl'] = target.provider;
+    writes['integrations.issues'] = target.provider;
+  }
+  if (target.provider === 'github' && projectLayer.github === undefined) {
+    writes['github.owner'] = target.parts[0];
+    writes['github.repo'] = target.parts[1];
+  }
+  if (target.provider === 'azure' && projectLayer.azureDevOps === undefined) {
+    writes['azureDevOps.organization'] = target.parts[0];
+    writes['azureDevOps.project'] = target.parts[1];
+    writes['azureDevOps.repository'] = target.parts[2];
+  }
 }
 
 async function resolveIdentity(

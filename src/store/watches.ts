@@ -222,14 +222,7 @@ export class WatchStore {
           ...check,
           expectBaseline: check.expectBaseline ? 1 : 0,
           seq: row?.seq ?? this.nextWatchSeq(originRef),
-          baselineValue: asked ? row.baseline_value : null,
-          baselineAt: asked ? row.baseline_at : null,
-          dryRunEnvironment: asked ? row.dry_run_environment : null,
-          dryRunAt: asked ? row.dry_run_at : null,
-          dryRunVerdict: asked ? row.dry_run_verdict : null,
-          dryRunPresence: asked ? row.dry_run_presence : null,
-          dryRunRows: asked ? row.dry_run_rows : null,
-          dryRunDetail: asked ? row.dry_run_detail : null,
+          ...keptAnswers(asked ? row : null),
           createdAt: row?.created_at ?? now,
           goalRef: originRef,
           now,
@@ -386,6 +379,30 @@ interface GoalWatchRow {
   dry_run_presence: string | null;
   dry_run_rows: number | null;
   dry_run_detail: string | null;
+}
+
+function keptAnswers(row: GoalWatchRow | null) {
+  if (row === null)
+    return {
+      baselineValue: null,
+      baselineAt: null,
+      dryRunEnvironment: null,
+      dryRunAt: null,
+      dryRunVerdict: null,
+      dryRunPresence: null,
+      dryRunRows: null,
+      dryRunDetail: null,
+    };
+  return {
+    baselineValue: row.baseline_value,
+    baselineAt: row.baseline_at,
+    dryRunEnvironment: row.dry_run_environment,
+    dryRunAt: row.dry_run_at,
+    dryRunVerdict: row.dry_run_verdict,
+    dryRunPresence: row.dry_run_presence,
+    dryRunRows: row.dry_run_rows,
+    dryRunDetail: row.dry_run_detail,
+  };
 }
 
 function hydrate(row: GoalWatchRow): GoalWatch {

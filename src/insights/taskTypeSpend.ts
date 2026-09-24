@@ -84,14 +84,7 @@ export function rollUpChecks(input: TaskTypeInput): ChecksSpend {
     attributedCostUsd = roundUsd(attributedCostUsd + cost);
     const share = cost / names.length;
     const at = agent.endedAt ?? agent.startedAt;
-    for (const name of names) {
-      const row = byCheck.get(name) ?? { name, costUsd: 0, runs: 0, soleRuns: 0, perRunUsd: 0, lastAt: null };
-      row.costUsd = roundUsd(row.costUsd + share);
-      row.runs += 1;
-      if (names.length === 1) row.soleRuns += 1;
-      if (row.lastAt === null || at > row.lastAt) row.lastAt = at;
-      byCheck.set(name, row);
-    }
+    creditChecks(byCheck, names, share, at);
   }
 
   const ranked = [...byCheck.values()]
@@ -104,4 +97,15 @@ export function rollUpChecks(input: TaskTypeInput): ChecksSpend {
     attributedCostUsd,
     unnamedCostUsd,
   };
+}
+
+function creditChecks(byCheck: Map<string, CheckSpend>, names: readonly string[], share: number, at: string): void {
+  for (const name of names) {
+    const row = byCheck.get(name) ?? { name, costUsd: 0, runs: 0, soleRuns: 0, perRunUsd: 0, lastAt: null };
+    row.costUsd = roundUsd(row.costUsd + share);
+    row.runs += 1;
+    if (names.length === 1) row.soleRuns += 1;
+    if (row.lastAt === null || at > row.lastAt) row.lastAt = at;
+    byCheck.set(name, row);
+  }
 }

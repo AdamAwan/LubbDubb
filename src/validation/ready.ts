@@ -35,47 +35,8 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
   for (const delivery of input.deliveries) {
     const originRef = delivery.originRef;
     if (shortfalls.has(originRef)) continue;
-    const live = liveChecks(input.checks.get(originRef) ?? []);
-    const existing = byOrigin.get(originRef);
-    const owed = live.filter(owedToAPerson);
-
-    if (owed.length === 0) {
-      if (existing?.status === 'open')
-        steps.push({
-          kind: 'settle',
-          taskId: existing.id,
-          status: 'done',
-          resolution: settledResolution(live.length),
-        });
-      continue;
-    }
-    if (input.released !== null && !input.released.has(originRef)) {
-      if (existing?.status === 'open')
-        steps.push({
-          kind: 'settle',
-          taskId: existing.id,
-          status: 'declined',
-          resolution: DESK_SETTLED + 'the check set is waiting on your accept — it is not work until you do',
-        });
-      continue;
-    }
-    if (existing && existing.status !== 'open') {
-      if (deskSettled(existing))
-        steps.push({
-          kind: 'reopen',
-          taskId: existing.id,
-          detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length, input.sheetRows.get(originRef)),
-        });
-      continue;
-    }
-    if (input.opened !== null && !input.opened.has(originRef) && !existing) continue;
-    if (input.watchCleared !== null && !input.watchCleared.has(originRef) && !existing) continue;
-    steps.push({
-      kind: 'file',
-      originRef,
-      title: validateTitle(originRef),
-      detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length, input.sheetRows.get(originRef)),
-    });
+    const step = deliveryStep(input, originRef, byOrigin.get(originRef), inWorld.get(originRef) ?? null);
+    if (step !== null) steps.push(step);
   }
 
   for (const task of input.existing) {
@@ -89,6 +50,50 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
   }
 
   return steps;
+}
+
+function deliveryStep(
+  input: ValidationReadyInput,
+  originRef: string,
+  existing: HumanTask | undefined,
+  issue: Issue | null,
+): ValidationReadyStep | null {
+  const live = liveChecks(input.checks.get(originRef) ?? []);
+  const owed = live.filter(owedToAPerson);
+
+  if (owed.length === 0) {
+    if (existing?.status !== 'open') return null;
+    return { kind: 'settle', taskId: existing.id, status: 'done', resolution: settledResolution(live.length) };
+  }
+  if (!admits(input.released, originRef)) {
+    if (existing?.status !== 'open') return null;
+    return {
+      kind: 'settle',
+      taskId: existing.id,
+      status: 'declined',
+      resolution: DESK_SETTLED + 'the check set is waiting on your accept — it is not work until you do',
+    };
+  }
+  if (existing && existing.status !== 'open') {
+    if (!deskSettled(existing)) return null;
+    return {
+      kind: 'reopen',
+      taskId: existing.id,
+      detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef)),
+    };
+  }
+  if (!admits(input.opened, originRef) && !existing) return null;
+  if (!admits(input.watchCleared, originRef) && !existing) return null;
+  return {
+    kind: 'file',
+    originRef,
+    title: validateTitle(originRef),
+    detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef)),
+  };
+}
+
+function admits(gate: ReadonlySet<string> | null, originRef: string): boolean {
+  return gate === null || gate.has(originRef);
 }
 
 /**

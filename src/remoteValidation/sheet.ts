@@ -59,8 +59,7 @@ interface SheetInput {
  * every other row on the same sheet still reports.
  */
 export function sheetRows(input: SheetInput): SheetRowPlan[] {
-  const { environment } = input;
-  const permits = environment.validate?.permits ?? [];
+  const permits = input.environment.validate?.permits ?? [];
   const out: SheetRowPlan[] = [];
   let seq = 0;
 
@@ -71,73 +70,93 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
     // → docs/spec/36-remote-validation.md#a-declined-row-is-not-on-the-sheet
     if (check.state === 'declined') continue;
     seq += 1;
-    out.push({
-      rowId: `check:${check.id}`,
-      kind: 'check',
-      seq,
-      title: check.title,
-      sourceId: check.id,
-      selected: true,
-      blockedReason:
-        unpermitted('check', permits, environment.name) ??
-        areaFault(stepArea(check.steps)) ??
-        actingTenantFault(check, input.tenant, environment.name),
-      awaitingApproval: false,
-      matched: null,
-      idleReason: idleReason(check, environment),
-      run: null,
-    });
+    out.push(checkRow(check, seq, input, permits));
   }
 
   for (const query of input.queries) {
     seq += 1;
-    const approved = input.approvals.has(`${query.digest} ${environment.name}`);
-    const unpermittedReason = unpermitted('state', permits, environment.name);
-    out.push({
-      rowId: `state:${query.id}`,
-      kind: 'state',
-      seq,
-      title: query.title,
-      sourceId: query.id,
-      selected: true,
-      blockedReason: unpermittedReason ?? (approved ? null : unapproved(environment.name)),
-      awaitingApproval: unpermittedReason === null && !approved,
-      matched: null,
-      // A query row is read by the press itself, synchronously and under the pin: there is no
-      // instrument for it to be missing.
-      idleReason: null,
-      run: 'state',
-    });
+    out.push(queryRow(query, seq, input, permits));
   }
 
   for (const watch of input.watches) {
     if (!watch.live) continue;
     seq += 1;
-    const approved = input.approvals.has(`${queryDigest(watch.query, watch.presence ?? '')} ${environment.name}`);
-    const unpermittedReason = unpermitted(watch.kind, permits, environment.name);
-    const observable = (environment.watch?.observe ?? '').trim() !== '';
-    out.push({
-      rowId: `watch:${watch.id}`,
-      kind: watch.kind,
-      seq,
-      title: watch.title,
-      sourceId: watch.id,
-      selected: true,
-      blockedReason:
-        unpermittedReason ??
-        (observable
-          ? approved
-            ? null
-            : unapproved(environment.name)
-          : `${environment.name} declares no "watch.observe" command, so there is nothing here to put this query to.`),
-      awaitingApproval: unpermittedReason === null && observable && !approved,
-      matched: null,
-      idleReason: null,
-      run: 'watch',
-    });
+    out.push(watchRow(watch, seq, input, permits));
   }
 
   return out;
+}
+
+function checkRow(
+  check: ValidationCheck,
+  seq: number,
+  input: SheetInput,
+  permits: readonly RemoteRowKind[],
+): SheetRowPlan {
+  const { environment } = input;
+  return {
+    rowId: `check:${check.id}`,
+    kind: 'check',
+    seq,
+    title: check.title,
+    sourceId: check.id,
+    selected: true,
+    blockedReason:
+      unpermitted('check', permits, environment.name) ??
+      areaFault(stepArea(check.steps)) ??
+      actingTenantFault(check, input.tenant, environment.name),
+    awaitingApproval: false,
+    matched: null,
+    idleReason: idleReason(check, environment),
+    run: null,
+  };
+}
+
+function queryRow(query: StateQuery, seq: number, input: SheetInput, permits: readonly RemoteRowKind[]): SheetRowPlan {
+  const { environment } = input;
+  const approved = input.approvals.has(`${query.digest} ${environment.name}`);
+  const unpermittedReason = unpermitted('state', permits, environment.name);
+  return {
+    rowId: `state:${query.id}`,
+    kind: 'state',
+    seq,
+    title: query.title,
+    sourceId: query.id,
+    selected: true,
+    blockedReason: unpermittedReason ?? (approved ? null : unapproved(environment.name)),
+    awaitingApproval: unpermittedReason === null && !approved,
+    matched: null,
+    // A query row is read by the press itself, synchronously and under the pin: there is no
+    // instrument for it to be missing.
+    idleReason: null,
+    run: 'state',
+  };
+}
+
+function watchRow(watch: GoalWatch, seq: number, input: SheetInput, permits: readonly RemoteRowKind[]): SheetRowPlan {
+  const { environment } = input;
+  const approved = input.approvals.has(`${queryDigest(watch.query, watch.presence ?? '')} ${environment.name}`);
+  const unpermittedReason = unpermitted(watch.kind, permits, environment.name);
+  const observable = (environment.watch?.observe ?? '').trim() !== '';
+  return {
+    rowId: `watch:${watch.id}`,
+    kind: watch.kind,
+    seq,
+    title: watch.title,
+    sourceId: watch.id,
+    selected: true,
+    blockedReason:
+      unpermittedReason ??
+      (observable
+        ? approved
+          ? null
+          : unapproved(environment.name)
+        : `${environment.name} declares no "watch.observe" command, so there is nothing here to put this query to.`),
+    awaitingApproval: unpermittedReason === null && observable && !approved,
+    matched: null,
+    idleReason: null,
+    run: 'watch',
+  };
 }
 
 /** The delimiter guard, asked only of a check that declares an area. */

@@ -34,11 +34,16 @@ export function collectActions(store: Store): PetActionCandidate[] {
     if (job.originRef === null) out.push({ kind: 'job', ref: job.id, at: job.createdAt });
   }
 
-  const upgrade = store.upgrades.readUpgradeIntent();
-  if (upgrade.state === 'applying' && upgrade.targetSha !== null && upgrade.requestedAt !== null)
-    out.push({ kind: 'upgrade', ref: upgrade.targetSha, at: upgrade.requestedAt });
+  out.push(...upgradeActions(store));
 
   return out;
+}
+
+function upgradeActions(store: Store): PetActionCandidate[] {
+  const upgrade = store.upgrades.readUpgradeIntent();
+  if (upgrade.state === 'applying' && upgrade.targetSha !== null && upgrade.requestedAt !== null)
+    return [{ kind: 'upgrade', ref: upgrade.targetSha, at: upgrade.requestedAt }];
+  return [];
 }
 
 const ALL = 100_000;

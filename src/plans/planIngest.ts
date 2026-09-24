@@ -60,6 +60,23 @@ export function ingestPlanDocument(
     });
   }
 
+  ingestPlanValidation(store, originRef, doc, written);
+
+  if (doc.watch) store.watches.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
+
+  if (doc.state) store.remoteValidation.saveStateQueries(originRef, stateQueryInputs(doc.state), 'plan');
+
+  const rolled = input.approved === true ? store.plans.rollUpPlanStatus(plan.id) : null;
+
+  return { plan: rolled ?? plan, status: rolled?.status ?? status, retired: retire.map((p) => p.slug) };
+}
+
+function ingestPlanValidation(
+  store: Store,
+  originRef: string,
+  doc: PlanDocument,
+  written: readonly { slug: string }[],
+): void {
   if (doc.validation) store.validation.recordValidationHint(originRef, doc.validation.hint ?? null);
 
   // A `validation` block that declares only a hint writes no check set. Reading a hint-only block as
@@ -83,12 +100,4 @@ export function ingestPlanDocument(
       amendNote: AMENDED_CHECK_NOTE,
     });
   }
-
-  if (doc.watch) store.watches.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
-
-  if (doc.state) store.remoteValidation.saveStateQueries(originRef, stateQueryInputs(doc.state), 'plan');
-
-  const rolled = input.approved === true ? store.plans.rollUpPlanStatus(plan.id) : null;
-
-  return { plan: rolled ?? plan, status: rolled?.status ?? status, retired: retire.map((p) => p.slug) };
 }

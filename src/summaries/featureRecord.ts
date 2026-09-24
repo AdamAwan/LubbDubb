@@ -5,6 +5,7 @@ import { isWatched } from '../watchLabels.js';
 import type { Store } from '../store/store.js';
 import type { Escalation, GoalEnvironmentReach } from '../types.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
+import { lastLandingByGoal } from '../features/featureBoard.js';
 import { featureStandingKey, type FeatureChildStandingFacts } from './featureSummary.js';
 
 // → docs/spec/14-persistence.md
@@ -41,12 +42,7 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
       .filter((r) => r.completedAt === null && r.dismissedAt === null)
       .map((r) => [r.issueNumber, r.startedAt]),
   );
-  const landings = store.environments.listGoalLandings();
-  const landedAt = new Map<string, string>();
-  for (const landing of landings) {
-    const seen = landedAt.get(landing.goalRef);
-    if (seen === undefined || landing.recordedAt > seen) landedAt.set(landing.goalRef, landing.recordedAt);
-  }
+  const landedAt = lastLandingByGoal(store.environments.listGoalLandings());
   const groups = new Map<number, { title: string; children: FeatureChildRecord[] }>();
   for (const item of items) {
     if (isContainerType(item.issueType, opts.containerTypes)) continue;

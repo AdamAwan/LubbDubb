@@ -90,13 +90,7 @@ export class PlanReconciler {
         .map((t) => t.partId),
     );
 
-    const next = new Map<string, Partial<PlanPart>>();
-    for (const part of parts) {
-      if (partIsHuman(part)) continue;
-      if (part.status === 'retired' || part.status === 'concluded') continue;
-      const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part, tasks);
-      if (patch) next.set(part.slug, patch);
-    }
+    const next = this.foldObservations(parts, issueNumber, prs, closedPrs, tasks);
     const observed = parts.map((p) => ({ ...p, ...next.get(p.slug) }) as PlanPart);
     const index = bySlug(observed);
 
@@ -104,27 +98,19 @@ export class PlanReconciler {
       flatTaken && !partIsHuman(part) && (part.branch ?? partBranch(issueNumber, part.slug)) !== flat;
 
     for (const part of observed) {
-      if (part.status !== 'pending' && part.status !== 'ready' && part.status !== 'blocked') continue;
-      const refused = declined.has(part.id);
-      const collision = collidesWith(part);
-      const status = collision || refused ? 'blocked' : await this.readiness(part, index, issueNumber);
-      const blockedReason = collision
-        ? refCollisionReason(issueNumber, presence)
-        : refused
-          ? declinedStepReason(part.title)
+      if (!awaitsGate(part)) continue;
+      const blockedBy: PlanPartBlocker | null = collidesWith(part)
+        ? 'collision'
+        : declined.has(part.id)
+          ? 'declined'
           : null;
-      const blockedBy: PlanPartBlocker | null = collision ? 'collision' : refused ? 'declined' : null;
+      const status = blockedBy !== null ? 'blocked' : await this.readiness(part, index, issueNumber);
+      const blockedReason = blockReason(blockedBy, part, issueNumber, presence);
       if (status !== part.status || blockedReason !== part.blockedReason || blockedBy !== part.blockedBy)
         next.set(part.slug, { ...next.get(part.slug), status, blockedReason, blockedBy });
     }
 
-    let changed = false;
-    for (const part of parts) {
-      const patch = next.get(part.slug);
-      if (!patch || !differs(part, patch)) continue;
-      store.plans.updatePlanPart(part.id, patch);
-      changed = true;
-    }
+    const changed = this.writePatches(parts, next);
     if (changed && observed.some(collidesWith)) {
       this.deps.errors?.record({
         source: 'cycle',
@@ -132,6 +118,39 @@ export class PlanReconciler {
       });
     }
 
+    await this.settleStatus(plan, issueNumber, changed);
+  }
+
+  private foldObservations(
+    parts: PlanPart[],
+    issueNumber: number,
+    prs: PullRequest[],
+    closedPrs: PullRequest[],
+    tasks: TaskSummary[],
+  ): Map<string, Partial<PlanPart>> {
+    const next = new Map<string, Partial<PlanPart>>();
+    for (const part of parts) {
+      if (partIsHuman(part)) continue;
+      if (part.status === 'retired' || part.status === 'concluded') continue;
+      const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part, tasks);
+      if (patch) next.set(part.slug, patch);
+    }
+    return next;
+  }
+
+  private writePatches(parts: PlanPart[], next: Map<string, Partial<PlanPart>>): boolean {
+    let changed = false;
+    for (const part of parts) {
+      const patch = next.get(part.slug);
+      if (!patch || !differs(part, patch)) continue;
+      this.deps.store.plans.updatePlanPart(part.id, patch);
+      changed = true;
+    }
+    return changed;
+  }
+
+  private async settleStatus(plan: Plan, issueNumber: number, changed: boolean): Promise<void> {
+    const { store } = this.deps;
     const rolled = store.plans.rollUpPlanStatus(plan.id);
     const current = rolled ?? plan;
     if (current.status !== 'awaiting_approval' && (current.statusCommentRef === null || changed || rolled)) {
@@ -200,6 +219,21 @@ export class PlanReconciler {
       });
     }
   }
+}
+
+function awaitsGate(part: PlanPart): boolean {
+  return part.status === 'pending' || part.status === 'ready' || part.status === 'blocked';
+}
+
+function blockReason(
+  blockedBy: PlanPartBlocker | null,
+  part: PlanPart,
+  issueNumber: number,
+  presence: BranchPresence,
+): string | null {
+  if (blockedBy === 'collision') return refCollisionReason(issueNumber, presence);
+  if (blockedBy === 'declined') return declinedStepReason(part.title);
+  return null;
 }
 
 function declinedStepReason(title: string): string {
