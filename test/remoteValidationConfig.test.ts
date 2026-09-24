@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config/config.js';
+import { loadConfig, loadConfigFromText } from '../src/config/config.js';
 import { CONFIG_FIELDS } from '../src/config/configFields.js';
 import { groupedTopLevelKeys } from '../src/server/runningConfig.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
@@ -61,20 +61,19 @@ test('the whole validate block parses, and environments stays fileOnly', () => {
   assert.equal(field?.access, 'fileOnly', 'every field in the block is a shell command the harness runs');
 });
 
-test('remoteValidation.runTimeoutMs defaults to thirty minutes and the Features group claims it', () => {
+test('the Features group claims remoteValidation, and runTimeoutMs is gone from it', () => {
   const dir = temp();
   const config = loadConfig({
     dbPath: ':memory:',
     repoRoot: dir,
     projectConfigFile: join(dir, 'absent.json'),
   } as never);
-  assert.equal(config.remoteValidation.runTimeoutMs, 30 * 60 * 1000);
   assert.ok(groupedTopLevelKeys().has('remoteValidation'), 'an unclaimed key validates, applies, and is drawn nowhere');
-  assert.ok(CONFIG_FIELDS.some((f) => f.path === 'remoteValidation.runTimeoutMs'));
+  assert.ok(!Object.hasOwn(config.remoteValidation, 'runTimeoutMs'), 'the harness spawns no runner to kill');
+  assert.ok(!CONFIG_FIELDS.some((f) => f.path === 'remoteValidation.runTimeoutMs'));
 
-  // The tenant commands are not the runner, and neither of them is a thirty-second job: this
-  // document's own account of ensureTenant is "possibly very slow", so the ordinary kill would end
-  // both on every invocation.
+  // Neither tenant command is a thirty-second job: this document's own account of ensureTenant is
+  // "possibly very slow", so the ordinary kill would end both on every invocation.
   assert.equal(config.remoteValidation.tenantTimeoutMs, 60 * 60 * 1000);
   assert.ok(CONFIG_FIELDS.some((f) => f.path === 'remoteValidation.tenantTimeoutMs'));
 });
@@ -154,4 +153,25 @@ test('a block with no state.run is not an executor, and a named one resolves by 
   assert.equal(stateExecutor([bare, withState, production] as EnvironmentConfig[])!.name, 'acceptance');
   assert.equal(stateExecutor([bare, withState, production] as EnvironmentConfig[], 'production')!.name, 'production');
   assert.equal(stateExecutor([bare, withState] as EnvironmentConfig[], 'production'), null);
+});
+
+test('a file still setting remoteValidation.runTimeoutMs boots, warns naming it, and keeps its siblings', (t) => {
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (msg: string): void => void warnings.push(msg);
+  t.after(() => {
+    console.warn = realWarn;
+  });
+  const dir = temp();
+  const config = loadConfigFromText(
+    JSON.stringify({
+      repoRoot: dir,
+      projectConfigFile: join(dir, 'absent.json'),
+      remoteValidation: { runTimeoutMs: 1_800_000, tenantTimeoutMs: 123_000 },
+    }),
+    join(dir, 'lubbdubb.config.json'),
+  );
+  assert.equal(config.remoteValidation.tenantTimeoutMs, 123_000);
+  assert.ok(!Object.hasOwn(config.remoteValidation, 'runTimeoutMs'));
+  assert.ok(warnings.some((w) => w.includes('remoteValidation.runTimeoutMs') && w.includes('no longer exists')));
 });
