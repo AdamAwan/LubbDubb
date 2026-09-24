@@ -25,7 +25,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           agents: store.agents.listAgents(),
           tasks,
           ciEvents: store.world.listWorldEventsOfKindsSince(since, ['pr_ci']),
-          usageEvents,
           window,
           now,
         }),

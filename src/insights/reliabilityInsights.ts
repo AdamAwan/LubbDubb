@@ -1,4 +1,4 @@
-import type { Agent, AgentStatus, TaskSummary, UsageEvent, WorldEvent } from '../types.js';
+import type { Agent, AgentStatus, TaskSummary, WorldEvent } from '../types.js';
 import { prNodeRefOf, roundUsd, unmeasured } from './issueSpend.js';
 import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from '../world/worldDiff.js';
@@ -130,7 +130,6 @@ interface ReliabilityInput {
   agents: readonly Agent[];
   tasks: readonly TaskSummary[];
   ciEvents: readonly WorldEvent[];
-  usageEvents: readonly UsageEvent[];
   window: ResolvedWindow;
   now: number;
 }
@@ -288,7 +287,7 @@ function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan)
   return health;
 }
 
-function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: ReliabilityInput, span: TimelineSpan): CiHealth {
+function buildCiHealth({ agents, tasks, ciEvents, now }: ReliabilityInput, span: TimelineSpan): CiHealth {
   const buckets: CiBucket[] = Array.from({ length: span.buckets }, (_, i) => ({
     startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
     red: 0,
@@ -346,26 +345,22 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
   }
 
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
-  const prRuns = new Map<string, { phase: 'ci' | 'landing'; ref: string | null }>();
-  for (const agent of agents) {
-    const originRef = originOfTask.get(agent.taskId) ?? null;
-    const phase = phaseOf(originRef);
-    if (phase !== 'ci' && phase !== 'landing') continue;
-    prRuns.set(agent.id, { phase, ref: originRef === null ? null : prNodeRefOf(originRef) });
-  }
-
   let ciCostUsd = 0;
   let landingCostUsd = 0;
-  for (const event of usageEvents) {
-    const run = prRuns.get(event.agentId);
-    if (run === undefined || Date.parse(event.at) < span.startMs) continue;
-    if (run.phase === 'landing') {
-      landingCostUsd = roundUsd(landingCostUsd + event.costUsd);
+  for (const agent of agents) {
+    if (unmeasured(agent)) continue;
+    const originRef = originOfTask.get(agent.taskId) ?? null;
+    const phase = phaseOf(originRef);
+    const cost = agent.costUsd ?? 0;
+    if (phase === 'landing') {
+      landingCostUsd = roundUsd(landingCostUsd + cost);
       continue;
     }
-    ciCostUsd = roundUsd(ciCostUsd + event.costUsd);
-    const subject = run.ref === null ? undefined : subjects.get(run.ref);
-    if (subject) subject.costUsd = roundUsd(subject.costUsd + event.costUsd);
+    if (phase !== 'ci') continue;
+    ciCostUsd = roundUsd(ciCostUsd + cost);
+    const ref = originRef === null ? null : prNodeRefOf(originRef);
+    const subject = ref === null ? undefined : subjects.get(ref);
+    if (subject) subject.costUsd = roundUsd(subject.costUsd + cost);
   }
 
   const ranked = [...subjects.values()].sort((a, b) => b.reds - a.reds || b.redMs - a.redMs);
