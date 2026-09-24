@@ -1424,13 +1424,18 @@ passes an agent's output on by default along several paths, each of which is shu
   beside the operator's `plan_mark_*`, same four-valued shape, same `readMark`, and never folded into
   them.
 
-Its transcript is kept like any agent's, because that is what the fleet controls and the usage
-metrics read; no agent reads another's transcript, so keeping it is not a path.
+- **Its transcript and its prompt**: both carry the prediction, and the operator's desktop channel
+  serves both to a model — `agent_read` returns an agent's brief and transcript tail, and
+  `ejection_read` hands a held agent's `prompt` and transcript to the operator's Claude Code
+  ([11](11-mcp-tools.md#the-desktop-channel)). So `agent_read` answers a judge's task with its status
+  and spend and nothing it was told or said, and a judge cannot be ejected. Both are kept, because the
+  cockpit draws them to the operator and the usage metrics read the row; what is shut is every door to
+  a model.
 
 The containment test keeps both arms and names the one exception: structurally, only the judge's rule
 module may name the store among the listed directories; live, the sentinel is asserted to appear in
-the judge's own prompt and in no other agent's prompt, tool response or transcript, and in no outbound
-sink call.
+the judge's own prompt and in no other agent's prompt, tool response or transcript, in no desktop
+tool response, and in no outbound sink call.
 
 **Acceptance criteria are the opposite case and must not inherit this posture.** Criteria are an
 oracle the implementer is _meant_ to be judged against, and today's `plan_parts.acceptance` already

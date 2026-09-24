@@ -898,8 +898,10 @@ the operator gives, written to the prediction store and nowhere else
 The judge is the one agent that may read a prediction, and **everything that makes that safe is about
 its output, not its input**: the harness passes an agent's output on by default, and each default path
 is shut for this origin. No tool but its own (its `RULE_TOOLS` row carries only `prediction_judge`,
-and `UNIVERSAL_TOOLS` are withheld from it), no goal scratchpad, no tracker, no worktree, and no row in
-the retro dossier's decisions. Its reading is the same model's as the planner's, so it can share the
+and `UNIVERSAL_TOOLS` are withheld from it), no goal scratchpad, no tracker, no worktree, no row in
+the retro dossier's decisions, and no way onto the operator's desktop channel — `agent_read` withholds
+its brief and transcript, and it cannot be ejected
+([14](14-persistence.md#the-prediction-judge)). Its reading is the same model's as the planner's, so it can share the
 planner's misreading of the story; it is a second opinion, drawn beside the operator's, never in
 place of it.
 
