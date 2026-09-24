@@ -33,6 +33,83 @@ function untilTime(iso: string, now: number = Date.now()): string {
   return `in ${Math.round(secs / 86_400)}d`;
 }
 
+function CronField({ cron, onCron }: { cron: string; onCron: (cron: string) => void }) {
+  return (
+    <>
+      <div className="sched-cron">
+        <input
+          className="sched-cron-input"
+          value={cron}
+          spellCheck={false}
+          aria-label="cron expression"
+          placeholder="minute hour day-of-month month day-of-week"
+          onChange={(e) => onCron(e.target.value)}
+        />
+        <span className="muted sched-tz" title="Cron fields are read in the timezone the harness process runs in">
+          local time
+        </span>
+      </div>
+      <ul className="sched-examples">
+        {EXAMPLES.map((example) => (
+          <li key={example.cron}>
+            <Button ghost size="small" onClick={() => onCron(example.cron)}>
+              <code>{example.cron}</code> {example.label}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function ScheduleList({ schedules, onChanged }: { schedules: JobSchedule[]; onChanged: () => void }) {
+  return (
+    <ul className="launch-queue">
+      {schedules.map((schedule) => (
+        <li key={schedule.id} className={`launch-queue-item${schedule.enabled ? '' : ' sched-off'}`}>
+          <code className="sched-expr" title="Read in the harness's own timezone">
+            {schedule.cron}
+          </code>
+          <span className="launch-title" title={schedule.prompt}>
+            {schedule.title}
+          </span>
+          <Tag>{schedule.kind}</Tag>
+          {/* The two things a standing intention is judged on. A disabled one
+              says so instead of showing a next run it does not have. */}
+          <span className="muted launch-age" title={schedule.nextRunAt ?? 'not scheduled'}>
+            {!schedule.enabled ? 'paused' : schedule.nextRunAt ? untilTime(schedule.nextRunAt) : 'never'}
+          </span>
+          <span className="muted launch-age" title="When it last queued a job">
+            {schedule.lastFiredAt ? `ran ${relTime(schedule.lastFiredAt)}` : 'never run'}
+          </span>
+          <AsyncButton
+            ghost
+            onClick={() => api.runSchedule(schedule.id).then(onChanged)}
+            title="Queue this schedule's job now, without moving its next run"
+          >
+            run now
+          </AsyncButton>
+          <AsyncButton
+            ghost
+            onClick={() => api.updateSchedule(schedule.id, { enabled: !schedule.enabled }).then(onChanged)}
+            title={schedule.enabled ? 'Stop firing, keep the recurrence' : 'Start firing again from now'}
+          >
+            {schedule.enabled ? 'pause' : 'resume'}
+          </AsyncButton>
+          <ConfirmButton
+            ghost
+            size="small"
+            label="delete"
+            confirmLabel="delete?"
+            title="Forget this recurrence — the jobs it already queued are untouched"
+            onConfirm={() => api.deleteSchedule(schedule.id).then(onChanged)}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule[]; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [cron, setCron] = useState('0 9 * * 1-5');
@@ -77,28 +154,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
             void submit.run(create);
           }}
         >
-          <div className="sched-cron">
-            <input
-              className="sched-cron-input"
-              value={cron}
-              spellCheck={false}
-              aria-label="cron expression"
-              placeholder="minute hour day-of-month month day-of-week"
-              onChange={(e) => setCron(e.target.value)}
-            />
-            <span className="muted sched-tz" title="Cron fields are read in the timezone the harness process runs in">
-              local time
-            </span>
-          </div>
-          <ul className="sched-examples">
-            {EXAMPLES.map((example) => (
-              <li key={example.cron}>
-                <Button ghost size="small" onClick={() => setCron(example.cron)}>
-                  <code>{example.cron}</code> {example.label}
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <CronField cron={cron} onCron={setCron} />
           <textarea
             className="launch-prompt"
             placeholder="Describe what should run — e.g. “Review the open PRs for anything stale and comment on each.”"
@@ -131,51 +187,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
         </form>
       )}
 
-      {schedules.length > 0 && (
-        <ul className="launch-queue">
-          {schedules.map((schedule) => (
-            <li key={schedule.id} className={`launch-queue-item${schedule.enabled ? '' : ' sched-off'}`}>
-              <code className="sched-expr" title="Read in the harness's own timezone">
-                {schedule.cron}
-              </code>
-              <span className="launch-title" title={schedule.prompt}>
-                {schedule.title}
-              </span>
-              <Tag>{schedule.kind}</Tag>
-              {/* The two things a standing intention is judged on. A disabled one
-                  says so instead of showing a next run it does not have. */}
-              <span className="muted launch-age" title={schedule.nextRunAt ?? 'not scheduled'}>
-                {!schedule.enabled ? 'paused' : schedule.nextRunAt ? untilTime(schedule.nextRunAt) : 'never'}
-              </span>
-              <span className="muted launch-age" title="When it last queued a job">
-                {schedule.lastFiredAt ? `ran ${relTime(schedule.lastFiredAt)}` : 'never run'}
-              </span>
-              <AsyncButton
-                ghost
-                onClick={() => api.runSchedule(schedule.id).then(onChanged)}
-                title="Queue this schedule's job now, without moving its next run"
-              >
-                run now
-              </AsyncButton>
-              <AsyncButton
-                ghost
-                onClick={() => api.updateSchedule(schedule.id, { enabled: !schedule.enabled }).then(onChanged)}
-                title={schedule.enabled ? 'Stop firing, keep the recurrence' : 'Start firing again from now'}
-              >
-                {schedule.enabled ? 'pause' : 'resume'}
-              </AsyncButton>
-              <ConfirmButton
-                ghost
-                size="small"
-                label="delete"
-                confirmLabel="delete?"
-                title="Forget this recurrence — the jobs it already queued are untouched"
-                onConfirm={() => api.deleteSchedule(schedule.id).then(onChanged)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      {schedules.length > 0 && <ScheduleList schedules={schedules} onChanged={onChanged} />}
     </div>
   );
 }

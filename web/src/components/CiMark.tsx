@@ -17,13 +17,11 @@ function counted(pr: PullRequest): CiCheck[] {
   return (pr.ciChecks ?? []).filter((check) => check.advisory !== true);
 }
 
-function reading(pr: PullRequest): CiReading | null {
+function verdictReading(pr: PullRequest, total: number): CiReading | null {
   const verdict = pr.ciVerdict;
   const dispatch = verdict?.dispatch.length ?? 0;
   const escalate = verdict?.escalate.length ?? 0;
   const ignored = verdict?.ignored.length ?? 0;
-  const checks = counted(pr);
-  const total = checks.length;
 
   if (dispatch > 0) {
     return { tone: 't-red', badge: String(dispatch), said: said(dispatch, total, 'failed') };
@@ -38,6 +36,31 @@ function reading(pr: PullRequest): CiReading | null {
       said: said(ignored, total, 'failed, and muted by the CI policy'),
     };
   }
+  return null;
+}
+
+function pendingReading(checks: CiCheck[]): CiReading {
+  const total = checks.length;
+  const waiting = checks.filter((check) => check.status === 'pending');
+  if (waiting.length > 0 && waiting.every((check) => check.expired === true)) {
+    return {
+      tone: 't-amber',
+      badge: String(waiting.length),
+      said: `${waiting.length} check${waiting.length === 1 ? '' : 's'} waiting on a run nobody has started`,
+    };
+  }
+  return {
+    tone: 't-blue',
+    badge: null,
+    said: waiting.length > 0 ? `${waiting.length} of ${total} checks still running` : 'The checks are still running',
+  };
+}
+
+function reading(pr: PullRequest): CiReading | null {
+  const checks = counted(pr);
+  const total = checks.length;
+  const verdict = verdictReading(pr, total);
+  if (verdict !== null) return verdict;
 
   switch (pr.ciStatus) {
     case 'passing':
@@ -48,22 +71,8 @@ function reading(pr: PullRequest): CiReading | null {
       };
     case 'failing':
       return { tone: 't-red', badge: null, said: 'A check failed, and the provider named none of them' };
-    case 'pending': {
-      const waiting = checks.filter((check) => check.status === 'pending');
-      if (waiting.length > 0 && waiting.every((check) => check.expired === true)) {
-        return {
-          tone: 't-amber',
-          badge: String(waiting.length),
-          said: `${waiting.length} check${waiting.length === 1 ? '' : 's'} waiting on a run nobody has started`,
-        };
-      }
-      return {
-        tone: 't-blue',
-        badge: null,
-        said:
-          waiting.length > 0 ? `${waiting.length} of ${total} checks still running` : 'The checks are still running',
-      };
-    }
+    case 'pending':
+      return pendingReading(checks);
     case 'unknown':
       return null;
   }
@@ -93,6 +102,42 @@ export function CiSlot(): JSX.Element {
   return <span className="ck-slot" aria-hidden="true" />;
 }
 
+function CiTipBody({ pr, read, onOpen }: { pr: PullRequest; read: CiReading; onOpen?: () => void }): JSX.Element {
+  const checks = counted(pr);
+  const words = verdictWords(pr);
+  const shown = checks.slice(0, TIP_CHECKS);
+  const rest = checks.length - shown.length;
+  return (
+    <>
+      <b>{read.said}</b>
+      {shown.length > 0 && (
+        <ul className="ck-list">
+          {shown.map((check) => (
+            <li key={check.name}>
+              <i className={`ck-dot ck-${check.status}`} />
+              <span>{check.name}</span>
+              <em>{checkWord(check, words)}</em>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rest > 0 && <span className="ck-more">{`and ${rest} more`}</span>}
+      {checks.length === 0 && (
+        <span className="ck-more">
+          {pr.ciChecksWithheld === true
+            ? 'The provider had the per-check detail and the policy withheld it.'
+            : 'The provider reported no per-check detail, so this is the aggregate.'}
+        </span>
+      )}
+      <span className="ck-foot">
+        {pr.headSha !== undefined && `at ${pr.headSha.slice(0, 7)}`}
+        {pr.headSha !== undefined && onOpen !== undefined && ' · '}
+        {onOpen !== undefined && 'click for the whole reading'}
+      </span>
+    </>
+  );
+}
+
 export function CiMark({
   pr,
   reserve,
@@ -106,10 +151,6 @@ export function CiMark({
   const read = reading(pr);
   if (read === null) return reserve === true ? <CiSlot /> : null;
 
-  const checks = counted(pr);
-  const words = verdictWords(pr);
-  const shown = checks.slice(0, TIP_CHECKS);
-  const rest = checks.length - shown.length;
   const Tag = onOpen === undefined ? 'span' : 'button';
   return (
     <Tag
@@ -126,31 +167,7 @@ export function CiMark({
       {read.badge !== null && <span className="ck-badge">{read.badge}</span>}
       {tip.at !== null && (
         <Tip at={tip.at}>
-          <b>{read.said}</b>
-          {shown.length > 0 && (
-            <ul className="ck-list">
-              {shown.map((check) => (
-                <li key={check.name}>
-                  <i className={`ck-dot ck-${check.status}`} />
-                  <span>{check.name}</span>
-                  <em>{checkWord(check, words)}</em>
-                </li>
-              ))}
-            </ul>
-          )}
-          {rest > 0 && <span className="ck-more">{`and ${rest} more`}</span>}
-          {checks.length === 0 && (
-            <span className="ck-more">
-              {pr.ciChecksWithheld === true
-                ? 'The provider had the per-check detail and the policy withheld it.'
-                : 'The provider reported no per-check detail, so this is the aggregate.'}
-            </span>
-          )}
-          <span className="ck-foot">
-            {pr.headSha !== undefined && `at ${pr.headSha.slice(0, 7)}`}
-            {pr.headSha !== undefined && onOpen !== undefined && ' · '}
-            {onOpen !== undefined && 'click for the whole reading'}
-          </span>
+          <CiTipBody pr={pr} read={read} onOpen={onOpen} />
         </Tip>
       )}
     </Tag>

@@ -64,71 +64,93 @@ export function ReviewWrite({
 
       {preview && (
         <div className="cfg-diff">
-          <Panel density="flush" className="cfg-card">
-            <h3>
-              {payload.file}
-              <span className="cfg-more">{countChanged(payload.text, preview.text)} lines changed</span>
-            </h3>
-            <div className="cfg-code">
-              {diffLines(payload.text, preview.text).map((line, i) => (
-                <div className={`cfg-ln ${line.kind}`} key={i}>
-                  <span className="cfg-gut">{line.n ?? ''}</span>
-                  {line.text}
-                </div>
-              ))}
-            </div>
-            <p className="cfg-foot">
-              Rewritten in place: key order and the <code>&quot;//&quot;</code> doc keys the file already carries are
-              kept, and no key this page did not touch is re-serialised.
-            </p>
-          </Panel>
+          <DiffCard payload={payload} after={preview.text} />
 
-          <Panel density="flush" className="cfg-card">
-            <h3>What it does</h3>
-            {preview.changes.map((change) => (
-              <div className="cfg-eff" key={change.path}>
-                <div>
-                  <span className="cfg-effk">
-                    {change.path} {render(change.from)} → {render(change.to)}
-                  </span>
-                  <span className="cfg-effv">
-                    {change.applied
-                      ? 'An arm re-seats whoever holds this, so it takes effect on save.'
-                      : 'The config is read once, at boot — this waits for a restart.'}
-                  </span>
-                </div>
-                <span className={`cfg-src ${change.applied ? 'now' : 'restart'}`}>
-                  {change.applied ? 'now' : 'at restart'}
-                </span>
-              </div>
-            ))}
-            {preview.changes.length === 0 && (
-              <p className="cfg-hint">
-                Nothing the running harness would notice — the file changes, and every value it resolves to is what it
-                already had.
-              </p>
-            )}
-            <div className="cfg-eff">
-              <div>
-                <span className="cfg-effk">Everything else</span>
-                <span className="cfg-effv">
-                  Untouched. A key this page never edited is never written, so hand-made edits between boots survive.
-                </span>
-              </div>
-              <span className="cfg-src ok">kept</span>
-            </div>
-            <div className="cfg-foot cfg-footacts">
-              <Button ghost size="small" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button tone="primary" size="small" disabled={busy} onClick={() => void write()}>
-                {busy ? 'Writing…' : 'Write'}
-              </Button>
-            </div>
-          </Panel>
+          <EffectsCard changes={preview.changes} busy={busy} onCancel={onCancel} onWrite={() => void write()} />
         </div>
       )}
     </div>
+  );
+}
+
+function DiffCard({ payload, after }: { payload: RunningConfigPayload; after: string }): React.JSX.Element {
+  return (
+    <Panel density="flush" className="cfg-card">
+      <h3>
+        {payload.file}
+        <span className="cfg-more">{countChanged(payload.text, after)} lines changed</span>
+      </h3>
+      <div className="cfg-code">
+        {diffLines(payload.text, after).map((line, i) => (
+          <div className={`cfg-ln ${line.kind}`} key={i}>
+            <span className="cfg-gut">{line.n ?? ''}</span>
+            {line.text}
+          </div>
+        ))}
+      </div>
+      <p className="cfg-foot">
+        Rewritten in place: key order and the <code>&quot;//&quot;</code> doc keys the file already carries are kept,
+        and no key this page did not touch is re-serialised.
+      </p>
+    </Panel>
+  );
+}
+
+function EffectsCard({
+  changes,
+  busy,
+  onCancel,
+  onWrite,
+}: {
+  changes: readonly ConfigChange[];
+  busy: boolean;
+  onCancel: () => void;
+  onWrite: () => void;
+}): React.JSX.Element {
+  return (
+    <Panel density="flush" className="cfg-card">
+      <h3>What it does</h3>
+      {changes.map((change) => (
+        <div className="cfg-eff" key={change.path}>
+          <div>
+            <span className="cfg-effk">
+              {change.path} {render(change.from)} → {render(change.to)}
+            </span>
+            <span className="cfg-effv">
+              {change.applied
+                ? 'An arm re-seats whoever holds this, so it takes effect on save.'
+                : 'The config is read once, at boot — this waits for a restart.'}
+            </span>
+          </div>
+          <span className={`cfg-src ${change.applied ? 'now' : 'restart'}`}>
+            {change.applied ? 'now' : 'at restart'}
+          </span>
+        </div>
+      ))}
+      {changes.length === 0 && (
+        <p className="cfg-hint">
+          Nothing the running harness would notice — the file changes, and every value it resolves to is what it already
+          had.
+        </p>
+      )}
+      <div className="cfg-eff">
+        <div>
+          <span className="cfg-effk">Everything else</span>
+          <span className="cfg-effv">
+            Untouched. A key this page never edited is never written, so hand-made edits between boots survive.
+          </span>
+        </div>
+        <span className="cfg-src ok">kept</span>
+      </div>
+      <div className="cfg-foot cfg-footacts">
+        <Button ghost size="small" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button tone="primary" size="small" disabled={busy} onClick={onWrite}>
+          {busy ? 'Writing…' : 'Write'}
+        </Button>
+      </div>
+    </Panel>
   );
 }
 

@@ -95,104 +95,110 @@ const NAMED = 3;
  * choose which of them to put in front of somebody, and no more than that.
  */
 export function buildLeads(view: CockpitView): Lead[] {
-  const out: Lead[] = [];
-  const { issues, pullRequests } = view.state.world;
+  return [unapprovedLead(view), queuedLead(view), reservoirLead(view), quietLead(view), faultsLead(view)].filter(
+    (lead): lead is Lead => lead !== null,
+  );
+}
 
-  /* `approved === false` and never `!== true`: the field is optional, so an
-     unreported approval is an **unknown** rather than a missing one, and folding
-     the two would have this lead claim every open pull request on a provider that
-     does not report reviews. Minus the branches an agent is out on, for the
-     reason the readying rows are not agents: the fleet is still writing those,
-     and the harness raises a merge ask of its own when it wants one merged. */
+/* `approved === false` and never `!== true`: the field is optional, so an
+   unreported approval is an **unknown** rather than a missing one, and folding
+   the two would have this lead claim every open pull request on a provider that
+   does not report reviews. Minus the branches an agent is out on, for the
+   reason the readying rows are not agents: the fleet is still writing those,
+   and the harness raises a merge ask of its own when it wants one merged. */
+function unapprovedLead(view: CockpitView): Lead | null {
+  const { pullRequests } = view.state.world;
   const unapproved = pullRequests
     .filter((pr) => pr.approved === false && !view.agentOnBranch.has(pr.branch))
     .sort(byWait);
-  if (unapproved.length > 0) {
-    out.push({
-      key: 'prs',
-      tone: LEAD_TONE.prs,
-      count: unapproved.length,
-      title:
-        unapproved.length === 1 ? 'open pull request nobody has approved' : 'open pull requests nobody has approved',
-      say: 'None of these is asking yet, and an approval is nobody’s but yours — which makes an unapproved pull request the likeliest thing on the deployment to be quietly waiting on you.',
-      go: 'See them on Cards',
-      where: { kind: 'cards' },
-      items: unapproved.slice(0, NAMED).map((pr) => ({
-        key: `pr:${pr.number}`,
-        label: pr.title,
-        ref: `pr:${pr.number}`,
-        where: { kind: 'pr', number: pr.number },
-        ...(pr.attention.reviewWaitingSince === undefined ? {} : { since: pr.attention.reviewWaitingSince }),
-      })),
-    });
-  }
+  if (unapproved.length === 0) return null;
+  return {
+    key: 'prs',
+    tone: LEAD_TONE.prs,
+    count: unapproved.length,
+    title: unapproved.length === 1 ? 'open pull request nobody has approved' : 'open pull requests nobody has approved',
+    say: 'None of these is asking yet, and an approval is nobody’s but yours — which makes an unapproved pull request the likeliest thing on the deployment to be quietly waiting on you.',
+    go: 'See them on Cards',
+    where: { kind: 'cards' },
+    items: unapproved.slice(0, NAMED).map((pr) => ({
+      key: `pr:${pr.number}`,
+      label: pr.title,
+      ref: `pr:${pr.number}`,
+      where: { kind: 'pr', number: pr.number },
+      ...(pr.attention.reviewWaitingSince === undefined ? {} : { since: pr.attention.reviewWaitingSince }),
+    })),
+  };
+}
 
-  /* Only where nobody is out. A queue behind a working fleet is the fleet
-     working, and saying so on the surface that just said nothing needs you
-     would be a lead pointing at normal. */
+/* Only where nobody is out. A queue behind a working fleet is the fleet
+   working, and saying so on the surface that just said nothing needs you
+   would be a lead pointing at normal. */
+function queuedLead(view: CockpitView): Lead | null {
   const idle = view.live.length + view.readying.length + view.deskRuns.length === 0;
-  if (idle && view.upNext.length > 0) {
-    out.push({
-      key: 'queued',
-      tone: LEAD_TONE.queued,
-      count: view.upNext.length,
-      title: view.upNext.length === 1 ? 'candidate queued, and nobody is out' : 'candidates queued, and nobody is out',
-      say: 'The harness has work it has not dispatched. Each row carries the reason it is still sitting there.',
-      go: 'Open the queue',
-      where: { kind: 'upnext' },
-      items: [],
-    });
-  }
+  if (!idle || view.upNext.length === 0) return null;
+  return {
+    key: 'queued',
+    tone: LEAD_TONE.queued,
+    count: view.upNext.length,
+    title: view.upNext.length === 1 ? 'candidate queued, and nobody is out' : 'candidates queued, and nobody is out',
+    say: 'The harness has work it has not dispatched. Each row carries the reason it is still sitting there.',
+    go: 'Open the queue',
+    where: { kind: 'upnext' },
+    items: [],
+  };
+}
 
-  /* Newest first: the reservoir is mostly old, and the item somebody filed this
-     morning is the one a lead has any chance of being about. */
+/* Newest first: the reservoir is mostly old, and the item somebody filed this
+   morning is the one a lead has any chance of being about. */
+function reservoirLead(view: CockpitView): Lead | null {
+  const { issues } = view.state.world;
   const unwatched = issues.filter((issue) => issue.pickup.status === 'unwatched').sort((a, b) => b.number - a.number);
-  if (unwatched.length > 0) {
-    out.push({
-      key: 'reservoir',
-      tone: LEAD_TONE.reservoir,
-      count: unwatched.length,
-      title: unwatched.length === 1 ? 'tracker item nobody has picked up' : 'tracker items nobody has picked up',
-      say: `Nothing watches these, so the fleet never sees one. The ${view.state.config.watchLabel} label is what lets it.`,
-      go: 'Open the tracker',
-      where: { kind: 'reservoir' },
-      items: unwatched.slice(0, NAMED).map(goalItem),
-    });
-  }
+  if (unwatched.length === 0) return null;
+  return {
+    key: 'reservoir',
+    tone: LEAD_TONE.reservoir,
+    count: unwatched.length,
+    title: unwatched.length === 1 ? 'tracker item nobody has picked up' : 'tracker items nobody has picked up',
+    say: `Nothing watches these, so the fleet never sees one. The ${view.state.config.watchLabel} label is what lets it.`,
+    go: 'Open the tracker',
+    where: { kind: 'reservoir' },
+    items: unwatched.slice(0, NAMED).map(goalItem),
+  };
+}
 
-  /* Oldest first, which is the opposite cut and for the opposite reason: what
-     makes an unstaffed goal worth finding is how long it has been sitting. */
+/* Oldest first, which is the opposite cut and for the opposite reason: what
+   makes an unstaffed goal worth finding is how long it has been sitting. */
+function quietLead(view: CockpitView): Lead | null {
+  const { issues } = view.state.world;
   const quiet = issues
     .filter((issue) => IN_FLIGHT.has(issue.pickup.status) && !view.agentOnGoal.has(`issue:${issue.number}`))
     .sort((a, b) => a.number - b.number);
-  if (quiet.length > 0) {
-    out.push({
-      key: 'quiet',
-      tone: LEAD_TONE.quiet,
-      count: quiet.length,
-      title: quiet.length === 1 ? 'goal in flight with nobody on it' : 'goals in flight with nobody on them',
-      say: 'No agent is out on these and nothing is asking about them. What happens next is on the goal’s own plan.',
-      go: 'See them on Cards',
-      where: { kind: 'cards' },
-      items: quiet.slice(0, NAMED).map(goalItem),
-    });
-  }
+  if (quiet.length === 0) return null;
+  return {
+    key: 'quiet',
+    tone: LEAD_TONE.quiet,
+    count: quiet.length,
+    title: quiet.length === 1 ? 'goal in flight with nobody on it' : 'goals in flight with nobody on them',
+    say: 'No agent is out on these and nothing is asking about them. What happens next is on the goal’s own plan.',
+    go: 'See them on Cards',
+    where: { kind: 'cards' },
+    items: quiet.slice(0, NAMED).map(goalItem),
+  };
+}
 
+function faultsLead(view: CockpitView): Lead | null {
   const faults = view.state.errors.length;
-  if (faults > 0) {
-    out.push({
-      key: 'faults',
-      tone: LEAD_TONE.faults,
-      count: faults,
-      title: faults === 1 ? 'fault recorded' : 'faults recorded',
-      say: 'Failures the harness caught and carried on past. Nothing is asking you to act on one.',
-      go: 'Open the fault log',
-      where: { kind: 'faults' },
-      items: [],
-    });
-  }
-
-  return out;
+  if (faults === 0) return null;
+  return {
+    key: 'faults',
+    tone: LEAD_TONE.faults,
+    count: faults,
+    title: faults === 1 ? 'fault recorded' : 'faults recorded',
+    say: 'Failures the harness caught and carried on past. Nothing is asking you to act on one.',
+    go: 'Open the fault log',
+    where: { kind: 'faults' },
+    items: [],
+  };
 }
 
 function goalItem(issue: { number: number; title: string }): LeadItem {

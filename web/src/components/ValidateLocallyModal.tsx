@@ -7,6 +7,60 @@ import type { LocalRunView } from '../types.js';
 
 // → docs/spec/17-cockpit.md
 
+function SwapCosts({
+  run,
+  runTitle,
+  issueTitle,
+  targetRef,
+}: {
+  run: LocalRunView;
+  runTitle: string | null;
+  issueTitle: string;
+  targetRef: string | null;
+}) {
+  return (
+    <>
+      <p className="rb-intro">
+        {/* The ref sits *in the sentence*, never inside a button: one click may
+          not have two destinations, and this modal's clicks are the two below. */}
+        The dev environment is running <Ref to={run.originRef} />
+        {runTitle === null ? '' : ` — “${runTitle}”`} on <code>{run.ref}</code> ({run.status}).
+      </p>
+      <ul className="rb-costs">
+        <li>It is stopped first, which takes as long as this project takes to shut down.</li>
+        <li>
+          “{issueTitle}” comes up in its place
+          {targetRef === null ? '' : ' on '}
+          {targetRef === null ? '' : <code>{targetRef}</code>}.
+        </li>
+        <li>
+          Then one agent writes a test plan, drives the running application through it, and reports on this goal’s page.
+        </li>
+      </ul>
+    </>
+  );
+}
+
+function RefreshCosts({ run }: { run: LocalRunView }) {
+  const behind = run.freshness?.behindTip ?? 0;
+  return (
+    <>
+      <p className="rb-intro">
+        The environment is running this goal on <code>{run.ref}</code>, {behind} commit
+        {behind === 1 ? '' : 's'} behind the tip of that branch — an agent has pushed since it came up.
+      </p>
+      <ul className="rb-costs">
+        <li>Refreshing moves the checkout to the tip and tells the session what changed.</li>
+        <li>It is a hard reset under a running server, so anything uncommitted in that checkout goes.</li>
+        <li>
+          Validating what is running is the other answer, and it is a real one — that is the code you have been looking
+          at.
+        </li>
+      </ul>
+    </>
+  );
+}
+
 export function ValidateLocallyModal({
   mode,
   issueNumber,
@@ -32,7 +86,6 @@ export function ValidateLocallyModal({
     await onSubmit(opts);
     onClose();
   };
-  const behind = run.freshness?.behindTip ?? 0;
 
   return (
     <Modal
@@ -65,41 +118,9 @@ export function ValidateLocallyModal({
       }
     >
       {mode === 'swap' ? (
-        <>
-          <p className="rb-intro">
-            {/* The ref sits *in the sentence*, never inside a button: one click may
-                  not have two destinations, and this modal's clicks are the two below. */}
-            The dev environment is running <Ref to={run.originRef} />
-            {runTitle === null ? '' : ` — “${runTitle}”`} on <code>{run.ref}</code> ({run.status}).
-          </p>
-          <ul className="rb-costs">
-            <li>It is stopped first, which takes as long as this project takes to shut down.</li>
-            <li>
-              “{issueTitle}” comes up in its place
-              {targetRef === null ? '' : ' on '}
-              {targetRef === null ? '' : <code>{targetRef}</code>}.
-            </li>
-            <li>
-              Then one agent writes a test plan, drives the running application through it, and reports on this goal’s
-              page.
-            </li>
-          </ul>
-        </>
+        <SwapCosts run={run} runTitle={runTitle} issueTitle={issueTitle} targetRef={targetRef} />
       ) : (
-        <>
-          <p className="rb-intro">
-            The environment is running this goal on <code>{run.ref}</code>, {behind} commit
-            {behind === 1 ? '' : 's'} behind the tip of that branch — an agent has pushed since it came up.
-          </p>
-          <ul className="rb-costs">
-            <li>Refreshing moves the checkout to the tip and tells the session what changed.</li>
-            <li>It is a hard reset under a running server, so anything uncommitted in that checkout goes.</li>
-            <li>
-              Validating what is running is the other answer, and it is a real one — that is the code you have been
-              looking at.
-            </li>
-          </ul>
-        </>
+        <RefreshCosts run={run} />
       )}
       {refusal !== null && (
         <p className="launch-error" role="alert">

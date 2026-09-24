@@ -6,6 +6,21 @@ import { Tag } from './tag.js';
 
 // → docs/spec/17-cockpit.md
 
+function resolveAfterPause(
+  query: { email: string; repoRoot: string },
+  onError: (message: string | null) => void,
+  onResolved: (next: SetupResolvePayload) => void,
+): () => void {
+  const timer = setTimeout(() => {
+    onError(null);
+    void api
+      .resolveSetup(query)
+      .then(onResolved)
+      .catch((err: Error) => onError(err.message));
+  }, 400);
+  return () => clearTimeout(timer);
+}
+
 export function SetupPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [reading, setReading] = useState<SetupPayload | null>(null);
   const [email, setEmail] = useState('');
@@ -26,29 +41,23 @@ export function SetupPanel({ onClose }: { onClose: () => void }): React.JSX.Elem
 
   useEffect(() => {
     if (reading === null || repoRoot.trim() === '') return;
-    const timer = setTimeout(() => {
-      setError(null);
-      void api
-        .resolveSetup({ email, repoRoot })
-        .then((next) => {
-          setResolved(next);
-          setPreview(null);
-        })
-        .catch((err: Error) => setError(err.message));
-    }, 400);
-    return () => clearTimeout(timer);
+    return resolveAfterPause({ email, repoRoot }, setError, (next) => {
+      setResolved(next);
+      setPreview(null);
+    });
   }, [email, repoRoot, reading]);
 
   if (reading === null) return <div className="cn-empty">Reading the configuration…</div>;
 
-  const review = async (): Promise<void> => {
+  const withConfig = async (
+    step: (edits: { set: SetupResolvePayload['writes']; baseline: string }) => Promise<void>,
+  ): Promise<void> => {
     if (resolved === null) return;
     setBusy(true);
     setError(null);
     try {
       const config = await api.getConfig();
-      const next = await api.previewConfig({ set: resolved.writes, baseline: config.revision });
-      setPreview({ text: next.text, changes: next.changes });
+      await step({ set: resolved.writes, baseline: config.revision });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -56,20 +65,17 @@ export function SetupPanel({ onClose }: { onClose: () => void }): React.JSX.Elem
     }
   };
 
-  const write = async (): Promise<void> => {
-    if (resolved === null) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const config = await api.getConfig();
-      const result = await api.saveConfig({ set: resolved.writes, baseline: config.revision });
+  const review = (): Promise<void> =>
+    withConfig(async (edits) => {
+      const next = await api.previewConfig(edits);
+      setPreview({ text: next.text, changes: next.changes });
+    });
+
+  const write = (): Promise<void> =>
+    withConfig(async (edits) => {
+      const result = await api.saveConfig(edits);
       setSaved(result.changes);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
   if (saved !== null) return <Done changes={saved} onClose={onClose} />;
 
@@ -81,52 +87,93 @@ export function SetupPanel({ onClose }: { onClose: () => void }): React.JSX.Elem
       </p>
 
       <div className="cn-setup-body">
-        <div className="cn-setup-ins">
-          <label className="cn-setup-field">
-            <span className="cn-setup-label">Your email</span>
-            <input className="cn-setup-in" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </label>
-          <label className="cn-setup-field">
-            <span className="cn-setup-label">The project the fleet works on</span>
-            <input className="cn-setup-in" value={repoRoot} onChange={(e) => setRepoRoot(e.target.value)} />
-          </label>
-        </div>
-        <p className="cn-setup-note">
-          Everything below is read off the repository you name — the provider, the target, your login on it, the
-          integration branch and your team’s <code>lubbdubb.project.json</code> if they committed one. Nothing is
-          written until you have seen the file. Your email is not stored: it resolves to your login, and <b>that</b> is
-          what gets written, as <code>userId</code>.
-        </p>
-        {resolved?.repoRootIsSelf === true && (
-          <p className="cn-setup-warnline">
-            That is LubbDubb’s <b>own</b> checkout, not a project it works on. Supported — it is how LubbDubb works on
-            itself — but it is also what this box starts at on any default start, so point it elsewhere if you meant a
-            different project. The harness’s own build is watched separately, from the Build reading.
-          </p>
-        )}
+        <SetupFields email={email} onEmail={setEmail} repoRoot={repoRoot} onRepoRoot={setRepoRoot} />
+        <SetupNote isSelf={resolved?.repoRootIsSelf === true} />
 
         {resolved !== null && <Derived resolved={resolved} />}
         {preview !== null && <Preview preview={preview} />}
       </div>
 
-      <div className="cn-setup-foot">
-        <Button onClick={onClose}>Cancel</Button>
-        <span className="cn-setup-hint">
-          {preview === null
-            ? 'Nothing is written until you have seen the file.'
-            : 'Keys your team’s project file already sets are absent on purpose.'}
-        </span>
-        {preview === null ? (
-          <Button tone="primary" disabled={busy || resolved === null} onClick={() => void review()}>
-            {busy ? 'Preparing…' : 'Show me the file'}
-          </Button>
-        ) : (
-          <Button tone="primary" disabled={busy} onClick={() => void write()}>
-            {busy ? 'Writing…' : 'Write the file'}
-          </Button>
-        )}
-      </div>
+      <SetupFoot
+        previewed={preview !== null}
+        busy={busy}
+        canReview={resolved !== null}
+        onClose={onClose}
+        onReview={() => void review()}
+        onWrite={() => void write()}
+      />
       {error !== null && <p className="cn-setup-err">{error}</p>}
+    </div>
+  );
+}
+
+function SetupFields(props: {
+  email: string;
+  onEmail: (email: string) => void;
+  repoRoot: string;
+  onRepoRoot: (repoRoot: string) => void;
+}): React.JSX.Element {
+  const { email, onEmail, repoRoot, onRepoRoot } = props;
+  return (
+    <div className="cn-setup-ins">
+      <label className="cn-setup-field">
+        <span className="cn-setup-label">Your email</span>
+        <input className="cn-setup-in" value={email} onChange={(e) => onEmail(e.target.value)} />
+      </label>
+      <label className="cn-setup-field">
+        <span className="cn-setup-label">The project the fleet works on</span>
+        <input className="cn-setup-in" value={repoRoot} onChange={(e) => onRepoRoot(e.target.value)} />
+      </label>
+    </div>
+  );
+}
+
+function SetupNote({ isSelf }: { isSelf: boolean }): React.JSX.Element {
+  return (
+    <>
+      <p className="cn-setup-note">
+        Everything below is read off the repository you name — the provider, the target, your login on it, the
+        integration branch and your team’s <code>lubbdubb.project.json</code> if they committed one. Nothing is written
+        until you have seen the file. Your email is not stored: it resolves to your login, and <b>that</b> is what gets
+        written, as <code>userId</code>.
+      </p>
+      {isSelf && (
+        <p className="cn-setup-warnline">
+          That is LubbDubb’s <b>own</b> checkout, not a project it works on. Supported — it is how LubbDubb works on
+          itself — but it is also what this box starts at on any default start, so point it elsewhere if you meant a
+          different project. The harness’s own build is watched separately, from the Build reading.
+        </p>
+      )}
+    </>
+  );
+}
+
+function SetupFoot(props: {
+  previewed: boolean;
+  busy: boolean;
+  canReview: boolean;
+  onClose: () => void;
+  onReview: () => void;
+  onWrite: () => void;
+}): React.JSX.Element {
+  const { previewed, busy, canReview, onClose, onReview, onWrite } = props;
+  return (
+    <div className="cn-setup-foot">
+      <Button onClick={onClose}>Cancel</Button>
+      <span className="cn-setup-hint">
+        {!previewed
+          ? 'Nothing is written until you have seen the file.'
+          : 'Keys your team’s project file already sets are absent on purpose.'}
+      </span>
+      {!previewed ? (
+        <Button tone="primary" disabled={busy || !canReview} onClick={onReview}>
+          {busy ? 'Preparing…' : 'Show me the file'}
+        </Button>
+      ) : (
+        <Button tone="primary" disabled={busy} onClick={onWrite}>
+          {busy ? 'Writing…' : 'Write the file'}
+        </Button>
+      )}
     </div>
   );
 }
