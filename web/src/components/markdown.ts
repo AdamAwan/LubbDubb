@@ -23,12 +23,8 @@ export function renderMarkdown(source: string, refUrls: Record<string, string> =
     const fence = /^```(\w*)/.exec(line);
     if (fence) {
       flushParagraph();
-      const body: string[] = [];
-      i++;
-      while (i < lines.length && !/^```/.test(lines[i]!)) {
-        body.push(lines[i]!);
-        i++;
-      }
+      const body = takeWhile(lines, i + 1, (l) => !/^```/.test(l));
+      i += 1 + body.length;
       // A fence that names a language draws through `CodeBlock`, which carries the
       // copy control. A bare fence keeps the plain `<pre>` it has always been:
       // several stylesheets reach one as a direct child, and a component on every
@@ -52,12 +48,8 @@ export function renderMarkdown(source: string, refUrls: Record<string, string> =
 
     if (/^>\s?/.test(line)) {
       flushParagraph();
-      const body: string[] = [];
-      while (i < lines.length && /^>\s?/.test(lines[i]!)) {
-        body.push(lines[i]!.replace(/^>\s?/, ''));
-        i++;
-      }
-      i--;
+      const body = takeWhile(lines, i, (l) => /^>\s?/.test(l)).map((l) => l.replace(/^>\s?/, ''));
+      i += body.length - 1;
       out.push(createElement('blockquote', { key: k() }, ...inline(body.join(' '), k, refUrls)));
       continue;
     }
@@ -65,13 +57,9 @@ export function renderMarkdown(source: string, refUrls: Record<string, string> =
     if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
       flushParagraph();
       const ordered = /^\s*\d+\.\s+/.test(line);
-      const items: string[] = [];
       const matches = (l: string) => (ordered ? /^\s*\d+\.\s+/.test(l) : /^\s*[-*]\s+/.test(l));
-      while (i < lines.length && matches(lines[i]!)) {
-        items.push(lines[i]!.replace(ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/, ''));
-        i++;
-      }
-      i--;
+      const items = takeWhile(lines, i, matches).map((l) => l.replace(ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/, ''));
+      i += items.length - 1;
       out.push(
         createElement(
           ordered ? 'ol' : 'ul',
@@ -87,6 +75,12 @@ export function renderMarkdown(source: string, refUrls: Record<string, string> =
   }
   flushParagraph();
   return out;
+}
+
+function takeWhile(lines: string[], start: number, matches: (line: string) => boolean): string[] {
+  let end = start;
+  while (end < lines.length && matches(lines[end]!)) end++;
+  return lines.slice(start, end);
 }
 
 function inline(text: string, k: () => string, refUrls: Record<string, string>): ReactNode[] {

@@ -17,35 +17,44 @@ export function ciStatusOf(event: Pick<WorldEvent, 'kind' | 'summary'>): CiStatu
 }
 
 export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEventInput[] {
-  const events: WorldEventInput[] = [];
-
   const prevPrs = byId(prev.pullRequests);
-  for (const pr of next.pullRequests) {
-    const before = prevPrs.get(pr.id);
-    if (!before) {
-      events.push({ kind: 'pr_opened', ref: prRef(pr), summary: `PR #${pr.number} opened: ${pr.title}` });
-      continue;
-    }
-    if (before.ciStatus !== pr.ciStatus) {
-      events.push({ kind: 'pr_ci', ref: prRef(pr), summary: ciSummary(pr.number, pr.ciStatus) });
-    }
-    if (!before.approved && pr.approved) {
-      events.push({ kind: 'pr_approved', ref: prRef(pr), summary: `PR #${pr.number} approved` });
-    }
-    if (!before.mergeable && pr.mergeable) {
-      events.push({ kind: 'pr_mergeable', ref: prRef(pr), summary: `PR #${pr.number} is mergeable` });
-    }
-    if (!before.merged && pr.merged) {
-      events.push({ kind: 'pr_merged', ref: prRef(pr), summary: `PR #${pr.number} merged` });
-    }
-    const seen = new Set(before.unresolvedComments.map((c) => c.id));
-    for (const comment of pr.unresolvedComments) {
-      if (!seen.has(comment.id)) {
-        events.push({ kind: 'pr_comment', ref: prRef(pr), summary: `PR #${pr.number}: ${comment.author} commented` });
-      }
+  return [
+    ...next.pullRequests.flatMap((pr) => openPrEvents(prevPrs.get(pr.id), pr)),
+    ...closedPrEvents(prevPrs, prev, next),
+    ...issueEvents(prev, next),
+  ];
+}
+
+function openPrEvents(before: PullRequest | undefined, pr: PullRequest): WorldEventInput[] {
+  if (!before) return [{ kind: 'pr_opened', ref: prRef(pr), summary: `PR #${pr.number} opened: ${pr.title}` }];
+  const events: WorldEventInput[] = [];
+  if (before.ciStatus !== pr.ciStatus) {
+    events.push({ kind: 'pr_ci', ref: prRef(pr), summary: ciSummary(pr.number, pr.ciStatus) });
+  }
+  if (!before.approved && pr.approved) {
+    events.push({ kind: 'pr_approved', ref: prRef(pr), summary: `PR #${pr.number} approved` });
+  }
+  if (!before.mergeable && pr.mergeable) {
+    events.push({ kind: 'pr_mergeable', ref: prRef(pr), summary: `PR #${pr.number} is mergeable` });
+  }
+  if (!before.merged && pr.merged) {
+    events.push({ kind: 'pr_merged', ref: prRef(pr), summary: `PR #${pr.number} merged` });
+  }
+  const seen = new Set(before.unresolvedComments.map((c) => c.id));
+  for (const comment of pr.unresolvedComments) {
+    if (!seen.has(comment.id)) {
+      events.push({ kind: 'pr_comment', ref: prRef(pr), summary: `PR #${pr.number}: ${comment.author} commented` });
     }
   }
+  return events;
+}
 
+function closedPrEvents(
+  prevPrs: Map<string, PullRequest>,
+  prev: WorldSnapshot,
+  next: WorldSnapshot,
+): WorldEventInput[] {
+  const events: WorldEventInput[] = [];
   const prevClosed = byId(prev.closedPullRequests ?? []);
   for (const pr of next.closedPullRequests ?? []) {
     if (prevClosed.has(pr.id)) continue;
@@ -57,7 +66,11 @@ export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEvent
         : { kind: 'pr_closed', ref: prRef(pr), summary: `PR #${pr.number} closed without merging` },
     );
   }
+  return events;
+}
 
+function issueEvents(prev: WorldSnapshot, next: WorldSnapshot): WorldEventInput[] {
+  const events: WorldEventInput[] = [];
   const prevIssues = byId(prev.issues);
   for (const issue of next.issues) {
     const before = prevIssues.get(issue.id);
@@ -80,7 +93,6 @@ export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEvent
       });
     }
   }
-
   return events;
 }
 

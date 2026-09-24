@@ -63,12 +63,7 @@ function Masthead({ page, view }: { page: PrPageView; view: CockpitView }): JSX.
         <span className="cn-prnum">#{pr.number}</span>
         <h2>{pr.title}</h2>
       </div>
-      <div className="cn-prbranch">
-        {pr.branch}
-        {pr.baseBranch !== undefined && <> → {pr.baseBranch}</>}
-        {pr.headSha !== undefined && <> · head {pr.headSha.slice(0, 7)}</>}
-        {pr.author !== undefined && <> · opened by {pr.author}</>}
-      </div>
+      <BranchLine pr={pr} />
       <div className="cn-prchips">
         <Tag tone={STATE_TONE[state]} fill={STATE_TONE[state] !== undefined}>
           {state}
@@ -108,6 +103,17 @@ function Masthead({ page, view }: { page: PrPageView; view: CockpitView }): JSX.
         </PrLink>
       </div>
     </section>
+  );
+}
+
+function BranchLine({ pr }: { pr: PullRequest }): JSX.Element {
+  return (
+    <div className="cn-prbranch">
+      {pr.branch}
+      {pr.baseBranch !== undefined && <> → {pr.baseBranch}</>}
+      {pr.headSha !== undefined && <> · head {pr.headSha.slice(0, 7)}</>}
+      {pr.author !== undefined && <> · opened by {pr.author}</>}
+    </div>
   );
 }
 

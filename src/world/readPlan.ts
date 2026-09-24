@@ -1,5 +1,5 @@
 import { issueOriginRef } from '../issueOrigins.js';
-import type { TaskSummary, WorldEvent, WorldSnapshot } from '../types.js';
+import type { PullRequest, TaskSummary, WorldEvent, WorldSnapshot } from '../types.js';
 import { isActiveTask } from '../tasks.js';
 
 // → docs/spec/03-world-model.md
@@ -43,11 +43,7 @@ export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
   for (const ref of refsFinishedSince(input.tasks, previous.pullRequests, previous.takenAt)) fresh.add(ref);
 
   const hot = new Set<string>();
-  for (const pr of previous.pullRequests) {
-    if (pr.ciStatus !== 'passing' && pr.ciStatus !== 'failing') hot.add(prReadRef(pr.number));
-    else if (pr.approved === true) hot.add(prReadRef(pr.number));
-    else if (pr.mergeableState === 'behind' || pr.mergeableState === 'dirty') hot.add(prReadRef(pr.number));
-  }
+  for (const pr of previous.pullRequests) if (isUnsettledPr(pr)) hot.add(prReadRef(pr.number));
 
   const branches = new Set<string>();
   for (const task of input.tasks) {
@@ -68,6 +64,12 @@ export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
   }
 
   return { hot, fresh, ...lanes };
+}
+
+function isUnsettledPr(pr: PullRequest): boolean {
+  if (pr.ciStatus !== 'passing' && pr.ciStatus !== 'failing') return true;
+  if (pr.approved === true) return true;
+  return pr.mergeableState === 'behind' || pr.mergeableState === 'dirty';
 }
 
 export function hydrationMaxAgeMs(plan: ReadPlan | undefined, ref: string): number {

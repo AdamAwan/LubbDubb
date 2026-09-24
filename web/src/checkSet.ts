@@ -21,26 +21,31 @@ export function checkSetOf(proposal: Proposal | undefined): ProposedCheckSet | n
   const raw = Array.isArray(action.set) ? action.set : [];
   const checks: ProposedCheck[] = [];
   for (const entry of raw) {
-    if (typeof entry !== 'object' || entry === null) continue;
-    const { letter, title, expect, proof, steps, fleetCandidate, candidateWhy, fleetBlocked, carriesQuery } =
-      entry as Record<string, unknown>;
-    if (typeof letter !== 'string' || letter === '' || typeof title !== 'string' || title === '') continue;
-    checks.push({
-      letter,
-      title,
-      expect: typeof expect === 'string' ? expect : '',
-      proof: typeof proof === 'string' ? proof : '',
-      steps: readSteps(steps),
-      fleetCandidate: fleetCandidate === true,
-      candidateWhy: typeof candidateWhy === 'string' && candidateWhy ? candidateWhy : null,
-      fleetBlocked: fleetBlocked === true,
-      carriesQuery: carriesQuery === true,
-    });
+    const check = readCheck(entry);
+    if (check) checks.push(check);
   }
   return {
     note: typeof action.note === 'string' && action.note ? action.note : null,
     hint: typeof action.hint === 'string' && action.hint ? action.hint : null,
     checks,
+  };
+}
+
+function readCheck(entry: unknown): ProposedCheck | null {
+  if (typeof entry !== 'object' || entry === null) return null;
+  const { letter, title, expect, proof, steps, fleetCandidate, candidateWhy, fleetBlocked, carriesQuery } =
+    entry as Record<string, unknown>;
+  if (typeof letter !== 'string' || letter === '' || typeof title !== 'string' || title === '') return null;
+  return {
+    letter,
+    title,
+    expect: typeof expect === 'string' ? expect : '',
+    proof: typeof proof === 'string' ? proof : '',
+    steps: readSteps(steps),
+    fleetCandidate: fleetCandidate === true,
+    candidateWhy: typeof candidateWhy === 'string' && candidateWhy ? candidateWhy : null,
+    fleetBlocked: fleetBlocked === true,
+    carriesQuery: carriesQuery === true,
   };
 }
 
