@@ -1,0 +1,1312 @@
+{
+  "scripts/smoke.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/agents/agentManager.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/agents/modelPolicy.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/agents/processTree.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/agents/recoveryDesk.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/agents/streamJsonSession.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/ci/ciPolicy.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/config/config.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/config/configFields.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/delivery/closeOut.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/dispatcher/dispatchCooldown.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/issuePickup.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/promptTemplates.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/ruleDispatcher.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/issuePlan.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/issueShortfall.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/localValidation.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/planPart.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/prConcerns.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/prConcerns/review.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/dispatcher/rules/workItemBackToPickup.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/environments/arrival.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/environments/policy.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/environments/watchDryRun.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/executor/actionExecutor.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-depth": {
+      "count": 10
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/features/featureBoard.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/graph/workGraph.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/harness.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/ingress/delivery.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/insights/allowanceInsights.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/insights/operatorInsights.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/insights/reliabilityInsights.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/insights/spendInsights.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/insights/spendTrend.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/insights/taskTypeSpend.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/insights/throughputInsights.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/integrations/azure/restAzureDevOpsApi.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/integrations/fake/fakeGitHub.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/integrations/github/octokitGitHubApi.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/jobs/brief.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/localRun/runner.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/mcp/assessment.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/desktopGoal.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/desktopInbox.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/desktopOps.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 6
+    }
+  },
+  "src/mcp/desktopTools.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/desktopWork.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/appraiseIssue.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/assessIssue.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/criteriaAlignment.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/featureSummary.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/linkTicket.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/openPr.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/mcp/tools/planCorrect.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/raise.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/remoteValidationReport.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/replyToReview.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/reviewRoute.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/splitAssess.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/stateDeclare.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/validationAmend.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/validationPlan.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/mcp/tools/watchDeclare.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/pets/scan.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/plans/planDocument.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/plans/planIngest.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/plans/planReconciler.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/plans/regroup.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/pool/document.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/pr/prAttention.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/proposals/proposals.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/remoteValidation/briefing.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/remoteValidation/readings.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/remoteValidation/run.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/remoteValidation/sheet.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/retro/dossier.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/schedules/cron.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/selfUpdate/upgradePlan.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sequence/dossier.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/server/app.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/main.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/agents.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/artifacts.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/escalations.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/features.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/humanTasks.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/issues.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/jobs.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/localValidation.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/server/routes/obstacles.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/plans.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/prDescriptions.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/predictions.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/remoteValidation.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/schedules.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/state.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/validation.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/routes/work.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/server/stateSnapshot.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/server/validation.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/setup/resolve.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sink/markdownToHtml.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/spendBurn.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/stacks/stack.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/store/obstacles.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/store/plans.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/store/remoteValidation.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/store/schema.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/store/store.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/store/tasks.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/store/validation.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/store/watches.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/summaries/featureRecord.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/supply/runway.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/system.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/tickets/ticketList.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/types.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/validation/desktopSkill.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/validation/ready.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/wire.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/worktree/worktreeManager.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "src/world/readPlan.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/world/worldDiff.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/App.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/api.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "web/src/checkSet.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/cockpit/place.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "web/src/cockpit/tokens.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "web/src/cockpit/useCockpit.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/AgentDrawer.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/AllowanceTab.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/CausesTab.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/CheckSetAsk.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/CiMark.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "web/src/components/ConfigPage.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/ConfigValues.tsx": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/EconomicsTab.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/EndRunModal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/EscalationCard.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/FeatureBoard.tsx": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "web/src/components/GoalCriteria.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/HumanTaskActions.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/InjectPanel.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/InsightsPage.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "web/src/components/IntakeSitting.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/LaunchPanel.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/LocalRunPanel.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/McpTab.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/McpUsageTab.tsx": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "web/src/components/NotificationSettings.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/ObstaclesPage.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "web/src/components/PetsCollection.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PetsPage.tsx": {
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/PlanAnswers.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PlanMap.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PlanModal.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/PlanRegroup.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PlanRevealGate.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PrDescription.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PredictionReview.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/PredictionTab.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/RaiseIssueModal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/RawConfigTab.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/RecordPanel.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/RemoteValidationSection.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/components/ReviewMark.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/components/ReviewWrite.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/SchedulePanel.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/ScratchpadModal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/SetupPanel.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/SignalsSection.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/SpendTrendTab.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "web/src/components/TenantCommandsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/components/ThemeSettings.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/ThroughputTab.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/components/TicketCard.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/TicketsBoard.tsx": {
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/TicketsPanel.tsx": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "web/src/components/ValidateLocallyModal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/components/ValidationSection.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/components/markdown.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/console/ConsoleRoot.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/console/GoalPage.tsx": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 4
+    }
+  },
+  "web/src/console/LocalValidationReport.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/console/NeedsBand.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/console/Overview.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/console/PanelRow.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/console/PrPage.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "web/src/console/QueueRail.tsx": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/console/TopBar.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/console/overviews/FocusOverview.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/console/overviews/leads.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/demo/demoBackend.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-depth": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 8
+    }
+  },
+  "web/src/demo/fixtures.ts": {
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "web/src/pets/sprites.ts": {
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "web/src/view/featureHolds.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/view/goalPage.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
+  "web/src/view/needsYou.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "web/src/view/viewModel.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  }
+}

@@ -7,3 +7,4 @@
 # Hook scripts must stay LF: git runs them through sh, and CRLF makes the
 # shebang unparseable on any non-Windows checkout.
 .githooks/* text eol=lf
+.claude/hooks/* text eol=lf
