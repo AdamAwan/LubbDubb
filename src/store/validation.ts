@@ -207,7 +207,7 @@ export class ValidationStore {
       proof: input.proof,
       uses: input.uses,
       covers: input.covers,
-      satisfies: input.satisfies ?? [],
+      satisfies: input.satisfies ?? prev?.satisfies ?? [],
       fleetCandidate: input.fleetCandidate,
       candidateWhy: input.candidateWhy,
       actor: keep ? prev.actor : 'human',

@@ -154,6 +154,9 @@ interface AgentManagerEvents {
   limited: [{ agentId: string; taskId: string; reason: string; resetsAt: string | null }];
 }
 
+const SEALED_WAITING =
+  'This sealed agent stopped and is waiting. What it said is kept from every other reader — read its transcript in the cockpit.';
+
 export class AgentManager extends EventEmitter implements AgentToolTarget {
   private readonly sessions = new Map<string, AgentSession>();
   private readonly exitCodes = new Map<string, number>();
@@ -1304,8 +1307,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     debugLog('agent', `${kind} park armed agent=${agentId} window=${window}ms grace=${grace}ms`);
   }
 
-  private handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
+  private handleWaiting(agentId: string, task: Task, said: string, asked?: AgentAsk): void {
     if (this.parked.has(agentId)) return;
+    // A sealed agent's own words reach no other reader. → docs/spec/14-persistence.md#the-prediction-judge
+    const sealed = isSealedRule(task.rule);
+    const reason = sealed ? SEALED_WAITING : said;
+    const ask = sealed ? undefined : asked;
     this.drainFileEvents(agentId);
     const rule = this.opts.whitelistedApprovals.find((r) => reason.includes(r.match));
     if (rule) {

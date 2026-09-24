@@ -1427,11 +1427,16 @@ default along several paths. `prediction-judge` is a **sealed** rule (`isSealedR
 - **Tools**: `buildTools` hands a sealed agent its own row and nothing else — not advertised-and-hidden,
   as every other agent's unlisted tools are, but absent, so a call to one is an unknown tool. The
   judge has `prediction_judge` alone: no scratchpad, no note, no request, no tracker.
-- **Built-in tools**: a sealed agent is launched with `--disallowedTools` naming every built-in tool
-  (`SEALED_DISALLOWED_TOOLS`, `src/agents/agentProtocol.ts`) and without the operator's
-  `agentAllowedTools`, so it has no shell, no file write and no fetch to carry what it read out by.
-- **Its own output, quoted back**: the stall notice drops the agent's last words, the waiting
-  escalation drops its recent output, and a failure record drops the transcript excerpt — each of which
+- **Built-in tools and other servers**: a sealed agent is launched with `--disallowedTools` naming
+  every built-in tool (`SEALED_DISALLOWED_TOOLS`, `src/agents/agentProtocol.ts`) — `AskUserQuestion`,
+  `Agent`/`Task` and the MCP resource readers among them, because a question is an escalation others
+  read — with `--strict-mcp-config`, so no MCP server from the operator's user or project settings loads
+  into it, without the operator's `agentAllowedTools`, and without `--permission-prompt-tool`, which
+  names a tool its channel no longer serves. It has no shell, no file write, no fetch and no
+  third-party tool to carry what it read out by.
+- **Its own output, quoted back**: whatever it says or asks when it stops, its waiting reason is a
+  fixed sentence and its ask is dropped, the waiting escalation drops its recent output, and a failure
+  record drops the transcript excerpt — each of which
   every other agent's carries, and each of which the operator's desktop channel serves to a model.
 - **The desktop channel**: `agent_read` answers a sealed agent with its status and spend and nothing it
   was told or said, and a sealed agent cannot be ejected, because an ejection hands the brief and the

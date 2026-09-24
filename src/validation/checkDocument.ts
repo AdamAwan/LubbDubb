@@ -251,10 +251,14 @@ type DeclaredResource = z.infer<typeof ValidationResourceSchema>;
  * exists and declares no test plan, and a legacy one that somehow carries steps gets every one of
  * them assigned to a person, which is the direction this fails in everywhere.
  */
-export function validationCheckInputs(block: ValidationBlock, slugs: readonly string[]): ValidationCheckInput[] {
+export function validationCheckInputs(
+  block: ValidationBlock,
+  slugs: readonly string[],
+  criteria: readonly string[] = [],
+): ValidationCheckInput[] {
   const names = new Set((block.resources ?? []).map((r) => r.name));
   return (block.checks ?? []).map((check, index) => ({
-    ...checkAmendment(check, names, new Set(slugs), new Set(), NO_STEP_CAPABILITIES),
+    ...checkAmendment(check, names, new Set(slugs), new Set(criteria), NO_STEP_CAPABILITIES),
     seq: index + 1,
   }));
 }
@@ -316,7 +320,8 @@ function checkAmendment(
     proof: check.proof ?? null,
     uses: check.uses.filter((name) => names.has(name)),
     covers: check.covers.filter((slug) => slugs.has(slug)),
-    satisfies: (check.satisfies ?? []).map((c) => c.trim()).filter((c) => criteria.has(c)),
+    satisfies:
+      check.satisfies === undefined ? undefined : check.satisfies.map((c) => c.trim()).filter((c) => criteria.has(c)),
     fleetCandidate: check.fleetCandidate,
     candidateWhy: check.fleetCandidate ? (check.why ?? null) : null,
     // The steps are the whole of it. The area a check is verified against and the spec names it

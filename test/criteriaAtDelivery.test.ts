@@ -11,7 +11,7 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { criteriaItems } from '../src/criteria/items.js';
 import { coverageLines, criteriaCoverage } from '../src/criteria/coverage.js';
-import { validationCheckSetInputs } from '../src/validation/checkDocument.js';
+import { validationCheckInputs, validationCheckSetInputs } from '../src/validation/checkDocument.js';
 import { NO_STEP_CAPABILITIES } from '../src/validation/steps.js';
 import { authoringBriefing } from '../src/validation/authoring.js';
 import { closeOutPass } from '../src/delivery/closeOut.js';
@@ -168,6 +168,49 @@ test('a check set round-trips what it satisfies, and the criteria route reads th
     });
     assert.deepEqual(written!.satisfies, ['No double entry']);
     assert.deepEqual(system.store.validation.listValidationChecks('issue:12')[0]!.satisfies, ['No double entry']);
+
+    const [replanned] = system.store.validation.ingestValidation('issue:12', {
+      checks: validationCheckInputs(
+        {
+          checks: [
+            {
+              id: 'refund',
+              title: 'Refund',
+              do: 'Refund an order',
+              expect: 'One ledger row',
+              uses: [],
+              covers: [],
+              fleetCandidate: false,
+            },
+          ],
+        },
+        [],
+        criteriaItems('- No double entry\n- Audited'),
+      ),
+      resources: [],
+      supersededReason: 'replaced',
+      amendNote: 'replanned',
+    });
+    assert.deepEqual(replanned!.satisfies, ['No double entry'], 'a re-ingest that says nothing keeps what it answered');
+    const [fromPlan] = validationCheckInputs(
+      {
+        checks: [
+          {
+            id: 'audit',
+            title: 'Audit',
+            do: 'd',
+            expect: 'e',
+            uses: [],
+            covers: [],
+            satisfies: ['Audited'],
+            fleetCandidate: false,
+          },
+        ],
+      },
+      [],
+      criteriaItems('- No double entry\n- Audited'),
+    );
+    assert.deepEqual(fromPlan!.satisfies, ['Audited'], "the plan file's path keeps what the criteria state");
 
     const reading = (await app.inject({ method: 'GET', url: '/api/goals/12/criteria' })).json() as {
       coverage: { criterion: string; reading: string }[];

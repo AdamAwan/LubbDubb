@@ -997,9 +997,11 @@ criteria it answers in `satisfies` — each entry a criterion's **text**, keyed 
 `acceptanceCriteria` keys a part's, so a reworded criterion loses its checks rather than having them
 silently carried onto a claim nobody checked. A version is read as its list by `criteriaItems`
 (`src/criteria/items.ts`): one criterion per non-blank line, list markers stripped. An entry naming no
-criterion of the current version is dropped at ingestion, as `covers` drops an unknown slug — by
-`validation_plan` and `validation_amend` alike, both of which declare the field in their own tool
-schema as well as reaching `ValidationCheckSchema`. The column is `validation_checks.satisfies`, JSON,
+criterion of the current version is dropped at ingestion, as `covers` drops an unknown slug — by the plan
+document's `validation` block, `validation_plan` and `validation_amend` alike, the last two of which declare the field in their own tool
+schema as well as reaching `ValidationCheckSchema`. A re-declared check that **omits** `satisfies`
+keeps what it answered — a replan or an amendment that never mentions the criteria does not wipe
+them; an explicit list, empty included, replaces them. The column is `validation_checks.satisfies`, JSON,
 and null reads as none, which is true of every row before it.
 
 One line per criterion — met, not met, waived, or not yet read — is read off the live checks that name

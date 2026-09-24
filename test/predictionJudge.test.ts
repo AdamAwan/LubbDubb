@@ -109,6 +109,14 @@ test('the judge is sealed: handed its one tool, launched with no built-in tool, 
     assert.ok(launch, 'the judge is launched with its built-in tools taken away');
     assert.match(launch[launch.indexOf('--disallowedTools') + 1]!, /(^|,)Bash(,|$)/);
     assert.equal(text(launch).includes('Bash(npm'), false, "the operator's allow-list is not handed to it");
+    for (const tool of ['AskUserQuestion', 'Agent', 'ListMcpResourcesTool', 'ReadMcpResourceTool'])
+      assert.match(launch[launch.indexOf('--disallowedTools') + 1]!, new RegExp(`(^|,)${tool}(,|$)`));
+    assert.ok(launch.includes('--strict-mcp-config'), 'no MCP server from the operator’s own settings loads');
+    assert.equal(
+      launch.includes('--permission-prompt-tool'),
+      false,
+      'its channel serves no permission tool, so the launch names none',
+    );
     assert.equal(text(launch).includes(SENTINEL), false);
 
     assert.deepEqual([...toolsForRule('prediction-judge')], ['prediction_judge']);

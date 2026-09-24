@@ -135,6 +135,7 @@ interface ClaudeArgsOptions {
   additionalDirectories?: string[];
   permissionPromptTool?: string;
   extraAllowedTools?: string[];
+  strictMcpConfig?: boolean;
 }
 
 function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
@@ -188,6 +189,11 @@ export const SEALED_DISALLOWED_TOOLS: readonly string[] = [
   'WebFetch',
   'WebSearch',
   'Task',
+  'Agent',
+  'AskUserQuestion',
+  'ExitPlanMode',
+  'ListMcpResourcesTool',
+  'ReadMcpResourceTool',
   'Skill',
   'SlashCommand',
   'TodoWrite',
@@ -208,6 +214,7 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   const settings = collectSettings(opts);
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);
+  if (opts.strictMcpConfig) args.push('--strict-mcp-config');
   if (opts.disallowedTools?.length) args.push('--disallowedTools', opts.disallowedTools.join(','));
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.model) args.push('--model', opts.model);
