@@ -128,11 +128,9 @@ export interface Config {
 }
 
 interface RemoteValidationPolicy {
-  runTimeoutMs: number;
   /**
-   * The kill for `ensureTenant` and `reseed`. Its own key rather than `runTimeoutMs` because the two
-   * are unrelated lengths — a suite's runtime against a provisioning job's — and its own default
-   * because 30 seconds kills every tenant command this design has, always.
+   * The kill for `ensureTenant` and `reseed`. Its own default because 30 seconds kills every tenant
+   * command this design has, always.
    */
   tenantTimeoutMs: number;
   /**
@@ -154,7 +152,6 @@ interface RemoteValidationPolicy {
 }
 
 const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
-  runTimeoutMs: 30 * 60 * 1000,
   tenantTimeoutMs: 60 * 60 * 1000,
   scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
   captureLinkBase: null,
@@ -430,6 +427,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'github.filters': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',
+  'remoteValidation.runTimeoutMs':
+    "the harness no longer spawns the browser suite — the remote validation run's agent invokes the runner in its own shell, under its own stall park, so there is no invocation for the harness to kill",
 };
 
 function dropRetiredKeys(fromFile: Partial<Config>, filePath: string): void {

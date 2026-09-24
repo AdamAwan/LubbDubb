@@ -2158,7 +2158,6 @@ rather than `error`.
     },
   ],
   "remoteValidation": {
-    "runTimeoutMs": 1800000,
     "tenantTimeoutMs": 3600000,
     "scriptGraceMs": 2592000000,
     "captureLinkBase": "https://lubbdubb.internal.example",
@@ -2181,13 +2180,11 @@ validation run actually executes unreviewable. The parameters are the tenant, th
 profile, and each rides in the spawn env: **never into the prompt, never into the cockpit, never into
 a project layer that gets committed.**
 
-`remoteValidation` is the one **new top-level key**, and it exists because 30 seconds — the kill every
-other command in the harness gets — is the wrong number for a browser suite. It carries
-`runTimeoutMs`, default 30 minutes, which was the kill for a **runner** invocation and now has **no
-consumer**: the harness spawns no browser command, so there is nothing for it to kill — the suite runs
-under the run agent's own stall park. It is left declared rather than withdrawn here, because removing
-an operator-facing key is a change to the configuration surface and belongs in one of its own; it is
-the one loose end this increment leaves. And `tenantTimeoutMs`,
+`remoteValidation` is the one **new top-level key**. It carries no runner timeout: `runTimeoutMs`,
+the old 30-minute kill for a **runner** invocation, is a [retired key](02-configuration.md#retired-keys),
+because the harness spawns no browser command — the run agent invokes the runner in its own shell, so
+the suite runs under that agent's own stall park and there is nothing for the harness to kill. A file
+still setting it boots with a warning naming it. It carries `tenantTimeoutMs`,
 default one hour, the kill for `ensureTenant` and `reseed`. Every other command, `state.run` included,
 keeps the 30-second kill. And `captureLinkBase`, default **null** — the address this harness is
 reachable at from wherever its tickets are read, used for the one link the harness posts somewhere it

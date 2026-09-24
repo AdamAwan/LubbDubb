@@ -94,6 +94,8 @@ the harness either already does or will never do again — and refusing would ta
 down at boot over one stale line. `lessonBlockChars`, `agentIdleWaitMs` and `sessionTranscriptRoot`
 are entries of a second kind: each named a thing that is gone rather than a switch that went
 unconditional — a block that no longer renders, and two keys the removed `pty` runtime alone read.
+`remoteValidation.runTimeoutMs` is the same kind: the kill for a browser suite the harness no longer
+spawns ([36](36-remote-validation.md#configuration)).
 They warn rather than refusing for the same reason and the first two carry a real cost — a deployment
 that had tuned the figure boots on the replacement's default until somebody sets it — which is why
 their warnings name what replaced them, or say that nothing did (`agentSilenceParkMs`).
@@ -124,6 +126,7 @@ rather than the field inside it. The list:
 | `knowledgeScopeStaleDays`, `knowledgeColdDays`                         | readings for the Knowledge page, gone with the store behind it ([27](27-obstacles.md#what-the-claim-store-left-behind))            |
 | `agentIdleWaitMs`                                                      | the removed `pty` runtime's silence watch; `agentSilenceParkMs` reads the same silence off the stream ([10](10-agent-runtimes.md)) |
 | `sessionTranscriptRoot`                                                | only `pty` tailed a transcript file; the stream transport carries it in structure ([10](10-agent-runtimes.md))                     |
+| `remoteValidation.runTimeoutMs`                                        | the harness spawns no browser suite to kill; the run agent invokes it ([36](36-remote-validation.md#configuration))                |
 
 Both lists are permanent — a config written before a removal outlives the release that made it.
 
