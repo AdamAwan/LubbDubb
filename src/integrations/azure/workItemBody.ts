@@ -1,8 +1,17 @@
 // → docs/spec/15-integrations.md#where-a-work-items-body-lives
 
+const DESCRIPTION_FIELD = 'System.Description';
+const REPRO_STEPS_FIELD = 'Microsoft.VSTS.TCM.ReproSteps';
+
+const BODY_FIELD_BY_TYPE: ReadonlyMap<string, string> = new Map([['bug', REPRO_STEPS_FIELD]]);
+
+export function workItemBodyField(type: string): string {
+  return BODY_FIELD_BY_TYPE.get(type.trim().toLowerCase()) ?? DESCRIPTION_FIELD;
+}
+
 const NAMED_BODY_FIELDS: ReadonlyArray<readonly [string, string]> = [
-  ['System.Description', 'Description'],
-  ['Microsoft.VSTS.TCM.ReproSteps', 'Repro steps'],
+  [DESCRIPTION_FIELD, 'Description'],
+  [REPRO_STEPS_FIELD, 'Repro steps'],
   ['Microsoft.VSTS.Common.AcceptanceCriteria', 'Acceptance criteria'],
   ['Microsoft.VSTS.TCM.SystemInfo', 'System info'],
 ];

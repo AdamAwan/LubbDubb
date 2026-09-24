@@ -1,4 +1,5 @@
 import type { Config } from './config/config.js';
+import { workItemBodyField } from './integrations/azure/workItemBody.js';
 import type { Store } from './store/store.js';
 import type { IssueConclusion, IssueInstruction, Plan } from './types.js';
 
@@ -22,11 +23,14 @@ export function ticketAmendCommands(config: Config, issueNumber: number): string
     const { organization, project } = config.azureDevOps;
     const org = `https://dev.azure.com/${organization}`;
     return (
-      `Read what it says now, then write the amended description back — in project "${project}", ` +
-      `organization "${organization}":\n\n` +
-      `  az boards work-item show --org ${org} --id ${issueNumber} --query "fields.\\"System.Description\\""\n` +
-      `  az boards work-item update --org ${org} --id ${issueNumber} --description "<the amended description>"\n\n` +
-      `The description is HTML, so keep the markup that is already in it.`
+      `Read what it says now, then write the amended body back to the field that holds it — in project ` +
+      `"${project}", organization "${organization}":\n\n` +
+      `  az boards work-item show --org ${org} --id ${issueNumber} --query fields\n` +
+      `  az boards work-item update --org ${org} --id ${issueNumber} --fields "<field>=<the amended body>"\n\n` +
+      `The field is \`${workItemBodyField('Bug')}\` when \`System.WorkItemType\` is Bug, and ` +
+      `\`${workItemBodyField('')}\` for any other type. Read every field, not only that one — prose can ` +
+      `sit in acceptance criteria or a custom field too. The body is HTML, so keep the markup that is ` +
+      `already in it.`
     );
   }
   return null;

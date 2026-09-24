@@ -217,14 +217,14 @@ each of them composed a `gh`/`az` command as a string and spent a desk agent typ
 ([13](13-jobs-and-tickets.md#filing-a-ticket)). Its input is provider-neutral and every provider
 answers the parts it has:
 
-| Field       | GitHub                                                    | Azure DevOps                                                                                       |
-| ----------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `title`     | the issue title                                           | `System.Title`                                                                                     |
-| `body`      | the issue body                                            | `System.Description` (reads fold in every content field — [below](#where-a-work-items-body-lives)) |
-| `labels`    | `labels` on the create                                    | `System.Tags`, semicolon-joined, on the create                                                     |
-| `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                                                                  |
-| `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)                                                           |
-| `relatedTo` | appended to the body as `Related to #<n>`                 | a second write: a `System.LinkTypes.Related` relation                                              |
+| Field       | GitHub                                                    | Azure DevOps                                                                                                                           |
+| ----------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`     | the issue title                                           | `System.Title`                                                                                                                         |
+| `body`      | the issue body                                            | the type's body field — `Microsoft.VSTS.TCM.ReproSteps` for a Bug, else `System.Description` ([below](#where-a-work-items-body-lives)) |
+| `labels`    | `labels` on the create                                    | `System.Tags`, semicolon-joined, on the create                                                                                         |
+| `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                                                                                                      |
+| `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)                                                                                               |
+| `relatedTo` | appended to the body as `Related to #<n>`                 | a second write: a `System.LinkTypes.Related` relation                                                                                  |
 
 Two of those rows are the whole point. Labels and the assignee ride on the **create** rather than on
 follow-up writes, because an item that exists for a moment untagged is one the pickup gate can miss
@@ -764,6 +764,19 @@ Sections are separated by an `<h3>` heading, matching the HTML the fields themse
 section there is, which is the common case and stays exactly the bare description it always was. The
 batch read already asks for every field (`workitemsbatch` with no `fields` filter), so none of this
 costs a request.
+
+**A write has to choose one field, and it chooses the one the type's form shows.** Reading can fold
+everything; `createWorkItem` cannot, and a body written where the form does not surface it is a
+ticket that reads as blank to the person opening it in Azure — which is who a filed ticket is for.
+`workItemBodyField(type)`, beside `composeWorkItemBody`, is that rule: a **Bug** (matched without
+regard to case) takes its body in `Microsoft.VSTS.TCM.ReproSteps` — the Agile, Scrum and CMMI Bug
+forms all show Repro Steps and not Description — and every other type, including one the harness has
+never heard of, in `System.Description`. The two halves stay symmetrical because the read folds in
+both fields whatever the type: a filed Bug reads back as its Repro Steps under a "Repro steps"
+heading, never as an empty body. The same rule is what the operator-instruction amend commands name
+([06](06-issue-pickup.md)): an agent is told to read every field and to write the amended body back
+with `az boards work-item update --fields`, into Repro Steps for a Bug and Description otherwise —
+never to read `System.Description` alone.
 
 ### Reading less on Azure
 
