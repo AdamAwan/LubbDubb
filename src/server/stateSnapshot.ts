@@ -340,6 +340,7 @@ export function buildStateSections(
       deliveries: deliveries(),
       deliverySignals: deliverySignals(),
       appraisals,
+      closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
       obstacleBlocks: store.obstacles.listObstacleBlocks(),
       obstacles: store.obstacles.obstacleBoard(),
       runs: issueRuns,

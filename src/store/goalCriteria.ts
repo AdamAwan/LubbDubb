@@ -55,6 +55,18 @@ export class GoalCriteriaStore {
     return row ? rowToVersion(row) : null;
   }
 
+  /** Every goal's newest version. What the dispatcher appends to the goal's prompts. */
+  listCurrentCriteria(): GoalCriteriaVersion[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT c.* FROM goal_criteria c
+         JOIN (SELECT origin_ref, MAX(version) AS version FROM goal_criteria GROUP BY origin_ref) m
+           ON m.origin_ref = c.origin_ref AND m.version = c.version`,
+      )
+      .all() as CriteriaRow[];
+    return rows.map(rowToVersion);
+  }
+
   /** The whole chain, oldest first. What the goal page draws behind the current one. */
   listCriteriaVersions(originRef: string): GoalCriteriaVersion[] {
     const rows = this.ctx

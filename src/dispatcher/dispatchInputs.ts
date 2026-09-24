@@ -29,6 +29,8 @@ type PulseReadings = Pick<
   | 'remoteRuns'
   | 'modelPins'
   | 'agentHeadroom'
+  | 'closedSittings'
+  | 'goalCriteria'
 >;
 
 export function buildDispatchInputs(store: Store, pulse: PulseReadings): DispatchContext {

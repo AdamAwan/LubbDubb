@@ -3,6 +3,7 @@ import type {
   Decision,
   Escalation,
   FeatureSequence,
+  GoalCriteriaVersion,
   GoalPause,
   GoalPriority,
   IssueConclusion,
@@ -38,6 +39,7 @@ import type {
 import type { AgentModels, ProfileSource } from '../agents/modelPolicy.js';
 import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
+import type { ClosedSittings } from '../intake/sitting.js';
 import type { DispatchRuleId } from './rules.js';
 
 // → docs/spec/05-dispatcher.md
@@ -77,6 +79,8 @@ export interface DispatchContext {
   deliverySignals?: WorldEvent[];
   shortfalls?: IssueShortfall[];
   appraisals?: IssueAppraisal[];
+  closedSittings?: ClosedSittings;
+  goalCriteria?: GoalCriteriaVersion[];
   retrospectiveOrigins?: string[];
   featureStandings?: { number: number; title: string; key: string }[];
   featureSummaryKeys?: { originRef: string; standingKey: string }[];

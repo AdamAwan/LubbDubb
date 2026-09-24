@@ -380,7 +380,7 @@ chip.
 | `escalated` | Attempt cap spent; parked on a human.                                                |
 | `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
 | `appraisal` | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
-| `sitting`   | Not yet built. Appraised workable; waiting on your prediction and criteria.          |
+| `sitting`   | Nothing holds it but your prediction and criteria, which planning waits for.         |
 | `obstacle`  | An agent could not finish it and named what stopped it — parked until that clears.   |
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
 | `eligible`  | Would be picked up next cycle.                                                       |
@@ -426,11 +426,12 @@ exactly like an idle fleet.
 
 ### The sitting arm
 
-**Not yet built.** Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a goal whose
-appraisal stands `workable` and that has no reveal stamp is held out of rule `issue-plan` until the
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a goal with no
+plan row and no reveal stamp, that the appraisal does not hold, is held out of rule `issue-plan` until the
 operator closes its [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner),
-and reads `sitting` with the reason `awaiting your prediction and criteria` — or, while the alignment
-check is out, `checking your criteria against the ticket`. It is asked **after** the `appraisal` arm,
+and reads `sitting` with the reason `awaiting your prediction and criteria`. (Not yet built: while the
+[alignment check](08-planning.md#the-alignment-check) is out, the reason reads `checking your criteria
+against the ticket`.) It is asked **after** the `appraisal` arm,
 because an appraisal still running or holding the goal is the truer reason, and **before** the plan
 funnel, which is what it holds. Unlike every other hold on this page it is a person's, and it is
 reported for the reason the appraisal's pending case is: a goal silently waiting looks exactly like an

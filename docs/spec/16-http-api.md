@@ -1841,12 +1841,13 @@ it for ever.
 
 ### `POST /api/goals/:number/reveal`
 
-**Not yet built:** the stamp also closes the
-[intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner), so the route
-accepts a goal with **no plan** where its appraisal stands `workable` and no planner has been
-dispatched — that is the sitting, and the stamp there is what releases rule `issue-plan`. The 409 below
-stays for every other goal with no plan `awaiting_approval`. Marking stays refused until a plan
-exists: a stamp with no plan behind it is a closed sitting, not a revealed plan.
+The stamp also closes the
+[intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner): on an **open** goal
+with **no plan row**, the press is the sitting's end, it runs a cycle, and the stamp is what releases
+rule `issue-plan`. **409** on a number the world holds no open goal for — there is no sitting there to
+close, and a stamp would read as a decline on a goal never offered. The 409 below stays for a goal
+whose plan exists and is not `awaiting_approval`. **Marking is refused (409) until a plan exists**:
+a stamp with no plan behind it is a closed sitting, not a revealed plan.
 
 Stamps the reveal server-side and answers `{ ok, reveal, plan }` with the full document. This is the
 call that ends the offer, and the act that ends the opportunity to predict is the same act that would

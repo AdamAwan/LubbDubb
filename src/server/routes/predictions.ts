@@ -62,16 +62,29 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const originRef = issueOriginRef('root', params.number);
       const plan = store.plans.getPlanByOrigin(originRef);
       const standing = predictions.getReveal(originRef);
-      // A goal is offered the gate once, when its plan is ready, and the stamp is
-      // what ends the offer. Stamping one on a goal with no plan awaiting approval
-      // would burn that goal's gate for good over a press that revealed nothing —
-      // and the goal would then read as a decline rather than as never offered.
-      if (standing === null && plan?.status !== 'awaiting_approval')
+      // With no plan row the stamp closes the goal's intake sitting, which is what
+      // releases its planner. With one, the goal is offered the gate once, when its
+      // plan is ready: stamping a plan that is not awaiting approval would burn the
+      // gate over a press that revealed nothing, and read as a decline rather than as
+      // never offered.
+      const sitting = plan === null;
+      if (
+        standing === null &&
+        sitting &&
+        store.world.getWorldBaseline()?.issues.some((i) => i.number === params.number && i.state === 'open') !== true
+      )
+        return reply
+          .code(409)
+          .send({ error: 'there is no open goal with this number, so there is no sitting to close' });
+      if (standing === null && !sitting && plan.status !== 'awaiting_approval')
         return reply
           .code(409)
           .send({ error: 'there is no plan awaiting approval on this goal, so there is nothing to reveal' });
       const reveal = standing ?? predictions.recordReveal(originRef);
-      if (standing === null) hub.broadcast({ type: 'dirty', sections: ['plans'] });
+      if (standing === null) {
+        hub.broadcast({ type: 'dirty', sections: ['plans'] });
+        if (sitting) await harness.runCycle('manual');
+      }
       return { ok: true, reveal, plan };
     }),
   );
@@ -88,6 +101,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       path,
       checked({ params: IssueNumberParams, body: MarkBody }, async ({ params, body, reply }) => {
         const originRef = issueOriginRef('root', params.number);
+        if (store.plans.getPlanByOrigin(originRef) === null)
+          return reply
+            .code(409)
+            .send({ error: 'this goal has no plan yet, so there is nothing to mark the prediction against' });
         const owedBefore = owesOutcome(originRef);
         const outcome = write({
           originRef,

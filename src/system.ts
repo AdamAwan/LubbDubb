@@ -785,6 +785,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
     // Computed here rather than in the rule: `src/remoteValidation/` is a lens as far as the
     // dispatcher is concerned, so what reaches it is a run row and a rendered string.
+    goalIntake: () => ({
+      closedSittings: revealGateOn(config) ? new Set(predictions.listReveals().map((r) => r.originRef)) : null,
+      criteria: config.goalCriteria.enabled ? store.goalCriteria.listCurrentCriteria() : [],
+    }),
     remoteRuns: () =>
       remoteRunBriefs({
         store,

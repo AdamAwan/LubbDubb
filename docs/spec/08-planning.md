@@ -802,11 +802,13 @@ one, because a replan resets the row.
 
 ### The intake sitting stands in front of the planner
 
-**Not yet built.** Today the prediction and the criteria are asked for at the
-[reveal gate](#the-reveal-gate-on-a-plan-written-before-its-sitting), after the planner has run. What
-is outstanding is everything this section describes: the hold on rule `issue-plan`, the sitting on the
-goal page, the alignment check, the criteria reaching the planner and the parts, the prediction judge
-and the criteria reading at delivery.
+**Partly built.** The hold on rule `issue-plan`, the stamp that releases it, and the criteria reaching
+the planner and every part are built. Not yet built: the sitting's composer on the goal page and the
+rail's ask ([17](17-cockpit.md#the-reveal-gate)), [the alignment check](#the-alignment-check),
+[the prediction judge](#the-prediction-judge) and [the criteria at delivery](#the-criteria-at-delivery),
+each marked where it is described.
+
+#### The sitting
 
 Where the [reveal gate](02-configuration.md#the-reveal-gate) is on — `prediction.enabled` or
 `goalCriteria.enabled` — the operator is asked for the goal's prediction and its criteria **after the
@@ -819,9 +821,15 @@ part are handed ([below](#what-the-fleet-is-handed)), and the prediction gets st
 written before a plan exists at all, so its independence of the plan is a fact about the order of the
 pipeline rather than about a withheld payload.
 
-**Rule `issue-plan` is held until the sitting closes.** A goal whose appraisal stands `workable` and
-that has no reveal stamp is not planned; the pickup reason reads `awaiting your prediction and
-criteria` ([06](06-issue-pickup.md#the-sitting-arm)) and the rail carries the ask, because a
+**Rule `issue-plan` is held until the sitting closes.** A goal with **no plan row** and no reveal
+stamp is not planned, once nothing else holds it — the appraisal has cast `workable` or, crashed or
+capped, cast nothing, which holds nothing on its own. A goal that already has a plan is never held
+here: a replan is not a first sight of the goal, and one planned before its sitting meets
+[the reveal gate](#the-reveal-gate-on-a-plan-written-before-its-sitting) instead. The question is
+`sittingHolds` (`src/intake/sitting.ts`), asked by the rule and by the pickup verdict alike. Held, the
+planner is queued in Up next as `sitting` — never cleared by a priority flag the way `sequenced` is,
+because the answer it waits on is the operator's, not the fleet's — and the pickup reason reads
+`awaiting your prediction and criteria` ([06](06-issue-pickup.md#the-sitting-arm)) and the rail carries the ask, because a
 goal silently waiting on a person looks exactly like an idle fleet. The stamp in `goal_reveals` is
 what closes the sitting — it keeps the table's name, and now means _the sitting ended_ rather than _the
 plan was shown_. Both records are written before it, because the stamp is what ends their
@@ -839,6 +847,8 @@ and the goals it releases read `not offered`, because they were.
 
 #### The alignment check
 
+**Not yet built.**
+
 Where the goal's ticket carries its **own** acceptance criteria, the operator's are compared against
 them before the sitting can close. The ticket's criteria are the Azure DevOps "Acceptance criteria"
 field, which already reaches the body under its own heading
@@ -851,12 +861,12 @@ declared as a family in `src/issueOrigins.ts` with the role of a deliberation, p
 text and the current criteria version and nothing else. It answers through one tool,
 `criteria_alignment`, tagging every point on either side:
 
-| Tag           | Means                                                   |
-| ------------- | ------------------------------------------------------- |
-| `matches`     | Both say it.                                            |
-| `extra`       | Only the operator says it. Fine — that is their right.  |
-| `uncovered`   | Only the ticket says it. Shown; usually fine.           |
-| `contradicts` | The two disagree. The reading the check exists for.     |
+| Tag           | Means                                                  |
+| ------------- | ------------------------------------------------------ |
+| `matches`     | Both say it.                                           |
+| `extra`       | Only the operator says it. Fine — that is their right. |
+| `uncovered`   | Only the ticket says it. Shown; usually fine.          |
+| `contradicts` | The two disagree. The reading the check exists for.    |
 
 and an overall verdict of `aligned`, `partial` or `conflicting`, written to
 `goal_criteria_alignments` against the criteria **version** it read, so a revision is a new question
@@ -883,6 +893,8 @@ offers the replan beside the revision.
 
 #### The prediction judge
 
+**Not yet built.**
+
 A prediction is marked against the plan by the operator (moment one), and a **second** reading of the
 same comparison is taken by an agent, so the aggregate can show where the two disagree — the rows the
 record is most worth reading for.
@@ -907,6 +919,8 @@ place of it.
 
 #### The criteria at delivery
 
+**Not yet built.**
+
 The validation planner, writing the check set on `delivered`
 ([20](20-validation.md#when-the-check-set-is-written)), writes **at least one check per criterion** of
 the goal's current version, and each check names the criteria it answers in `satisfies`. A criterion
@@ -923,9 +937,8 @@ of the checks that name it. It holds nothing, as validation holds nothing: a fai
 Where the gate is on and a plan is already `awaiting_approval` with no stamp — a goal planned before
 the sitting existed, or while both keys were off and then one was turned on — the plan is served to
 the cockpit **without its body**, and the operator is drawn the plan obscured, with _"A plan is ready.
-Predict first?"_ over it and two presses of equal weight: **Predict** and **Show me the plan**. This is
-today's whole gate; once the sitting is built it is the fallback for those goals and nothing else, and
-a goal whose sitting closed never meets it.
+Predict first?"_ over it and two presses of equal weight: **Predict** and **Show me the plan**. It is
+the fallback for those goals and nothing else: a goal whose sitting closed never meets it.
 → [16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)
 
 This changes nothing about the approval gate itself and holds no work. Nothing is withheld from the
@@ -981,10 +994,8 @@ as well as a moment, so that invariant has to be drawn as well as held: the crit
 a rule with a note of its own, never as a fifth prediction slot under one containment sentence.
 → [17](17-cockpit.md#the-criteria-half-of-the-gate)
 
-**Delivering them to an agent is not yet built** — [What the fleet is handed](#what-the-fleet-is-handed)
-is the design. Today the set is authored, versioned, drawn on the goal page and counted in the
-aggregate, and it is read by people; nothing appends it to a prompt, so until that lands the goal set
-is an oracle for the human reviewing the work and not one the implementer is handed.
+The current version reaches the planner and every part as an appended note
+(`goalCriteriaNote`, `src/criteria/note.ts`) — [What the fleet is handed](#what-the-fleet-is-handed).
 
 ### The status is the plan's life, and only that
 

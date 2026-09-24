@@ -39,6 +39,7 @@ import {
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
+import { sittingHolds } from '../intake/sitting.js';
 import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
 import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 import { isActive, type Candidate, type ConsiderOptions, type RawAction, type StageContext } from './rules/context.js';
@@ -390,6 +391,8 @@ export class RuleDispatcher implements Dispatcher {
           )
         : [];
 
+    const criteriaByOrigin = new Map((ctx.goalCriteria ?? []).map((c) => [c.originRef, c]));
+
     const validationChecks = new Map<string, ValidationCheck[]>();
     for (const check of ctx.validationChecks ?? []) {
       const group = validationChecks.get(check.originRef);
@@ -438,6 +441,9 @@ export class RuleDispatcher implements Dispatcher {
       },
       deliveryParked,
       appraisalParked,
+      sittingHolds: (issueNumber: number) =>
+        sittingHolds(ctx.closedSittings, issueNumber, plansByOrigin.get(issueOrigin(issueNumber)) ?? null),
+      criteriaFor: (issueNumber: number) => criteriaByOrigin.get(issueOrigin(issueNumber)) ?? null,
       profileOverrides,
       pinFor: (originRef: string | null) =>
         (originRef === null ? undefined : profileOverrides.get(originRef)) ??

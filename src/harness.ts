@@ -22,6 +22,7 @@ import { applyThreadReopens } from './pr/prThreads.js';
 import { runPulse, type PulseDeps, type PulsePhase } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
+import type { GoalIntake } from './intake/sitting.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -52,6 +53,8 @@ interface HarnessDeps extends PulseDeps {
   issuePickup?: IssuePickupPolicy;
   localRun?: { noteAlive(): void };
   remoteRuns?: () => RemoteRunBrief[];
+  /** → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner */
+  goalIntake?: () => GoalIntake;
   recovery?: { pendingCount(): number };
   freshReads?: { drain(): string[] };
 }
@@ -305,6 +308,7 @@ export class Harness extends EventEmitter {
         this.markPass('afterOrigins'),
       );
       const recentDecisions = store.decisions.listDecisions(200);
+      const intake = this.deps.goalIntake?.() ?? { closedSittings: null, criteria: [] };
       const liveAgents = store.agents.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
@@ -359,6 +363,8 @@ export class Harness extends EventEmitter {
           remoteRuns: this.deps.remoteRuns?.() ?? [],
           modelPins: this.deps.modelPins,
           agentHeadroom: headroom,
+          closedSittings: intake.closedSittings,
+          goalCriteria: intake.criteria,
         }),
       );
 
@@ -393,6 +399,7 @@ export class Harness extends EventEmitter {
             deliveries,
             deliverySignals,
             appraisals,
+            closedSittings: intake.closedSittings,
             runs: issueRuns,
             headroom,
             paused: this.deps.runtime.paused,
