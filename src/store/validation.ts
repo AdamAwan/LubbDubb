@@ -216,7 +216,11 @@ export class ValidationStore {
       resultAt: keep ? prev.resultAt : null,
       deferUntil: keep ? prev.deferUntil : null,
       supersededReason: null,
-      revision: band ? (reworded && prev !== undefined ? priorWording(prev) : null) : (prev?.revision ?? null),
+      revision: band
+        ? reworded && prev !== undefined
+          ? (unanswered(prev) ?? priorWording(prev))
+          : null
+        : (prev?.revision ?? null),
       amendedAt: band ? ts : (prev?.amendedAt ?? null),
       amendNote: band ? amendNote : (prev?.amendNote ?? null),
       // Resolved from the configuration at ingestion and recomputed on every amendment — a check's
@@ -577,6 +581,10 @@ interface ValidationCheckAmendmentLike {
   do: string;
   expect: string;
   proof: string | null;
+}
+
+function unanswered(prev: ValidationCheck): ValidationRevision | null {
+  return prev.state === 'unrun' && prev.revision !== null && prev.revision.state !== null ? prev.revision : null;
 }
 
 function priorWording(prev: ValidationCheck): ValidationRevision {
