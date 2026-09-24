@@ -6,6 +6,7 @@ import {
   windowView,
   type InsightsWindowView,
   type ResolvedWindow,
+  type TimelineSpan,
 } from './insightsWindow.js';
 import { median, prNumberOf } from '../primitives.js';
 
@@ -187,6 +188,14 @@ interface ThroughputInput {
   now: number;
 }
 
+interface ThroughputWalk {
+  counts: Map<ThroughputMeasure, number>;
+  subjects: Map<string, ThroughputSubject>;
+  openedAt: Map<string, number>;
+  toMerge: number[];
+  buckets: ThroughputBucket[];
+}
+
 export function buildThroughputInsights(input: ThroughputInput): ThroughputInsights {
   const { now, window } = input;
   const events = input.events.filter((event) => inWindow(window, Date.parse(event.createdAt)));
@@ -196,80 +205,23 @@ export function buildThroughputInsights(input: ThroughputInput): ThroughputInsig
   >((oldest, at) => (Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest), null);
   const span = timelineSpan(window, earliest);
 
-  const counts = new Map<ThroughputMeasure, number>();
-  const subjects = new Map<string, ThroughputSubject>();
-  const openedAt = new Map<string, number>();
-  const toMerge: number[] = [];
-  const buckets: ThroughputBucket[] = Array.from({ length: span.buckets }, (_, i) => ({
-    startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
-    opened: 0,
-    merged: 0,
-    closed: 0,
-    comments: 0,
-    replies: 0,
-  }));
-
-  const bump = (measure: ThroughputMeasure): void => {
-    counts.set(measure, (counts.get(measure) ?? 0) + 1);
+  const walk: ThroughputWalk = {
+    counts: new Map(),
+    subjects: new Map(),
+    openedAt: new Map(),
+    toMerge: [],
+    buckets: Array.from({ length: span.buckets }, (_, i) => ({
+      startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
+      opened: 0,
+      merged: 0,
+      closed: 0,
+      comments: 0,
+      replies: 0,
+    })),
   };
-  const subjectOf = (ref: string, at: string): ThroughputSubject => {
-    const found = subjects.get(ref) ?? {
-      ref,
-      prNumber: prNumberOf(ref),
-      opened: false,
-      merged: false,
-      closed: false,
-      commentsReceived: 0,
-      repliesSent: 0,
-      toMergeMs: null,
-      lastAt: at,
-    };
-    if (at >= found.lastAt) found.lastAt = at;
-    subjects.set(ref, found);
-    return found;
-  };
-
-  for (const event of events) {
-    const measure = MEASURE_OF_KIND[event.kind];
-    if (measure === undefined) continue;
-    const at = Date.parse(event.createdAt);
-    if (Number.isNaN(at)) continue;
-    bump(measure);
-
-    const bucket = buckets[bucketIndexIn(span, at) ?? -1];
-    if (bucket) {
-      if (measure === 'pr-opened') bucket.opened += 1;
-      else if (measure === 'pr-merged') bucket.merged += 1;
-      else if (measure === 'pr-closed') bucket.closed += 1;
-      else if (measure === 'review-received') bucket.comments += 1;
-    }
-
-    if (event.ref === null || prNumberOf(event.ref) === null) continue;
-    const subject = subjectOf(event.ref, event.createdAt);
-    if (measure === 'pr-opened') {
-      subject.opened = true;
-      if (!openedAt.has(event.ref)) openedAt.set(event.ref, at);
-    } else if (measure === 'review-received') subject.commentsReceived += 1;
-    else if (measure === 'pr-merged' || measure === 'pr-closed') {
-      if (measure === 'pr-merged') subject.merged = true;
-      else subject.closed = true;
-      const opened = openedAt.get(event.ref);
-      if (opened !== undefined && measure === 'pr-merged') {
-        subject.toMergeMs = at - opened;
-        toMerge.push(at - opened);
-      }
-      openedAt.delete(event.ref);
-    }
-  }
-
-  for (const reply of replies) {
-    const at = Date.parse(reply.sentAt);
-    if (Number.isNaN(at)) continue;
-    bump('reply-sent');
-    const bucket = buckets[bucketIndexIn(span, at) ?? -1];
-    if (bucket) bucket.replies += 1;
-    subjectOf(`pr:${reply.prNumber}`, reply.sentAt).repliesSent += 1;
-  }
+  walkEvents(walk, events, span);
+  walkReplies(walk, replies, span);
+  const { counts, subjects, toMerge, buckets } = walk;
 
   const count = (measure: ThroughputMeasure): number => counts.get(measure) ?? 0;
   const spanMs = window.spanMs ?? (earliest === null ? null : Math.max(0, now - earliest));
@@ -277,11 +229,7 @@ export function buildThroughputInsights(input: ThroughputInput): ThroughputInsig
   const abandoned = count('pr-closed');
   const received = count('review-received');
   const replied = count('reply-sent');
-  const ranked = [...subjects.values()].sort(
-    (a, b) =>
-      b.commentsReceived + b.repliesSent - (a.commentsReceived + a.repliesSent) ||
-      (b.lastAt > a.lastAt ? 1 : b.lastAt < a.lastAt ? -1 : 0),
-  );
+  const ranked = [...subjects.values()].sort(byActivity);
 
   return {
     generatedAt: new Date(now).toISOString(),
@@ -313,4 +261,91 @@ export function buildThroughputInsights(input: ThroughputInput): ThroughputInsig
     prsTouched: subjects.size,
     timeline: { bucketMs: span.bucketMs, startsAt: new Date(span.startMs).toISOString(), buckets },
   };
+}
+
+function byActivity(a: ThroughputSubject, b: ThroughputSubject): number {
+  return (
+    b.commentsReceived + b.repliesSent - (a.commentsReceived + a.repliesSent) ||
+    (b.lastAt > a.lastAt ? 1 : b.lastAt < a.lastAt ? -1 : 0)
+  );
+}
+
+function bump(walk: ThroughputWalk, measure: ThroughputMeasure): void {
+  walk.counts.set(measure, (walk.counts.get(measure) ?? 0) + 1);
+}
+
+function subjectOf(walk: ThroughputWalk, ref: string, at: string): ThroughputSubject {
+  const found = walk.subjects.get(ref) ?? {
+    ref,
+    prNumber: prNumberOf(ref),
+    opened: false,
+    merged: false,
+    closed: false,
+    commentsReceived: 0,
+    repliesSent: 0,
+    toMergeMs: null,
+    lastAt: at,
+  };
+  if (at >= found.lastAt) found.lastAt = at;
+  walk.subjects.set(ref, found);
+  return found;
+}
+
+function bucketEvent(bucket: ThroughputBucket, measure: ThroughputMeasure): void {
+  if (measure === 'pr-opened') bucket.opened += 1;
+  else if (measure === 'pr-merged') bucket.merged += 1;
+  else if (measure === 'pr-closed') bucket.closed += 1;
+  else if (measure === 'review-received') bucket.comments += 1;
+}
+
+function recordSubjectEvent(
+  walk: ThroughputWalk,
+  subject: ThroughputSubject,
+  measure: ThroughputMeasure,
+  ref: string,
+  at: number,
+): void {
+  const { openedAt, toMerge } = walk;
+  if (measure === 'pr-opened') {
+    subject.opened = true;
+    if (!openedAt.has(ref)) openedAt.set(ref, at);
+  } else if (measure === 'review-received') subject.commentsReceived += 1;
+  else if (measure === 'pr-merged' || measure === 'pr-closed') {
+    if (measure === 'pr-merged') subject.merged = true;
+    else subject.closed = true;
+    const opened = openedAt.get(ref);
+    if (opened !== undefined && measure === 'pr-merged') {
+      subject.toMergeMs = at - opened;
+      toMerge.push(at - opened);
+    }
+    openedAt.delete(ref);
+  }
+}
+
+function walkEvents(walk: ThroughputWalk, events: readonly WorldEvent[], span: TimelineSpan): void {
+  for (const event of events) {
+    const measure = MEASURE_OF_KIND[event.kind];
+    if (measure === undefined) continue;
+    const at = Date.parse(event.createdAt);
+    if (Number.isNaN(at)) continue;
+    bump(walk, measure);
+
+    const bucket = walk.buckets[bucketIndexIn(span, at) ?? -1];
+    if (bucket) bucketEvent(bucket, measure);
+
+    if (event.ref === null || prNumberOf(event.ref) === null) continue;
+    const subject = subjectOf(walk, event.ref, event.createdAt);
+    recordSubjectEvent(walk, subject, measure, event.ref, at);
+  }
+}
+
+function walkReplies(walk: ThroughputWalk, replies: readonly PrReplySent[], span: TimelineSpan): void {
+  for (const reply of replies) {
+    const at = Date.parse(reply.sentAt);
+    if (Number.isNaN(at)) continue;
+    bump(walk, 'reply-sent');
+    const bucket = walk.buckets[bucketIndexIn(span, at) ?? -1];
+    if (bucket) bucket.replies += 1;
+    subjectOf(walk, `pr:${reply.prNumber}`, reply.sentAt).repliesSent += 1;
+  }
 }

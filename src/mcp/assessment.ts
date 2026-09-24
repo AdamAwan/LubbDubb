@@ -43,30 +43,8 @@ export function validateAssessment(
     };
   }
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
-  if (!summary) {
-    return {
-      ok: false,
-      error:
-        'summary is required. One line saying whether the goal is reached and what decided it; the evidence ' +
-        'goes in `detail`. An operator decides what happens to the ticket from these two alone.',
-    };
-  }
-  if (/[\r\n]/.test(summary)) {
-    return {
-      ok: false,
-      error:
-        'summary is one line — what you found, in a sentence. Everything with a line break in it is evidence: ' +
-        'put it in `detail`, which takes markdown and is rendered as the body of the card an operator reads.',
-    };
-  }
-  if (summary.length > MAX_ASSESSMENT_SUMMARY) {
-    return {
-      ok: false,
-      error:
-        `summary is too long (${summary.length} chars, max ${MAX_ASSESSMENT_SUMMARY}) — it is the headline, ` +
-        `not the account. Keep the claim and move the rest to \`detail\`.`,
-    };
-  }
+  const summaryProblem = summaryError(summary);
+  if (summaryProblem !== null) return { ok: false, error: summaryProblem };
   const detailText = typeof args.detail === 'string' ? args.detail.trim() : '';
   if (detailText.length > MAX_ASSESSMENT_DETAIL) {
     return {
@@ -88,6 +66,36 @@ export function validateAssessment(
     return { ok: true, verdict, summary, detail, cause: null, part: null };
   }
 
+  const shortfall = validateShortfall(args);
+  if (!shortfall.ok) return shortfall;
+  return { ok: true, verdict: verdict as AssessmentVerdict, summary, detail, ...shortfall.value };
+}
+
+function summaryError(summary: string): string | null {
+  if (!summary) {
+    return (
+      'summary is required. One line saying whether the goal is reached and what decided it; the evidence ' +
+      'goes in `detail`. An operator decides what happens to the ticket from these two alone.'
+    );
+  }
+  if (/[\r\n]/.test(summary)) {
+    return (
+      'summary is one line — what you found, in a sentence. Everything with a line break in it is evidence: ' +
+      'put it in `detail`, which takes markdown and is rendered as the body of the card an operator reads.'
+    );
+  }
+  if (summary.length > MAX_ASSESSMENT_SUMMARY) {
+    return (
+      `summary is too long (${summary.length} chars, max ${MAX_ASSESSMENT_SUMMARY}) — it is the headline, ` +
+      `not the account. Keep the claim and move the rest to \`detail\`.`
+    );
+  }
+  return null;
+}
+
+function validateShortfall(
+  args: Record<string, unknown>,
+): { ok: true; value: Pick<ValidAssessment, 'cause' | 'part'> } | { ok: false; error: string } {
   const cause = args.cause;
   if (cause !== undefined && (typeof cause !== 'string' || !SHORTFALL_CAUSES.includes(cause as ShortfallCause))) {
     return {
@@ -114,14 +122,7 @@ export function validateAssessment(
         'plan declares it). If you cannot say which, the decomposition itself is what is wrong — say cause "plan".',
     };
   }
-  return {
-    ok: true,
-    verdict: verdict as AssessmentVerdict,
-    summary,
-    detail,
-    cause: (cause as ShortfallCause | undefined) ?? null,
-    part: part || null,
-  };
+  return { ok: true, value: { cause: (cause as ShortfallCause | undefined) ?? null, part: part || null } };
 }
 
 export function assessmentOrigin(

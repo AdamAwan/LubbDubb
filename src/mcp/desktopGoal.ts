@@ -6,8 +6,8 @@ import { settlePlacement } from '../intake/placementSettle.js';
 import { MAX_INSTRUCTION, withdrawGoalInstruction, writeGoalInstruction } from '../goalInstructions.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { desktopIssueRef } from '../validation/desktop.js';
-import type { DesktopToolFactory } from './desktopContext.js';
-import { toolError, toolJson } from './protocol.js';
+import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
+import { toolError, toolJson, type ToolCallResult } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -69,59 +69,12 @@ export const goalGate: DesktopToolFactory = (deps) => ({
 
     const out: Record<string, unknown> = { issue: ref.issue };
 
-    if (wantsAppraisal) {
-      const verdict = args.appraisal;
-      if (verdict !== 'workable' && verdict !== 'unclear' && verdict !== 'clear')
-        return toolError('appraisal must be "workable", "unclear" or "clear".');
-      if (verdict === 'clear') {
-        deps.store.verdicts.clearAppraisal(originRef);
-        out.appraisal = null;
-      } else {
-        const issue = deps.store.world.getWorldBaseline()?.issues.find((i) => i.number === ref.issue);
-        if (!issue)
-          return toolError(
-            `Issue #${ref.issue} is not in the last world snapshot, so there is no goal text to fingerprint a ` +
-              'verdict against. Nothing was changed.',
-          );
-        const summary = typeof args.summary === 'string' && args.summary.trim() ? args.summary.trim() : null;
-        const appraisal = deps.store.verdicts.recordAppraisal({
-          originRef,
-          verdict,
-          summary: summary ?? 'Set by the operator from the desktop channel.',
-          goalRef: goalFingerprint(issue.title, issue.body),
-          by: 'operator',
-        });
-        out.appraisal = { verdict: appraisal.verdict, summary: appraisal.summary };
-      }
-    }
-
-    if (wantsOverrule) {
-      if (typeof args.overrule !== 'string' || !args.overrule.trim())
-        return toolError('overrule must say why the assessment is wrong — that text is the whole of the record.');
-      const text = args.overrule.trim();
-      if (text.length > MAX_INSTRUCTION) return toolError(`overrule is too long (max ${MAX_INSTRUCTION} characters).`);
-      const outcome = overruleShortfall(deps.store, originRef, text);
-      if (!outcome.ok)
-        return toolError(
-          `${outcome.error} — nothing on #${ref.issue} says the goal was not reached, so there is no assessment ` +
-            'to overrule. If you mean the plain thing, that is a delivery in the cockpit.',
-        );
-      out.overruled = { delivered: true, instruction: outcome.instruction.id };
-    }
-
-    if (wantsGate) {
-      if (typeof args.environmentGate !== 'boolean') return toolError('environmentGate must be true or false.');
-      if (args.environmentGate) {
-        const note = typeof args.note === 'string' ? args.note.trim() : '';
-        if (!note)
-          return toolError('A release needs a `note` — it is the only account of why this goal stopped waiting.');
-        deps.store.environments.releaseEnvironmentGate(originRef, note);
-        out.environmentGate = { released: true, note };
-      } else {
-        deps.store.environments.clearEnvironmentGateRelease(originRef);
-        out.environmentGate = { released: false };
-      }
-    }
+    const hold: GoalHold = { deps, args, issue: ref.issue, originRef, out };
+    const refused =
+      (wantsAppraisal ? setAppraisal(hold) : null) ??
+      (wantsOverrule ? overrule(hold) : null) ??
+      (wantsGate ? setEnvironmentGate(hold) : null);
+    if (refused !== null) return refused;
 
     await deps.runCycle();
     return toolJson({
@@ -133,6 +86,107 @@ export const goalGate: DesktopToolFactory = (deps) => ({
     });
   },
 });
+
+interface GoalHold {
+  deps: DesktopToolDeps;
+  args: Record<string, unknown>;
+  issue: number;
+  originRef: string;
+  out: Record<string, unknown>;
+}
+
+function setAppraisal({ deps, args, issue, originRef, out }: GoalHold): ToolCallResult | null {
+  const verdict = args.appraisal;
+  if (verdict !== 'workable' && verdict !== 'unclear' && verdict !== 'clear')
+    return toolError('appraisal must be "workable", "unclear" or "clear".');
+  if (verdict === 'clear') {
+    deps.store.verdicts.clearAppraisal(originRef);
+    out.appraisal = null;
+    return null;
+  }
+  const found = deps.store.world.getWorldBaseline()?.issues.find((i) => i.number === issue);
+  if (!found)
+    return toolError(
+      `Issue #${issue} is not in the last world snapshot, so there is no goal text to fingerprint a ` +
+        'verdict against. Nothing was changed.',
+    );
+  const summary = typeof args.summary === 'string' && args.summary.trim() ? args.summary.trim() : null;
+  const appraisal = deps.store.verdicts.recordAppraisal({
+    originRef,
+    verdict,
+    summary: summary ?? 'Set by the operator from the desktop channel.',
+    goalRef: goalFingerprint(found.title, found.body),
+    by: 'operator',
+  });
+  out.appraisal = { verdict: appraisal.verdict, summary: appraisal.summary };
+  return null;
+}
+
+function overrule({ deps, args, issue, originRef, out }: GoalHold): ToolCallResult | null {
+  if (typeof args.overrule !== 'string' || !args.overrule.trim())
+    return toolError('overrule must say why the assessment is wrong — that text is the whole of the record.');
+  const text = args.overrule.trim();
+  if (text.length > MAX_INSTRUCTION) return toolError(`overrule is too long (max ${MAX_INSTRUCTION} characters).`);
+  const outcome = overruleShortfall(deps.store, originRef, text);
+  if (!outcome.ok)
+    return toolError(
+      `${outcome.error} — nothing on #${issue} says the goal was not reached, so there is no assessment ` +
+        'to overrule. If you mean the plain thing, that is a delivery in the cockpit.',
+    );
+  out.overruled = { delivered: true, instruction: outcome.instruction.id };
+  return null;
+}
+
+function setEnvironmentGate({ deps, args, originRef, out }: GoalHold): ToolCallResult | null {
+  if (typeof args.environmentGate !== 'boolean') return toolError('environmentGate must be true or false.');
+  if (args.environmentGate) {
+    const note = typeof args.note === 'string' ? args.note.trim() : '';
+    if (!note) return toolError('A release needs a `note` — it is the only account of why this goal stopped waiting.');
+    deps.store.environments.releaseEnvironmentGate(originRef, note);
+    out.environmentGate = { released: true, note };
+  } else {
+    deps.store.environments.clearEnvironmentGateRelease(originRef);
+    out.environmentGate = { released: false };
+  }
+  return null;
+}
+
+async function placeParent(
+  deps: DesktopToolDeps,
+  parent: unknown,
+  issue: number,
+  out: Record<string, unknown>,
+): Promise<ToolCallResult | null> {
+  if (parent !== null && (typeof parent !== 'number' || !Number.isInteger(parent) || parent <= 0))
+    return toolError('parent must be a positive whole issue number, or null for "no container".');
+  const ctx = { store: deps.store, connector: deps.connector, errors: deps.errors };
+  const outcome = await settlePlacement(ctx, issue, 'parent', async () => {
+    if (parent === null) return;
+    await deps.connector.setWorkItemParent({ number: issue, parentNumber: parent });
+  });
+  if (!outcome.ok) return toolError(outcome.error);
+  out.parent = { set: parent, settled: outcome.settled };
+  return null;
+}
+
+async function placeAreaPath(
+  deps: DesktopToolDeps,
+  areaPath: unknown,
+  issue: number,
+  out: Record<string, unknown>,
+): Promise<ToolCallResult | null> {
+  if (areaPath !== null && typeof areaPath !== 'string')
+    return toolError('areaPath must be a string, or null to leave the item where it is.');
+  const wanted = typeof areaPath === 'string' && areaPath.trim() ? areaPath.trim() : null;
+  const ctx = { store: deps.store, connector: deps.connector, errors: deps.errors };
+  const outcome = await settlePlacement(ctx, issue, 'areaPath', async () => {
+    if (wanted === null) return;
+    await deps.connector.setWorkItemAreaPath({ number: issue, areaPath: wanted });
+  });
+  if (!outcome.ok) return toolError(outcome.error);
+  out.areaPath = { set: wanted, settled: outcome.settled };
+  return null;
+}
 
 export const goalPlacement: DesktopToolFactory = (deps) => ({
   description:
@@ -169,32 +223,16 @@ export const goalPlacement: DesktopToolFactory = (deps) => ({
     if (!wantsParent && !wantsArea)
       return toolError('Nothing to do — give `parent` or `areaPath`. To read the goal, call goal_read.');
 
-    const ctx = { store: deps.store, connector: deps.connector, errors: deps.errors };
     const out: Record<string, unknown> = { issue: ref.issue };
 
     if (wantsParent) {
-      const parent = args.parent;
-      if (parent !== null && (typeof parent !== 'number' || !Number.isInteger(parent) || parent <= 0))
-        return toolError('parent must be a positive whole issue number, or null for "no container".');
-      const outcome = await settlePlacement(ctx, ref.issue, 'parent', async () => {
-        if (parent === null) return;
-        await deps.connector.setWorkItemParent({ number: ref.issue, parentNumber: parent });
-      });
-      if (!outcome.ok) return toolError(outcome.error);
-      out.parent = { set: parent, settled: outcome.settled };
+      const refused = await placeParent(deps, args.parent, ref.issue, out);
+      if (refused !== null) return refused;
     }
 
     if (wantsArea) {
-      const areaPath = args.areaPath;
-      if (areaPath !== null && typeof areaPath !== 'string')
-        return toolError('areaPath must be a string, or null to leave the item where it is.');
-      const wanted = typeof areaPath === 'string' && areaPath.trim() ? areaPath.trim() : null;
-      const outcome = await settlePlacement(ctx, ref.issue, 'areaPath', async () => {
-        if (wanted === null) return;
-        await deps.connector.setWorkItemAreaPath({ number: ref.issue, areaPath: wanted });
-      });
-      if (!outcome.ok) return toolError(outcome.error);
-      out.areaPath = { set: wanted, settled: outcome.settled };
+      const refused = await placeAreaPath(deps, args.areaPath, ref.issue, out);
+      if (refused !== null) return refused;
     }
 
     await deps.runCycle();

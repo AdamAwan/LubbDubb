@@ -176,11 +176,10 @@ export function buildReliabilityInsights(input: ReliabilityInput): ReliabilityIn
   };
 }
 
-function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan): RunHealth {
-  const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
-  const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
+type PhaseRow = RunPhaseHealth & { durations: number[] };
 
-  const health: RunHealth = {
+function emptyRunHealth(agents: readonly Agent[], span: TimelineSpan): RunHealth {
+  return {
     ...tallyRunOutcomes(agents),
     costUsd: 0,
     lostCostUsd: 0,
@@ -199,9 +198,16 @@ function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan)
       })),
     },
   };
+}
+
+function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan): RunHealth {
+  const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
+  const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
+
+  const health = emptyRunHealth(agents, span);
 
   const outcomes = new Map<RunOutcome, RunOutcomeTotal>();
-  const phases = new Map<SpendPhase, RunPhaseHealth & { durations: number[] }>();
+  const phases = new Map<SpendPhase, PhaseRow>();
   const repeats = new Map<string, RunRepeat>();
 
   for (const agent of agents) {
@@ -221,49 +227,8 @@ function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan)
     total.costUsd = roundUsd(total.costUsd + cost);
     outcomes.set(outcome, total);
 
-    const row = phases.get(phase) ?? {
-      phase,
-      label: phaseLabel(phase),
-      settled: 0,
-      completed: 0,
-      lost: 0,
-      stopped: 0,
-      completionRate: null,
-      lostCostUsd: 0,
-      medianMs: null,
-      durations: [],
-    };
-    row.settled += 1;
-    if (outcome === 'done') row.completed += 1;
-    else if (lost) {
-      row.lost += 1;
-      row.lostCostUsd = roundUsd(row.lostCostUsd + cost);
-    } else row.stopped += 1;
-    if (agent.endedAt !== null) {
-      const ms = Date.parse(agent.endedAt) - Date.parse(agent.startedAt);
-      if (Number.isFinite(ms) && ms >= 0) row.durations.push(ms);
-    }
-    phases.set(phase, row);
-
-    if (originRef !== null) {
-      const seen = repeats.get(originRef) ?? {
-        originRef,
-        title: null,
-        runs: 0,
-        lost: 0,
-        costUsd: 0,
-        lastAt: '',
-      };
-      seen.runs += 1;
-      if (lost) seen.lost += 1;
-      seen.costUsd = roundUsd(seen.costUsd + cost);
-      const at = agent.endedAt ?? agent.startedAt;
-      if (at >= seen.lastAt) {
-        seen.lastAt = at;
-        seen.title = titleOfTask.get(agent.taskId) ?? null;
-      }
-      repeats.set(originRef, seen);
-    }
+    addToPhase(phases, phase, agent, outcome, lost, cost);
+    if (originRef !== null) addToRepeat(repeats, originRef, agent, lost, cost, titleOfTask.get(agent.taskId) ?? null);
 
     const index = bucketIndexIn(span, runInstant(agent));
     const bucket = index === null ? undefined : health.timeline.buckets[index];
@@ -287,18 +252,89 @@ function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan)
   return health;
 }
 
-function buildCiHealth({ agents, tasks, ciEvents, now }: ReliabilityInput, span: TimelineSpan): CiHealth {
-  const buckets: CiBucket[] = Array.from({ length: span.buckets }, (_, i) => ({
-    startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
-    red: 0,
-    green: 0,
-  }));
+function addToPhase(
+  phases: Map<SpendPhase, PhaseRow>,
+  phase: SpendPhase,
+  agent: Agent,
+  outcome: RunOutcome,
+  lost: boolean,
+  cost: number,
+): void {
+  const row = phases.get(phase) ?? {
+    phase,
+    label: phaseLabel(phase),
+    settled: 0,
+    completed: 0,
+    lost: 0,
+    stopped: 0,
+    completionRate: null,
+    lostCostUsd: 0,
+    medianMs: null,
+    durations: [],
+  };
+  row.settled += 1;
+  if (outcome === 'done') row.completed += 1;
+  else if (lost) {
+    row.lost += 1;
+    row.lostCostUsd = roundUsd(row.lostCostUsd + cost);
+  } else row.stopped += 1;
+  if (agent.endedAt !== null) {
+    const ms = Date.parse(agent.endedAt) - Date.parse(agent.startedAt);
+    if (Number.isFinite(ms) && ms >= 0) row.durations.push(ms);
+  }
+  phases.set(phase, row);
+}
 
-  const subjects = new Map<string, CiSubject>();
-  const redSince = new Map<string, number>();
-  const recoveries: number[] = [];
-  let reds = 0;
-  let greens = 0;
+function addToRepeat(
+  repeats: Map<string, RunRepeat>,
+  originRef: string,
+  agent: Agent,
+  lost: boolean,
+  cost: number,
+  title: string | null,
+): void {
+  const seen = repeats.get(originRef) ?? {
+    originRef,
+    title: null,
+    runs: 0,
+    lost: 0,
+    costUsd: 0,
+    lastAt: '',
+  };
+  seen.runs += 1;
+  if (lost) seen.lost += 1;
+  seen.costUsd = roundUsd(seen.costUsd + cost);
+  const at = agent.endedAt ?? agent.startedAt;
+  if (at >= seen.lastAt) {
+    seen.lastAt = at;
+    seen.title = title;
+  }
+  repeats.set(originRef, seen);
+}
+
+interface CiWalk {
+  buckets: CiBucket[];
+  subjects: Map<string, CiSubject>;
+  redSince: Map<string, number>;
+  recoveries: number[];
+  reds: number;
+  greens: number;
+}
+
+function walkCiEvents(ciEvents: readonly WorldEvent[], span: TimelineSpan): CiWalk {
+  const walk: CiWalk = {
+    buckets: Array.from({ length: span.buckets }, (_, i) => ({
+      startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
+      red: 0,
+      green: 0,
+    })),
+    subjects: new Map(),
+    redSince: new Map(),
+    recoveries: [],
+    reds: 0,
+    greens: 0,
+  };
+  const { buckets, subjects, redSince, recoveries } = walk;
 
   for (const event of ciEvents) {
     const status = ciStatusOf(event);
@@ -317,13 +353,13 @@ function buildCiHealth({ agents, tasks, ciEvents, now }: ReliabilityInput, span:
     };
 
     if (status === 'failing') {
-      reds += 1;
+      walk.reds += 1;
       subject.reds += 1;
       const bucket = buckets[bucketIndexIn(span, at) ?? -1];
       if (bucket) bucket.red += 1;
       if (!redSince.has(event.ref)) redSince.set(event.ref, at);
     } else {
-      greens += 1;
+      walk.greens += 1;
       subject.greens += 1;
       const bucket = buckets[bucketIndexIn(span, at) ?? -1];
       if (bucket) bucket.green += 1;
@@ -337,13 +373,23 @@ function buildCiHealth({ agents, tasks, ciEvents, now }: ReliabilityInput, span:
     subjects.set(event.ref, subject);
   }
 
+  return walk;
+}
+
+function markStillRed({ subjects, redSince }: CiWalk, now: number): void {
   for (const [ref, since] of redSince) {
     const subject = subjects.get(ref);
     if (!subject) continue;
     subject.stillRed = true;
     subject.redMs += now - since;
   }
+}
 
+function attributeCiCost(
+  agents: readonly Agent[],
+  tasks: readonly TaskSummary[],
+  subjects: Map<string, CiSubject>,
+): { ciCostUsd: number; landingCostUsd: number } {
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   let ciCostUsd = 0;
   let landingCostUsd = 0;
@@ -362,6 +408,14 @@ function buildCiHealth({ agents, tasks, ciEvents, now }: ReliabilityInput, span:
     const subject = ref === null ? undefined : subjects.get(ref);
     if (subject) subject.costUsd = roundUsd(subject.costUsd + cost);
   }
+  return { ciCostUsd, landingCostUsd };
+}
+
+function buildCiHealth({ agents, tasks, ciEvents, now }: ReliabilityInput, span: TimelineSpan): CiHealth {
+  const walk = walkCiEvents(ciEvents, span);
+  markStillRed(walk, now);
+  const { buckets, subjects, redSince, recoveries, reds, greens } = walk;
+  const { ciCostUsd, landingCostUsd } = attributeCiCost(agents, tasks, subjects);
 
   const ranked = [...subjects.values()].sort((a, b) => b.reds - a.reds || b.redMs - a.redMs);
   return {

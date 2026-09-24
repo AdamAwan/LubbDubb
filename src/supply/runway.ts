@@ -83,37 +83,45 @@ const INFLIGHT = new Set(['active', 'has_pr', 'planning']);
 const QUEUED = new Set(['eligible', 'blocked', 'cooldown']);
 const HELD = new Set(['escalated', 'delivered', 'retained', 'sitting']);
 
-export function readRunway(input: RunwayInput): RunwayReading {
-  let inflight = 0;
-  let queued = 0;
-  let reservoir = 0;
-  let reservoirContainers = 0;
-  let held = 0;
-  let escalated = 0;
+interface StatusCounts {
+  inflight: number;
+  queued: number;
+  reservoir: number;
+  reservoirContainers: number;
+  held: number;
+  escalated: number;
+}
 
-  const appraisals = input.pickup.appraisals ?? [];
-  const plans = input.pickup.plans ?? [];
-  const planParts = input.pickup.planParts ?? [];
-
+function countStatuses(input: RunwayInput, appraisals: NonNullable<IssuePickupContext['appraisals']>): StatusCounts {
+  const c: StatusCounts = { inflight: 0, queued: 0, reservoir: 0, reservoirContainers: 0, held: 0, escalated: 0 };
   for (const issue of input.issues) {
     const { status } = issuePickupStatus(issue, input.pickup);
-    if (INFLIGHT.has(status)) inflight += 1;
-    else if (QUEUED.has(status)) queued += 1;
+    if (INFLIGHT.has(status)) c.inflight += 1;
+    else if (QUEUED.has(status)) c.queued += 1;
     else if (status === 'appraisal') {
       const hold = appraisalHold(
         appraisals.find((a) => a.originRef === issueOriginRef('root', issue.number)) ?? null,
         issue,
       );
-      if (hold === null) queued += 1;
-      else held += 1;
+      if (hold === null) c.queued += 1;
+      else c.held += 1;
     } else if (HELD.has(status)) {
-      held += 1;
-      if (status === 'escalated') escalated += 1;
-    } else if (status === 'unwatched') reservoir += 1;
+      c.held += 1;
+      if (status === 'escalated') c.escalated += 1;
+    } else if (status === 'unwatched') c.reservoir += 1;
     else if (status === 'container' && issueWatchGateReason(issue, input.pickup.policy) !== null) {
-      reservoirContainers += 1;
+      c.reservoirContainers += 1;
     }
   }
+  return c;
+}
+
+export function readRunway(input: RunwayInput): RunwayReading {
+  const appraisals = input.pickup.appraisals ?? [];
+  const plans = input.pickup.plans ?? [];
+  const planParts = input.pickup.planParts ?? [];
+
+  const { inflight, queued, reservoir, reservoirContainers, held, escalated } = countStatuses(input, appraisals);
 
   const {
     lead: medianLeadMinutes,
@@ -231,35 +239,39 @@ function benchRowHolds(t: HumanTask): boolean {
   return t.kind === 'ask' && t.partId !== null;
 }
 
+function addHold(held: Map<string, Hold[]>, ref: string | null, from: string, to: string | null): void {
+  const goal = goalOf(ref);
+  const start = Date.parse(from);
+  if (goal === null || !Number.isFinite(start)) return;
+  const end = to === null ? NaN : Date.parse(to);
+  const list = held.get(goal) ?? [];
+  list.push({ from: start, to: Number.isFinite(end) ? end : null });
+  held.set(goal, list);
+}
+
 function humanHolds(input: RunwayInput): Map<string, Hold[]> {
   const held = new Map<string, Hold[]>();
-  const add = (ref: string | null, from: string, to: string | null): void => {
-    const goal = goalOf(ref);
-    const start = Date.parse(from);
-    if (goal === null || !Number.isFinite(start)) return;
-    const end = to === null ? NaN : Date.parse(to);
-    const list = held.get(goal) ?? [];
-    list.push({ from: start, to: Number.isFinite(end) ? end : null });
-    held.set(goal, list);
-  };
-
-  for (const t of input.humanTasks) if (benchRowHolds(t)) add(t.originRef, t.createdAt, t.resolvedAt);
+  for (const t of input.humanTasks) if (benchRowHolds(t)) addHold(held, t.originRef, t.createdAt, t.resolvedAt);
   const issuesByRef = new Map(input.issues.map((i) => [issueOriginRef('root', i.number), i]));
   for (const a of input.pickup.appraisals ?? []) {
     if (a.profileAnsweredAt === null) continue;
     const issue = issuesByRef.get(a.originRef);
     if (!issue) continue;
     if (appraisalHold({ ...a, profileAnsweredAt: null }, issue) === null) continue;
-    add(a.originRef, a.decidedAt, a.profileAnsweredAt);
+    addHold(held, a.originRef, a.decidedAt, a.profileAnsweredAt);
   }
-  for (const d of input.pickup.deliveries ?? []) add(d.originRef, d.decidedAt, null);
+  for (const d of input.pickup.deliveries ?? []) addHold(held, d.originRef, d.decidedAt, null);
   const byPr = prGoals(input.runs);
   for (const e of input.escalations) {
     if (e.answeredAt === null && !e.open) continue;
-    const ref = goalOf(e.originRef) ?? (e.prNumber === null ? null : (byPr.get(e.prNumber) ?? null));
-    if (ref !== null) add(ref, e.createdAt, e.answeredAt);
+    const ref = escalationGoal(e, byPr);
+    if (ref !== null) addHold(held, ref, e.createdAt, e.answeredAt);
   }
   return held;
+}
+
+function escalationGoal(e: EscalationSpan, byPr: ReadonlyMap<number, string>): string | null {
+  return goalOf(e.originRef) ?? (e.prNumber === null ? null : (byPr.get(e.prNumber) ?? null));
 }
 
 function prGoals(runs: readonly IssueRun[]): Map<number, string> {
@@ -300,74 +312,77 @@ function reservoirClause(reading: Omit<RunwayReading, 'headline' | 'detail'>): s
     : `${base}, under ${reading.reservoirContainers} unwatched container${reading.reservoirContainers === 1 ? '' : 's'} whose watch would cascade`;
 }
 
-function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): { headline: string; detail: string } {
+type Reading = Omit<RunwayReading, 'headline' | 'detail'>;
+
+type Said = { headline: string; detail: string };
+
+function sentences(parts: readonly (string | null)[]): string {
+  return parts.filter((s): s is string => s !== null).join(' ');
+}
+
+function say(reading: Reading, cap: number): Said {
   const latent = latentClause(reading.latent);
-  const reservoir = reservoirClause(reading);
-  const debt =
-    reading.debt === 0 ? null : `${reading.debt} other row${reading.debt === 1 ? '' : 's'} on the bench are open.`;
+  const reservoirText = reservoirClause(reading);
+  const reservoir = reservoirText === null ? null : `${capitalise(reservoirText)}.`;
 
-  if (reading.state === 'starved') {
-    const headline = latent ? 'The fleet is waiting on you, not on work' : 'Slots are idle with nothing to take';
-    return {
-      headline,
-      detail: [
-        `Nothing is eligible for pickup and ${reading.idleSlots} of ${cap} slot${cap === 1 ? '' : 's'} ` +
-          `${reading.idleSlots === 1 ? 'is' : 'are'} empty.`,
-        latent,
-        reservoir === null ? null : `${capitalise(reservoir)}.`,
-        debt,
-      ]
-        .filter((s): s is string => s !== null)
-        .join(' '),
-    };
-  }
-
+  if (reading.state === 'starved') return sayStarved(reading, cap, latent, reservoir);
   if (reading.state === 'dry') {
     return {
       headline: latent ? 'The fleet is waiting on you, not on work' : 'Nothing is queued behind the fleet',
-      detail: [
+      detail: sentences([
         `${reading.inflight} goal${reading.inflight === 1 ? ' is' : 's are'} in flight and nothing is waiting behind ` +
           `them — the next one to finish leaves a slot with nothing to take it.`,
         latent,
-        reservoir === null ? null : `${capitalise(reservoir)}.`,
-      ]
-        .filter((s): s is string => s !== null)
-        .join(' '),
+        reservoir,
+      ]),
     };
   }
-
   if (reading.state === 'thin' && reading.runwayMinutes !== null) {
     return {
       headline: 'The queue is thinning',
-      detail: [
+      detail: sentences([
         `${reading.inflight} in flight, ${reading.queued} waiting. At ${cap} slot${cap === 1 ? '' : 's'} and a ` +
           `${humanMinutes(reading.medianLeadMinutes ?? 0)} median goal of fleet time, that is ` +
           `${humanMinutes(reading.runwayMinutes)} before the fleet runs out.`,
         heldClause(reading),
-        reservoir === null ? null : `${capitalise(reservoir)}.`,
+        reservoir,
         latent,
-      ]
-        .filter((s): s is string => s !== null)
-        .join(' '),
+      ]),
     };
   }
-
-  if (reading.state === 'unknown') {
-    return {
-      headline: 'Not enough history for a runway yet',
-      detail:
-        (reading.unmeasuredRuns > 0
-          ? `${reading.completedRuns} of ${reading.completedRuns + reading.unmeasuredRuns} completed goals left ` +
-            `fleet time to measure; a median lead time is taken over more. `
-          : `${reading.completedRuns} goal${reading.completedRuns === 1 ? ' has' : 's have'} completed; a median ` +
-            `lead time is taken over more. `) + `${reading.inflight} in flight, ${reading.queued} waiting.`,
-    };
-  }
+  if (reading.state === 'unknown') return sayUnknown(reading);
   return {
     headline: 'Healthy',
     detail:
       `${reading.inflight} in flight, ${reading.queued} waiting.` +
       (reading.runwayMinutes === null ? '' : ` About ${humanMinutes(reading.runwayMinutes)} of work queued.`),
+  };
+}
+
+function sayStarved(reading: Reading, cap: number, latent: string | null, reservoir: string | null): Said {
+  const debt =
+    reading.debt === 0 ? null : `${reading.debt} other row${reading.debt === 1 ? '' : 's'} on the bench are open.`;
+  return {
+    headline: latent ? 'The fleet is waiting on you, not on work' : 'Slots are idle with nothing to take',
+    detail: sentences([
+      `Nothing is eligible for pickup and ${reading.idleSlots} of ${cap} slot${cap === 1 ? '' : 's'} ` +
+        `${reading.idleSlots === 1 ? 'is' : 'are'} empty.`,
+      latent,
+      reservoir,
+      debt,
+    ]),
+  };
+}
+
+function sayUnknown(reading: Reading): Said {
+  return {
+    headline: 'Not enough history for a runway yet',
+    detail:
+      (reading.unmeasuredRuns > 0
+        ? `${reading.completedRuns} of ${reading.completedRuns + reading.unmeasuredRuns} completed goals left ` +
+          `fleet time to measure; a median lead time is taken over more. `
+        : `${reading.completedRuns} goal${reading.completedRuns === 1 ? ' has' : 's have'} completed; a median ` +
+          `lead time is taken over more. `) + `${reading.inflight} in flight, ${reading.queued} waiting.`,
   };
 }
 

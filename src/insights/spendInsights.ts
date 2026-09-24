@@ -187,6 +187,22 @@ interface SpendGoalRollup {
   localRunAttribution: Map<string, number | null>;
 }
 
+function addGoalPhaseCost(
+  goalPhases: Map<number, Record<SpendPhase, number>>,
+  issueNumber: number,
+  phase: SpendPhase,
+  cost: number,
+): void {
+  const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
+  byPhase[phase] = roundUsd(byPhase[phase] + cost);
+  goalPhases.set(issueNumber, byPhase);
+}
+
+function stampGoalLastAt(goalLastAt: Map<number, string>, issueNumber: number, at: string): void {
+  const seen = goalLastAt.get(issueNumber);
+  if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
+}
+
 export function buildSpendGoals(input: {
   agents: readonly Agent[];
   localRuns: readonly LocalRun[];
@@ -210,22 +226,14 @@ export function buildSpendGoals(input: {
     const issueNumber = rollup.attribution.get(agent.id) ?? null;
     if (issueNumber === null) continue;
     const phase = phaseOf(originOfTask.get(agent.taskId) ?? null);
-    const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
-    byPhase[phase] = roundUsd(byPhase[phase] + (agent.costUsd ?? 0));
-    goalPhases.set(issueNumber, byPhase);
-    const at = ranAt(agent);
-    const seen = goalLastAt.get(issueNumber);
-    if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
+    addGoalPhaseCost(goalPhases, issueNumber, phase, agent.costUsd ?? 0);
+    stampGoalLastAt(goalLastAt, issueNumber, ranAt(agent));
   }
   for (const run of input.localRuns) {
     const issueNumber = rollup.localRunAttribution.get(run.id) ?? null;
     if (issueNumber === null) continue;
-    const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
-    byPhase.local = roundUsd(byPhase.local + (run.costUsd ?? 0));
-    goalPhases.set(issueNumber, byPhase);
-    const at = run.endedAt ?? run.startedAt;
-    const seen = goalLastAt.get(issueNumber);
-    if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
+    addGoalPhaseCost(goalPhases, issueNumber, 'local', run.costUsd ?? 0);
+    stampGoalLastAt(goalLastAt, issueNumber, run.endedAt ?? run.startedAt);
   }
 
   return {
@@ -250,25 +258,9 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
   const rollup = buildSpendGoals({ agents, localRuns, tasks, nodes, issues, runs: input.runs });
-  const span = timelineSpan(
-    window,
-    costDeltas.reduce<number | null>((oldest, delta) => {
-      const at = Date.parse(delta.at);
-      return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
-    }, null),
-  );
+  const span = timelineSpan(window, earliestDelta(costDeltas));
 
-  const totals: SpendTotals = {
-    costUsd: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-    cacheMeasuredInputTokens: 0,
-    turns: 0,
-    measuredRuns: 0,
-    unmeasuredRuns: 0,
-  };
+  const totals = emptyTotals();
   const phaseTotals = new Map<SpendPhase, SpendPhaseTotal>();
   const runs: SpendRun[] = [];
   let lostCostUsd = 0;
@@ -278,38 +270,12 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
       totals.unmeasuredRuns += 1;
       continue;
     }
-    const cost = agent.costUsd ?? 0;
-    const inputTokens = agent.inputTokens ?? 0;
-    const outputTokens = agent.outputTokens ?? 0;
+    const { cost, inputTokens, outputTokens } = addToTotals(totals, agent);
     const originRef = originOfTask.get(agent.taskId) ?? null;
     const phase = phaseOf(originRef);
     const issueNumber = rollup.attribution.get(agent.id) ?? null;
-
-    totals.costUsd = roundUsd(totals.costUsd + cost);
-    totals.inputTokens += inputTokens;
-    totals.outputTokens += outputTokens;
-    if (agent.cacheReadTokens !== null && agent.cacheCreationTokens !== null) {
-      totals.cacheReadTokens += agent.cacheReadTokens;
-      totals.cacheCreationTokens += agent.cacheCreationTokens;
-      totals.cacheMeasuredInputTokens += inputTokens;
-    }
-    totals.turns += agent.numTurns ?? 0;
-    totals.measuredRuns += 1;
     if (agent.status === 'failed' || agent.status === 'crashed') lostCostUsd = roundUsd(lostCostUsd + cost);
-
-    const phaseTotal = phaseTotals.get(phase) ?? {
-      phase,
-      ...PHASE_COPY[phase],
-      costUsd: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      runs: 0,
-    };
-    phaseTotal.costUsd = roundUsd(phaseTotal.costUsd + cost);
-    phaseTotal.inputTokens += inputTokens;
-    phaseTotal.outputTokens += outputTokens;
-    phaseTotal.runs += 1;
-    phaseTotals.set(phase, phaseTotal);
+    addToPhaseTotal(phaseTotals, phase, cost, inputTokens, outputTokens);
 
     runs.push({
       id: agent.id,
@@ -332,33 +298,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
       totals.unmeasuredRuns += 1;
       continue;
     }
-    const cost = run.costUsd ?? 0;
-    const inputTokens = run.inputTokens ?? 0;
-    const outputTokens = run.outputTokens ?? 0;
-    totals.costUsd = roundUsd(totals.costUsd + cost);
-    totals.inputTokens += inputTokens;
-    totals.outputTokens += outputTokens;
-    if (run.cacheReadTokens !== null && run.cacheCreationTokens !== null) {
-      totals.cacheReadTokens += run.cacheReadTokens;
-      totals.cacheCreationTokens += run.cacheCreationTokens;
-      totals.cacheMeasuredInputTokens += inputTokens;
-    }
-    totals.turns += run.numTurns ?? 0;
-    totals.measuredRuns += 1;
-
-    const phaseTotal = phaseTotals.get('local') ?? {
-      phase: 'local' as const,
-      ...PHASE_COPY.local,
-      costUsd: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      runs: 0,
-    };
-    phaseTotal.costUsd = roundUsd(phaseTotal.costUsd + cost);
-    phaseTotal.inputTokens += inputTokens;
-    phaseTotal.outputTokens += outputTokens;
-    phaseTotal.runs += 1;
-    phaseTotals.set('local', phaseTotal);
+    const { cost, inputTokens, outputTokens } = addToTotals(totals, run);
+    addToPhaseTotal(phaseTotals, 'local', cost, inputTokens, outputTokens);
 
     runs.push({
       id: run.id,
@@ -391,6 +332,74 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     rankedFrom: runs.length,
     timeline: bucketise(costDeltas, span),
   };
+}
+
+type MeasuredRun = Pick<
+  Agent,
+  'costUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheCreationTokens' | 'numTurns'
+>;
+
+function emptyTotals(): SpendTotals {
+  return {
+    costUsd: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    cacheMeasuredInputTokens: 0,
+    turns: 0,
+    measuredRuns: 0,
+    unmeasuredRuns: 0,
+  };
+}
+
+function addToTotals(
+  totals: SpendTotals,
+  run: MeasuredRun,
+): { cost: number; inputTokens: number; outputTokens: number } {
+  const cost = run.costUsd ?? 0;
+  const inputTokens = run.inputTokens ?? 0;
+  const outputTokens = run.outputTokens ?? 0;
+  totals.costUsd = roundUsd(totals.costUsd + cost);
+  totals.inputTokens += inputTokens;
+  totals.outputTokens += outputTokens;
+  if (run.cacheReadTokens !== null && run.cacheCreationTokens !== null) {
+    totals.cacheReadTokens += run.cacheReadTokens;
+    totals.cacheCreationTokens += run.cacheCreationTokens;
+    totals.cacheMeasuredInputTokens += inputTokens;
+  }
+  totals.turns += run.numTurns ?? 0;
+  totals.measuredRuns += 1;
+  return { cost, inputTokens, outputTokens };
+}
+
+function addToPhaseTotal(
+  phaseTotals: Map<SpendPhase, SpendPhaseTotal>,
+  phase: SpendPhase,
+  cost: number,
+  inputTokens: number,
+  outputTokens: number,
+): void {
+  const phaseTotal = phaseTotals.get(phase) ?? {
+    phase,
+    ...PHASE_COPY[phase],
+    costUsd: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    runs: 0,
+  };
+  phaseTotal.costUsd = roundUsd(phaseTotal.costUsd + cost);
+  phaseTotal.inputTokens += inputTokens;
+  phaseTotal.outputTokens += outputTokens;
+  phaseTotal.runs += 1;
+  phaseTotals.set(phase, phaseTotal);
+}
+
+function earliestDelta(costDeltas: readonly CostDelta[]): number | null {
+  return costDeltas.reduce<number | null>((oldest, delta) => {
+    const at = Date.parse(delta.at);
+    return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
+  }, null);
 }
 
 function bucketise(events: readonly CostDelta[], span: TimelineSpan): SpendTimeline {
