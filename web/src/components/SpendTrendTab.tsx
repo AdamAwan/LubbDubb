@@ -15,6 +15,7 @@ import {
   fmtPts,
   ptsTone,
   columns,
+  ratio,
 } from './spendTrendFormat.js';
 
 // → docs/spec/17-cockpit.md
@@ -117,7 +118,7 @@ function MedianTile({
   then: number | null;
   fmt: (value: number) => string;
 }): JSX.Element {
-  const change = now === null || then === null || then === 0 ? null : (now - then) / then;
+  const change = ratio(now, then);
   return (
     <div className="sp-tile sp-well">
       <Label dense>{label}</Label>

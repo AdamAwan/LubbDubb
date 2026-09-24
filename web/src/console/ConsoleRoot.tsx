@@ -85,7 +85,6 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
   );
 }
 
-/** What the main pane is showing: a pull request, a goal, or the tab's own page. */
 function situationOf(view: CockpitView, actions: CockpitActions): JSX.Element {
   return view.prPage !== null ? (
     <>

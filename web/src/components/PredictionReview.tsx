@@ -1,13 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { api, type GoalPredictionReading } from '../api.js';
-import type {
-  GoalPrediction,
-  PlanPart,
-  PlanView,
-  PredictionMark,
-  PredictionOutcomeMarks,
-  PredictionSlot,
-} from '../types.js';
+import type { GoalPrediction, PlanPart, PlanView, PredictionMark, PredictionSlot } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { relTime } from './util.js';
@@ -252,8 +245,7 @@ function SlotRow({
 }): JSX.Element {
   const said = prediction.slots[slot];
   const mark = prediction.planMarks[slot];
-  const outcomeMarks: PredictionOutcomeMarks = prediction.outcomeMarks;
-  const outcome = outcomeMarks[slot];
+  const outcome = prediction.outcomeMarks[slot];
   if (said === null)
     return (
       <div className="cn-pmark-row is-skipped">

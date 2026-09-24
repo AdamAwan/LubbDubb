@@ -1,7 +1,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
-import { DESKTOP_SKILL_LOCAL_JOBS } from './desktopSkillLocalJobs.js';
+import {
+  EJECTED_RUN_SECTION,
+  PR_DESCRIPTION_SECTION,
+  RUN_LOCALLY_SECTION,
+  VALIDATION_CHECK_SECTION,
+} from './desktopSkillSections.js';
 
 // → docs/spec/20-validation.md
 
@@ -428,7 +433,7 @@ this harness has: a story held behind one that never lands simply never starts,
 and nothing goes red. If you cannot support an edge from what the items actually
 say, leave it out.
 
-${DESKTOP_SKILL_LOCAL_JOBS}`;
+${RUN_LOCALLY_SECTION}${EJECTED_RUN_SECTION}${VALIDATION_CHECK_SECTION}${PR_DESCRIPTION_SECTION}`;
 
 function desktopSkillDocument(harnessRoot: string | null): string {
   if (harnessRoot === null) return DESKTOP_SKILL;

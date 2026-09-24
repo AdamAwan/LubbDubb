@@ -290,7 +290,7 @@ function DescriptionPresses({
   onWrite,
   handOff,
   desktopFolder,
-  part,
+  checkPrompt,
 }: {
   current: PrDescriptionVersion | null;
   handedOver: PrDescriptionDraft | null;
@@ -300,7 +300,7 @@ function DescriptionPresses({
   onWrite: () => void;
   handOff: () => Promise<void>;
   desktopFolder: string | null;
-  part: RegExpExecArray | null;
+  checkPrompt: string | null;
 }): JSX.Element {
   return (
     <div className="cn-desc-presses">
@@ -329,10 +329,10 @@ function DescriptionPresses({
           agent, because what follows the report is an argument and an argument on
           the pulse costs an afternoon. It contradicts; it never hands back prose.
           → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts */}
-      {current !== null && desktopFolder !== null && part !== null && (
+      {current !== null && desktopFolder !== null && checkPrompt !== null && (
         <DesktopLink
           folder={desktopFolder}
-          prompt={descriptionPrompt(Number(part[1]), part[2] ?? '')}
+          prompt={checkPrompt}
           label="Check my description"
           explain="which reads what you wrote against the diff and says where they disagree. It will not write one for you."
         />
@@ -378,6 +378,7 @@ export function PrDescription({
   if (originRef === null) return null;
 
   const part = /^issue:(\d+):part:(.+)$/.exec(originRef);
+  const checkPrompt = part === null ? null : descriptionPrompt(Number(part[1]), part[2] ?? '');
 
   const submit = async (): Promise<void> => {
     const body = text.trim();
@@ -436,7 +437,7 @@ export function PrDescription({
           onWrite={() => setWriting(true)}
           handOff={handOff}
           desktopFolder={desktopFolder}
-          part={part}
+          checkPrompt={checkPrompt}
         />
       )}
     </section>

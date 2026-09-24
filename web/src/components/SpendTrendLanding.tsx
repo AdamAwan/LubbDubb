@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import type { SpendTrendComparison, SpendTrendBucket } from '../types.js';
 import { fmtUsd } from './util.js';
 import { Label } from './label.js';
-import { PLOT, VIEW_BOX, fmtPct, fmtChange, toneOf, fmtPts, ptsTone, columns } from './spendTrendFormat.js';
+import { PLOT, VIEW_BOX, fmtPct, fmtChange, toneOf, fmtPts, ptsTone, columns, ratio } from './spendTrendFormat.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -91,8 +91,6 @@ export function LandingTiles({ comparison }: { comparison: SpendTrendComparison 
     return <p className="empty">Not enough complete weeks yet to compare the halves.</p>;
   }
   const { earlier, recent } = comparison;
-  const ratio = (now: number | null, then: number | null): number | null =>
-    now === null || then === null || then === 0 ? null : (now - then) / then;
 
   return (
     <>

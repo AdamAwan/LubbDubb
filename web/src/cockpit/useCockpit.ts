@@ -205,7 +205,8 @@ function useAgentSubscription(wsRef: { readonly current: WsClient | null }, sele
   }, [wsRef, selected]);
 }
 
-function useSetupReader(setSetup: (setup: SetupPayload | null) => void): void {
+function useSetup(): SetupPayload | null {
+  const [setup, setSetup] = useState<SetupPayload | null>(null);
   const readSetup = useCallback(() => {
     void api
       .getSetup()
@@ -218,18 +219,18 @@ function useSetupReader(setSetup: (setup: SetupPayload | null) => void): void {
     window.addEventListener('lubbdubb:config-changed', onChanged);
     return () => window.removeEventListener('lubbdubb:config-changed', onChanged);
   }, [readSetup]);
+  return setup;
 }
 
 export function useCockpit(): CockpitStatus {
   const { place, go, arrival } = useNavigation();
   useSurfaceReach(place, arrival);
   const live = useLiveState();
-  const [setup, setSetup] = useState<SetupPayload | null>(null);
+  const setup = useSetup();
   const now = useNow(1000);
   useNotifications(live.state, setup);
   const goalAgents = useGoalAgents(live.state, place.goal);
   useAgentSubscription(live.wsRef, place.agent);
-  useSetupReader(setSetup);
   const { actions, appliedFixes } = useCockpitActions(live.refresh, go);
 
   const { state, denied, connected } = live;

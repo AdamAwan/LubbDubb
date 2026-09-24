@@ -21,37 +21,19 @@ function planHold(
   reason: string,
   planner: 'dispatch' | 'cooldown',
 ): { reason: string; held: RuleHeld | undefined } {
-  const supersededBy = s.appraising.has(issueNumber) ? ('issue-appraisal' as const) : null;
+  if (s.appraising.has(issueNumber)) return { reason: supersededReason('issue-appraisal', reason), held: 'superseded' };
+  if (s.sittingHolds(issueNumber))
+    return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
   const waits = s.sequenceWaits.get(issueNumber);
-  const sitting = !supersededBy && s.sittingHolds(issueNumber);
-  if (supersededBy) return { reason: supersededReason(supersededBy, reason), held: 'superseded' };
-  if (sitting) return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
   if (waits) return { reason: `${reason} ${sequenceHoldReason(waits)}`, held: 'sequenced' };
   return { reason, held: planner === 'cooldown' ? 'cooldown' : undefined };
 }
 
 function planTemplate(s: StageContext, issue: Issue, branch: string, replanOf: Plan | null): string {
-  if (!replanOf) {
-    return s.templates.render('issue-plan', {
-      number: issue.number,
-      title: issue.title,
-      body: issue.body,
-      branch,
-      planFile: PLAN_FILE,
-    });
-  }
-  return s.templates.render('issue-replan', {
-    number: issue.number,
-    title: issue.title,
-    body: issue.body,
-    branch,
-    planFile: PLAN_FILE,
-    current: currentPlanSummary(
-      replanOf,
-      (s.ctx.planParts ?? []).filter((p) => p.planId === replanOf.id),
-      s.prRefStyle,
-    ),
-  });
+  const vars = { number: issue.number, title: issue.title, body: issue.body, branch, planFile: PLAN_FILE };
+  if (!replanOf) return s.templates.render('issue-plan', vars);
+  const parts = (s.ctx.planParts ?? []).filter((p) => p.planId === replanOf.id);
+  return s.templates.render('issue-replan', { ...vars, current: currentPlanSummary(replanOf, parts, s.prRefStyle) });
 }
 
 export function issuePlan(s: StageContext): void {

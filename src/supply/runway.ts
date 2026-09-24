@@ -68,6 +68,8 @@ export interface RunwayReading {
   detail: string;
 }
 
+type Reading = Omit<RunwayReading, 'headline' | 'detail'>;
+
 export interface RunwayInput {
   policy: RunwayPolicy;
   issues: readonly Issue[];
@@ -155,7 +157,7 @@ export function readRunway(input: RunwayInput): RunwayReading {
     standing: input.standing,
   });
 
-  const reading: Omit<RunwayReading, 'headline' | 'detail'> = {
+  const reading: Reading = {
     state,
     runwayMinutes,
     inflight,
@@ -304,15 +306,13 @@ function humanMinutes(minutes: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-function reservoirClause(reading: Omit<RunwayReading, 'headline' | 'detail'>): string | null {
+function reservoirClause(reading: Reading): string | null {
   if (reading.reservoir === 0) return null;
   const base = `${reading.reservoir} open issue${reading.reservoir === 1 ? '' : 's'} nobody has watched`;
   return reading.reservoirContainers === 0
     ? base
     : `${base}, under ${reading.reservoirContainers} unwatched container${reading.reservoirContainers === 1 ? '' : 's'} whose watch would cascade`;
 }
-
-type Reading = Omit<RunwayReading, 'headline' | 'detail'>;
 
 type Said = { headline: string; detail: string };
 
@@ -386,7 +386,7 @@ function sayUnknown(reading: Reading): Said {
   };
 }
 
-function heldClause(reading: Omit<RunwayReading, 'headline' | 'detail'>): string | null {
+function heldClause(reading: Reading): string | null {
   const held = reading.medianHeldMinutes ?? 0;
   const lead = reading.medianLeadMinutes ?? 0;
   if (held <= 0) return null;

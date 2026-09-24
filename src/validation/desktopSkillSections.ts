@@ -1,6 +1,6 @@
 // → docs/spec/20-validation.md
 
-export const DESKTOP_SKILL_LOCAL_JOBS = `## Run it locally
+export const RUN_LOCALLY_SECTION = `## Run it locally
 
 The operator wants to see this goal's work running on this machine. **You do not
 start it — the harness does.** It keeps one checkout for this, brings the
@@ -35,7 +35,9 @@ in the clone the harness cuts its agents' worktrees from: a branch checked out
 here is one it can no longer hand to an agent, and a server you start yourself is
 one nothing can stop from the cockpit.
 
-## Take over an ejected run
+`;
+
+export const EJECTED_RUN_SECTION = `## Take over an ejected run
 
 An operator was watching an agent, decided it was going the wrong way, and
 **ejected** it: the agent was stopped, and its goal and its worktree are held for
@@ -87,7 +89,9 @@ Ask which one it is. The answer is the operator's:
   command where the runtime kept one. Either way the hold is still the hold, and
   it still has to be settled.
 
-## Run a validation check
+`;
+
+export const VALIDATION_CHECK_SECTION = `## Run a validation check
 
 A validation check is a procedure somebody has to actually carry out before a
 goal can be called done — open the page, click the thing, look at what happened.
@@ -146,7 +150,9 @@ which check if more than one is outstanding.
   at what it meant. Correcting the wording is a job for an agent working the
   goal, not for the session taking the reading.
 
-## Check a pull request's description
+`;
+
+export const PR_DESCRIPTION_SECTION = `## Check a pull request's description
 
 \`describe <issue>:<part>\` — the operator wrote the description their pull request
 will carry, and wants it checked before a reviewer reads it. \`description_read\`

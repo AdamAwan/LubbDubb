@@ -31,6 +31,10 @@ export function fmtPct(fraction: number): string {
   return pct < 1 ? '<1%' : `${Math.round(pct)}%`;
 }
 
+export function ratio(now: number | null, then: number | null): number | null {
+  return now === null || then === null || then === 0 ? null : (now - then) / then;
+}
+
 export function fmtChange(ratio: number | null): string {
   if (ratio === null) return 'new';
   const pct = Math.round(ratio * 100);

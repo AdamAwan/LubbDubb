@@ -20,12 +20,22 @@ export function useCockpitActions(refresh: Refresh, go: Go): { actions: CockpitA
   const actions = useMemo<CockpitActions>(() => {
     const then: Then = (p) => p.then(() => refresh(null));
     return {
-      ...agentActions(then, refresh, go),
+      ...cycleActions(then, refresh),
+      ...agentActions(then, go),
       ...decisionActions(then),
-      ...workActions(then, refresh),
+      ...issueSettingActions(then),
+      ...planActions(then),
+      ...prActions(then),
+      ...watchActions(then, refresh),
+      ...obstacleActions(then),
+      ...upNextActions(then),
+      ...remoteValidationActions(then),
+      ...localRunActions(then),
+      ...buildActions(then),
+      ...petActions(then),
+      ...humanTaskActions(then),
+      ...filingActions(then, refresh),
       ...placeActions(go),
-      ...machineActions(then),
-      ...recordActions(then, refresh),
       ...configFixActions(undoable.current, setAppliedFixes),
       fetchWorkSubtree: (ref) => api.getWorkSubtree(ref),
     };
@@ -33,13 +43,17 @@ export function useCockpitActions(refresh: Refresh, go: Go): { actions: CockpitA
   return { actions, appliedFixes };
 }
 
-function agentActions(then: Then, refresh: Refresh, go: Go) {
+function cycleActions(then: Then, refresh: Refresh) {
   return {
     refresh: () => refresh(null),
     pulse: () => then(api.pulse()),
     clearErrors: () => then(api.clearErrors()),
-    select: (agentId) => go({ agent: agentId }),
+  } satisfies Partial<CockpitActions>;
+}
 
+function agentActions(then: Then, go: Go) {
+  return {
+    select: (agentId) => go({ agent: agentId }),
     killAgent: (id) => then(api.killAgent(id)),
     completeAgent: (id) => then(api.completeAgent(id)),
     interruptAgent: (id) => api.interruptAgent(id).then(() => undefined),
@@ -73,9 +87,41 @@ function decisionActions(then: Then) {
   } satisfies Partial<CockpitActions>;
 }
 
-function workActions(then: Then, refresh: Refresh) {
+function issueSettingActions(then: Then) {
+  return {
+    setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
+    setIssueState: (n, state) => then(api.setIssueState(n, state)),
+    setGoalPriority: (n, priority) => then(api.setGoalPriority(n, priority)),
+    setIssueProfile: (n, profile) => then(api.setIssueProfile(n, profile)),
+    setIssueParent: (n, parent) => then(api.setIssueParent(n, parent)),
+    setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
+    setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
+    setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
+    addInstruction: (n, text) => then(api.addInstruction(n, text)),
+    withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
+    dismissRun: (n, note) => then(api.dismissRun(n, note)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function planActions(then: Then) {
   return {
     replan: (planId) => then(api.replan(planId)),
+    setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
+    restartPart: (planId, slug) => then(api.restartPart(planId, slug)),
+    regroupPlan: (planId, groups) => then(api.regroupPlan(planId, groups)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function prActions(then: Then) {
+  return {
+    setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
+    setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
+    reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function watchActions(then: Then, refresh: Refresh) {
+  return {
     ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
     saveWatchCheck: async (issueNumber, check) => {
       const { dryRun } = await api.saveWatchCheck(issueNumber, check);
@@ -85,12 +131,28 @@ function workActions(then: Then, refresh: Refresh) {
     deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
     extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
     setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function obstacleActions(then: Then) {
+  return {
     muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
     decideObstacleTicket: (id, approved) => then(api.decideObstacleTicket(id, approved)),
     ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
     retireObstacle: (id) => then(api.retireObstacle(id)),
     writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
-    reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function upNextActions(then: Then) {
+  return {
+    reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
+    setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function remoteValidationActions(then: Then) {
+  return {
     ruleRemoteQuery: (issueNumber, environment, rowId, accept) =>
       then(api.ruleRemoteQuery(issueNumber, environment, rowId, accept)),
     selectRemoteRow: (issueNumber, environment, rowId, selected) =>
@@ -98,8 +160,59 @@ function workActions(then: Then, refresh: Refresh) {
     pressRemoteSheet: (issueNumber, environment) => then(api.pressRemoteSheet(issueNumber, environment)),
     cancelRemoteRun: (issueNumber, environment) => then(api.cancelRemoteRun(issueNumber, environment)),
     reseedRemoteTenant: (issueNumber, environment) => then(api.reseedRemoteTenant(issueNumber, environment)),
-    reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
-    setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
+    tenantCommandOutput: (environment) => api.tenantCommandOutput(environment),
+  } satisfies Partial<CockpitActions>;
+}
+
+function localRunActions(then: Then) {
+  return {
+    startLocalRun: (issueNumber, ref) => then(api.startLocalRun(issueNumber, ref)),
+    stopLocalRun: () => then(api.stopLocalRun()),
+    messageLocalRun: (text) => api.messageLocalRun(text).then(() => undefined),
+    refreshLocalRun: () => then(api.refreshLocalRun()),
+    localRunOutput: () => api.localRunOutput().then((r) => r.lines),
+    validateLocally: (issueNumber, opts) => then(api.validateLocally(issueNumber, opts)),
+    cancelLocalValidation: (issueNumber) => then(api.cancelLocalValidation(issueNumber)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function buildActions(then: Then) {
+  return {
+    upgrade: (action, opts) => then(api.upgrade(action, opts)),
+    checkBuild: () => then(api.checkBuild()),
+    pullProject: () => then(api.pullProject()),
+    snoozeUpdate: (target) => then(api.snoozeUpdate(target)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function petActions(then: Then) {
+  return {
+    openPet: (id) => then(api.openPet(id)),
+    feedPet: (id, beats) => then(api.feedPet(id, beats)),
+    renamePet: (id, name) => then(api.renamePet(id, name)),
+    placePet: (id, placed) => then(api.placePet(id, placed)),
+    blendPet: (id) => then(api.blendPet(id)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function humanTaskActions(then: Then) {
+  return {
+    completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
+    declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
+    closeHumanTaskTicket: (id, note) => then(api.closeHumanTaskTicket(id, note)),
+    dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
+  } satisfies Partial<CockpitActions>;
+}
+
+function filingActions(then: Then, refresh: Refresh) {
+  return {
+    raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
+    probeFilingTarget: () => api.probeFilingTarget(),
+    raiseIssue: async (title, body, watch) => {
+      const filed = await api.raiseIssue(title, body, watch);
+      await refresh(null);
+      return filed;
+    },
   } satisfies Partial<CockpitActions>;
 }
 
@@ -155,61 +268,6 @@ function placeActions(go: Go) {
       })),
     openGoalTab: (tab) => go({ goalTab: tab }),
     openRemoteSheet: (environment) => go({ sheetEnvironment: environment }),
-  } satisfies Partial<CockpitActions>;
-}
-
-function machineActions(then: Then) {
-  return {
-    upgrade: (action, opts) => then(api.upgrade(action, opts)),
-    checkBuild: () => then(api.checkBuild()),
-    pullProject: () => then(api.pullProject()),
-    snoozeUpdate: (target) => then(api.snoozeUpdate(target)),
-    startLocalRun: (issueNumber, ref) => then(api.startLocalRun(issueNumber, ref)),
-    stopLocalRun: () => then(api.stopLocalRun()),
-    messageLocalRun: (text) => api.messageLocalRun(text).then(() => undefined),
-    refreshLocalRun: () => then(api.refreshLocalRun()),
-    validateLocally: (issueNumber, opts) => then(api.validateLocally(issueNumber, opts)),
-    cancelLocalValidation: (issueNumber) => then(api.cancelLocalValidation(issueNumber)),
-    localRunOutput: () => api.localRunOutput().then((r) => r.lines),
-    tenantCommandOutput: (environment) => api.tenantCommandOutput(environment),
-  } satisfies Partial<CockpitActions>;
-}
-
-function recordActions(then: Then, refresh: Refresh) {
-  return {
-    openPet: (id) => then(api.openPet(id)),
-    feedPet: (id, beats) => then(api.feedPet(id, beats)),
-    renamePet: (id, name) => then(api.renamePet(id, name)),
-    placePet: (id, placed) => then(api.placePet(id, placed)),
-    blendPet: (id) => then(api.blendPet(id)),
-    completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
-    declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
-    closeHumanTaskTicket: (id, note) => then(api.closeHumanTaskTicket(id, note)),
-    dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
-
-    setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
-    setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
-    setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
-    setIssueState: (n, state) => then(api.setIssueState(n, state)),
-    setGoalPriority: (n, priority) => then(api.setGoalPriority(n, priority)),
-    setIssueProfile: (n, profile) => then(api.setIssueProfile(n, profile)),
-    setIssueParent: (n, parent) => then(api.setIssueParent(n, parent)),
-    setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
-    setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
-    restartPart: (planId, slug) => then(api.restartPart(planId, slug)),
-    regroupPlan: (planId, groups) => then(api.regroupPlan(planId, groups)),
-    setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
-    setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
-    addInstruction: (n, text) => then(api.addInstruction(n, text)),
-    withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
-    raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
-    probeFilingTarget: () => api.probeFilingTarget(),
-    raiseIssue: async (title, body, watch) => {
-      const filed = await api.raiseIssue(title, body, watch);
-      await refresh(null);
-      return filed;
-    },
-    dismissRun: (n, note) => then(api.dismissRun(n, note)),
   } satisfies Partial<CockpitActions>;
 }
 

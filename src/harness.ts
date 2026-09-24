@@ -4,6 +4,7 @@ import { Heartbeat } from './heartbeat.js';
 import type { Connector } from './connector/connector.js';
 import type { DispatchResult, Dispatcher } from './dispatcher/dispatcher.js';
 import { buildDispatchInputs } from './dispatcher/dispatchInputs.js';
+import { deliverySignalQuery } from './delivery/delivery.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
@@ -19,7 +20,7 @@ import { runPulse, type PulseDeps, type PulsePhase } from './pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { GoalIntake } from './intake/sitting.js';
-import { dispatchView, readCycle, type CycleReadings } from './harnessCycleReadings.js';
+import { dispatchView, type CycleReadings } from './harnessCycleReadings.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -311,7 +312,7 @@ export class Harness extends EventEmitter {
   ): Promise<CycleReport> {
     const { store } = this.deps;
     const world = await this.observe(cached, readWorld);
-    const r = await readCycle(this.deps, world, readWorld, (phase) => this.markPass(phase));
+    const r = await this.pulseAndRead(world, readWorld);
     const issueRuns = store.floor.listIssueRuns();
     const { hiddenPrs, retainedIssues, dispatchWorld } = dispatchView(world, this.deps.prWatchLabel, issueRuns);
 
@@ -383,6 +384,56 @@ export class Harness extends EventEmitter {
     };
     this.emit('cycle:end', report);
     return report;
+  }
+
+  private async pulseAndRead(world: WorldSnapshot, readWorld: boolean): Promise<CycleReadings> {
+    const { store } = this.deps;
+    await runPulse('open', this.deps, {}, readWorld, this.markPass('open'));
+    const tasks = store.tasks.listTasks();
+    await runPulse('afterTasks', this.deps, { world, tasks }, readWorld, this.markPass('afterTasks'));
+    const agents = store.agents.listAgents();
+    await runPulse('afterAgents', this.deps, { tasks, agents }, readWorld, this.markPass('afterAgents'));
+    const queuedJobs = store.jobs.listQueuedJobs();
+    const plans = store.plans.listPlans();
+    const planParts = store.plans.listAllPlanParts();
+    const conclusions = store.verdicts.listIssueConclusions();
+    const deliveries = store.verdicts.listDeliveries();
+    const deliveryWindow = deliverySignalQuery(deliveries);
+    const shortfalls = store.verdicts.listShortfalls();
+    const deliverySignals = deliveryWindow
+      ? store.world.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
+      : [];
+    const appraisals = store.verdicts.listAppraisals();
+    await runPulse('afterVerdicts', this.deps, { world }, readWorld, this.markPass('afterVerdicts'));
+    const retrospectiveOrigins = store.scratch.listRetrospectiveOrigins();
+    await runPulse(
+      'afterOrigins',
+      this.deps,
+      { world, tasks, signals: { retrospectiveOrigins, conclusions, deliveries, shortfalls, plans, planParts } },
+      readWorld,
+      this.markPass('afterOrigins'),
+    );
+    const recentDecisions = store.decisions.listDecisions(200);
+    const intake = this.deps.goalIntake?.() ?? { closedSittings: null, criteria: [], judgeOwed: [] };
+    const liveAgents = store.agents.countLiveAgents();
+    const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
+    return {
+      tasks,
+      agents,
+      queuedJobs,
+      plans,
+      planParts,
+      conclusions,
+      deliveries,
+      deliverySignals,
+      shortfalls,
+      appraisals,
+      retrospectiveOrigins,
+      recentDecisions,
+      intake,
+      liveAgents,
+      headroom,
+    };
   }
 
   private settlePlan(cycleId: string, plan: DispatchResult, world: WorldSnapshot, r: CycleReadings): void {

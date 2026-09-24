@@ -22,6 +22,23 @@ const CONFIRM_TITLE: Record<Verb, string> = {
   close: 'Close the item in the tracker, with what you said on the row',
 };
 
+type PressWords = { label: string; actTitle: string; askTitle: string };
+
+const PRESS_WORDS: Record<'close' | 'done', PressWords> = {
+  close: {
+    label: 'Mark as closed',
+    actTitle: 'Close the item in the tracker and settle this row with it',
+    askTitle: 'Close the item in the tracker — and say what you are doing about what is outstanding',
+  },
+  done: {
+    label: 'Done',
+    actTitle: 'You did it — release anything waiting on it',
+    askTitle: 'You did it — and this one asks what you are doing about what is outstanding',
+  },
+};
+
+type Settle = (id: string) => Promise<unknown> | unknown;
+
 type HumanTaskActionsProps = {
   task: HumanTask;
   look?: ButtonLook;
@@ -52,6 +69,10 @@ export function HumanTaskActions({
     setRefusal(null);
     setSaying((current) => (current === verb ? null : verb));
   };
+  const act = (settle: Settle) => () => {
+    setRefusal(null);
+    return settle(task.id);
+  };
 
   return (
     <>
@@ -60,25 +81,21 @@ export function HumanTaskActions({
             thing, and this is it — so it leads, and the note rule it may owe is
             the same one Done owes, asked in the same box. */}
         {onCloseTicket !== null && (
-          <CloseTicketPress
-            look={look}
+          <Press
+            look={expected(look)}
             asks={noteOnDone !== null}
+            words={PRESS_WORDS.close}
             onRefused={setRefusal}
-            onAct={() => {
-              setRefusal(null);
-              return onCloseTicket(task.id);
-            }}
+            onAct={act(onCloseTicket)}
             onAsk={() => open('close')}
           />
         )}
-        <DonePress
+        <Press
           look={onCloseTicket === null ? expected(look) : look}
           asks={noteOnDone !== null}
+          words={PRESS_WORDS.done}
           onRefused={setRefusal}
-          onAct={() => {
-            setRefusal(null);
-            return onDone(task.id);
-          }}
+          onAct={act(onDone)}
           onAsk={() => open('done')}
         />
         <Button {...look} onClick={() => open('declined')} title="You will not be doing this">
@@ -168,44 +185,20 @@ function NoteBox({
 type PressProps = {
   look: ButtonLook;
   asks: boolean;
+  words: PressWords;
   onRefused: (message: string) => void;
   onAct: () => Promise<unknown> | unknown;
   onAsk: () => void;
 };
 
-function CloseTicketPress({ look, asks, onRefused, onAct, onAsk }: PressProps) {
+function Press({ look, asks, words, onRefused, onAct, onAsk }: PressProps) {
   return !asks ? (
-    <AsyncButton
-      {...expected(look)}
-      onClick={onAct}
-      onRefused={onRefused}
-      title="Close the item in the tracker and settle this row with it"
-    >
-      Mark as closed
+    <AsyncButton {...look} onClick={onAct} onRefused={onRefused} title={words.actTitle}>
+      {words.label}
     </AsyncButton>
   ) : (
-    <Button
-      {...expected(look)}
-      onClick={onAsk}
-      title="Close the item in the tracker — and say what you are doing about what is outstanding"
-    >
-      Mark as closed…
-    </Button>
-  );
-}
-
-function DonePress({ look, asks, onRefused, onAct, onAsk }: PressProps) {
-  return !asks ? (
-    <AsyncButton {...look} onClick={onAct} onRefused={onRefused} title="You did it — release anything waiting on it">
-      Done
-    </AsyncButton>
-  ) : (
-    <Button
-      {...look}
-      onClick={onAsk}
-      title="You did it — and this one asks what you are doing about what is outstanding"
-    >
-      Done…
+    <Button {...look} onClick={onAsk} title={words.askTitle}>
+      {`${words.label}…`}
     </Button>
   );
 }

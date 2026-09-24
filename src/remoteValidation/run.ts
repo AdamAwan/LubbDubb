@@ -296,9 +296,8 @@ export class RemoteRunDesk extends EventEmitter {
 
     const said: string[] = [];
     if (validate.ensureTenant !== undefined && resumed?.call !== 'reseed') {
-      const ensured = await this.ensureStep(environmentName, validate.ensureTenant, resumed);
-      if (!('said' in ensured)) return ensured;
-      said.push(ensured.said);
+      const refused = await this.ensureStep(environmentName, validate.ensureTenant, resumed, said);
+      if (refused !== null) return refused;
     }
 
     const resolved = resolveTenant({
@@ -308,9 +307,8 @@ export class RemoteRunDesk extends EventEmitter {
       env: this.deps.env,
     });
     if (validate.reseed !== undefined) {
-      const reseeded = await this.reseedStep(environmentName, validate.reseed, resolved, resumed);
-      if (!('said' in reseeded)) return reseeded;
-      said.push(reseeded.said);
+      const refused = await this.reseedStep(environmentName, validate.reseed, resolved, resumed, said);
+      if (refused !== null) return refused;
     }
 
     if (said.length === 0)
@@ -326,7 +324,8 @@ export class RemoteRunDesk extends EventEmitter {
     environmentName: string,
     command: string,
     resumed: { call: TenantCall; launch: TenantLaunch } | null,
-  ): Promise<Prepared | { said: string }> {
+    said: string[],
+  ): Promise<Prepared | null> {
     const request = { environment: environmentName, command, tenant: this.standing(environmentName).tenant };
     const provisioned =
       resumed === null
@@ -344,7 +343,8 @@ export class RemoteRunDesk extends EventEmitter {
       tenant: provisioned.tenant,
       ensured: true,
     });
-    return { said: `\`${provisioned.tenant}\` is provisioned` };
+    said.push(`\`${provisioned.tenant}\` is provisioned`);
+    return null;
   }
 
   private async reseedStep(
@@ -352,7 +352,8 @@ export class RemoteRunDesk extends EventEmitter {
     command: string,
     resolved: ReturnType<typeof resolveTenant>,
     resumed: { call: TenantCall; launch: TenantLaunch } | null,
-  ): Promise<Prepared | { said: string }> {
+    said: string[],
+  ): Promise<Prepared | null> {
     if (resolved.standing.tenant === null || resolved.value === null)
       return {
         ok: false,
@@ -374,7 +375,8 @@ export class RemoteRunDesk extends EventEmitter {
       tenant: resolved.standing.tenant,
       reseeded: true,
     });
-    return { said: `\`${resolved.standing.tenant}\` is reseeded` };
+    said.push(`\`${resolved.standing.tenant}\` is reseeded`);
+    return null;
   }
 
   private launched(environmentName: string, call: TenantCall): (launch: TenantLaunch) => void {

@@ -1897,7 +1897,7 @@ is not a supported shape so much as the brief refusing to render a command nobod
 agent told to take a listing from a command that does not exist has one blocked call and no run.
 Templates are operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so an override
 that never learned a new `{token}` silently drops it, on exactly the deployments that customised most.
-The appending is `briefing` in `src/remoteValidation/briefing.ts`, computed with the brief and never
+The appending is `briefing` in `src/remoteValidation/remoteRunBriefingText.ts`, computed with the brief and never
 imported into `src/dispatcher/`. A `tenantEnv`'s **value** never reaches it: what the briefing carries
 is `resolveTenant(...).standing.tenant`, which for that shape is the **variable's own name**.
 
