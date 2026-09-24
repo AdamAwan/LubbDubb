@@ -2751,6 +2751,16 @@ merely not started.
 
 ### The reveal gate
 
+**Not yet built: the sitting moves to the goal page, before the planner.** Where the gate is on, a
+goal appraised `workable` with no stamp draws the same composer — the four slots, the containment
+sentence, and the criteria half behind its rule — on the goal page where the plan card will be, over
+**Write these down** and **Skip, just plan it**, at equal weight. Where the ticket carries its own
+criteria, the [alignment check](08-planning.md#the-alignment-check)'s verdict is drawn under the
+criteria before the stamp, each point with its tag, and a `conflicting` verdict asks the operator to
+revise or press on. The rail's ask leads there. What follows describes the gate as built, which
+remains the path for a plan written before its sitting
+([08](08-planning.md#the-reveal-gate-on-a-plan-written-before-its-sitting)).
+
 Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan has arrived
 `awaiting_approval` on a goal nobody has revealed it on, the plan card draws the gate in place of the
 waves: a blurred stand-in for the document, and over it _"A plan is ready. Predict first?"_ with
@@ -2843,6 +2853,11 @@ link to a half-typed composer would be a link to something that no longer exists
 correctly re-reads the server's fact rather than the page's memory of it.
 
 ### Moment one — the prediction beside the plan
+
+**Not yet built:** once the operator has marked, the
+[prediction judge](08-planning.md#the-prediction-judge)'s marks are drawn beside theirs, slot by slot,
+with a disagreement called out rather than left to be spotted. Never before the operator's mark — the
+judge is not dispatched until then, so there is nothing to anchor on.
 
 Where the plan has been revealed on a goal that **has** a prediction, the plan card draws the two side
 by side: the four slots on one side with a three-way mark each, the plan's narrative and its parts on

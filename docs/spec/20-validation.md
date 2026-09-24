@@ -988,6 +988,22 @@ is whether the goal works. `covers` does not change that; it only lets a check s
 exercises, which is what lets a reader see which parts nothing checks. An absent check looks exactly
 like a check that passed until someone counts.
 
+### `satisfies`, and the goal's criteria
+
+**Not yet built.** Where the goal has
+[human-authored criteria](08-planning.md#goal-criteria-beside-the-planners-acceptance), the validation
+planner writes at least one check per criterion of the current version, and a check names the
+criteria it answers in `satisfies` — each entry a criterion's **text**, keyed the way
+`acceptanceCriteria` keys a part's, so a reworded criterion loses its checks rather than having them
+silently carried onto a claim nobody checked. An entry naming no criterion of the current version is
+dropped at ingestion, as `covers` drops an unknown slug.
+
+The sheet and the close-out draw one line per criterion — met, not met, waived, or not yet read —
+off the readings of the checks that name it, and a criterion **no** check names is drawn as a gap.
+That is the whole of the criteria's reading at delivery, and it holds nothing: a failed check is rule
+`validation-failed`'s, never a shortfall ([When a check fails](#when-a-check-fails)).
+→ [08](08-planning.md#the-criteria-at-delivery)
+
 ## Saying so on the bench
 
 A goal parked as delivered is the one moment a check becomes runnable, and that moment used to

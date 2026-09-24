@@ -847,6 +847,13 @@ is never read as a zero. → [18](18-observability.md#the-burn-watch)
 | `goalCriteria.enabled`        | `boolean` | `false` | Goal-level acceptance criteria can be authored and versioned; drift is derived, recorded and surfaced.                                                                                 |
 | `predictionAggregateMinGoals` | `number`  | `10`    | How many marked goals a rate needs before the aggregate will report it. Below it the **rate is withheld from the payload** and the count toward the threshold is shipped in its place. |
 
+**Either key on holds planning.** Not yet built: with either on, rule `issue-plan` waits for the
+goal's [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner) — the
+prediction and the criteria, written before the planner runs — and a goal nobody sits for is not
+planned. That hold is what the keys are the switch for; there is no separate one, and turning both off
+releases every held goal on the next pulse. Today the keys hold nothing and the gate stands in front
+of a plan already written.
+
 Two keys rather than one because the two halves are independently worth being unhappy with, and the
 point of a switch is that it can be thrown for one thing at a time. They are genuinely independent:
 neither reads the other's rows. They share exactly one fact — the reveal stamp — and nothing else.

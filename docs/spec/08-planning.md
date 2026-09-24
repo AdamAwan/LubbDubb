@@ -800,21 +800,137 @@ released status with the gate closed. Rule `plan-part`'s question — "is this p
 therefore the status check it already had, and a superseded plan structurally cannot release a new
 one, because a replan resets the row.
 
-### The reveal gate stands in front of the approval gate
+### The intake sitting stands in front of the planner
 
-Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a plan that is `awaiting_approval`
-and has not been revealed is served to the cockpit **without its body** — no narrative, no parts, no
-atoms, and the approval escalation and its proposal carry a placeholder instead of the prose. The
-operator is drawn the plan obscured, with _"A plan is ready. Predict first?"_ over it and two presses
-of equal weight: **Predict** and **Show me the plan**.
+**Not yet built.** Today the prediction and the criteria are asked for at the
+[reveal gate](#the-reveal-gate-on-a-plan-written-before-its-sitting), after the planner has run. What
+is outstanding is everything this section describes: the hold on rule `issue-plan`, the sitting on the
+goal page, the alignment check, the criteria reaching the planner and the parts, the prediction judge
+and the criteria reading at delivery.
+
+Where the [reveal gate](02-configuration.md#the-reveal-gate) is on — `prediction.enabled` or
+`goalCriteria.enabled` — the operator is asked for the goal's prediction and its criteria **after the
+appraisal says `workable` and before the planner is dispatched**, in one sitting on the goal page.
+
+**The sitting was moved in front of the planner because the criteria are the plan's input.** Asked at
+the reveal, they arrived after the plan they were meant to be the authority over, so the most they
+could do was mark it down. Written before the planner runs, they are something the planner and every
+part are handed ([below](#what-the-fleet-is-handed)), and the prediction gets stronger for free: it is
+written before a plan exists at all, so its independence of the plan is a fact about the order of the
+pipeline rather than about a withheld payload.
+
+**Rule `issue-plan` is held until the sitting closes.** A goal whose appraisal stands `workable` and
+that has no reveal stamp is not planned; the pickup reason reads `awaiting your prediction and
+criteria` ([06](06-issue-pickup.md#the-sitting-arm)) and the rail carries the ask, because a
+goal silently waiting on a person looks exactly like an idle fleet. The stamp in `goal_reveals` is
+what closes the sitting — it keeps the table's name, and now means _the sitting ended_ rather than _the
+plan was shown_. Both records are written before it, because the stamp is what ends their
+independence.
+
+This is the one place the feature holds work, and it holds it **deliberately and visibly**, which is
+the opposite of the reveal gate's promise to hold nothing. The operator's lever over it is the switch:
+a deployment that does not want the sitting turns both keys off and nothing is held. Within a
+deployment that has it on, **Skip, just plan it** closes the sitting as a decline — stamped, predicted
+on by nobody, no criteria — and is a press of equal weight to **Write these down**, for the reason the
+reveal gate gave: a hold that is awkward to decline is a hold that gets resented and then switched off.
+
+The hold never outlives the switch. Turning both keys off releases every held goal on the next pulse,
+and the goals it releases read `not offered`, because they were.
+
+#### The alignment check
+
+Where the goal's ticket carries its **own** acceptance criteria, the operator's are compared against
+them before the sitting can close. The ticket's criteria are the Azure DevOps "Acceptance criteria"
+field, which already reaches the body under its own heading
+([15](15-integrations.md#where-a-work-items-body-lives)), or an "Acceptance criteria" heading in a
+GitHub issue body. A ticket with neither has nothing to compare, and the sitting says so rather than
+dispatching.
+
+Rule `criteria-alignment` dispatches a read-only agent on origin `issue:<n>:criteria-alignment`,
+declared as a family in `src/issueOrigins.ts` with the role of a deliberation, prompted with the ticket
+text and the current criteria version and nothing else. It answers through one tool,
+`criteria_alignment`, tagging every point on either side:
+
+| Tag           | Means                                                   |
+| ------------- | ------------------------------------------------------- |
+| `matches`     | Both say it.                                            |
+| `extra`       | Only the operator says it. Fine — that is their right.  |
+| `uncovered`   | Only the ticket says it. Shown; usually fine.           |
+| `contradicts` | The two disagree. The reading the check exists for.     |
+
+and an overall verdict of `aligned`, `partial` or `conflicting`, written to
+`goal_criteria_alignments` against the criteria **version** it read, so a revision is a new question
+and an old verdict never passes for a reading of new text.
+
+**It asks for the gist, not the wording.** The operator's criteria will not touch every point the
+ticket does and will phrase the ones they share differently; `partial` is an ordinary answer and
+`conflicting` is the one worth stopping for.
+
+**It informs the sitting and never holds it past the operator.** The verdict is drawn in the sitting
+before the stamp; on `conflicting` the operator either revises (a new version, a new check) or
+presses on, and pressing on is recorded beside the verdict. **Silence holds nothing**, the appraisal's
+rule exactly ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)): a crashed, killed or
+capped alignment agent writes no row, and the sitting closes without one.
+
+#### What the fleet is handed
+
+The current criteria version is **appended** to the planner's prompt and to every part's, beside the
+`plan_parts.acceptance` that already arrives there — appended, never a `{token}`, because an
+operator-overridable template that never learned a new placeholder drops it silently, on exactly the
+deployments that customised most ([05](05-dispatcher.md#prompt-templates)). A criteria version written
+after the plan is appended from the next dispatch on; it does not replan on its own, and the goal page
+offers the replan beside the revision.
+
+#### The prediction judge
+
+A prediction is marked against the plan by the operator (moment one), and a **second** reading of the
+same comparison is taken by an agent, so the aggregate can show where the two disagree — the rows the
+record is most worth reading for.
+
+Rule `prediction-judge` dispatches once per goal, **after the operator's moment-one mark lands**, so
+the agent's reading can never anchor the operator's. It is an ordinary fleet dispatch — it counts
+against the cap, its spend and time land in the usage metrics like any other — on origin
+`issue:<n>:prediction-judge`, with a prompt of the four slots and the plan's narrative and parts, and
+nothing else. It answers through one tool, `prediction_judge`, with the same four-valued mark per slot
+the operator gives, written to the prediction store and nowhere else
+([14](14-persistence.md#the-prediction-judge)).
+
+The judge is the one agent that may read a prediction, and **everything that makes that safe is about
+its output, not its input**: the harness passes an agent's output on by default, and each default path
+is shut for this origin. No tool but its own (its `RULE_TOOLS` row carries only `prediction_judge`,
+and `UNIVERSAL_TOOLS` are withheld from it), no goal scratchpad, no tracker, no worktree, and no row in
+the retro dossier's decisions. Its reading is the same model's as the planner's, so it can share the
+planner's misreading of the story; it is a second opinion, drawn beside the operator's, never in
+place of it.
+
+#### The criteria at delivery
+
+The validation planner, writing the check set on `delivered`
+([20](20-validation.md#when-the-check-set-is-written)), writes **at least one check per criterion** of
+the goal's current version, and each check names the criteria it answers in `satisfies`. A criterion
+no check names is drawn as a gap on the sheet and on the close-out, which is where it is caught — an
+absent check looks exactly like a check that passed until someone counts.
+
+The close-out draws one line per criterion — met, not met, waived or not yet read — off the readings
+of the checks that name it. It holds nothing, as validation holds nothing: a failed check goes to rule
+`validation-failed` on its own origin and **is never recorded as a shortfall**
+([20](20-validation.md#when-a-check-fails)).
+
+### The reveal gate, on a plan written before its sitting
+
+Where the gate is on and a plan is already `awaiting_approval` with no stamp — a goal planned before
+the sitting existed, or while both keys were off and then one was turned on — the plan is served to
+the cockpit **without its body**, and the operator is drawn the plan obscured, with _"A plan is ready.
+Predict first?"_ over it and two presses of equal weight: **Predict** and **Show me the plan**. This is
+today's whole gate; once the sitting is built it is the fallback for those goals and nothing else, and
+a goal whose sitting closed never meets it.
 → [16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)
 
 This changes nothing about the approval gate itself and holds no work. Nothing is withheld from the
 fleet: parts are not held, the plan is not un-approved, no rule waits on it, and a goal with no
 prediction proceeds exactly as goals proceed today. What is briefly withheld is **the operator's own
 view of the plan, from the operator, at their own request** — which is worth naming as an interruption
-rather than pretending the cost is zero. It is also the only thing this feature is allowed to
-interrupt.
+rather than pretending the cost is zero.
 
 **Approving is refused while the plan is withheld**, and that refusal is not about secrecy. Approving
 or refusing a plan sight-unseen would settle the goal with the reveal never stamped, so the record
@@ -835,7 +951,7 @@ plainly when they looked.
 ### Goal criteria, beside the planner's acceptance
 
 `plan_parts.acceptance` is the **planner's** restatement of done, at part grain, and it stays exactly
-as it is. Beside it there is now an optional **goal-level** set, human-authored, versioned and
+as it is. Beside it there is an optional **goal-level** set, human-authored, versioned and
 append-only, behind `goalCriteria.enabled`.
 
 The reason the two coexist rather than one replacing the other is the failure part acceptance cannot
@@ -848,31 +964,25 @@ independent oracle precisely because it was not written by the thing it judges.
 **Where both exist the goal set is the authority.** A part's acceptance that contradicts it is a plan
 defect rather than a criteria change.
 
-What makes a goal criterion independent is not that it predates the planner's dispatch but that it
-predates its author's sight of the plan, so its standing is derived against the same reveal stamp the
-prediction record uses. The reveal interstitial therefore **asks for the criteria as well as the
-prediction**: it is the last moment at which either can be authored independently, and one the operator
-is already stopped at. A goal whose criteria were written there has an oracle that provably predates
-its plan; criteria first written on the goal page are `post-reveal`, which is an honest reading and a
-weaker oracle. Both records are written before the reveal is stamped, because the stamp is what ends
-their independence. → [14](14-persistence.md#goal-criteria-are-append-only),
-[17](17-cockpit.md#the-criteria-half-of-the-gate)
+What makes a goal criterion independent is that it predates its author's sight of the plan, so its
+standing is derived against the same stamp the prediction record uses. Written in the
+[intake sitting](#the-intake-sitting-stands-in-front-of-the-planner), a version precedes the stamp and
+therefore the plan itself, and its standing is `pre-reveal` for good; criteria first written on the
+goal page are `post-reveal`, which is an honest reading and a weaker oracle.
+→ [14](14-persistence.md#goal-criteria-are-append-only), [17](17-cockpit.md#the-criteria-half-of-the-gate)
 
 Criteria are **not contained the way a prediction is** — that is the opposite posture to the record
 they share a moment with, and conflating the two leaks predictions or hides criteria.
 `GoalCriteriaStore` is an ordinary member of `Store` precisely so that an agent can be given them,
-where a prediction structurally cannot be. They now share a **form** as well as a moment, so that
-invariant has to be drawn as well as held: the criteria field sits behind a rule with a note of its
-own, never as a fifth prediction slot under one containment sentence.
+where a prediction reaches exactly one agent, the judge, by a path built for it. They share a **form**
+as well as a moment, so that invariant has to be drawn as well as held: the criteria field sits behind
+a rule with a note of its own, never as a fifth prediction slot under one containment sentence.
 → [17](17-cockpit.md#the-criteria-half-of-the-gate)
 
-**Delivering them to an agent is not built.** Today the set is authored, versioned, drawn on the goal
-page and counted in the aggregate, and it is read by people. Nothing appends it to a prompt. The place
-for that is the part dispatch, beside the `plan_parts.acceptance` that already arrives there, and it
-is an **append** rather than a `{token}` — an operator-overridable template that never learned a new
-placeholder drops it silently, on exactly the deployments that customised most
-([05](05-dispatcher.md#prompt-templates)). Until that lands, the goal set is an oracle for the human
-reviewing the work and not one the implementer is handed.
+**Delivering them to an agent is not yet built** — [What the fleet is handed](#what-the-fleet-is-handed)
+is the design. Today the set is authored, versioned, drawn on the goal page and counted in the
+aggregate, and it is read by people; nothing appends it to a prompt, so until that lands the goal set
+is an oracle for the human reviewing the work and not one the implementer is handed.
 
 ### The status is the plan's life, and only that
 

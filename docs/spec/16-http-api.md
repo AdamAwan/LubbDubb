@@ -1841,6 +1841,13 @@ it for ever.
 
 ### `POST /api/goals/:number/reveal`
 
+**Not yet built:** the stamp also closes the
+[intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner), so the route
+accepts a goal with **no plan** where its appraisal stands `workable` and no planner has been
+dispatched — that is the sitting, and the stamp there is what releases rule `issue-plan`. The 409 below
+stays for every other goal with no plan `awaiting_approval`. Marking stays refused until a plan
+exists: a stamp with no plan behind it is a closed sitting, not a revealed plan.
+
 Stamps the reveal server-side and answers `{ ok, reveal, plan }` with the full document. This is the
 call that ends the offer, and the act that ends the opportunity to predict is the same act that would
 have contaminated it — which is why there is no rule against back-filling a prediction to enforce
@@ -1864,7 +1871,9 @@ so it is an invariant of the record rather than a check somebody remembered to w
 its own check only so the refusal can say which rule refused.
 
 Prediction text is served **here and nowhere else**. It reaches no prompt, no tool response, no
-transcript, no retro dossier, no scratchpad and above all no tracker.
+transcript, no retro dossier, no scratchpad and above all no tracker — save the one agent built to read
+it, the [prediction judge](14-persistence.md#the-prediction-judge), whose own output reaches none of
+those either. Not yet built.
 → [14](14-persistence.md#the-prediction-store-is-not-on-store)
 
 ### `POST /api/goals/:number/prediction/outcome`
