@@ -11,6 +11,7 @@ import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
 import {
   ALLOWED_MCP_TOOLS,
+  isSealedRule,
   MCP_SERVER_ID,
   MCP_TOOL_NAMES,
   PERMISSION_PROMPT_TOOL,
@@ -213,6 +214,10 @@ test('every rule subset names a live rule and real tools, and the core is in eve
   for (const [rule, extras] of Object.entries(RULE_TOOLS)) {
     assert.ok(Object.hasOwn(DISPATCH_RULES, rule), `${rule} is a live dispatch rule`);
     for (const tool of extras) assert.ok((MCP_TOOL_NAMES as readonly string[]).includes(tool), `${tool} is a tool`);
+    if (isSealedRule(rule)) {
+      assert.deepEqual([...toolsForRule(rule)], [...extras], `${rule} is sealed, so it keeps its own tools alone`);
+      continue;
+    }
     for (const core of UNIVERSAL_TOOLS) assert.ok(toolsForRule(rule).has(core), `${rule} keeps ${core}`);
   }
   for (const [name, naming] of Object.entries(TOOL_NAMING)) {

@@ -42,6 +42,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { GoalCriteria } from '../components/GoalCriteria.js';
 import { PartDescriptionsProvider, PartDescriptionTag } from '../components/partDescriptions.js';
 import { PlanRevealGate } from '../components/PlanRevealGate.js';
+import { IntakeSitting } from '../components/IntakeSitting.js';
 import { PredictionReview } from '../components/PredictionReview.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
@@ -294,8 +295,22 @@ function WorkPaneBody({
 }): JSX.Element {
   const underWay = planUnderWay(page);
   const gatedPlan = page.plan !== null && !page.plan.revealed;
+  /* Planning waits on the operator here, so the sitting is drawn first and the criteria
+     card is not: it asks the same question, and asked twice the operator answers one.
+     → docs/spec/17-cockpit.md#the-reveal-gate */
+  const sitting = page.plan === null && page.issue.pickup.status === 'sitting';
   return (
     <>
+      {sitting && (
+        <section className="cn-card">
+          <h3>Before planning</h3>
+          <IntakeSitting
+            issueNumber={page.issue.number}
+            aligning={page.issue.pickup.reasons.some((r) => r.startsWith('checking your criteria'))}
+            onClosed={() => actions.refresh()}
+          />
+        </section>
+      )}
       <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} />
       {/* Below the plan rather than above it: what "done" means is read against the
           shape the fleet proposed, and the card draws nothing at all where the
@@ -304,10 +319,11 @@ function WorkPaneBody({
           before the operator starts typing. Not while the plan is at its gate: the
           gate asks the same question, and asked twice the operator answers one.
           → docs/spec/17-cockpit.md#goal-criteria-and-drift */}
-      {!gatedPlan && (
+      {!gatedPlan && !sitting && (
         <GoalCriteria
           issueNumber={page.issue.number}
           workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
+          hasChecks={page.checks.length > 0}
           open={folds.criteria.open}
           settled={folds.criteria.settled}
           onToggle={folds.criteria.onToggle}

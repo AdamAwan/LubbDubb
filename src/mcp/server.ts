@@ -46,6 +46,7 @@ interface McpBridgeServerOptions {
   remoteReadings?: McpToolDeps['remoteReadings'];
   remoteListings?: McpToolDeps['remoteListings'];
   localRun?: McpToolDeps['localRun'];
+  judge?: McpToolDeps['judge'];
   repoRoot?: string;
   argsRetentionDays?: number;
   errors?: ErrorRecorder;
@@ -217,6 +218,7 @@ export class McpBridgeServer {
         remoteReadings: this.opts.remoteReadings,
         remoteListings: this.opts.remoteListings,
         localRun: this.opts.localRun,
+        judge: this.opts.judge,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,
       },

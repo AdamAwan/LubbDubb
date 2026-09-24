@@ -3,7 +3,7 @@ import { DISPATCH_RULES, type DispatchRuleId } from './rules.js';
 
 // → docs/spec/05-dispatcher.md
 
-type HeldReason = 'cooldown' | 'capped' | 'unapproved' | 'superseded' | 'sequenced' | 'waiting';
+type HeldReason = 'cooldown' | 'capped' | 'unapproved' | 'superseded' | 'sequenced' | 'sitting' | 'waiting';
 
 export type RuleHeld = Exclude<HeldReason, 'waiting'>;
 

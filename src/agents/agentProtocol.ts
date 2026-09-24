@@ -134,6 +134,8 @@ interface ClaudeArgsOptions {
   additionalDirectories?: string[];
   permissionPromptTool?: string;
   extraAllowedTools?: string[];
+  /** A sealed rule: no built-in tool and no MCP server but the harness's. */
+  sealed?: boolean;
 }
 
 function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
@@ -183,6 +185,7 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   const settings = collectSettings(opts);
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);
+  if (opts.sealed) args.push('--strict-mcp-config', '--tools', '');
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.model) args.push('--model', opts.model);
   if (opts.effort) args.push('--effort', opts.effort);

@@ -18,6 +18,8 @@ export const MCP_TOOL_NAMES = [
   'assess_issue',
   'conclude_part',
   'appraise_issue',
+  'criteria_alignment',
+  'prediction_judge',
   'scratch_append',
   'scratch_read',
   'retro_submit',
@@ -62,6 +64,8 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   conclude_part: 'point-of-use',
   assess_issue: 'point-of-use',
   appraise_issue: 'point-of-use',
+  criteria_alignment: 'point-of-use',
+  prediction_judge: 'point-of-use',
   retro_submit: 'point-of-use',
   feature_summary: 'point-of-use',
   sequence_submit: 'point-of-use',
@@ -121,11 +125,13 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   'work-item-in-review': [],
   'work-item-back-to-pickup': [],
   'issue-appraisal': ['appraise_issue'],
+  'criteria-alignment': ['criteria_alignment'],
   'issue-plan': ['plan_submit', 'plan_not_needed'],
   'issue-assess': ['assess_issue', 'validation_plan'],
   'issue-shortfall': [],
   'issue-retro': ['retro_submit'],
   'plan-approval': [],
+  'prediction-judge': ['prediction_judge'],
   'plan-amendment': [],
   'plan-blocked': [],
   'plan-part': ['conclude_part', 'watch_declare', 'state_declare'],
@@ -142,8 +148,20 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   idle: [],
 };
 
+/**
+ * Rules whose agent is handed its own tools and nothing else: no universal tool, no
+ * hidden tool it could still call, and no built-in tool at launch. Its output must
+ * reach no other agent. → docs/spec/14-persistence.md#the-prediction-judge
+ */
+const SEALED_RULES: ReadonlySet<string> = new Set<DispatchRuleId>(['prediction-judge']);
+
+export function isSealedRule(rule: string | null | undefined): boolean {
+  return rule !== null && rule !== undefined && SEALED_RULES.has(rule);
+}
+
 export function toolsForRule(rule: string | null): ReadonlySet<McpToolName> {
   if (rule === null || !Object.hasOwn(RULE_TOOLS, rule)) return new Set(MCP_TOOL_NAMES);
+  if (isSealedRule(rule)) return new Set(RULE_TOOLS[rule as DispatchRuleId]);
   return new Set([...UNIVERSAL_TOOLS, ...RULE_TOOLS[rule as DispatchRuleId]]);
 }
 

@@ -332,6 +332,26 @@ export function PredictionReview({
                     mark={mark}
                     onPick={(next) => write(key, next)}
                   />
+                  {/* The judge's second reading, only once there is one and never before the
+                      operator's own — it is dispatched after their mark, so it cannot anchor it.
+                      → docs/spec/17-cockpit.md#moment-one--the-prediction-beside-the-plan */}
+                  {prediction.judgeMarkedAt !== null && (
+                    <p
+                      className={`cn-pmark-judge ${
+                        mark !== null && prediction.judgeMarks[key] !== null && prediction.judgeMarks[key] !== mark
+                          ? 'is-apart'
+                          : ''
+                      }`}
+                    >
+                      The judge’s reading:{' '}
+                      {prediction.judgeMarks[key] === null
+                        ? 'left unmarked'
+                        : wording.state[prediction.judgeMarks[key]]}
+                      {mark !== null && prediction.judgeMarks[key] !== null && prediction.judgeMarks[key] !== mark
+                        ? ' — it read this differently from you.'
+                        : ''}
+                    </p>
+                  )}
                   {showOutcome && (
                     <Moment
                       moment="two"

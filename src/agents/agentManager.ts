@@ -33,7 +33,7 @@ import type {
   Task,
   BugFiling,
 } from '../types.js';
-import { extraMcpGrants } from '../mcp/names.js';
+import { extraMcpGrants, isSealedRule } from '../mcp/names.js';
 
 type LinkTicketResult = { ok: true; bug: BugFiling } | { ok: false; error: string };
 
@@ -86,6 +86,7 @@ interface AgentManagerOptions {
     model: string | null;
     effort: string | null;
     permissionMode: string | null;
+    sealed: boolean;
   }) => string[];
   goalProfile?: {
     effective: (issueOrigin: string) => string | null;
@@ -153,6 +154,9 @@ interface AgentManagerEvents {
   limited: [{ agentId: string; taskId: string; reason: string; resetsAt: string | null }];
 }
 
+const SEALED_WAITING =
+  'This sealed agent stopped and is waiting. What it said is kept from every other reader — read its transcript in the cockpit.';
+
 export class AgentManager extends EventEmitter implements AgentToolTarget {
   private readonly sessions = new Map<string, AgentSession>();
   private readonly exitCodes = new Map<string, number>();
@@ -188,6 +192,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         model: task.model ?? null,
         effort: task.effort ?? null,
         permissionMode: task.permissionMode ?? null,
+        sealed: isSealedRule(task.rule),
       }),
       cwd,
       env: {
@@ -244,6 +249,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         model: task.model ?? null,
         effort: task.effort ?? null,
         permissionMode: task.permissionMode ?? null,
+        sealed: isSealedRule(task.rule),
       }),
       cwd: agent.cwd,
       env: {
@@ -1284,7 +1290,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         // The session went away between the turn ending and the nudge; fall through.
       }
     }
-    this.handleWaiting(agentId, task, stallReason(lastWords));
+    this.handleWaiting(agentId, task, stallReason(isSealedRule(task.rule) ? '' : lastWords));
     this.armStallClock(agentId, this.opts.stallParkMs ?? 0, 'stall');
   }
 
@@ -1301,8 +1307,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     debugLog('agent', `${kind} park armed agent=${agentId} window=${window}ms grace=${grace}ms`);
   }
 
-  private handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
+  private handleWaiting(agentId: string, task: Task, said: string, asked?: AgentAsk): void {
     if (this.parked.has(agentId)) return;
+    // A sealed agent's own words reach no other reader. → docs/spec/14-persistence.md#the-prediction-judge
+    const sealed = isSealedRule(task.rule);
+    const reason = sealed ? SEALED_WAITING : said;
+    const ask = sealed ? undefined : asked;
     this.drainFileEvents(agentId);
     const rule = this.opts.whitelistedApprovals.find((r) => reason.includes(r.match));
     if (rule) {
@@ -1407,7 +1417,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         message:
           `Agent ${agentId} failed (task ${taskId})` +
           `${exitCode !== undefined ? `, exit code ${exitCode}` : ''}${failureNote ? `, ${failureNote}` : ''}`,
-        detail: recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
+        detail: isSealedRule(this.store.tasks.getTask(taskId)?.rule)
+          ? null
+          : recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
       });
     }
     this.reflectStatus(agentId, taskId, status);

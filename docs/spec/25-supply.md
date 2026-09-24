@@ -135,13 +135,13 @@ issue, and the lens re-reads that one function's answer — it never asks the wo
 of its own, which is what stops it and rule `issue-pickup` coming to different conclusions about the
 same issue.
 
-| Bucket        | Pickup status                                          | What it means                                   |
-| ------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| **Inflight**  | `active` · `has_pr` · `planning`                       | The fleet is on it. Drains over time.           |
-| **Queued**    | `eligible` · `blocked` · `cooldown` · `appraisal`\*    | Unstarted supply the fleet may take.            |
-| **Reservoir** | `unwatched`                                            | Not supply. One watch write away from being it. |
-| **Held**      | `escalated` · `delivered` · `retained` · `appraisal`\* | Parked on a person. The fleet cannot drain it.  |
-| **Gone**      | `done`                                                 | —                                               |
+| Bucket        | Pickup status                                                      | What it means                                   |
+| ------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| **Inflight**  | `active` · `has_pr` · `planning`                                   | The fleet is on it. Drains over time.           |
+| **Queued**    | `eligible` · `blocked` · `cooldown` · `appraisal`\*                | Unstarted supply the fleet may take.            |
+| **Reservoir** | `unwatched`                                                        | Not supply. One watch write away from being it. |
+| **Held**      | `escalated` · `delivered` · `retained` · `sitting` · `appraisal`\* | Parked on a person. The fleet cannot drain it.  |
+| **Gone**      | `done`                                                             | —                                               |
 
 `blocked` is in **queued** and it is the healthiest number on the card: it means more work than
 slots, which is the condition this whole module exists to keep a deployment in. A count that dropped

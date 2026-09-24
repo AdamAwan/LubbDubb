@@ -6,7 +6,7 @@ import { buttonClass } from './button.js';
 // → docs/spec/17-cockpit.md
 
 /** The four slots, in the order they are asked, each with the question it asks. */
-const SLOTS: readonly { key: keyof PredictionDraft; question: string }[] = [
+export const SLOTS: readonly { key: keyof PredictionDraft; question: string }[] = [
   { key: 'locus', question: 'Where do I think this lives?' },
   { key: 'cause', question: 'What do I think the cause / approach is?' },
   { key: 'split', question: 'How would I split this up?' },
@@ -37,9 +37,10 @@ export const PREDICT_WHY =
  */
 export const HOLDS_NOTHING_UP = 'It holds nothing up: the fleet is not waiting on this.';
 
-const CONTAINMENT =
-  'What you write here is kept from every agent the harness runs — it goes into no prompt, no ' +
-  'transcript and no tool answer. That holds for what should not happen as much as for the rest: it ' +
+export const CONTAINMENT =
+  'What you write here is kept from every agent the harness runs but one: a sealed judge, which reads it ' +
+  'after you have marked it against the plan, to give a second reading, and whose own words reach no other ' +
+  'agent. It goes into no other prompt, transcript or tool answer. That holds for what should not happen as much as for the rest: it ' +
   'is a prediction the plan is marked against, never an instruction the fleet is given. The one leak ' +
   "the containment cannot stop is you: paste it into this goal's standing instructions and the " +
   'fleet reads it.';
@@ -51,16 +52,16 @@ const CONTAINMENT =
  * one block, the operator carries whichever posture they read first across to the
  * other field — which either leaks the prediction or buries the criteria.
  */
-const REACHES_THE_FLEET =
+export const REACHES_THE_FLEET =
   'Unlike the prediction above, this is meant to be read: it is the oracle the work is judged ' +
   'against, and where it and a part’s own acceptance disagree, this is the authority. Writing it ' +
   'now, before you have read the plan, is what makes it independent of the plan.';
 
-type Draft = Record<keyof PredictionDraft, string>;
+export type Draft = Record<keyof PredictionDraft, string>;
 
-const EMPTY: Draft = { locus: '', cause: '', split: '', avoid: '' };
+export const EMPTY: Draft = { locus: '', cause: '', split: '', avoid: '' };
 
-function filled(draft: Draft): PredictionDraft {
+export function filled(draft: Draft): PredictionDraft {
   const slots: PredictionDraft = {};
   for (const { key } of SLOTS) {
     const text = draft[key].trim();

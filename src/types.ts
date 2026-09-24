@@ -889,6 +889,11 @@ export interface ValidationCheck {
   proof: string | null;
   uses: string[];
   covers: string[];
+  /**
+   * The goal criteria this check answers, each a criterion's text as the current version states it.
+   * Absent is none. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
+   */
+  satisfies?: string[];
   fleetCandidate: boolean;
   candidateWhy: string | null;
   actor: ValidationCheckActor;
@@ -947,6 +952,7 @@ export interface ValidationCheckInput {
   proof: string | null;
   uses: string[];
   covers: string[];
+  satisfies?: string[];
   fleetCandidate: boolean;
   candidateWhy: string | null;
   /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
@@ -2171,6 +2177,12 @@ export interface GoalPrediction {
   planMarkedAt: string | null;
   outcomeMarks: PredictionOutcomeMarks;
   outcomeMarkedAt: string | null;
+  /**
+   * The prediction judge's reading of moment one, beside the operator's and never
+   * folded into it. → docs/spec/14-persistence.md#the-prediction-judge
+   */
+  judgeMarks: PredictionPlanMarks;
+  judgeMarkedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2239,6 +2251,45 @@ export interface GoalCriteriaDrift {
   author: string | null;
   reason: string | null;
   recordedAt: string;
+}
+
+export type CriteriaAlignmentVerdict = 'aligned' | 'partial' | 'conflicting';
+
+type CriteriaPointTag = 'matches' | 'extra' | 'uncovered' | 'contradicts';
+
+export interface CriteriaAlignmentPoint {
+  tag: CriteriaPointTag;
+  point: string;
+  note: string | null;
+}
+
+/**
+ * The alignment check's reading of one criteria version against the ticket's own
+ * criteria. `pressedOnAt` is when the operator closed the sitting over a
+ * `conflicting` verdict. → docs/spec/08-planning.md#the-alignment-check
+ */
+export interface GoalCriteriaAlignment {
+  id: string;
+  originRef: string;
+  version: number;
+  criteriaId: string;
+  verdict: CriteriaAlignmentVerdict;
+  summary: string;
+  points: CriteriaAlignmentPoint[];
+  agentId: string | null;
+  decidedAt: string;
+  pressedOnAt: string | null;
+}
+
+/**
+ * How one of a goal's criteria stands at delivery, read off the live checks that name it in
+ * `satisfies`. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
+ */
+export interface CriterionCoverage {
+  criterion: string;
+  reading: 'met' | 'not-met' | 'waived' | 'unread' | 'gap';
+  /** The letters of the live checks that name it, in the order the sheet draws them. */
+  checks: string[];
 }
 
 /** One version in a goal's append-only acceptance-criteria chain. */

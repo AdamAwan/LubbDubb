@@ -98,10 +98,9 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
   [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
 - **The prediction store is deliberately NOT forwarded on `Store`, and tidying it on removes the guarantee.** There is
-  no `store.predictions`: `Store.openPredictions()` is called once in `src/system.ts` and handed to the prediction
-  routes alone, so nothing the fleet is given can name one. A prediction measures the fleet, and `worldRead` serves
-  issue bodies and comments verbatim — on the tracker it is a prediction every agent on the goal has read. →
-  [14](docs/spec/14-persistence.md#the-prediction-store-is-not-on-store)
+  no `store.predictions`: `Store.openPredictions()` is handed to the prediction routes and `judgeSeam` alone. The judge
+  that reads one is a **sealed** rule (`isSealedRule`): a new path quoting an agent's output back must drop it for a
+  sealed agent. → [14](docs/spec/14-persistence.md#the-prediction-store-is-not-on-store)
 - **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
   another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
