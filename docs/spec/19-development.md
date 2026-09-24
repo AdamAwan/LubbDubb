@@ -183,6 +183,13 @@ AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@p
 - **format:check** is Prettier in check mode over `src/**/*.ts`, `test/**/*.ts`, `web/**/*.{ts,tsx}`,
   `scripts/*.ts` and root-level `*.{json,md}`. Run `npm run format` to fix; do not hand-format. The
   pre-commit hook below normally means it never fails.
+- **Complexity limits only ratchet down.** `eslint.config.js` sets `complexity` (15), `max-depth`
+  (4), `max-lines-per-function` (80) and `max-lines` (500) as errors over `src/`, `web/` and
+  `scripts/`. Every breach that existed when they were added is frozen in `eslint-suppressions.json`
+  (ESLint's bulk suppressions), so lint fails only on a _new_ one. Fix a frozen breach and lint then
+  fails on the stale entry until `npm run lint:prune` removes it — the file only shrinks. Never add
+  to it by hand or with `--suppress-all`; split the function instead. The file is in
+  `.prettierignore` because ESLint rewrites it in its own format.
 
 CI additionally runs `npm run smoke` and coverage, and there are CodeQL and security workflows.
 CodeQL is a hard gate: code scanning is enabled on the repository, the analysis uploads its
@@ -216,6 +223,15 @@ and is the difference between a hook people keep and one they disable.
 
 `.gitattributes` pins `.githooks/*` to `eol=lf`: git runs hooks through `sh`, and a CRLF shebang
 line is unparseable on any non-Windows checkout.
+
+## The review Stop hook
+
+`.claude/settings.json` registers `.claude/hooks/review-reminder.sh` as a Claude Code `Stop` hook.
+When the branch's diff against `origin/main` touches `src/`, `web/` or `scripts/`, it blocks the
+stop once and asks the agent to run `/simplify` then `/code-review`. It stamps a hash of that diff in
+the git dir, so it asks once per distinct change set, and it never blocks a stop that is already the
+hook's own continuation (`stop_hook_active`) — without both, it loops. A hook cannot invoke a skill
+itself; it can only hand the agent a reason to.
 
 ## What holds the documentation honest
 

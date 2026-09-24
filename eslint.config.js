@@ -62,6 +62,18 @@ export default tseslint.config(
     },
   },
 
+  // Complexity limits. Existing breaches are frozen in eslint-suppressions.json;
+  // fix one and run `npm run lint:prune` so the count only goes down.
+  {
+    files: ['src/**/*.ts', 'web/**/*.{ts,tsx}', 'scripts/**/*.ts'],
+    rules: {
+      complexity: ['error', 15],
+      'max-depth': ['error', 4],
+      'max-lines-per-function': ['error', { max: 80, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
+    },
+  },
+
   // Turn off any stylistic rules that would fight Prettier. Must stay last.
   prettier,
 );

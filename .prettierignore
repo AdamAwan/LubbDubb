@@ -6,3 +6,4 @@ package-lock.json
 *.sqlite
 *.db
 .lubbdubb
+eslint-suppressions.json

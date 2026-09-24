@@ -27,6 +27,7 @@
     "typecheck:web": "tsc -p web/tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/web.tsbuildinfo",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "lint:fix": "eslint . --fix",
+    "lint:prune": "eslint . --prune-suppressions",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
     "format:check": "prettier --cache --check \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
     "knip": "knip --cache",
