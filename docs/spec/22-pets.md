@@ -791,14 +791,27 @@ on anything the operator did while the feature was on screen.
 
 What the first stamp takes is the whole of the migration decision:
 
-- **`pet_actions` empty → `now()`.** Nothing here has ever been rolled, so nothing is being cut off.
-  The backlog is recorded inert and the deployment's first pet comes from what its operator does
-  next.
-- **`pet_actions` non-empty → `MIN(at)` over it.** Every already-rolled row is then at or after the
-  start, which makes the filter a **provable no-op** for an existing collection: the same pity walk,
-  the same `firstEver`, the same replay, the same pets. `now()` here instead would mark honestly
-  earned actions pre-boundary and put an `unearned` badge on a real animal on the boot its owner took
-  the build, which is the failure [authenticity](#authenticity) is written to avoid above all others.
+- **No row in `pet_actions` hatched anything → `now()`.** Nothing here has ever been rolled, so
+  nothing is being cut off. The backlog is recorded inert and the deployment's first pet comes from
+  what its operator does next.
+- **Some row hatched → `MIN(at)` over the rows that did** (`pet_id IS NOT NULL`). Every already-rolled
+  row is then at or after the start, which makes the filter a **provable no-op** for an existing
+  collection: the same pity walk, the same `firstEver`, the same replay, the same pets. `now()` here
+  instead would mark honestly earned actions pre-boundary and put an `unearned` badge on a real animal
+  on the boot its owner took the build, which is the failure [authenticity](#authenticity) is written
+  to avoid above all others.
+
+**The gate asks _has anything been rolled_, and only a hatch answers it.** `pet_actions` holds two
+kinds of row that look alike — actions that were rolled, and actions recorded inert so they never
+would be, both with `pet_id` null when nothing hatched. Only the first kind is history the boundary
+must not cut, and an inert row carries its source's own timestamp, which can be years old. Taken over
+the whole table, `MIN(at)` lets one inert row pin the start to it and pay the entire backlog after it
+out on the first scan — the [first action ever](#the-first-action-ever) spent on a row nobody was
+looking at. A hatch is the one reading that cannot mean _inert_, and it loses nothing: the first
+action ever rolled always hatches, so on a genuinely rolled collection the earliest hatch _is_ the
+earliest roll. A table of misses and no hatch reaches `now()`, the same answer the empty table does.
+Anything that ever stamps rows into `pet_actions` outside the scan is covered by this, and must not
+be allowed to reopen it ([#587](https://github.com/AdamAwan/LubbDubb/issues/587)).
 
 The row's own absence is the migration gate, which is why the start is a table and not a column: it
 is true on exactly one boot however the schema arrived, and it needs no `ColumnMigrations` entry and
@@ -844,10 +857,14 @@ triaging a finding was, under the name it has now that the three claim stores ar
 and markings from is `<kind>:<ref>`. Renaming a member does not rename a category; it orphans every
 pet already hatched from one. So the word stays, its rate and its species table are the `claim` ones
 unchanged, and its label is found by putting the fold's own derivation back — the row that named a
-finding is `fact_<that finding's id>` now. And the ledger is stamped once: `spendRuledClaims` records
-every claim already ruled on as an action that paid nothing, because otherwise a deployment taking that
-build pays out for a year of decisions in one afternoon — which looks exactly like the feature working.
-→ [14](14-persistence.md#a-migration-that-must-run-once)
+finding is `fact_<that finding's id>` now.
+
+**The scan is the only writer of `pet_actions`.** `recordPetAction` is reached from `PetKeeper.scan`
+and from nothing else. A one-shot migration once stamped every ruled claim into the ledger as an
+action that paid nothing; it went with the claim store, and the rows it stamped on a running
+deployment stay, inert. They are why [the vivarium's start](#the-vivariums-start) is read off hatched
+rows only — a stamping migration writes into a table that gate reads, and the next one that is
+written has to be checked against it. → [14](14-persistence.md#a-migration-that-must-run-once)
 
 Three exclusions are deliberate. A **declined** human task is the operator saying the ask should not
 have been made, and a **`close_out`** one is the harness's own, which the harness also settles — so
