@@ -57,6 +57,12 @@ function manager(
   );
 }
 
+// Root ignores directory permissions, so the POSIX wedge cannot hold; CI runs these as a normal user.
+const wedgeUnavailable =
+  process.platform !== 'win32' && process.getuid?.() === 0
+    ? 'needs a non-root user (root ignores the chmod wedge); CI covers it - not a failure'
+    : false;
+
 /**
  * Makes `git clean -ffdx` fail on a slot, the way a left-behind process does, without the sweep
  * being able to fix it: on Windows a live process whose cwd is a directory in the slot, which rmdir
@@ -130,42 +136,46 @@ test('a handover sweeps the slot before it wipes it', async () => {
   assert.ok(!existsSync(join(slot, 'deps', 'installed.txt')), 'the wipe ran after the sweep');
 });
 
-test('a slot whose wipe is refused is taken out of the pool and the dispatch goes to another', async () => {
-  const repo = initRepo();
-  const processes = new FakeSlotProcesses();
-  const errors = recorder();
-  const wt = manager(repo, 2, processes, errors);
+test(
+  'a slot whose wipe is refused is taken out of the pool and the dispatch goes to another',
+  { skip: wedgeUnavailable },
+  async () => {
+    const repo = initRepo();
+    const processes = new FakeSlotProcesses();
+    const errors = recorder();
+    const wt = manager(repo, 2, processes, errors);
 
-  const first = await wt.ensure('feature/x');
-  const spare = await wt.ensure('feature/w');
-  await wt.remove('feature/x');
-  await wt.remove('feature/w');
-  const release = wedge(first);
-  processes.standing(first, [{ pid: 6000, parentPid: 1, detail: `${first}/node_modules/.bin/vite` }]).stubborn(6000);
+    const first = await wt.ensure('feature/x');
+    const spare = await wt.ensure('feature/w');
+    await wt.remove('feature/x');
+    await wt.remove('feature/w');
+    const release = wedge(first);
+    processes.standing(first, [{ pid: 6000, parentPid: 1, detail: `${first}/node_modules/.bin/vite` }]).stubborn(6000);
 
-  try {
-    const second = await wt.ensure('feature/y');
-    assert.equal(second, spare, 'the condemned slot is skipped and another is handed over');
+    try {
+      const second = await wt.ensure('feature/y');
+      assert.equal(second, spare, 'the condemned slot is skipped and another is handed over');
 
-    const faults = errors.entries.filter((e) => e.message.includes('cannot be emptied'));
-    assert.equal(faults.length, 1, 'the fault is surfaced once, not once per pulse');
-    assert.match(faults[0]?.message ?? '', /pid 6000/);
-    assert.match(faults[0]?.message ?? '', /node_modules/);
+      const faults = errors.entries.filter((e) => e.message.includes('cannot be emptied'));
+      assert.equal(faults.length, 1, 'the fault is surfaced once, not once per pulse');
+      assert.match(faults[0]?.message ?? '', /pid 6000/);
+      assert.match(faults[0]?.message ?? '', /node_modules/);
 
-    await wt.remove('feature/y');
-    const third = await wt.ensure('feature/z');
-    assert.notEqual(third, first);
-    assert.equal(
-      errors.entries.filter((e) => e.message.includes('cannot be emptied')).length,
-      1,
-      'a second dispatch does not re-propose the same handover',
-    );
-  } finally {
-    await release();
-  }
-});
+      await wt.remove('feature/y');
+      const third = await wt.ensure('feature/z');
+      assert.notEqual(third, first);
+      assert.equal(
+        errors.entries.filter((e) => e.message.includes('cannot be emptied')).length,
+        1,
+        'a second dispatch does not re-propose the same handover',
+      );
+    } finally {
+      await release();
+    }
+  },
+);
 
-test('the exhaustion refusal names the slot that was taken out and why', async () => {
+test('the exhaustion refusal names the slot that was taken out and why', { skip: wedgeUnavailable }, async () => {
   const repo = initRepo();
   const processes = new FakeSlotProcesses();
   const wt = manager(repo, 1, processes, recorder());
@@ -187,7 +197,7 @@ test('the exhaustion refusal names the slot that was taken out and why', async (
   }
 });
 
-test('a slot comes back into the pool once nothing is holding it', async () => {
+test('a slot comes back into the pool once nothing is holding it', { skip: wedgeUnavailable }, async () => {
   const repo = initRepo();
   const processes = new FakeSlotProcesses();
   const errors = recorder();
@@ -207,7 +217,7 @@ test('a slot comes back into the pool once nothing is holding it', async () => {
   assert.equal(errors.entries.filter((e) => e.message.includes('is back in the pool')).length, 1);
 });
 
-test('a slot comes back into the pool even where the probe can never answer', async () => {
+test('a slot comes back into the pool even where the probe can never answer', { skip: wedgeUnavailable }, async () => {
   const repo = initRepo();
   const processes = new FakeSlotProcesses();
   const errors = recorder();
@@ -228,53 +238,61 @@ test('a slot comes back into the pool even where the probe can never answer', as
   assert.equal(errors.entries.filter((e) => e.message.includes('is back in the pool')).length, 1);
 });
 
-test('a refused wipe is probed again for the paths git named, not for the whole table', async () => {
-  const repo = initRepo();
-  const processes = new FakeSlotProcesses();
-  const wt = manager(repo, 1, processes, recorder());
+test(
+  'a refused wipe is probed again for the paths git named, not for the whole table',
+  { skip: wedgeUnavailable },
+  async () => {
+    const repo = initRepo();
+    const processes = new FakeSlotProcesses();
+    const wt = manager(repo, 1, processes, recorder());
 
-  const only = await wt.ensure('feature/x');
-  await wt.remove('feature/x');
-  const release = wedge(only);
-  processes.asked.length = 0;
-  processes.askedPaths.length = 0;
+    const only = await wt.ensure('feature/x');
+    await wt.remove('feature/x');
+    const release = wedge(only);
+    processes.asked.length = 0;
+    processes.askedPaths.length = 0;
 
-  try {
+    try {
+      await assert.rejects(wt.ensure('feature/y'));
+      assert.ok(processes.askedPaths.length >= 2, 'the sweep, then a probe of what the wipe refused');
+      assert.deepEqual(processes.askedPaths[0], [], 'the sweep has no path to ask about yet');
+      assert.ok(
+        processes.askedPaths.slice(1).some((paths) => paths.length > 0),
+        'the probes after the refusal name the paths git could not unlink',
+      );
+    } finally {
+      await release();
+    }
+  },
+);
+
+test(
+  'a slot condemned while the process table could not be read comes back once it can',
+  { skip: wedgeUnavailable },
+  async () => {
+    const repo = initRepo();
+    const processes = new FakeSlotProcesses();
+    const errors = recorder();
+    const wt = manager(repo, 1, processes, errors);
+
+    const only = await wt.ensure('feature/x');
+    await wt.remove('feature/x');
+    const release = wedge(only);
+    processes.unreadable(only);
     await assert.rejects(wt.ensure('feature/y'));
-    assert.ok(processes.askedPaths.length >= 2, 'the sweep, then a probe of what the wipe refused');
-    assert.deepEqual(processes.askedPaths[0], [], 'the sweep has no path to ask about yet');
-    assert.ok(
-      processes.askedPaths.slice(1).some((paths) => paths.length > 0),
-      'the probes after the refusal name the paths git could not unlink',
-    );
-  } finally {
+
+    const fault = errors.entries.find((e) => e.message.includes('cannot be emptied'));
+    assert.ok(fault !== undefined);
+    assert.match(fault.message, /could not read the process table/);
+    assert.doesNotMatch(fault.message, /Nothing the harness can see is holding it/);
+
     await release();
-  }
-});
+    processes.unreadable(only, false);
 
-test('a slot condemned while the process table could not be read comes back once it can', async () => {
-  const repo = initRepo();
-  const processes = new FakeSlotProcesses();
-  const errors = recorder();
-  const wt = manager(repo, 1, processes, errors);
-
-  const only = await wt.ensure('feature/x');
-  await wt.remove('feature/x');
-  const release = wedge(only);
-  processes.unreadable(only);
-  await assert.rejects(wt.ensure('feature/y'));
-
-  const fault = errors.entries.find((e) => e.message.includes('cannot be emptied'));
-  assert.ok(fault !== undefined);
-  assert.match(fault.message, /could not read the process table/);
-  assert.doesNotMatch(fault.message, /Nothing the harness can see is holding it/);
-
-  await release();
-  processes.unreadable(only, false);
-
-  const back = await wt.ensure('feature/z');
-  assert.equal(back, only, 'an unreadable probe is not a condemnation nothing could ever change');
-});
+    const back = await wt.ensure('feature/z');
+    assert.equal(back, only, 'an unreadable probe is not a condemnation nothing could ever change');
+  },
+);
 
 test('a probe that could not answer says why, not which script it ran', () => {
   assert.match(

@@ -403,6 +403,15 @@ checkout's shape stops mattering. Inject the fake unless git behaviour **is** th
 `hasCommitsBeyond`. Those tests point `repoRoot` at a throwaway repository from
 `test/support/gitRepo.ts` and use the real manager.
 
+### Why the refused-wipe tests skip under root
+
+`test/slotProcessSweep.test.ts` makes a slot's `git clean -ffdx` fail by leaving an unwritable
+directory in it. Root ignores directory permissions, so under root the wipe succeeds and the six
+tests that rely on it fail with an `ENOENT` — which is exactly how cloud agent sessions, which run
+as root, kept reporting "6 worktree-pool tests already fail on main". They now **skip** under root,
+with a reason saying so; the suite reports no failure, and CI, which runs as a normal user, still
+exercises them.
+
 ### Why a test turns the self-update check off
 
 `selfUpdate.enabled` defaults to **on**, and `UpdateDesk.run` is awaited inside `Harness.runCycle`
