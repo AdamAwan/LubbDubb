@@ -171,7 +171,7 @@ function registerConfigWriteRoutes(app: FastifyInstance, ctx: RouteContext): voi
       if (Object.keys(body.set ?? {}).length === 0 && (body.clear ?? []).length === 0) {
         return reply.code(400).send({ error: 'nothing to save: neither set nor clear named a field' });
       }
-      const prepared = prepare(filePath, readConfigText(filePath), body.baseline, { set: body.set, clear: body.clear });
+      const prepared = prepare(filePath, body.baseline, { set: body.set, clear: body.clear });
       if (!prepared.ok) return reply.code(prepared.status).send({ error: prepared.error });
 
       const result = commit(ctx, prepared.text, prepared.next);
@@ -184,7 +184,7 @@ function registerConfigWriteRoutes(app: FastifyInstance, ctx: RouteContext): voi
     '/api/config/preview',
     { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
     checked({ body: ConfigPreviewBody }, async ({ body, reply }) => {
-      const prepared = prepare(filePath, readConfigText(filePath), body.baseline, {
+      const prepared = prepare(filePath, body.baseline, {
         set: body.set,
         clear: body.clear,
         ...(body.text !== undefined ? { text: body.text } : {}),
@@ -202,7 +202,7 @@ function registerConfigWriteRoutes(app: FastifyInstance, ctx: RouteContext): voi
     '/api/config/raw',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     checked({ body: ConfigRawBody }, async ({ body, reply }) => {
-      const prepared = prepare(filePath, readConfigText(filePath), body.baseline, { text: body.text });
+      const prepared = prepare(filePath, body.baseline, { text: body.text });
       if (!prepared.ok) return reply.code(prepared.status).send({ error: prepared.error });
 
       const result = commit(ctx, prepared.text, prepared.next);
@@ -246,10 +246,10 @@ type Prepared = { ok: true; text: string; next: Config } | { ok: false; status: 
 
 function prepare(
   filePath: string,
-  current: string,
   baseline: string,
   edits: { set?: Record<string, unknown>; clear?: readonly string[]; text?: string },
 ): Prepared {
+  const current = readConfigText(filePath);
   if (configRevision(current) !== baseline) {
     return {
       ok: false,

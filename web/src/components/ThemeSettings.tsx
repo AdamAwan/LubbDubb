@@ -253,10 +253,12 @@ function useThemeEditor() {
   };
 }
 
-export function ThemeSettings() {
-  const editor = useThemeEditor();
-  const { draft, preset, query, onlyChanged, advanced, dirty } = editor;
-
+function useVisibleTokens(
+  draft: Readonly<Record<string, string>>,
+  query: string,
+  onlyChanged: boolean,
+  advanced: boolean,
+): { visible: ThemeToken[]; groups: TokenGroup[] } {
   const needle = query.trim().toLowerCase();
   const visible = useMemo(
     () =>
@@ -270,8 +272,32 @@ export function ThemeSettings() {
       }),
     [needle, onlyChanged, advanced, draft],
   );
-
   const groups = (Object.keys(TOKEN_GROUPS) as TokenGroup[]).filter((g) => visible.some((t) => t.group === g));
+  return { visible, groups };
+}
+
+export function ThemeSettings() {
+  const {
+    draft,
+    preset,
+    query,
+    onlyChanged,
+    advanced,
+    dirty,
+    justSaved,
+    choosePreset,
+    setQuery,
+    setOnlyChanged,
+    setAdvanced,
+    resetAll,
+    setToken,
+    resetToken,
+    revert,
+    save,
+  } = useThemeEditor();
+
+  const { visible, groups } = useVisibleTokens(draft, query, onlyChanged, advanced);
+
   const changed = THEME_TOKENS.filter((t) => draft[t.name] !== undefined).length;
   const presetLabel = PRESETS.find((p) => p.id === preset)?.label ?? preset;
 
@@ -280,7 +306,7 @@ export function ThemeSettings() {
       {/* Tiles carry the swatches and a name only, in a Dark row and a Light row;
           the blurb is drawn once, beneath, for the preset that is on. Seventeen
           blurbs is a page, and the question the picker answers is "which one". */}
-      <PresetPicker preset={preset} onChoose={editor.choosePreset} />
+      <PresetPicker preset={preset} onChoose={choosePreset} />
 
       <div className="th-tools">
         <input
@@ -289,18 +315,18 @@ export function ThemeSettings() {
           value={query}
           placeholder={SEARCH_HINT}
           aria-label={SEARCH_HINT}
-          onChange={(e) => editor.setQuery(e.target.value)}
+          onChange={(e) => setQuery(e.target.value)}
         />
         <label className="th-only">
-          <input type="checkbox" checked={onlyChanged} onChange={(e) => editor.setOnlyChanged(e.target.checked)} />
+          <input type="checkbox" checked={onlyChanged} onChange={(e) => setOnlyChanged(e.target.checked)} />
           Only what I have changed
         </label>
         <label className="th-only">
-          <input type="checkbox" checked={advanced} onChange={(e) => editor.setAdvanced(e.target.checked)} />
+          <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} />
           Show every token
         </label>
         {changed > 0 && (
-          <Button ghost size="small" onClick={editor.resetAll}>
+          <Button ghost size="small" onClick={resetAll}>
             Reset to {presetLabel}
           </Button>
         )}
@@ -320,8 +346,8 @@ export function ThemeSettings() {
                 token={token}
                 draft={draft}
                 presetLabel={presetLabel}
-                onSet={(next) => editor.setToken(token, next)}
-                onReset={() => editor.resetToken(token)}
+                onSet={(next) => setToken(token, next)}
+                onReset={() => resetToken(token)}
               />
             ))}
         </section>
@@ -330,10 +356,10 @@ export function ThemeSettings() {
       <SaveBar
         dirty={dirty}
         changed={changed}
-        justSaved={editor.justSaved}
+        justSaved={justSaved}
         presetLabel={presetLabel}
-        onRevert={editor.revert}
-        onSave={editor.save}
+        onRevert={revert}
+        onSave={save}
       />
     </div>
   );

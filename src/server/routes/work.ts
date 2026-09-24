@@ -9,9 +9,8 @@ import type { RouteContext } from './context.js';
 
 const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
 
-export function register(app: FastifyInstance, ctx: RouteContext): void {
+function registerRoots(app: FastifyInstance, ctx: RouteContext): void {
   const { store, connector } = ctx.system;
-
   app.get('/api/work', WORK_RATE_LIMIT, async () => {
     const roots = store.graph.listWorkRoots();
     const unrecorded = unrecordedWork(
@@ -27,7 +26,10 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
     }
     return { roots, unrecorded, refUrls } satisfies WorkRootsPayload;
   });
+}
 
+function registerIgnores(app: FastifyInstance, ctx: RouteContext): void {
+  const { store } = ctx.system;
   app.post(
     '/api/work/:ref/ignore',
     WORK_RATE_LIMIT,
@@ -47,27 +49,10 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
       return { ok: true };
     }),
   );
-
-  registerFileRoute(app, ctx);
-
-  app.get(
-    '/api/work/:ref',
-    WORK_RATE_LIMIT,
-    checked({ params: RefParams }, async ({ params, reply }) => {
-      const nodes = store.graph.listWorkSubtree(params.ref);
-      if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
-      const refUrls: Record<string, string> = {};
-      for (const ref of nodes.flatMap((node) => [node.ref, node.baseRef])) {
-        if (!ref || ref in refUrls) continue;
-        const url = connector.resolveRefUrl(ref);
-        if (url) refUrls[ref] = url;
-      }
-      return { nodes, refUrls } satisfies WorkSubtreePayload;
-    }),
-  );
 }
 
-function registerFileRoute(app: FastifyInstance, { system, hub }: RouteContext): void {
+function registerFileRoute(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
   const { store, harness, errors } = system;
 
   app.post(
@@ -120,4 +105,30 @@ function registerFileRoute(app: FastifyInstance, { system, hub }: RouteContext):
       })(req, reply);
     }),
   );
+}
+
+function registerSubtree(app: FastifyInstance, ctx: RouteContext): void {
+  const { store, connector } = ctx.system;
+  app.get(
+    '/api/work/:ref',
+    WORK_RATE_LIMIT,
+    checked({ params: RefParams }, async ({ params, reply }) => {
+      const nodes = store.graph.listWorkSubtree(params.ref);
+      if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
+      const refUrls: Record<string, string> = {};
+      for (const ref of nodes.flatMap((node) => [node.ref, node.baseRef])) {
+        if (!ref || ref in refUrls) continue;
+        const url = connector.resolveRefUrl(ref);
+        if (url) refUrls[ref] = url;
+      }
+      return { nodes, refUrls } satisfies WorkSubtreePayload;
+    }),
+  );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerRoots(app, ctx);
+  registerIgnores(app, ctx);
+  registerFileRoute(app, ctx);
+  registerSubtree(app, ctx);
 }

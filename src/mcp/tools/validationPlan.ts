@@ -21,94 +21,92 @@ import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
-const VALIDATION_PLAN_INPUT = toolSchema(
-  z.object({
-    note: z
-      .string()
-      .describe(
-        'Where you went a different way from the plan’s hint, and why. The hint was written against code ' +
-          'that did not exist yet and it binds nothing — but an operator approved this goal on the strength ' +
-          'of it, so a departure nobody states makes their read at the approval gate worth nothing. Say so ' +
-          'plainly, including where you followed it.',
-      ),
-    emptyReason: z
-      .string()
-      .describe(
-        'Required when you declare no checks: what already settles the question — the suite area that now ' +
-          'asserts it, the coverage part that built it. An empty set with no account of itself reads exactly ' +
-          'like an agent that did nothing.',
-      )
-      .optional(),
-    checks: z
-      .array(
-        z.object({
-          id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
-          title: z.string().describe('One line, the headline.'),
-          do: z
-            .string()
-            .describe(
-              'The procedure, in markdown: the commands, the URL, the clicks. Concrete steps, written for ' +
-                'somebody who has not read the plan. What the check needs in order to be runnable opens it.',
-            ),
-          expect: z
-            .string()
-            .describe(
-              'What a pass looks like, and where — the row, the log line, the ref that is gone, the screen. ' +
-                'One run settles several things: list all of them here rather than splitting the check.',
-            ),
-          proof: z
-            .string()
-            .describe(
-              'What must come **back** for a pass to count — the evidence, not the assertion. Name the ' +
-                'screen and what has to be visible on it. Write it on every check an agent carries out ' +
-                'unwatched: it is the only thing standing between an agent\u2019s word and a green row, ' +
-                'and a check that declares it is refused a pass that hands nothing back. Leave it out ' +
-                'where the assertion is the whole of the evidence \u2014 a store reading, a log line, a ' +
-                'suite area\u2019s own report.',
-            )
-            .optional(),
-          uses: z
-            .array(z.string())
-            .describe('Names of declared resources this check needs. Names, never paths.')
-            .optional(),
-          covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
-          satisfies: z
-            .array(z.string())
-            .describe(
-              'The goal criteria this check answers, each copied exactly as your prompt lists them. Every ' +
-                'criterion needs at least one check naming it.',
-            )
-            .optional(),
-          fleetCandidate: z
-            .boolean()
-            .describe(
-              'Your nomination that an agent could run this rather than a person. A suggestion for whoever ' +
-                'decides — it dispatches nothing, and the hand-over is an operator’s press.',
-            )
-            .optional(),
-          steps: validationStepsSchema,
-          why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
-        }),
-      )
-      .describe('The whole check set. Omit it, with an emptyReason, to declare none.')
-      .optional(),
-    resources: z
-      .array(
-        z.object({
-          name: z.string().describe('A file name, not a path.'),
-          kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
-          note: z.string().optional(),
-          provided: z.boolean().describe('False is "a check needs this and I cannot produce it".').optional(),
-        }),
-      )
-      .describe(
-        'Files a check needs that the repository does not have: a seeded fixture, a reference screenshot, a ' +
-          'dump of real data. Not the place for a login, an account or an environment — what a check needs ' +
-          'to be runnable goes in its "do", where the person running it reads it.',
-      )
-      .optional(),
-  }),
-);
+const ValidationPlanInput = z.object({
+  note: z
+    .string()
+    .describe(
+      'Where you went a different way from the plan’s hint, and why. The hint was written against code ' +
+        'that did not exist yet and it binds nothing — but an operator approved this goal on the strength ' +
+        'of it, so a departure nobody states makes their read at the approval gate worth nothing. Say so ' +
+        'plainly, including where you followed it.',
+    ),
+  emptyReason: z
+    .string()
+    .describe(
+      'Required when you declare no checks: what already settles the question — the suite area that now ' +
+        'asserts it, the coverage part that built it. An empty set with no account of itself reads exactly ' +
+        'like an agent that did nothing.',
+    )
+    .optional(),
+  checks: z
+    .array(
+      z.object({
+        id: z.string().describe('Stable lowercase kebab-case id, and the merge key.'),
+        title: z.string().describe('One line, the headline.'),
+        do: z
+          .string()
+          .describe(
+            'The procedure, in markdown: the commands, the URL, the clicks. Concrete steps, written for ' +
+              'somebody who has not read the plan. What the check needs in order to be runnable opens it.',
+          ),
+        expect: z
+          .string()
+          .describe(
+            'What a pass looks like, and where — the row, the log line, the ref that is gone, the screen. ' +
+              'One run settles several things: list all of them here rather than splitting the check.',
+          ),
+        proof: z
+          .string()
+          .describe(
+            'What must come **back** for a pass to count — the evidence, not the assertion. Name the ' +
+              'screen and what has to be visible on it. Write it on every check an agent carries out ' +
+              'unwatched: it is the only thing standing between an agent\u2019s word and a green row, ' +
+              'and a check that declares it is refused a pass that hands nothing back. Leave it out ' +
+              'where the assertion is the whole of the evidence \u2014 a store reading, a log line, a ' +
+              'suite area\u2019s own report.',
+          )
+          .optional(),
+        uses: z
+          .array(z.string())
+          .describe('Names of declared resources this check needs. Names, never paths.')
+          .optional(),
+        covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
+        satisfies: z
+          .array(z.string())
+          .describe(
+            'The goal criteria this check answers, each copied exactly as your prompt lists them. Every ' +
+              'criterion needs at least one check naming it.',
+          )
+          .optional(),
+        fleetCandidate: z
+          .boolean()
+          .describe(
+            'Your nomination that an agent could run this rather than a person. A suggestion for whoever ' +
+              'decides — it dispatches nothing, and the hand-over is an operator’s press.',
+          )
+          .optional(),
+        steps: validationStepsSchema,
+        why: z.string().describe('Why an agent could run it. Kept only with the nomination.').optional(),
+      }),
+    )
+    .describe('The whole check set. Omit it, with an emptyReason, to declare none.')
+    .optional(),
+  resources: z
+    .array(
+      z.object({
+        name: z.string().describe('A file name, not a path.'),
+        kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
+        note: z.string().optional(),
+        provided: z.boolean().describe('False is "a check needs this and I cannot produce it".').optional(),
+      }),
+    )
+    .describe(
+      'Files a check needs that the repository does not have: a seeded fixture, a reference screenshot, a ' +
+        'dump of real data. Not the place for a login, an account or an environment — what a check needs ' +
+        'to be runnable goes in its "do", where the person running it reads it.',
+    )
+    .optional(),
+});
 
 export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -119,7 +117,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
     'the screen. Anything the diff, the type checker, the test suite or a green build already settles is not ' +
     'a check, and writing one sends a person out to redo work that is done. Declaring no checks at all is a ' +
     'complete answer where the permanent suite already settles the question, and it carries a reason.',
-  inputSchema: VALIDATION_PLAN_INPUT,
+  inputSchema: toolSchema(ValidationPlanInput),
   handler: (args) => {
     // The gate the two briefing rules read, applied here as well: with `validation.checkSets` off no
     // prompt asks for a set, and a set written anyway is one no rule would ever put to an operator.

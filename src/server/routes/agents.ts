@@ -21,7 +21,8 @@ const RespondBody = z.object({
 
 const LiftBody = z.object({ profile: optionalText('profile') });
 
-function registerReads(app: FastifyInstance, { store }: RouteContext['system']): void {
+function registerReads(app: FastifyInstance, ctx: RouteContext): void {
+  const { store } = ctx.system;
   app.get(
     '/api/agents/:id/transcript',
     checked({ params: IdParams, query: TranscriptQuery }, async ({ params, query, reply }) => {
@@ -45,7 +46,8 @@ function registerReads(app: FastifyInstance, { store }: RouteContext['system']):
   );
 }
 
-function registerProfileLift(app: FastifyInstance, { system, hub }: RouteContext): void {
+function registerProfileLift(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
   const { store, agents, config } = system;
   app.post(
     '/api/agents/:id/profile',
@@ -72,12 +74,8 @@ function registerProfileLift(app: FastifyInstance, { system, hub }: RouteContext
   );
 }
 
-export function register(app: FastifyInstance, ctx: RouteContext): void {
-  const { system, hub } = ctx;
-  const { agents } = system;
-
-  registerReads(app, system);
-
+function registerLiveControls(app: FastifyInstance, ctx: RouteContext): void {
+  const { agents } = ctx.system;
   app.post(
     '/api/agents/:id/respond',
     checked({ params: IdParams, body: RespondBody }, async ({ params, body, reply }) => {
@@ -93,9 +91,11 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
       return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
     }),
   );
+}
 
-  registerProfileLift(app, ctx);
-
+function registerLifecycle(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
+  const { agents } = system;
   app.post(
     '/api/agents/:id/complete',
     checked({ params: IdParams }, async ({ params, reply }) => {
@@ -131,4 +131,11 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
       return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
     }),
   );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerReads(app, ctx);
+  registerLiveControls(app, ctx);
+  registerProfileLift(app, ctx);
+  registerLifecycle(app, ctx);
 }

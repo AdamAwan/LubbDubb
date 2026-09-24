@@ -22,7 +22,25 @@ const JobBody = z.object({
   attachments: AttachmentsField,
 });
 
-function registerJobSubmit(app: FastifyInstance, { system, hub }: RouteContext): void {
+const UpNextOrderBody = z.object({
+  origins: z
+    .array(z.string({ invalid_type_error: 'origins must be an array of strings' }), {
+      required_error: 'origins must be an array of strings',
+      invalid_type_error: 'origins must be an array of strings',
+    })
+    .refine((origins) => new Set(origins).size === origins.length, { message: 'origins must be unique' }),
+});
+
+const UpNextProfileBody = z.object({
+  origin: z
+    .string({ required_error: 'origin required', invalid_type_error: 'origin required' })
+    .trim()
+    .min(1, 'origin required'),
+  profile: optionalText('profile'),
+});
+
+function registerJobSubmit(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
   const { store, harness, config } = system;
   app.post(
     '/api/jobs',
@@ -77,20 +95,9 @@ function registerJobSubmit(app: FastifyInstance, { system, hub }: RouteContext):
   );
 }
 
-export function register(app: FastifyInstance, ctx: RouteContext): void {
+function registerQueue(app: FastifyInstance, ctx: RouteContext): void {
   const { system, hub } = ctx;
   const { store, harness, config } = system;
-
-  registerJobSubmit(app, ctx);
-
-  const UpNextOrderBody = z.object({
-    origins: z
-      .array(z.string({ invalid_type_error: 'origins must be an array of strings' }), {
-        required_error: 'origins must be an array of strings',
-        invalid_type_error: 'origins must be an array of strings',
-      })
-      .refine((origins) => new Set(origins).size === origins.length, { message: 'origins must be unique' }),
-  });
   app.post(
     '/api/upnext/order',
     checked({ body: UpNextOrderBody }, async ({ body }) => {
@@ -101,13 +108,6 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
     }),
   );
 
-  const UpNextProfileBody = z.object({
-    origin: z
-      .string({ required_error: 'origin required', invalid_type_error: 'origin required' })
-      .trim()
-      .min(1, 'origin required'),
-    profile: optionalText('profile'),
-  });
   app.post(
     '/api/upnext/profile',
     checked({ body: UpNextProfileBody }, async ({ body, reply }) => {
@@ -138,4 +138,9 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
       return { ok: true, job };
     }),
   );
+}
+
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  registerJobSubmit(app, ctx);
+  registerQueue(app, ctx);
 }

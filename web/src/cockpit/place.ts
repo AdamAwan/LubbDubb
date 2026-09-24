@@ -232,7 +232,9 @@ function param(query: URLSearchParams, key: string): string | null {
   return value === null || value === '' ? null : value;
 }
 
-function readWhere(query: URLSearchParams): Pick<Place, 'tab' | 'goal' | 'pr' | 'panel'> {
+function readWhere(
+  query: URLSearchParams,
+): Pick<Place, 'tab' | 'goal' | 'pr' | 'panel' | 'agent' | 'plan' | 'planRegroup' | 'retro' | 'hatch' | 'scratchpad'> {
   const tab = param(query, 'tab');
   const panel = param(query, 'panel');
   const ask = param(query, 'ask');
@@ -249,14 +251,38 @@ function readWhere(query: URLSearchParams): Pick<Place, 'tab' | 'goal' | 'pr' | 
     goal,
     pr,
     panel: ask !== null ? { ask } : (PANELS.find((p) => p === panel) ?? null),
+    agent: param(query, 'agent'),
+    plan: param(query, 'plan'),
+    planRegroup: query.has('regroup'),
+    retro: param(query, 'retro'),
+    hatch: param(query, 'hatch'),
+    scratchpad: param(query, 'pad'),
   };
 }
 
-function readGoalPage(query: URLSearchParams): Pick<Place, 'goalTab' | 'goalOpen' | 'goalShut'> {
+function readPagePicks(
+  query: URLSearchParams,
+): Pick<Place, 'goalTab' | 'goalOpen' | 'goalShut' | 'obstacle' | 'obstacleEnded' | 'configTab' | 'configGroup'> {
   return {
     goalTab: GOAL_TABS.find((t) => t === param(query, 'pane')) ?? null,
     goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
     goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
+    obstacle: param(query, 'obs'),
+    obstacleEnded: query.has('ended'),
+    configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
+    configGroup: param(query, 'keys'),
+  };
+}
+
+function readInsightsPage(
+  query: URLSearchParams,
+): Pick<Place, 'insightsView' | 'insightsScope' | 'poolProject' | 'sheetEnvironment' | 'insightsWindow' | 'collapsed'> {
+  return {
+    ...readInsights(param(query, 'view'), param(query, 'scope')),
+    poolProject: param(query, 'project') ?? null,
+    sheetEnvironment: param(query, 'sheet'),
+    insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
+    collapsed: readNumbers(param(query, 'collapsed')),
   };
 }
 
@@ -286,12 +312,18 @@ function readTicketFilters(
 
 function readFeatureBoard(
   query: URLSearchParams,
-): Pick<Place, 'featureCard' | 'featureSort' | 'featureDensity' | 'featurePrs'> {
+): Pick<
+  Place,
+  'featureCard' | 'featureSort' | 'featureDensity' | 'featurePrs' | 'petsBlended' | 'overview' | 'featureMode'
+> {
   return {
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featureDensity: FEATURE_DENSITIES.find((d) => d === param(query, 'density')) ?? 'auto',
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
+    petsBlended: query.has('blended'),
+    overview: readOverview(param(query, 'overview')),
+    featureMode: FEATURE_MODES.find((m) => m === param(query, 'fmode')) ?? 'board',
   };
 }
 
@@ -299,27 +331,10 @@ export function readPlace(search: string): Place {
   const query = new URLSearchParams(search);
   return {
     ...readWhere(query),
-    agent: param(query, 'agent'),
-    plan: param(query, 'plan'),
-    planRegroup: query.has('regroup'),
-    retro: param(query, 'retro'),
-    hatch: param(query, 'hatch'),
-    scratchpad: param(query, 'pad'),
-    ...readGoalPage(query),
-    obstacle: param(query, 'obs'),
-    obstacleEnded: query.has('ended'),
-    configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
-    configGroup: param(query, 'keys'),
-    ...readInsights(param(query, 'view'), param(query, 'scope')),
-    poolProject: param(query, 'project') ?? null,
-    sheetEnvironment: param(query, 'sheet'),
-    insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
-    collapsed: readNumbers(param(query, 'collapsed')),
+    ...readPagePicks(query),
+    ...readInsightsPage(query),
     ...readTicketFilters(query),
     ...readFeatureBoard(query),
-    petsBlended: query.has('blended'),
-    overview: readOverview(param(query, 'overview')),
-    featureMode: FEATURE_MODES.find((m) => m === param(query, 'fmode')) ?? 'board',
   };
 }
 
@@ -435,7 +450,7 @@ function writePagePicks(query: URLSearchParams, place: Place): void {
   if (place.configGroup !== null) query.set('keys', place.configGroup);
 }
 
-function writeInsights(query: URLSearchParams, place: Place): void {
+function writeInsightsPage(query: URLSearchParams, place: Place): void {
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
   if (place.insightsScope !== 'mine') query.set('scope', place.insightsScope);
   if (place.poolProject !== null) query.set('project', place.poolProject);
@@ -473,7 +488,7 @@ export function placeQuery(place: Place): string {
   const query = new URLSearchParams();
   writeWhere(query, place);
   writePagePicks(query, place);
-  writeInsights(query, place);
+  writeInsightsPage(query, place);
   writeTicketFilters(query, place);
   writeFeatureBoard(query, place);
   const encoded = query.toString();
