@@ -149,37 +149,50 @@ export type UpgradeTransition = { ok: true; intent: UpgradeIntent } | { ok: fals
 
 export type UpgradeAction = 'drain' | 'cancel' | 'apply';
 
+interface UpgradeContext {
+  upgradable: Upgradability;
+  live: number;
+  alreadyPaused: boolean;
+  targetSha: string | null;
+  now: string;
+}
+
 export function applyUpgradeAction(
   intent: UpgradeIntent,
   request: { action: UpgradeAction; interrupt?: boolean },
-  ctx: { upgradable: Upgradability; live: number; alreadyPaused: boolean; targetSha: string | null; now: string },
+  ctx: UpgradeContext,
 ): UpgradeTransition {
   const { action } = request;
+  if (action === 'cancel') return cancelUpgrade(intent);
+  if (action === 'drain') return drainForUpgrade(intent, ctx);
+  return applyUpgrade(intent, request.interrupt, ctx);
+}
 
-  if (action === 'cancel') {
-    if (intent.state === 'idle') return { ok: false, error: 'no upgrade is in progress' };
-    if (intent.state === 'applying')
-      return { ok: false, error: 'this process is already going down for the upgrade; it is too late to cancel' };
-    return { ok: true, intent: IDLE_INTENT };
-  }
+function cancelUpgrade(intent: UpgradeIntent): UpgradeTransition {
+  if (intent.state === 'idle') return { ok: false, error: 'no upgrade is in progress' };
+  if (intent.state === 'applying')
+    return { ok: false, error: 'this process is already going down for the upgrade; it is too late to cancel' };
+  return { ok: true, intent: IDLE_INTENT };
+}
 
-  if (action === 'drain') {
-    if (intent.state !== 'idle') return { ok: false, error: `an upgrade is already ${intent.state}` };
-    if (!ctx.upgradable.can) return { ok: false, error: ctx.upgradable.blocked ?? 'this build cannot be upgraded' };
-    return {
-      ok: true,
-      intent: {
-        state: ctx.live > 0 ? 'draining' : 'ready',
-        targetSha: ctx.targetSha,
-        requestedAt: ctx.now,
-        pausedByDrain: !ctx.alreadyPaused,
-      },
-    };
-  }
+function drainForUpgrade(intent: UpgradeIntent, ctx: UpgradeContext): UpgradeTransition {
+  if (intent.state !== 'idle') return { ok: false, error: `an upgrade is already ${intent.state}` };
+  if (!ctx.upgradable.can) return { ok: false, error: ctx.upgradable.blocked ?? 'this build cannot be upgraded' };
+  return {
+    ok: true,
+    intent: {
+      state: ctx.live > 0 ? 'draining' : 'ready',
+      targetSha: ctx.targetSha,
+      requestedAt: ctx.now,
+      pausedByDrain: !ctx.alreadyPaused,
+    },
+  };
+}
 
+function applyUpgrade(intent: UpgradeIntent, interrupt: boolean | undefined, ctx: UpgradeContext): UpgradeTransition {
   if (intent.state === 'applying') return { ok: false, error: 'the upgrade is already being applied' };
   if (!ctx.upgradable.can) return { ok: false, error: ctx.upgradable.blocked ?? 'this build cannot be upgraded' };
-  if (ctx.live > 0 && !request.interrupt)
+  if (ctx.live > 0 && !interrupt)
     return {
       ok: false,
       error:

@@ -181,69 +181,78 @@ type ProposedAct =
       summary: string;
     };
 
-export function readProposedAct(proposal: Proposal): { ok: true; act: ProposedAct } | { ok: false; error: string } {
+type ActRead = { ok: true; act: ProposedAct } | { ok: false; error: string };
+
+export function readProposedAct(proposal: Proposal): ActRead {
   const action = proposal.action as Record<string, unknown>;
-
-  if (proposal.kind === 'plan') {
-    const planId = action.planId;
-    const originRef = action.originRef;
-    if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
-      return { ok: false, error: `proposal ${proposal.id} names no plan` };
-    return { ok: true, act: { kind: 'plan', planId, originRef } };
-  }
-
-  if (proposal.kind === 'validation_plan') {
-    const originRef = action.originRef;
-    const issueNumber = action.issueNumber;
-    if (typeof originRef !== 'string' || originRef === '')
-      return { ok: false, error: `proposal ${proposal.id} names no goal` };
-    if (typeof issueNumber !== 'number' || !Number.isInteger(issueNumber))
-      return { ok: false, error: `proposal ${proposal.id} names no issue number` };
-    return { ok: true, act: { kind: 'validation_plan', originRef, issueNumber } };
-  }
-
-  if (proposal.kind === 'plan_amendment') {
-    const amendmentId = action.amendmentId;
-    const planId = action.planId;
-    const originRef = action.originRef;
-    if (typeof amendmentId !== 'string' || amendmentId === '')
-      return { ok: false, error: `proposal ${proposal.id} names no amendment` };
-    if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
-      return { ok: false, error: `proposal ${proposal.id} names no plan` };
-    return { ok: true, act: { kind: 'plan_amendment', amendmentId, planId, originRef } };
-  }
-
-  if (proposal.kind === 'shortfall') {
-    const planId = action.planId;
-    const originRef = action.originRef;
-    const summary = action.summary;
-    const cause = action.cause;
-    if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
-      return { ok: false, error: `proposal ${proposal.id} names no plan` };
-    if (cause !== 'plan' && cause !== 'part')
-      return { ok: false, error: `proposal ${proposal.id} names an unknown shortfall cause ${JSON.stringify(cause)}` };
-    if (typeof summary !== 'string' || summary.trim() === '')
-      return { ok: false, error: `proposal ${proposal.id} carries no summary of what fell short` };
-    const partSlug = typeof action.partSlug === 'string' && action.partSlug ? action.partSlug : null;
-    if (cause === 'part' && partSlug === null)
-      return { ok: false, error: `proposal ${proposal.id} says a part fell short but names none` };
-    return { ok: true, act: { kind: 'shortfall', planId, originRef, cause, partSlug, summary } };
-  }
+  if (proposal.kind === 'plan') return readPlanAct(proposal.id, action);
+  if (proposal.kind === 'validation_plan') return readValidationPlanAct(proposal.id, action);
+  if (proposal.kind === 'plan_amendment') return readAmendmentAct(proposal.id, action);
+  if (proposal.kind === 'shortfall') return readShortfallAct(proposal.id, action);
 
   const prNumber = action.prNumber;
   if (typeof prNumber !== 'number' || !Number.isInteger(prNumber))
     return { ok: false, error: `proposal ${proposal.id} names no PR number` };
+  if (proposal.kind === 'merge') return readMergeAct(proposal.id, prNumber, action);
+  return readReplyAct(proposal.id, prNumber, action);
+}
 
-  if (proposal.kind === 'merge') {
-    const method = action.method;
-    if (method !== 'merge' && method !== 'squash' && method !== 'rebase')
-      return { ok: false, error: `proposal ${proposal.id} names an unknown merge method ${JSON.stringify(method)}` };
-    return { ok: true, act: { kind: 'merge', prNumber, method } };
-  }
+function readPlanAct(id: string, action: Record<string, unknown>): ActRead {
+  const planId = action.planId;
+  const originRef = action.originRef;
+  if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
+    return { ok: false, error: `proposal ${id} names no plan` };
+  return { ok: true, act: { kind: 'plan', planId, originRef } };
+}
 
+function readValidationPlanAct(id: string, action: Record<string, unknown>): ActRead {
+  const originRef = action.originRef;
+  const issueNumber = action.issueNumber;
+  if (typeof originRef !== 'string' || originRef === '') return { ok: false, error: `proposal ${id} names no goal` };
+  if (typeof issueNumber !== 'number' || !Number.isInteger(issueNumber))
+    return { ok: false, error: `proposal ${id} names no issue number` };
+  return { ok: true, act: { kind: 'validation_plan', originRef, issueNumber } };
+}
+
+function readAmendmentAct(id: string, action: Record<string, unknown>): ActRead {
+  const amendmentId = action.amendmentId;
+  const planId = action.planId;
+  const originRef = action.originRef;
+  if (typeof amendmentId !== 'string' || amendmentId === '')
+    return { ok: false, error: `proposal ${id} names no amendment` };
+  if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
+    return { ok: false, error: `proposal ${id} names no plan` };
+  return { ok: true, act: { kind: 'plan_amendment', amendmentId, planId, originRef } };
+}
+
+function readShortfallAct(id: string, action: Record<string, unknown>): ActRead {
+  const planId = action.planId;
+  const originRef = action.originRef;
+  const summary = action.summary;
+  const cause = action.cause;
+  if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
+    return { ok: false, error: `proposal ${id} names no plan` };
+  if (cause !== 'plan' && cause !== 'part')
+    return { ok: false, error: `proposal ${id} names an unknown shortfall cause ${JSON.stringify(cause)}` };
+  if (typeof summary !== 'string' || summary.trim() === '')
+    return { ok: false, error: `proposal ${id} carries no summary of what fell short` };
+  const partSlug = typeof action.partSlug === 'string' && action.partSlug ? action.partSlug : null;
+  if (cause === 'part' && partSlug === null)
+    return { ok: false, error: `proposal ${id} says a part fell short but names none` };
+  return { ok: true, act: { kind: 'shortfall', planId, originRef, cause, partSlug, summary } };
+}
+
+function readMergeAct(id: string, prNumber: number, action: Record<string, unknown>): ActRead {
+  const method = action.method;
+  if (method !== 'merge' && method !== 'squash' && method !== 'rebase')
+    return { ok: false, error: `proposal ${id} names an unknown merge method ${JSON.stringify(method)}` };
+  return { ok: true, act: { kind: 'merge', prNumber, method } };
+}
+
+function readReplyAct(id: string, prNumber: number, action: Record<string, unknown>): ActRead {
   const body = action.draft;
   if (typeof body !== 'string' || body.trim() === '')
-    return { ok: false, error: `proposal ${proposal.id} carries no draft to send` };
+    return { ok: false, error: `proposal ${id} carries no draft to send` };
   const commentId = action.commentId;
   return {
     ok: true,

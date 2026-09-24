@@ -129,7 +129,25 @@ function markReadings(readings: readonly AccountRateLimits[]): AllowanceReading[
 }
 
 function apportion(input: AllowanceInput): AllowanceApportionment {
-  const { readings, usageEvents, costDeltas, agents, goals, attribution, nodes } = input;
+  const { readings, goals } = input;
+  const { points, observed, attributed, unattributed } = chargeReadings(input);
+  const costUsd = goals.reduce((sum, goal) => sum + goal.costUsd, 0);
+  return {
+    observedPoints: readings.length < 2 ? null : roundUsd(observed),
+    attributedPoints: roundUsd(attributed),
+    unattributedPoints: roundUsd(unattributed),
+    pointsPerUsd: costUsd > 0 ? roundUsd(observed / costUsd) : null,
+    goals: allowanceGoals(input, points),
+  };
+}
+
+function chargeReadings(input: AllowanceInput): {
+  points: Map<number, number>;
+  observed: number;
+  attributed: number;
+  unattributed: number;
+} {
+  const { readings, usageEvents, costDeltas, agents, attribution } = input;
   const points = new Map<number, number>();
   let observed = 0;
   let unattributed = 0;
@@ -142,10 +160,8 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
   for (let i = 1; i < readings.length; i++) {
     const from = readings[i - 1];
     const to = readings[i];
-    const before = from?.fiveHour?.usedPercentage ?? null;
-    const after = to?.fiveHour?.usedPercentage ?? null;
-    if (from === undefined || to === undefined || before === null || after === null) continue;
-    const rise = after - before;
+    if (from === undefined || to === undefined) continue;
+    const rise = fiveHourRise(from, to);
     if (rise <= 0) continue;
     observed += rise;
 
@@ -168,10 +184,19 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
     attributed += charged;
     unattributed += rise - charged;
   }
+  return { points, observed, attributed, unattributed };
+}
 
-  const landed = landedByGoal(input.mergeEvents, nodes);
-  const costUsd = goals.reduce((sum, goal) => sum + goal.costUsd, 0);
-  const rows = goals
+function fiveHourRise(from: AccountRateLimits, to: AccountRateLimits): number {
+  const before = from.fiveHour?.usedPercentage ?? null;
+  const after = to.fiveHour?.usedPercentage ?? null;
+  if (before === null || after === null) return 0;
+  return after - before;
+}
+
+function allowanceGoals(input: AllowanceInput, points: ReadonlyMap<number, number>): AllowanceGoal[] {
+  const landed = landedByGoal(input.mergeEvents, input.nodes);
+  const rows = input.goals
     .map((goal) => {
       const share = roundUsd(points.get(goal.issueNumber) ?? 0);
       const merged = landed.get(goal.issueNumber) ?? 0;
@@ -188,15 +213,7 @@ function apportion(input: AllowanceInput): AllowanceApportionment {
     .filter((goal) => goal.points > 0)
     .sort((a, b) => b.points - a.points || a.issueNumber - b.issueNumber);
   const slots = assignSlots(rows.map((row) => row.issueNumber));
-  const withSlots = rows.map((row): AllowanceGoal => ({ ...row, slot: slots.get(row.issueNumber) ?? 0 }));
-
-  return {
-    observedPoints: readings.length < 2 ? null : roundUsd(observed),
-    attributedPoints: roundUsd(attributed),
-    unattributedPoints: roundUsd(unattributed),
-    pointsPerUsd: costUsd > 0 ? roundUsd(observed / costUsd) : null,
-    goals: withSlots,
-  };
+  return rows.map((row): AllowanceGoal => ({ ...row, slot: slots.get(row.issueNumber) ?? 0 }));
 }
 
 function assignSlots(issueNumbers: readonly number[]): Map<number, number> {
@@ -232,15 +249,7 @@ function project(weekReadings: readonly AccountRateLimits[], now: number): Allow
   const latest = withWeek.at(-1);
   if (latest === undefined || latest.sevenDay === null) return null;
 
-  let fit = withWeek.filter((r) => now - Date.parse(r.capturedAt) <= FIT_MS);
-  for (let i = fit.length - 1; i > 0; i--) {
-    const used = fit[i]?.sevenDay?.usedPercentage ?? 0;
-    const before = fit[i - 1]?.sevenDay?.usedPercentage ?? 0;
-    if (used < before) {
-      fit = fit.slice(i);
-      break;
-    }
-  }
+  const fit = sinceLastReset(withWeek.filter((r) => now - Date.parse(r.capturedAt) <= FIT_MS));
 
   const first = fit[0];
   const usedPercentage = latest.sevenDay.usedPercentage;
@@ -268,4 +277,13 @@ function project(weekReadings: readonly AccountRateLimits[], now: number): Allow
     exhaustsAt,
     beforeReset: resetsAt === null ? null : Date.parse(exhaustsAt) < Date.parse(resetsAt),
   };
+}
+
+function sinceLastReset(fit: AccountRateLimits[]): AccountRateLimits[] {
+  for (let i = fit.length - 1; i > 0; i--) {
+    const used = fit[i]?.sevenDay?.usedPercentage ?? 0;
+    const before = fit[i - 1]?.sevenDay?.usedPercentage ?? 0;
+    if (used < before) return fit.slice(i);
+  }
+  return fit;
 }

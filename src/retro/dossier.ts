@@ -123,21 +123,7 @@ export function retroDossier(input: RetroDossierInput): string {
     '### Plan',
   ];
 
-  if (!input.plan) {
-    lines.push('- There was no plan: this goal was worked as a single pull request.');
-  } else {
-    lines.push(`- Plan is \`${input.plan.status}\`${input.plan.reason ? ` — ${input.plan.reason}` : ''}`);
-    if (input.parts.length === 0) lines.push('- The plan recorded no parts.');
-    const parts = cap(input.parts, MAX_PARTS, 'newest');
-    for (const p of parts.shown) {
-      const pr = p.prNumber ? `, PR #${p.prNumber}` : '';
-      const outcome = p.outcomeKind ? `, concluded as a ${p.outcomeKind}` : '';
-      const said = p.outcomeSummary ? ` — ${p.outcomeSummary}` : '';
-      lines.push(`- Part \`${p.slug}\` (${p.title}): \`${p.status}\`${pr}${outcome}${said}`);
-    }
-    lines.push(...droppedNote(parts, 'parts', 'newest'));
-  }
-
+  lines.push(...planSection(input));
   lines.push('', '### Pull requests');
   const prs = cap([...input.closedPullRequests, ...input.pullRequests], MAX_PULL_REQUESTS, 'oldest');
   if (prs.total === 0) lines.push('- No pull requests are recorded for this goal.');
@@ -145,8 +131,37 @@ export function retroDossier(input: RetroDossierInput): string {
   lines.push(...droppedNote(prs, 'pull requests', 'oldest'));
 
   lines.push(...decisionSection(input.decisions));
+  lines.push(...humanSection(input));
+  lines.push(...verdictSection(input));
 
-  lines.push('', '### Where a human was involved');
+  lines.push('', '### What it cost');
+  lines.push(`- ${input.agentCount} agent${input.agentCount === 1 ? '' : 's'} were spawned under this goal.`);
+  lines.push(
+    input.costUsd === null
+      ? '- Spend was not reported by the runtime (PTY mode reports none) — that is missing detail, not zero.'
+      : `- Reported spend: $${input.costUsd.toFixed(2)}.`,
+  );
+
+  return lines.join('\n');
+}
+
+function planSection(input: RetroDossierInput): string[] {
+  if (!input.plan) return ['- There was no plan: this goal was worked as a single pull request.'];
+  const lines = [`- Plan is \`${input.plan.status}\`${input.plan.reason ? ` — ${input.plan.reason}` : ''}`];
+  if (input.parts.length === 0) lines.push('- The plan recorded no parts.');
+  const parts = cap(input.parts, MAX_PARTS, 'newest');
+  for (const p of parts.shown) {
+    const pr = p.prNumber ? `, PR #${p.prNumber}` : '';
+    const outcome = p.outcomeKind ? `, concluded as a ${p.outcomeKind}` : '';
+    const said = p.outcomeSummary ? ` — ${p.outcomeSummary}` : '';
+    lines.push(`- Part \`${p.slug}\` (${p.title}): \`${p.status}\`${pr}${outcome}${said}`);
+  }
+  lines.push(...droppedNote(parts, 'parts', 'newest'));
+  return lines;
+}
+
+function humanSection(input: RetroDossierInput): string[] {
+  const lines = ['', '### Where a human was involved'];
   if (input.escalations.length === 0 && input.proposals.length === 0) {
     lines.push('- Nothing was escalated and nothing was put to a human.');
   }
@@ -160,8 +175,11 @@ export function retroDossier(input: RetroDossierInput): string {
     lines.push(`- Proposal (${p.kind}, ${p.status}) on ${p.ref}${p.note ? ` — ${p.note}` : ''}`);
   }
   lines.push(...droppedNote(proposals, 'proposals', 'oldest'));
+  return lines;
+}
 
-  lines.push('', '### Verdicts on the goal');
+function verdictSection(input: RetroDossierInput): string[] {
+  const lines = ['', '### Verdicts on the goal'];
   const verdicts = lines.length;
   if (input.appraisal)
     lines.push(`- Appraisal: \`${input.appraisal.verdict}\` (${input.appraisal.by}) — ${input.appraisal.summary}`);
@@ -177,16 +195,7 @@ export function retroDossier(input: RetroDossierInput): string {
     lines.push(`- Concluded \`${input.conclusion.verdict}\` by ${input.conclusion.by}: ${input.conclusion.note}`);
   }
   if (lines.length === verdicts) lines.push('- No verdict is recorded beyond the delivery that asked for this.');
-
-  lines.push('', '### What it cost');
-  lines.push(`- ${input.agentCount} agent${input.agentCount === 1 ? '' : 's'} were spawned under this goal.`);
-  lines.push(
-    input.costUsd === null
-      ? '- Spend was not reported by the runtime (PTY mode reports none) — that is missing detail, not zero.'
-      : `- Reported spend: $${input.costUsd.toFixed(2)}.`,
-  );
-
-  return lines.join('\n');
+  return lines;
 }
 
 export function padTestimony(entries: ScratchEntry[]): string {
