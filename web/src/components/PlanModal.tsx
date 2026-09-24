@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import type {
-  AcceptanceCriterion,
   GoalWatch,
   CaveatAnswerInput,
   IssueSpend,
@@ -9,9 +8,7 @@ import type {
   PlanCaveat,
   PlanCaveatAnswer,
   Plan,
-  PlanDiff,
   PlanHistory,
-  PendingPlanAmendment,
   PlanPartView,
   PlanningPolicy,
   Proposal,
@@ -26,21 +23,21 @@ import { DesktopLink } from './DesktopLink.js';
 import { CaveatChecklist, useAcknowledgements } from './CaveatChecklist.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { AsyncButton } from './AsyncButton.js';
-import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanAnswers } from './PlanAnswers.js';
 import { PlanMap } from './PlanMap.js';
 import { PlanRegroup } from './PlanRegroup.js';
 import { ProofBand, proofCounts, type ProofCell } from './ProofBand.js';
 import { StateDigest } from './StateDigest.js';
-import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { WatchDigest } from './WatchDigest.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
+import { PartBlock } from './PlanPart.js';
+import { HistoryView } from './PlanHistoryView.js';
 import { HeadRow } from './panel.js';
-import { Tag, type TagTone } from './tag.js';
+import { Tag } from './tag.js';
 import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
@@ -258,6 +255,35 @@ function PlanRail({
         Write-up
       </button>
       <span className="spacer" />
+      <ViewToggles
+        onRegroupView={onRegroupView}
+        regroupable={regroupable}
+        regroup={regroup}
+        history={history}
+        view={view}
+        setView={setView}
+      />
+    </div>
+  );
+}
+
+function ViewToggles({
+  onRegroupView,
+  regroupable,
+  regroup,
+  history,
+  view,
+  setView,
+}: {
+  onRegroupView: ((on: boolean) => void) | undefined;
+  regroupable: boolean;
+  regroup: boolean;
+  history: PlanHistory | null;
+  view: SheetView;
+  setView: (view: SheetView) => void;
+}) {
+  return (
+    <>
       {/* A view, not a jump — a different document, so it reads as a different
             control. Absent until there is a second revision to be a change from,
             or a change waiting on the operator to be asked about. */}
@@ -286,7 +312,7 @@ function PlanRail({
           <i className="k">v{history.revisions.length}</i>
         </button>
       )}
-    </div>
+    </>
   );
 }
 
@@ -321,25 +347,8 @@ function PlanSheet(
       jumpProof: (cell: ProofCell) => void;
     },
 ) {
-  const {
-    plan,
-    checks,
-    validationPlan,
-    watches,
-    queries,
-    refUrls,
-    onClose,
-    onWatchProposal,
-    onOpenGoal,
-    live,
-    queued,
-    originOf,
-    issueNumber,
-    sections,
-    focused,
-    focusPart,
-    jumpProof,
-  } = props;
+  const { plan, checks, watches, queries, refUrls, live, queued, originOf, sections, focused, focusPart, jumpProof } =
+    props;
   const shapeNote = plan.approach ? plan.reason : null;
   return (
     <>
@@ -366,6 +375,38 @@ function PlanSheet(
 
       <PartsSection {...props} shapeNote={shapeNote} />
 
+      <DigestSections {...props} />
+
+      <CaveatsSection {...props} />
+
+      <JumpSection at="writeup" sections={sections}>
+        <span className="pm-section-label">The full write-up</span>
+        {plan.document ? (
+          <div className="pm-doc">{renderMarkdown(plan.document, refUrls)}</div>
+        ) : (
+          <p className="empty">
+            This planner wrote no write-up. Replan to ask again, or discuss it if you want the reasoning.
+          </p>
+        )}
+      </JumpSection>
+    </>
+  );
+}
+
+function DigestSections({
+  checks,
+  validationPlan,
+  watches,
+  queries,
+  refUrls,
+  onClose,
+  onWatchProposal,
+  onOpenGoal,
+  issueNumber,
+  sections,
+}: PlanModalProps & Derived) {
+  return (
+    <>
       <JumpSection at="validation" sections={sections}>
         {/* Read-only, because the sheet defines the checks and the goal
               page runs them. A plan under review still has to show what it
@@ -405,19 +446,6 @@ function PlanSheet(
               on: whether the thing works, whether it is behaving, and then
               whether the data it wrote is shaped the way the plan said. */}
         <StateDigest queries={queries} refUrls={refUrls} />
-      </JumpSection>
-
-      <CaveatsSection {...props} />
-
-      <JumpSection at="writeup" sections={sections}>
-        <span className="pm-section-label">The full write-up</span>
-        {plan.document ? (
-          <div className="pm-doc">{renderMarkdown(plan.document, refUrls)}</div>
-        ) : (
-          <p className="empty">
-            This planner wrote no write-up. Replan to ask again, or discuss it if you want the reasoning.
-          </p>
-        )}
       </JumpSection>
     </>
   );
@@ -800,342 +828,6 @@ function teaser(body: string): string {
     .replace(/\s+/g, ' ')
     .trim();
   return flat.length > 110 ? `${flat.slice(0, 110).trimEnd()}…` : flat;
-}
-
-function PartBlock({
-  part,
-  atoms,
-  seq,
-  queue,
-  focused,
-  onPartProfile,
-  onRestart,
-  profiles,
-  defaultProfile,
-}: {
-  part: PlanPartView;
-  atoms: PlanAtom[];
-  seq: number;
-  queue: QueueItem | undefined;
-  focused: boolean;
-  onPartProfile: (profile: string | null) => Promise<unknown> | unknown;
-  onRestart: (() => Promise<unknown> | unknown) | undefined;
-  profiles: { name: string; description: string }[];
-  defaultProfile: string | null;
-}) {
-  return (
-    <div className={`pm-part${focused ? ' on' : ''}`}>
-      <span className="pm-seq">{seq}</span>
-      <div>
-        <div className="pm-part-head">
-          <span className="pm-part-title">{part.title}</span>
-          <Tag lower>{part.slug}</Tag>
-          <Tag>{part.status.replace('_', ' ')}</Tag>
-          {/* This is the surface plan approval exists for: seeing that step 3 is
-              "write it up" rather than "build it" is what an operator is approving.
-              Shown only when the kind is not code, which is the default. */}
-          {kindOf(part) && (
-            <Tag title={part.status === 'concluded' ? 'What it produced' : 'What it will produce'}>{kindOf(part)}</Tag>
-          )}
-          {part.size !== null && (
-            <Tag lower title="How big this is to review, as the planner judged it">
-              {part.size.toUpperCase()}
-            </Tag>
-          )}
-          {/* Which model profile this part runs on (#342) — the planner's own
-              sizing of the part it just cut, edited. Beside the size chip because
-              they are the same judgement about the same thing: how much this part
-              is going to take. */}
-          <ProfilePicker
-            profiles={profiles}
-            value={part.profile ?? null}
-            defaultProfile={defaultProfile}
-            inheritLabel="Inherit"
-            onPick={(profile) => void onPartProfile(profile)}
-          />
-          {part.prNumber !== null && (
-            <Tag>
-              <Ref to={`pr:${part.prNumber}`} />
-            </Tag>
-          )}
-          {queue && (
-            <Tag
-              tone={
-                queue.status === 'dispatching'
-                  ? 'green'
-                  : queue.status === 'capped' || queue.status === 'unapproved'
-                    ? 'amber'
-                    : undefined
-              }
-              title={queue.reason}
-            >
-              {queue.status === 'dispatching' ? '▶ now' : queue.status}
-            </Tag>
-          )}
-          {/* Only where it applies: a part in review has a pull request open and no
-              agent on it (an agent still working is `dispatched`), which is exactly
-              the state an amendment overtakes. Two clicks, because closing somebody's
-              open pull request is not undoable from here. */}
-          {onRestart && part.status === 'in_review' && part.prNumber !== null && (
-            <ConfirmButton
-              size="small"
-              label="↺ restart"
-              confirmLabel="close the PR and restart"
-              title={`Close PR #${part.prNumber}, drop its branch, and put "${part.slug}" back to ready so it is worked again against the plan as it stands now.`}
-              onConfirm={onRestart}
-            />
-          )}
-        </div>
-        {part.scope !== '' && (
-          <div className="pm-field">
-            <b>what this achieves</b>
-            {part.scope}
-          </div>
-        )}
-        {atoms.length > 0 && <Atoms atoms={atoms} />}
-        {part.outsideScope.length > 0 && (
-          <div className="pm-drift">
-            <b>wrote outside its scope</b>
-            {part.outsideScope.map((path) => (
-              <code key={path}>{path}</code>
-            ))}
-          </div>
-        )}
-        {part.acceptanceCriteria.length > 0 && <Acceptance criteria={part.acceptanceCriteria} />}
-        {/* A concluded part left a record rather than a pull request, so this is the
-            only place its outcome is readable at all. */}
-        {part.status === 'concluded' && part.outcomeSummary && (
-          <div className="pm-field">
-            <b>
-              {part.outcomeKind ?? 'concluded'}
-              {part.expectedKind && part.expectedKind !== part.outcomeKind ? ` (planned as ${part.expectedKind})` : ''}
-            </b>
-            {part.outcomeSummary}
-          </div>
-        )}
-        {part.status === 'blocked' && part.blockedReason && (
-          <div className="pm-drift">
-            <b>held</b>
-            {part.blockedReason}
-          </div>
-        )}
-        {/*
-          Spelled out rather than left as an `on <slug>` chip: the stack edge is
-          what decides which branch this part is cut from, and getting it wrong is
-          the one planning mistake that is expensive to undo.
-        */}
-        <div className="pm-stack">{stackLine(part)}</div>
-      </div>
-    </div>
-  );
-}
-
-function Atoms({ atoms }: { atoms: PlanAtom[] }) {
-  return (
-    <div className="pm-atoms">
-      <span className="pm-section-label">
-        {atoms.length} atom{atoms.length === 1 ? '' : 's'} — each one could land and be rolled back on its own
-      </span>
-      {atoms.map((atom) => (
-        <div className="pm-atom" key={atom.slug}>
-          <div className="pm-atom-head">
-            <span className="pm-atom-title">{atom.title}</span>
-            <Tag lower>{atom.slug}</Tag>
-            {atom.dependsOn.length > 0 && <span className="muted small">after {quoteList(atom.dependsOn)}</span>}
-          </div>
-          <div className="pm-atom-intent">{atom.intent}</div>
-          {atom.acceptance !== null && (
-            <div className="pm-field">
-              <b>done when</b>
-              {atom.acceptance}
-            </div>
-          )}
-          {atom.touches.length > 0 && (
-            <div className="pm-atom-paths">
-              {atom.touches.map((path) => (
-                <code key={path}>{path}</code>
-              ))}
-            </div>
-          )}
-          {/* A route the planner weighed and did not take. Drawn as what it is —
-              a reason from before the code existed — rather than as a claim about
-              what the code now does. */}
-          {atom.rejected.map((r) => (
-            <div className="pm-atom-not" key={r.route}>
-              <b>not</b>
-              <span>
-                {r.route} <i>{r.because}</i>
-              </span>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function stackLine(part: PlanPartView): string {
-  if (part.expectedKind === 'human') {
-    return part.dependsOn.length === 0
-      ? 'a step for a person — no branch is cut for it'
-      : `a step for a person, once ${quoteList(part.dependsOn)} ${part.dependsOn.length === 1 ? 'is' : 'are'} done`;
-  }
-  if (part.dependsOn.length === 0) return 'stacks on nothing — starts from the default branch';
-  if (part.dependsOn.length === 1) return `stacks on ${quoteList(part.dependsOn)} — based on that part's branch`;
-  return `rejoins ${quoteList(part.dependsOn)} — starts only once every one of them has merged, from the default branch`;
-}
-
-function quoteList(slugs: string[]): string {
-  const quoted = slugs.map((s) => `“${s}”`);
-  if (quoted.length <= 1) return quoted.join('');
-  return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
-}
-
-function Acceptance({ criteria }: { criteria: AcceptanceCriterion[] }) {
-  return (
-    <div className="pm-accept">
-      <b>done when</b>
-      <div>
-        {criteria.map((c) => (
-          <span className={`pm-crit${c.met ? ' met' : ''}`} key={c.text}>
-            <span>{c.text}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HistoryView({ history, now }: { history: PlanHistory | null; now: number }) {
-  if (history === null) return <p className="empty">The history for this plan could not be read.</p>;
-  const { diff, pending, revisions } = history;
-  const latest = revisions[revisions.length - 1];
-  return (
-    <>
-      {/* Above the history, because it is the only part of this view that is a
-          question rather than a record: a plan still scheduling, with a change
-          somebody is waiting on an answer to. */}
-      {pending !== null && <PendingAmendment pending={pending} now={now} />}
-      <div className="pm-revs">
-        {revisions.map((rev) => (
-          <Tag tone={rev === latest ? 'green' : undefined} key={rev.id} title={rev.narrative.reason ?? ''}>
-            v{rev.seq} · {rev.parts.length} part{rev.parts.length === 1 ? '' : 's'} · {relTime(rev.at, now)}
-          </Tag>
-        ))}
-      </div>
-      {diff === null ? (
-        <p className="empty">One plan, never amended — there is nothing to compare it to.</p>
-      ) : (
-        <DiffBody diff={diff} />
-      )}
-    </>
-  );
-}
-
-function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now: number }) {
-  return (
-    <section className="pm-pending">
-      <HeadRow align="baseline" className="pm-pending-head">
-        <span className="pm-section-label">Waiting on you</span>
-        <Tag tone="amber">amendment</Tag>
-        <span className="muted small">
-          proposed by {pending.author === 'operator' ? 'you' : 'an agent'} · {relTime(pending.createdAt, now)}
-        </span>
-      </HeadRow>
-      <p className="pm-pending-note">{pending.note}</p>
-      {pending.diff === null ? (
-        <p className="empty">There is no earlier version to compare this against.</p>
-      ) : (
-        <DiffBody diff={pending.diff} />
-      )}
-      {pending.warnings.length > 0 && (
-        <ul className="pm-pending-warnings">
-          {pending.warnings.map((w) => (
-            <li key={w}>{w}</li>
-          ))}
-        </ul>
-      )}
-      {/* Said rather than left to be inferred from the plan still drawing its
-          parts: the one thing an operator must not read off a pending amendment
-          is that the work is on hold while they decide. */}
-      <p className="muted small">
-        The plan is still running: every part that was scheduling still is, and nothing changes until you accept this on
-        its card. Decline it and the plan carries on exactly as it is.
-      </p>
-    </section>
-  );
-}
-
-const DIFF_TONE: Record<PlanDiff['parts'][number]['kind'], TagTone | undefined> = {
-  added: 'green',
-  dropped: 'red',
-  changed: 'blue',
-  unchanged: undefined,
-};
-
-function DiffBody({ diff }: { diff: PlanDiff }) {
-  const moved = diff.parts.filter((p) => p.kind !== 'unchanged');
-  const unchanged = diff.parts.length - moved.length;
-  return (
-    <>
-      <div className="pm-diff-head">
-        <span className="pm-section-label">
-          v{diff.seq} against v{diff.againstSeq}
-        </span>
-        {moved.length === 0 && <Tag>no part changed</Tag>}
-        {unchanged > 0 && <Tag>{unchanged} unchanged</Tag>}
-      </div>
-      {moved.map((change) => (
-        <div className="pm-diff-row" key={change.slug}>
-          <Tag tone={DIFF_TONE[change.kind]} fill={DIFF_TONE[change.kind] !== undefined}>
-            {change.kind === 'dropped' ? 'no longer' : change.kind}
-          </Tag>
-          <div>
-            <div className="pm-part-head">
-              <span className="pm-part-title">{change.title}</span>
-              <Tag lower>{change.slug}</Tag>
-            </div>
-            {change.kind === 'dropped' && (
-              <div className="pm-was">
-                Not declared any more. It is retired only if nothing was started for it — a part with a branch or a pull
-                request stays exactly as it was.
-              </div>
-            )}
-            {change.fields.map((f) => (
-              <div className="pm-was" key={f.field}>
-                <b>{f.field}</b>
-                {f.from !== null && <s>{f.from}</s>}
-                {f.from !== null && f.to !== null && ' → '}
-                {f.to !== null && <ins>{f.to}</ins>}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {diff.narrative.length > 0 && (
-        <div className="pm-diff-row">
-          <Tag>prose</Tag>
-          <div className="pm-was">
-            {diff.narrative.map((n, i) => (
-              <span key={n.field}>
-                {i > 0 && ' · '}
-                <b>{n.field}</b> {n.kind}
-              </span>
-            ))}
-            <p className="muted small">
-              The current text is on the Plan view — this says which fields the amendment rewrote, not how they read
-              before.
-            </p>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function kindOf(part: PlanPartView): string | null {
-  const kind = part.status === 'concluded' ? (part.outcomeKind ?? 'concluded') : (part.expectedKind ?? null);
-  return kind && kind !== 'code' ? kind : null;
 }
 
 function partInFlight(part: PlanPartView): boolean {

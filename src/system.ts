@@ -424,7 +424,7 @@ function buildAgentRuntime(config: Config, opts: BuildOptions, { backend, errors
 type Channels = ReturnType<typeof buildChannels>;
 
 function buildChannels(config: Config, base: Foundation, late: Late) {
-  const { store, errors, connector, sink, areaPaths, runtimeControl, watchLabel } = base;
+  const { store, errors, sink, areaPaths, watchLabel } = base;
   const predictions = store.openPredictions();
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
@@ -474,7 +474,18 @@ function buildChannels(config: Config, base: Foundation, late: Late) {
     }),
   );
 
-  const desktop = new McpDesktopServer({
+  const desktop = buildDesktop(config, base, predictions, prompts, late);
+  return { predictions, mcp, prompts, reviewCharters, desktop };
+}
+
+function buildDesktop(
+  config: Config,
+  { store, connector, runtimeControl, errors }: Foundation,
+  predictions: PredictionStore,
+  prompts: PromptTemplates,
+  late: Late,
+): McpDesktopServer {
+  return new McpDesktopServer({
     store,
     // The desktop channel is the operator's own Claude Code, and it can read a plan
     // aloud. It is handed the *answer* to whether a plan is withheld, never the means
@@ -509,7 +520,6 @@ function buildChannels(config: Config, base: Foundation, late: Late) {
     credentialPath: config.validation.desktopCredentialPath,
     errors,
   });
-  return { predictions, mcp, prompts, reviewCharters, desktop };
 }
 
 type Fleet = ReturnType<typeof buildFleet>;
@@ -599,7 +609,7 @@ function buildFleet(
   { prompts, reviewCharters }: Channels,
   crew: Crew,
 ) {
-  const { store, connector, sink, now, errors, worktrees, runtimeControl, watchLabel } = base;
+  const { store, connector, sink, now, errors, worktrees, runtimeControl } = base;
   const { sequenceWatchPolicy, featureBoard, agents } = crew;
   const escalations = new EscalationInbox(store, agents);
   const permissions = new PermissionDesk(escalations);
@@ -649,6 +659,28 @@ function buildFleet(
     errors,
   });
 
+  return {
+    sequenceWatchPolicy,
+    featureBoard,
+    agents,
+    escalations,
+    permissions,
+    recovery,
+    ejections,
+    landings,
+    readying,
+    executor,
+    proposals,
+    ...buildDispatch(config, base, prompts, reviewCharters),
+  };
+}
+
+function buildDispatch(
+  config: Config,
+  { runtimeControl, watchLabel }: Foundation,
+  prompts: PromptTemplates,
+  reviewCharters: Channels['reviewCharters'],
+) {
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
@@ -685,22 +717,7 @@ function buildFleet(
   const dispatcher: Dispatcher = rules;
 
   const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });
-  return {
-    sequenceWatchPolicy,
-    featureBoard,
-    agents,
-    escalations,
-    permissions,
-    recovery,
-    ejections,
-    landings,
-    readying,
-    executor,
-    proposals,
-    issuePickup,
-    dispatcher,
-    liveConfig,
-  };
+  return { issuePickup, dispatcher, liveConfig };
 }
 
 type IntakeDesks = ReturnType<typeof buildIntakeDesks>;
@@ -847,7 +864,7 @@ function buildBenchDesks(
   { prompts, predictions }: Channels,
   { sequenceWatchPolicy, agents }: Fleet,
 ) {
-  const { store, connector, sink, now, errors, runtimeControl, watchLabel } = base;
+  const { store, connector, sink, errors, runtimeControl, watchLabel } = base;
   const closeOutSink = sink;
   const closeOuts = new DeliveryCloseOutDesk(
     store,
@@ -910,6 +927,25 @@ function buildBenchDesks(
     errors,
   });
 
+  return {
+    closeOuts,
+    unwatchedChildren,
+    validationAsks,
+    validationReady,
+    burn,
+    runway,
+    schedules,
+    updates,
+    filing,
+    upstream,
+    graph,
+    tickets,
+    obstacles,
+    pool: buildPool(config, opts, base),
+  };
+}
+
+function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: Foundation): PoolDesk | undefined {
   const fleetId = config.fleetId ?? '';
   const poolTransport =
     opts.poolTransport ??
@@ -930,22 +966,7 @@ function buildBenchDesks(
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
           errors,
         });
-  return {
-    closeOuts,
-    unwatchedChildren,
-    validationAsks,
-    validationReady,
-    burn,
-    runway,
-    schedules,
-    updates,
-    filing,
-    upstream,
-    graph,
-    tickets,
-    obstacles,
-    pool,
-  };
+  return pool;
 }
 
 function buildHarness(
@@ -960,17 +981,13 @@ function buildHarness(
   late: Late,
 ): Harness {
   const { store, connector, areaPaths, errors, runtimeControl, ingressInbox, watchLabel } = base;
-  const { featureBoard } = fleet;
+  const reads = harnessReads(config, store, predictions, fleet.featureBoard);
   return new Harness({
     store,
     connector,
     dispatcher: fleet.dispatcher,
     executor: fleet.executor,
-    featureStandings: (): { number: number; title: string; key: string }[] => {
-      const facts = featureBoard();
-      if (!facts) return [];
-      return featureRecords(store, facts).map((f) => ({ number: f.number, title: f.title, key: f.key }));
-    },
+    featureStandings: reads.featureStandings,
     plans: intake.plans,
     appraisals: intake.appraisals,
     areaPaths,
@@ -1003,22 +1020,8 @@ function buildHarness(
         late.localValidations.sweep();
       },
     },
-    // Computed here rather than in the rule: `src/remoteValidation/` is a lens as far as the
-    // dispatcher is concerned, so what reaches it is a run row and a rendered string.
-    goalIntake: () => ({
-      closedSittings: revealGateOn(config) ? new Set(predictions.listReveals().map((r) => r.originRef)) : null,
-      criteria: config.goalCriteria.enabled ? store.goalCriteria.listCurrentCriteria() : [],
-      judgeOwed: config.prediction.enabled ? predictions.listJudgeOwed() : [],
-    }),
-    remoteRuns: () =>
-      remoteRunBriefs({
-        store,
-        environments: config.environments,
-        validationRoot: config.validationRoot,
-        // The one browser block, read by both dispatches. Off the live config each pulse, so an
-        // operator who configures one does not have to restart the harness to use it.
-        browser: config.localValidation.browser,
-      }),
+    goalIntake: reads.goalIntake,
+    remoteRuns: reads.remoteRuns,
     landings: fleet.landings,
     recovery: fleet.recovery,
     ejections: fleet.ejections,
@@ -1042,9 +1045,33 @@ function buildHarness(
   });
 }
 
-function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
-  const { store, errors, worktrees, runtimeControl, ingressInbox } = base;
-  const { agents, escalations } = fleet;
+function harnessReads(config: Config, store: Store, predictions: PredictionStore, featureBoard: Fleet['featureBoard']) {
+  return {
+    featureStandings: (): { number: number; title: string; key: string }[] => {
+      const facts = featureBoard();
+      if (!facts) return [];
+      return featureRecords(store, facts).map((f) => ({ number: f.number, title: f.title, key: f.key }));
+    },
+    // Computed here rather than in the rule: `src/remoteValidation/` is a lens as far as the
+    // dispatcher is concerned, so what reaches it is a run row and a rendered string.
+    goalIntake: () => ({
+      closedSittings: revealGateOn(config) ? new Set(predictions.listReveals().map((r) => r.originRef)) : null,
+      criteria: config.goalCriteria.enabled ? store.goalCriteria.listCurrentCriteria() : [],
+      judgeOwed: config.prediction.enabled ? predictions.listJudgeOwed() : [],
+    }),
+    remoteRuns: () =>
+      remoteRunBriefs({
+        store,
+        environments: config.environments,
+        validationRoot: config.validationRoot,
+        // The one browser block, read by both dispatches. Off the live config each pulse, so an
+        // operator who configures one does not have to restart the harness to use it.
+        browser: config.localValidation.browser,
+      }),
+  };
+}
+
+function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, escalations }: Fleet): void {
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
     if (store.escalations.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.tasks.getTask(taskId);
@@ -1089,6 +1116,12 @@ function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: 
       errors.record({ source: 'agent', message: `Failed to release the worktree slot for ${branch}: ${err.message}` });
     });
   });
+}
+
+function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
+  const { store, errors, worktrees, runtimeControl, ingressInbox } = base;
+  const { agents } = fleet;
+  wireAgentEvents(base, fleet);
 
   const localCycles = new CycleTrigger({
     run: () => harness.runCycle('local'),

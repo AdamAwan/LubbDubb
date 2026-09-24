@@ -7,6 +7,7 @@ import { planIsWithheld, withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import { sheetFoldLine } from '../remoteValidation/sheet.js';
 import { resolveTenant } from '../remoteValidation/tenants.js';
 import type {
+  Decision,
   EnvironmentHealthReading,
   GoalArrival,
   GoalWatch,
@@ -266,6 +267,24 @@ function planReads({ system, store, config, world, tasks }: BaseReads) {
   const landings = once(() =>
     store.landings.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped'),
   );
+  const { withheld, wirePlans } = planReveals(system, config, plans);
+  const wirePlanParts = planPartViews(store, tasks, plans, planParts, partsOfPlan, withheld);
+  return {
+    plans,
+    planParts,
+    planByOrigin,
+    planPartsOf,
+    stacks,
+    openPrNumbers,
+    mergedPrs,
+    landings,
+    withheld,
+    wirePlans,
+    wirePlanParts,
+  };
+}
+
+function planReveals(system: System, config: Config, plans: Plan[]) {
   const reveals = once(() => {
     const byPlan = new Map<string, { revealed: boolean; revealedAt: string | null }>();
     for (const plan of plans) {
@@ -296,6 +315,17 @@ function planReads({ system, store, config, world, tasks }: BaseReads) {
       evidence: [],
     };
   });
+  return { withheld, wirePlans };
+}
+
+function planPartViews(
+  store: Store,
+  tasks: BaseReads['tasks'],
+  plans: Plan[],
+  planParts: () => PlanPart[],
+  partsOfPlan: (planId: string) => PlanPart[],
+  withheld: (planId: unknown) => boolean,
+) {
   const drift = once(() => {
     const partOrigins = new Set(
       plans.flatMap((plan) => {
@@ -333,19 +363,7 @@ function planReads({ system, store, config, world, tasks }: BaseReads) {
         outsideScope: drifted.get(part.id) ?? [],
       }));
   });
-  return {
-    plans,
-    planParts,
-    planByOrigin,
-    planPartsOf,
-    stacks,
-    openPrNumbers,
-    mergedPrs,
-    landings,
-    withheld,
-    wirePlans,
-    wirePlanParts,
-  };
+  return wirePlanParts;
 }
 
 function verdictReads({ store, config, opts }: PlanReadsOn) {
@@ -414,8 +432,8 @@ function verdictReads({ store, config, opts }: PlanReadsOn) {
 }
 
 function contextReads(r: VerdictReadsOn) {
-  const { system, store, connector, config, world, tasks, control, proposals, watchLabel, plans, planParts } = r;
-  const { deliveries, deliverySignals, appraisals, issueRuns, withheld, bugFilings, humanTasks, wirePlans } = r;
+  const { system, store, config, world, tasks, control, proposals, watchLabel, plans, planParts } = r;
+  const { deliveries, deliverySignals, appraisals, issueRuns } = r;
   const recentDecisions = once(() => store.decisions.listDecisions(200));
   const pickupCtx = once(
     (): IssuePickupContext => ({
@@ -468,6 +486,12 @@ function contextReads(r: VerdictReadsOn) {
       ...reviewRows(),
     };
   });
+  return { recentDecisions, pickupCtx, reviewRows, attentionCtx, ...activityReads(r, recentDecisions) };
+}
+
+function activityReads(r: VerdictReadsOn, recentDecisions: () => Decision[]) {
+  const { store, connector, world, tasks, proposals, appraisals, issueRuns, withheld, bugFilings, humanTasks } = r;
+  const { wirePlans } = r;
   const worldEvents = store.world.listWorldEvents(100);
   // The Decision log persists the whole action, and a `propose_plan` action carries
   // the plan's narrative in its prompt and its diagnosis and approach in its detail.
@@ -499,13 +523,11 @@ function contextReads(r: VerdictReadsOn) {
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
-  return { recentDecisions, pickupCtx, reviewRows, attentionCtx, worldEvents, shiftLog, refUrls };
+  return { worldEvents, shiftLog, refUrls };
 }
 
 function issueReads(r: ContextReadsOn) {
-  const { system, store, connector, config, opts, world, tasks, agents, issueRuns, runByOrigin, pickupCtx } = r;
-  const { conclusions, planByOrigin, planPartsOf, shortfallsByOrigin, deliveriesByOrigin, appraisalsByOrigin } = r;
-  const { padsByOrigin, instructionsByOrigin, checksByGoal } = r;
+  const { system, store, connector, config, world, tasks, agents, issueRuns, runByOrigin } = r;
   const workNodes = once(() => store.graph.listWorkNodes());
   const spend = once(() =>
     rollUpIssueSpend({
@@ -515,22 +537,12 @@ function issueReads(r: ContextReadsOn) {
       localRuns: store.localRuns.listLocalRuns(),
     }),
   );
-  const goalPriorities = once(
-    () => new Map(store.priority.listGoalPriorities().map((g) => [g.originRef, { since: g.since }])),
-  );
-  const localValidations = once(
-    () => new Map(store.localValidations.listLatestLocalValidations().map((v) => [v.originRef, v])),
-  );
-  const liveLocalRun = once(() => store.localRuns.liveLocalRun());
-  const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
-    const checks = checksByGoal().get(origin) ?? [];
-    return checks.length === 0 ? null : validationVerdict(checks);
-  };
   const placementCtx: PlacementContext = {
     areaTree: system.areaPaths.current(),
     canPlace: connector.canPlaceWorkItem(),
     types: { containerTypes: config.issueContainerTypes, parentedTypes: config.issueParentedTypes },
   };
+  const enrichIssue = issueEnricher(r, spend, placementCtx);
   const retainedRuns = () => {
     const retained = retainedRunIssues(issueRuns, world.issues);
     const mirrored = new Map(store.tickets.readTrackerItems(retained.map((i) => i.number)).map((t) => [t.number, t]));
@@ -551,8 +563,29 @@ function issueReads(r: ContextReadsOn) {
       ];
     });
   };
+  return { workNodes, spend, placementCtx, retainedRuns, enrichIssue };
+}
 
-  const enrichIssue = (issue: Issue) => {
+function issueEnricher(
+  r: ContextReadsOn,
+  spend: () => ReturnType<typeof rollUpIssueSpend>,
+  placementCtx: PlacementContext,
+) {
+  const { system, store, config, opts, runByOrigin, pickupCtx, conclusions, planByOrigin, planPartsOf } = r;
+  const { shortfallsByOrigin, deliveriesByOrigin, appraisalsByOrigin, padsByOrigin, instructionsByOrigin } = r;
+  const { checksByGoal } = r;
+  const goalPriorities = once(
+    () => new Map(store.priority.listGoalPriorities().map((g) => [g.originRef, { since: g.since }])),
+  );
+  const localValidations = once(
+    () => new Map(store.localValidations.listLatestLocalValidations().map((v) => [v.originRef, v])),
+  );
+  const liveLocalRun = once(() => store.localRuns.liveLocalRun());
+  const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
+    const checks = checksByGoal().get(origin) ?? [];
+    return checks.length === 0 ? null : validationVerdict(checks);
+  };
+  return (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
     const run = runByOrigin.get(origin);
     return {
@@ -592,7 +625,6 @@ function issueReads(r: ContextReadsOn) {
       ),
     };
   };
-  return { workNodes, spend, placementCtx, retainedRuns, enrichIssue };
 }
 
 function prReads({ store, config, world, reviewRows, attentionCtx }: IssueReadsOn) {
@@ -716,7 +748,7 @@ function goalsSection(
   | 'remoteSheets'
   | 'stackLandings'
 > {
-  const { store, config, opts, baseline, world, tasks, stacks, landings, mergedPrs, openPrNumbers, withReview } = r;
+  const { store, config, opts, baseline, world, tasks, stacks, withReview } = r;
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
   const remoteSheets = once(() => buildRemoteSheets(store, config.environments, tasks, opts?.remoteCaptureSigner));
@@ -760,35 +792,44 @@ function goalsSection(
     environmentArrivals: arrivals.slice(0, 50),
     ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),
     remoteSheets: remoteSheets(),
-    stackLandings: [
-      ...stacks().map((stack) => {
-        const rungPrs = stack.rungs.flatMap((rung) => {
-          const pr = prByNumber.get(rung.prNumber);
-          return pr ? [pr] : [];
-        });
-        const landing = landingFor(
-          stack.rungs.map((r) => r.prNumber),
-          landings(),
-          openPrNumbers,
-        );
-        return {
-          ref: stack.ref,
-          ...landingReadiness(rungPrs),
-          landing,
-          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
-        };
-      }),
-      ...landings()
-        .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
-        .map((landing) => ({
-          ref: landing.ref,
-          offer: false,
-          blockedBy: null,
-          landing,
-          landed: landedCount(landing, { ...world, merged: mergedPrs() }),
-        })),
-    ],
+    stackLandings: stackLandingViews(r, prByNumber, stackRungPrs),
   };
+}
+
+function stackLandingViews(
+  r: Reads,
+  prByNumber: Map<number, PullRequest>,
+  stackRungPrs: Set<number>,
+): CockpitState['stackLandings'] {
+  const { world, stacks, landings, mergedPrs, openPrNumbers } = r;
+  return [
+    ...stacks().map((stack) => {
+      const rungPrs = stack.rungs.flatMap((rung) => {
+        const pr = prByNumber.get(rung.prNumber);
+        return pr ? [pr] : [];
+      });
+      const landing = landingFor(
+        stack.rungs.map((r) => r.prNumber),
+        landings(),
+        openPrNumbers,
+      );
+      return {
+        ref: stack.ref,
+        ...landingReadiness(rungPrs),
+        landing,
+        landed: landing ? landedCount(landing, { ...world, merged: mergedPrs() }) : 0,
+      };
+    }),
+    ...landings()
+      .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
+      .map((landing) => ({
+        ref: landing.ref,
+        offer: false,
+        blockedBy: null,
+        landing,
+        landed: landedCount(landing, { ...world, merged: mergedPrs() }),
+      })),
+  ];
 }
 
 /**
