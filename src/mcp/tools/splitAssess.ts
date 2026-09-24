@@ -9,6 +9,31 @@ import type { ToolFactory } from './context.js';
 
 const MIN_CONCEPTS = 2;
 
+const SPLIT_ASSESS_INPUT = toolSchema(
+  z.object({
+    verdict: z
+      .enum(['split', 'coherent'])
+      .describe(
+        '`coherent` if the diff is one concept, however wide. `split` if it holds work that should have ' +
+          'been separate pull requests.',
+      ),
+    concepts: z
+      .array(z.string())
+      .describe(
+        'On `split`, the concepts you found — one short name each, at least two, in the order they would ' +
+          'have to land. Each one is a part of the plan you are about to propose. Omit on `coherent`.',
+      )
+      .optional(),
+    reason: z
+      .string()
+      .describe(
+        'What you saw in the diff that decided it, in a few sentences. On `coherent` this is the whole ' +
+          'record of why a wide pull request was left alone, so “it is all related” is not a reason.',
+      ),
+    files: z.number().describe('How many files the diff changes, as you counted them on the branch.'),
+  }),
+);
+
 export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Report whether the PULL REQUEST you were dispatched for is one piece of work or several. You are not ' +
@@ -18,30 +43,7 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
     'unrelated refactor are three. Answer `coherent` and nothing else happens and nothing asks again. ' +
     'Answer `split` and name the concepts, then propose the plan that separates them with plan_correct — ' +
     'an operator decides, and neither the pull request nor the agent on it is stopped meanwhile.',
-  inputSchema: toolSchema(
-    z.object({
-      verdict: z
-        .enum(['split', 'coherent'])
-        .describe(
-          '`coherent` if the diff is one concept, however wide. `split` if it holds work that should have ' +
-            'been separate pull requests.',
-        ),
-      concepts: z
-        .array(z.string())
-        .describe(
-          'On `split`, the concepts you found — one short name each, at least two, in the order they would ' +
-            'have to land. Each one is a part of the plan you are about to propose. Omit on `coherent`.',
-        )
-        .optional(),
-      reason: z
-        .string()
-        .describe(
-          'What you saw in the diff that decided it, in a few sentences. On `coherent` this is the whole ' +
-            'record of why a wide pull request was left alone, so “it is all related” is not a reason.',
-        ),
-      files: z.number().describe('How many files the diff changes, as you counted them on the branch.'),
-    }),
-  ),
+  inputSchema: SPLIT_ASSESS_INPUT,
   handler: (args) => {
     const prNumber = splitTargetPr(task.originRef);
     const issueNumber = issueSubtreeNumber(task.originRef);
@@ -59,13 +61,10 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
     if (reason === '')
       return toolError('Verdict rejected: the reason is what an operator reads instead of re-reading the diff.');
 
-    const files =
-      typeof input.files === 'number' && Number.isFinite(input.files) ? Math.max(0, Math.trunc(input.files)) : null;
+    const files = fileCountOf(input.files);
     if (files === null) return toolError('Verdict rejected: give the number of files the diff changes.');
 
-    const concepts = Array.isArray(input.concepts)
-      ? input.concepts.filter((c): c is string => typeof c === 'string' && c.trim() !== '').map((c) => c.trim())
-      : [];
+    const concepts = conceptsOf(input.concepts);
     if (verdict === 'split' && concepts.length < MIN_CONCEPTS) {
       return toolError(
         `Verdict rejected: a split needs at least ${MIN_CONCEPTS} named concepts. Name them, or answer ` +
@@ -104,3 +103,13 @@ export const splitAssess: ToolFactory = ({ deps, agent, task, ok }) => ({
     });
   },
 });
+
+function fileCountOf(files: unknown): number | null {
+  return typeof files === 'number' && Number.isFinite(files) ? Math.max(0, Math.trunc(files)) : null;
+}
+
+function conceptsOf(concepts: unknown): string[] {
+  return Array.isArray(concepts)
+    ? concepts.filter((c): c is string => typeof c === 'string' && c.trim() !== '').map((c) => c.trim())
+    : [];
+}

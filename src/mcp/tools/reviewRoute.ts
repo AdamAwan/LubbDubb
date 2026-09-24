@@ -17,6 +17,33 @@ function modeField(modes: string[], allowSkip: boolean): z.ZodTypeAny {
   return allowSkip ? described.optional() : described;
 }
 
+function routeInput(modes: string[], allowSkip: boolean) {
+  return toolSchema(
+    z.object({
+      mode: modeField(modes, allowSkip),
+      ...(allowSkip
+        ? {
+            skip: z
+              .boolean()
+              .describe(
+                'True if this pull request needs no review at all — a version bump, a regenerated ' +
+                  'lockfile, a typo in a comment. It also releases the merge gate, so anything that ' +
+                  'changes behaviour gets a mode however small the diff. Give a mode or this, not both.',
+              )
+              .optional(),
+          }
+        : {}),
+      reason: z
+        .string()
+        .describe(
+          'Why, in one or two sentences and about *this* change — what you saw that made it need this ' +
+            'depth. It is the whole of what an operator reads later when a review turns out to have been ' +
+            'the wrong shape, so "it is small" is not a reason.',
+        ),
+    }),
+  );
+}
+
 export const reviewRoute: ToolFactory = ({ deps, agent, task, ok }) => {
   const modes = deps.reviewModes ?? [];
   const allowSkip = deps.reviewAllowSkip === true;
@@ -32,30 +59,7 @@ export const reviewRoute: ToolFactory = ({ deps, agent, task, ok }) => {
         ? ' This project also lets you decide a pull request needs no review at all — pass `skip: true` ' +
           'instead of a mode, and only where reading the diff could not change anything.'
         : ''),
-    inputSchema: toolSchema(
-      z.object({
-        mode: modeField(modes, allowSkip),
-        ...(allowSkip
-          ? {
-              skip: z
-                .boolean()
-                .describe(
-                  'True if this pull request needs no review at all — a version bump, a regenerated ' +
-                    'lockfile, a typo in a comment. It also releases the merge gate, so anything that ' +
-                    'changes behaviour gets a mode however small the diff. Give a mode or this, not both.',
-                )
-                .optional(),
-            }
-          : {}),
-        reason: z
-          .string()
-          .describe(
-            'Why, in one or two sentences and about *this* change — what you saw that made it need this ' +
-              'depth. It is the whole of what an operator reads later when a review turns out to have been ' +
-              'the wrong shape, so "it is small" is not a reason.',
-          ),
-      }),
-    ),
+    inputSchema: routeInput(modes, allowSkip),
     handler: (args) => {
       const prNumber = reviewTargetPr(task.originRef, 'review-triage');
       if (prNumber === null) {
@@ -67,20 +71,8 @@ export const reviewRoute: ToolFactory = ({ deps, agent, task, ok }) => {
       const input = args as { mode?: unknown; reason?: unknown; skip?: unknown };
       const mode = typeof input.mode === 'string' ? input.mode.trim() : '';
       const skip = input.skip === true;
-      if (skip && !allowSkip) {
-        return toolError(
-          'Route rejected: this project does not allow skipping a review (review.allowSkip is off). ' +
-            `Name one of its modes instead (${modes.join(', ') || 'none declared'}).`,
-        );
-      }
-      if (skip && mode !== '') {
-        return toolError(`Route rejected: you asked to skip the review *and* named "${mode}". Give one or the other.`);
-      }
-      if (!skip && !modes.includes(mode)) {
-        return toolError(
-          `Route rejected: "${mode}" is not one of this project's review modes (${modes.join(', ') || 'none declared'}).`,
-        );
-      }
+      const problem = routeProblem(mode, skip, modes, allowSkip);
+      if (problem !== null) return toolError(problem);
       const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
       if (reason === '') return toolError('Route rejected: the reason is what an operator reads instead of guessing.');
 
@@ -111,3 +103,19 @@ export const reviewRoute: ToolFactory = ({ deps, agent, task, ok }) => {
     },
   };
 };
+
+function routeProblem(mode: string, skip: boolean, modes: string[], allowSkip: boolean): string | null {
+  if (skip && !allowSkip) {
+    return (
+      'Route rejected: this project does not allow skipping a review (review.allowSkip is off). ' +
+      `Name one of its modes instead (${modes.join(', ') || 'none declared'}).`
+    );
+  }
+  if (skip && mode !== '') {
+    return `Route rejected: you asked to skip the review *and* named "${mode}". Give one or the other.`;
+  }
+  if (!skip && !modes.includes(mode)) {
+    return `Route rejected: "${mode}" is not one of this project's review modes (${modes.join(', ') || 'none declared'}).`;
+  }
+  return null;
+}
