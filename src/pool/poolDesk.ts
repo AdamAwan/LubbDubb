@@ -1,3 +1,4 @@
+import type { DecisionChoice } from '../insights/choiceInsights.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { WorldScope } from '../integrations/registry.js';
 import type { Store } from '../store/store.js';
@@ -23,6 +24,7 @@ export class PoolDesk {
       now: () => string;
       digestIntervalMs: number;
       worldScope: WorldScope;
+      choicesOff?: readonly DecisionChoice[];
       errors?: ErrorRecorder;
     },
   ) {}
@@ -143,6 +145,7 @@ export class PoolDesk {
       harnessVersion: this.deps.harnessVersion,
       now,
       scope: this.deps.worldScope,
+      choicesOff: this.deps.choicesOff,
     };
     return buildDigestDocument(this.deps.store, context);
   }

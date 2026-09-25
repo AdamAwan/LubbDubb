@@ -350,16 +350,17 @@ publish from rows the fleet already holds, so the envelope carries it and nothin
 
 Every dimension is a closed vocabulary that already exists, and none of them is a provider identifier.
 
-| Section        | Keyed by                                                   | Measures                                |
-| -------------- | ---------------------------------------------------------- | --------------------------------------- |
-| `byPhase`      | `SpendPhase` (`src/insights/spendInsights.ts`)             | costUsd, runs                           |
-| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`               | accounts, costUsd                       |
-| `byCheck`      | the check's own name                                       | accounts, costUsd                       |
-| `unaccounted`  | —                                                          | return dispatches that filed no account |
-| `unmeasured`   | —                                                          | runs that reported no usage at all      |
-| `byUsage`      | `UsageSubject` × `UsageVerb`                               | times a person did it (no cost)         |
-| `byThroughput` | `ThroughputMeasure` (`src/insights/throughputInsights.ts`) | times it happened (no cost)             |
-| `byFault`      | `ErrorLogEntry['source']`                                  | faults recorded (no cost)               |
+| Section        | Keyed by                                                               | Measures                                                            |
+| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `byPhase`      | `SpendPhase` (`src/insights/spendInsights.ts`)                         | costUsd, runs                                                       |
+| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`                           | accounts, costUsd                                                   |
+| `byCheck`      | the check's own name                                                   | accounts, costUsd                                                   |
+| `unaccounted`  | —                                                                      | return dispatches that filed no account                             |
+| `unmeasured`   | —                                                                      | runs that reported no usage at all                                  |
+| `byUsage`      | `UsageSubject` × `UsageVerb`                                           | times a person did it (no cost)                                     |
+| `byThroughput` | `ThroughputMeasure` (`src/insights/throughputInsights.ts`)             | times it happened (no cost)                                         |
+| `byFault`      | `ErrorLogEntry['source']`                                              | faults recorded (no cost)                                           |
+| `byChoice`     | `DecisionChoice` × `person`/`agent` (`src/insights/choiceInsights.ts`) | whose answer stood (no cost), [34](34-usage-metrics.md#who-decided) |
 
 `byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
 every rule stated here. Both halves of its key are closed vocabularies the harness owns

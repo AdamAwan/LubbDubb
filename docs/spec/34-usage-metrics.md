@@ -68,27 +68,28 @@ Not every verb applies to every subject, and which do is declared — `VERBS_BY_
 shape and exactly the purpose of `CAUSES_BY_KIND`. An empty cell is a statement that the product
 offers no such control, and the day it does, the cell is where it is added.
 
-| Subject      | Verbs it offers                                          |
-| ------------ | -------------------------------------------------------- |
-| `plan`       | `view` `expand` `edit` `accept` `reject` `abandon`       |
-| `goal`       | `view` `expand` `edit` `accept` `abandon`                |
-| `pr`         | `view` `accept` `send`                                   |
-| `validation` | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
-| `escalation` | `view` `accept` `reject` `send`                          |
-| `human-task` | `view` `accept` `reject`                                 |
-| `ticket`     | `view` `filter` `create`                                 |
-| `feature`    | `view` `expand`                                          |
-| `agent`      | `view` `expand` `send` `stop`                            |
-| `obstacle`   | `view` `expand` `accept` `waive`                         |
-| `local-run`  | `view` `create` `stop`                                   |
-| `job`        | `view` `create` `stop`                                   |
-| `retro`      | `view`                                                   |
-| `scratchpad` | `view` `edit`                                            |
-| `insights`   | `view` `filter`                                          |
-| `pool`       | `view` `filter`                                          |
-| `config`     | `view` `edit`                                            |
-| `upgrade`    | `view` `accept` `reject`                                 |
-| `pet`        | `view` `edit`                                            |
+| Subject          | Verbs it offers                                          |
+| ---------------- | -------------------------------------------------------- |
+| `plan`           | `view` `expand` `edit` `accept` `reject` `abandon`       |
+| `goal`           | `view` `expand` `edit` `accept` `abandon`                |
+| `pr`             | `view` `accept` `send`                                   |
+| `pr-description` | `create` `accept`                                        |
+| `validation`     | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
+| `escalation`     | `view` `accept` `reject` `send`                          |
+| `human-task`     | `view` `accept` `reject`                                 |
+| `ticket`         | `view` `filter` `create`                                 |
+| `feature`        | `view` `expand`                                          |
+| `agent`          | `view` `expand` `send` `stop`                            |
+| `obstacle`       | `view` `expand` `accept` `waive`                         |
+| `local-run`      | `view` `create` `stop`                                   |
+| `job`            | `view` `create` `stop`                                   |
+| `retro`          | `view`                                                   |
+| `scratchpad`     | `view` `edit`                                            |
+| `insights`       | `view` `filter`                                          |
+| `pool`           | `view` `filter`                                          |
+| `config`         | `view` `edit`                                            |
+| `upgrade`        | `view` `accept` `reject`                                 |
+| `pet`            | `view` `edit`                                            |
 
 **A subject is a thing, never a screen.** `pr` is the pull request wherever it is worked, so a
 control that moves to another surface keeps its row and the history stays one series. Keying on the
@@ -218,6 +219,7 @@ omits the one ask that parks the whole fleet.
 | Settling a check      | `ValidationCheckState`, with `ValidationCheckResultBy` saying whether a person or the fleet settled it — [20](20-validation.md) |
 | Concluding a goal     | the issue conclusions, `by = 'operator'` — [14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)                      |
 | Stopping an agent     | the run's `killed` / `interrupted` outcome, already counted by `src/insights/reliabilityInsights.ts`                            |
+| Writing a description | the first version of a part's `pr_descriptions` chain — [07](07-pull-requests.md#the-agents-draft)                              |
 
 **Authorising a landing is an act and not an ask**, though it settles something: the row exists only
 because somebody clicked, and nothing anywhere records that a landable stack was ever put in front of
@@ -436,6 +438,54 @@ nobody was in is a finding manufactured out of an absent operator — a page of 
 week somebody was on holiday is four findings' worth of noise. Then `operated`, then
 `visited-never-operated`, and the two silent verdicts last, told apart by the arrival evidence alone.
 **Every subject gets a row**, so the reading is never a list of only what was used.
+
+## Who decided
+
+A standing rule, and a digest section of its own. Wherever the harness lets a person decide something
+themselves or take what an agent decided, **whose answer stood is recorded, both ways, and it reaches
+the pool**. How often an agent's answer is the one that stands is the measure of whether it is good
+enough, and it is only a reading once many fleets have made the choice — which is what the pool is.
+
+**It is not the registry, and it cannot be.** The registry counts what a _person_ did, and half of
+every row here is an agent's answer that nobody overrode. So it is `byChoice` on `PoolDigestDocument`,
+keyed `<choice>/<side>` where the side is `person` or `agent`, folded by `choiceSightings`
+(`src/insights/choiceInsights.ts`) from records the harness already keeps, and mirrored, summed and
+drawn like `byUsage`. Same shape as every other section: a day, a key from a closed vocabulary, a
+count — no refs, no text, no identity.
+
+- **Both sides, or neither.** A count of one side with no count of the other is a number with no
+  denominator, and it sums across fleets into something that looks like a trend.
+- **Swept from the record, never logged at a control.** Every choice below already writes who
+  answered; a sweep picks up a second route to the same decision for free.
+- **A new key decision is a new `DecisionChoice`**, in the change that adds the decision: its copy in
+  `CHOICE_COPY`, its sweep in `SWEEPS` (both `Record`s over the union, so a choice with neither does
+  not compile), the lists that sweep reads on `ChoiceInput`, and the reads that fill them in
+  `byChoice` (`src/pool/digestArm.ts`).
+- **A choice the deployment does not offer is left out, not zeroed.** `choicesOff` names them —
+  `goal-criteria` where `goalCriteria.enabled` is off — so a fleet that was never asked does not
+  publish every goal as the planner's.
+
+| Choice             | A person's answer stood                           | An agent's answer stood                                  |
+| ------------------ | ------------------------------------------------- | -------------------------------------------------------- |
+| `pr-description`   | the part's first `pr_descriptions` version        | a draft handed over, on a part nobody described          |
+| `plan`             | the plan proposal rejected by a person            | the plan proposal accepted by a person                   |
+| `validation-check` | a pass or fail with `resultBy = 'operator'`       | a pass or fail by `agent`, `desktop`, `spec` or `script` |
+| `goal-verdict`     | a conclusion, delivery or shortfall by `operator` | the same, by the assessor or an agent                    |
+| `goal-criteria`    | criteria written before the goal's first plan     | the goal planned with none, where `goalCriteria` is on   |
+| `watch-check`      | a live watch `authored = 'operator'`              | a live watch the plan declared                           |
+| `state-query`      | a query `authored = 'operator'`                   | a plan's or agent's query with an approval somewhere     |
+| `story-order`      | a proposed order declined                         | a proposed order accepted                                |
+
+**What it cannot see, stated rather than hidden.** A goal verdict and a check reading are one row
+each, overwritten, so a verdict a person later replaced counts once, as theirs. A declined watch or
+query is deleted, so it counts on neither side — only what a person ended up standing behind does.
+Criteria are dated at the goal's first plan, because the intake sitting's stamp lives in the
+prediction store, which the digest is deliberately not handed
+([14](14-persistence.md#the-prediction-store-is-not-on-store)).
+
+`pr-description.create` and `pr-description.accept` stay in the registry for the local reading — the
+ledger's "Writing a description" act and the press's reach — and are not how the pool counts the
+choice.
 
 ## The one new table
 

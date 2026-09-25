@@ -65,6 +65,13 @@ export function PoolUsage({ payload }: { payload: PoolInsightsPayload }): JSX.El
         publishing={rollup.fleets.length}
         empty="Nothing yet. Only acts the cockpit witnesses on the click are here."
       />
+      <Counted
+        title="Who decided"
+        note="each key decision, and whether a person’s answer or an agent’s stood"
+        rows={rollup.byChoice}
+        publishing={rollup.fleets.length}
+        empty="Nothing yet. No fleet has published a decision it recorded."
+      />
       <MethodNote>
         <p>
           <b>These rows compare across providers</b> because the vocabularies are the harness’s own. <b>Times</b> is how

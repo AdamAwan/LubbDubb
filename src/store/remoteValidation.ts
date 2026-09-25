@@ -175,6 +175,21 @@ export class RemoteValidationStore {
     );
   }
 
+  /**
+   * Who wrote each query a person stood behind: their own, or an agent's they approved somewhere.
+   * → docs/spec/34-usage-metrics.md#who-decided
+   */
+  listQueryAuthorship(): { authored: string; createdAt: string }[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT q.authored, q.created_at FROM remote_state_queries q
+         WHERE q.authored = 'operator'
+            OR EXISTS (SELECT 1 FROM remote_query_approvals a WHERE a.query_digest = q.digest)`,
+      )
+      .all() as { authored: string; created_at: string }[];
+    return rows.map((r) => ({ authored: r.authored, createdAt: r.created_at }));
+  }
+
   deleteStateQuery(originRef: string, queryId: string): boolean {
     return this.ctx.db.transaction(() => {
       const row = this.ctx

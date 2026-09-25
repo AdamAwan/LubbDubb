@@ -101,6 +101,15 @@ export class WatchStore {
     ).map(hydrate);
   }
 
+  /** Who wrote each live watch, and when. → docs/spec/34-usage-metrics.md#who-decided */
+  listWatchAuthorship(): { authored: string; createdAt: string }[] {
+    const rows = this.ctx.prep(`SELECT authored, created_at FROM goal_watches WHERE live=1`).all() as {
+      authored: string;
+      created_at: string;
+    }[];
+    return rows.map((r) => ({ authored: r.authored, createdAt: r.created_at }));
+  }
+
   listProposedGoalWatches(): GoalWatch[] {
     return (
       this.ctx.prep(`SELECT * FROM goal_watches WHERE live=0 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]

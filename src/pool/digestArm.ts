@@ -20,6 +20,7 @@ import {
   throughputMeasureOf,
 } from '../insights/throughputInsights.js';
 import { VERBS_BY_SUBJECT } from '../usage/events.js';
+import { choiceKey, choiceSightings, type DecisionChoice } from '../insights/choiceInsights.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -32,7 +33,14 @@ export function utcDay(iso: string): string {
 
 export function buildDigestDocument(
   store: Store,
-  context: { fleetId: string; project: string; harnessVersion: string; now: string; scope: WorldScope },
+  context: {
+    fleetId: string;
+    project: string;
+    harnessVersion: string;
+    now: string;
+    scope: WorldScope;
+    choicesOff?: readonly DecisionChoice[];
+  },
 ): PoolDigestDocument {
   const since = retentionStart(context.now);
   const today = utcDay(context.now);
@@ -65,6 +73,7 @@ export function buildDigestDocument(
       today,
     ),
     byFault: byFault(store.errors.listErrorsSince(since), today),
+    byChoice: byChoice(store, since, context.choicesOff ?? [], today),
   };
 }
 
@@ -149,6 +158,29 @@ function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[]
     if (!verbs.includes(row.verb)) continue;
     rows.add(utcDay(row.at), `${row.subject}.${row.verb}`, { count: 1 });
   }
+  return rows.rows(today);
+}
+
+function byChoice(store: Store, since: string, choicesOff: readonly DecisionChoice[], today: string): PoolDigestRow[] {
+  const criteria = !choicesOff.includes('goal-criteria');
+  const rows = new Bucket();
+  const sightings = choiceSightings({
+    since,
+    descriptionsWritten: store.prDescriptions.listFirstDescriptionsSince(since),
+    draftsTaken: store.prDescriptions.listTakenDraftsSince(since),
+    proposals: store.escalations.listProposals(),
+    checks: store.validation.listAllValidationChecks(),
+    conclusions: store.verdicts.listIssueConclusions(),
+    deliveries: store.verdicts.listDeliveries(),
+    shortfalls: store.verdicts.listShortfalls(),
+    choicesOff,
+    firstCriteria: criteria ? store.goalCriteria.listFirstCriteria() : [],
+    plans: criteria ? store.plans.listPlans() : [],
+    watches: store.watches.listWatchAuthorship(),
+    queries: store.remoteValidation.listQueryAuthorship(),
+    sequences: store.sequences.listFeatureSequences(),
+  });
+  for (const s of sightings) rows.add(utcDay(s.at), choiceKey(s.choice, s.side), { count: 1 });
   return rows.rows(today);
 }
 

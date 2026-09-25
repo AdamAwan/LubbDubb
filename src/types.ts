@@ -2044,6 +2044,7 @@ export interface PoolDigestDocument extends PoolEnvelope {
      reader. → docs/spec/28-cross-fleet-pool.md */
   poolableThroughput: string[];
   byFault: PoolDigestRow[];
+  byChoice: PoolDigestRow[];
 }
 
 export type PoolClockDocument = PoolDigestDocument;

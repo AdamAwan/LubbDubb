@@ -277,6 +277,7 @@ function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: F
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
+          choicesOff: config.goalCriteria.enabled ? [] : ['goal-criteria'],
           errors,
         });
   return pool;

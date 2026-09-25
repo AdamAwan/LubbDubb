@@ -32,7 +32,8 @@ export type OperatorRowId =
   | 'plan-abandoned'
   | 'validation-check'
   | 'goal-retired'
-  | 'agent-stopped';
+  | 'agent-stopped'
+  | 'pr-description-written';
 
 export interface OperatorRow {
   id: OperatorRowId;
@@ -88,6 +89,7 @@ export interface OperatorInput {
   checks: readonly ValidationCheck[];
   conclusions: readonly IssueConclusion[];
   agents: readonly Agent[];
+  descriptionsWritten: readonly string[];
   costEvents: readonly CostEvent[];
   window: ResolvedWindow;
   now: number;
@@ -338,7 +340,23 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       parks: false,
       stamps: true,
     },
+    descriptionAct(input),
   ];
+}
+
+function descriptionAct(input: OperatorInput): RowSpec {
+  return {
+    id: 'pr-description-written',
+    kind: 'act',
+    subject: 'pr-description',
+    label: 'Writing a description',
+    blurb: 'A person described a pull request themselves rather than taking the agent’s draft',
+    data: input.descriptionsWritten.map((at) => answered(at, at)),
+    declinable: false,
+    countsOffers: false,
+    parks: false,
+    stamps: true,
+  };
 }
 
 function answered(openedAt: string, settledAt: string | null): Datum {

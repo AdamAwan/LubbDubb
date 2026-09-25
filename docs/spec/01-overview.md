@@ -117,6 +117,9 @@ owns it.
    human-readable reason and (for rule-dispatcher actions) the rule id that produced it.
 10. **The store holds intent; the outside world is the source of truth.** Plan reconciliation folds
     observed reality back onto the store's rows every pulse, and every fold is idempotent.
+11. **Every key decision records whose answer stood — a person's or an agent's — and it reaches the
+    pool.** A new decision a person can take over from an agent is a new `DecisionChoice` in the same
+    change. → [34](34-usage-metrics.md#who-decided)
 
 ## Boot sequence
 

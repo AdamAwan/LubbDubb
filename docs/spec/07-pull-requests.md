@@ -832,6 +832,10 @@ pull request with the footer alone.
 - **The operator's own version outranks it.** A hand-over is refused once a version exists, and
   `unpushedDrafts` skips any part that has one — **Write your own instead** stays on the page, and
   what they write replaces the agent's body on the next pulse.
+- **Whose description stood is counted, and reaches the pool.** A part's first version is a
+  person's; a hand-over on a part nobody described — pressed or by `autoUseAgentDescriptions` — is the
+  agent's. A revision is not a second choice. Locally, the ledger counts the first as an act and the
+  press is `pr-description.accept`. → [34](34-usage-metrics.md#who-decided)
 
 #### The field is free, and the four questions are hints
 
