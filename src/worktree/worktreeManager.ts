@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from '../git/gitCli.js';
 import { runSerial } from '../git/serialQueue.js';
@@ -10,7 +10,33 @@ import {
   type SlotProcess,
   type SlotProcesses,
 } from './slotProcesses.js';
-import { lockPaths, slotNotSwitchable, staleLockCleared } from './staleLocks.js';
+import {
+  checkedOutElsewhere,
+  exhausted,
+  firstLine,
+  reapBlockedByCheckout,
+  reclaimFailure,
+  revived,
+  RMDIR_RETRIES,
+  RMDIR_RETRY_DELAY_MS,
+  salvaged,
+} from './slotRefusals.js';
+import {
+  describe,
+  isUnder,
+  MARKS_DIR,
+  parseWorktreeList,
+  readMark,
+  shortBranch,
+  type Blocked,
+  type Condemnation,
+  type Mark,
+  type Request,
+  type SalvageReport,
+  type Survey,
+  type WorktreeEntry,
+} from './slots.js';
+import { lockAge, lockPaths, slotNotSwitchable, STALE_LOCK_MS, staleLockCleared } from './staleLocks.js';
 
 // → docs/spec/09-execution.md#worktrees
 
@@ -121,7 +147,7 @@ export class WorktreeManager implements Worktrees {
       const existing = await this.findExistingSlot(req.name);
       if (existing) return this.lease(req.name, existing);
       const outside = await this.findExisting(req.name);
-      if (outside !== null) throw new Error(this.checkedOutElsewhere(req.name, outside));
+      if (outside !== null) throw new Error(checkedOutElsewhere(req.name, outside, this.worktreeRoot));
     }
 
     mkdirSync(this.worktreeRoot, { recursive: true });
@@ -192,7 +218,7 @@ export class WorktreeManager implements Worktrees {
       }
     }
     await this.remove(branch);
-    if (holding === resolve(this.repoRoot)) throw new Error(this.reapBlockedByCheckout(branch, holding));
+    if (holding === resolve(this.repoRoot)) throw new Error(reapBlockedByCheckout(branch, holding));
     if (holding !== null) await runGit(holding, ['switch', '--detach']);
     if (!(await this.branchExists(branch))) return;
     await this.git(['branch', '-D', branch]);
@@ -209,36 +235,35 @@ export class WorktreeManager implements Worktrees {
     let spare: string | null = null;
     let evictable: string | null = null;
     for (const slot of slots) {
-      const condemnation = this.condemned.get(slot.path);
-      if (condemnation !== undefined) {
-        blocked.push({ path: slot.path, reason: condemnation.reason, stuck: false });
-        continue;
-      }
-      const mark = readMark(this.markPath(slot.path));
-      const holder = this.holder(slot, mark);
-      if (holder !== null) {
-        if (holder === req.name) return { own: slot.path, warm, spare, evictable, blocked };
-        blocked.push({ path: slot.path, reason: `work in flight on ${holder}`, stuck: false });
-        continue;
-      }
-      if (await this.dirty(slot.path)) {
-        const on = shortBranch(slot.branch) ?? 'a detached HEAD';
-        blocked.push({ path: slot.path, reason: `uncommitted changes on ${on}`, stuck: true });
-        continue;
-      }
-      if (req.readOnly && mark !== null && mark.of === req.of) {
-        warm ??= slot.path;
-        continue;
-      }
-      const occupant = shortBranch(slot.branch);
-      if (mark === null && (occupant === null || !(await this.branchExists(occupant)))) {
+      const standing = await this.standing(slot, req);
+      if (standing === 'own') return { own: slot.path, warm, spare, evictable, blocked };
+      if (standing === 'warm') warm ??= slot.path;
+      else if (standing === 'spare') {
         spare ??= slot.path;
         if (!req.readOnly) return { own: null, warm, spare, evictable, blocked };
-        continue;
-      }
-      evictable ??= slot.path;
+      } else if (standing === 'evictable') evictable ??= slot.path;
+      else blocked.push(standing);
     }
     return { own: null, warm, spare, evictable, blocked };
+  }
+
+  private async standing(slot: WorktreeEntry, req: Request): Promise<'own' | 'warm' | 'spare' | 'evictable' | Blocked> {
+    const condemnation = this.condemned.get(slot.path);
+    if (condemnation !== undefined) return { path: slot.path, reason: condemnation.reason, stuck: false };
+    const mark = readMark(this.markPath(slot.path));
+    const holder = this.holder(slot, mark);
+    if (holder !== null) {
+      if (holder === req.name) return 'own';
+      return { path: slot.path, reason: `work in flight on ${holder}`, stuck: false };
+    }
+    if (await this.dirty(slot.path)) {
+      const on = shortBranch(slot.branch) ?? 'a detached HEAD';
+      return { path: slot.path, reason: `uncommitted changes on ${on}`, stuck: true };
+    }
+    if (req.readOnly && mark !== null && mark.of === req.of) return 'warm';
+    const occupant = shortBranch(slot.branch);
+    if (mark === null && (occupant === null || !(await this.branchExists(occupant)))) return 'spare';
+    return 'evictable';
   }
 
   private holder(slot: WorktreeEntry, mark: Mark | null): string | null {
@@ -505,42 +530,8 @@ export class WorktreeManager implements Worktrees {
     return null;
   }
 
-  private checkedOutElsewhere(branch: string, path: string): string {
-    return (
-      `Cannot lease a worktree for ${branch}: it is already checked out at ${path}, which is not a pool slot ` +
-      `(the pool is ${this.worktreeRoot}). Git refuses to check one branch out twice, and this checkout is not ` +
-      `the harness's to switch — it is most likely the repository's own working copy. Switch it to another ` +
-      `branch and the dispatch goes through on the next pulse.`
-    );
-  }
-
-  private reapBlockedByCheckout(branch: string, path: string): string {
-    return (
-      `Cannot reap ${branch}: it is checked out at ${path}, the repository's own working copy, which is not ` +
-      `the harness's to switch — detaching it would move an operator off their branch without asking. Git ` +
-      `refuses to delete a branch that is checked out, so the local ref and the remote copy both stay. Switch ` +
-      `that checkout to another branch and the reap completes on the next pulse.`
-    );
-  }
-
   private exhausted(req: Request, blocked: Blocked[], salvage: SalvageReport, slots: WorktreeEntry[]): string {
-    const strays = this.strays(slots);
-    return (
-      `No free worktree slot for ${describe(req)}: all ${this.pool.size} slots under ${this.worktreeRoot} are ` +
-      `unavailable — ${blocked.map((b) => `${b.path} (${b.reason})`).join('; ')}. ` +
-      (salvage.notes.length > 0 ? `Reclaim: ${salvage.notes.join('; ')}. ` : '') +
-      'A slot is held while the harness has work in flight on the branch checked out in it, and a slot carrying ' +
-      'uncommitted changes is stashed onto a salvage ref and reclaimed — so one still named above is one the ' +
-      'stash itself refused. The bound follows the live agent cap, so raising the cap raises it too; the ' +
-      'dispatch is retried next cycle either way.' +
-      (strays.length === 0
-        ? ''
-        : ` Costing disk but not slots: ${strays.length} ${strays.length === 1 ? 'directory' : 'directories'} ` +
-          `under ${this.worktreeRoot} that git no longer knows about (${listed(strays)}). \`git worktree prune\` ` +
-          'has already run, so nothing here will ever reach them again and they are safe to delete by hand; ' +
-          'the harness will not, because this root is an operator setting and an unguarded delete under a ' +
-          'mistyped one is unrecoverable.')
-    );
+    return exhausted(req, blocked, salvage, { size: this.pool.size, root: this.worktreeRoot }, this.strays(slots));
   }
 
   private strays(slots: WorktreeEntry[]): string[] {
@@ -593,166 +584,8 @@ export function defaultPoolSize(cap: number): number {
   return Math.max(1, cap) + POOL_SLACK;
 }
 
-const RMDIR_RETRIES = 5;
-const RMDIR_RETRY_DELAY_MS = 200;
-
-function reclaimFailure(dir: string, err: NodeJS.ErrnoException): string {
-  const held = err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'ENOTEMPTY';
-  if (!held) return `Cannot reclaim the worktree directory ${dir}: ${err.message}`;
-  return (
-    `Cannot reclaim the worktree directory ${dir}: it is held open by another process (${err.code}), ` +
-    `and was still held after ${RMDIR_RETRIES} retries over ` +
-    `${(RMDIR_RETRIES * RMDIR_RETRY_DELAY_MS) / 1000}s. That is almost always a process an earlier agent ` +
-    `started and left running — a shell, a watcher, a test runner — whose working directory is still ` +
-    `inside it; on Windows being a live process's cwd is by itself enough to refuse the removal. ` +
-    `Everything the harness could find standing in the directory has already been terminated, so ` +
-    `this one is outside what it can see. Stop that process and the branch dispatches again on the ` +
-    `next cycle; until then every dispatch onto it will fail here.`
-  );
-}
-
-type Request = { readOnly: false; name: string; base?: string } | { readOnly: true; name: string; of: string };
-
-interface Mark {
-  key: string;
-  of: string;
-}
-
-const MARKS_DIR = '.read-only';
-
 const HARNESS_ARTEFACTS = '.lubbdubb';
-
-function readMark(path: string): Mark | null {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const { key, of } = parsed as Partial<Mark>;
-    return typeof key === 'string' && typeof of === 'string' ? { key, of } : null;
-  } catch {
-    return null;
-  }
-}
-
-function describe(req: Request): string {
-  return req.readOnly ? `read-only checkout ${req.name} of ${req.of}` : `branch ${req.name}`;
-}
-
-interface Survey {
-  own: string | null;
-  warm: string | null;
-  spare: string | null;
-  evictable: string | null;
-  blocked: Blocked[];
-}
-
-interface Blocked {
-  path: string;
-  reason: string;
-  stuck: boolean;
-}
-
-interface SalvageReport {
-  freed: number;
-  notes: string[];
-}
-
-interface Condemnation {
-  /** The short form, for the slot's line in the exhaustion refusal. */
-  reason: string;
-  /**
-   * Files whose presence is the condemnation, observed rather than predicted: while one is there
-   * the wipe the revival performs answers a question this slot is not failing on.
-   */
-  blockers?: string[];
-}
-
-/**
- * How old a git lock must be before the harness will call it stale and remove it. Longer than any
- * single git command the harness or an agent runs, and shorter by orders of magnitude than the
- * lifetime of one left by a process that died mid-write.
- */
-const STALE_LOCK_MS = 10 * 60_000;
-
-function lockAge(path: string): number | null {
-  try {
-    const age = Date.now() - statSync(path).mtimeMs;
-    return age < 0 ? 0 : age;
-  } catch {
-    return null;
-  }
-}
 
 const HANDLES_SETTLE_MS = 500;
 
-function firstLine(detail: string): string {
-  const line = detail.split(/\r?\n/).find((l) => l.trim() !== '') ?? detail;
-  return line.trim().length > CONDEMNED_REASON_CHARS
-    ? `${line.trim().slice(0, CONDEMNED_REASON_CHARS - 1)}…`
-    : line.trim();
-}
-
-const CONDEMNED_REASON_CHARS = 160;
-
-function revived(dir: string, condemnation: Condemnation): string {
-  const gone =
-    (condemnation.blockers ?? []).length > 0
-      ? 'what was standing in the way of the checkout is no longer there'
-      : 'the wipe it refused has now gone through';
-  return (
-    `Worktree slot ${dir} is back in the pool: it was taken out because ${condemnation.reason}, and ${gone}. ` +
-    'It is handed over on the next dispatch that needs a slot, like any other.'
-  );
-}
-
 const SALVAGE_REFS = 'refs/lubbdubb/salvage';
-
-function salvaged(dir: string, ref: string): string {
-  return (
-    `Reclaimed worktree slot ${dir}, which was stranded carrying uncommitted changes. Nothing was discarded: ` +
-    `its tracked edits, staged state and new files are stashed at ${ref} (\`git stash apply ${ref}\`). Ignored ` +
-    'files are not stashed — a dependency tree does not belong in a git object, and the slot handles its own ' +
-    "under the pool's usual rules. A slot needing this after every dispatch is a repository with tracked files " +
-    'a build rewrites: untracking those is the fix, and until then this is where each copy goes.'
-  );
-}
-
-function listed(paths: string[]): string {
-  const named = paths.slice(0, STRAYS_NAMED);
-  const rest = paths.length - named.length;
-  return rest === 0 ? named.join(', ') : `${named.join(', ')}, and ${rest} more`;
-}
-
-const STRAYS_NAMED = 5;
-
-interface WorktreeEntry {
-  path: string;
-  branch: string | null;
-}
-
-function shortBranch(ref: string | null): string | null {
-  if (ref === null) return null;
-  return ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : ref;
-}
-
-function isUnder(root: string, path: string): boolean {
-  const rel = relative(root, path);
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
-}
-
-function parseWorktreeList(porcelain: string): WorktreeEntry[] {
-  const entries: WorktreeEntry[] = [];
-  let current: Partial<WorktreeEntry> = {};
-  for (const line of porcelain.split('\n')) {
-    if (line.startsWith('worktree ')) {
-      if (current.path) entries.push({ path: current.path, branch: current.branch ?? null });
-      current = { path: line.slice('worktree '.length).trim() };
-    } else if (line.startsWith('branch ')) {
-      current.branch = line.slice('branch '.length).trim();
-    } else if (line.trim() === '') {
-      if (current.path) entries.push({ path: current.path, branch: current.branch ?? null });
-      current = {};
-    }
-  }
-  if (current.path) entries.push({ path: current.path, branch: current.branch ?? null });
-  return entries;
-}
