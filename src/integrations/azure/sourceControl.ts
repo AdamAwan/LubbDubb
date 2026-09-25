@@ -178,9 +178,17 @@ export class AzureDevOpsSourceControlIntegration
     if (p.description === '') return '';
     const hit = this.bodyReadings.get(p.pullRequestId, maxAgeMs);
     if (hit !== undefined && hit.listed === p.description) return hit.body;
-    const body = await this.opts.api.getPullBody(p.pullRequestId);
-    this.bodyReadings.set(p.pullRequestId, { listed: p.description, body });
-    return body;
+    try {
+      const body = await this.opts.api.getPullBody(p.pullRequestId);
+      this.bodyReadings.set(p.pullRequestId, { listed: p.description, body });
+      return body;
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} could not read the body of PR !${p.pullRequestId}: ${(err as Error).message}`,
+      });
+      return undefined;
+    }
   }
 
   private async policyEvaluations(p: AzPull, threads: AzThread[], maxAgeMs: number): Promise<AzPolicyEvaluation[]> {
@@ -276,6 +284,8 @@ export class AzureDevOpsSourceControlIntegration
 
   async setPullBody(input: PrBodyInput): Promise<SendResult> {
     await this.opts.api.setPullBody(input.prNumber, input.body);
+    // The listed prefix may not move with the push, and a cached old body reads as an edit.
+    this.bodyReadings.delete(input.prNumber);
     return { ok: true };
   }
 

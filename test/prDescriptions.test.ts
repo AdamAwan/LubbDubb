@@ -19,6 +19,7 @@ import {
   PR_DESCRIPTION,
 } from '../src/pr/prDescription.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
+import { PrBodyEditDesk } from '../src/pr/prBodyEditDesk.js';
 import { findTask } from './support/tasks.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -953,6 +954,35 @@ test('a description written straight onto the pull request is adopted, checked, 
       'the harness\u2019s own push is never adopted back',
     );
     assert.equal(sink.bodies.length, 1);
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a stale world read is never taken for an edit', () => {
+  const system = systemWith();
+  try {
+    const footer = renderPrFooter({ issueNumber: 182, issueTitle: 'Ticket sync rewrite', position: 1, total: 1 });
+    system.store.prDescriptions.recordPrBody({ originRef: 'issue:182:part:cursor', prNumber: 1, tail: footer });
+    const desk = new PrBodyEditDesk({ store: system.store });
+    const pr = {
+      id: 'pr_1',
+      number: 1,
+      title: 't',
+      branch: 'b',
+      ciStatus: 'passing' as const,
+      unresolvedComments: [],
+      body: composeDescribedBody('An old body from before the push.', footer),
+    };
+
+    desk.run({ takenAt: 'now', pullRequests: [pr], issues: [], staleSources: ['sourceControl:azure'] });
+    assert.equal(system.store.prDescriptions.currentDescription('issue:182:part:cursor'), null);
+
+    desk.run({ takenAt: 'now', pullRequests: [pr], issues: [] });
+    assert.equal(
+      system.store.prDescriptions.currentDescription('issue:182:part:cursor')?.text,
+      'An old body from before the push.',
+    );
   } finally {
     system.store.close();
   }

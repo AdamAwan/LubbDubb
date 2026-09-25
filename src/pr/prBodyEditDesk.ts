@@ -14,6 +14,7 @@ export class PrBodyEditDesk {
 
   run(world: WorldSnapshot): void {
     const { store } = this.deps;
+    if ((world.staleSources ?? []).length > 0) return;
     const bodies = new Map<number, string>();
     for (const pr of world.pullRequests) if (!pr.merged && pr.body !== undefined) bodies.set(pr.number, pr.body);
     const owed = new Set([

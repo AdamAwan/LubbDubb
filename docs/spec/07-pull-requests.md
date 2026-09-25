@@ -756,6 +756,11 @@ trailing spaces are normalised on both sides.
   newest version, else a pushed draft, else nothing. Equal is not an edit.
 - **An owed push outranks the provider.** A part in `unpushedDescriptions` or `unpushedDrafts` is skipped:
   the cockpit's write is newer, and it overwrites.
+- **A reading that may be old is not an edit.** A stale world read (any `staleSources`) is skipped
+  entirely, and Azure's cached body is dropped on every `setPullBody`: a body from before the
+  harness's own push would read as a person reverting it, and be pushed back over the newer one.
+- **A body that could not be read is left out, never the whole read.** A failed Azure body fetch is
+  recorded and leaves `body` undefined for that pull request alone.
 - **Nothing above the footer is not a description.** Clearing the body adopts nothing.
 - **The author is unrecorded** (`author: null`). The provider does not say who edited a body, so
   anything that edits it — a person, or a tool running under their account — reads as a person's.

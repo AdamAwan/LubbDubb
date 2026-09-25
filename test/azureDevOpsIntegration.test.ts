@@ -54,7 +54,7 @@ interface Script {
   workItems?: AzWorkItem[];
   relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
-  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline';
+  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline' | 'getPullBody';
   historyItems?: AzWorkItem[];
   timeline?: Record<number, AzTimelineRecord[]>;
   buildLogs?: Record<string, string[]>;
@@ -157,6 +157,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async getPullBody(id) {
       recorded.bodyReads.push(id);
+      if (script.throwOn === 'getPullBody') throw new Error('503');
       return script.fullBodies?.[id] ?? '';
     },
     async setPullBody(id, body) {
@@ -904,6 +905,32 @@ test('the body is read whole, because the list truncates it, and read again only
   script.pulls = [pull({ pullRequestId: 7, description: '' })];
   assert.equal((await sc.snapshot()).pullRequests![0]!.body, '', 'an empty body needs no second read');
   assert.equal(recorded.bodyReads.length, 2);
+});
+
+test('a push drops the cached body, because the listed prefix may not move with it', async () => {
+  const script: Script = {
+    pulls: [pull({ pullRequestId: 7, description: 'Same first four hundred' })],
+    fullBodies: { 7: 'Same first four hundred, then V1.' },
+  };
+  const { api, recorded } = fakeApi(script);
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  await sc.snapshot();
+
+  await sc.setPullBody({ prNumber: 7, body: 'Same first four hundred, then V2.' });
+  script.fullBodies = { 7: 'Same first four hundred, then V2.' };
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, 'Same first four hundred, then V2.');
+  assert.deepEqual(recorded.bodyReads, [7, 7]);
+});
+
+test('a body that cannot be read costs that body alone, never the read', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ pullRequestId: 7, description: 'Written on Azure' })],
+    throwOn: 'getPullBody',
+  });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  const slice = await sc.snapshot();
+  assert.notEqual(slice.stale, true);
+  assert.equal(slice.pullRequests![0]!.body, undefined, 'unread, which is not empty');
 });
 
 test('snapshot leaves mergeable undefined while Azure is still computing', async () => {
