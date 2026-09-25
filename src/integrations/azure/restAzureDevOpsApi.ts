@@ -111,11 +111,17 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]> {
-    const pulls = await this.http.pagedValues<RawClosedPull>(`${this.repoUrl}/pullrequests`, {
-      'searchCriteria.status': 'all',
-      'searchCriteria.queryTimeRangeType': 'closed',
-      'searchCriteria.minTime': since,
-    });
+    const pulls = await this.http.pagedValues<RawClosedPull>(
+      `${this.repoUrl}/pullrequests`,
+      {
+        'searchCriteria.status': 'all',
+        'searchCriteria.queryTimeRangeType': 'closed',
+        'searchCriteria.minTime': since,
+      },
+      {
+        conditional: false,
+      },
+    );
     const out: AzClosedPull[] = [];
     for (const p of pulls) {
       if (p.status !== 'completed' && p.status !== 'abandoned') continue;

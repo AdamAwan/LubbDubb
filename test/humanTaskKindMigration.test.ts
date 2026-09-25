@@ -13,9 +13,8 @@ test('a database whose human_tasks predates kind opens, gains the column and its
   const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-human-kind-')), 'old.db');
   const db = new Database(path);
   const stripped = SCHEMA.split('\n')
-    .filter((line) => !/^\s*(kind\s+TEXT NOT NULL DEFAULT 'ask'|dismissed_at TEXT\s+--)/.test(line))
-    .join('\n')
-    .replace(/(resolved_at TEXT),(\s*\n\);\s*\n\s*CREATE INDEX IF NOT EXISTS idx_human_tasks_status)/, '$1$2');
+    .filter((line) => !/^\s*kind\s+TEXT NOT NULL DEFAULT 'ask'/.test(line))
+    .join('\n');
   db.exec(stripped);
   const before = db.prepare(`PRAGMA table_info(human_tasks)`).all() as Array<{ name: string }>;
   assert.ok(!before.some((c) => c.name === 'kind'), 'the fixture really is from before kind');

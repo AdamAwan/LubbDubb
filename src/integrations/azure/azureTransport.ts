@@ -47,11 +47,17 @@ export class AzureTransport {
     private readonly sleep: (ms: number) => Promise<void>,
   ) {}
 
-  async pagedValues<T>(url: string, params: Record<string, string>): Promise<T[]> {
+  async pagedValues<T>(
+    url: string,
+    params: Record<string, string>,
+    opts: { conditional?: boolean } = {},
+  ): Promise<T[]> {
     const out: T[] = [];
     for (let skip = 0; ; skip += PAGE_SIZE) {
       const data = await this.request<{ value: T[] }>(
         withApiVersion(url, { ...params, $top: String(PAGE_SIZE), $skip: String(skip) }),
+        {},
+        opts,
       );
       out.push(...data.value);
       if (data.value.length < PAGE_SIZE) return out;

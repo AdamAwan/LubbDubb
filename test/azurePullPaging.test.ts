@@ -11,12 +11,12 @@ test('the azure closed-PR read pages past the first hundred', async () => {
     status: 'completed',
     closedDate: '2026-07-25T11:00:00.000Z',
   }));
-  const skips: string[] = [];
+  const skips: number[] = [];
   const fetchImpl: typeof fetch = async (url) => {
     const u = new URL(String(url));
     const skip = Number(u.searchParams.get('$skip') ?? '0');
     const top = Number(u.searchParams.get('$top'));
-    skips.push(String(skip));
+    skips.push(skip);
     return new Response(JSON.stringify({ value: pulls.slice(skip, skip + top) }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -27,5 +27,5 @@ test('the azure closed-PR read pages past the first hundred', async () => {
   const closed = await api.listRecentlyClosedPullRequests('2026-07-25T09:00:00.000Z');
 
   assert.equal(closed.length, 150);
-  assert.deepEqual(skips, ['0', '100']);
+  assert.deepEqual(skips, [0, 100]);
 });
