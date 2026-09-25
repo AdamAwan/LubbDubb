@@ -1,6 +1,6 @@
 import { issueOriginNumber } from '../../issueOrigins.js';
-import { localValidationFixBriefing } from '../../localValidation/briefing.js';
-import { localValidationFixOrigin } from '../../localValidation/origin.js';
+import { localValidationFixBriefing } from '../../validation/local/briefing.js';
+import { localValidationFixOrigin } from '../../validation/local/origin.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import type { RawAction, StageContext } from './context.js';
 

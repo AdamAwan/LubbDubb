@@ -4,15 +4,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { VALIDATION_COLUMNS } from '../src/store/validation.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
+import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
+import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
 import { checkBriefing } from '../src/validation/fleet.js';
 import {
   fleetCanStart,
@@ -23,7 +23,7 @@ import {
   stepExpects,
 } from '../src/validation/steps.js';
 import { validationCheckSetInputs } from '../src/validation/checkDocument.js';
-import { sheetRows } from '../src/remoteValidation/sheet.js';
+import { sheetRows } from '../src/validation/remote/sheet.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';

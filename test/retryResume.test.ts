@@ -5,7 +5,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config/config.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { parseActions } from '../src/dispatcher/actions.js';
 import { retryResumeFor } from '../src/executor/retryResume.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';

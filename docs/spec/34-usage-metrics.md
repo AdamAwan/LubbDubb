@@ -506,13 +506,13 @@ happened rather than why. It narrows where to ask; it does not answer.
 - **Composition** — both folds are pure functions the route calls, like `buildSpendInsights` and
   `buildReliabilityInsights` beside them, so neither needs wiring of its own. The **store** for
   [surface reach](#surface-reach) is a `StoreContext` module that `Store` delegates to under the same
-  names ([14](14-persistence.md#shape)), so `src/system.ts` reaches it through the `Store` it already
+  names ([14](14-persistence.md#shape)), so `src/system/system.ts` reaches it through the `Store` it already
   builds — what `system.ts` gains is the boot-time retention sweep, beside `compactMcpCallArgs` and
   for its reason exactly.
 - **The digest** — `byUsage` in `src/pool/digestArm.ts`, `digestSections` in `src/store/pool.ts`,
   `foldPoolDigest` and `poolUsageLabel` in `src/pool/aggregate.ts`, the companion's `SECTIONS` entry
   in `src/pool/markdown.ts`, and the table `web/src/components/PoolTab.tsx` draws. Nothing is wired
-  into `src/system.ts`: `PoolDesk` derives the whole document on its clock and the section rides it.
+  into `src/system/system.ts`: `PoolDesk` derives the whole document on its clock and the section rides it.
 
 ## Build order
 

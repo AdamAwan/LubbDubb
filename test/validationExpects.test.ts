@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Store } from '../src/store/store.js';
-import { preflightRows } from '../src/remoteValidation/preflight.js';
+import { preflightRows } from '../src/validation/remote/preflight.js';
 import { stepExpects } from '../src/validation/steps.js';
-import type { SelectorListing } from '../src/remoteValidation/runner.js';
+import type { SelectorListing } from '../src/validation/remote/runner.js';
 import type { RemoteSheetRow, ValidationCheck, ValidationCheckInput, ValidationStep } from '../src/types.js';
 
 /*

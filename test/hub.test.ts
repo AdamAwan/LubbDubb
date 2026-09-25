@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { Hub, type ServerEvent } from '../src/server/hub.js';
-import type { System } from '../src/system.js';
+import type { System } from '../src/system/system.js';
 import type { WebSocket } from 'ws';
 
 const OPEN = 1;

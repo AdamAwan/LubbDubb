@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { System } from '../../system.js';
+import type { System } from '../../system/system.js';
 import type { Hub } from '../hub.js';
 
 // → docs/spec/16-http-api.md

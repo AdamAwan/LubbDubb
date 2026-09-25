@@ -9,7 +9,7 @@ import type { SetupProbes } from '../src/setup/probes.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { buildSetupReading, type SetupCheck } from '../src/setup/reading.js';
 import { resolveFromRepo } from '../src/setup/resolve.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 
 function probes(over: Partial<SetupProbes> = {}): SetupProbes {
   return {

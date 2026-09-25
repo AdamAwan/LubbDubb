@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bugFilingType, filingType } from '../src/ticketTypes.js';
+import { bugFilingType, filingType } from '../src/tickets/ticketTypes.js';
 import { defaultConfig } from '../src/config/config.js';
 import type { Config } from '../src/config/config.js';
 

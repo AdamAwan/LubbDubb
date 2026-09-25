@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueOrigin } from '../../plans/planning.js';
 import { StateQuerySchema } from '../../validation/stateDocument.js';
-import { NO_STATE_EXECUTOR, stateExecutor } from '../../remoteValidation/enabled.js';
+import { NO_STATE_EXECUTOR, stateExecutor } from '../../validation/remote/enabled.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { TenantCommandOutput } from '../../wire.js';

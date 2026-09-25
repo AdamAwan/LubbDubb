@@ -6,11 +6,11 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { RemoteValidationDesk } from '../src/remoteValidation/desk.js';
-import { StateQueryDesk } from '../src/remoteValidation/stateQueries.js';
-import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
+import { RemoteValidationDesk } from '../src/validation/remote/desk.js';
+import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
+import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
-import { sheetBenchLine } from '../src/remoteValidation/sheet.js';
+import { sheetBenchLine } from '../src/validation/remote/sheet.js';
 import { NO_STEP_CAPABILITIES, resolveSteps } from '../src/validation/steps.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
@@ -21,7 +21,7 @@ import type {
   ValidationCheckInput,
   ValidationStep,
 } from '../src/types.js';
-import { PULSE_PIPELINE, type PulseId } from '../src/pulseDesks.js';
+import { PULSE_PIPELINE, type PulseId } from '../src/system/pulseDesks.js';
 
 /**
  * These benches post no capture, so nothing ever reads it — but the desk takes a root rather than
@@ -679,7 +679,7 @@ test('the desk assembles below EnvironmentDesk and above ValidationReadyDesk', (
   assert.ok(ready < closeOuts, 'the bench asks for one thing at a time');
 });
 
-test('nothing under src/dispatcher/ imports src/remoteValidation/ or src/environments/', () => {
+test('nothing under src/dispatcher/ imports src/validation/remote/ or src/environments/', () => {
   const files: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -690,7 +690,7 @@ test('nothing under src/dispatcher/ imports src/remoteValidation/ or src/environ
   };
   walk('src/dispatcher');
   const readers = files
-    .filter((f) => /from '(\.\.\/)+(remoteValidation|environments)\//.test(readFileSync(f, 'utf8')))
+    .filter((f) => /from '(\.\.\/)+(validation\/remote|environments)\//.test(readFileSync(f, 'utf8')))
     .sort();
   assert.deepEqual(readers, [], 'the sheet is a lens; the dispatcher decides from the world and the store');
 });

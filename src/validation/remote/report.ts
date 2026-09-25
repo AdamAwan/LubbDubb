@@ -1,0 +1,365 @@
+import type { RemoteRowOutcome } from '../../types.js';
+
+// → docs/spec/36-remote-validation.md#the-report-is-the-only-source-of-row-outcomes
+
+/**
+ * One test the runner's machine-readable report carries. **Rows, never counts** — the state
+ * contract's own refusal, one subsystem over and for the same reason: a report that declares totals
+ * defeats every guard this design has, because matched-versus-executed is the guard and a declared
+ * count is the thing being checked.
+ */
+interface ReportTest {
+  /** The area this test belongs to. It is compared against the area a check's `suite` step names and nothing else. */
+  selector: string;
+  status: 'passed' | 'failed' | 'skipped';
+  retries: number;
+  durationMs: number | null;
+  /** What the runner said about a test that did not run — a failed dependency, most of all. */
+  note: string | null;
+  /**
+   * The screen this row handed back, by **file name**, written into the run's artefact directory.
+   * Held raw: a name that is not one is a `blocked` row saying so rather than a row quietly missing
+   * its screen. → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
+   */
+  capture: string | null;
+}
+
+/** What a report came back as. **Null tests means it could not be read** — never an empty report. */
+export interface RunReport {
+  tests: ReportTest[] | null;
+  detail: string | null;
+}
+
+/**
+ * What one row's tests came to. `matched` is **not** in here: it comes off `remote_sheet_rows.matched`,
+ * written from the runner's own listing, and derived from a report instead a selector that matched
+ * nothing reads as a clean pass.
+ */
+export interface RowOutcome {
+  outcome: RemoteRowOutcome;
+  detail: string | null;
+  executed: number;
+  retries: number;
+  durationMs: number | null;
+  /**
+   * The screen this row handed back, under the name the harness kept it as. Absent on every row a
+   * `screenshot` step did not produce, which is almost all of them.
+   */
+  capture?: string;
+}
+
+/**
+ * A status vocabulary wide enough for the runners projects actually have, folded onto the three the
+ * harness reasons about. **Anything it does not recognise is `skipped`** rather than `passed`: an
+ * unread word must never be the one that colours a row green.
+ */
+function statusOf(raw: string): ReportTest['status'] {
+  const word = raw.trim().toLowerCase();
+  if (word === 'passed' || word === 'pass' || word === 'ok' || word === 'expected') return 'passed';
+  if (word === 'failed' || word === 'fail' || word === 'unexpected' || word === 'timedout' || word === 'error')
+    return 'failed';
+  return 'skipped';
+}
+
+function numberOf(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : null;
+}
+
+function stringOf(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null;
+}
+
+/**
+ * The harness's own report contract, which the project's runner emits through its own reporter —
+ * `validate.state.run`'s arrangement exactly, and for the governing principle's reason: the harness
+ * declares the shape and the project owns every command that produces it.
+ *
+ * A JSON array of tests, or an object carrying one under `tests`. Each test names its `selector`
+ * and its `status`, and may carry `retries`, `durationMs` and a `note`.
+ */
+export function parseRunReport(text: string): RunReport {
+  const body = text.trim();
+  if (body === '')
+    return { tests: null, detail: 'the report file is empty, so nothing in it says what any row came back as' };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch (err) {
+    return { tests: null, detail: `the report did not parse as JSON — ${(err as Error).message}` };
+  }
+  const list = Array.isArray(parsed)
+    ? parsed
+    : typeof parsed === 'object' && parsed !== null && Array.isArray((parsed as Record<string, unknown>)['tests'])
+      ? ((parsed as Record<string, unknown>)['tests'] as unknown[])
+      : null;
+  if (list === null)
+    return {
+      tests: null,
+      detail:
+        'the report is neither a list of tests nor an object carrying one under "tests". It states counts ' +
+        'or something else, and a report of counts defeats the matched-versus-executed guard this design ' +
+        'leans on',
+    };
+  const tests: ReportTest[] = [];
+  for (const entry of list) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const selector = stringOf(record['selector']);
+    const status = stringOf(record['status']);
+    if (selector === null || status === null) continue;
+    tests.push({
+      selector,
+      status: statusOf(status),
+      retries: numberOf(record['retries']) ?? 0,
+      durationMs: numberOf(record['durationMs']),
+      note: stringOf(record['note']),
+      capture: stringOf(record['capture']),
+    });
+  }
+  return { tests, detail: null };
+}
+
+interface FoldInput {
+  environment: string;
+  /**
+   * The selector this row is verified against. For a **suite spec** it is the check's own `area`, out
+   * of a `suite` step; for a **one-off script** it is the check's own id, which is what the script is
+   * told to report under. Two instruments, one report, and never one selector.
+   */
+  area: string;
+  /** `remote_sheet_rows.matched`, from the runner's listing. Null where it has not been taken yet. */
+  matched: number | null;
+  /**
+   * Which browser instrument ran. It is not cosmetic: a `spec` row is read against the pre-flight's
+   * listing, and a **`script` or `agent` row has no listing to be read against** — nobody lists a
+   * program written ten minutes ago, and nobody lists an agent. So the "the pre-flight attributed no
+   * tests" arm, which is what stops a selector matching zero from reading as a clean pass, cannot
+   * apply to either and is replaced by the row's own emptiness check.
+   *
+   * `agent` is the fleet at the browser it was launched with, carrying the check's own `browser`
+   * steps. It reports under the check's id exactly as a script does, and what separates the two is
+   * what an operator counting green rows is owed: neither was reviewed, and only one of them is a
+   * program anybody can read afterwards.
+   * → docs/spec/36-remote-validation.md#a-check-the-agent-drives-itself
+   */
+  instrument: 'spec' | 'script' | 'agent';
+  report: RunReport;
+}
+
+/**
+ * One row's outcome, out of the report and out of nothing else. **The exit code is never read**: one
+ * invocation carries many rows and one code, so anything inferred from it is guaranteed to be wrong
+ * for some row.
+ *
+ * The order the four arms are tried in is load-bearing:
+ *
+ * - a report nobody could read learns nothing, so every row through it is `blocked`;
+ * - a selector the report names **no test** under is `blocked` and never `passed` — with generated
+ *   specs gone this is the ordinary failure rather than an exotic one. What it says happened depends
+ *   on what else the report holds: a runner that reports the tests a failed dependency held as
+ *   `skipped` reaches the narrowing arm with its own words, and a runner that omits them entirely
+ *   arrives here instead, where a failure under another selector is the only evidence of that
+ *   available — so it is named rather than left as a renamed area;
+ * - a test that genuinely **failed** is a failure, and it is a failure whatever else the row did.
+ *   A narrowed run is a run that verified less than it claimed; it is not a reason to withhold a
+ *   red the deployed product actually earned;
+ * - and only then the narrowing case: fewer tests ran than the pre-flight matched — a focus marker,
+ *   a filter, or the tests a failed auth-setup project was holding up. That is `blocked`, **never
+ *   `failed`**, and only the report distinguishes it.
+ */
+export function foldRowOutcome(input: FoldInput): RowOutcome {
+  const { environment, area, matched, report, instrument } = input;
+  const ran =
+    instrument === 'script'
+      ? `the one-off script for \`${area}\``
+      : instrument === 'agent'
+        ? `the browser steps of \`${area}\``
+        : `\`${area}\``;
+  if (report.tests === null)
+    return {
+      outcome: 'blocked',
+      detail:
+        `the runner's report could not be read — ${report.detail ?? 'it said nothing this harness understands'}. ` +
+        'Nothing was learned about this row, because a reading nobody can read is not a reading.',
+      executed: 0,
+      retries: 0,
+      durationMs: null,
+    };
+
+  const mine = report.tests.filter((test) => test.selector === area);
+  const executed = mine.filter((test) => test.status !== 'skipped').length;
+  const retries = mine.reduce((sum, test) => sum + test.retries, 0);
+  const durationMs = mine.some((test) => test.durationMs !== null)
+    ? mine.reduce((sum, test) => sum + (test.durationMs ?? 0), 0)
+    : null;
+  const measured = { executed, retries, durationMs };
+
+  if (mine.length === 0)
+    return {
+      outcome: 'blocked',
+      detail: instrument === 'spec' ? unnamed(area, report.tests) : silentRow(instrument, area, report.tests),
+      ...measured,
+    };
+
+  const failed = mine.filter((test) => test.status === 'failed');
+  if (failed.length > 0)
+    return {
+      outcome: 'failed',
+      detail:
+        `${environment} ran ${count(executed, 'test')} under ${ran} and ${String(failed.length)} of them ` +
+        `did not pass${retried(retries)}.`,
+      ...measured,
+    };
+
+  if (matched !== null && executed < matched)
+    return {
+      outcome: 'blocked',
+      detail:
+        `the pre-flight matched ${count(matched, 'test')} under \`${area}\` and only ${String(executed)} ran` +
+        `${skips(mine)}. A run that verified less than it matched is not a pass — nothing was learned about ` +
+        'the tests that never ran, and a dependency that failed is the ordinary reason for it.',
+      ...measured,
+    };
+
+  // A script is written for this check and run as it stands: there is no listing of it to compare
+  // against, so this arm — the one that stops a selector matching zero reading as a clean pass — has
+  // no question to ask. What does the same job for a script is the emptiness check above: a script
+  // that reported nothing under its own id learned nothing, whatever its exit code said.
+  if (instrument === 'spec' && (matched === null || matched === 0))
+    return {
+      outcome: 'blocked',
+      detail:
+        `no listing attributes a test to \`${area}\`: either the run's listing step was never taken, or it ` +
+        'was and the runner offers nothing under this area. Either way there is nothing here to read the ' +
+        'report against, and a row whose selector matched nothing is never a pass.',
+      ...measured,
+    };
+
+  if (executed === 0)
+    return {
+      outcome: 'blocked',
+      detail: `every assertion ${ran} reported was skipped, so nothing ran. A row nothing ran under is never a pass.`,
+      ...measured,
+    };
+
+  return {
+    outcome: 'passed',
+    detail: `${environment} ran ${count(executed, 'test')} under ${ran} and every one passed${retried(retries)}.`,
+    ...measured,
+  };
+}
+
+/**
+ * A selector the report holds nothing under. The reason matters more than the outcome here, because
+ * the reason is what an operator acts on, and two very different things arrive at this arm.
+ *
+ * A **renamed area, a deleted spec or a wrong profile** is one. The other is a dependency that
+ * failed before this area was ever reached: the contract asks a project to report the tests it never
+ * ran as `skipped` rows naming the dependency — which lands in the narrowing arm with the right
+ * words — but a runner mapping its own report one-to-one commonly **omits** them, and then this arm
+ * is where a failed auth setup arrives. The harness cannot know a suite's dependency graph, so it
+ * names what it can see: a failure under some other selector, which is the shape that reading has.
+ */
+function unnamed(area: string, tests: readonly ReportTest[]): string {
+  const elsewhere = [...new Set(tests.filter((t) => t.status === 'failed').map((t) => t.selector))];
+  const dependency =
+    elsewhere.length === 0
+      ? ''
+      : ` Nothing under it failed either, but ${elsewhere.map((s) => `\`${s}\``).join(', ')} did — where the ` +
+        'runner omits the tests a failed dependency was holding up rather than reporting them skipped, that ' +
+        'is what this looks like.';
+  return (
+    `the report names no test under \`${area}\` — a renamed area, a deleted spec or a wrong profile.` +
+    `${dependency} A selector that matched zero tests is never a pass.`
+  );
+}
+
+/**
+ * A script that reported nothing under its own id. It is not the renamed-area story `unnamed` tells —
+ * nobody renames a program written for one check — so it says the thing that is actually true here:
+ * the script ran, or did not, and either way it said nothing this harness can read a row from.
+ */
+function silentRow(instrument: 'script' | 'agent', checkId: string, tests: readonly ReportTest[]): string {
+  const elsewhere =
+    tests.length === 0 ? '' : ` The report holds ${count(tests.length, 'other test')}, none of them its.`;
+  const who = instrument === 'script' ? `the one-off script for \`${checkId}\`` : `the browser steps of \`${checkId}\``;
+  const same =
+    instrument === 'script'
+      ? 'a script that fell over before it asserted and one that asserted and passed look identical from here'
+      : 'an agent that never reached the page and one that carried every step out look identical from here';
+  return (
+    `${who} reported nothing under its own id.${elsewhere} The result is emitted with \`selector\` set to the ` +
+    `check's id, and a row that emitted none learned nothing about the goal — ${same}, so this is never read as ` +
+    'a pass.'
+  );
+}
+
+/** A retried pass **is a pass**, and the row records that it was retried. Retry policy is the project's. */
+function retried(retries: number): string {
+  return retries === 0 ? '' : `, after ${count(retries, 'retry', 'retries')}`;
+}
+
+function skips(mine: readonly ReportTest[]): string {
+  const notes = [...new Set(mine.filter((t) => t.status === 'skipped' && t.note !== null).map((t) => t.note))];
+  return notes.length === 0 ? '' : ` — ${notes.join('; ')}`;
+}
+
+function count(n: number, noun: string, plural = `${noun}s`): string {
+  return `${String(n)} ${n === 1 ? noun : plural}`;
+}
+
+/**
+ * A capture is a **file name**, never a path and never a URL — the resource name's own rule, and for
+ * its reason: a name cannot escape the directory it is resolved against, so nothing downstream has
+ * to prove that it did not. The run's agent writes the image into the run's artefact directory and
+ * names it here; the desk is what moves it to where a capture lives.
+ */
+function captureFault(name: string): string | null {
+  if (/[\\/]/.test(name)) return 'it is a path rather than a file name';
+  if (name === '.' || name === '..' || name.startsWith('..')) return 'it does not name a file';
+  if (name.startsWith('http://') || name.startsWith('https://')) return 'it is a URL rather than a file name';
+  return null;
+}
+
+/** A screen the run handed back for one check, or why there is nothing to look at. */
+type FoldedCapture = { ok: true; capture: string } | { ok: false; detail: string };
+
+/**
+ * The screen a `screenshot` step handed back, out of the report and out of nothing else — the same
+ * contract every row outcome is read under, and for the same reason: one invocation carries many
+ * rows, so anything the agent said about which is guaranteed to be wrong for some other row.
+ *
+ * It is keyed on the **check's own id**, exactly as a one-off script's row is and never on an
+ * `area`: an area may be named by two checks, and a capture that landed on both would offer one
+ * image, taken once, as the thing two different people have to look at.
+ * → docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run
+ */
+export function foldCapture(checkId: string, report: RunReport): FoldedCapture {
+  if (report.tests === null)
+    return {
+      ok: false,
+      detail:
+        `the runner's report could not be read — ${report.detail ?? 'it said nothing this harness understands'}, ` +
+        'so there is no screen to look at and nothing was learned about this row.',
+    };
+  const named = report.tests.filter((test) => test.selector === checkId && test.capture !== null);
+  if (named.length === 0)
+    return {
+      ok: false,
+      detail:
+        `the test plan for \`${checkId}\` asks for a screen to be handed back and the report names none under ` +
+        'its id. A `screenshot` step is the whole of what this row is for, so a run that came back without one ' +
+        'learned nothing here — it is never read as a pass, and there is nothing yet for anybody to look at.',
+    };
+  const capture = named[0]?.capture as string;
+  const fault = captureFault(capture);
+  if (fault !== null)
+    return {
+      ok: false,
+      detail:
+        `the report names \`${capture}\` as the screen for \`${checkId}\`, and ${fault}. A capture is the name ` +
+        'of a file in the run’s artefact directory, so that the harness rather than the report decides where a ' +
+        'screen is read from.',
+    };
+  return { ok: true, capture };
+}

@@ -724,7 +724,7 @@ test('/api/state ships the classification verdict, from the same call the dispat
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const { buildSystem } = await import('../src/system.js');
+  const { buildSystem } = await import('../src/system/system.js');
   const { FakePtyBackend } = await import('../src/pty/fakeBackend.js');
   const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
 

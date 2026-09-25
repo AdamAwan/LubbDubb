@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { ErrorLogEntry, ErrorLogInput } from '../src/types.js';
 import { loadConfig } from '../src/config/config.js';
 import { RuntimeControl } from '../src/runtimeControl.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';

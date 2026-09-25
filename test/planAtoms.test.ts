@@ -14,7 +14,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import { pastTheFunnel } from './support/plans.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { PLAN_COLUMNS } from '../src/store/plans.js';

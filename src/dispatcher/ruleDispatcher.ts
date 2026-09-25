@@ -56,7 +56,7 @@ import { issuePickup } from './rules/issuePickup.js';
 import { localValidation } from './rules/localValidation.js';
 import { localValidationFix } from './rules/localValidationFix.js';
 import { validateCheck } from './rules/validateCheck.js';
-import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../localValidation/policy.js';
+import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../validation/local/policy.js';
 import { featureSummary } from './rules/featureSummary.js';
 import { featureSequence } from './rules/featureSequence.js';
 import { validationFailed } from './rules/validationFailed.js';

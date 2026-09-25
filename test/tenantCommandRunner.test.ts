@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CommandTenantKeeper } from '../src/remoteValidation/tenants.js';
+import { CommandTenantKeeper } from '../src/validation/remote/tenants.js';
 import type { TenantLaunch } from '../src/types.js';
 
 /*

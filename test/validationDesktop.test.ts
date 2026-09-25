@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { buildApp } from '../src/server/app.js';
 import type { McpChannelPayload } from '../src/wire.js';

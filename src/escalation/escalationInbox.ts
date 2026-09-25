@@ -141,7 +141,7 @@ export class EscalationInbox extends EventEmitter {
    * route it left by. Run once per pulse, and idempotent — a clean inbox writes
    * nothing.
    *
-   * The terminal-state listeners in `src/system.ts` are the fast path, and this is
+   * The terminal-state listeners in `src/system/system.ts` are the fast path, and this is
    * the backstop, because the fast path is an *enumeration of transitions* that has
    * to stay complete: a death arriving by a route nobody wired there leaves an
    * un-answerable "Needs you" card up for good, and nothing about it looks wrong —

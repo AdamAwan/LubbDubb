@@ -1578,7 +1578,7 @@ outcome is unchanged: a throw, no `branch_reaps` row, retried next pulse.
 `-D` and not `-d` for the reason it always was — `merge_pr` squashes, so `-d`'s "is this merged" test
 says no for every branch this is called on.
 
-`src/system.ts` listens for `agents.on('reaped')` and releases the slot when:
+`src/system/system.ts` listens for `agents.on('reaped')` and releases the slot when:
 
 - the task has a branch, **and**
 - no other active task shares that branch.

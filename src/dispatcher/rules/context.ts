@@ -8,7 +8,7 @@ import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
-import type { LocalValidationPolicy } from '../../localValidation/policy.js';
+import type { LocalValidationPolicy } from '../../validation/local/policy.js';
 import type { SequenceableFeature } from '../../sequence/sequence.js';
 import type { SequenceWait } from '../../sequence/readiness.js';
 import type {

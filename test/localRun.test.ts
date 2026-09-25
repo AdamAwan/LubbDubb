@@ -14,7 +14,7 @@ import { localRunChoices } from '../src/localRun/ref.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from '../src/agents/session.js';
 import type { PlanPart } from '../src/types.js';

@@ -10,7 +10,7 @@ import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import type { HumanTask, Issue, IssueDelivery, ValidationCheck } from '../src/types.js';
 

@@ -321,7 +321,7 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const { loadConfig } = await import('../src/config/config.js');
-  const { buildSystem } = await import('../src/system.js');
+  const { buildSystem } = await import('../src/system/system.js');
   const { FakePtyBackend } = await import('../src/pty/fakeBackend.js');
   const { FakeWorktreeManager } = await import('../src/worktree/fakeWorktreeManager.js');
 

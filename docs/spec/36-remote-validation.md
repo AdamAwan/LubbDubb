@@ -27,9 +27,9 @@
 > **`remote-validation` prompt** with everything the agent must read appended to it
 > ([The prompts](#the-prompts)), and the **`remote_validation_report` tool**
 > (`src/mcp/tools/remoteValidationReport.ts`) with its narrow origin fence
-> (`src/remoteValidation/origin.ts`) and no field an agent could state an outcome in
+> (`src/validation/remote/origin.ts`) and no field an agent could state an outcome in
 > ([The report tool](#the-report-tool)); and — as of the readings — **the fold of a report into row
-> outcomes** (`src/remoteValidation/report.ts`, `src/remoteValidation/readings.ts`) with the exit
+> outcomes** (`src/validation/remote/report.ts`, `src/validation/remote/readings.ts`) with the exit
 > code read nowhere ([The report is the only source of row outcomes](#the-report-is-the-only-source-of-row-outcomes)),
 > the **environment-moved asymmetry** ([The asymmetry](#the-environment-moved-asymmetry)), the
 > **`spec` reading** and the two rules governing what it may be written over
@@ -47,7 +47,7 @@
 > **`remote_validation_listing` tool** (`src/mcp/tools/remoteValidationListing.ts`) with the report
 > tool's own narrow origin fence and no field naming a selector or a count
 > ([The report tool](#the-report-tool)), **`RemoteListingDesk`**
-> (`src/remoteValidation/listing.ts`) as the one reader of that file and the one writer of `matched`,
+> (`src/validation/remote/listing.ts`) as the one reader of that file and the one writer of `matched`,
 > the four listing arms writing a run's **`blocked` reading** rather than the row's `blockedReason`,
 > the fold's refusal to read a report over a row the listing blocked, and **`remote_runs.listing_path`**
 > ([Migrations](#migrations)); and — as of the retirement — **the assembly-time pre-flight is gone**,
@@ -76,7 +76,7 @@
 > ([Keeping the critical path lean](#keeping-the-critical-path-lean)). The behaviour is
 > [#840](https://github.com/AdamAwan/LubbDubb/issues/840) revision 9 written into the tree.
 
-`src/remoteValidation/`. A goal's work has arrived in a real environment ([24](24-environments.md)).
+`src/validation/remote/`. A goal's work has arrived in a real environment ([24](24-environments.md)).
 This is the one page an operator opens to answer the question that arrival raises and nothing in the
 harness answers today:
 
@@ -775,7 +775,7 @@ and this one is overcome by amending the check or by writing the configuration b
 block would also catch every honest prose check — which is most checks on most deployments — so every
 goal's sheet would report "N blocked" and read as a misconfiguration it is not.
 
-`remote_sheet_rows.idle_reason` carries it, folded in `sheetRows` (`src/remoteValidation/sheet.ts`) at
+`remote_sheet_rows.idle_reason` carries it, folded in `sheetRows` (`src/validation/remote/sheet.ts`) at
 assembly, beside the row it describes. It is folded on the **server** for the reason the Environments
 card's line is: a cockpit working out for itself which rows a press would touch is a second opinion
 drawn beside the reading. Three arms, each naming what would carry the check:
@@ -799,7 +799,7 @@ the same wrong reading one surface out.
 ## The press
 
 **Built.** `POST /api/issues/:number/remote-validation/:environment/run`, in
-`src/server/routes/remoteValidation.ts`, over `RemoteRunDesk` (`src/remoteValidation/run.ts`).
+`src/server/routes/remoteValidation.ts`, over `RemoteRunDesk` (`src/validation/remote/run.ts`).
 In order: refuse **409** if a run is already live for this `(environment, tenant)`, naming it; refuse
 **400** if nothing is selected; take the pin; open the run row `pending`; broadcast; **run a cycle**.
 
@@ -878,7 +878,7 @@ bypasses all of it and fails at the first authenticated call. So:
   is free text by design, a `suite` step's area is whatever its author wrote, and a runner that offers
   `Reports, exports` is an ordinary thing to have. A check whose
   area holds a comma is `blocked` at assembly, naming the delimiter, by `selectorFault` in
-  `src/remoteValidation/runner.ts` — where the joining lives — read from `sheetRows`, which is the
+  `src/validation/remote/runner.ts` — where the joining lives — read from `sheetRows`, which is the
   one cause of `blocked` a press could never overcome that the sheet can see without asking anybody
   anything. Refusing where the area is read is the cheap fix; encoding the list as JSON in the
   variable is the other one, and it changes the contract for every project already reading it.
@@ -895,7 +895,7 @@ bypasses all of it and fails at the first authenticated call. So:
 
 ### The listing is taken by the run, and not by the harness
 
-**Built**, as `RemoteListingDesk` (`src/remoteValidation/listing.ts`) behind the
+**Built**, as `RemoteListingDesk` (`src/validation/remote/listing.ts`) behind the
 `remote_validation_listing` tool.
 
 > **The denominator a row is read against describes the commit the environment is running, or it
@@ -929,7 +929,7 @@ check can match, and every row then blocks naming a renamed area against a runne
 precisely the right ones — an empty listing read as an answer and a garbage one have the same shape.
 
 **The tool answers with the selectors that survived, and those are the ones the run invokes.** It
-blocks a row on **four counts, in this order**, through `preflightRows` (`src/remoteValidation/preflight.ts`,
+blocks a row on **four counts, in this order**, through `preflightRows` (`src/validation/remote/preflight.ts`,
 which kept its name from the pre-flight it outlived): the listing **could not be taken** at all; the
 listing holds **no offer** for the area the check names; the offer it holds is **empty**, which is a
 selector that matched zero tests and must not read as a clean pass; and the check named **specs the
@@ -973,8 +973,8 @@ still settled by `remote_validation_report`, once, at the end.
 
 ### The report is the only source of row outcomes
 
-**Built**, in `src/remoteValidation/report.ts` — the parse and the fold, pure — and
-`src/remoteValidation/readings.ts` — `RemoteReadingDesk`, which reads the file, folds a row at a time
+**Built**, in `src/validation/remote/report.ts` — the parse and the fold, pure — and
+`src/validation/remote/readings.ts` — `RemoteReadingDesk`, which reads the file, folds a row at a time
 and writes what it says.
 
 > **The runner's machine-readable report is the only source of row outcomes. The exit code is never
@@ -1062,7 +1062,7 @@ deploy-schedule knowledge the harness does not have and cannot be told without a
 
 ### The state command contract
 
-**Built**, in `src/remoteValidation/stateReader.ts`. A `state` row is executed by a project-supplied
+**Built**, in `src/validation/remote/stateReader.ts`. A `state` row is executed by a project-supplied
 command, `validate.state.run`, that receives the approved query **out-of-band** — in a file, or in an env var, **never interpolated into a command
 string** — and emits the harness's row contract on stdout.
 
@@ -1093,8 +1093,8 @@ consumer.
 
 ## Tenants
 
-**Built**, in `src/remoteValidation/tenants.ts` — `TenantKeeper`, `CommandTenantKeeper`, its scripted
-fake in `src/remoteValidation/fakeTenantKeeper.ts`, and the pure `resolveTenant` the press, the gate
+**Built**, in `src/validation/remote/tenants.ts` — `TenantKeeper`, `CommandTenantKeeper`, its scripted
+fake in `src/validation/remote/fakeTenantKeeper.ts`, and the pure `resolveTenant` the press, the gate
 and the cockpit all read.
 
 Both commands are killed at `remoteValidation.tenantTimeoutMs`, default **one hour**, and not at the
@@ -1157,7 +1157,7 @@ with nothing on screen to say so. A spinner on a button is the same failure one 
 one tab and dies with it.
 
 So the press **opens a record and returns**, and the record is what the gate draws. `beginPrepareTenant`
-(`src/remoteValidation/run.ts`) writes a row to `remote_tenant_prepares`, starts the commands, and
+(`src/validation/remote/run.ts`) writes a row to `remote_tenant_prepares`, starts the commands, and
 settles the row when they answer; the route returns immediately and broadcasts again on settle. The
 gate reads the row, so the state survives a reload, shows in a second browser, and is the same thing
 every operator sees.
@@ -1180,7 +1180,7 @@ row says exactly that.
 #### The command outlives the harness, and the row follows it
 
 A tenant command is started **detached**, under a small **runner** — a Node process handed its source
-on `node -e` (`src/remoteValidation/tenantLog.ts`), so it needs no build and no file on disk. The runner
+on `node -e` (`src/validation/remote/tenantLog.ts`), so it needs no build and no file on disk. The runner
 starts the project's command through the shell, with the `LUBBDUBB_ENVIRONMENT` / `LUBBDUBB_TENANT`
 env, `windowsHide`, stdin closed, and `cwd` at the repo root, and it owns three things in a directory
 the **harness** owns, `<validationRoot>/tenant-commands/<environment>/<launch id>/`:
@@ -1539,7 +1539,7 @@ beyond running the suite, and it is why the denominator moved here.
 - **Nothing is dispatched for a sheet nobody pressed.** The rule reads run rows, never sheets — and
   nothing is dispatched for a run with no confirmed `check` row an instrument can carry, which is a run
   the press already finished. `runnableSelectors`, `runnableScripts`, `runnableScreens` and
-  `runnableDrives` (`src/remoteValidation/briefing.ts`) are the one place that rule is written, read by
+  `runnableDrives` (`src/validation/remote/briefing.ts`) are the one place that rule is written, read by
   the press and by the brief: a second copy would either strand a run waiting for an agent nothing will
   dispatch, or settle one with the agent's half still owed.
 - **It carries an `enabled` predicate** on a `RuleConditions` flag — true only where some environment
@@ -1679,9 +1679,9 @@ validation was up — `blocked` rows on a sheet somebody pressed, with nothing r
 reaches an acceptance deployment is not the one that reaches somebody's dev machine, so the two would
 fight over the same cookies besides.
 
-**It is folded in `src/remoteValidation/briefing.ts`, beside the run directory it needs, and reaches
+**It is folded in `src/validation/remote/briefing.ts`, beside the run directory it needs, and reaches
 the rule on `RemoteRunBrief.browser` already substituted.** The rule imports nothing from
-`src/remoteValidation/` ([the lens boundary](#the-lens-boundary)), so what it does with it is one line:
+`src/validation/remote/` ([the lens boundary](#the-lens-boundary)), so what it does with it is one line:
 put it on the action, from where the executor persists it on the task row (`tasks.mcp_servers`) and
 `AgentManager.spawn` opens it. Recorded on the row rather than re-derived at spawn for `model`'s
 reason: `AgentManager.resume` rebuilds a launch from the row, and an agent re-attached without the
@@ -1718,7 +1718,7 @@ off the listing, and for a plain `browser` step everywhere else
 ([20](20-validation.md#the-test-plan)). This instrument carries most checks now, and the
 weight that puts on an `agent` reading is what [`proof`](20-validation.md#proof) answers: a check whose
 author demanded evidence is refused a pass that hands none back, here and on the tool channel alike. It is the fourth thing
-a run can be pressed for, and `runnableDrives` (`src/remoteValidation/briefing.ts`) is the one place
+a run can be pressed for, and `runnableDrives` (`src/validation/remote/briefing.ts`) is the one place
 that rule is written — read by the brief and by the press, which is what
 [the three halves of one question](#a-screen-from-the-sheets-own-run) means with a fourth entry in it:
 a press counting only selectors, scripts and screens ends such a run on the spot, the check stays
@@ -1744,14 +1744,14 @@ it.
 ### The lens boundary
 
 `src/environments/` is a lens and nothing under `src/dispatcher/` may import it, asserted structurally
-([05](05-dispatcher.md)). `src/remoteValidation/` sits on the same side of that line as far as the
+([05](05-dispatcher.md)). `src/validation/remote/` sits on the same side of that line as far as the
 dispatcher is concerned: **the rule reads the run rows out of the store and imports nothing from
 either directory.** Everything the agent must know reaches it as a rendered string on the prompt, the
 arrangement [29](29-post-deploy-watch.md#who-writes-it-and-when) already makes for the watch's notes.
 
 **Built**, as `RemoteRunBrief`: one per live run, carrying the origin, the lease key, the deployed
 commit, how many rows are confirmed and the whole appended briefing as a string. `remoteRunBriefs`
-(`src/remoteValidation/briefing.ts`) folds them, `src/system.ts` threads the folding through the
+(`src/validation/remote/briefing.ts`) folds them, `src/system/system.ts` threads the folding through the
 harness, and they arrive on `DispatchContext.remoteRuns` — `testPartNote`'s arrangement exactly. What
 the rule sees is a run row and a string.
 
@@ -1808,7 +1808,7 @@ The call **records where the report and the artefacts landed on the run row, fol
 reading per confirmed row, and settles the run** — `remote_runs.report_path` and
 `remote_runs.artefacts`, with the status going to `ended`. The fold is not in the tool module: it
 needs the environment's config and its `at` command, which a tool module has no business holding, so
-it reaches the handler as `deps.remoteReadings` — `RemoteReadingDesk`, injected from `src/system.ts`
+it reaches the handler as `deps.remoteReadings` — `RemoteReadingDesk`, injected from `src/system/system.ts`
 exactly as `deps.state` and `deps.localValidations` are. **The tool stays an origin fence and a parse
 call**, which is what keeps it a place a model's opinion cannot get into.
 
@@ -1831,7 +1831,7 @@ the environment has learned nothing about the goal, and with only pass and fail 
 are a lie and silence.
 
 **The origin fence is the narrow kind.** `remoteValidationOriginParts`
-(`src/remoteValidation/origin.ts`) parses `:validate-remote:` alone, so which run a report concerns is
+(`src/validation/remote/origin.ts`) parses `:validate-remote:` alone, so which run a report concerns is
 settled **before** the report rather than by it, and every other caller — the agent that just built
 the thing most of all — is refused **by name**. The `validation-failed` agent this run may go on to
 produce is refused structurally, by the parse, exactly as it is refused `validation_report`.
@@ -1855,7 +1855,7 @@ in. The call records the path on the run row, writes `matched` for every confirm
 settles nothing, which is the other half of what makes it safe to take early.
 
 The fold is not in the tool module, `remoteReadings`' reason: it reaches the handler as
-`deps.remoteListings` — `RemoteListingDesk`, injected from `src/system.ts` — so **the tool stays an
+`deps.remoteListings` — `RemoteListingDesk`, injected from `src/system/system.ts` — so **the tool stays an
 origin fence and a parse call**. The fence is the same narrow `remoteValidationOriginParts`: which
 run a listing belongs to is settled **before** the listing rather than by it, and every other caller
 is refused by name. A denominator for a run an agent was not sent on is not a denominator.
@@ -1897,7 +1897,7 @@ is not a supported shape so much as the brief refusing to render a command nobod
 agent told to take a listing from a command that does not exist has one blocked call and no run.
 Templates are operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so an override
 that never learned a new `{token}` silently drops it, on exactly the deployments that customised most.
-The appending is `briefing` in `src/remoteValidation/remoteRunBriefingText.ts`, computed with the brief and never
+The appending is `briefing` in `src/validation/remote/remoteRunBriefingText.ts`, computed with the brief and never
 imported into `src/dispatcher/`. A `tenantEnv`'s **value** never reaches it: what the briefing carries
 is `resolveTenant(...).standing.tenant`, which for that shape is the **variable's own name**.
 
@@ -1909,7 +1909,7 @@ Two notes are appended to prompts that already exist, both rendered strings rath
 - the **test-part bar** on `issue-plan` and `issue-replan`, appended only where some environment
   declares a `validate.browser` block, so a planner on a deployment with no suite is never told to
   declare a part nobody can build. **Built**: `testPartNote` (`src/plans/planning.ts`), computed once
-  in `src/system.ts`, threaded through `RuleContext` and the `RuleDispatcher` constructor, and
+  in `src/system/system.ts`, threaded through `RuleContext` and the `RuleDispatcher` constructor, and
   concatenated onto both renderings in `src/dispatcher/rules/issuePlan.ts` — never imported into
   `src/dispatcher/` from `src/environments/`. **The same string is returned by `plan_read` on the
   desktop channel**, as `testPart`, computed there from `deps.environments` alone — what the bar asks
@@ -1919,9 +1919,9 @@ Two notes are appended to prompts that already exist, both rendered strings rath
   that declares the coverage a goal turned out to need
   ([08](08-planning.md#discussing-a-plan));
 - the **`state_declare` instruction** on the two prompts that dispatch work — **built**, as
-  `stateDeclareNote` in `src/plans/planning.ts`, computed in `src/system.ts`, threaded through
+  `stateDeclareNote` in `src/plans/planning.ts`, computed in `src/system/system.ts`, threaded through
   `RuleContext` and appended to the `issue-pickup` and `plan-part` renderings, so nothing under
-  `src/dispatcher/` imports `src/remoteValidation/`. `watchDeclareNote`'s
+  `src/dispatcher/` imports `src/validation/remote/`. `watchDeclareNote`'s
   arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — but
   **appended only where some environment declares a `validate.state` executor**, which is where that
   arrangement is deliberately departed from. `watch_declare`'s note is unconditional and can afford
@@ -2013,7 +2013,7 @@ reading no run took — the press's deterministic rows — and on a run that nev
 
 ## The desk
 
-`RemoteValidationDesk` (`src/remoteValidation/desk.ts`) is the one owner of every sheet write. Four
+`RemoteValidationDesk` (`src/validation/remote/desk.ts`) is the one owner of every sheet write. Four
 passes: assemble the sheets for arrivals nothing has assembled yet, run the approved deterministic rows
 on a freshly assembled sheet, refresh what the bench row says, and sweep runs that have gone away.
 
@@ -2063,7 +2063,7 @@ landed. `DeliveryCloseOutDesk` stays below both
 assembled for `acceptance` — 4 rows, 1 waiting on an approval_ — because an operator has to be told a
 sheet exists on the pulse sheets start existing, and what the sheet says is the sheet's own surface to
 say. It is folded on the **server**, off the rows the card draws, in `sheetBenchLine`
-(`src/remoteValidation/sheet.ts`).
+(`src/validation/remote/sheet.ts`).
 
 **Only an arrival the harness watched gets a sheet.** The freshness guard from the announce and watch
 passes applies unchanged and for its reason: the first pulse after this ships — or after an operator
@@ -2357,12 +2357,12 @@ environment, or queries a deployed store — and passes while doing it. That is 
 lesson exactly ([15](15-integrations.md)): the failure is not that the test breaks, it is that it
 succeeds.
 
-| Seam                                                  | Implementations                                          | Covers                                     |
-| ----------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------ |
-| `EnvironmentProber` (existing)                        | `CommandEnvironmentProber` · `FakeEnvironmentProber`     | `at`, for the pin                          |
-| `EnvironmentObserver` (existing)                      | `CommandEnvironmentObserver` · `FakeEnvironmentObserver` | `observe`, for `signal` and `measure` rows |
-| `StateReader` (`src/remoteValidation/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                |
-| `TenantKeeper` (`src/remoteValidation/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**   | `ensureTenant`, `reseed`                   |
+| Seam                                                   | Implementations                                          | Covers                                     |
+| ------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------ |
+| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`     | `at`, for the pin                          |
+| `EnvironmentObserver` (existing)                       | `CommandEnvironmentObserver` · `FakeEnvironmentObserver` | `observe`, for `signal` and `measure` rows |
+| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                |
+| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**   | `ensureTenant`, `reseed`                   |
 
 **The harness spawns none of the three browser commands, and there is no seam for them.** `runner`,
 `publishArtefacts` and `listSelectors` are all invoked by the run agent in its own shell, from its
@@ -2370,7 +2370,7 @@ pinned checkout; the harness parses the file the agent points it at and spawns n
 ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)). So
 `RemoteRunner`, `CommandRemoteRunner` and `FakeRemoteRunner` are deleted with the offering refresh that
 was their last production caller, and `buildSystem` takes no `remoteRunner`. `parseSelectorListing`
-and `selectorFault` stay in `src/remoteValidation/runner.ts` — the run's listing is read through the
+and `selectorFault` stay in `src/validation/remote/runner.ts` — the run's listing is read through the
 first and an area is guarded by the second — and so does `SELECTOR_DELIMITER`, which the briefing joins
 the selectors on and `selectorFault` refuses an area for holding. A test no longer needs a runner fake;
 it still needs `FakeStateReader` and `FakeTenantKeeper`, which are about commands the harness **does**
@@ -2443,7 +2443,7 @@ above draws. A cockpit that worked it out for itself would be a second opinion d
 reading it describes, which is the disagreement the fold exists to prevent. The line says _check
 plan_ and _checks_ because that is the cockpit's one word for each
 ([17](17-cockpit.md#one-noun-per-thing)); what the store calls them is unchanged. **Built**, as
-`sheetFoldLine` (`src/remoteValidation/sheet.ts`) beside `sheetBenchLine`, read in
+`sheetFoldLine` (`src/validation/remote/sheet.ts`) beside `sheetBenchLine`, read in
 `buildEnvironmentReach` off the very `RemoteSheetView`s `buildRemoteSheets` handed the sheet card,
 and shipped on `GoalEnvironmentReachView.sheet`. A row is **blocked** in the fold whichever road it
 took there — a cause the sheet settled before any press, or a run that came back having learned
@@ -2481,7 +2481,7 @@ shipped on `CockpitState.remoteSheets` and re-exported by `web/src/types.ts`. A 
 a domain type from `src/types.ts` or `extends` it — never a re-declaration and never widened — and
 `src/wire.ts` stays the only server module `web/src/` may name.
 
-**A new component is threaded through `src/system.ts`**, which is the composition root.
+**A new component is threaded through `src/system/system.ts`**, which is the composition root.
 
 **What the card draws** is the block the sheet earns and no more. Above the rows sits the
 **gate**: the tenant and its age against the declared freshness window, the commit the last run
@@ -2555,7 +2555,7 @@ against the world's own list; an arrival older than two probe intervals is stamp
 nothing; an arrival on an environment with no `validate` block is left **unstamped**; the cap of five
 defers rather than drops, asserted on a backlog of seven; a database written before
 `goal_arrivals.sheeted_at` gains it on boot and **no backfill runs** over it; the desk's position in
-the pulse; that nothing under `src/dispatcher/` imports `src/remoteValidation/` or
+the pulse; that nothing under `src/dispatcher/` imports `src/validation/remote/` or
 `src/environments/`; and the **off switch in both directions on one run** — no sheet, row, reading,
 stamp, bench mention, cockpit card, prompt note or spawned command with no `validate` block anywhere,
 and all of it with one environment declaring `permits: ["state"]` and a `state.run` — extended, rather

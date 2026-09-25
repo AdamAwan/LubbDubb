@@ -26,7 +26,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 
 | Component           | Module                           | Responsibility                                                         |
 | ------------------- | -------------------------------- | ---------------------------------------------------------------------- |
-| Composition root    | `src/system.ts`                  | Wires every module through its interface; the only place they meet     |
+| Composition root    | `src/system/system.ts`           | Wires every module through its interface; the only place they meet     |
 | Entry point         | `src/server/main.ts`             | Loads config, boots, parks orphaned agents, serves, shuts down cleanly |
 | Config              | `src/config/config.ts`           | Defaults, file overrides, env overrides, path resolution               |
 | Store               | `src/store/store.ts`             | The only module that touches SQLite                                    |

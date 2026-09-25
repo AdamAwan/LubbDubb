@@ -1,6 +1,6 @@
-import type { System } from '../system.js';
-import { sheetFoldLine } from '../remoteValidation/sheet.js';
-import { resolveTenant } from '../remoteValidation/tenants.js';
+import type { System } from '../system/system.js';
+import { sheetFoldLine } from '../validation/remote/sheet.js';
+import { resolveTenant } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,

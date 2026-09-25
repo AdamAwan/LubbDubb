@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DEEP_MERGED_BLOCKS, loadConfig, loadDeploymentConfig } from '../src/config/config.js';
 import { CONFIG_FIELDS } from '../src/config/configFields.js';
-import { ticketAssignee } from '../src/ticketAssignment.js';
+import { ticketAssignee } from '../src/tickets/ticketAssignment.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
   const cfg = loadConfig();

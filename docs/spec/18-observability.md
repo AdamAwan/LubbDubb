@@ -808,7 +808,7 @@ so the cockpit can say how few readings it is standing on.
 ## The burn watch
 
 Every reading above is a post-mortem, read by an operator who went looking. `burnPass`
-(`src/spendBurn.ts`) is the one cost reading taken **while the money is still being spent**:
+(`src/insights/spendBurn.ts`) is the one cost reading taken **while the money is still being spent**:
 `recordAgentUsage` folds a cumulative report onto the `agents` row on every `result` event, so
 `Agent.costUsd` climbs turn by turn, and a run that is going to cost forty dollars is answerable long
 before it settles.

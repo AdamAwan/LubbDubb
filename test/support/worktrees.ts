@@ -1,5 +1,5 @@
 import type { Config } from '../../src/config/config.js';
-import type { System } from '../../src/system.js';
+import type { System } from '../../src/system/system.js';
 import { WorktreeManager } from '../../src/worktree/worktreeManager.js';
 import { FakeSlotProcesses } from '../../src/worktree/fakeSlotProcesses.js';
 

@@ -116,7 +116,7 @@ type Moment = keyof typeof MOMENT_WRITES;
 /**
  * `goal_predictions` and `goal_reveals`.
  *
- * Reached from `src/system.ts` through `Store.openPredictions()` and handed to the
+ * Reached from `src/system/system.ts` through `Store.openPredictions()` and handed to the
  * prediction routes and nothing else. It is deliberately not a member of `Store`,
  * so nothing that is handed a `Store` — the dispatcher, `buildTools`, the retro
  * dossier, the sink — can name it.

@@ -546,7 +546,7 @@ once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask
 
 `hasActiveTaskOnBranch` is the existence question `findActiveTaskByBranch` cannot ask: whether any
 task **other than** the one being asked about still holds the branch. The reaped-agent handler in
-`src/system.ts` asks it before releasing a worktree slot, and asked it by hydrating the whole table
+`src/system/system.ts` asks it before releasing a worktree slot, and asked it by hydrating the whole table
 and filtering in JS until it was an index-shaped `SELECT 1 … LIMIT 1`. There is no index on
 `tasks(branch)` — `idx_tasks_status` and `idx_tasks_origin` are the only two — so the query is a scan
 of `tasks` with an early exit, still strictly cheaper than hydrating every row.
@@ -1427,7 +1427,7 @@ serves an issue's body and comments **verbatim** to every agent on the goal.
 So the containment is made a property of the composition root rather than a rule somebody has to
 remember. `buildTools` is handed `deps.store`; the dispatcher is handed the store; `goalRecord` is
 handed the store. None of them can name a prediction, because the member does not exist. The store is
-opened once, by `Store.openPredictions()`, in `src/system.ts`, and handed to the prediction routes and
+opened once, by `Store.openPredictions()`, in `src/system/system.ts`, and handed to the prediction routes and
 to [the judge's seam](#the-prediction-judge), and to nothing else — so leaking a prediction into a prompt costs somebody a new dependency threaded
 through the composition root, which is a diff a reviewer sees.
 
@@ -1462,7 +1462,7 @@ prediction, and it reads it through a **seam**, never the store: `judgeSeam`
 (`src/predictionJudge/seam.ts`) is built at the composition root beside the routes and handed to the
 MCP server as `judge`, a brief and a place to put marks. No module in the fleet's directories names the
 store, so the structural scan below stands with no exception — the one new door is a named dependency
-in `src/system.ts`, which is the diff a reviewer is meant to see.
+in `src/system/system.ts`, which is the diff a reviewer is meant to see.
 
 **The prediction is in no prompt.** The judge's dispatch prompt names the goal and the tool and nothing
 else; the text reaches the judge as the answer to `prediction_judge {action: "read"}`. So it is in no

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { loadConfig } from '../src/config/config.js';

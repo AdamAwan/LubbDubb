@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -48,7 +48,7 @@ const CONTAINED_DIRS = [
 const CONTAINED_FILES = [
   'src/goalInstructions.ts',
   'src/issueWatch.ts',
-  'src/briefTicket.ts',
+  'src/tickets/briefTicket.ts',
   // The one module that composes *persisted* prose off the prediction record's
   // shadow. `attention_read` serves an open human task's title and detail to the
   // operator's own Claude Code, so a close-out row that ever carried prediction text
@@ -124,7 +124,7 @@ test('nothing the fleet is handed can name the prediction store', () => {
       assert.ok(
         !pattern.test(source),
         `${file} ${what}. A prediction is a measurement of the fleet, so nothing the fleet reads may name ` +
-          `it — fix ${file}, not this assertion. The store is opened once, in src/system.ts, and handed to ` +
+          `it — fix ${file}, not this assertion. The store is opened once, in src/system/system.ts, and handed to ` +
           'the prediction routes alone. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store',
       );
     }

@@ -6,7 +6,7 @@ import type { RawAction, StageContext } from './context.js';
 
 /**
  * One code agent on one open run row. Everything it needs is a run row and a rendered string, both
- * already on the `StageContext`: nothing here imports `src/remoteValidation/` or `src/environments/`,
+ * already on the `StageContext`: nothing here imports `src/validation/remote/` or `src/environments/`,
  * which is asserted structurally.
  *
  * No cooldown budget and no escalation. A run row is one press rather than a standing signal: it is
@@ -45,7 +45,7 @@ export function remoteValidation(s: StageContext): void {
             environment: run.environment,
           }) + run.briefing,
         // The browser, already substituted with this run's own directories by the brief: the rule
-        // imports nothing from `src/remoteValidation/`, so what reaches it is a server and not a
+        // imports nothing from `src/validation/remote/`, so what reaches it is a server and not a
         // policy to apply. → docs/spec/36-remote-validation.md#the-browser-the-run-drives
         mcpServers: run.browser === null ? [] : [run.browser],
         remoteRun: { id: run.runId },
