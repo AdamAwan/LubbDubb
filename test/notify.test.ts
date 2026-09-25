@@ -11,8 +11,14 @@ import {
 const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
 const buildDemoState = () => buildDemoSeed().state;
 
-function snap(over: Partial<ReturnType<typeof notifySnapshot>> = {}) {
+function snap(over: Partial<Snapshot> = {}) {
   return { needsYou: [], errors: [], agents: [], environments: [], ...over };
+}
+
+type Snapshot = ReturnType<typeof notifySnapshot>;
+
+function agent(over: Partial<Snapshot['agents'][number]> & { id: string; status: string }) {
+  return { task: null, origin: null, note: null, numTurns: null, ...over };
 }
 
 function health(over: Partial<EnvironmentHealthReading> & { environment: string }): EnvironmentHealthReading {
@@ -67,12 +73,12 @@ test('a new error notifies, and an existing one does not', () => {
 });
 
 test('an agent notifies when it ends, not when it appears', () => {
-  const spawned = notifiableChanges(snap(), snap({ agents: [{ id: 'a1', status: 'running' }] }));
+  const spawned = notifiableChanges(snap(), snap({ agents: [agent({ id: 'a1', status: 'running' })] }));
   assert.deepEqual(spawned, []);
 
   const ended = notifiableChanges(
-    snap({ agents: [{ id: 'a1', status: 'running' }] }),
-    snap({ agents: [{ id: 'a1', status: 'done' }] }),
+    snap({ agents: [agent({ id: 'a1', status: 'running' })] }),
+    snap({ agents: [agent({ id: 'a1', status: 'done' })] }),
   );
   assert.equal(ended.length, 1);
   assert.equal(ended[0]!.category, 'agents');
@@ -80,14 +86,14 @@ test('an agent notifies when it ends, not when it appears', () => {
 });
 
 test('an agent already terminal in the previous snapshot does not re-notify', () => {
-  const done = snap({ agents: [{ id: 'a1', status: 'done' }] });
+  const done = snap({ agents: [agent({ id: 'a1', status: 'done' })] });
   assert.deepEqual(notifiableChanges(done, done), []);
 });
 
 test('an unhappy ending says which', () => {
   const items = notifiableChanges(
-    snap({ agents: [{ id: 'a1', status: 'running' }] }),
-    snap({ agents: [{ id: 'a1', status: 'crashed' }] }),
+    snap({ agents: [agent({ id: 'a1', status: 'running' })] }),
+    snap({ agents: [agent({ id: 'a1', status: 'crashed' })] }),
   );
   assert.equal(items[0]!.title, 'Agent crashed');
 });
@@ -113,16 +119,16 @@ test('a cascade of errors is one notification, not one each', () => {
 
 test('an ended agent says what it was doing, not its id', () => {
   const [item] = notifiableChanges(
-    snap({ agents: [{ id: 'xy12343', status: 'running' }] }),
+    snap({ agents: [agent({ id: 'xy12343', status: 'running' })] }),
     snap({
       agents: [
-        {
+        agent({
           id: 'xy12343',
           status: 'done',
           task: 'Fix login redirect loop',
           origin: 'issue:412',
           note: 'Redirect now respects returnTo',
-        },
+        }),
       ],
     }),
   );
@@ -132,8 +138,8 @@ test('an ended agent says what it was doing, not its id', () => {
 
 test('a failed agent with no note says how far it got', () => {
   const [item] = notifiableChanges(
-    snap({ agents: [{ id: 'a1', status: 'running' }] }),
-    snap({ agents: [{ id: 'a1', status: 'failed', task: 'Add CSV export', origin: 'pr:397', numTurns: 14 }] }),
+    snap({ agents: [agent({ id: 'a1', status: 'running' })] }),
+    snap({ agents: [agent({ id: 'a1', status: 'failed', task: 'Add CSV export', origin: 'pr:397', numTurns: 14 })] }),
   );
   assert.equal(item!.title, 'Failed: Add CSV export');
   assert.equal(item!.body, 'PR 397 · stopped after 14 turns');
@@ -142,15 +148,12 @@ test('a failed agent with no note says how far it got', () => {
 test('several ended agents are summarised by their tasks', () => {
   const [item] = notifiableChanges(
     snap({
-      agents: [
-        { id: 'a1', status: 'running' },
-        { id: 'a2', status: 'running' },
-      ],
+      agents: [agent({ id: 'a1', status: 'running' }), agent({ id: 'a2', status: 'running' })],
     }),
     snap({
       agents: [
-        { id: 'a1', status: 'done', task: 'Fix login' },
-        { id: 'a2', status: 'crashed', task: 'Add export' },
+        agent({ id: 'a1', status: 'done', task: 'Fix login' }),
+        agent({ id: 'a2', status: 'crashed', task: 'Add export' }),
       ],
     }),
   );
@@ -160,20 +163,14 @@ test('several ended agents are summarised by their tasks', () => {
 test('a batch is folded per category, not across them', () => {
   const items = notifiableChanges(
     snap({
-      agents: [
-        { id: 'a1', status: 'running' },
-        { id: 'a2', status: 'running' },
-      ],
+      agents: [agent({ id: 'a1', status: 'running' }), agent({ id: 'a2', status: 'running' })],
     }),
     snap({
       errors: [
         { id: 'e1', message: 'one' },
         { id: 'e2', message: 'two' },
       ],
-      agents: [
-        { id: 'a1', status: 'done' },
-        { id: 'a2', status: 'crashed' },
-      ],
+      agents: [agent({ id: 'a1', status: 'done' }), agent({ id: 'a2', status: 'crashed' })],
     }),
   );
   assert.deepEqual(
@@ -302,8 +299,8 @@ test('nothing fires without the switch or the grant', () => {
 
 test('a switched-off category is dropped and its siblings are not', () => {
   const changes = notifiableChanges(
-    snap({ agents: [{ id: 'a1', status: 'running' }] }),
-    snap({ needsYou: ONE_ITEM, agents: [{ id: 'a1', status: 'done' }] }),
+    snap({ agents: [agent({ id: 'a1', status: 'running' })] }),
+    snap({ needsYou: ONE_ITEM, agents: [agent({ id: 'a1', status: 'done' })] }),
   );
   const raised = withEngine({ permission: 'granted', visibility: 'visible', focused: false }, () => {
     fireNotifications(changes, { ...ON, categories: { ...ON.categories, agents: false } });
@@ -398,6 +395,7 @@ test('several environments changing at once is one notification that says how ma
   const items = notifiableChanges(before, snap({ environments: [ill('a'), ill('b'), ill('c')] }));
   assert.equal(items.length, 1);
   assert.equal(items[0]!.title, '3 environments changed');
+  assert.equal(items[0]!.body, 'a · b · c');
 });
 
 test('notifySnapshot reduces a whole AppState to the four lists', () => {

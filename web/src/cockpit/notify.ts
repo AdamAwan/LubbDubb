@@ -67,16 +67,16 @@ interface NotifyItem {
   tag: string;
   title: string;
   body: string;
-  summary?: string;
+  name: string;
 }
 
 interface NotifyAgent {
   id: string;
   status: string;
-  task?: string | null;
-  origin?: string | null;
-  note?: string | null;
-  numTurns?: number | null;
+  task: string | null;
+  origin: string | null;
+  note: string | null;
+  numTurns: number | null;
 }
 
 interface NotifySnapshot {
@@ -86,7 +86,15 @@ interface NotifySnapshot {
   environments: EnvironmentHealthReading[];
 }
 
-const AGENT_ENDINGS = new Set(['done', 'killed', 'interrupted', 'failed', 'crashed']);
+const ENDING_WORD: Record<string, string> = {
+  done: 'Finished',
+  killed: 'Killed',
+  interrupted: 'Interrupted',
+  failed: 'Failed',
+  crashed: 'Crashed',
+};
+
+const AGENT_ENDINGS = new Set(Object.keys(ENDING_WORD));
 
 const NEED_KIND_LABEL: Record<NeedKind, string> = {
   config: "This harness's own configuration is stopping it",
@@ -121,11 +129,12 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
 };
 
 export function notifySnapshot(state: AppState, setup: SetupPayload | null = null): NotifySnapshot {
+  const tasks = new Map(state.tasks.map((t) => [t.id, t]));
   return {
     needsYou: buildNeedsYou(state, setup).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
     errors: state.errors.map((e) => ({ id: e.id, message: e.message })),
     agents: state.agents.map((a) => {
-      const task = state.tasks.find((t) => t.id === a.taskId);
+      const task = tasks.get(a.taskId);
       return {
         id: a.id,
         status: a.status,
@@ -151,13 +160,20 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
       tag: `need:${row.id}`,
       title: NEED_KIND_LABEL[row.kind],
       body: row.title,
+      name: row.title,
     });
   }
 
   const seenErrors = new Set(prev.errors.map((e) => e.id));
   for (const err of next.errors) {
     if (seenErrors.has(err.id)) continue;
-    items.push({ category: 'errors', tag: `error:${err.id}`, title: 'Error recorded', body: err.message });
+    items.push({
+      category: 'errors',
+      tag: `error:${err.id}`,
+      title: 'Error recorded',
+      body: err.message,
+      name: err.message,
+    });
   }
 
   const before = new Map(prev.agents.map((a) => [a.id, a.status]));
@@ -170,7 +186,7 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
       tag: `agent:${agent.id}`,
       title: agentTitle(agent),
       body: agentBody(agent),
-      summary: agent.task ?? agent.id,
+      name: agent.task ?? agent.id,
     });
   }
 
@@ -184,28 +200,24 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
       tag: `env:${env.environment}:${env.changedAt}`,
       title: healthTitle(env),
       body: healthBody(env, was),
+      name: env.environment,
     });
   }
 
   return coalesce(items);
 }
 
-const ENDING_WORD: Record<string, string> = {
-  done: 'Finished',
-  killed: 'Killed',
-  interrupted: 'Interrupted',
-  failed: 'Failed',
-  crashed: 'Crashed',
-};
-
 function agentTitle(agent: NotifyAgent): string {
-  const word = ENDING_WORD[agent.status] ?? agent.status;
+  const word = ENDING_WORD[agent.status]!;
   return agent.task ? `${word}: ${agent.task}` : `Agent ${word.toLowerCase()}`;
 }
 
 function agentBody(agent: NotifyAgent): string {
-  const stopped = agent.status !== 'done' && agent.numTurns ? `stopped after ${agent.numTurns} turns` : null;
-  const said = agent.note ? `"${agent.note}"` : stopped;
+  const said = agent.note
+    ? `"${agent.note}"`
+    : agent.status !== 'done' && agent.numTurns
+      ? `stopped after ${agent.numTurns} turns`
+      : null;
   const parts = [agent.origin ? refLabel(agent.origin) : null, said].filter((p): p is string => p !== null);
   return parts.length > 0 ? parts.join(' · ') : agent.id;
 }
@@ -257,13 +269,15 @@ function coalesce(items: readonly NotifyItem[]): NotifyItem[] {
       out.push(batch[0]!);
       continue;
     }
-    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.summary ?? i.body);
+    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.name);
     const rest = batch.length - named.length;
+    const title = SUMMARY_TITLE[id](batch.length);
     out.push({
       category: id,
       tag: `${batch[0]!.tag}+${batch.length - 1}`,
-      title: SUMMARY_TITLE[id](batch.length),
+      title,
       body: [...named, ...(rest > 0 ? [`+${rest} more`] : [])].join(' · '),
+      name: title,
     });
   }
   return out;
