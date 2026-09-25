@@ -9,7 +9,6 @@ import type {
   PrReplySent,
   PoolDigestRow,
   Remedy,
-  SurfaceReach,
   UsageEvent,
   WorldEvent,
 } from '../types.js';
@@ -19,7 +18,7 @@ import {
   THROUGHPUT_EVENT_KINDS,
   throughputMeasureOf,
 } from '../insights/throughputInsights.js';
-import { VERBS_BY_SUBJECT } from '../usage/events.js';
+import { VERBS_BY_SUBJECT, type UsageEvent as RegistryEvent } from '../usage/events.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -57,7 +56,7 @@ export function buildDigestDocument(
     byCheck: byCheck(remedies, usage, today),
     unaccounted: unaccounted(tasks, remedies, since, today),
     unmeasured: unmeasured(agents, since, today),
-    byUsage: byUsage(store.surfaceReach.listSurfaceReachSince(since), today),
+    byUsage: byUsage(store, since, today),
     poolableThroughput: [...poolableThroughputMeasures(context.scope)],
     byThroughput: byThroughput(
       store.world.listWorldEventsOfKindsSince(since, THROUGHPUT_EVENT_KINDS),
@@ -142,12 +141,19 @@ function unmeasured(agents: readonly Agent[], since: string, today: string): Poo
   return rows.rows(today);
 }
 
-function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[] {
+export const SWEPT_RECORD_EVENTS: Partial<Record<RegistryEvent, (store: Store, since: string) => string[]>> = {
+  'pr-description.create': (store, since) => store.prDescriptions.listFirstDescriptionsSince(since),
+};
+
+function byUsage(store: Store, since: string, today: string): PoolDigestRow[] {
   const rows = new Bucket();
-  for (const row of reach) {
+  for (const row of store.surfaceReach.listSurfaceReachSince(since)) {
     const verbs: readonly string[] = VERBS_BY_SUBJECT[row.subject] ?? [];
     if (!verbs.includes(row.verb)) continue;
     rows.add(utcDay(row.at), `${row.subject}.${row.verb}`, { count: 1 });
+  }
+  for (const [event, sweep] of Object.entries(SWEPT_RECORD_EVENTS)) {
+    for (const at of sweep(store, since)) rows.add(utcDay(at), event, { count: 1 });
   }
   return rows.rows(today);
 }

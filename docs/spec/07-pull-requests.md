@@ -832,6 +832,11 @@ pull request with the footer alone.
 - **The operator's own version outranks it.** A hand-over is refused once a version exists, and
   `unpushedDrafts` skips any part that has one — **Write your own instead** stays on the page, and
   what they write replaces the agent's body on the next pulse.
+- **Which one a person chose is counted, and reaches the pool.** A first version in `pr_descriptions`
+  is `pr-description.create`, swept from the record; a press of **Use the agent's** or **Hand it to
+  the agent** is `pr-description.accept`, logged at the button because `handed_at` cannot tell a
+  person from `autoUseAgentDescriptions`. A revision is not a second choice and is not counted.
+  → [34](34-usage-metrics.md#a-choice-between-a-persons-work-and-an-agents-is-always-measured)
 
 #### The field is free, and the four questions are hints
 

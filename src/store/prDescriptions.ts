@@ -94,6 +94,14 @@ export class PrDescriptionStore {
     return row ? this.toVersion(row) : null;
   }
 
+  /** When each part's first version was written: a person describing it themselves. → docs/spec/34-usage-metrics.md */
+  listFirstDescriptionsSince(since: string): string[] {
+    const rows = this.ctx
+      .prep(`SELECT authored_at FROM pr_descriptions WHERE version = 1 AND authored_at >= ? ORDER BY authored_at ASC`)
+      .all(since) as { authored_at: string }[];
+    return rows.map((r) => r.authored_at);
+  }
+
   /** The whole chain, oldest first. What the part's panel draws behind the current one. */
   listDescriptionVersions(originRef: string): PrDescriptionVersion[] {
     const rows = this.ctx

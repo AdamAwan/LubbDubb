@@ -19,6 +19,7 @@ export const VERBS_BY_SUBJECT = {
   plan: ['view', 'expand', 'edit', 'accept', 'reject', 'abandon'],
   goal: ['view', 'expand', 'edit', 'accept', 'abandon'],
   pr: ['view', 'accept', 'send'],
+  'pr-description': ['create', 'accept'],
   validation: ['view', 'expand', 'accept', 'reject', 'defer', 'waive', 'undo'],
   escalation: ['view', 'accept', 'reject', 'send'],
   'human-task': ['view', 'accept', 'reject'],
@@ -62,6 +63,8 @@ const EVENT_SOURCE = {
   'pr.view': 'ui',
   'pr.accept': 'record',
   'pr.send': 'record',
+  'pr-description.create': 'record',
+  'pr-description.accept': 'ui',
   'validation.view': 'ui',
   'validation.expand': 'ui',
   'validation.accept': 'record',
@@ -112,6 +115,10 @@ const EVENT_SOURCE = {
   'pet.edit': 'record',
 } as const satisfies Record<UsageEvent, UsageEventSource>;
 
+export const PERSON_OR_AGENT_CHOICES = [
+  { themselves: 'pr-description.create', agents: 'pr-description.accept' },
+] as const satisfies readonly { themselves: UsageEvent; agents: UsageEvent }[];
+
 export type UiUsageEvent = {
   [E in UsageEvent]: (typeof EVENT_SOURCE)[E] extends 'ui' ? E : never;
 }[UsageEvent];
@@ -135,6 +142,14 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'pr.view': { label: 'Opened a pull request', blurb: 'The pull request page was reached' },
   'pr.accept': { label: 'Authorised a landing', blurb: 'A merge, or a whole stack, was cleared to land' },
   'pr.send': { label: 'Sent a review reply', blurb: 'A drafted reply left the harness onto the thread' },
+  'pr-description.create': {
+    label: 'Wrote a description',
+    blurb: 'A person wrote a pull request’s description themselves',
+  },
+  'pr-description.accept': {
+    label: 'Used the agent’s description',
+    blurb: 'A person took the agent’s draft instead of writing one',
+  },
   'validation.view': { label: 'Opened validation', blurb: 'The goal’s checks were reached' },
   'validation.expand': { label: 'Read a check', blurb: 'One check’s procedure was opened' },
   'validation.accept': { label: 'Passed a check', blurb: 'The procedure was run and it did what it says' },
@@ -221,6 +236,7 @@ export const SUBJECT_LABEL: Record<UsageSubject, string> = {
   plan: 'Plans',
   goal: 'Goals',
   pr: 'Pull requests',
+  'pr-description': 'Pull request descriptions',
   validation: 'Validation',
   escalation: 'Escalations',
   'human-task': 'The bench',

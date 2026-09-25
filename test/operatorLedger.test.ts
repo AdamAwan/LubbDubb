@@ -54,6 +54,7 @@ function emptyInput(now = NOW): OperatorInput {
     checks: [],
     conclusions: [],
     agents: [],
+    descriptionsWritten: [],
     costEvents: [],
     window: resolveWindow('24h', now, null),
     now,

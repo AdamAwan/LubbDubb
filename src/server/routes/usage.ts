@@ -34,6 +34,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           checks: store.validation.listAllValidationChecks(),
           conclusions: store.verdicts.listIssueConclusions(),
           agents: store.agents.listAgents(),
+          descriptionsWritten: store.prDescriptions.listFirstDescriptionsSince(since),
           costEvents: store.agents.listUsageEventsSince(since),
           window,
           now,

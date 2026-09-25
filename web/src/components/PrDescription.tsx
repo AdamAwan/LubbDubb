@@ -7,6 +7,7 @@ import type {
   PrDescriptionVersion,
 } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
+import { logUsage } from '../cockpit/usage.js';
 import { AsyncButton } from './AsyncButton.js';
 import { buttonClass } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -395,6 +396,7 @@ export function PrDescription({
 
   const handOff = async (): Promise<void> => {
     await api.handOffPrDescription(prNumber);
+    logUsage('pr-description.accept');
     await held.reload();
   };
 

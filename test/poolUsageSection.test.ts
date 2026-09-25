@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { foldPoolDigest, poolUsageLabel } from '../src/pool/aggregate.js';
-import { buildDigestDocument } from '../src/pool/digestArm.js';
+import { SWEPT_RECORD_EVENTS, buildDigestDocument } from '../src/pool/digestArm.js';
 import { POOL_SCHEMA_VERSION, parsePoolDocument, serialisePoolDocument } from '../src/pool/document.js';
 import { renderPoolMarkdown } from '../src/pool/markdown.js';
-import { USAGE_COPY } from '../src/usage/events.js';
+import { PERSON_OR_AGENT_CHOICES, USAGE_COPY, usageEventSource } from '../src/usage/events.js';
 import type { PoolDigestDocument } from '../src/types.js';
 
 const SCOPED = { pullRequests: true, issues: true };
@@ -177,4 +177,35 @@ test('the companion summarises the section rather than transcribing it, and draw
   assert.ok(text.includes(`| ${USAGE_COPY['plan.view'].label} | 11 | 11 | 11 |`), text);
   assert.ok(text.includes(`| ${USAGE_COPY['goal.view'].label} | 0 | 0 | 90 |`), text);
   assert.ok(!text.includes('Cost 7d'), 'a column of dashes is worse than no column');
+});
+
+test('a person writing a description is swept from the record, and only a first version counts', () => {
+  const store = new Store(':memory:', () => NOW);
+  store.prDescriptions.appendDescription({ originRef: 'issue:7:part:a', text: 'first', author: null });
+  store.prDescriptions.appendDescription({ originRef: 'issue:7:part:a', text: 'revised', author: null });
+  store.prDescriptions.appendDescription({ originRef: 'issue:7:part:b', text: 'another', author: null });
+  store.surfaceReach.recordSurfaceReach([
+    { subject: 'pr-description', verb: 'accept', place: 'pr', arrival: 'direct' },
+  ]);
+  const document = buildDigestDocument(store, {
+    fleetId: 'alice@acme-api',
+    project: 'acme-api',
+    harnessVersion: '0.1.0',
+    now: NOW,
+    scope: SCOPED,
+  });
+
+  assert.deepEqual(document.byUsage, [
+    { day: '2026-08-24', key: 'pr-description.accept', count: 1, costUsd: null, partial: true },
+    { day: '2026-08-24', key: 'pr-description.create', count: 2, costUsd: null, partial: true },
+  ]);
+});
+
+test('both halves of every person-or-agent choice reach the digest', () => {
+  for (const choice of PERSON_OR_AGENT_CHOICES) {
+    for (const event of [choice.themselves, choice.agents]) {
+      const reaches = usageEventSource(event) === 'ui' || SWEPT_RECORD_EVENTS[event] !== undefined;
+      assert.ok(reaches, `${event} is a record event the digest does not sweep, so the pool never sees it`);
+    }
+  }
 });

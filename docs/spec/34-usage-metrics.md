@@ -68,27 +68,28 @@ Not every verb applies to every subject, and which do is declared — `VERBS_BY_
 shape and exactly the purpose of `CAUSES_BY_KIND`. An empty cell is a statement that the product
 offers no such control, and the day it does, the cell is where it is added.
 
-| Subject      | Verbs it offers                                          |
-| ------------ | -------------------------------------------------------- |
-| `plan`       | `view` `expand` `edit` `accept` `reject` `abandon`       |
-| `goal`       | `view` `expand` `edit` `accept` `abandon`                |
-| `pr`         | `view` `accept` `send`                                   |
-| `validation` | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
-| `escalation` | `view` `accept` `reject` `send`                          |
-| `human-task` | `view` `accept` `reject`                                 |
-| `ticket`     | `view` `filter` `create`                                 |
-| `feature`    | `view` `expand`                                          |
-| `agent`      | `view` `expand` `send` `stop`                            |
-| `obstacle`   | `view` `expand` `accept` `waive`                         |
-| `local-run`  | `view` `create` `stop`                                   |
-| `job`        | `view` `create` `stop`                                   |
-| `retro`      | `view`                                                   |
-| `scratchpad` | `view` `edit`                                            |
-| `insights`   | `view` `filter`                                          |
-| `pool`       | `view` `filter`                                          |
-| `config`     | `view` `edit`                                            |
-| `upgrade`    | `view` `accept` `reject`                                 |
-| `pet`        | `view` `edit`                                            |
+| Subject          | Verbs it offers                                          |
+| ---------------- | -------------------------------------------------------- |
+| `plan`           | `view` `expand` `edit` `accept` `reject` `abandon`       |
+| `goal`           | `view` `expand` `edit` `accept` `abandon`                |
+| `pr`             | `view` `accept` `send`                                   |
+| `pr-description` | `create` `accept`                                        |
+| `validation`     | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
+| `escalation`     | `view` `accept` `reject` `send`                          |
+| `human-task`     | `view` `accept` `reject`                                 |
+| `ticket`         | `view` `filter` `create`                                 |
+| `feature`        | `view` `expand`                                          |
+| `agent`          | `view` `expand` `send` `stop`                            |
+| `obstacle`       | `view` `expand` `accept` `waive`                         |
+| `local-run`      | `view` `create` `stop`                                   |
+| `job`            | `view` `create` `stop`                                   |
+| `retro`          | `view`                                                   |
+| `scratchpad`     | `view` `edit`                                            |
+| `insights`       | `view` `filter`                                          |
+| `pool`           | `view` `filter`                                          |
+| `config`         | `view` `edit`                                            |
+| `upgrade`        | `view` `accept` `reject`                                 |
+| `pet`            | `view` `edit`                                            |
 
 **A subject is a thing, never a screen.** `pr` is the pull request wherever it is worked, so a
 control that moves to another surface keeps its row and the history stays one series. Keying on the
@@ -218,6 +219,7 @@ omits the one ask that parks the whole fleet.
 | Settling a check      | `ValidationCheckState`, with `ValidationCheckResultBy` saying whether a person or the fleet settled it — [20](20-validation.md) |
 | Concluding a goal     | the issue conclusions, `by = 'operator'` — [14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)                      |
 | Stopping an agent     | the run's `killed` / `interrupted` outcome, already counted by `src/insights/reliabilityInsights.ts`                            |
+| Writing a description | the first version of a part's `pr_descriptions` chain — [07](07-pull-requests.md#the-agents-draft)                              |
 
 **Authorising a landing is an act and not an ask**, though it settles something: the row exists only
 because somebody clicked, and nothing anywhere records that a landable stack was ever put in front of
@@ -406,6 +408,13 @@ stamp for the act itself, so the section would ship a handful of honest keys bes
 silent zeros — the [never-named failure](#a-quiet-surface-is-four-different-facts) this whole reading
 exists to make impossible, reintroduced at the last step.
 
+**One `record` event has joined: `pr-description.create`.** The first version of a part's
+`pr_descriptions` chain is stamped with its own `authored_at`, so the table answers per day, and
+`byUsage` sweeps it beside `surface_reach`. A `record` event joins by an entry in
+`SWEPT_RECORD_EVENTS` (`src/pool/digestArm.ts`), the one place that says which ones the pool carries. It is the first half of a
+[choice that is always measured](#a-choice-between-a-persons-work-and-an-agents-is-always-measured),
+and its other half is `ui`, so leaving it out would ship one side of a comparison.
+
 **Nothing is withheld for policy, which is the rule that actually binds.** There is no per-section
 opt-out and no field a fleet may drop: every fleet in the pool publishes the same key space, so a
 zero is a real zero and a sum across nine fleets is a sum of nine. What is out of the key space is
@@ -436,6 +445,29 @@ nobody was in is a finding manufactured out of an absent operator — a page of 
 week somebody was on holiday is four findings' worth of noise. Then `operated`, then
 `visited-never-operated`, and the two silent verdicts last, told apart by the arrival evidence alone.
 **Every subject gets a row**, so the reading is never a list of only what was used.
+
+## A choice between a person's work and an agent's is always measured
+
+A standing rule rather than one event. Wherever the cockpit offers a person the choice of doing
+something themselves or taking what an agent made, **both answers are in the registry and both reach
+the digest**. How often people take the agent's work is the measure of whether that work is good
+enough, and it is only a reading once many fleets have made the choice — which is what the pool is.
+
+- **Both halves, or neither.** A count of one side with no count of the other is a number with no
+  denominator, and it sums across fleets into something that looks like a trend.
+- **Each half is swept where a record can say a person did it**, and logged at the control where it
+  cannot. The hand-over's `handed_at` is also written by `autoUseAgentDescriptions`, so it cannot say
+  a person chose, and the press is the witness.
+- **Neither half may be a `record` event the digest does not sweep**, or the choice is a local
+  reading and the pool never sees it.
+
+The pairs are declared in `PERSON_OR_AGENT_CHOICES` (`src/usage/events.ts`), and
+`test/poolUsageSection.test.ts` fails any half that is neither `ui` nor in `SWEPT_RECORD_EVENTS`. A new
+choice is a new pair there. Where it holds today:
+
+| Choice                     | Did it themselves                           | Took the agent's                       |
+| -------------------------- | ------------------------------------------- | -------------------------------------- |
+| A pull request description | `pr-description.create` — swept, first only | `pr-description.accept` — at the press |
 
 ## The one new table
 
