@@ -4,8 +4,9 @@ import { coverageLines, criteriaCoverage } from '../criteria/coverage.js';
 import { watchClearedGoals, watchCloseOutLine, watchWindowReadings } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
-import type { Issue, ValidationPlanRecord } from '../types.js';
+import type { Issue } from '../types.js';
 import { goalValidation, type GoalValidation } from '../validation/goal.js';
+import { checkSetUnanswered } from '../validation/planApproval.js';
 import { closeOutPass } from './closeOut.js';
 
 // → docs/spec/24-environments.md
@@ -101,8 +102,4 @@ export class DeliveryCloseOutDesk {
     }
     return out;
   }
-}
-
-function checkSetUnanswered(record: ValidationPlanRecord): boolean {
-  return record.releasedAt === null && (record.authoredAt !== null || record.note !== null);
 }

@@ -19,6 +19,7 @@ interface CloseOutInput {
   /** Each goal's criteria, one line per criterion as it was read. → 20-validation.md#satisfies-and-the-goals-criteria */
   criteria?: ReadonlyMap<string, readonly string[]>;
   opened: ReadonlySet<string> | null;
+  /** Goals with validation still ahead of the close: an open `validate` row, or an unanswered check set. */
   validating: ReadonlySet<string>;
   watch: ReadonlyMap<string, string>;
   watchCleared: ReadonlySet<string> | null;
