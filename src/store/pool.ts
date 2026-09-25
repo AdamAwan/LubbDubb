@@ -149,7 +149,7 @@ export class PoolStore {
   }
 }
 
-type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage' | 'throughput';
+type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage' | 'throughput' | 'choice';
 
 export interface PoolDigestMirrorRow {
   fleetId: string;
@@ -198,6 +198,7 @@ function digestSections(document: PoolDigestDocument): [PoolDigestSection, reado
     ['unaccounted', document.unaccounted],
     ['unmeasured', document.unmeasured],
     ['usage', document.byUsage],
+    ['choice', document.byChoice],
     // Only the measures the publishing fleet declared its own reach the mirror: a
     // slice its provider did not filter to it is the repository's, seen by every
     // fleet watching that repository, and summed it would count watchers rather than

@@ -9,6 +9,7 @@ import type {
   PrReplySent,
   PoolDigestRow,
   Remedy,
+  SurfaceReach,
   UsageEvent,
   WorldEvent,
 } from '../types.js';
@@ -18,7 +19,8 @@ import {
   THROUGHPUT_EVENT_KINDS,
   throughputMeasureOf,
 } from '../insights/throughputInsights.js';
-import { VERBS_BY_SUBJECT, type UsageEvent as RegistryEvent } from '../usage/events.js';
+import { VERBS_BY_SUBJECT } from '../usage/events.js';
+import { choiceKey, choiceSightings, type DecisionChoice } from '../insights/choiceInsights.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -31,7 +33,14 @@ export function utcDay(iso: string): string {
 
 export function buildDigestDocument(
   store: Store,
-  context: { fleetId: string; project: string; harnessVersion: string; now: string; scope: WorldScope },
+  context: {
+    fleetId: string;
+    project: string;
+    harnessVersion: string;
+    now: string;
+    scope: WorldScope;
+    choicesOff?: readonly DecisionChoice[];
+  },
 ): PoolDigestDocument {
   const since = retentionStart(context.now);
   const today = utcDay(context.now);
@@ -56,7 +65,7 @@ export function buildDigestDocument(
     byCheck: byCheck(remedies, usage, today),
     unaccounted: unaccounted(tasks, remedies, since, today),
     unmeasured: unmeasured(agents, since, today),
-    byUsage: byUsage(store, since, today),
+    byUsage: byUsage(store.surfaceReach.listSurfaceReachSince(since), today),
     poolableThroughput: [...poolableThroughputMeasures(context.scope)],
     byThroughput: byThroughput(
       store.world.listWorldEventsOfKindsSince(since, THROUGHPUT_EVENT_KINDS),
@@ -64,6 +73,7 @@ export function buildDigestDocument(
       today,
     ),
     byFault: byFault(store.errors.listErrorsSince(since), today),
+    byChoice: byChoice(store, since, context.choicesOff ?? [], today),
   };
 }
 
@@ -141,20 +151,36 @@ function unmeasured(agents: readonly Agent[], since: string, today: string): Poo
   return rows.rows(today);
 }
 
-export const SWEPT_RECORD_EVENTS: Partial<Record<RegistryEvent, (store: Store, since: string) => string[]>> = {
-  'pr-description.create': (store, since) => store.prDescriptions.listFirstDescriptionsSince(since),
-};
-
-function byUsage(store: Store, since: string, today: string): PoolDigestRow[] {
+function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[] {
   const rows = new Bucket();
-  for (const row of store.surfaceReach.listSurfaceReachSince(since)) {
+  for (const row of reach) {
     const verbs: readonly string[] = VERBS_BY_SUBJECT[row.subject] ?? [];
     if (!verbs.includes(row.verb)) continue;
     rows.add(utcDay(row.at), `${row.subject}.${row.verb}`, { count: 1 });
   }
-  for (const [event, sweep] of Object.entries(SWEPT_RECORD_EVENTS)) {
-    for (const at of sweep(store, since)) rows.add(utcDay(at), event, { count: 1 });
-  }
+  return rows.rows(today);
+}
+
+function byChoice(store: Store, since: string, choicesOff: readonly DecisionChoice[], today: string): PoolDigestRow[] {
+  const criteria = !choicesOff.includes('goal-criteria');
+  const rows = new Bucket();
+  const sightings = choiceSightings({
+    since,
+    descriptionsWritten: store.prDescriptions.listFirstDescriptionsSince(since),
+    draftsTaken: store.prDescriptions.listTakenDraftsSince(since),
+    proposals: store.escalations.listProposals(),
+    checks: store.validation.listAllValidationChecks(),
+    conclusions: store.verdicts.listIssueConclusions(),
+    deliveries: store.verdicts.listDeliveries(),
+    shortfalls: store.verdicts.listShortfalls(),
+    choicesOff,
+    firstCriteria: criteria ? store.goalCriteria.listFirstCriteria() : [],
+    plans: criteria ? store.plans.listPlans() : [],
+    watches: store.watches.listWatchAuthorship(),
+    queries: store.remoteValidation.listQueryAuthorship(),
+    sequences: store.sequences.listFeatureSequences(),
+  });
+  for (const s of sightings) rows.add(utcDay(s.at), choiceKey(s.choice, s.side), { count: 1 });
   return rows.rows(today);
 }
 

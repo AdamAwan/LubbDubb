@@ -4778,6 +4778,7 @@ export const demoApi = {
         unmeasured: { key: '', label: 'Unmeasured runs', count: 0, costUsd: null, fleets: 0, dailyMeanCostUsd: null },
         byUsage: [],
         byThroughput: [],
+        byChoice: [],
       },
       projects: [],
       fleets: [],

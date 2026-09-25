@@ -408,13 +408,6 @@ stamp for the act itself, so the section would ship a handful of honest keys bes
 silent zeros — the [never-named failure](#a-quiet-surface-is-four-different-facts) this whole reading
 exists to make impossible, reintroduced at the last step.
 
-**One `record` event has joined: `pr-description.create`.** The first version of a part's
-`pr_descriptions` chain is stamped with its own `authored_at`, so the table answers per day, and
-`byUsage` sweeps it beside `surface_reach`. A `record` event joins by an entry in
-`SWEPT_RECORD_EVENTS` (`src/pool/digestArm.ts`), the one place that says which ones the pool carries. It is the first half of a
-[choice that is always measured](#a-choice-between-a-persons-work-and-an-agents-is-always-measured),
-and its other half is `ui`, so leaving it out would ship one side of a comparison.
-
 **Nothing is withheld for policy, which is the rule that actually binds.** There is no per-section
 opt-out and no field a fleet may drop: every fleet in the pool publishes the same key space, so a
 zero is a real zero and a sum across nine fleets is a sum of nine. What is out of the key space is
@@ -446,28 +439,53 @@ week somebody was on holiday is four findings' worth of noise. Then `operated`, 
 `visited-never-operated`, and the two silent verdicts last, told apart by the arrival evidence alone.
 **Every subject gets a row**, so the reading is never a list of only what was used.
 
-## A choice between a person's work and an agent's is always measured
+## Who decided
 
-A standing rule rather than one event. Wherever the cockpit offers a person the choice of doing
-something themselves or taking what an agent made, **both answers are in the registry and both reach
-the digest**. How often people take the agent's work is the measure of whether that work is good
+A standing rule, and a digest section of its own. Wherever the harness lets a person decide something
+themselves or take what an agent decided, **whose answer stood is recorded, both ways, and it reaches
+the pool**. How often an agent's answer is the one that stands is the measure of whether it is good
 enough, and it is only a reading once many fleets have made the choice — which is what the pool is.
 
-- **Both halves, or neither.** A count of one side with no count of the other is a number with no
+**It is not the registry, and it cannot be.** The registry counts what a _person_ did, and half of
+every row here is an agent's answer that nobody overrode. So it is `byChoice` on `PoolDigestDocument`,
+keyed `<choice>/<side>` where the side is `person` or `agent`, folded by `choiceSightings`
+(`src/insights/choiceInsights.ts`) from records the harness already keeps, and mirrored, summed and
+drawn like `byUsage`. Same shape as every other section: a day, a key from a closed vocabulary, a
+count — no refs, no text, no identity.
+
+- **Both sides, or neither.** A count of one side with no count of the other is a number with no
   denominator, and it sums across fleets into something that looks like a trend.
-- **Each half is swept where a record can say a person did it**, and logged at the control where it
-  cannot. The hand-over's `handed_at` is also written by `autoUseAgentDescriptions`, so it cannot say
-  a person chose, and the press is the witness.
-- **Neither half may be a `record` event the digest does not sweep**, or the choice is a local
-  reading and the pool never sees it.
+- **Swept from the record, never logged at a control.** Every choice below already writes who
+  answered; a sweep picks up a second route to the same decision for free.
+- **A new key decision is a new `DecisionChoice`**, in the change that adds the decision: its copy in
+  `CHOICE_COPY`, its sweep in `SWEEPS` (both `Record`s over the union, so a choice with neither does
+  not compile), the lists that sweep reads on `ChoiceInput`, and the reads that fill them in
+  `byChoice` (`src/pool/digestArm.ts`).
+- **A choice the deployment does not offer is left out, not zeroed.** `choicesOff` names them —
+  `goal-criteria` where `goalCriteria.enabled` is off — so a fleet that was never asked does not
+  publish every goal as the planner's.
 
-The pairs are declared in `PERSON_OR_AGENT_CHOICES` (`src/usage/events.ts`), and
-`test/poolUsageSection.test.ts` fails any half that is neither `ui` nor in `SWEPT_RECORD_EVENTS`. A new
-choice is a new pair there. Where it holds today:
+| Choice             | A person's answer stood                           | An agent's answer stood                                  |
+| ------------------ | ------------------------------------------------- | -------------------------------------------------------- |
+| `pr-description`   | the part's first `pr_descriptions` version        | a draft handed over, on a part nobody described          |
+| `plan`             | the plan proposal rejected by a person            | the plan proposal accepted by a person                   |
+| `validation-check` | a pass or fail with `resultBy = 'operator'`       | a pass or fail by `agent`, `desktop`, `spec` or `script` |
+| `goal-verdict`     | a conclusion, delivery or shortfall by `operator` | the same, by the assessor or an agent                    |
+| `goal-criteria`    | criteria written before the goal's first plan     | the goal planned with none, where `goalCriteria` is on   |
+| `watch-check`      | a live watch `authored = 'operator'`              | a live watch the plan declared                           |
+| `state-query`      | a query `authored = 'operator'`                   | a plan's or agent's query with an approval somewhere     |
+| `story-order`      | a proposed order declined                         | a proposed order accepted                                |
 
-| Choice                     | Did it themselves                           | Took the agent's                       |
-| -------------------------- | ------------------------------------------- | -------------------------------------- |
-| A pull request description | `pr-description.create` — swept, first only | `pr-description.accept` — at the press |
+**What it cannot see, stated rather than hidden.** A goal verdict and a check reading are one row
+each, overwritten, so a verdict a person later replaced counts once, as theirs. A declined watch or
+query is deleted, so it counts on neither side — only what a person ended up standing behind does.
+Criteria are dated at the goal's first plan, because the intake sitting's stamp lives in the
+prediction store, which the digest is deliberately not handed
+([14](14-persistence.md#the-prediction-store-is-not-on-store)).
+
+`pr-description.create` and `pr-description.accept` stay in the registry for the local reading — the
+ledger's "Writing a description" act and the press's reach — and are not how the pool counts the
+choice.
 
 ## The one new table
 

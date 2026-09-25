@@ -1,6 +1,7 @@
 import { PHASE_ORDER, type SpendPhase } from '../insights/spendInsights.js';
 import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRow } from '../types.js';
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
+import { choiceLabel } from '../insights/choiceInsights.js';
 import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 
@@ -110,6 +111,18 @@ const SECTIONS: readonly DigestSection[] = [
       'to this operator is a fact about the **repository**, which every fleet watching it also reports, ' +
       'so summing it would count watchers rather than work. `poolableThroughput` in `digest.json` names ' +
       'the rows this fleet published as its own._',
+  },
+  {
+    rows: (d) => d.byChoice,
+    title: 'Who decided',
+    column: 'Decision · whose',
+    label: (key) => choiceLabel(key),
+    counts: 'Times',
+    costed: false,
+    caveat:
+      '_Each key decision the harness offers, and whether a person’s answer or an agent’s is the one that ' +
+      'stood — swept from the records that hold it. A verdict or a check reading that was later overwritten ' +
+      'counts once, as whoever wrote it last._',
   },
   {
     rows: (d) => d.byFault,

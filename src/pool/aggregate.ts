@@ -3,6 +3,7 @@ import { PHASE_ORDER, phaseLabel, type SpendPhase } from '../insights/spendInsig
 import type { PoolDigestMirrorRow } from '../store/pool.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
+import { choiceLabel } from '../insights/choiceInsights.js';
 import { USAGE_COPY, type UsageEvent } from '../usage/events.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -27,6 +28,7 @@ export interface PoolRollup {
   unmeasured: PoolRollupRow;
   byUsage: PoolRollupRow[];
   byThroughput: PoolRollupRow[];
+  byChoice: PoolRollupRow[];
 }
 
 export function foldPoolDigest(
@@ -45,6 +47,7 @@ export function foldPoolDigest(
     unmeasured: single(inWindow, 'unmeasured', 'Unmeasured runs'),
     byUsage: rollup(inWindow, 'usage', poolUsageLabel).sort((a, b) => b.count - a.count),
     byThroughput: rollup(inWindow, 'throughput', throughputMeasureLabel).sort((a, b) => b.count - a.count),
+    byChoice: rollup(inWindow, 'choice', choiceLabel).sort((a, b) => a.key.localeCompare(b.key)),
   };
 }
 

@@ -102,6 +102,17 @@ export class PrDescriptionStore {
     return rows.map((r) => r.authored_at);
   }
 
+  /** When each agent's draft was taken for a part a person never described. → docs/spec/34-usage-metrics.md#who-decided */
+  listTakenDraftsSince(since: string): string[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT h.handed_at FROM pr_description_drafts h
+         WHERE h.handed_at >= ? AND NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = h.origin_ref)`,
+      )
+      .all(since) as { handed_at: string }[];
+    return rows.map((r) => r.handed_at);
+  }
+
   /** The whole chain, oldest first. What the part's panel draws behind the current one. */
   listDescriptionVersions(originRef: string): PrDescriptionVersion[] {
     const rows = this.ctx

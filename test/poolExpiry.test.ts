@@ -30,6 +30,7 @@ function digest(fleetId: string, publishedAt: string): PoolDigestDocument {
     byThroughput: [],
     poolableThroughput: ['reply-sent'],
     byFault: [],
+    byChoice: [],
   };
 }
 

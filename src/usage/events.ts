@@ -115,10 +115,6 @@ const EVENT_SOURCE = {
   'pet.edit': 'record',
 } as const satisfies Record<UsageEvent, UsageEventSource>;
 
-export const PERSON_OR_AGENT_CHOICES = [
-  { themselves: 'pr-description.create', agents: 'pr-description.accept' },
-] as const satisfies readonly { themselves: UsageEvent; agents: UsageEvent }[];
-
 export type UiUsageEvent = {
   [E in UsageEvent]: (typeof EVENT_SOURCE)[E] extends 'ui' ? E : never;
 }[UsageEvent];

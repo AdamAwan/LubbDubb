@@ -74,6 +74,14 @@ export class GoalCriteriaStore {
     return rows.map(rowToVersion);
   }
 
+  /** When each goal's first version was written. → docs/spec/34-usage-metrics.md#who-decided */
+  listFirstCriteria(): { originRef: string; at: string }[] {
+    const rows = this.ctx
+      .prep(`SELECT origin_ref, MIN(authored_at) AS at FROM goal_criteria GROUP BY origin_ref`)
+      .all() as { origin_ref: string; at: string }[];
+    return rows.map((r) => ({ originRef: r.origin_ref, at: r.at }));
+  }
+
   /** The whole chain, oldest first. What the goal page draws behind the current one. */
   listCriteriaVersions(originRef: string): GoalCriteriaVersion[] {
     const rows = this.ctx
