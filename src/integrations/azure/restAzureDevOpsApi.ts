@@ -104,23 +104,26 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listActivePullRequests(): Promise<AzPull[]> {
-    const data = await this.http.request<{ value: RawPull[] }>(
-      withApiVersion(`${this.repoUrl}/pullrequests`, { 'searchCriteria.status': 'active', $top: '100' }),
-    );
-    return data.value.map((p) => toPull(p, this.pullUrl(p.pullRequestId)));
+    const pulls = await this.http.pagedPulls<RawPull>(`${this.repoUrl}/pullrequests`, {
+      'searchCriteria.status': 'active',
+    });
+    return pulls.map((p) => toPull(p, this.pullUrl(p.pullRequestId)));
   }
 
   async listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]> {
-    const data = await this.http.request<{ value: RawClosedPull[] }>(
-      withApiVersion(`${this.repoUrl}/pullrequests`, {
+    const pulls = await this.http.pagedPulls<RawClosedPull>(
+      `${this.repoUrl}/pullrequests`,
+      {
         'searchCriteria.status': 'all',
         'searchCriteria.queryTimeRangeType': 'closed',
         'searchCriteria.minTime': since,
-        $top: '100',
-      }),
+      },
+      {
+        conditional: false,
+      },
     );
     const out: AzClosedPull[] = [];
-    for (const p of data.value) {
+    for (const p of pulls) {
       if (p.status !== 'completed' && p.status !== 'abandoned') continue;
       const closedAt = p.closedDate;
       if (!withinClosedWindow(closedAt, since)) continue;

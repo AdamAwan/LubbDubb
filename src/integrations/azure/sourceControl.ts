@@ -108,13 +108,16 @@ export class AzureDevOpsSourceControlIntegration
     try {
       const { api, prAuthor } = this.opts;
       const viewer = await api.viewerUniqueName();
-      let pulls = await api.listActivePullRequests();
+      const [active, closedPullRequests] = await Promise.all([
+        api.listActivePullRequests(),
+        this.recentlyClosed(viewer),
+      ]);
+      let pulls = active;
       if (prAuthor) {
         pulls = pulls.filter(
           (p) => sameIdentity(p.authorUniqueName, prAuthor) || viewerAssignment(p.reviewers, prAuthor) !== undefined,
         );
       }
-      const closedPullRequests = await this.recentlyClosed(viewer);
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
@@ -150,7 +153,7 @@ export class AzureDevOpsSourceControlIntegration
             url: p.url,
           };
           if (body !== undefined) pr.body = body;
-          const author = p.authorDisplayName || p.authorUniqueName;
+          const author = azAuthorName(p);
           if (author !== '') pr.author = author;
           if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
           const assignment = viewerAssignment(p.reviewers, viewer);
@@ -218,7 +221,7 @@ export class AzureDevOpsSourceControlIntegration
     const closed = await api.listRecentlyClosedPullRequests(since);
     closedSweep?.recordClosedSweep(new Date(now).toISOString());
     return closed
-      .filter((p) => !prAuthor || p.authorUniqueName === prAuthor)
+      .filter((p) => !prAuthor || sameIdentity(p.authorUniqueName, prAuthor))
       .map((p) => {
         const pr = mapClosedPull(p);
         if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
@@ -358,7 +361,12 @@ function stripLogTimestamp(line: string): string {
   return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, '');
 }
 
+function azAuthorName(p: { authorDisplayName?: string; authorUniqueName: string }): string {
+  return p.authorDisplayName || p.authorUniqueName;
+}
+
 export function mapClosedPull(p: AzClosedPull): PullRequest {
+  const author = azAuthorName(p);
   return {
     id: `pr_${p.pullRequestId}`,
     number: p.pullRequestId,
@@ -370,7 +378,7 @@ export function mapClosedPull(p: AzClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
-    ...(p.authorUniqueName === '' ? {} : { author: p.authorUniqueName }),
+    ...(author === '' ? {} : { author }),
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
     ...(p.reviewers === undefined ? {} : { assignees: namedReviewers(p.reviewers) }),
     url: p.url,

@@ -868,7 +868,8 @@ pull request with the footer alone.
   again under the ordinary cooldown.
 - **The operator's own version outranks it.** A hand-over is refused once a version exists, and
   `unpushedDrafts` skips any part that has one — **Write your own instead** stays on the page, and
-  what they write replaces the agent's body on the next pulse.
+  what they write replaces the agent's body on the next pulse. `pendingDrafts` skips it too, so a
+  hand-over the operator then answered themselves dispatches no agent whose draft could never ship.
 - **Whose description stood is counted, and reaches the pool.** A part's first version is a
   person's; a hand-over on a part nobody described — pressed or by `autoUseAgentDescriptions` — is the
   agent's. A revision is not a second choice. Locally, the ledger counts the first as an act and the
@@ -1175,7 +1176,8 @@ on the fleet's own pull request, with no answer yet, is accepted. A second tab p
 cannot assign somebody in the tracker behind an answer already recorded. An assignment still waiting on the
 tracker holds the ask as answered too (in memory, on the desk), so a "Nah" pressed in the meantime
 is refused rather than recorded against a person the tracker is about to have. Merged pull requests
-carry their author like open ones, so a self-assigned PR never offers its own author. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
+carry their author like open ones — on Azure the display name first, as the open list does, because that
+is the name the reviewer shortlist carries — so a self-assigned PR never offers its own author. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
 answer is one `pr_assign_asks` row ([14](14-persistence.md)).
 
 ### How long it has been waiting on a reviewer

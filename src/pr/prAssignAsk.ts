@@ -139,7 +139,10 @@ export class PrAssignDesk {
     this.inFlight.add(prNumber);
     try {
       const sent = await assignPr({ prNumber, personId });
-      if (!sent.ok) return { ok: false, refusal: 'the tracker did not take the assignment' };
+      if (!sent.ok) {
+        errors.record({ source: 'provider', message: `assigning PR #${prNumber} was refused by the tracker` });
+        return { ok: false, refusal: 'the tracker did not take the assignment' };
+      }
     } catch (err) {
       errors.record({ source: 'provider', message: `assigning PR #${prNumber} failed: ${(err as Error).message}` });
       return { ok: false, refusal: `the tracker refused: ${(err as Error).message}` };

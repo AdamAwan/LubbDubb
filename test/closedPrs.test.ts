@@ -440,6 +440,25 @@ test('the azure provider skips the lookup when the window is disabled, and filte
   );
 });
 
+test('the azure prAuthor filter on closed PRs ignores case, like the open-PR filter', async () => {
+  const integration = new AzureDevOpsSourceControlIntegration({
+    api: azApi([azClosed({ authorUniqueName: 'Alice@Acme.com' })], []),
+    prAuthor: 'alice@acme.com',
+    closedPrWindowMs: 3 * HOUR,
+    now: () => NOW,
+  });
+  assert.deepEqual(
+    (await integration.snapshot()).closedPullRequests?.map((p) => p.number),
+    [42],
+  );
+});
+
+test('mapClosedPull (azure) names the author as an open PR does — display name first', () => {
+  assert.equal(mapAzClosedPull(azClosed({ authorDisplayName: 'Alice Nkemelu' })).author, 'Alice Nkemelu');
+  assert.equal(mapAzClosedPull(azClosed({ authorDisplayName: '' })).author, 'alice@acme.com');
+  assert.equal(mapAzClosedPull(azClosed({ authorDisplayName: '', authorUniqueName: '' })).author, undefined);
+});
+
 test('mapClosedPull (azure) blanks the signals only an active PR has', () => {
   const mapped = mapAzClosedPull(azClosed({ merged: false }));
   assert.equal(mapped.ciStatus, 'unknown');

@@ -89,6 +89,13 @@ so a month-long outage is not an unbounded query. Three properties carry the beh
   read overlaps the last `closedPrWindowMs` anyway, so a close the provider reported late is still
   picked up by the following pulse.
 
+- **A read is the whole answer, or it is no answer.** Both providers page the list to its end — Azure by
+  `$skip` in pages of 100, keeping one row per pull request since a list that shifts between pages repeats one — because a read cut at one page still answers, still moves the mark, and puts
+  every close past the first page out of reach for good. The same holds for the open list.
+- **The author filter is the open list's.** On Azure `prAuthor` is compared with `sameIdentity`, which
+  ignores case, on both lists; an exact match on the closed list alone drops every merge whose uniqueName
+  Azure cased differently, while the open PRs keep showing.
+
 A deployment where the lookup is disabled (`closedPrWindowMs: 0`) reads nothing and writes no mark.
 
 ## Capabilities and providers

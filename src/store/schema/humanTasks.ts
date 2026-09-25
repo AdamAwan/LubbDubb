@@ -32,6 +32,4 @@ CREATE TABLE IF NOT EXISTS human_tasks (
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
-
-CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref);
 `;

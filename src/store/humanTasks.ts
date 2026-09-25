@@ -11,6 +11,10 @@ export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
   human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'`, dismissed_at: `TEXT` },
 };
 
+export function indexHumanTasksByKind(db: Database.Database): void {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref)');
+}
+
 export function declineRetiredOutcomeRows(db: Database.Database, now: string): void {
   db.prepare(
     `UPDATE human_tasks SET status='declined', resolution=?, updated_at=?, resolved_at=?

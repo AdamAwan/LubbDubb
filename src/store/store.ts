@@ -16,7 +16,7 @@ import { RemedyStore } from './remedies.js';
 import { McpCallStore } from './mcpCalls.js';
 import { ApiErrorStore } from './apiErrors.js';
 import { SurfaceReachStore } from './surfaceReach.js';
-import { declineRetiredOutcomeRows, HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
+import { declineRetiredOutcomeRows, HumanTaskStore, HUMAN_TASK_COLUMNS, indexHumanTasksByKind } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import {
   releaseValidationPlansFromBeforeTheGate,
@@ -109,6 +109,7 @@ function migrate(db: Database.Database, clock: Clock): void {
   ]) {
     addedColumns.push(...ensureColumns(db, columns));
   }
+  indexHumanTasksByKind(db);
   if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(db);
   if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(db);
   if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(db, clock());

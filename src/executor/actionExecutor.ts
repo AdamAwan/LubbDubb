@@ -448,7 +448,11 @@ export class ActionExecutor {
   private abandonUnstarted(task: Task): void {
     const current = this.deps.store.tasks.getTask(task.id);
     if (current && isActiveTask(current)) this.deps.store.tasks.updateTask(task.id, { status: 'interrupted' });
-    if (task.branch) void this.deps.worktrees.remove(task.branch).catch(() => {});
+    if (!task.branch) return;
+    const failed = `releasing ${task.branch} after a failed dispatch: `;
+    void this.deps.worktrees
+      .remove(task.branch)
+      .catch((err: unknown) => this.deps.errors.record({ source: 'cycle', message: failed + (err as Error).message }));
   }
 
   private recordDispatchTask(
