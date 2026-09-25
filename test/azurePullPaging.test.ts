@@ -29,3 +29,27 @@ test('the azure closed-PR read pages past the first hundred', async () => {
   assert.equal(closed.length, 150);
   assert.deepEqual(skips, [0, 100]);
 });
+
+test('a pull request the list shifts onto two pages is read once', async () => {
+  const pull = (id: number) => ({
+    pullRequestId: id,
+    title: `PR ${id}`,
+    sourceRefName: `refs/heads/feat/${id}`,
+    targetRefName: 'refs/heads/main',
+  });
+  const pages = [Array.from({ length: 100 }, (_, i) => pull(i + 1)), [pull(100), pull(101)]];
+  let call = 0;
+  const fetchImpl: typeof fetch = async () =>
+    new Response(JSON.stringify({ value: pages[call++] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  const api = new RestAzureDevOpsApi('org', 'proj', 'repo', { header: async () => 'Bearer t' }, fetchImpl);
+
+  const active = await api.listActivePullRequests();
+
+  assert.deepEqual(
+    active.map((p) => p.pullRequestId),
+    Array.from({ length: 101 }, (_, i) => i + 1),
+  );
+});

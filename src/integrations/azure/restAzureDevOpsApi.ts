@@ -104,14 +104,14 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listActivePullRequests(): Promise<AzPull[]> {
-    const pulls = await this.http.pagedValues<RawPull>(`${this.repoUrl}/pullrequests`, {
+    const pulls = await this.http.pagedPulls<RawPull>(`${this.repoUrl}/pullrequests`, {
       'searchCriteria.status': 'active',
     });
     return pulls.map((p) => toPull(p, this.pullUrl(p.pullRequestId)));
   }
 
   async listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]> {
-    const pulls = await this.http.pagedValues<RawClosedPull>(
+    const pulls = await this.http.pagedPulls<RawClosedPull>(
       `${this.repoUrl}/pullrequests`,
       {
         'searchCriteria.status': 'all',
