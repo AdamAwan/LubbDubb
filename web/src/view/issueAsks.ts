@@ -1,4 +1,4 @@
-import type { AppState } from '../types.js';
+import type { AppState, Issue } from '../types.js';
 import { watchBucket } from '../worldBuckets.js';
 import { askLine, opensAt } from './needLines.js';
 import type { NeedDraft } from './needsYou.js';
@@ -52,17 +52,22 @@ export function sittingRows(state: AppState): NeedDraft[] {
   return rows;
 }
 
+export function awaitedProfile(issue: Issue): string | null {
+  return issue.appraisal?.awaitingProfileAnswer === true ? issue.appraisal.proposedProfile : null;
+}
+
 export function profileRows(state: AppState): NeedDraft[] {
   const rows: NeedDraft[] = [];
   for (const issue of state.world.issues) {
     const appraisal = issue.appraisal;
-    if (!appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) continue;
+    const proposed = awaitedProfile(issue);
+    if (!appraisal || proposed === null) continue;
     const goalRef = `issue:${issue.number}`;
     rows.push({
       id: `profile:${goalRef}`,
       kind: 'profile',
       group: 'yours',
-      title: askLine(`Wants to run on “${appraisal.proposedProfile}”`, goalRef, state),
+      title: askLine(`Wants to run on “${proposed}”`, goalRef, state),
       goalRef,
       originRef: goalRef,
       opens: opensAt(goalRef, state),
@@ -100,8 +105,14 @@ export function placementRows(state: AppState): NeedDraft[] {
         agentLabel: null,
         holding: 0,
         raisedAt: issue.appraisal?.decidedAt ?? '',
+        placementField: ask.field,
+        ...(ask.field === 'areaPath' ? { verb: 'Pick a board' } : {}),
       });
     }
   }
   return rows;
+}
+
+export function placementAskOf(row: { placementField?: 'parent' | 'areaPath' }, issue: Issue | undefined) {
+  return issue?.appraisal?.placement.find((p) => p.field === row.placementField);
 }

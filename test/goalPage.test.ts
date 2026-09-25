@@ -863,7 +863,7 @@ test('an ask is drawn in the pane it is about, and stays a row everywhere else',
       /* About the goal as a whole — no pane owns it, so it can only ever be a row. */
       planAsk({ id: 'profile:1', kind: 'profile' }),
       planAsk({ id: 'task:check', kind: 'validate' }),
-      planAsk({ id: 'placement:parent:1', kind: 'placement' }),
+      planAsk({ id: 'placement:parent:1', kind: 'placement', placementField: 'parent' }),
     ],
   };
   const escalations = [planEscalation('e:1', 'p')];

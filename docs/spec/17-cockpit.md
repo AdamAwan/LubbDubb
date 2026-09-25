@@ -2334,6 +2334,29 @@ the write between them. Embedded, never redrawn: a second wiring is a second way
 `buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
 the console reaching into their class.
 
+#### An ask with a proposal is answered on its row
+
+The profile ask and the area-path ask arrive with the appraisal's **proposed answer** already on
+them, and opening the ask panel only to press "Use it" is a detour the operator takes on every goal.
+So on the goal page's row form (`NeedsBand` with `line`), `quickAnswer`
+(`web/src/view/quickAnswer.ts`) reads the proposal off the issue and the row draws:
+
+- **the text as the opener** — pressing it still opens the ask panel with the whole of the ask;
+- **`✓ <proposed>`**, which makes the same write the panel's "Use …" makes (`setIssueProfile`,
+  `setIssueAreaPath`);
+- **Change…**, a list of the other profiles or area paths that writes the one picked — drawn only
+  when there is another to pick.
+
+The parent ask is not among them: it is never a row on the goal page (the band at the foot draws
+it). The answers the panel alone offers ("Leave it unpinned", "Not applicable") stay in the panel:
+the row covers the common answer, never every answer.
+
+A placement row carries the field it is about as `placementField`, set where `placementRows` mints
+it, and every reader — the goal page's split, the ask body, `quickAnswer` — reads that rather than
+parsing the row's id. The area-path row also carries its own `verb`, **Pick a board**, over the
+placement kind's "Pick a parent": the kind spans both fields, and the verb names what the press is
+for.
+
 #### Saying the sentence a refusal asks for
 
 A route that refuses for a reason the operator can act on needs two things on the glass, and for a
