@@ -6,6 +6,7 @@ import type { Issue } from '../types.js';
 import { AsyncButton, useAsyncAction } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
+import { PrDescription } from '../components/PrDescription.js';
 import { GOAL_ANCHOR } from '../view/goalPage.js';
 import { scrollToAnchor } from './jump.js';
 import { Ref } from '../components/refs.js';
@@ -352,7 +353,7 @@ function assignedBody(row: NeedRow, view: CockpitView): ReactNode {
   );
 }
 
-function describeBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+function describeBody(row: NeedRow, view: CockpitView): ReactNode {
   const waiting = (view.state.undescribedParts ?? []).find((p) => `describe:${p.originRef}` === row.id);
   if (waiting === undefined) return null;
   const part = (view.state.planParts ?? []).find((p) => waiting.originRef.endsWith(`:part:${p.slug}`));
@@ -369,17 +370,12 @@ function describeBody(row: NeedRow, view: CockpitView, actions: CockpitActions):
         it above the coordinates.
       </p>
       <p className="cn-tick">
-        Read the change first, then write it in your own words on the pull request&rsquo;s own page — what you write
-        goes to the top of its body.
+        Read the change first, then write it in your own words — what you write goes to the top of its body.
       </p>
-      {/* The act, not just the situation, and it lands on the page the field is on.
-          → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */}
-      <PrPress
-        prNumber={waiting.prNumber}
-        label="Describe it"
-        refTitle="Read the change you are describing"
-        actions={actions}
-      />
+      {/* The pull request's own description card, so the ask is answered where it is asked.
+          → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer */}
+      <PrDescription prNumber={waiting.prNumber} open desktopFolder={view.state.config.desktopFolder} now={view.now} />
+      <RefLine to={`pr:${waiting.prNumber}`} title="Read the change you are describing" />
     </>
   );
 }

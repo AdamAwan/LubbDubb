@@ -50,6 +50,8 @@ export interface PullRequest {
   assignees?: PrPerson[];
   changedFiles?: number;
   url?: string;
+  /** Undefined where the provider did not read it, which is not an empty body. */
+  body?: string;
 }
 
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
@@ -2364,6 +2366,8 @@ export interface PrDescriptionVersion {
   authoredAt: string;
   checkedAt: string | null;
   findings: DescriptionFinding[];
+  /** The operator pressed to leave this check's findings as they are. A re-check clears it. */
+  dismissedAt: string | null;
 }
 
 /**

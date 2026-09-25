@@ -59,7 +59,15 @@ const STOOD: Readonly<Record<'clean' | 'gaps' | 'contradicted', { label: string;
  * worth saying about a description against its diff is none of them. So a finding
  * stands on its own and names a question only where it happens to be one.
  */
-function Checked({ version, now }: { version: PrDescriptionVersion; now: number }): JSX.Element | null {
+function Checked({
+  version,
+  now,
+  onDismiss,
+}: {
+  version: PrDescriptionVersion;
+  now: number;
+  onDismiss: () => Promise<void>;
+}): JSX.Element | null {
   if (version.checkedAt === null) return null;
   const stood = version.findings.some((f) => f.kind === 'contradicted')
     ? 'contradicted'
@@ -71,6 +79,9 @@ function Checked({ version, now }: { version: PrDescriptionVersion; now: number 
       <div className="cn-desc-check-hdr">
         <Tag tone={STOOD[stood].tone}>{STOOD[stood].label}</Tag>
         <span className="cn-desc-when">{relTime(version.checkedAt, now)}</span>
+        {version.dismissedAt !== null && (
+          <span className="cn-desc-when">· you left it as is {relTime(version.dismissedAt, now)}</span>
+        )}
       </div>
       {version.findings.length === 0 && (
         <p className="cn-desc-clean">Nothing it could hold against the diff. A clean check, not an unchecked one.</p>
@@ -88,6 +99,14 @@ function Checked({ version, now }: { version: PrDescriptionVersion; now: number 
             </li>
           ))}
         </ul>
+      )}
+      {/* → docs/spec/07-pull-requests.md#leaving-it-as-is */}
+      {version.findings.length > 0 && version.dismissedAt === null && (
+        <div className="cn-desc-presses">
+          <AsyncButton ghost onClick={onDismiss}>
+            Leave it as is
+          </AsyncButton>
+        </div>
       )}
     </div>
   );
@@ -165,7 +184,15 @@ function HandedOver({ handedOver, now }: { handedOver: PrDescriptionDraft; now: 
   );
 }
 
-function CurrentVersion({ current, now }: { current: PrDescriptionVersion; now: number }): JSX.Element {
+function CurrentVersion({
+  current,
+  now,
+  onDismiss,
+}: {
+  current: PrDescriptionVersion;
+  now: number;
+  onDismiss: () => Promise<void>;
+}): JSX.Element {
   return (
     <div className="cn-desc-current">
       <blockquote className="cn-desc-text">{current.text}</blockquote>
@@ -177,7 +204,7 @@ function CurrentVersion({ current, now }: { current: PrDescriptionVersion; now: 
       {current.checkedAt === null && (
         <p className="cn-desc-pending">An agent is reading this against the diff. It will only flag what matters.</p>
       )}
-      <Checked version={current} now={now} />
+      <Checked version={current} now={now} onDismiss={onDismiss} />
     </div>
   );
 }
@@ -188,12 +215,14 @@ function DescriptionReading({
   hiddenDraft,
   revealed,
   now,
+  onDismiss,
 }: {
   current: PrDescriptionVersion | null;
   handedOver: PrDescriptionDraft | null;
   hiddenDraft: string | null;
   revealed: boolean;
   now: number;
+  onDismiss: () => Promise<void>;
 }): JSX.Element {
   return (
     <>
@@ -208,7 +237,7 @@ function DescriptionReading({
         </div>
       )}
 
-      {current !== null && <CurrentVersion current={current} now={now} />}
+      {current !== null && <CurrentVersion current={current} now={now} onDismiss={onDismiss} />}
     </>
   );
 }
@@ -368,8 +397,7 @@ export function PrDescription({
   desktopFolder: string | null;
   now: number;
 }): JSX.Element | null {
-  const [writing, setWriting] = useState(false);
-  const [text, setText] = useState('');
+  const [text, setText] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
   const held = usePrDescription(prNumber);
@@ -382,15 +410,14 @@ export function PrDescription({
   const checkPrompt = part === null ? null : descriptionPrompt(Number(part[1]), part[2] ?? '');
 
   const submit = async (): Promise<void> => {
-    const body = text.trim();
+    const body = (text ?? '').trim();
     if (body === '') {
       setRefusal('There is nothing here to save. Say what the pull request does, or leave it and it will carry none.');
       return;
     }
     setRefusal(null);
     await api.writePrDescription(prNumber, { text: body });
-    setText('');
-    setWriting(false);
+    setText(null);
     await held.reload();
   };
 
@@ -409,34 +436,35 @@ export function PrDescription({
         {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}
       </h3>
 
-      {!writing && (
+      {text === null && (
         <DescriptionReading
           current={current}
           handedOver={handedOver}
           hiddenDraft={hiddenDraft}
           revealed={revealed}
           now={now}
+          onDismiss={() => api.dismissPrDescriptionFindings(prNumber).then(held.reload)}
         />
       )}
 
-      {writing && (
+      {text !== null && (
         <DescriptionForm
           text={text}
           setText={setText}
           refusal={refusal}
-          onCancel={() => setWriting(false)}
+          onCancel={() => setText(null)}
           onSubmit={submit}
         />
       )}
 
-      {!writing && (
+      {text === null && (
         <DescriptionPresses
           current={current}
           handedOver={handedOver}
           hiddenDraft={hiddenDraft}
           revealed={revealed}
           setRevealed={setRevealed}
-          onWrite={() => setWriting(true)}
+          onWrite={() => setText(current?.text ?? '')}
           handOff={handOff}
           desktopFolder={desktopFolder}
           checkPrompt={checkPrompt}

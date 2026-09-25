@@ -67,6 +67,8 @@ export interface AzureDevOpsApi {
   setWorkItemAreaPath(id: number, areaPath: string): Promise<void>;
   createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ pullRequestId: number }>;
   setPullTitle(pullRequestId: number, title: string): Promise<void>;
+  /** One pull request's own read: the list truncates `description`, so it cannot answer this. */
+  getPullBody(pullRequestId: number): Promise<string>;
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
@@ -94,6 +96,8 @@ export interface AzPull {
   isDraft: boolean;
   mergeStatus: string;
   reviewers: AzReviewer[];
+  /** Truncated by the list endpoint; `getPullBody` reads it whole. */
+  description?: string;
 }
 
 export interface AzReviewer {

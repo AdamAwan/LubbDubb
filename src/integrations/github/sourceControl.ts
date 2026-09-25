@@ -157,6 +157,7 @@ export class GitHubSourceControlIntegration
           pr.assignees = loginPeople(p.assigneeLogins);
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
+          if (p.body !== undefined) pr.body = p.body;
           return pr;
         }),
       );

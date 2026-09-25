@@ -206,6 +206,7 @@ const realApi = {
     post<{ ok: true; version: PrDescriptionVersion }>(`/api/prs/${prNumber}/description`, body),
   handOffPrDescription: (prNumber: number) =>
     post<{ ok: true; draft: PrDescriptionDraft }>(`/api/prs/${prNumber}/description/handoff`),
+  dismissPrDescriptionFindings: (prNumber: number) => post<{ ok: true }>(`/api/prs/${prNumber}/description/dismiss`),
   setFeaturePaused: (number: number, paused: boolean) =>
     post<{ ok: true; paused: boolean }>(`/api/features/${number}/pause`, { paused }),
   getRetrospective: (ref: string) =>

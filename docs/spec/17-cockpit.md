@@ -472,8 +472,9 @@ So there is no pick to make and no panel to point anywhere:
 - **A part's card opens its pull request.** Clicking anywhere on a part that has one opens that
   page, and the card's title carries the same press for a keyboard. A control _inside_ the card —
   the pull request's `Ref`, the way into the agent — is its own press and never also opens the page.
-- **The `describe` ask opens it too**, as its own destination rather than a pane of the goal
-  ([which pane opens](#which-pane-opens)). The ask keeps the _part's_ origin, which is what it is
+- **The `describe` ask carries the same card**, so the description is written from the ask itself —
+  in the rail's band and in focus mode alike — and its `Ref` opens the page as its own destination
+  rather than a pane of the goal ([which pane opens](#which-pane-opens)). The ask keeps the _part's_ origin, which is what it is
   about and what the surfaces that mark the part read; the pull request's number rides beside it as
   the thing the press opens.
 

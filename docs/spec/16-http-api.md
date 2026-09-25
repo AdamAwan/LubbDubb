@@ -275,6 +275,12 @@ the desk pushes it. With no draft the row is created empty and rule `pr-describe
 operator has already described — their own version outranks the agent's.
 → [07](07-pull-requests.md#the-agents-draft)
 
+### `POST /api/prs/:number/description/dismiss`
+
+Leaves the current version's findings as they are: stamps `dismissed_at`, idempotent, and its rail row
+goes. A `400` where the pull request's newest description has no findings.
+→ [07](07-pull-requests.md#leaving-it-as-is)
+
 ### `GET /api/state`
 
 The cockpit snapshot, whole or in named parts. See [_The state snapshot_](#the-state-snapshot) below

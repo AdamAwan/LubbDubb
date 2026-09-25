@@ -13,11 +13,13 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { AUTOMATION_NOTE, HUMAN_NOTE, renderPrFooter } from '../src/pr/prFooter.js';
 import {
   composeDescribedBody,
+  descriptionInBody,
   descriptionRefusal,
   descriptionStanding,
   PR_DESCRIPTION,
 } from '../src/pr/prDescription.js';
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
+import { PrBodyEditDesk } from '../src/pr/prBodyEditDesk.js';
 import { findTask } from './support/tasks.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -862,6 +864,25 @@ test('every description the operator writes is checked by an agent without askin
     assert.notEqual(current.checkedAt, null, 'the findings are on the pull request’s page');
     assert.equal(current.findings.length, 2);
 
+    const dismissed = await app.inject({ method: 'POST', url: '/api/prs/1/description/dismiss' });
+    assert.equal(dismissed.statusCode, 200, dismissed.body);
+    assert.deepEqual(buildStateSnapshot(system).descriptionFeedback, [], 'left as is, it stops asking');
+    const reread = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
+    const kept = (reread.json() as { current: { dismissedAt: string | null; findings: unknown[] } }).current;
+    assert.notEqual(kept.dismissedAt, null);
+    assert.equal(kept.findings.length, 2, 'the findings stay readable on the page');
+    system.store.prDescriptions.recordCheck({
+      id: versionId,
+      findings: [{ kind: 'gap', note: 'The migration drops the old column.', question: null }],
+    });
+    assert.equal(
+      buildStateSnapshot(system).descriptionFeedback.length,
+      1,
+      'a re-check is a new reading and asks again',
+    );
+    const stray404 = await app.inject({ method: 'POST', url: '/api/prs/999/description/dismiss' });
+    assert.equal(stray404.statusCode, 400, 'a pull request with nothing to dismiss is refused');
+
     const clean = system.store.prDescriptions.appendDescription({
       originRef: 'issue:182:part:cursor',
       text: 'The cursor is now written; reading it back is the next part.',
@@ -873,6 +894,115 @@ test('every description the operator writes is checked by an agent without askin
     assert.deepEqual(system.store.prDescriptions.uncheckedDescriptions(), [], 'and is not checked again');
   } finally {
     await app.close();
+    system.store.close();
+  }
+});
+
+// → docs/spec/07-pull-requests.md#a-description-written-on-the-provider-is-adopted
+test('the text above the footer is read back as the description, whatever the provider did to it', () => {
+  const footer = renderPrFooter({ issueNumber: 12, issueTitle: 'Resume the sync', position: 1, total: 1 });
+
+  assert.equal(descriptionInBody(footer, footer), null, 'the footer alone carries no description');
+  assert.equal(descriptionInBody('', footer), null);
+  assert.equal(
+    descriptionInBody(composeDescribedBody('The cursor is read back.', footer), footer),
+    'The cursor is read back.',
+    'a body the harness composed reads back as the text it was composed from',
+  );
+  assert.equal(
+    descriptionInBody(`Written on GitHub.\r\n\r\n${footer.replace(/\n/g, '\r\n')}`, footer),
+    'Written on GitHub.',
+    'line endings are the provider\u2019s',
+  );
+  const reflowed = footer.replace('Relates to', 'Relates  to');
+  assert.equal(
+    descriptionInBody(`Written on Azure.\n\n${reflowed}`, footer),
+    'Written on Azure.',
+    'a footer somebody touched is still found by its rule and marker',
+  );
+  assert.equal(descriptionInBody('No footer at all.', footer), 'No footer at all.');
+});
+
+test('a description written straight onto the pull request is adopted, checked, and marked as a person\u2019s', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-desc-'));
+  const sink = recordingSink();
+  const system = manualSystem(dir, sink);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    const tail = sink.opened[0]!.body;
+    system.connector.inject({ kind: 'new_pr', number: 1, title: 'read the cursor back', branch: 'issue/182/cursor' });
+    system.connector.inject({ kind: 'pr_body_edited', prNumber: 1, body: tail });
+    await system.harness.runCycle('manual');
+    assert.equal(
+      system.store.prDescriptions.currentDescription('issue:182:part:cursor'),
+      null,
+      'the footer alone is not a description',
+    );
+
+    system.connector.inject({
+      kind: 'pr_body_edited',
+      prNumber: 1,
+      body: `A restart replays the whole feed, which is the bug people see.\r\n\r\n${tail}`,
+    });
+    await system.harness.runCycle('manual');
+
+    const adopted = system.store.prDescriptions.currentDescription('issue:182:part:cursor');
+    assert.equal(adopted?.text, 'A restart replays the whole feed, which is the bug people see.');
+    assert.equal(adopted?.author, null, 'the provider does not say who edited a body');
+    assert.deepEqual(buildStateSnapshot(system).undescribedParts, [], 'written on the provider is written');
+
+    assert.equal(sink.bodies.length, 1, 'pushed back, reformatted');
+    assert.equal(
+      sink.bodies[0]!.body,
+      composeDescribedBody('A restart replays the whole feed, which is the bug people see.', tail),
+      'with the human mark between the text and the footer',
+    );
+
+    const check = findTask(system.store, (t) => t.originRef === 'issue:182:describe-check:1');
+    assert.ok(check, 'checked against the diff exactly as one written in the cockpit');
+
+    system.connector.inject({ kind: 'pr_body_edited', prNumber: 1, body: sink.bodies[0]!.body });
+    await system.harness.runCycle('manual');
+    assert.equal(
+      system.store.prDescriptions.listDescriptionVersions('issue:182:part:cursor').length,
+      1,
+      'the harness\u2019s own push is never adopted back',
+    );
+    assert.equal(sink.bodies.length, 1);
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a stale world read is never taken for an edit', () => {
+  const system = systemWith();
+  try {
+    const footer = renderPrFooter({ issueNumber: 182, issueTitle: 'Ticket sync rewrite', position: 1, total: 1 });
+    system.store.prDescriptions.recordPrBody({ originRef: 'issue:182:part:cursor', prNumber: 1, tail: footer });
+    const desk = new PrBodyEditDesk({ store: system.store });
+    const pr = {
+      id: 'pr_1',
+      number: 1,
+      title: 't',
+      branch: 'b',
+      ciStatus: 'passing' as const,
+      unresolvedComments: [],
+      body: composeDescribedBody('An old body from before the push.', footer),
+    };
+
+    desk.run({ takenAt: 'now', pullRequests: [pr], issues: [], staleSources: ['sourceControl:azure'] });
+    assert.equal(system.store.prDescriptions.currentDescription('issue:182:part:cursor'), null);
+
+    desk.run({ takenAt: 'now', pullRequests: [pr], issues: [] });
+    assert.equal(
+      system.store.prDescriptions.currentDescription('issue:182:part:cursor')?.text,
+      'An old body from before the push.',
+    );
+  } finally {
     system.store.close();
   }
 });

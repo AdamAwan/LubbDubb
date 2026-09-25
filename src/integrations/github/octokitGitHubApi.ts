@@ -171,6 +171,7 @@ export class OctokitGitHubApi implements GitHubApi {
       labels: p.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
       assigneeLogins: assigneeLogins(p.assignees),
       updatedAt: p.updated_at,
+      body: p.body ?? '',
     }));
   }
 

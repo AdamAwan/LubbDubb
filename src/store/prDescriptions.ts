@@ -24,6 +24,7 @@ import type { StoreContext } from './context.js';
 export const PR_DESCRIPTION_COLUMNS: ColumnMigrations = {
   pr_descriptions: {
     pushed_at: 'TEXT',
+    dismissed_at: 'TEXT',
   },
 };
 
@@ -66,6 +67,7 @@ export class PrDescriptionStore {
         authoredAt: this.ctx.now(),
         checkedAt: null,
         findings: [],
+        dismissedAt: null,
       };
       this.ctx
         .prep(
@@ -232,6 +234,7 @@ export class PrDescriptionStore {
            JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
            JOIN pr_description_findings f ON f.description_id = d.id
           WHERE d.checked_at IS NOT NULL
+            AND d.dismissed_at IS NULL
             AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
           GROUP BY d.id
           ORDER BY d.checked_at ASC`,
@@ -298,10 +301,22 @@ export class PrDescriptionStore {
             question: finding.question,
           });
       }
-      this.ctx.prep(`UPDATE pr_descriptions SET checked_at=@checkedAt WHERE id=@id`).run({ id: input.id, checkedAt });
-      return { ...this.toVersion(row), checkedAt, findings: [...input.findings] };
+      this.ctx
+        .prep(`UPDATE pr_descriptions SET checked_at=@checkedAt, dismissed_at=NULL WHERE id=@id`)
+        .run({ id: input.id, checkedAt });
+      return { ...this.toVersion(row), checkedAt, findings: [...input.findings], dismissedAt: null };
     });
     return write();
+  }
+
+  /**
+   * The operator's press to leave a check's findings as they are. Idempotent — a second
+   * press keeps the first one's stamp. → docs/spec/07-pull-requests.md#leaving-it-as-is
+   */
+  dismissFindings(id: string): void {
+    this.ctx
+      .prep(`UPDATE pr_descriptions SET dismissed_at=COALESCE(dismissed_at, @at) WHERE id=@id`)
+      .run({ id, at: this.ctx.now() });
   }
 
   /**
@@ -342,6 +357,31 @@ export class PrDescriptionStore {
       prNumber: r.pr_number,
       body: composeDescribedBody(r.text, r.tail),
     }));
+  }
+
+  /**
+   * The parts on these pull requests, with the text the harness last put above each
+   * footer — the newest version, else a handed draft, else nothing. What a body read
+   * back off the provider is compared against.
+   * → docs/spec/07-pull-requests.md#a-description-written-on-the-provider-is-adopted
+   */
+  bodiesOnRecord(
+    prNumbers: readonly number[],
+  ): { originRef: string; prNumber: number; tail: string; standing: string }[] {
+    if (prNumbers.length === 0) return [];
+    const rows = this.ctx
+      .prep(
+        `SELECT b.origin_ref AS origin_ref, b.pr_number AS pr_number, b.tail AS tail,
+                COALESCE(d.text, CASE WHEN h.handed_at IS NOT NULL THEN h.text END, '') AS standing
+           FROM pr_description_bodies b
+           LEFT JOIN pr_descriptions d ON d.origin_ref = b.origin_ref
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = b.origin_ref)
+           LEFT JOIN pr_description_drafts h ON h.origin_ref = b.origin_ref
+          WHERE b.pr_number IN (SELECT value FROM json_each(?))
+          ORDER BY b.opened_at ASC`,
+      )
+      .all(JSON.stringify(prNumbers)) as { origin_ref: string; pr_number: number; tail: string; standing: string }[];
+    return rows.map((r) => ({ originRef: r.origin_ref, prNumber: r.pr_number, tail: r.tail, standing: r.standing }));
   }
 
   /**
@@ -458,6 +498,7 @@ export class PrDescriptionStore {
       authoredAt: r.authored_at,
       checkedAt: r.checked_at,
       findings: r.checked_at === null ? [] : this.findingsOf(r.id),
+      dismissedAt: r.dismissed_at,
     };
   }
 }
@@ -471,6 +512,7 @@ interface DescriptionRow {
   author: string | null;
   authored_at: string;
   checked_at: string | null;
+  dismissed_at: string | null;
 }
 
 interface DraftRow {

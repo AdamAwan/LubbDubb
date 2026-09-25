@@ -1,3 +1,4 @@
+import { computeApproved, namedReviewers, viewerApproved, viewerAssignment } from './reviewers.js';
 import { sameIdentity } from '../../pr/prOwnership.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
@@ -16,15 +17,7 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type {
-  CiCheck,
-  CiStatus,
-  MergeableState,
-  PrPerson,
-  PrReviewThread,
-  PullRequest,
-  ViewerAssignment,
-} from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
@@ -51,7 +44,6 @@ import type {
   AzClosedPull,
   AzPolicyEvaluation,
   AzPull,
-  AzReviewer,
   AzThread,
   AzTimelineRecord,
   AzureDevOpsApi,
@@ -103,6 +95,7 @@ export class AzureDevOpsSourceControlIntegration
   private lastGoodClosed: PullRequest[] | null = null;
   private mergeCommits = new Map<number, string>();
   private readonly policyReadings = new HydrationCache<{ token: string; evals: AzPolicyEvaluation[] }>();
+  private readonly bodyReadings = new HydrationCache<{ listed: string; body: string }>();
 
   constructor(private readonly opts: AzureSourceControlOpts) {}
 
@@ -125,9 +118,10 @@ export class AzureDevOpsSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [threads, labels] = await Promise.all([
+          const [threads, labels, body] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
             api.listPullLabels(p.pullRequestId),
+            this.pullBody(p, hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId))),
           ]);
           const policyEvals = await this.policyEvaluations(
             p,
@@ -155,6 +149,7 @@ export class AzureDevOpsSourceControlIntegration
             labels,
             url: p.url,
           };
+          if (body !== undefined) pr.body = body;
           const author = p.authorDisplayName || p.authorUniqueName;
           if (author !== '') pr.author = author;
           if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
@@ -169,6 +164,7 @@ export class AzureDevOpsSourceControlIntegration
       );
 
       this.policyReadings.retain(pulls.map((p) => p.pullRequestId));
+      this.bodyReadings.retain(pulls.map((p) => p.pullRequestId));
       this.lastGood = pullRequests;
       this.lastGoodClosed = closedPullRequests;
       return { pullRequests, closedPullRequests };
@@ -179,6 +175,24 @@ export class AzureDevOpsSourceControlIntegration
       });
       if (this.lastGood === null) throw err;
       return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
+    }
+  }
+
+  private async pullBody(p: AzPull, maxAgeMs: number): Promise<string | undefined> {
+    if (p.description === undefined) return undefined;
+    if (p.description === '') return '';
+    const hit = this.bodyReadings.get(p.pullRequestId, maxAgeMs);
+    if (hit !== undefined && hit.listed === p.description) return hit.body;
+    try {
+      const body = await this.opts.api.getPullBody(p.pullRequestId);
+      this.bodyReadings.set(p.pullRequestId, { listed: p.description, body });
+      return body;
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} could not read the body of PR !${p.pullRequestId}: ${(err as Error).message}`,
+      });
+      return undefined;
     }
   }
 
@@ -275,6 +289,8 @@ export class AzureDevOpsSourceControlIntegration
 
   async setPullBody(input: PrBodyInput): Promise<SendResult> {
     await this.opts.api.setPullBody(input.prNumber, input.body);
+    // The listed prefix may not move with the push, and a cached old body reads as an edit.
+    this.bodyReadings.delete(input.prNumber);
     return { ok: true };
   }
 
@@ -470,30 +486,6 @@ function checkStatusOf(status: string | null): CiCheck['status'] | null {
   if (status === 'queued' || status === 'running') return 'pending';
   if (status === 'approved') return 'passing';
   return null;
-}
-
-function viewerAssignment(reviewers: readonly AzReviewer[], viewer: string): ViewerAssignment | undefined {
-  if (viewer === '') return undefined;
-  const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
-  if (mine === undefined) return undefined;
-  return mine.isRequired ? 'reviewer-required' : 'reviewer-optional';
-}
-
-function namedReviewers(reviewers: readonly AzReviewer[]): PrPerson[] {
-  return reviewers.flatMap((r) =>
-    r.isContainer || r.id === undefined ? [] : [{ id: r.id, name: r.displayName ?? r.uniqueName }],
-  );
-}
-
-function viewerApproved(reviewers: readonly AzReviewer[], viewer: string): boolean {
-  if (viewer === '') return false;
-  const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
-  return mine !== undefined && mine.vote >= 5;
-}
-
-export function computeApproved(votes: number[]): boolean {
-  if (votes.some((v) => v < 0)) return false;
-  return votes.some((v) => v >= 5);
 }
 
 export function buildReviewThreads(threads: AzThread[], ourReplies: ReadonlySet<string> = new Set()): PrReviewThread[] {

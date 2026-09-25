@@ -725,15 +725,46 @@ Two things follow, and both are load-bearing:
   is written **after** the send, so a push that throws is retried on the next pulse rather than lost.
 - **The body is recomposed, never patched.** `open_pr` records the footer it wrote in
   `pr_description_bodies`, and a description is put in front of _that_, not in front of whatever the
-  body currently says. Reading the body back off the
-  provider would make the provider a second source of truth for a string the harness composed, and a
-  reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
+  body currently says. The body _is_ read back, but only for the description above the footer
+  ([below](#a-description-written-on-the-provider-is-adopted)); the footer is never taken from the
+  provider, so an edit to it is overwritten on the next push.
 - **A person's description says so.** `composeDescribedBody` (`src/pr/prDescription.ts`) puts
   `_🫀 Organic human description_` under the operator's text, above the footer's rule. Without it the
   only attribution on the page is the footer's automation note, which names the wrong author for the
   prose above it — and that takes back the only thing the description was for, that a person and not
   the thing that made the change is answering for it. The mark goes with the half it labels: an empty
   description carries no mark, because a mark over nothing labels an author who wrote nothing.
+
+#### A description written on the provider is adopted
+
+An operator may well write the description straight into the pull request on GitHub or Azure DevOps
+rather than in the cockpit. That is the same act, and it gets the same treatment: it becomes a
+version of the part's description, is [checked without asking](#every-description-is-checked-without-asking),
+and is pushed back **recomposed** — the text, `HUMAN_NOTE`, then the recorded footer.
+
+`PrBodyEditDesk` (`src/pr/prBodyEditDesk.ts`) runs on world-read pulses, just above
+`PrDescriptionDesk`. The body rides on the world read as `PullRequest.body`: GitHub's list carries it
+whole; Azure's list truncates `description`, so the Azure read fetches the pull request itself, and
+only again when the listed text moves or the hydration lane expires. Undefined means the provider did
+not read it, never an empty body. For every part in `pr_description_bodies` whose pull request is open
+the desk takes `descriptionInBody`: the text above the recorded tail (or, if the footer was touched,
+above the rule over `SIGNOFF_MARKER`), with a trailing `HUMAN_NOTE` removed. Line endings and
+trailing spaces are normalised on both sides.
+
+- **The harness never adopts its own push.** `descriptionInBody` is the inverse of
+  `composeDescribedBody`, and the result is compared against what the harness last put there — the
+  newest version, else a pushed draft, else nothing. Equal is not an edit.
+- **An owed push outranks the provider.** A part in `unpushedDescriptions` or `unpushedDrafts` is skipped:
+  the cockpit's write is newer, and it overwrites.
+- **A reading that may be old is not an edit.** A stale world read (any `staleSources`) is skipped
+  entirely, and Azure's cached body is dropped on every `setPullBody`: a body from before the
+  harness's own push would read as a person reverting it, and be pushed back over the newer one.
+- **A body that could not be read is left out, never the whole read.** A failed Azure body fetch is
+  recorded and leaves `body` undefined for that pull request alone.
+- **Nothing above the footer is not a description.** Clearing the body adopts nothing.
+- **The author is unrecorded** (`author: null`). The provider does not say who edited a body, so
+  anything that edits it — a person, or a tool running under their account — reads as a person's.
+- **The same bound applies.** A body `descriptionRefusal` would refuse is left alone.
 
 #### It holds nothing up
 
@@ -770,6 +801,10 @@ is where parts are _told apart_ rather than where any one of them is worked.
 - **A pull request that is not a part's draws nothing**, and its `POST` is refused. The read answers
   `originRef: null` rather than 404, because "this deployment did not open that for a part" is an
   answer and not an error.
+- **A rewrite starts from what stands.** **Rewrite it** opens the field holding the current
+  version's text, because a rewrite is usually a correction and retyping the rest of it is the cost
+  that stops one being made. A first description, or **Write your own instead** over the agent's,
+  starts empty.
 - **The plan board keeps the standing, and only the standing.** Each part with an open pull request
   carries `describe it →` in amber or `described`, because the board is where an operator reads which
   of five parts wants a sentence without opening five pages. The card is the way to the page; the
@@ -798,8 +833,10 @@ makes the one cut the store cannot, dropping the parts whose pull request has si
 because a change already reviewed is not one anybody is going to describe.
 
 **The ask carries the act, not just the situation.** Its card says what the gap is and then presses
-through to the field: **Describe it** opens the pull request's own page, which is where the field is
-([above](#the-pull-requests-own-page-is-where-it-is-written)). An ask that described the gap and left
+through to the field: the ask draws the pull request's own description card — **Describe it**,
+**Reveal the agent's draft**, **Use the agent's**, **Hand it to the agent** — so it is answered where
+it is asked, focus mode included, with the pull request's page one `Ref` away for reading the change.
+An ask that described the gap and left
 the operator on a page without it was the same failure one layer up from the one this section exists
 to remove — the gap named where the person who could close it can see it, and no way from there to
 closing it.
@@ -909,6 +946,15 @@ pull requests in `buildStateSnapshot`:
 
 A clean check raises nothing. A rewrite takes the row with it, because the row reads the newest
 version and a new version is unchecked.
+
+#### Leaving it as is
+
+A finding is the check's opinion, not a ruling, and the operator may disagree. **Leave it as is**
+under the findings stamps `dismissed_at` on that version (`POST /api/prs/:number/description/dismiss`,
+idempotent) and the rail row goes: `descriptionFeedback` skips a dismissed version. The findings stay
+drawn on the page, marked as left as is, so what the check said is still readable. The stamp is per
+version — a rewrite is a new, undismissed version, and **a re-check of the same version clears it**
+(`recordCheck`), because a new reading is new findings the operator has not yet seen.
 
 **`description_check` takes marks and findings and no text, and that is the invariant.** A session
 that hands back better prose gets it accepted, and then the pull request carries an account that
