@@ -71,6 +71,8 @@ export function assignShortlist(
 
 type AssignOutcome = { ok: true } | { ok: false; refusal: string };
 
+const ALREADY_ANSWERED: AssignOutcome = { ok: false, refusal: 'this ask was already answered' };
+
 export class PrAssignDesk {
   private readonly inFlight = new Set<number>();
 
@@ -131,7 +133,7 @@ export class PrAssignDesk {
     const pr = open.find((p) => p.number === prNumber);
     if (pr === undefined || !this.ours(pr))
       return { ok: false, refusal: 'the ask is only for the fleet’s own pull requests' };
-    if (this.settled(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
+    if (this.settled(prNumber)) return ALREADY_ANSWERED;
     const person = this.shortlist(open, store.prArchive.listArchivedPrs(HISTORY_DEPTH)).find((p) => p.id === personId);
     if (person === undefined) return { ok: false, refusal: 'that person is not on the shortlist' };
     this.inFlight.add(prNumber);
@@ -149,7 +151,7 @@ export class PrAssignDesk {
   }
 
   decline(prNumber: number): AssignOutcome {
-    if (this.settled(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
+    if (this.settled(prNumber)) return ALREADY_ANSWERED;
     this.opts.store.prAssignAsks.recordAssignAnswer(prNumber, { answer: 'declined' });
     return { ok: true };
   }
