@@ -1,30 +1,19 @@
-import { EventEmitter } from 'node:events';
 import { issueSubtreeNumber } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
-import type { ErrorRecorder } from '../errorLog.js';
-import type { WhitelistRule } from '../config/config.js';
 import type {
   Agent,
   AgentAsk,
-  AgentFlag,
-  AgentStatus,
-  AgentUsage,
   BugFiling,
-  ExtraMcpServer,
   FeatureSequenceEdge,
   HumanTask,
   HumanTaskInput,
-  IssueConclusion,
   PadDecision,
-  PlanPart,
   PrReviewThread,
   PrThreadLabel,
   Remedy,
   ScratchEntry,
   Task,
 } from '../types.js';
-import type { AssessmentVerdict } from '../mcp/assessment.js';
-import type { GoalAppraisalVerdictName } from '../mcp/goalAppraisal.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summaries/featureSummary.js';
@@ -32,121 +21,84 @@ import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequ
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../reviewLabels/labels.js';
 import { threadStamped } from '../review/prReviewState.js';
-import type { PrReviewPolicy } from '../review/policy.js';
-import type { FileEventsSpool } from './fileEvents.js';
-import type { WatchDryRunner } from '../environments/watchDryRun.js';
-import type { SessionFactory } from './session.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
+import type { AgentEmitter, AgentManagerOptions } from './agentContract.js';
+import * as verdicts from './agentVerdicts.js';
 
-// → docs/spec/10-agent-runtimes.md
+// → docs/spec/11-mcp-tools.md
 
 type LinkTicketResult = { ok: true; bug: BugFiling } | { ok: false; error: string };
 
 type FilingTargetResult = { ok: true; kind: 'bug'; storyNumber: number | null } | { ok: false; error: string };
 
-interface McpChannel {
-  open(extra?: readonly ExtraMcpServer[]): { token: string; configPath: string | null };
-  bind(token: string, agentId: string): void;
-  release(token: string): void;
+type Caller = { agent: Agent; task: Task };
+
+interface AskFleet {
+  isLive(agentId: string): boolean;
+  wait(agentId: string, task: Task, question: string, ask: AgentAsk): void;
 }
 
-export interface AgentManagerOptions {
-  command: string;
-  buildArgs: (opts: {
-    sessionId: string;
-    resume: boolean;
-    mcpConfigPath: string | null;
-    extraAllowedTools: string[];
-    model: string | null;
-    effort: string | null;
-    permissionMode: string | null;
-    sealed: boolean;
-  }) => string[];
-  goalProfile?: {
-    effective: (issueOrigin: string) => string | null;
-  };
-  featureStanding?: (featureOrigin: string) => string | null;
-  featureSequenceStanding?: (featureOrigin: string) => { key: string; members: number[] } | null;
-  whitelistedApprovals: WhitelistRule[];
-  reviewPolicy?: PrReviewPolicy;
-  createSession: SessionFactory;
-  initialInput?: (task: Task) => string | null;
-  resumeInput?: () => string | null;
-  promptDelayMs?: number;
-  waitingPatterns?: string[];
-  stallNudges?: number;
-  stallParkMs?: number;
-  stallExtendMs?: number;
-  silenceParkMs?: number;
-  resumable?: boolean;
-  resumeAttempts?: number;
-  fileEvents?: FileEventsSpool;
-  docsFolderPrefix?: string | string[];
-  mcp?: McpChannel;
-  watch?: WatchDryRunner;
-  errors?: ErrorRecorder;
-}
+export class AgentToolDesk implements AgentToolTarget {
+  private readonly ctx: verdicts.VerdictContext;
 
-export type TerminalBy = 'agent' | 'operator' | 'expiry';
-
-interface AgentManagerEvents {
-  output: [{ agentId: string; delta: string }];
-  waiting: [{ agentId: string; taskId: string; reason: string; ask?: AgentAsk }];
-  autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
-  done: [{ agentId: string; taskId: string; status: AgentStatus; by: TerminalBy }];
-  reaped: [{ agentId: string; taskId: string; status: 'done' | 'failed' | 'killed' }];
-  status: [{ agentId: string; taskId: string; status: AgentStatus }];
-  usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
-  flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
-  humanTask: [{ agentId: string; taskId: string; humanTask: HumanTask; created: boolean }];
-  progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
-  conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
-  assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
-  appraisal: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAppraisalVerdictName }];
-  goalMet: [{ agentId: string; taskId: string; issueOrigin: string }];
-  partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
-  scratch: [{ agentId: string; taskId: string; entry: ScratchEntry }];
-  retrospective: [{ agentId: string; taskId: string; issueOrigin: string }];
-  remedy: [{ agentId: string; taskId: string; originRef: string }];
-  files: [{ agentId: string; taskId: string }];
-  resumed: [{ agentId: string; taskId: string; resumedAt: string }];
-  limited: [{ agentId: string; taskId: string; reason: string; resetsAt: string | null }];
-}
-
-export class AgentToolRecords
-  extends EventEmitter
-  implements
-    Pick<
-      AgentToolTarget,
-      | 'requestHumanTask'
-      | 'filingTarget'
-      | 'linkTicket'
-      | 'recordProgress'
-      | 'appendScratch'
-      | 'readScratch'
-      | 'recordRetrospective'
-      | 'recordFeatureSummary'
-      | 'recordFeatureSequence'
-      | 'recordRemedy'
-      | 'recordThreadLabel'
-    >
-{
   constructor(
-    protected readonly store: Store,
-    protected readonly opts: AgentManagerOptions,
+    private readonly store: Store,
+    private readonly opts: AgentManagerOptions,
+    private readonly events: AgentEmitter,
+    private readonly fleet: AskFleet,
   ) {
-    super();
+    this.ctx = { store, opts, events };
   }
 
-  protected withCaller<R extends { ok: true } | { ok: false; error: string }>(
+  private withCaller<R extends { ok: true } | { ok: false; error: string }>(
     agentId: string,
-    fn: (caller: { agent: Agent; task: Task }) => R,
+    fn: (caller: Caller) => R,
   ): R | { ok: false; error: string } {
     const agent = this.store.agents.getAgent(agentId);
     const task = agent ? this.store.tasks.getTask(agent.taskId) : null;
     if (!agent || !task) return { ok: false, error: 'agent has no task' };
     return fn({ agent, task });
   }
+
+  forCaller<R extends { ok: true } | { ok: false; error: string }>(
+    agentId: string,
+    fn: (caller: Caller) => R,
+  ): R | { ok: false; error: string } {
+    return this.withCaller(agentId, fn);
+  }
+
+  ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string } {
+    if (!this.fleet.isLive(agentId)) return { ok: false, error: 'agent is no longer live' };
+    return this.withCaller(agentId, ({ task }) => {
+      const question = ask.question.trim();
+      if (!question) return { ok: false, error: 'question must not be empty' };
+      this.fleet.wait(agentId, task, question, ask);
+      const open = this.store.escalations.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
+      return { ok: true, escalationId: open?.id ?? null };
+    });
+  }
+
+  readonly recordConclusion: AgentToolTarget['recordConclusion'] = (agentId, verdict, note) =>
+    this.withCaller(agentId, ({ task }) => verdicts.recordConclusion(this.ctx, agentId, task, verdict, note));
+
+  readonly recordBlocked: AgentToolTarget['recordBlocked'] = (agentId, obstacleId, note) =>
+    this.withCaller(agentId, ({ task }) => verdicts.recordBlocked(this.ctx, agentId, task, obstacleId, note));
+
+  readonly recordAssessment: AgentToolTarget['recordAssessment'] = (agentId, verdict, summary, detail, cause, part) =>
+    this.withCaller(agentId, ({ task }) =>
+      verdicts.recordAssessment(this.ctx, agentId, task, verdict, summary, detail, cause, part),
+    );
+
+  readonly recordGoalMet: AgentToolTarget['recordGoalMet'] = (agentId, summary, detail) =>
+    this.withCaller(agentId, ({ task }) => verdicts.recordGoalMet(this.ctx, agentId, task, summary, detail));
+
+  readonly recordAppraisal: AgentToolTarget['recordAppraisal'] = (agentId, verdict, summary, profile, placement) =>
+    this.withCaller(agentId, ({ task }) =>
+      verdicts.recordAppraisal(this.ctx, agentId, task, verdict, summary, profile, placement),
+    );
+
+  readonly recordPartOutcome: AgentToolTarget['recordPartOutcome'] = (agentId, kind, summary, ref) =>
+    this.withCaller(agentId, ({ task }) => verdicts.recordPartOutcome(this.ctx, agentId, task, kind, summary, ref));
 
   requestHumanTask(
     agentId: string,
@@ -159,7 +111,7 @@ export class AgentToolRecords
         taskId: task.id,
         originRef: task.originRef,
       });
-      this.emit('humanTask', { agentId, taskId: task.id, humanTask, created });
+      this.events.emit('humanTask', { agentId, taskId: task.id, humanTask, created });
       return { ok: true, task: humanTask };
     });
   }
@@ -209,7 +161,7 @@ export class AgentToolRecords
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
       const notedAt = this.store.agents.recordAgentNote(agentId, note);
-      this.emit('progress', { agentId, taskId: task.id, note, notedAt });
+      this.events.emit('progress', { agentId, taskId: task.id, note, notedAt });
       return { ok: true, notedAt };
     });
   }
@@ -232,7 +184,7 @@ export class AgentToolRecords
         note,
         decision,
       });
-      this.emit('scratch', { agentId, taskId: task.id, entry });
+      this.events.emit('scratch', { agentId, taskId: task.id, entry });
       return { ok: true, entry };
     });
   }
@@ -261,7 +213,7 @@ export class AgentToolRecords
         agentId,
         taskId: task.id,
       });
-      this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
+      this.events.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
       return { ok: true, issueOrigin: origin.issueOrigin };
     });
   }
@@ -338,7 +290,7 @@ export class AgentToolRecords
         agentId,
         taskId: task.id,
       });
-      this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
+      this.events.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
       return { ok: true, remedy };
     });
   }
@@ -385,12 +337,5 @@ export class AgentToolRecords
       world.pullRequests.find((p) => p.number === prNumber) ??
       (world.closedPullRequests ?? []).find((p) => p.number === prNumber);
     return pr?.reviewThreads?.find((t) => t.id === threadId) ?? null;
-  }
-
-  override emit<K extends keyof AgentManagerEvents>(event: K, ...args: AgentManagerEvents[K]): boolean {
-    return super.emit(event, ...args);
-  }
-  override on<K extends keyof AgentManagerEvents>(event: K, listener: (...args: AgentManagerEvents[K]) => void): this {
-    return super.on(event, listener as (...args: unknown[]) => void);
   }
 }

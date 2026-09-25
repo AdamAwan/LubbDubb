@@ -1,3 +1,6 @@
+import type { Task } from '../types.js';
+import type { TaskStore } from '../store/tasks.js';
+
 // → docs/spec/10-agent-runtimes.md
 
 export interface LiftProfile {
@@ -8,7 +11,7 @@ export interface LiftProfile {
   autoApprove: boolean;
 }
 
-export function liftNote(from: string | null, to: string): string {
+function liftNote(from: string | null, to: string): string {
   const previous = from === null ? 'a cheaper profile' : `the **${from}** profile`;
   return (
     `## The conversation above is not yours, and it did not work\n\n` +
@@ -33,4 +36,26 @@ export function liftNote(from: string | null, to: string): string {
     `Start by saying, in a line or two, what you think is actually going on and where the earlier run ` +
     `went wrong. Then work it.`
   );
+}
+
+export function liftedTask(task: Task, profile: LiftProfile): Parameters<TaskStore['createTask']>[0] {
+  return {
+    kind: task.kind,
+    title: task.title,
+    prompt: `${liftNote(task.profile ?? null, profile.name)}\n\n${task.prompt}`,
+    branch: task.branch,
+    originRef: task.originRef,
+    originTitle: task.originTitle,
+    originSummary: task.originSummary,
+    dispatchReason: task.dispatchReason,
+    rule: task.rule ?? null,
+    ciChecks: task.ciChecks ?? null,
+    mcpServers: task.mcpServers ?? null,
+    model: profile.model,
+    effort: profile.effort,
+    permissionMode: profile.permissionMode ?? task.permissionMode ?? null,
+    permissionAutoApprove: profile.autoApprove,
+    profile: profile.name,
+    profileSource: 'pin',
+  };
 }

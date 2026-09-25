@@ -1,13 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import type { Store } from '../store/store.js';
-import type { Agent } from '../types.js';
+import type { Agent, Task } from '../types.js';
+import { extraMcpGrants, isSealedRule } from '../mcp/names.js';
+import type { AgentSession } from './session.js';
 import { classifyArtifact, type FileEventRecord } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { debugEnabled, debugLog } from '../debug.js';
-import type { AgentManagerOptions, AgentToolRecords } from './agentToolRecords.js';
+import type { AgentEmitter, AgentManagerOptions } from './agentContract.js';
 
 // → docs/spec/10-agent-runtimes.md
 
@@ -18,7 +21,7 @@ export class AgentChannels {
   constructor(
     private readonly store: Store,
     private readonly opts: AgentManagerOptions,
-    private readonly events: Pick<AgentToolRecords, 'emit'>,
+    private readonly events: AgentEmitter,
   ) {}
 
   bind(agentId: string, eventsKey: string | null, mcp: { token: string } | null): void {
@@ -29,7 +32,41 @@ export class AgentChannels {
     }
   }
 
-  eventsDirEnv(key: string | null): Record<string, string> {
+  openSession(
+    task: Task,
+    cwd: string,
+    sessionId: string | null,
+    resume: boolean,
+  ): { session: AgentSession; eventsKey: string | null; mcp: { token: string; configPath: string | null } | null } {
+    const eventsKey = this.opts.fileEvents ? randomUUID() : null;
+    const extraServers = task.mcpServers ?? [];
+    const mcp = this.opts.mcp?.open(extraServers) ?? null;
+    const session = this.opts.createSession({
+      command: this.opts.command,
+      args: this.opts.buildArgs({
+        sessionId: sessionId ?? '',
+        extraAllowedTools: extraMcpGrants(extraServers),
+        resume,
+        mcpConfigPath: mcp?.configPath ?? null,
+        model: task.model ?? null,
+        effort: task.effort ?? null,
+        permissionMode: task.permissionMode ?? null,
+        sealed: isSealedRule(task.rule),
+      }),
+      cwd,
+      env: {
+        LUBBDUBB_PROMPT: task.prompt,
+        LUBBDUBB_TASK_ID: task.id,
+        ...this.eventsDirEnv(eventsKey),
+      },
+      waitingPatterns: this.opts.waitingPatterns,
+      sessionId,
+      resume,
+    });
+    return { session, eventsKey, mcp };
+  }
+
+  private eventsDirEnv(key: string | null): Record<string, string> {
     if (!key || !this.opts.fileEvents) return {};
     const env: Record<string, string> = { LUBBDUBB_EVENTS_DIR: this.opts.fileEvents.dirFor(key) };
     if (debugEnabled()) env.LUBBDUBB_EVENTS_DEBUG = '1';

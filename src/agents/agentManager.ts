@@ -1,16 +1,21 @@
+import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { recentOutputExcerpt } from '../escalation/context.js';
-import type { Agent, AgentUsage, AccountRateLimits, ApiErrorReading, Task } from '../types.js';
-import { extraMcpGrants, isSealedRule } from '../mcp/names.js';
+import type { Agent, AgentStatus, AgentUsage, AccountRateLimits, ApiErrorReading, StallPark, Task } from '../types.js';
+import type { Store } from '../store/store.js';
+import { isSealedRule } from '../mcp/names.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
 import type { AgentSession } from './session.js';
-import { liftNote, type LiftProfile } from './profileLift.js';
+import { liftedTask, type LiftProfile } from './profileLift.js';
 import type { RateLimitPark } from './streamJsonSession.js';
 import { debugLog } from '../debug.js';
+import { HUMAN_BLOCK, renderBlocks } from './streamTranscript.js';
+import { AgentChannels } from './agentChannels.js';
 import { AgentParks } from './agentParks.js';
-import type { TerminalBy } from './agentToolRecords.js';
+import { AgentToolDesk } from './agentToolDesk.js';
+import type { AgentManagerEvents, AgentManagerOptions, TerminalBy } from './agentContract.js';
 
 // → docs/spec/10-agent-runtimes.md
 
@@ -19,13 +24,59 @@ export interface LimitResumeFailure {
   error: string;
 }
 
-export class AgentManager extends AgentParks implements AgentToolTarget {
+export class AgentManager extends EventEmitter implements AgentToolTarget {
+  private readonly sessions = new Map<string, AgentSession>();
+  private readonly exitCodes = new Map<string, number>();
   private readonly terminals = new Map<string, 'done' | 'failed' | 'killed'>();
+  private readonly exited = new Set<string>();
+  private readonly channels: AgentChannels;
+  private readonly parks: AgentParks;
+  private readonly tools: AgentToolDesk;
+
+  constructor(
+    private readonly store: Store,
+    private readonly opts: AgentManagerOptions,
+  ) {
+    super();
+    this.channels = new AgentChannels(store, opts, this);
+    this.parks = new AgentParks(store, opts, this, this.channels, {
+      hasExited: (agentId) => this.exited.has(agentId),
+      noteSent: (agentId, session, text) => this.noteSent(agentId, session, text),
+      respond: (agentId, text) => this.respond(agentId, text),
+      shedSession: (agentId) => this.shedLimitedSession(agentId),
+    });
+    this.tools = new AgentToolDesk(store, opts, this, {
+      isLive: (agentId) => this.sessions.has(agentId),
+      wait: (agentId, task, question, ask) => this.parks.handleWaiting(agentId, task, question, ask),
+    });
+  }
+
+  readonly ask: AgentToolTarget['ask'] = (...args) => this.tools.ask(...args);
+  readonly requestHumanTask: AgentToolTarget['requestHumanTask'] = (...args) => this.tools.requestHumanTask(...args);
+  readonly recordProgress: AgentToolTarget['recordProgress'] = (...args) => this.tools.recordProgress(...args);
+  readonly filingTarget: AgentToolTarget['filingTarget'] = (...args) => this.tools.filingTarget(...args);
+  readonly linkTicket: AgentToolTarget['linkTicket'] = (...args) => this.tools.linkTicket(...args);
+  readonly recordConclusion: AgentToolTarget['recordConclusion'] = (...args) => this.tools.recordConclusion(...args);
+  readonly recordBlocked: AgentToolTarget['recordBlocked'] = (...args) => this.tools.recordBlocked(...args);
+  readonly recordAssessment: AgentToolTarget['recordAssessment'] = (...args) => this.tools.recordAssessment(...args);
+  readonly recordGoalMet: AgentToolTarget['recordGoalMet'] = (...args) => this.tools.recordGoalMet(...args);
+  readonly recordAppraisal: AgentToolTarget['recordAppraisal'] = (...args) => this.tools.recordAppraisal(...args);
+  readonly recordPartOutcome: AgentToolTarget['recordPartOutcome'] = (...args) => this.tools.recordPartOutcome(...args);
+  readonly appendScratch: AgentToolTarget['appendScratch'] = (...args) => this.tools.appendScratch(...args);
+  readonly readScratch: AgentToolTarget['readScratch'] = (...args) => this.tools.readScratch(...args);
+  readonly recordFeatureSummary: AgentToolTarget['recordFeatureSummary'] = (...args) =>
+    this.tools.recordFeatureSummary(...args);
+  readonly recordFeatureSequence: AgentToolTarget['recordFeatureSequence'] = (...args) =>
+    this.tools.recordFeatureSequence(...args);
+  readonly recordRetrospective: AgentToolTarget['recordRetrospective'] = (...args) =>
+    this.tools.recordRetrospective(...args);
+  readonly recordRemedy: AgentToolTarget['recordRemedy'] = (...args) => this.tools.recordRemedy(...args);
+  readonly recordThreadLabel: AgentToolTarget['recordThreadLabel'] = (...args) => this.tools.recordThreadLabel(...args);
 
   spawn(task: Task, cwd: string, resumeSessionId?: string | null): Agent {
     const inherited = this.opts.resumable ? (resumeSessionId ?? null) : null;
     const sessionId = inherited ?? (this.opts.resumable ? randomUUID() : null);
-    const { session, eventsKey, mcp } = this.openSession(task, cwd, sessionId, inherited !== null);
+    const { session, eventsKey, mcp } = this.channels.openSession(task, cwd, sessionId, inherited !== null);
 
     const agent = this.store.agents.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
     this.channels.bind(agent.id, eventsKey, mcp);
@@ -54,7 +105,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
     if (this.sessions.has(agent.id)) return true;
 
     const wasWaiting = agent.status === 'waiting' || agent.waitingReason != null;
-    const { session, eventsKey, mcp } = this.openSession(task, agent.cwd, agent.sessionId, true);
+    const { session, eventsKey, mcp } = this.channels.openSession(task, agent.cwd, agent.sessionId, true);
     this.channels.bind(agent.id, eventsKey, mcp);
     debugLog(
       'agent',
@@ -73,7 +124,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
     }
 
     if (wasWaiting) {
-      this.restoreWaiting(agent, task);
+      this.parks.restoreWaiting(agent, task);
     } else {
       const carryOn = nudge ?? this.opts.resumeInput?.() ?? null;
       if (carryOn !== null) this.noteSent(agent.id, session, carryOn);
@@ -81,40 +132,6 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
     }
 
     return true;
-  }
-
-  private openSession(
-    task: Task,
-    cwd: string,
-    sessionId: string | null,
-    resume: boolean,
-  ): { session: AgentSession; eventsKey: string | null; mcp: { token: string; configPath: string | null } | null } {
-    const eventsKey = this.opts.fileEvents ? randomUUID() : null;
-    const extraServers = task.mcpServers ?? [];
-    const mcp = this.opts.mcp?.open(extraServers) ?? null;
-    const session = this.opts.createSession({
-      command: this.opts.command,
-      args: this.opts.buildArgs({
-        sessionId: sessionId ?? '',
-        extraAllowedTools: extraMcpGrants(extraServers),
-        resume,
-        mcpConfigPath: mcp?.configPath ?? null,
-        model: task.model ?? null,
-        effort: task.effort ?? null,
-        permissionMode: task.permissionMode ?? null,
-        sealed: isSealedRule(task.rule),
-      }),
-      cwd,
-      env: {
-        LUBBDUBB_PROMPT: task.prompt,
-        LUBBDUBB_TASK_ID: task.id,
-        ...this.channels.eventsDirEnv(eventsKey),
-      },
-      waitingPatterns: this.opts.waitingPatterns,
-      sessionId,
-      resume,
-    });
-    return { session, eventsKey, mcp };
   }
 
   fileEventsDir(agentId: string): string | null {
@@ -126,16 +143,14 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
   }
 
   resumeParked(agentId: string): { ok: true } | { ok: false; error: string } {
-    const park = this.limited.get(agentId);
+    const park = this.parks.limitPark(agentId);
     if (park === undefined) return { ok: false, error: 'this agent is not parked on a usage limit' };
-    return this.withCaller(agentId, ({ agent, task }) => {
+    return this.tools.forCaller(agentId, ({ agent, task }) => {
       const session = this.sessions.get(agentId);
       if (!session && (!this.opts.resumable || !agent.sessionId)) {
         return { ok: false, error: 'this agent runtime cannot re-open its session, so the park cannot be ended' };
       }
-      this.limited.delete(agentId);
-      this.parked.delete(agentId);
-      this.stalled.delete(agentId);
+      this.parks.clear(agentId);
       this.store.agents.setAgentResumed(agentId, null);
       this.store.agents.updateAgent(agentId, { status: 'running', waitingReason: null });
       this.store.tasks.updateTask(task.id, { status: 'running' });
@@ -151,7 +166,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
       try {
         if (!row || !this.resume(row, task, LIMIT_RESUME_MESSAGE)) throw new Error('the runtime declined the resume');
       } catch (err) {
-        this.reinstateLimitPark(agentId, task, park);
+        this.parks.reinstateLimitPark(agentId, task, park);
         return { ok: false, error: `could not re-open the session: ${(err as Error).message}` };
       }
       return { ok: true };
@@ -160,33 +175,63 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
 
   /** @public Reached through the structural `fleet` seam on `HarnessDeps` (`src/harness.ts`). */
   resumeExpiredParks(): LimitResumeFailure[] {
-    const now = Date.now();
     const failures: LimitResumeFailure[] = [];
-    for (const [agentId, park] of [...this.limited]) {
-      if (!park.resetsAt) continue;
-      const resetsAt = Date.parse(park.resetsAt);
-      if (!Number.isFinite(resetsAt) || resetsAt > now) continue;
-      debugLog('agent', `limit park expired agent=${agentId} resetsAt=${park.resetsAt}`);
+    this.parks.expireLimitParks((agentId) => {
       const result = this.resumeParked(agentId);
       if (!result.ok) failures.push({ agentId, error: result.error });
-    }
+    });
     return failures;
   }
 
   completeExpiredStalls(): string[] {
-    const now = Date.now();
-    const settled: string[] = [];
-    for (const [agentId, clock] of [...this.stalled]) {
-      if (clock.at > now) continue;
-      if (this.limited.has(agentId)) {
-        this.stalled.delete(agentId);
-        continue;
-      }
-      debugLog('agent', `stall park expired agent=${agentId}`);
-      if (this.complete(agentId, 'expiry')) settled.push(agentId);
-      else this.stalled.delete(agentId);
+    return this.parks.completeExpiredStalls((agentId) => this.complete(agentId, 'expiry'));
+  }
+
+  limitedAgentIds(): string[] {
+    return this.parks.limitedAgentIds();
+  }
+
+  stallDeadlines(): StallPark[] {
+    return this.parks.stallDeadlines();
+  }
+
+  extendStallPark(agentId: string): { ok: true; expiresAt: string } | { ok: false; error: string } {
+    return this.parks.extendStallPark(agentId);
+  }
+
+  releasePark(agentId: string): void {
+    this.parks.releasePark(agentId);
+  }
+
+  private noteSent(agentId: string, session: AgentSession, text: string): void {
+    if (session.recordsSentMessages) return;
+    const note = renderBlocks([{ type: HUMAN_BLOCK, text }], new Date().toISOString());
+    if (!note) return;
+    this.store.transcripts.appendTranscript(agentId, note);
+    this.emit('output', { agentId, delta: note });
+  }
+
+  notify(agentId: string, text: string): boolean {
+    const session = this.sessions.get(agentId);
+    if (!session || this.parks.isParked(agentId)) return false;
+    this.noteSent(agentId, session, text);
+    try {
+      session.send(text);
+    } catch {
+      return false;
     }
-    return settled;
+    return true;
+  }
+
+  respond(agentId: string, text: string): boolean {
+    const session = this.sessions.get(agentId);
+    if (!session) return false;
+    this.noteSent(agentId, session, text);
+    session.send(text);
+    this.parks.clear(agentId);
+    this.store.agents.setAgentResumed(agentId, null);
+    this.store.agents.updateAgent(agentId, { status: 'running', waitingReason: null });
+    return true;
   }
 
   interrupt(agentId: string): boolean {
@@ -198,13 +243,11 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
 
   kill(agentId: string): boolean {
     const session = this.sessions.get(agentId);
-    if (!session && !this.limited.has(agentId)) return false;
+    if (!session && !this.parks.isLimited(agentId)) return false;
     session?.kill();
     this.channels.disposeFileEvents(agentId);
     this.channels.releaseMcp(agentId);
-    this.parked.delete(agentId);
-    this.limited.delete(agentId);
-    this.stalled.delete(agentId);
+    this.parks.clear(agentId);
     this.store.transcripts.flushTranscript(agentId);
     const agent = this.store.agents.getAgent(agentId);
     this.store.agents.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
@@ -227,7 +270,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
     profile: LiftProfile,
   ): { ok: true; agentId: string; taskId: string } | { ok: false; error: string } {
     if (!this.sessions.has(agentId)) return { ok: false, error: 'agent is no longer live' };
-    return this.withCaller(agentId, ({ agent, task }) => {
+    return this.tools.forCaller(agentId, ({ agent, task }) => {
       if (!this.opts.resumable || !agent.sessionId)
         return {
           ok: false,
@@ -240,25 +283,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
       const { cwd, sessionId } = agent;
       // The successor task is written before the kill, not after: `reaped` releases the
       // worktree slot for a branch no active task holds, and this row is what holds it.
-      const successor = this.store.tasks.createTask({
-        kind: task.kind,
-        title: task.title,
-        prompt: `${liftNote(task.profile ?? null, profile.name)}\n\n${task.prompt}`,
-        branch: task.branch,
-        originRef: task.originRef,
-        originTitle: task.originTitle,
-        originSummary: task.originSummary,
-        dispatchReason: task.dispatchReason,
-        rule: task.rule ?? null,
-        ciChecks: task.ciChecks ?? null,
-        mcpServers: task.mcpServers ?? null,
-        model: profile.model,
-        effort: profile.effort,
-        permissionMode: profile.permissionMode ?? task.permissionMode ?? null,
-        permissionAutoApprove: profile.autoApprove,
-        profile: profile.name,
-        profileSource: 'pin',
-      });
+      const successor = this.store.tasks.createTask(liftedTask(task, profile));
       this.kill(agentId);
       let next;
       try {
@@ -325,8 +350,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
       this.sessions.delete(id);
       this.exitCodes.delete(id);
       this.exited.delete(id);
-      this.parked.delete(id);
-      this.limited.delete(id);
+      this.parks.unpark(id);
     }
   }
 
@@ -373,17 +397,17 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
 
     session.on('activity', () => {
       this.store.agents.countAgentStep(agentId);
-      this.noteResumed(agentId, task.id);
+      this.parks.noteResumed(agentId, task.id);
     });
 
-    session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
-    session.on('stalled', (lastWords: string) => this.handleStalled(session, agentId, task, lastWords));
-    session.on('silent', (silenceMs: number) => this.handleSilent(agentId, task, silenceMs));
-    session.on('limited', (park: RateLimitPark) => this.handleLimited(agentId, task, park));
+    session.on('waiting', (reason: string) => this.parks.handleWaiting(agentId, task, reason));
+    session.on('stalled', (lastWords: string) => this.parks.handleStalled(session, agentId, task, lastWords));
+    session.on('silent', (silenceMs: number) => this.parks.handleSilent(agentId, task, silenceMs));
+    session.on('limited', (park: RateLimitPark) => this.parks.handleLimited(agentId, task, park));
     session.on('exit', (code: number) => {
       this.exitCodes.set(agentId, code);
       this.exited.add(agentId);
-      if (this.limited.has(agentId)) this.shedLimitedSession(agentId);
+      if (this.parks.isLimited(agentId)) this.shedLimitedSession(agentId);
       this.maybeReap(agentId, task.id);
     });
     session.on('done', () => this.handleTerminal(agentId, task.id, 'done'));
@@ -459,10 +483,7 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
     failureNote?: string,
   ): void {
     this.channels.drainFileEvents(agentId);
-    this.parked.delete(agentId);
-    this.limited.delete(agentId);
-    this.nudges.delete(agentId);
-    this.stalled.delete(agentId);
+    this.parks.forget(agentId);
     this.store.transcripts.flushTranscript(agentId);
     this.store.agents.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.tasks.updateTask(taskId, { status });
@@ -494,6 +515,25 @@ export class AgentManager extends AgentParks implements AgentToolTarget {
     this.channels.disposeFileEvents(agentId);
     this.channels.releaseMcp(agentId);
     this.emit('reaped', { agentId, taskId, status });
+  }
+  private shedLimitedSession(agentId: string): void {
+    this.channels.disposeFileEvents(agentId);
+    this.channels.releaseMcp(agentId);
+    this.sessions.delete(agentId);
+    this.exitCodes.delete(agentId);
+    this.exited.delete(agentId);
+    this.store.agents.updateAgent(agentId, { pid: null });
+  }
+
+  private reflectStatus(agentId: string, taskId: string, status: AgentStatus): void {
+    this.emit('status', { agentId, taskId, status });
+  }
+
+  override emit<K extends keyof AgentManagerEvents>(event: K, ...args: AgentManagerEvents[K]): boolean {
+    return super.emit(event, ...args);
+  }
+  override on<K extends keyof AgentManagerEvents>(event: K, listener: (...args: AgentManagerEvents[K]) => void): this {
+    return super.on(event, listener as (...args: unknown[]) => void);
   }
 }
 

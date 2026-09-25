@@ -858,9 +858,10 @@ The token is a **bearer credential**: it lives in the 0600 launch-config file, n
 `ps` would show it), and it is revoked on kill, interrupt and reap. A resume mints a fresh one for the
 same agent row.
 
-**The `agent → task` half of that chain is resolved in exactly one place**, `AgentManager.withCaller`
-(declared on the `AgentToolRecords` layer it extends, `src/agents/agentToolRecords.ts`),
-and every tool-facing method on the fleet runs its body through it. It was copied into all eleven of
+**The `agent → task` half of that chain is resolved in exactly one place**, `AgentToolDesk.withCaller`
+(`src/agents/agentToolDesk.ts`, private to the desk `AgentManager` composes and forwards the tool seam
+to), and every tool-facing method on the fleet runs its body through it. The operator's `lift` and
+`resumeParked` reach the same wrapper through the desk's `forCaller`; nothing else resolves a caller. It was copied into all eleven of
 them, so the channel's one security-relevant step held eleven times by inspection rather than once by
 construction: a twelfth method written from scratch, or one that dropped the `!task` check because its
 store call happens to take only an `agentId` (as `recordProgress`'s genuinely does), would have
@@ -899,7 +900,7 @@ Three things carry the split:
   answered next to the write it guards.
 
 `test/mcpChannel.test.ts` asserts both halves structurally: the caller resolution appears once across
-`AgentManager`'s layers, and `tools.ts` declares no schema and no handler with one module per advertised
+every file in `src/agents/`, in the file declaring the private `withCaller`, and `tools.ts` declares no schema and no handler with one module per advertised
 tool. Neither is a property any behavioural test can fail on — a tool that re-derived the caller by
 hand works, right up until it works for the wrong agent.
 
