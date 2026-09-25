@@ -153,6 +153,7 @@ export class GitHubSourceControlIntegration
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
+          if (p.body !== undefined) pr.body = p.body;
           return pr;
         }),
       );

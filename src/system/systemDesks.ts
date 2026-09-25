@@ -12,6 +12,7 @@ import { TicketSweep } from '../tickets/sweep.js';
 import { ObstacleDesk } from '../obstacles/desk.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { PrNamingDesk } from '../pr/prNamingDesk.js';
+import { PrBodyEditDesk } from '../pr/prBodyEditDesk.js';
 import { PrDescriptionDesk } from '../pr/prDescriptionDesk.js';
 import { DeliveryCloseOutDesk } from '../delivery/closeOutDesk.js';
 import { UnwatchedChildDesk } from '../features/unwatchedDesk.js';
@@ -69,6 +70,7 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     errors,
   });
   const prDescriptions = new PrDescriptionDesk({ sink, store, errors });
+  const prBodyEdits = new PrBodyEditDesk({ store });
 
   const prWatch = new PrWatchDesk({
     sink,
@@ -93,7 +95,7 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     prAuthorConfigured,
     errors,
   });
-  return { plans, appraisals, naming, prDescriptions, prWatch, prWorkItems, branchReaps };
+  return { plans, appraisals, naming, prDescriptions, prBodyEdits, prWatch, prWorkItems, branchReaps };
 }
 
 export type EnvironmentDesks = ReturnType<typeof buildEnvironmentDesks>;

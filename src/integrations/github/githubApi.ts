@@ -51,6 +51,7 @@ export interface GhPullSummary {
   labels: string[];
   assigneeLogins: string[];
   updatedAt?: string;
+  body?: string;
 }
 
 export interface GhClosedPull {

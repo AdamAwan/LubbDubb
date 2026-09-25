@@ -91,6 +91,7 @@ export class AzureDevOpsSourceControlIntegration
   private lastGoodClosed: PullRequest[] | null = null;
   private mergeCommits = new Map<number, string>();
   private readonly policyReadings = new HydrationCache<{ token: string; evals: AzPolicyEvaluation[] }>();
+  private readonly bodyReadings = new HydrationCache<{ listed: string; body: string }>();
 
   constructor(private readonly opts: AzureSourceControlOpts) {}
 
@@ -113,9 +114,10 @@ export class AzureDevOpsSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [threads, labels] = await Promise.all([
+          const [threads, labels, body] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
             api.listPullLabels(p.pullRequestId),
+            this.pullBody(p, hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId))),
           ]);
           const policyEvals = await this.policyEvaluations(
             p,
@@ -143,6 +145,7 @@ export class AzureDevOpsSourceControlIntegration
             labels,
             url: p.url,
           };
+          if (body !== undefined) pr.body = body;
           const author = p.authorDisplayName || p.authorUniqueName;
           if (author !== '') pr.author = author;
           if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
@@ -156,6 +159,7 @@ export class AzureDevOpsSourceControlIntegration
       );
 
       this.policyReadings.retain(pulls.map((p) => p.pullRequestId));
+      this.bodyReadings.retain(pulls.map((p) => p.pullRequestId));
       this.lastGood = pullRequests;
       this.lastGoodClosed = closedPullRequests;
       return { pullRequests, closedPullRequests };
@@ -166,6 +170,24 @@ export class AzureDevOpsSourceControlIntegration
       });
       if (this.lastGood === null) throw err;
       return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
+    }
+  }
+
+  private async pullBody(p: AzPull, maxAgeMs: number): Promise<string | undefined> {
+    if (p.description === undefined) return undefined;
+    if (p.description === '') return '';
+    const hit = this.bodyReadings.get(p.pullRequestId, maxAgeMs);
+    if (hit !== undefined && hit.listed === p.description) return hit.body;
+    try {
+      const body = await this.opts.api.getPullBody(p.pullRequestId);
+      this.bodyReadings.set(p.pullRequestId, { listed: p.description, body });
+      return body;
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} could not read the body of PR !${p.pullRequestId}: ${(err as Error).message}`,
+      });
+      return undefined;
     }
   }
 
@@ -262,6 +284,8 @@ export class AzureDevOpsSourceControlIntegration
 
   async setPullBody(input: PrBodyInput): Promise<SendResult> {
     await this.opts.api.setPullBody(input.prNumber, input.body);
+    // The listed prefix may not move with the push, and a cached old body reads as an edit.
+    this.bodyReadings.delete(input.prNumber);
     return { ok: true };
   }
 

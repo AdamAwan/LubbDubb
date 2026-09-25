@@ -46,6 +46,7 @@ import type { AreaPathTree } from '../src/intake/placement.js';
 interface Script {
   viewer?: string;
   pulls?: AzPull[];
+  fullBodies?: Record<number, string>;
   closedPulls?: AzClosedPull[];
   threads?: Record<number, AzThread[]>;
   policyEvals?: Record<number, AzPolicyEvaluation[]>;
@@ -53,7 +54,7 @@ interface Script {
   workItems?: AzWorkItem[];
   relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
-  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline';
+  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline' | 'getPullBody';
   historyItems?: AzWorkItem[];
   timeline?: Record<number, AzTimelineRecord[]>;
   buildLogs?: Record<string, string[]>;
@@ -97,6 +98,7 @@ interface Recorded {
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
   bodySets: Array<{ id: number; body: string }>;
+  bodyReads: number[];
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
   abandoned: number[];
@@ -131,6 +133,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     createdPulls: [],
     titleSets: [],
     bodySets: [],
+    bodyReads: [],
     baseSets: [],
     deletedBranches: [],
     abandoned: [],
@@ -151,6 +154,11 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullTitle(id, title) {
       recorded.titleSets.push({ id, title });
+    },
+    async getPullBody(id) {
+      recorded.bodyReads.push(id);
+      if (script.throwOn === 'getPullBody') throw new Error('503');
+      return script.fullBodies?.[id] ?? '';
     },
     async setPullBody(id, body) {
       recorded.bodySets.push({ id, body });
@@ -875,6 +883,54 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
   assert.equal(pr.unresolvedComments.length, 1);
   assert.equal(pr.unresolvedComments[0]!.handled, false);
   store.close();
+});
+
+test('the body is read whole, because the list truncates it, and read again only when the listed text moves', async () => {
+  const script: Script = {
+    pulls: [pull({ pullRequestId: 7, description: 'Written on Azure, cut sh' })],
+    fullBodies: { 7: 'Written on Azure, cut short by the list.' },
+  };
+  const { api, recorded } = fakeApi(script);
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, 'Written on Azure, cut short by the list.');
+  await sc.snapshot();
+  assert.deepEqual(recorded.bodyReads, [7], 'an unchanged listing reuses the whole body');
+
+  script.pulls = [pull({ pullRequestId: 7, description: 'Rewritten on Azure' })];
+  script.fullBodies = { 7: 'Rewritten on Azure, whole.' };
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, 'Rewritten on Azure, whole.');
+  assert.deepEqual(recorded.bodyReads, [7, 7]);
+
+  script.pulls = [pull({ pullRequestId: 7, description: '' })];
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, '', 'an empty body needs no second read');
+  assert.equal(recorded.bodyReads.length, 2);
+});
+
+test('a push drops the cached body, because the listed prefix may not move with it', async () => {
+  const script: Script = {
+    pulls: [pull({ pullRequestId: 7, description: 'Same first four hundred' })],
+    fullBodies: { 7: 'Same first four hundred, then V1.' },
+  };
+  const { api, recorded } = fakeApi(script);
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  await sc.snapshot();
+
+  await sc.setPullBody({ prNumber: 7, body: 'Same first four hundred, then V2.' });
+  script.fullBodies = { 7: 'Same first four hundred, then V2.' };
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, 'Same first four hundred, then V2.');
+  assert.deepEqual(recorded.bodyReads, [7, 7]);
+});
+
+test('a body that cannot be read costs that body alone, never the read', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ pullRequestId: 7, description: 'Written on Azure' })],
+    throwOn: 'getPullBody',
+  });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  const slice = await sc.snapshot();
+  assert.notEqual(slice.stale, true);
+  assert.equal(slice.pullRequests![0]!.body, undefined, 'unread, which is not empty');
 });
 
 test('snapshot leaves mergeable undefined while Azure is still computing', async () => {

@@ -360,6 +360,31 @@ export class PrDescriptionStore {
   }
 
   /**
+   * The parts on these pull requests, with the text the harness last put above each
+   * footer — the newest version, else a handed draft, else nothing. What a body read
+   * back off the provider is compared against.
+   * → docs/spec/07-pull-requests.md#a-description-written-on-the-provider-is-adopted
+   */
+  bodiesOnRecord(
+    prNumbers: readonly number[],
+  ): { originRef: string; prNumber: number; tail: string; standing: string }[] {
+    if (prNumbers.length === 0) return [];
+    const rows = this.ctx
+      .prep(
+        `SELECT b.origin_ref AS origin_ref, b.pr_number AS pr_number, b.tail AS tail,
+                COALESCE(d.text, CASE WHEN h.handed_at IS NOT NULL THEN h.text END, '') AS standing
+           FROM pr_description_bodies b
+           LEFT JOIN pr_descriptions d ON d.origin_ref = b.origin_ref
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = b.origin_ref)
+           LEFT JOIN pr_description_drafts h ON h.origin_ref = b.origin_ref
+          WHERE b.pr_number IN (SELECT value FROM json_each(?))
+          ORDER BY b.opened_at ASC`,
+      )
+      .all(JSON.stringify(prNumbers)) as { origin_ref: string; pr_number: number; tail: string; standing: string }[];
+    return rows.map((r) => ({ originRef: r.origin_ref, prNumber: r.pr_number, tail: r.tail, standing: r.standing }));
+  }
+
+  /**
    * The body the agent sent to `open_pr`, kept rather than shipped: the operator
    * decides whether it reaches the pull request.
    * → docs/spec/07-pull-requests.md#the-agents-draft

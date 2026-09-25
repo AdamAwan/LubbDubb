@@ -197,6 +197,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     linkWorkItemToPull: unused('linkWorkItemToPull'),
     createPull: unused('createPull'),
     setPullTitle: unused('setPullTitle'),
+    getPullBody: unused('getPullBody'),
     setPullBody: unused('setPullBody'),
     setPullBase: unused('setPullBase'),
     abandonPullRequest: unused('abandonPullRequest'),

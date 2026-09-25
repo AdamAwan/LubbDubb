@@ -46,6 +46,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'pr_approved',
   'pr_mergeable',
   'pr_size',
+  'pr_body_edited',
   'pr_closed',
 ]);
 
@@ -120,6 +121,9 @@ export class FakeGitHubIntegration
           break;
         case 'new_pr':
           openFromEvent(world, event, this.defaultBranch);
+          break;
+        case 'pr_body_edited':
+          mutatePr(world, event.prNumber, (pr) => (pr.body = event.body));
           break;
       }
     });
@@ -197,13 +201,13 @@ export class FakeGitHubIntegration
 
   async setPullBody(input: PrBodyInput): Promise<SendResult> {
     this.bodies.set(input.prNumber, input.body);
+    this.world.mutate((world) => mutatePr(world, input.prNumber, (pr) => (pr.body = input.body)));
     return { ok: true, ref: `fake-body_${nanoid(6)}` };
   }
 
   /**
-   * The body one pull request carries. Kept beside the world rather than on
-   * `PullRequest`, because no reading the harness makes needs a pull request's body
-   * and a domain field nothing reads is a field the next change has to keep true.
+   * The body one pull request carries, kept whether or not the pull request is in
+   * the world yet.
    *
    * @public the seam a test asserts a pushed description through
    */

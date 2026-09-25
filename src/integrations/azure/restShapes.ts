@@ -19,6 +19,7 @@ export interface RawPull {
   targetRefName: string;
   isDraft?: boolean;
   mergeStatus?: string;
+  description?: string;
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string; displayName?: string };
   reviewers?: Array<{ vote?: number; uniqueName?: string; isRequired?: boolean; isContainer?: boolean }>;
@@ -131,6 +132,7 @@ export function toPull(p: RawPull, url: string): AzPull {
     url,
     isDraft: p.isDraft ?? false,
     mergeStatus: p.mergeStatus ?? 'notSet',
+    description: p.description ?? '',
     reviewers: (p.reviewers ?? []).map((r) => ({
       uniqueName: r.uniqueName ?? '',
       vote: r.vote ?? 0,

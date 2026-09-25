@@ -27,6 +27,10 @@ export class HydrationCache<V> {
     }
   }
 
+  delete(key: number): void {
+    this.entries.delete(key);
+  }
+
   retain(keys: Iterable<number>): void {
     const live = new Set(keys);
     for (const key of this.entries.keys()) if (!live.has(key)) this.entries.delete(key);

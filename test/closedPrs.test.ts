@@ -366,6 +366,7 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     setPullLabel: unused,
     createPull: unused,
     setPullTitle: unused,
+    getPullBody: unused,
     setPullBody: unused,
     setPullBase: unused,
     abandonPullRequest: unused,
