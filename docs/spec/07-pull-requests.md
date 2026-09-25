@@ -1101,7 +1101,7 @@ this to someone?"_. The shortlist is drawn from people they already assign, and 
 drawn the same size, so saying no is as cheap as picking. The habit spreads by example. Nothing is
 posted to anybody, and nothing is asked twice.
 
-**When it is asked** — `assignAskDue` (`src/pr/prAssignAsk.ts`), all of:
+**When it is asked** — `PrAssignDesk.asks` (`src/pr/prAssignAsk.ts`), all of:
 
 | Condition                                                                                                                 | Why                                                                                                                                                                                                                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1114,7 +1114,9 @@ posted to anybody, and nothing is asked twice.
 | The sink `canAssignPr()`, and the shortlist is not empty                                                                  | An ask with no way to answer it, or nobody to offer, is noise.                                                                                                                                                                                                      |
 
 **The shortlist** — `assignShortlist`: everybody the tracker has on the operator's own pull requests,
-open and the last 100 archived, plus the people assigned through this ask. Each person is counted
+open and the last 100 archived, plus the people assigned through this ask. The closed-PR read carries
+assignees for exactly this (GitHub's list payload has them, and so does Azure's reviewer list), so
+the archive holds who each merged pull request went to. Each person is counted
 once per pull request. The operator and each PR's author are left out. People are ranked by how many
 pull requests they were on, then by the most recent one, and the top four are offered. It is learnt
 from what the operator already does, so a deployment whose PRs have never had anyone on them has no
@@ -1122,8 +1124,9 @@ shortlist and gets no ask.
 
 **Answering it.** A name goes through `PrAssignSink.assignPr` ([15](15-integrations.md)): a GitHub
 assignee, or an Azure reviewer (individual, optional). These are the same fields a colleague's harness
-reads as `viewerAssignment`, so the pull request lands on _their_ rail. Only a shortlisted person is
-accepted. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
+reads as `viewerAssignment`, so the pull request lands on _their_ rail. Only a shortlisted person,
+on the fleet's own pull request, with no answer yet, is accepted. A second tab pressing a stale row
+cannot assign somebody in the tracker behind an answer already recorded. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
 answer is one `pr_assign_asks` row ([14](14-persistence.md)).
 
 ### How long it has been waiting on a reviewer

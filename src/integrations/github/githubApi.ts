@@ -60,6 +60,7 @@ export interface GhClosedPull {
   branch: string;
   baseBranch: string;
   authorLogin: string;
+  assigneeLogins?: string[];
   url: string;
   merged: boolean;
   closedAt: string;

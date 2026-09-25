@@ -111,6 +111,7 @@ export interface AzClosedPull {
   branch: string;
   baseBranch: string;
   authorUniqueName: string;
+  reviewers?: AzReviewer[];
   url: string;
   merged: boolean;
   closedAt: string;

@@ -144,6 +144,10 @@ test('"nah" ends the ask for good, and assigns nobody', async () => {
   assert.equal(askOf(system, 7), undefined);
   assert.deepEqual(assigned, []);
 
+  const stale = await app.inject({ method: 'POST', url: '/api/prs/7/assign', payload: { personId: 'dave' } });
+  assert.equal(stale.statusCode, 409, 'a stale row in another tab cannot assign behind a recorded "nah"');
+  assert.deepEqual(assigned, []);
+
   const missing = await app.inject({ method: 'POST', url: '/api/prs/99/assign/decline' });
   assert.equal(missing.statusCode, 404);
 });

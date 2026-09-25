@@ -243,6 +243,17 @@ test('the github provider reports recently-closed PRs, marked merged vs closed-u
   assert.deepEqual(slice.pullRequests, [], 'closed PRs never join the open list');
 });
 
+test('a closed PR keeps who it went to, so the archive can teach the assign shortlist', async () => {
+  const integration = new GitHubSourceControlIntegration({
+    api: ghApi([ghClosed({ assigneeLogins: ['carol'] }), ghClosed({ number: 43 })], []),
+    closedPrWindowMs: 6 * HOUR,
+    now: () => NOW,
+  });
+  const closed = (await integration.snapshot()).closedPullRequests!;
+  assert.deepEqual(closed.find((p) => p.number === 42)?.assignees, [{ id: 'carol', name: 'carol' }]);
+  assert.equal(closed.find((p) => p.number === 43)?.assignees, undefined, 'not reported is not "nobody"');
+});
+
 test('the github provider reaches back to the sweep mark, so a merge during an outage is still read', async () => {
   const since: string[] = [];
   const store = new Store(':memory:');

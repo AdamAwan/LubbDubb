@@ -208,6 +208,7 @@ export class AzureDevOpsSourceControlIntegration
       .map((p) => {
         const pr = mapClosedPull(p);
         if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
+        if (p.reviewers !== undefined) pr.assignees = namedReviewers(p.reviewers);
         return pr;
       });
   }

@@ -193,6 +193,7 @@ export class OctokitGitHubApi implements GitHubApi {
           branch: p.head.ref,
           baseBranch: p.base.ref,
           authorLogin: p.user?.login ?? '',
+          assigneeLogins: (p.assignees ?? []).map((a) => a.login).filter((login) => login !== ''),
           url: p.html_url,
           merged: p.merged_at !== null,
           closedAt: p.closed_at,

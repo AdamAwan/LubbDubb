@@ -1,6 +1,7 @@
 import type { AreaPathTree } from '../../intake/placement.js';
 import type {
   AzClosedPull,
+  AzReviewer,
   AzPolicyEvaluation,
   AzPull,
   AzThread,
@@ -39,6 +40,7 @@ export interface RawClosedPull {
   status?: string;
   closedDate?: string;
   createdBy?: { uniqueName?: string };
+  reviewers?: RawPull['reviewers'];
   lastMergeCommit?: { commitId?: string };
 }
 
@@ -138,15 +140,19 @@ export function toPull(p: RawPull, url: string): AzPull {
     url,
     isDraft: p.isDraft ?? false,
     mergeStatus: p.mergeStatus ?? 'notSet',
-    reviewers: (p.reviewers ?? []).map((r) => ({
-      ...(r.id ? { id: r.id } : {}),
-      ...(r.displayName ? { displayName: r.displayName } : {}),
-      uniqueName: r.uniqueName ?? '',
-      vote: r.vote ?? 0,
-      isRequired: r.isRequired ?? false,
-      isContainer: r.isContainer ?? false,
-    })),
+    reviewers: toReviewers(p.reviewers),
   };
+}
+
+function toReviewers(raw: RawPull['reviewers']): AzReviewer[] {
+  return (raw ?? []).map((r) => ({
+    ...(r.id ? { id: r.id } : {}),
+    ...(r.displayName ? { displayName: r.displayName } : {}),
+    uniqueName: r.uniqueName ?? '',
+    vote: r.vote ?? 0,
+    isRequired: r.isRequired ?? false,
+    isContainer: r.isContainer ?? false,
+  }));
 }
 
 export function toClosedPull(p: RawClosedPull, closedAt: string, url: string): AzClosedPull {
@@ -156,6 +162,7 @@ export function toClosedPull(p: RawClosedPull, closedAt: string, url: string): A
     branch: stripRef(p.sourceRefName),
     baseBranch: stripRef(p.targetRefName),
     authorUniqueName: p.createdBy?.uniqueName ?? '',
+    ...(p.reviewers === undefined ? {} : { reviewers: toReviewers(p.reviewers) }),
     url,
     merged: p.status === 'completed',
     closedAt,

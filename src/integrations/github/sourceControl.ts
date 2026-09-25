@@ -248,6 +248,8 @@ export class GitHubSourceControlIntegration
       .map((p) => {
         const pr = mapClosedPull(p);
         if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
+        if (p.assigneeLogins !== undefined)
+          pr.assignees = p.assigneeLogins.map((login) => ({ id: login, name: login }));
         return pr;
       });
   }
