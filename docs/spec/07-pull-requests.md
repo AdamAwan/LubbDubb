@@ -829,8 +829,10 @@ makes the one cut the store cannot, dropping the parts whose pull request has si
 because a change already reviewed is not one anybody is going to describe.
 
 **The ask carries the act, not just the situation.** Its card says what the gap is and then presses
-through to the field: **Describe it** opens the pull request's own page, which is where the field is
-([above](#the-pull-requests-own-page-is-where-it-is-written)). An ask that described the gap and left
+through to the field: the ask draws the pull request's own description card — **Describe it**,
+**Reveal the agent's draft**, **Use the agent's**, **Hand it to the agent** — so it is answered where
+it is asked, focus mode included, with the pull request's page one `Ref` away for reading the change.
+An ask that described the gap and left
 the operator on a page without it was the same failure one layer up from the one this section exists
 to remove — the gap named where the person who could close it can see it, and no way from there to
 closing it.
