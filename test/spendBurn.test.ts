@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { burnPass, validateBurnPolicy, DEFAULT_BURN, type BurnPolicy } from '../src/spendBurn.js';
+import { burnPass, validateBurnPolicy, DEFAULT_BURN, type BurnPolicy } from '../src/insights/spendBurn.js';
 import type { Agent, HumanTask, Task } from '../src/types.js';
 
 const T = '2026-08-04T09:00:00.000Z';

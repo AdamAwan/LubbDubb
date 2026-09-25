@@ -8,7 +8,7 @@ import { resolveWindow, sinceOrEpoch, type InsightsWindow } from '../src/insight
 import { Store } from '../src/store/store.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../src/store/mcpCalls.js';
 import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

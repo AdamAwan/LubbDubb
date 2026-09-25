@@ -1,6 +1,6 @@
 import { issueOriginRef } from '../issueOrigins.js';
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
-import { sheetBenchLine } from '../remoteValidation/sheet.js';
+import { sheetBenchLine } from './remote/sheet.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { liveChecks, outstandingChecks } from './verdict.js';
 

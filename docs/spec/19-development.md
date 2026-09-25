@@ -107,7 +107,7 @@ under `.testbuild/test/`.
 
 The reason is that the suite used to be **transpile-bound**, not work-bound. Node's test runner gives
 each test file its own process, and under `--import tsx` each of those ~320 processes re-transpiled
-the same module graph from scratch: a file that does nothing but import `src/system.ts` cost ~1.9s,
+the same module graph from scratch: a file that does nothing but import `src/system/system.ts` cost ~1.9s,
 of which ~1.7s was transpile. The suite burned 6m47s of CPU to produce 2m18s of wall clock — the
 parallelism was spent on repeating one piece of work 320 times.
 
@@ -385,7 +385,7 @@ what settle whether a new cut is worth making.
 - **Domain types live in `src/types.ts`**; the shapes the HTTP routes ship live in `src/wire.ts`, which
   the cockpit re-exports through `web/src/types.ts`. Both are declaration-only and type-imported, so the
   SPA still bundles no server code — `test/wireContract.test.ts` enforces it.
-- **`src/system.ts` is the composition root.** Every module is wired there through its interface, so
+- **`src/system/system.ts` is the composition root.** Every module is wired there through its interface, so
   any one is swappable. A new component is threaded through it. `buildSystem` is a sequence of
   per-area phases — foundation (store, connector, worktrees), agent runtime, the two MCP channels,
   the agent manager, the fleet desks, intake/PR desks, environment desks, bench desks, the harness,
@@ -396,7 +396,7 @@ what settle whether a new cut is worth making.
   the last phase returns — so a component left out is a type error, not an `undefined` found at the
   first call. Nothing may call such a closure during construction; one that does throws rather than
   reading a half-built fleet. `buildSystem`, the channels, the harness and the pulse wiring stay in
-  `src/system.ts`; the other phases are written in its siblings — `systemFoundation.ts` (foundation,
+  `src/system/system.ts`; the other phases are written in its siblings — `systemFoundation.ts` (foundation,
   agent runtime, `BuildOptions`, `Late` and its binding), `systemFleet.ts` (agent manager, fleet
   desks, dispatcher), `systemDesks.ts` (intake, environment and bench desks) and
   `systemLocalRuns.ts` — and are only ever called from `buildSystem`.
@@ -456,7 +456,7 @@ runtime, and whether it touches the network at all, depend on a remote nobody de
 roughly half the suite's wall clock before the tests said otherwise.
 
 So a test config sets `selfUpdate: { enabled: false }` unless the self-update watch **is** the
-subject; `src/system.ts` reads that flag and hands the harness no desk at all. The same shape as the
+subject; `src/system/system.ts` reads that flag and hands the harness no desk at all. The same shape as the
 `gitObserver` row above, and for the same reason — the default reaches the real world, and only the
 test can say it should not.
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { validateLocalValidationReport } from '../../localValidation/report.js';
+import { validateLocalValidationReport } from '../../validation/local/report.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';

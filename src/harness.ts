@@ -16,7 +16,7 @@ import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import type { Action, IssueRun, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
-import { runPulse, type PulseDeps, type PulsePhase } from './pulseDesks.js';
+import { runPulse, type PulseDeps, type PulsePhase } from './system/pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { GoalIntake } from './intake/sitting.js';

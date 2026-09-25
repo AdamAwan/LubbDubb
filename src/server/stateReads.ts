@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { issueOriginRef } from '../issueOrigins.js';
-import type { System } from '../system.js';
+import type { System } from '../system/system.js';
 import type { Config } from '../config/config.js';
 import { revealGateOn } from '../config/config.js';
 import { planIsWithheld, withheldAction, WITHHELD_PLAN } from './planReveal.js';

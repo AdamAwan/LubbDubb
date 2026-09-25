@@ -7,7 +7,7 @@ import { loadConfig, loadConfigFromText } from '../src/config/config.js';
 import { CONFIG_FIELDS } from '../src/config/configFields.js';
 import { groupedTopLevelKeys } from '../src/server/runningConfig.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
-import { stateExecutor, stateExecutors } from '../src/remoteValidation/enabled.js';
+import { stateExecutor, stateExecutors } from '../src/validation/remote/enabled.js';
 
 // → docs/spec/36-remote-validation.md
 

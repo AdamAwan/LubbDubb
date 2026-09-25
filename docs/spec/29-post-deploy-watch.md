@@ -577,7 +577,7 @@ import it, which is asserted structurally, so a watch **cannot** spend an agent 
   check was declared and the query that read it ([13](13-jobs-and-tickets.md#human-tasks)). One row
   per watch that settled or is settling regressed, never one per reading.
 - **The goal page**, which draws every check on every environment whether or not anything is wrong.
-- **A bug**, through the filing job that already exists (`src/bugFiling.ts`), behind an operator's
+- **A bug**, through the filing job that already exists (`src/tickets/bugFiling.ts`), behind an operator's
   click. The reading rides as the operator's own report, so the fleet is handed the numbers rather
   than a paraphrase, and the bug is related back to the goal by `IssueCreateInput` rather than by a
   sentence in a prompt ([13](13-jobs-and-tickets.md#filing-a-ticket)).

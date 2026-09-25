@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueOriginNumber, issueOriginRef } from '../../issueOrigins.js';
 import { checked, IssueNumberParams } from '../validation.js';
-import type { System } from '../../system.js';
+import type { System } from '../../system/system.js';
 import type { LocalRun } from '../../types.js';
 import type { RouteContext } from './context.js';
 

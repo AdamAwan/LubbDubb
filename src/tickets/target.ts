@@ -1,7 +1,7 @@
 import type { Config } from '../config/config.js';
 import { trackerCoordinates } from '../mcp/findings.js';
-import { ticketAssignee } from '../ticketAssignment.js';
-import { bugFilingType, filingType } from '../ticketTypes.js';
+import { ticketAssignee } from './ticketAssignment.js';
+import { bugFilingType, filingType } from './ticketTypes.js';
 import { watchLabelFor } from '../watchLabels.js';
 
 // → docs/spec/13-jobs-and-tickets.md

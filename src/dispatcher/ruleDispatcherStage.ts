@@ -13,7 +13,7 @@ import { blockedGoals } from '../obstacles/blocked.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { appraisalHold } from '../intake/appraisal.js';
 import { resolveModelTag } from '../modelLabels.js';
-import { pinnedProfileFor } from '../profilePin.js';
+import { pinnedProfileFor } from '../intake/profilePin.js';
 import { issueOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';

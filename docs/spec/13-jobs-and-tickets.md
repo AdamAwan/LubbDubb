@@ -72,7 +72,7 @@ then the funnel_; this is the prompt arm wired to that convergence.
 - **The body was never being delegated.** It is the operator's own request, verbatim — the only
   judgement a desk agent added was a title, and the request's first line is that. The wording stays
   overridable through the `brief-ticket-body` template, whose pure fields come from
-  `briefTicketFields(request)` (`src/briefTicket.ts`); `body.title` on the launch still wins
+  `briefTicketFields(request)` (`src/tickets/briefTicket.ts`); `body.title` on the launch still wins
   over the derived one.
 - **The whole transform is at route time; rule `manual-job` is untouched.** That is a clean recursion
   boundary: only an operator-injected code brief via this route becomes a ticket, and there is no
@@ -339,8 +339,8 @@ command any more (issue #394).
   of the four routes then 409s, and the snapshot ships `config.canFileTickets: false` so the cockpit
   hides the buttons rather than offering a click that cannot work. One predicate, five surfaces.
 - **The type, the labels, the assignee and any relation are decided by the harness.** `ticketAssignee`
-  (`src/ticketAssignment.ts`) reads `userId` ([02](02-configuration.md#userid)); `filingType` /
-  `bugFilingType` (`src/ticketTypes.ts`) read `issueFilingTypes` and `issueBugType`
+  (`src/tickets/ticketAssignment.ts`) reads `userId` ([02](02-configuration.md#userid)); `filingType` /
+  `bugFilingType` (`src/tickets/ticketTypes.ts`) read `issueFilingTypes` and `issueBugType`
   ([02](02-configuration.md#what-type-a-filed-item-is)). Each of those was a sentence in a prompt, and
   a sentence is only as reliable as a model's memory of it: a brief's ticket without its watch
   label is never dispatched for, an Azure bug without its relation cannot be traced back to its story,

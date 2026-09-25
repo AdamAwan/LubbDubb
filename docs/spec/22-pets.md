@@ -767,7 +767,7 @@ and folding it into a headline rate would describe that moment rather than the d
 `src/pets/scan.ts` collects every operator action, `src/pets/keeper.ts` drops the ones already
 rolled, rolls the rest in timestamp order, and inserts what hatched.
 
-It is wired in `src/system.ts` against the harness's `cycle:end` event. Neither `src/harness.ts` nor
+It is wired in `src/system/system.ts` against the harness's `cycle:end` event. Neither `src/harness.ts` nor
 anything under `src/dispatcher/` names pets — the harness has no reason to know the vivarium exists —
 and a scan that throws is recorded through `errors.record` rather than allowed to reach the pulse.
 
@@ -1117,7 +1117,7 @@ rather than a dial one deployment turns and the rest do not.
 it cannot reach the roll at all.
 
 `PetKeeper` takes the rates as a third constructor argument, defaulted to `PET_RULES`. That is a
-**test seam and nothing else** — `src/system.ts` passes two arguments, and `test/pets.test.ts`
+**test seam and nothing else** — `src/system/system.ts` passes two arguments, and `test/pets.test.ts`
 asserts that `configFields.ts` exposes `pets.enabled` and `pets.visible` alone and that `PetPolicy`
 holds no number.
 

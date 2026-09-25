@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PULSE_PHASES, PULSE_PIPELINE, runPulse, type PulseDeps, type PulseId } from '../src/pulseDesks.js';
+import { PULSE_PHASES, PULSE_PIPELINE, runPulse, type PulseDeps, type PulseId } from '../src/system/pulseDesks.js';
 import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
 import type { Store } from '../src/store/store.js';
 import type { WorldSnapshot } from '../src/types.js';

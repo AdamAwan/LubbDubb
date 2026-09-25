@@ -1740,7 +1740,7 @@ export interface RemoteRun {
 
 /**
  * One open run, with everything the dispatcher needs to put an agent on it already rendered. The
- * rule reads these and imports nothing from `src/remoteValidation/` or `src/environments/` — the
+ * rule reads these and imports nothing from `src/validation/remote/` or `src/environments/` — the
  * arrangement `testPartNote` and `stateDeclareNote` already make for their prompts.
  */
 export interface RemoteRunBrief {
@@ -1760,7 +1760,7 @@ export interface RemoteRunBrief {
   /**
    * The browser MCP server the run's agent drives, with this run's own directories substituted, or
    * null where the deployment has configured none. It is folded here rather than in the rule because
-   * `src/remoteValidation/` is a lens as far as the dispatcher is concerned.
+   * `src/validation/remote/` is a lens as far as the dispatcher is concerned.
    * → docs/spec/36-remote-validation.md#the-browser-the-run-drives
    */
   browser: ExtraMcpServer | null;

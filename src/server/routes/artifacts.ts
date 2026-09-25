@@ -4,7 +4,7 @@ import { extname, isAbsolute, resolve, sep } from 'node:path';
 import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCapability.js';
 import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
-import { localValidationOutputDir } from '../../localValidation/origin.js';
+import { localValidationOutputDir } from '../../validation/local/origin.js';
 import { validationGoalDir, validationResourcePath } from '../../validation/resources.js';
 import type { RouteContext } from './context.js';
 

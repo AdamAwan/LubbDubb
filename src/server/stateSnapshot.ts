@@ -1,4 +1,4 @@
-import type { System } from '../system.js';
+import type { System } from '../system/system.js';
 import type { Config } from '../config/config.js';
 import { withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import type { StateSection } from '../wire.js';

@@ -11,7 +11,7 @@ import { StreamJsonSession, type Spawner, type StreamChild } from '../src/agents
 import { Store } from '../src/store/store.js';
 import { buildApp } from '../src/server/app.js';
 import { absolutePrefixes } from '../src/server/routes/artifacts.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 

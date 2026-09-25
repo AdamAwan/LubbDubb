@@ -1,6 +1,6 @@
 # 32 — Local validation
 
-`src/localValidation/`. The fleet driving the machine's **one** dev environment and saying whether a
+`src/validation/local/`. The fleet driving the machine's **one** dev environment and saying whether a
 goal's changes work: an operator presses a button, the harness brings the goal's code up
 ([23](23-local-runs.md)), and one agent writes a test plan for the change, waits for the environment,
 drives the running application through the plan, and reports.
@@ -57,7 +57,7 @@ the cockpit's word and tone maps rewritten around it.
 `run_id` and `commit_sha` record **which environment the plan was written against**, and that pin is
 the whole correctness of the feature.
 
-`validationRunStale` (`src/localValidation/stale.ts`) is the one predicate, asked by the rule before
+`validationRunStale` (`src/validation/local/stale.ts`) is the one predicate, asked by the rule before
 it dispatches, by `local_validation_report` before it records, and by the desk's sweep before it
 abandons. Three copies would be free to disagree, and the disagreement that matters is quiet: a
 report accepted against a checkout that has moved is a reading of code nobody asked about, filed
@@ -237,7 +237,7 @@ the fleet on the strength of an exploratory run against a branch — the same ov
 
 ## The desk
 
-`LocalValidationDesk` (`src/localValidation/desk.ts`) is the one owner of every row write and of the
+`LocalValidationDesk` (`src/validation/local/desk.ts`) is the one owner of every row write and of the
 staleness question every writer has to ask. Four things end a row and three of them are not in the
 caller's hands, so collecting them is what lets the sweep and the report ask one predicate — and the
 store's `WHERE status IN ('pending','dispatched')` guards settle the race between them, so the first

@@ -135,7 +135,7 @@ reaches it, because they are keyed on a key and `agentMode` is neither gone nor 
 still chooses between the two runtimes that are left, and what went is one of the three things it
 could say. It was in the example config's documented set for as long as the runtime existed, so it is
 the stale value most likely to still be sitting in a file; and it already took the deployment down,
-because `src/system.ts` indexes a two-key table by the string and an unknown mode is `undefined`. So
+because `src/system/system.ts` indexes a two-key table by the string and an unknown mode is `undefined`. So
 `validateAgentMode` is not a new refusal — it is that one given a name, the two modes that are left,
 and what to set instead. → [10](10-agent-runtimes.md)
 
@@ -1104,7 +1104,7 @@ The chain a dispatch resolves through is then three levels, in `resolveAgentProf
 - **It reaches every dispatch on that issue's origins, with two carve-outs.** `issue-retro` runs on its
   `byRule` entry whatever the goal is pinned to: a retrospective **gates nothing**, so inheriting a deep
   pin is real money on a write-up no dispatch reads. `issue-appraisal` runs on its own entry because it is
-  the stage that _produces_ the pin. Both are declared in `UNPINNED_SUFFIXES` in `src/profilePin.ts`.
+  the stage that _produces_ the pin. Both are declared in `UNPINNED_SUFFIXES` in `src/intake/profilePin.ts`.
   Nothing outside the `issue:<n>` subtree is pinned at all, so the CI and review rules on a pull request
   the work produced resolve on `byRule` — following a pin down that lineage is a second mechanism.
 - **A tag naming no configured profile is ignored, and never parks anything.** Config is the operator's
@@ -1295,7 +1295,7 @@ it: watched items exist, and none of them are yours.
 
 #### How assignment reaches the ticket
 
-It is passed to the create (`ticketAssignee`, `src/ticketAssignment.ts` →
+It is passed to the create (`ticketAssignee`, `src/tickets/ticketAssignment.ts` →
 [`createIssue`](15-integrations.md)), and each provider spells it in its own vocabulary — `assignees`
 on GitHub, `System.AssignedTo` on Azure — on the **create itself**, so a filed item is never briefly
 in nobody's queue.
@@ -1313,7 +1313,7 @@ mechanisms that happen to share a name.
 ### What type a filed item is
 
 `issueFilingTypes` names the Azure work item types the harness **creates** at, and the **first** entry
-is the one it uses (`filingType`, `src/ticketTypes.ts`). The three non-bug filing arms — a deferred
+is the one it uses (`filingType`, `src/tickets/ticketTypes.ts`). The three non-bug filing arms — a deferred
 finding, a brief, unrecorded work — used to hardcode `--type Task`, which is the altitude a story
 is **broken down** at rather than the one a backlog is filed at: an item created there has no story
 above it, rolls up to nothing, and appears on no backlog anybody grooms.

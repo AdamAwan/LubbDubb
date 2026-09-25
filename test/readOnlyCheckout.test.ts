@@ -11,7 +11,7 @@ import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeSlotProcesses } from '../src/worktree/fakeSlotProcesses.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import type { Issue, IssueAppraisal, IssueDelivery, Plan, Task, ValidationCheck } from '../src/types.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';

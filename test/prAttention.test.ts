@@ -7,7 +7,7 @@ import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttentio
 import { awaitingReview } from '../src/pr/prHealth.js';
 import { Store } from '../src/store/store.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';

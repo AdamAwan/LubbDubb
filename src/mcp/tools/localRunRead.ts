@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { describeLocalRun } from '../../localRun/describe.js';
 import { toolSchema } from '../schema.js';
-import { localValidationFixOriginParts, localValidationOriginParts } from '../../localValidation/origin.js';
+import { localValidationFixOriginParts, localValidationOriginParts } from '../../validation/local/origin.js';
 import { toolError, toolJson } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 

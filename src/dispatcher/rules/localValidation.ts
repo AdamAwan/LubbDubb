@@ -1,13 +1,13 @@
 import { issueOriginNumber } from '../../issueOrigins.js';
-import { localValidationBriefing } from '../../localValidation/briefing.js';
+import { localValidationBriefing } from '../../validation/local/briefing.js';
 import {
   localValidationKey,
   localValidationOrigin,
   localValidationOutputDir,
   localValidationProfileDir,
-} from '../../localValidation/origin.js';
-import { substituteBrowserArgs } from '../../localValidation/policy.js';
-import { validationRunStale } from '../../localValidation/stale.js';
+} from '../../validation/local/origin.js';
+import { substituteBrowserArgs } from '../../validation/local/policy.js';
+import { validationRunStale } from '../../validation/local/stale.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { liveChecks } from '../../validation/verdict.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';

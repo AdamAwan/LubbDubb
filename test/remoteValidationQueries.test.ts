@@ -4,12 +4,12 @@ import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
-import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { CommandStateReader } from '../src/remoteValidation/stateReader.js';
+import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
+import { CommandStateReader } from '../src/validation/remote/stateReader.js';
 import { parseWatchResult } from '../src/environments/watchResult.js';
 import { StateSchema } from '../src/validation/stateDocument.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';

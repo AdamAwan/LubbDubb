@@ -19,7 +19,7 @@ import {
 } from '../src/pool/document.js';
 import { PoolDesk } from '../src/pool/poolDesk.js';
 import type { PoolDigestDocument } from '../src/types.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
 

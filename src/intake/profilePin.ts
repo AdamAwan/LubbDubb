@@ -1,6 +1,7 @@
 import type { AgentModels } from '../agents/modelPolicy.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
+import { inIssueOriginFamily, issueOriginHead, issueOriginRole, parseIssueOrigin } from '../issueOrigins.js';
 import { modelLabelsFor } from '../modelLabels.js';
 import type { IssueLabelInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
@@ -57,4 +58,24 @@ export async function applyProfilePin(
   const appraisal = ctx.store.verdicts.getAppraisal(origin);
   const answered = appraisal !== null && ctx.store.verdicts.answerAppraisalProfile(origin, appraisal.goalRef);
   return { ok: true, profile: wanted, answered };
+}
+
+interface PinLookup {
+  goal: (issueNumber: number) => string | null;
+  part: (issueNumber: number, slug: string) => string | null;
+}
+
+export function pinnedProfileFor(originRef: string | null, lookup: PinLookup): string | null {
+  const head = issueOriginHead(originRef);
+  if (head === null) return null;
+  const { issueNumber, suffix } = head;
+  const family = parseIssueOrigin(originRef)?.family ?? null;
+  if (family === 'retro' || family === 'appraisal') return null;
+
+  const part =
+    suffix !== null && inIssueOriginFamily('part', originRef)
+      ? lookup.part(issueNumber, suffix.slice('part:'.length))
+      : null;
+  if (part !== null) return part;
+  return issueOriginRole(issueNumber, originRef) === null ? null : lookup.goal(issueNumber);
 }
