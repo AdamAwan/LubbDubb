@@ -5,7 +5,7 @@ import type { CockpitActions } from '../../cockpit/actions.js';
 import { Ref } from '../../components/refs.js';
 import { standsFor } from '../../view/goalPage.js';
 import { elapsed } from '../../components/util.js';
-import { agentLamp } from '../Overview.js';
+import { agentLamp } from '../fleetRows.js';
 
 // → docs/spec/17-cockpit.md#what-the-fleet-is-doing-above-the-ask
 
