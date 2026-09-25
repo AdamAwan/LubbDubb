@@ -1,5 +1,5 @@
 import { prRefStyle } from '../pr/prRef.js';
-import { revealGateOn, type Config } from '../config/config.js';
+import type { Config } from '../config/config.js';
 import { buildPoolTransport, worldScope } from '../integrations/registry.js';
 import { PoolDesk } from '../pool/poolDesk.js';
 import { harnessVersion } from '../pool/harnessVersion.js';
@@ -185,19 +185,11 @@ export function buildBenchDesks(
   config: Config,
   opts: BuildOptions,
   base: Foundation,
-  { prompts, predictions }: Channels,
+  { prompts }: Channels,
   { sequenceWatchPolicy, agents }: Fleet,
 ) {
   const { store, connector, sink, errors, runtimeControl, watchLabel } = base;
-  const closeOuts = new DeliveryCloseOutDesk(
-    store,
-    config.environments,
-    () => sink.canCloseIssue(),
-    // The one place the close-out bench and the prediction record meet, and it
-    // hands over origin refs alone. With the gate off the set is empty, which is
-    // also what settles any row that was standing when it was turned off.
-    () => (revealGateOn(config) ? new Set(predictions.listOutcomeOwed()) : new Set()),
-  );
+  const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => sink.canCloseIssue());
 
   const unwatchedChildren = new UnwatchedChildDesk({
     store,

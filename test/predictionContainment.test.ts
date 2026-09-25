@@ -82,7 +82,6 @@ const FORBIDDEN: { pattern: RegExp; what: string }[] = [
   // Stage 6, and the readers that return whole rows.
   { pattern: /\blistPredictions\b/, what: 'lists predictions, which carry their slot text' },
   { pattern: /\blistReveals\b/, what: 'lists reveal stamps' },
-  { pattern: /\blistOutcomeOwed\b/, what: 'asks which goals owe moment two' },
   { pattern: /\bgetPrediction\b/, what: 'reads a prediction' },
   { pattern: /\bgetReveal\b/, what: 'reads a reveal stamp' },
   { pattern: /\bpredictionFacts\b/, what: 'names the aggregate’s intake' },

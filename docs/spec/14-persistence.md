@@ -153,6 +153,14 @@ invisible on databases created by an older build. `ensureColumns` (`src/store/mi
 gap with additive, idempotent `ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe
 to run on every boot.
 
+### Retiring a bench-row kind
+
+A `HumanTaskKind` nothing files any more keeps its name, because its rows stay in `human_tasks`, and
+the rows still open are declined at store open by a plain `UPDATE` in `migrate` — idempotent because
+nothing can re-file the kind, so it needs no one-shot id. Declined, never done: a decline is the
+record of a question left unanswered. `outcome` is the one so far
+([24](24-environments.md#the-plan-verdict-row-is-retired)).
+
 ### A partial index predicate is not idempotent
 
 `CREATE UNIQUE INDEX IF NOT EXISTS` is idempotent about the index **existing** and says nothing about
@@ -1676,8 +1684,12 @@ an unrevealed goal can carry no moment-one mark at all, so a moment-two mark on 
 the second aggregate's columns with nothing in the first's to compare against — the mirror of the skip
 this moment is careful not to fold into a miss.
 
-**Delivery is deliberately not required.** Delivery is what makes the question worth _asking_ — it is
-what puts the bench row up — not what makes an answer true. A plan can be plainly wrong before
+**Moment two is no longer asked.** The close-out bench row that asked it is retired
+([24](24-environments.md#the-plan-verdict-row-is-retired)), so the columns hold the answers given
+while it was, and the route still takes a mark.
+
+**Delivery is deliberately not required.** Delivery is what made the question worth _asking_, not
+what makes an answer true. A plan can be plainly wrong before
 anything ships, a delivery can be cleared and re-made, and re-marking is allowed anyway, so a refusal
 would only move the same answer later. It would also make `PredictionStore` read delivery bookkeeping
 off `Store`, which it is deliberately contained from.

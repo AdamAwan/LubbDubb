@@ -293,11 +293,10 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
   const live = livePageChecks(page);
   return {
     /* Open while the prediction is the live question — the plan is at its gate and
-       marking it against what the plan says is the whole of what this pane is for —
-       and again when delivery has landed and the second question is being asked.
-       Between those it is a record of a moment that has passed, and an operator
+       marking it against what the plan says is the whole of what this pane is for.
+       After that it is a record of a moment that has passed, and an operator
        watching the work is reading past it to reach the parts. */
-    prediction: !planUnderWay(page) || outcomeAsked(page),
+    prediction: !planUnderWay(page),
     /* The page cannot answer this one: whether anybody has written criteria is the
        card's own read, not anything on the goal. So the default here is the widest
        the page can honestly give, and the card narrows it once its reading lands —
@@ -407,10 +406,6 @@ export function splitGoalAsks(
     (GOAL_ASK_TAB[row.kind] === tab ? inPane : lines).push(row);
   }
   return { inPane, lines };
-}
-
-function outcomeAsked(page: GoalPageView): boolean {
-  return page.needs.some((need) => need.kind === 'outcome');
 }
 
 function workStarted(page: GoalPageView): boolean {
@@ -644,7 +639,6 @@ export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   unwatched: 'watch',
   watch: 'watch',
   close_out: 'close',
-  outcome: 'close',
   shortfall: 'close',
   /* About the goal itself, or about the fleet carrying it: neither has a stage
      to be drawn in, so neither carries a dot. */

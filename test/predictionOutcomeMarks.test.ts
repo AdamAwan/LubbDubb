@@ -136,15 +136,3 @@ test('moment two is re-markable, and un-marking every slot takes the stamp back 
   );
   store.close();
 });
-
-test('the owed list is moment one answered and moment two not, and it carries refs only', () => {
-  const { store, predictions } = predicted();
-  assert.deepEqual(predictions.listOutcomeOwed(), [], 'an unmarked goal owes nothing — it was never asked');
-
-  assert.ok(predictions.recordPlanMarks({ originRef: 'issue:12', marks: { locus: 'matched' } }).ok);
-  assert.deepEqual(predictions.listOutcomeOwed(), ['issue:12']);
-
-  assert.ok(predictions.recordOutcomeMarks({ originRef: 'issue:12', marks: { locus: 'missed' } }).ok);
-  assert.deepEqual(predictions.listOutcomeOwed(), [], 'answered, so no longer owed');
-  store.close();
-});

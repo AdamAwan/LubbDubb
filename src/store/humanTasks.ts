@@ -1,4 +1,6 @@
 import { nanoid } from 'nanoid';
+import type Database from 'better-sqlite3';
+import { DESK_SETTLED } from '../benchSettlement.js';
 import type { HumanTask, HumanTaskInput, HumanTaskKind, HumanTaskStatus } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import { labelsById, type StoreContext } from './context.js';
@@ -8,6 +10,13 @@ import { labelsById, type StoreContext } from './context.js';
 export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
   human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'`, dismissed_at: `TEXT` },
 };
+
+export function declineRetiredOutcomeRows(db: Database.Database, now: string): void {
+  db.prepare(
+    `UPDATE human_tasks SET status='declined', resolution=?, updated_at=?, resolved_at=?
+      WHERE kind='outcome' AND status='open'`,
+  ).run(DESK_SETTLED + 'the bench no longer asks whether the plan turned out right', now, now);
+}
 
 export class HumanTaskStore {
   constructor(private readonly ctx: StoreContext) {}

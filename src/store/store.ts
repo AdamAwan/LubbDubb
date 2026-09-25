@@ -16,7 +16,7 @@ import { RemedyStore } from './remedies.js';
 import { McpCallStore } from './mcpCalls.js';
 import { ApiErrorStore } from './apiErrors.js';
 import { SurfaceReachStore } from './surfaceReach.js';
-import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
+import { declineRetiredOutcomeRows, HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import {
   releaseValidationPlansFromBeforeTheGate,
@@ -113,6 +113,7 @@ function migrate(db: Database.Database, clock: Clock): void {
   if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(db, clock());
   adoptFloorCompletions(db);
   absorbSinglePlanStatus(db);
+  declineRetiredOutcomeRows(db, clock());
   backfillWholePlanParts(db, clock());
   backfillTaskDispatchKind(db);
   repairPartRefGoals(db);

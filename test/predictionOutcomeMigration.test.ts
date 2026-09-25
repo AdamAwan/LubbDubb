@@ -74,7 +74,6 @@ test("moment two's columns are declared, so a database from before them gains th
     'null is the truth for every row written before delivery asked — no backfill invents an answer',
   );
   assert.equal(standing.outcomeMarkedAt, null);
-  assert.deepEqual(predictions.listOutcomeOwed(), ['issue:12'], 'and the goal now reads as owing the second moment');
   store.close();
 
   const after = new Database(path);

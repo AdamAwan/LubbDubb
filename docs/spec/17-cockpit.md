@@ -2898,16 +2898,13 @@ disclosure:
   pull requests — folded away. Everything above it is the work; the prediction is a record of a
   moment that has passed, and at the foot of the plan card it was still sitting above three cards an
   operator reads first.
-- **Unless moment two is being asked.** A goal whose delivery has landed has a live question in that
-  panel again, so it opens — still last, where the work it is now a reading of already is.
 - **And only while something in it is unanswered.** An operator who has marked every slot they wrote
-  — and answered moment two where it is asked — has a record, not a question, so the panel arrives
+  has a record, not a question, so the panel arrives
   folded even where the plan is still at its gate. It is the panel's own narrowing of the page's
   default, latched at the first reading and dropped the moment the operator works the disclosure
   themselves. → [Folding what is not relevant yet](#folding-what-is-not-relevant-yet)
 
-Folded, the header still says how much of it is unanswered — `2/3 marked`, and `outcome unanswered`
-where moment two is owed — because what a folded record owes its reader is whether anything in it is
+Folded, the header still says how much of it is unanswered — `2/3 marked` — because what a folded record owes its reader is whether anything in it is
 still theirs to do. The disclosure is the panel's **own**, as [the work record's](#the-record-on-the-goal-it-belongs-to) is:
 only it knows whether the goal carries a prediction at all, and a header drawn outside it would be an
 empty card on every goal nobody predicted.
@@ -2983,7 +2980,8 @@ dot and the rail's row are unchanged, because what needs the operator has not mo
 
 ### Moment two, beside moment one
 
-Where moment two has been asked, each filled slot draws **both** marks, and the card's whole job is
+Moment two is no longer asked ([24](24-environments.md#the-plan-verdict-row-is-retired)), so this
+card is drawn only on a record that answered it while it was. There, each filled slot draws **both** marks, and the card's whole job is
 that an operator cannot mistake which question they are answering. The two share no words: moment one
 asks _"Did you call it?"_ — about your reading of the system — and answers Matched / Missed / Plan is
 silent; moment two asks _"Was the plan right?"_ — about the plan, not about you — and answers Held up
@@ -2998,10 +2996,6 @@ score what the server did not.
 
 An unanswered moment two draws as not-yet-answered, in the same dashed chip moment one uses, with
 nothing pre-selected. It is skippable by design and absent is absent.
-
-The bench row opens the goal **on the pane that draws this card**, in one navigation, through `Place`
-— selecting the goal alone would land a delivered goal on a pane where the card is not drawn, which is
-a rail row that appears to do nothing.
 
 ### Goal criteria, and drift
 
@@ -8771,8 +8765,7 @@ put to. The seed is shaped so the panel is worth reading rather than merely popu
 clear the ten-goal threshold and draw a rate, `avoid` does not and draws the count toward it,
 moment two lags moment one everywhere because it is asked at delivery, and two goals were offered the
 gate and declined it, which is the third outcome the aggregate exists to keep apart from _never
-offered_. Issue #395 carries both moments answered, so the pair sentences are reachable, and its
-`outcome` bench row is the demo's one row that opens a goal on the pane its answer is given on.
+offered_. Issue #395 carries both moments answered, so the pair sentences are reachable.
 
 **What the static demo cannot claim is the containment, and it does not.** A withheld plan's document
 is in the bundle, as every fixture is; what is demonstrated here is the gate's interaction and its

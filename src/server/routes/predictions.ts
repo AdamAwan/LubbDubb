@@ -58,14 +58,7 @@ function registerPredictionRoute(app: FastifyInstance, { system, hub }: RouteCon
 }
 
 function registerMarkRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, predictions, harness } = system;
-
-  /**
-   * Whether this goal owes the second moment, asked of the record rather than
-   * restated here: it is the one predicate the close-out bench files and settles the
-   * `outcome` row on, and a second copy of it in a route is a copy that drifts.
-   */
-  const owesOutcome = (originRef: string): boolean => predictions.listOutcomeOwed().includes(originRef);
+  const { store, predictions } = system;
 
   // The two moments are two routes over the same slots, because they are two
   // records: moment one is a claim about the operator's model of the system and
@@ -83,7 +76,6 @@ function registerMarkRoutes(app: FastifyInstance, { system, hub }: RouteContext)
           return reply
             .code(409)
             .send({ error: 'this goal has no plan yet, so there is nothing to mark the prediction against' });
-        const owedBefore = owesOutcome(originRef);
         const outcome = write({
           originRef,
           marks: { locus: body.locus, cause: body.cause, split: body.split, avoid: body.avoid },
@@ -100,15 +92,6 @@ function registerMarkRoutes(app: FastifyInstance, { system, hub }: RouteContext)
             .send({ error: 'this goal has not been revealed, and a mark against an unseen plan is not a mark' });
         }
         hub.broadcast({ type: 'dirty', sections: ['plans'] });
-        // The press is what makes the bench row wrong, so the press is what has to
-        // settle it. The `outcome` row is filed and settled by `DeliveryCloseOutDesk`
-        // off this same predicate, and nothing else wakes that desk — so without a
-        // cycle here an operator who has just answered "was the plan right?" watches
-        // the row asking them to still sit there until the next pulse, which on an
-        // idle fleet is five minutes away and on a held or in-flight cycle is never.
-        // Only on the flip: a second mark on a moment already answered changes
-        // nothing the desk would decide, and a cycle reads the world.
-        if (owesOutcome(originRef) !== owedBefore) await harness.runCycle('manual');
         return { ok: true, prediction: outcome.prediction };
       }),
     );

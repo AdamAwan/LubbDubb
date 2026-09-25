@@ -286,7 +286,6 @@ function WorkPaneBody({
         <PredictionReview
           issueNumber={page.issue.number}
           revealed={page.plan?.revealed ?? false}
-          outcomeAsked={page.needs.some((need) => need.kind === 'outcome')}
           plan={page.plan}
           parts={page.parts.map((p) => p.part)}
           open={folds.prediction.open}
