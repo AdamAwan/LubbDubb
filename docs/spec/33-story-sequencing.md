@@ -494,7 +494,7 @@ that as "cannot say" and asks. → [14](14-persistence.md#when-a-null-means-some
 ### The Feature page
 
 The sequence **groups the children list that is already on the card** — it does not add a second
-list of the same stories (`web/src/components/FeatureBoard.tsx`). Two lists of the same stories in
+list of the same stories (`web/src/components/featureStories.tsx`). Two lists of the same stories in
 different orders are two answers to "what is under this Feature", and a reader would have to work
 out which to believe. The existing columns are unchanged; what is new is a wave header row above
 each group and, under a held story, a row saying what it waits behind. Within a wave the board's own

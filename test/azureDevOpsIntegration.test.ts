@@ -22,14 +22,11 @@ import {
   parseTags,
   viewerAddedTags,
 } from '../src/integrations/azure/workItems.js';
-import {
-  buildOpenWorkItemQuery,
-  buildWorkItemHistoryQuery,
-  isSignInHtml,
-  policyDisplayName,
-  RestAzureDevOpsApi,
-  type AzureAuth,
-} from '../src/integrations/azure/restAzureDevOpsApi.js';
+import { RestAzureDevOpsApi } from '../src/integrations/azure/restAzureDevOpsApi.js';
+import type { AzureAuth } from '../src/integrations/azure/azureAuth.js';
+import { isSignInHtml } from '../src/integrations/azure/azureTransport.js';
+import { policyDisplayName } from '../src/integrations/azure/restShapes.js';
+import { buildOpenWorkItemQuery, buildWorkItemHistoryQuery } from '../src/integrations/azure/wiql.js';
 import type {
   AzClosedPull,
   AzCommentRef,

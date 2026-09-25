@@ -1881,7 +1881,7 @@ against a claimed check, which is the right door for a person's own run.
 ### The prompts
 
 **Built.** A new `PromptId`, **`remote-validation`**, in the registry in
-`src/dispatcher/promptTemplates.ts`, with a copy of its body under
+`src/dispatcher/promptTemplates.ts` (its entry is written in `src/dispatcher/validationPrompts.ts`), with a copy of its body under
 [`docs/prompt-templates/remote-validation.md`](../prompt-templates/remote-validation.md).
 
 **Everything the agent must read is appended to the rendered prompt, never interpolated**
@@ -1937,7 +1937,7 @@ Two notes are appended to prompts that already exist, both rendered strings rath
 
 **Built.** `resultBy` gains a fourth value, **`spec`**, beside `operator`, `agent` and `desktop`. The
 column exists and only gains a value it may hold, so it needs no migration — `rowToCheck`
-(`src/store/validation.ts`) narrows it and a value it does not recognise reads as attributed to
+(`src/validation/rows.ts`) narrows it and a value it does not recognise reads as attributed to
 nobody, which is the safe direction.
 
 The four are four different facts and the whole feature exists to stop one being assumed from evidence
@@ -2509,7 +2509,7 @@ the four the signals card already draws, the gate introduced no colour of its ow
 the reading half, and what a row nothing was learned from says is why **in words** rather than a
 fifth tint. A colour written as a literal in a stylesheet is a colour no theme can reach, so a later
 tint here is a `--cn-*` property on **both** `:root` blocks and an entry in
-`web/src/cockpit/tokens.ts`. A deselected row is dimmed rather than hidden, because a row an operator
+`web/src/cockpit/tokenTints.ts`. A deselected row is dimmed rather than hidden, because a row an operator
 dropped is a decision they must be able to see and take back.
 
 `RemoteSheetView`, `RemoteSheetRowView`, `RemoteReadingView`, `RemoteRunView` and `RemoteTenantView`

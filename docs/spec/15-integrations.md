@@ -603,8 +603,9 @@ neither costs a request.
 ## The `azure` provider
 
 Azure DevOps Repos + Boards, the same shape: all HTTP behind the narrow `AzureDevOpsApi` seam,
-`RestAzureDevOpsApi` the only file that touches the network _and_ resolves auth, and scripted fakes in
-tests (`test/azureDevOpsIntegration.test.ts`).
+`RestAzureDevOpsApi` — with its transport (`azureTransport.ts`) and auth (`azureAuth.ts`) beside it — the
+only code that touches the network _and_ resolves auth, and scripted fakes in tests
+(`test/azureDevOpsIntegration.test.ts`).
 
 Pure mapping functions: `aggregatePolicyCiStatus`, `computeApproved` (reviewer votes),
 `normalizeMergeState` (`mergeStatus` + `isDraft`), `mergeableFromStatus`, `buildUnresolvedComments`

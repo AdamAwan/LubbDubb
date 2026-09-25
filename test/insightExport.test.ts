@@ -7,7 +7,7 @@ import { repoText } from './support/paths.js';
 (globalThis as { React?: typeof React }).React = React;
 
 const { toCsv } = await import('../web/src/components/Downloads.js');
-const { spendCsv } = await import('../web/src/components/EconomicsTab.js');
+const { spendCsv } = await import('../web/src/components/spendCsv.js');
 const { reliabilityCsv } = await import('../web/src/components/ReliabilityTab.js');
 
 const WINDOW = {

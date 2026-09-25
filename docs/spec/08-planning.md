@@ -517,11 +517,11 @@ about must not erase a narrative some other write put there.
 - **`plan_submit`** (preferred) — the MCP tool. Validated synchronously, with the rejection reason
   returned so the planner can fix and resubmit in the same turn. Nothing is written on a rejection.
 - **`.lubbdubb/plan.json`** — fully wired fallback. The file-events `PostToolUse` hook reports the
-  written path; `AgentManager.ingestFileEvent` recognises the reserved path, and `ingestPlan` reads,
-  validates and persists it. The read must happen **inside the drain**, while `agent.cwd` still
-  exists — `src/system.ts` removes a done agent's worktree on the reap, so a later read finds nothing.
-  An invalid document writes no plan row and records an error: the issue stays in the funnel, the
-  planner is retried, and the cap eventually fails it open.
+  written path; `AgentChannels.ingestFileEvent` (`src/agents/agentChannels.ts`) recognises the reserved
+  path, and `ingestPlan` reads, validates and persists it. The read must happen **inside the drain**,
+  while `agent.cwd` still exists — `src/system.ts` removes a done agent's worktree on the reap, so a later
+  read finds nothing. An invalid document writes no plan row and records an error: the issue stays in the
+  funnel, the planner is retried, and the cap eventually fails it open.
 
 `.lubbdubb/` is gitignored, so the plan graph lives only in the store.
 
@@ -703,7 +703,7 @@ the way it did when there was nothing to count.
 was started", which `partHasWork` enforces; a concluded part did its work and found there was nothing
 to build, and collapsing the two would discard the provenance of what it found.
 
-`partOutcomeKindOf` (`src/store/plans.ts`) is the row mapper's narrowing of those columns, and **a new
+`partOutcomeKindOf` (`src/plans/rows.ts`) is the row mapper's narrowing of those columns, and **a new
 kind must be added to it**. It is not a type guard the compiler checks against the union, so a kind
 missing from it is written to SQLite, read back as `null`, and reads as `code` everywhere downstream
 — which for `human` means a step for a person handed to an agent, silently.

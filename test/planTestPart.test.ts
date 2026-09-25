@@ -193,7 +193,7 @@ test('nothing in src/plans/ or src/dispatcher/ reads coverage to decide settleme
   };
   assert.deepEqual(
     [...mentions('src/plans'), ...mentions('src/dispatcher')].sort(),
-    ['src/plans/parts.ts', 'src/plans/planDocument.ts'].sort(),
+    ['src/plans/parts.ts', 'src/plans/planDocument.ts', 'src/plans/redeclare.ts', 'src/plans/rows.ts'].sort(),
     'a soft hold, a special case in partSettled/liveParts, or an exemption in the roll-up would show up here',
   );
   // planIngest read it once, to hand a check the area it inherited. That join is gone: an area comes

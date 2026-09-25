@@ -1294,7 +1294,7 @@ while still owing the operator the reading the first one took; capturing that `u
 revision keeps the wording the operator actually ran, not the intermediate wording nobody read —
 the band is about what they checked, not a diff of the last edit. `amendedAt` and `amendNote` still
 advance to the latest amendment. A reading recorded between the two answers the first band, so the
-second captures that reading instead (`mergeCheck` in `src/store/validation.ts`).
+second captures that reading instead (`mergeCheck` in `src/validation/checkMerge.ts`).
 
 **The band clears when the operator records a reading against the new wording**, in
 `recordValidationResult`, and by nothing else. That is the only acknowledgement worth having: a

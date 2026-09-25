@@ -29,7 +29,7 @@ const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js')
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
-const { usageReading, environmentsReading, menuEntries } = await import('../web/src/console/TopBar.js');
+const { usageReading, environmentsReading, menuEntries } = await import('../web/src/console/topBarReadings.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;

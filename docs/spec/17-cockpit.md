@@ -1023,7 +1023,7 @@ would make the rail's own claim about urgency stop being `needsYou`'s.
 **The row says which ask it is and which goal it is about, and nothing else.** It used to draw the
 ask's own prose — `escalation.prompt` verbatim — and a plan approval's prompt is four paragraphs, so
 the row that mattered most was the tallest thing on the rail and a queue of them could not be read at
-a glance. `askLine` (`web/src/view/needsYou.ts`) words each row instead: a summary of the act, then
+a glance. `askLine` (`web/src/view/needLines.ts`) words each row instead: a summary of the act, then
 `for #395 · <the goal's title>`.
 
 - **The act, from the row's own source and never from the prose.** A proposal knows which act it is,
@@ -1071,7 +1071,7 @@ values are the cases where that is not possible:
 
 **A `pr:<n>` origin is resolved to its goal, not read literally.** Most asks the harness raises come
 from a pull request — every rebase and CI question does — and most pull requests belong to a goal.
-`goalOf` therefore asks `goalOfPr` (`web/src/view/goalPage.ts`), which matches the same three ways
+`goalOf` therefore asks `goalOfPr` (`web/src/view/goalRefs.ts`), which matches the same three ways
 `ownsPr` does, read backwards: a part's `prNumber`, the tracker's `linkedPrNumber`, or the branch
 convention. The convention itself has **one** implementation, `branchGoal`, because it is read in both
 directions and two readings of one string shape is how `issue/14` comes to match `issue:1`. A PR no
@@ -1210,7 +1210,7 @@ separator they read as one sentence nobody wrote.
 ### The action bar
 
 **Everything a card can _do_ is in one bar across the bottom of it.** `CardFoot`
-(`web/src/console/QueueRail.tsx`) draws it, and it is the whole of the card's pressable surface: a
+(`web/src/console/queueRailFoots.tsx`) draws it, and it is the whole of the card's pressable surface: a
 `config` row's fix, an update ask's controls, the two destinations the assigned row does not spend its
 body on. Nothing pressable is anywhere else.
 
@@ -2337,7 +2337,7 @@ the console reaching into their class.
 #### Saying the sentence a refusal asks for
 
 A route that refuses for a reason the operator can act on needs two things on the glass, and for a
-while had neither. **The reason** — every route refuses with `{error}` and `api.ts` rethrows it as
+while had neither. **The reason** — every route refuses with `{error}` and `apiTransport.ts` rethrows it as
 the `Error`'s message, and `useAsyncAction` used to drop it in a bare `catch`, leaving a red ring
 that faded in two seconds as the whole account of what happened. It is now kept until the next run,
 hung off the button's own `title` (which costs no layout, so every `AsyncButton` in the cockpit gains
@@ -3161,7 +3161,7 @@ clean bill of health.
 
 `CiMark` is `web/src/components/CiMark.tsx` and every surface draws that one component, since two
 readings of one verdict side by side is how the same PR comes to wear two tones nobody chose.
-`CourtChip` stays in `GoalPage.tsx` for [the pull request page](#the-pull-request-page), which has a
+`CourtChip` stays in `goalChips.tsx` for [the pull request page](#the-pull-request-page), which has a
 header to put a verdict word in; on a row the same verdict is the `?` marker's, off `attention.reasons`
 ([the row grammar](#the-row-grammar)). `waitedFor` is `components/util.tsx`' — the row states the same
 age as a fact, and the chip and the row must not disagree about it.
@@ -3248,7 +3248,7 @@ page is doing.
 card of its own on the Plan pane, and on almost every goal it read _No agent is on this goal_ — a
 heading, a sentence and a card's worth of ground between the plan and everything below it, saying
 nothing. The count is the fact worth a line on the page; the names, their states, their ages and their
-costs are worth a hover, and `agentsTitle` (`GoalPage.tsx`) writes them in the words the drawer uses
+costs are worth a hover, and `agentsTitle` (`goalHeader.tsx`) writes them in the words the drawer uses
 for the same facts. The reading carries the glyph the cockpit says _agent_ with, so the hover is
 findable without being a control — it is a reading, not a press.
 
@@ -5460,7 +5460,7 @@ which is the only thing they wanted to know. The count is of the environments sh
 the _worst_ word rather than of every environment that is not well, so `2 red` and `1 orange` never add
 up into one figure describing neither.
 
-The fold is `environmentsReading` in `TopBar.tsx`, exported for `test/console.test.ts` exactly as
+The fold is `environmentsReading` in `topBarReadings.ts`, exported for `test/console.test.ts` exactly as
 `usageReading` is, because it is the whole of the chip's judgement. Its ranking is the card's tones read
 as an ordering: an **untiered `unhealthy` ranks with a red**, since an unstated severity is not a reason
 to rank an outage below one that stated it, and `unknown` sits below both — it is not a claim that
@@ -6439,7 +6439,8 @@ exactly the deployments with the most waiting.
 A preference of the _browser_, for [Notifications](#notifications)' reason exactly, and the second thing
 on this page that is not a config key: `localStorage` under `lubbdubb.theme`, never sent anywhere, no
 route and nothing on the wire. Two operators on one deployment want different colours and neither is
-wrong. The whole feature is `web/src/cockpit/theme.ts`, `web/src/cockpit/tokens.ts`, `web/src/theme.css`
+wrong. The whole feature is `web/src/cockpit/theme.ts`, `web/src/cockpit/tokens.ts` (its derived tints in
+`tokenTints.ts`), `web/src/theme.css`
 and `web/src/components/ThemeSettings.tsx`.
 
 #### What is stored
@@ -8063,7 +8064,7 @@ The silent half is worse. `goalOfOrigin` matched `issue:` and `pr:` only, so a r
 null — it staffed no goal, so the goal whose work was out on the fleet read as **unstaffed**, and an
 escalation it raised routed to no goal page.
 
-So the origin is read through **`standsFor(state, ref)`** (`web/src/view/goalPage.ts`) first: a
+So the origin is read through **`standsFor(state, ref)`** (`web/src/view/goalRefs.ts`) first: a
 `job:<id>` becomes the origin that job stands in for, and every other ref comes back unchanged. A job
 that stands in for nothing, and one the snapshot's 100-row job list has dropped, come back **as
 themselves** — the job ref is a true statement about the dispatch, and null would trade an opaque

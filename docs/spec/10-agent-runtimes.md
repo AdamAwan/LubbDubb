@@ -728,7 +728,12 @@ Tests: `test/ptySentinelScanner.test.ts`, `test/ptySession.test.ts`.
 ## `AgentManager`
 
 `src/agents/agentManager.ts` owns the live fleet. It maps session events onto store updates and
-re-emits them for the server to broadcast.
+re-emits them for the server to broadcast. The class is layered, each layer extending the one before:
+`AgentToolRecords` (`agentToolRecords.ts`: the tool channel's notes, `withCaller`, and the event and
+option contract), `AgentVerdicts` (`agentVerdicts.ts`: the tool channel's verdicts on a goal),
+`AgentParks` (`agentParks.ts`: the live-session maps, and waiting, stall and usage-limit parks), then
+`AgentManager` itself (spawn, resume, kill, lift, complete, terminal and reap). The file-events spool
+and MCP credential bookkeeping is composed in as `AgentChannels` (`agentChannels.ts`).
 
 ### Spawn
 

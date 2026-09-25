@@ -1,7 +1,7 @@
 # 14 — Persistence
 
 **`src/store/` is the only directory that touches SQLite.** Everything else goes through the
-`Store`. The schema is `src/store/schema.ts`.
+`Store`. The schema is `src/store/schema.ts`, concatenated from the fragments under `src/store/schema/`.
 
 ## Shape
 
@@ -69,7 +69,7 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 One file under `src/store/` is deliberately **not** a domain module and is excluded from all three
 assertions above: `verdicts.ts`, the issue-verdict exclusion matrix (#222). It is a dependency-free
 declaration — no SQLite, no `Store` — naming the four verdict tables so a test can walk it, and
-`issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` and
+`issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` (with its fragments under `schema/`) and
 `store.ts` itself are excluded for the same kind of reason: none of them owns a table.
 
 `context.ts` carries one read that crosses that line and is bounded on purpose: `labelsById`, the

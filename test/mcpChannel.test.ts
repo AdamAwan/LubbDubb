@@ -1570,10 +1570,12 @@ test('open_pr degrades to the floor when authoring is unwired — it never silen
 });
 
 test('the caller is resolved in exactly one place, so the identity chain cannot be got wrong twice', () => {
-  const source = repoText('src/agents/agentManager.ts');
+  const source = ['agentToolRecords', 'agentVerdicts', 'agentParks', 'agentManager']
+    .map((layer) => repoText(`src/agents/${layer}.ts`))
+    .join('\n');
   const preamble = source.match(/agent \? this\.store\.tasks\.getTask\(agent\.taskId\) : null/g) ?? [];
   assert.equal(preamble.length, 1, 'the agent -> task resolution appears once, inside withCaller');
-  assert.match(source, /private withCaller</, 'and that one copy is the wrapper the tool-facing methods run through');
+  assert.match(source, /protected withCaller</, 'and that one copy is the wrapper the tool-facing methods run through');
 });
 
 test('every advertised tool is its own module, and tools.ts is assembly and nothing else', () => {

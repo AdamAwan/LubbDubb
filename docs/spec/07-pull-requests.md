@@ -1313,7 +1313,7 @@ work already done and never dispatched for. Nothing went red, because by every t
 nothing was wrong.
 
 Every reply the harness sends leaves through exactly one call site, `sink.postPrReply` in
-`src/executor/actionExecutor.ts`, and `SendResult.commentRef` carries the provider's own id for the
+`src/executor/authorizedActs.ts`, and `SendResult.commentRef` carries the provider's own id for the
 comment it created — in the same vocabulary `PrThreadMessage.id` uses on the way back in.
 `PrReplyStore` (`src/store/prReplies.ts`) writes one row per reply, keyed on
 `(pr_number, thread_id, comment_ref)`. Both providers read it through the same `SentPrReplies` seam,

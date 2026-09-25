@@ -392,7 +392,11 @@ what settle whether a new cut is worth making.
   the pulse wiring, local runs — called in construction order, which is load-bearing: a component
   goes after everything it reads at construction, and desks keep the pulse order their specs state. A
   closure that needs a component a _later_ phase builds reads it off the `late` holder, which each
-  phase fills as it returns; nothing may call such a closure during construction.
+  phase fills as it returns; nothing may call such a closure during construction. `buildSystem`, the
+  channels, the harness and the pulse wiring stay in `src/system.ts`; the other phases are written in
+  its siblings — `systemFoundation.ts` (foundation, agent runtime, `BuildOptions` and `Late`),
+  `systemFleet.ts` (agent manager, fleet desks, dispatcher), `systemDesks.ts` (intake, environment
+  and bench desks) and `systemLocalRuns.ts` — and are only ever called from `buildSystem`.
 
 ## Testing seams
 

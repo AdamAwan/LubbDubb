@@ -76,7 +76,7 @@ test('the rules that quote someone say who, rather than leaving it to be guessed
   const sources = [
     'src/dispatcher/rules/issueShortfall.ts',
     'src/dispatcher/rules/prConcerns/ci.ts',
-    'src/executor/actionExecutor.ts',
+    'src/executor/proposalActs.ts',
   ];
   for (const file of sources) {
     const text = repoText(file);

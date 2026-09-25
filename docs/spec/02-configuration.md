@@ -236,7 +236,8 @@ to the project.
 
 ## Fields
 
-Every configurable leaf is declared once, in `src/config/configFields.ts`: its type (`number`, `boolean`,
+Every configurable leaf is declared once, in `CONFIG_FIELDS` (`src/config/configFields.ts`, which
+concatenates the grouped lists in its `configFields*.ts` siblings in order): its type (`number`, `boolean`,
 `string`, `enum`, `stringList`, `json`, `colourMap`), the members where it is an enum, how far an
 operator reaches to edit it, the environment variable that beats it, and one line saying why it exists.
 
