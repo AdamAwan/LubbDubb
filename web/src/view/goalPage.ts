@@ -401,7 +401,7 @@ export function splitGoalAsks(
   const inPane: NeedRow[] = [];
   const lines: NeedRow[] = [];
   for (const row of page.needs) {
-    if (row.id.startsWith('placement:parent:')) continue;
+    if (row.placementField === 'parent') continue;
     if (row.id === onPlanCard?.id) continue;
     (GOAL_ASK_TAB[row.kind] === tab ? inPane : lines).push(row);
   }

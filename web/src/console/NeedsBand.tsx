@@ -20,6 +20,7 @@ import { Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
 import { quickAnswer } from '../view/quickAnswer.js';
+import { awaitedProfile } from '../view/issueAsks.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
 
 // → docs/spec/17-cockpit.md
@@ -58,18 +59,13 @@ export function NeedsBand({
         onClick={() => actions.openPanel({ ask: row.id })}
         title="Open this ask"
       >
-        <span className="cn-sym" aria-hidden="true">
-          {KIND_SYMBOL[row.kind]}
-        </span>
-        <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
-        <span className="cn-needs-what">{oneLine(row.title)}</span>
-        <NeedAge row={row} now={view.now} />
+        <LineFace row={row} now={view.now} />
         {/* The verb, drawn as the press it is. A faint "Open" beside a pane's own
             filled primary is a row that loses the page to the one control on it
             that nothing is waiting on. It is a span rather than a button because
             the row *is* the button — nesting a second one is invalid.
             → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
-        <span className="cn-needs-do">{needVerb(row)}</span>
+        <span className="cn-needs-do">{row.verb ?? KIND_VERB[row.kind]}</span>
       </button>
     );
   }
@@ -95,14 +91,23 @@ export function NeedsBand({
   );
 }
 
-function needVerb(row: NeedRow): string {
-  return row.id.startsWith('placement:areaPath:') ? 'Pick a board' : KIND_VERB[row.kind];
+function LineFace({ row, now }: { row: NeedRow; now: number }): JSX.Element {
+  return (
+    <>
+      <span className="cn-sym" aria-hidden="true">
+        {KIND_SYMBOL[row.kind]}
+      </span>
+      <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
+      <span className="cn-needs-what">{oneLine(row.title)}</span>
+      <NeedAge row={row} now={now} />
+    </>
+  );
 }
 
 function applyQuick(quick: QuickAnswer, value: string, actions: CockpitActions): Promise<void> {
-  if (quick.field === 'profile') return actions.setIssueProfile(quick.issue, value);
-  if (quick.field === 'areaPath') return actions.setIssueAreaPath(quick.issue, value);
-  return actions.setIssueParent(quick.issue, Number(value));
+  return quick.field === 'profile'
+    ? actions.setIssueProfile(quick.issue, value)
+    : actions.setIssueAreaPath(quick.issue, value);
 }
 
 function QuickLine({
@@ -125,22 +130,17 @@ function QuickLine({
         onClick={() => actions.openPanel({ ask: row.id })}
         title="Open this ask"
       >
-        <span className="cn-sym" aria-hidden="true">
-          {KIND_SYMBOL[row.kind]}
-        </span>
-        <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
-        <span className="cn-needs-what">{oneLine(row.title)}</span>
-        <NeedAge row={row} now={view.now} />
+        <LineFace row={row} now={view.now} />
       </button>
       <AsyncButton
         size="small"
         tone="primary"
-        onClick={() => applyQuick(quick, quick.proposed.value, actions)}
-        title={`Use the proposed answer, “${quick.proposed.label}”`}
+        onClick={() => applyQuick(quick, quick.proposed, actions)}
+        title={`Use the proposed answer, “${quick.proposed}”`}
       >
-        ✓ {quick.proposed.label}
+        ✓ {quick.proposed}
       </AsyncButton>
-      {quick.others.length > 0 ? (
+      {quick.others.length > 0 && (
         <select
           className="cn-in cn-needs-change"
           value=""
@@ -154,15 +154,11 @@ function QuickLine({
         >
           <option value="">Change…</option>
           {quick.others.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
+            <option key={o} value={o}>
+              {o}
             </option>
           ))}
         </select>
-      ) : (
-        <Button size="small" onClick={() => actions.openPanel({ ask: row.id })}>
-          Change…
-        </Button>
       )}
     </div>
   );
@@ -251,9 +247,9 @@ function intakeBody(row: NeedRow, view: CockpitView, actions: CockpitActions): R
 function profileBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
   const issue = rowIssue(row, view);
   const appraisal = issue?.appraisal;
-  if (!issue || !appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) return null;
+  const proposed = issue === undefined ? null : awaitedProfile(issue);
+  if (!issue || !appraisal || proposed === null) return null;
   const { config } = view.state;
-  const proposed = appraisal.proposedProfile;
   const pinned = issue.modelPin.profile;
   const standing = pinned ?? config.defaultProfile;
   const described = config.profiles.find((p) => p.name === proposed)?.description;

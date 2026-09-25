@@ -6973,12 +6973,14 @@ button.cn-grow {
   border: 1px solid var(--cn-tone-line);
   border-left: 3px solid var(--cn-tone);
   border-radius: var(--cn-r);
+}
+.cn button.cn-needs-line {
   cursor: pointer;
 }
-.cn .cn-needs-line:hover {
+.cn button.cn-needs-line:hover {
   background: var(--cn-hover);
 }
-.cn .cn-needs-line:hover .cn-needs-do {
+.cn button.cn-needs-line:hover .cn-needs-do {
   background: var(--cn-tone);
   color: var(--cn-bg);
 }
@@ -7015,10 +7017,6 @@ button.cn-grow {
    → docs/spec/17-cockpit.md#an-ask-with-a-proposal-is-answered-on-its-row */
 .cn .cn-needs-quick {
   padding-block: 6px;
-  cursor: default;
-}
-.cn .cn-needs-quick:hover {
-  background: var(--cn-tone-fill);
 }
 .cn-needs-open {
   display: flex;
@@ -7037,11 +7035,11 @@ button.cn-grow {
 .cn-needs-open:hover .cn-needs-what {
   text-decoration: underline;
 }
-.cn-needs-quick > .btn,
-.cn-needs-change {
+.cn-needs-quick > .btn {
   flex: none;
 }
 .cn-needs-change {
+  flex: none;
   width: auto;
   max-width: 180px;
   font-size: 12px;

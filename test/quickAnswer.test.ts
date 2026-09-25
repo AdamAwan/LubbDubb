@@ -44,23 +44,9 @@ function rowOfKind(v: CockpitView, kind: NeedRow['kind']): NeedRow {
   return row;
 }
 
-function recorder(): { actions: CockpitActions; calls: unknown[][] } {
-  const calls: unknown[][] = [];
-  const actions = new Proxy(
-    {},
-    {
-      get:
-        (_t, name) =>
-        (...args: unknown[]) => {
-          calls.push([name, ...args]);
-          return Promise.resolve();
-        },
-    },
-  ) as CockpitActions;
-  return { actions, calls };
-}
+const actions = new Proxy({}, { get: () => () => Promise.resolve() }) as CockpitActions;
 
-function line(v: CockpitView, row: NeedRow, actions: CockpitActions): string {
+function line(v: CockpitView, row: NeedRow): string {
   return renderToStaticMarkup(createElement(NeedsBand, { row, view: v, actions, line: true }));
 }
 
@@ -70,26 +56,15 @@ test('a profile ask with a proposal draws accept and change on its row', () => {
   const quick = quickAnswer(row, v.state);
   assert.ok(quick !== null);
   assert.equal(quick.field, 'profile');
-  assert.equal(quick.proposed.value, 'deep');
-  assert.ok(!quick.others.some((o) => o.value === 'deep'));
-  const html = line(v, row, recorder().actions);
+  assert.equal(quick.proposed, 'deep');
+  assert.ok(!quick.others.includes('deep'));
+  const html = line(v, row);
   assert.match(html, /cn-needs-quick/);
   assert.match(html, /✓ deep/);
   assert.match(html, /Change…/);
 });
 
-test('a parent ask with a proposal answers with the proposed parent', () => {
-  const v = view();
-  const row = rowOfKind(v, 'placement');
-  const quick = quickAnswer(row, v.state);
-  assert.ok(quick !== null);
-  assert.equal(quick.field, 'parent');
-  assert.equal(quick.proposed.value, '301');
-  assert.ok(!quick.others.some((o) => o.value === '301' || o.value === String(quick.issue)));
-  assert.match(line(v, row, recorder().actions), /cn-needs-quick/);
-});
-
-test('an area-path ask answers on its row and says Pick a board when it cannot', () => {
+test('an area-path ask answers on its row and says Pick a board', () => {
   const base = buildDemoState().state;
   const issue = base.world.issues.find((i) => i.appraisal?.placement.some((p) => p.field === 'parent'));
   assert.ok(issue?.appraisal);
@@ -97,25 +72,19 @@ test('an area-path ask answers on its row and says Pick a board when it cannot',
   const v = view(base);
   const row = v.needsYou.find((n) => n.id === `placement:areaPath:issue:${issue.number}`);
   assert.ok(row);
+  assert.equal(row.verb, 'Pick a board');
   const quick = quickAnswer(row, v.state);
   assert.equal(quick?.field, 'areaPath');
-  assert.match(line(v, row, recorder().actions), /✓ NXG\\Statements/);
-
-  issue.appraisal.placement = [{ field: 'areaPath', proposedParent: null, proposedAreaPath: null }];
-  const bare = view(base);
-  const none = bare.needsYou.find((n) => n.id === `placement:areaPath:issue:${issue.number}`);
-  if (none !== undefined) assert.equal(quickAnswer(none, bare.state), null);
+  assert.equal(quick?.proposed, 'NXG\\Statements');
+  assert.match(line(v, row), /✓ NXG\\Statements/);
 });
 
-test('a parent ask with nothing proposed keeps the single-press row', () => {
-  const base = buildDemoState().state;
-  const issue = base.world.issues.find((i) => i.appraisal?.placement.some((p) => p.field === 'parent'));
-  assert.ok(issue?.appraisal);
-  issue.appraisal.placement = [{ field: 'parent', proposedParent: null, proposedAreaPath: null }];
-  const v = view(base);
+test('a parent ask gets no quick answer and keeps its verb', () => {
+  const v = view();
   const row = rowOfKind(v, 'placement');
+  assert.equal(row.placementField, 'parent');
   assert.equal(quickAnswer(row, v.state), null);
-  const html = line(v, row, recorder().actions);
+  const html = line(v, row);
   assert.doesNotMatch(html, /cn-needs-quick/);
   assert.match(html, /Pick a parent/);
 });

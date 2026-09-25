@@ -6,6 +6,7 @@ import type { NeedRow } from '../view/needsYou.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { goalIssue } from '../view/goalRefs.js';
+import { placementAskOf } from '../view/issueAsks.js';
 import { ParentPicker } from '../components/ParentPicker.js';
 import { proposedParentTitle } from '../view/orphanGoal.js';
 import { Ref } from '../components/refs.js';
@@ -15,7 +16,7 @@ import { ButtonRow } from '../components/button.js';
 
 export function placementBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
   const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-  const ask = (issue?.appraisal?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
+  const ask = placementAskOf(row, issue);
   if (!issue || !ask) return null;
   return ask.field === 'parent' ? (
     <ParentAsk issue={issue} proposed={ask.proposedParent} view={view} actions={actions} />

@@ -264,6 +264,10 @@ export interface NeedRow {
   raisedAt: string;
   check?: SetupCheck;
   applied?: AppliedFix;
+  /** Which backlog field a `placement` ask is about. */
+  placementField?: 'parent' | 'areaPath';
+  /** The press that answers this row, where the kind's `KIND_VERB` would name the wrong one. */
+  verb?: string;
 }
 
 export interface AppliedFix {
