@@ -37,7 +37,6 @@ export type NeedKind =
   | 'placement'
   | 'bench'
   | 'close_out'
-  | 'outcome'
   | 'validate'
   | 'validation_plan'
   | 'watch'
@@ -90,7 +89,6 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   close_out: 'next',
   // Moment two is skippable by design and holds nothing: it belongs behind
   // everything the fleet is actually waiting on.
-  outcome: 'later',
   validate: 'next',
   validation_plan: 'next',
   bench: 'next',
@@ -354,7 +352,7 @@ function kindOf(e: Escalation, proposal: Proposal | undefined, originRef: string
 const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
   ask: 'bench',
   close_out: 'close_out',
-  outcome: 'outcome',
+  outcome: 'close_out',
   validate: 'validate',
   watch: 'watch',
   unwatched: 'unwatched',
@@ -534,7 +532,7 @@ function humanTaskRows(state: AppState): NeedDraft[] {
         title: askLine(oneLine(t.title), goalRef, state),
         goalRef,
         originRef: t.originRef ?? null,
-        opens: t.kind === 'outcome' ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
+        opens: opensAt(goalRef, state),
         agentId: t.kind === 'burn' ? t.agentId : null,
         agentLabel: t.kind === 'burn' ? agentLabelOf(t.agentId, state) : null,
         holding: holdingForTask(t, parts),

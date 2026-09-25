@@ -215,23 +215,6 @@ export class PredictionStore {
   }
 
   /**
-   * The goals whose moment one was answered and whose moment two has not been, as
-   * origin refs and nothing else.
-   *
-   * Refs alone is the point rather than an economy: this is what the delivery
-   * close-out bench reads, a bench row is persisted as a human task and is served to
-   * surfaces that are not the cockpit. The row says which goal owes moment two; the
-   * prediction's text is fetched through `GET /api/goals/:number/prediction`, which
-   * is its one reader.
-   */
-  listOutcomeOwed(): string[] {
-    const rows = this.ctx
-      .prep(`SELECT origin_ref FROM goal_predictions WHERE plan_marked_at IS NOT NULL AND outcome_marked_at IS NULL`)
-      .all() as { origin_ref: string }[];
-    return rows.map((r) => r.origin_ref);
-  }
-
-  /**
    * The goals whose operator has marked moment one and whose judge has not, as origin
    * refs and nothing else — what the dispatcher is handed to know a judge is owed.
    * → docs/spec/14-persistence.md#the-prediction-judge

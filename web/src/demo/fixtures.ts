@@ -196,8 +196,8 @@ function demoPart(seed: PartSeed): PlanPartView {
  *   answered `delivered`.** Checks are authored late, against merged code, and a goal still planning
  *   has nothing to write them against. So `validationChecks`, `remoteSheets`, `goalWatchWindows` and
  *   `environmentArrivals` name only #364, #395 and #398. → docs/spec/20-validation.md#when-the-check-set-is-written
- * - **One ask per goal**, with two deliberate exceptions where a second thing is the point: #390
- *   carries a merge and a person's plan step, and #395 carries its bench row and its outcome marks.
+ * - **One ask per goal**, with one deliberate exception where a second thing is the point: #390
+ *   carries a merge and a person's plan step.
  *   A goal with four cards on it reads as a pile rather than a situation.
  *
  * → docs/spec/17-cockpit.md#demo-mode
@@ -2163,7 +2163,7 @@ export function buildDemoState(): DemoSeed {
     environmentGroups: [],
     featureSequences: [],
     /* A watch window opens on an arrival, so these too belong only to delivered goals. #395's has one
-       regressed reading, which is what `hum-6` is asked beside. */
+       regressed reading. */
     goalWatchWindows: [
       {
         goalRef: 'issue:395',
@@ -3865,30 +3865,6 @@ export function buildDemoState(): DemoSeed {
         resolution: null,
         createdAt: ago(20),
         updatedAt: ago(1),
-        resolvedAt: null,
-        dismissedAt: null,
-      },
-      // Moment two, asked at delivery. It is the one bench row whose answer is not on
-      // the bench: the two marks are made on the goal's prediction card, beside the
-      // plan they are about, so the row opens the goal on that pane rather than the
-      // ask panel. → docs/spec/17-cockpit.md#moment-two-beside-moment-one
-      {
-        id: 'hum-6',
-        title: 'Say how the plan for #395 turned out',
-        detail:
-          'You predicted this one before you read its plan, and you marked the plan against it. ' +
-          '**Every refund writes a ledger entry** has since been delivered, so each line now carries a ' +
-          'second question: whether the *plan* turned out right. It is not the same question, and either may be ' +
-          'left alone.',
-        originRef: 'issue:395',
-        partId: null,
-        kind: 'outcome',
-        agentId: null,
-        taskId: null,
-        status: 'open',
-        resolution: null,
-        createdAt: ago(16),
-        updatedAt: ago(16),
         resolvedAt: null,
         dismissedAt: null,
       },

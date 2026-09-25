@@ -728,42 +728,21 @@ marked done, or declined — not the checks. The close-out's detail still carrie
 outstanding ([20](20-validation.md)), so a row settled early is closed in front of the count rather
 than past it.
 
-### A third row, where the prediction record is on
+### The plan-verdict row is retired
 
-A goal whose prediction carries moment-one marks and no moment-two answer carries **one additional
-close-out row**: _"Say whether the plan for #N turned out right."_ It is sequenced **behind** the
-`close_out` row on exactly the terms the `validate` row is sequenced ahead of it — the bench asks one
-thing at a time, and a verdict on the plan asked in the same breath as the close is a verdict nobody
-reads.
+The bench used to file a third row behind the close-out on a goal whose prediction carried moment-one
+marks: _"Say whether the plan for #N turned out right"_ — prediction moment two
+([14](14-persistence.md#moment-two--was-the-plan-right)). It was taken out because answering it did
+not change how far an operator trusted the fleet's plans, and a row that informs no decision is a row
+the operator learns to clear without reading.
 
-It rides this bench rather than becoming a queue of its own, and that is the point: a second
-standalone queue for an optional feature is the thing that decays first, while the close-out bench is
-a surface the operator already has to clear.
-
-It is its **own** `HumanTask` kind rather than a second `close_out` row. That kind is the key
-`closeOutPass` groups by, the one the close-ticket route will close a ticket from, and the one the
-runway watch treats as a hold — reusing it would have broken all three silently.
-
-**The row carries the goal reference and nothing else, and that is an invariant rather than
-tidiness.** `attention_read` serves every open human task's title and detail to the operator's own
-Claude Code, so a row carrying prediction text would put a prediction in front of a model. The desk is
-handed a closure of the origin refs that owe an answer, computed in the composition root, so nothing
-under `src/delivery/` can name a prediction at all.
-→ [14](14-persistence.md#the-prediction-store-is-not-on-store)
-
-Declining the row records moment two as **unanswered**, never as a plan that turned out wrong — the
-absence is the honest reading, and folding it into a verdict is the error the four-valued mark exists
-to prevent. Turning the key off settles any standing row rather than stranding it.
-
-**Answering moment two settles the row on the press, and that is the route's job rather than the next
-pulse's.** The row is filed and settled only by `DeliveryCloseOutDesk`, and nothing but a cycle wakes
-that desk — so `POST /api/goals/:number/prediction/outcome` runs one whenever the press flips whether
-the goal owes the moment, on the same convention every other operator answer here follows. Without it
-the operator answers the question and the row asking it stays exactly where it was: for five minutes
-on an idle fleet, and for good on a cycle that is held behind a recovery decision or stuck in flight —
-an ask that reads as ignored, with nothing red. The flip is the condition because a cycle reads the
-world, and a second mark on a moment already answered changes nothing the desk would decide.
-→ [16](16-http-api.md)
+`DeliveryCloseOutDesk` files no `outcome` row now. The kind stays in `HumanTaskKind` because rows of
+it exist on deployed databases; opening the store **declines** every one still open
+(`declineRetiredOutcomeRows`, [14](14-persistence.md#migrations)), never marks it done, because declining
+is what records moment two as unanswered rather than as an answer. It is a plain idempotent `UPDATE`
+rather than a one-shot pass: nothing files the kind any more, so a second run finds nothing.
+`POST /api/goals/:number/prediction/outcome` still writes moment two's marks, but nothing asks for
+them, and the route no longer runs a cycle — the cycle only existed to settle the row.
 
 This is why `ValidationReadyDesk` runs **above** `DeliveryCloseOutDesk` in the pulse. Below it, the
 close-out would read a bench the validate row had not been filed onto yet and ask for the close on the

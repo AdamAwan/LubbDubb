@@ -97,7 +97,6 @@ test('the rebuild drops every mark, so no stamp survives with nothing left to ha
   // for: carried over, it would say moment one was answered with nothing in it.
   const retiredOnly = predictions.getPrediction('issue:13');
   assert.equal(retiredOnly?.planMarkedAt, null);
-  assert.deepEqual(predictions.listOutcomeOwed(), [], 'and neither row reads as owing moment two');
   store.close();
 });
 

@@ -378,17 +378,13 @@ function PredictionSaid({
 }
 
 /* Nothing in here is still the operator's to do: every slot they wrote is marked
-   against the plan, and moment two is either unasked or answered. The page's
+   against the plan. The page's
    default opens this card where the prediction is the live question; once it has
    been answered it is a record, and a record arrives folded. */
-function progressOf(
-  prediction: GoalPrediction,
-  showOutcome: boolean,
-): { marked: number; askedOf: number; answered: boolean } {
+function progressOf(prediction: GoalPrediction): { marked: number; askedOf: number; answered: boolean } {
   const marked = SLOTS.filter(({ key }) => prediction.slots[key] !== null && prediction.planMarks[key] !== null).length;
   const askedOf = SLOTS.filter(({ key }) => prediction.slots[key] !== null).length;
-  const answered = marked === askedOf && (!showOutcome || prediction.outcomeMarkedAt !== null);
-  return { marked, askedOf, answered };
+  return { marked, askedOf, answered: marked === askedOf };
 }
 
 function FoldHeader({
@@ -396,13 +392,11 @@ function FoldHeader({
   onToggle,
   marked,
   askedOf,
-  outcomeOpen,
 }: {
   showing: boolean;
   onToggle: (open: boolean) => void;
   marked: number;
   askedOf: number;
-  outcomeOpen: boolean;
 }): JSX.Element {
   return (
     <h4 className="cn-pmark-hdr">
@@ -415,7 +409,6 @@ function FoldHeader({
           {marked}/{askedOf} marked
         </i>
       )}
-      {outcomeOpen && <i className="cn-n">outcome unanswered</i>}
     </h4>
   );
 }
@@ -440,7 +433,6 @@ function FoldHeader({
 export function PredictionReview({
   issueNumber,
   revealed,
-  outcomeAsked,
   plan,
   parts,
   open,
@@ -450,7 +442,6 @@ export function PredictionReview({
 }: {
   issueNumber: number;
   revealed: boolean;
-  outcomeAsked: boolean;
   plan: PlanView | null;
   parts: readonly PlanPart[];
   open: boolean;
@@ -469,12 +460,11 @@ export function PredictionReview({
   const prediction = reading?.prediction ?? null;
   if (prediction === null || (reading?.reveal ?? null) === null) return null;
 
-  /* Asked, or answered before: a record that carries moment two goes on drawing it
-     once the bench row it was asked through has been closed. Neither is a default —
-     a goal nobody has been asked about draws moment one alone. */
-  const showOutcome = outcomeAsked || prediction.outcomeMarkedAt !== null;
+  /* Moment two is no longer asked, so it is drawn only on a record that answered it
+     while it was. → docs/spec/17-cockpit.md#moment-two-beside-moment-one */
+  const showOutcome = prediction.outcomeMarkedAt !== null;
 
-  const { marked, askedOf, answered } = progressOf(prediction, showOutcome);
+  const { marked, askedOf, answered } = progressOf(prediction);
   if (arrivedAnswered.current === null) arrivedAnswered.current = answered;
   const showing = settled ? open : open && arrivedAnswered.current === false;
 
@@ -486,13 +476,7 @@ export function PredictionReview({
           predicted. The count is drawn closed as well as open, because what a
           folded record owes its reader is whether anything in it is unanswered.
           → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
-      <FoldHeader
-        showing={showing}
-        onToggle={onToggle}
-        marked={marked}
-        askedOf={askedOf}
-        outcomeOpen={showOutcome && prediction.outcomeMarkedAt === null}
-      />
+      <FoldHeader showing={showing} onToggle={onToggle} marked={marked} askedOf={askedOf} />
       {showing && (
         <div className="cn-pmark">
           <PredictionSaid
