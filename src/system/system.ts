@@ -45,7 +45,7 @@ import { loadReviewCharters } from '../review/charter.js';
 import { reviewModeNames } from '../review/prReview.js';
 import type { Dispatcher } from '../dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from '../dispatcher/issuePickup.js';
-import { featureRecords } from '../features/featureRecord.js';
+import { featureRecords } from '../featureSummaries/featureRecord.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { Harness } from '../harness.js';
 import { CycleTrigger } from '../cycleTrigger.js';

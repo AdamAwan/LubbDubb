@@ -37,7 +37,7 @@ const CONTAINED_DIRS = [
   'src/plans',
   'src/escalation',
   'src/knowledge',
-  'src/features',
+  'src/featureSummaries',
 ];
 
 /**

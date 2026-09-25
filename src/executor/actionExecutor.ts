@@ -25,7 +25,7 @@ import { retryResumeFor, type RetryResume } from './retryResume.js';
 import { handoverResumeFor, type HandoverResume } from './handoverResume.js';
 import { isActiveTask } from '../tasks.js';
 import type { Action, CheckDecline, DecisionOutcome, Proposal, ProposalKind, Task } from '../types.js';
-import type { FeatureBoardFacts } from '../features/featureRecord.js';
+import type { FeatureBoardFacts } from '../featureSummaries/featureRecord.js';
 import { ciEvidenceFor, dispatchPrompt, type DispatchAction } from './dispatchBriefing.js';
 import {
   proposePlan,

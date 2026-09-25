@@ -8,7 +8,7 @@ import {
   featureSummarySubmitOrigin,
   validateFeatureSummary,
   type FeatureChildStandingFacts,
-} from '../src/features/featureSummary.js';
+} from '../src/featureSummaries/featureSummary.js';
 import { buildFeatureBoard } from '../src/features/featureBoard.js';
 import type { FeatureSummary, Task } from '../src/types.js';
 import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
