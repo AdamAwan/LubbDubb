@@ -801,6 +801,10 @@ is where parts are _told apart_ rather than where any one of them is worked.
 - **A pull request that is not a part's draws nothing**, and its `POST` is refused. The read answers
   `originRef: null` rather than 404, because "this deployment did not open that for a part" is an
   answer and not an error.
+- **A rewrite starts from what stands.** **Rewrite it** opens the field holding the current
+  version's text, because a rewrite is usually a correction and retyping the rest of it is the cost
+  that stops one being made. A first description, or **Write your own instead** over the agent's,
+  starts empty.
 - **The plan board keeps the standing, and only the standing.** Each part with an open pull request
   carries `describe it →` in amber or `described`, because the board is where an operator reads which
   of five parts wants a sentence without opening five pages. The card is the way to the page; the
