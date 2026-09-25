@@ -11,7 +11,7 @@ import type {
   ObstacleTicketDecision,
   ObstacleWriteUp,
   ObstacleWriteUpOutcome,
-} from '../types.js';
+} from '../../types.js';
 
 export interface ObstacleRow {
   id: string;

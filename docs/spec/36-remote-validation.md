@@ -1937,7 +1937,7 @@ Two notes are appended to prompts that already exist, both rendered strings rath
 
 **Built.** `resultBy` gains a fourth value, **`spec`**, beside `operator`, `agent` and `desktop`. The
 column exists and only gains a value it may hold, so it needs no migration — `rowToCheck`
-(`src/validation/rows.ts`) narrows it and a value it does not recognise reads as attributed to
+(`src/store/rows/validation.ts`) narrows it and a value it does not recognise reads as attributed to
 nobody, which is the safe direction.
 
 The four are four different facts and the whole feature exists to stop one being assumed from evidence

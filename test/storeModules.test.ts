@@ -25,7 +25,9 @@ const NOT_DOMAIN_MODULES = [
 ];
 
 function domainModules(): string[] {
-  return srcFiles('src/store').filter((f) => !NOT_DOMAIN_MODULES.includes(f) && !f.startsWith('src/store/schema/'));
+  return srcFiles('src/store').filter(
+    (f) => !NOT_DOMAIN_MODULES.includes(f) && !f.startsWith('src/store/schema/') && !f.startsWith('src/store/rows/'),
+  );
 }
 
 test('only src/store/ touches SQLite', () => {

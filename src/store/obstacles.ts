@@ -34,7 +34,7 @@ import {
   type ReadingRow,
   type SightingRow,
   type WriteUpRow,
-} from '../obstacles/rows.js';
+} from './rows/obstacles.js';
 
 // → docs/spec/14-persistence.md
 

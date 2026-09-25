@@ -703,7 +703,7 @@ the way it did when there was nothing to count.
 was started", which `partHasWork` enforces; a concluded part did its work and found there was nothing
 to build, and collapsing the two would discard the provenance of what it found.
 
-`partOutcomeKindOf` (`src/plans/rows.ts`) is the row mapper's narrowing of those columns, and **a new
+`partOutcomeKindOf` (`src/store/rows/plans.ts`) is the row mapper's narrowing of those columns, and **a new
 kind must be added to it**. It is not a type guard the compiler checks against the union, so a kind
 missing from it is written to SQLite, read back as `null`, and reads as `code` everywhere downstream
 — which for `human` means a step for a person handed to an agent, silently.

@@ -1,4 +1,5 @@
-export const PLAN_SCHEMA = `-- One delivery plan per issue — the planning agent's verdict. Written for *both*
+export const PLANS_SCHEMA = `
+-- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes (one pull request as much as a decomposition), so the planner never
 -- re-runs on the same issue. The graph lives here and nowhere else: it is
 -- scheduling intent, which has no home in the target repository.
@@ -146,76 +147,12 @@ CREATE TABLE IF NOT EXISTS plan_caveat_answers (
   answer      TEXT NOT NULL,
   at          TEXT NOT NULL
 );
+
 CREATE INDEX IF NOT EXISTS idx_plan_caveat_answers_plan ON plan_caveat_answers (plan_id);
 
-CREATE TABLE IF NOT EXISTS agent_transcripts (
-  agent_id   TEXT NOT NULL,
-  seq        INTEGER NOT NULL,
-  chunk      TEXT NOT NULL,
-  at         TEXT NOT NULL,
-  PRIMARY KEY (agent_id, seq)
-);
+CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 
-CREATE TABLE IF NOT EXISTS escalations (
-  id          TEXT PRIMARY KEY,
-  type        TEXT NOT NULL,
-  status      TEXT NOT NULL,
-  prompt      TEXT NOT NULL,
-  context     TEXT NOT NULL,
-  agent_id    TEXT,
-  task_id     TEXT,
-  response    TEXT,
-  created_at  TEXT NOT NULL,
-  answered_at TEXT
-);
+CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
 
--- Acts a human was asked to authorize, and what they said (issue #109). A *fresh*
--- table rather than columns on escalations, for two reasons that outlast the
--- migration cost: an escalation is answered once with free text and is done,
--- whereas a proposal carries a typed verdict a rule reads on every pulse — and
--- the gate keys on ref, which is a column only a proposal has. Widening
--- escalations would have given every existing question five permanently-null
--- decision columns and no way to tell "not a proposal" from "not yet decided".
-CREATE TABLE IF NOT EXISTS proposals (
-  id            TEXT PRIMARY KEY,
-  kind          TEXT NOT NULL,      -- reply_draft | merge
-  ref           TEXT NOT NULL,      -- "pr:42:merge" — the act's subject, what the gate keys on
-  status        TEXT NOT NULL,      -- pending | accepted | rejected | withdrawn
-  action        TEXT NOT NULL,      -- JSON: the validated action, run verbatim on accept
-  note          TEXT,
-  decided_by    TEXT,               -- human | stack_landing (| auto_send, historical)
-  decided_at    TEXT,
-  escalation_id TEXT,
-  created_at    TEXT NOT NULL
-);
-
--- An operator's standing authorization to land a whole stack (see StackLanding).
--- Its own table rather than a proposal, because a proposal is a verdict on *one
--- formed act* and this is a verdict given before any of the acts exist: it
--- authorizes merges the harness has not proposed yet and will not propose for
--- several cycles. Filing it as a proposal would have needed a ref naming an act
--- that has no number yet, and a pending row nobody is being asked to answer.
---
--- The rungs column is the authorization and ref is not: the stack ref renames
--- itself the moment the bottom rung merges, so every lookup keys on PR numbers.
-CREATE TABLE IF NOT EXISTS stack_landings (
-  id         TEXT PRIMARY KEY,
-  ref        TEXT NOT NULL,      -- "stack:124", as it read at the click
-  rungs      TEXT NOT NULL,      -- JSON array of PR numbers, bottom-first
-  status     TEXT NOT NULL,      -- standing | landed | stopped | revoked
-  reason     TEXT,               -- why it stopped
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- Pull requests whose merged branch has already been deleted, locally and on the
--- remote (see BranchReapStore). Keyed on the pull request rather than the branch:
--- a branch name is reusable, and a row keyed on the name would suppress the reap
--- owed to the *next* branch that wore it.
-CREATE TABLE IF NOT EXISTS branch_reaps (
-  pr_number INTEGER PRIMARY KEY,
-  branch    TEXT NOT NULL,      -- what was deleted, for the audit trail
-  at        TEXT NOT NULL
-);
-
+CREATE INDEX IF NOT EXISTS idx_plan_atoms_plan ON plan_atoms(plan_id);
 `;

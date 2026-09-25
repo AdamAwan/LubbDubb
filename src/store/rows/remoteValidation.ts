@@ -9,7 +9,7 @@ import type {
   TenantLaunch,
   TenantPreparation,
   WatchReadingVerdict,
-} from '../types.js';
+} from '../../types.js';
 
 export interface StateQueryRow {
   goal_ref: string;

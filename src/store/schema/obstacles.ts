@@ -1,22 +1,4 @@
-export const OBSTACLE_SCHEMA = `-- The account's Claude usage windows, as one row (id is pinned to 1).
---
--- Read off the CLI's own rate_limit_event on the stream transport, which every
--- live agent receives — so this is the fleet's single answer to "how much of the
--- five hours is spent", not a per-agent figure. captured_at dates it, because a
--- reading only arrives when an agent takes a turn: an idle fleet's is stale, and
--- the cockpit says so rather than pretending otherwise.
---
--- Each window is independently nullable: API-key auth carries no windows at all,
--- and an older CLI carries only some.
-CREATE TABLE IF NOT EXISTS account_rate_limits (
-  id                        INTEGER PRIMARY KEY CHECK (id = 1),
-  five_hour_used_percentage REAL,
-  five_hour_resets_at       TEXT,
-  seven_day_used_percentage REAL,
-  seven_day_resets_at       TEXT,
-  captured_at               TEXT NOT NULL
-);
-
+export const OBSTACLES_SCHEMA = `
 -- The same readings, kept rather than overwritten — the account's usage windows
 -- as a series instead of a single latest figure (issue #431).
 --
@@ -215,43 +197,18 @@ CREATE TABLE IF NOT EXISTS obstacle_suggestions (
   PRIMARY KEY (obstacle_id, suggested_id)
 );
 
--- An operator taking a running agent's work into their own Claude Code. The row is
--- the hold: while it stands unsettled it keeps the origin off the dispatcher and
--- keeps the worktree slot out of the pool, neither of which survives the agent's
--- own task settling. last_seen_at null means nobody has contacted the harness about
--- this claim at all, which is not the same as a stale timestamp.
-CREATE TABLE IF NOT EXISTS ejections (
-  id            TEXT PRIMARY KEY,
-  origin_ref    TEXT NOT NULL,
-  branch        TEXT,
-  worktree_path TEXT,
-  agent_id      TEXT NOT NULL,
-  task_id       TEXT NOT NULL,
-  session_id    TEXT,
-  reason        TEXT NOT NULL,
-  ejected_at    TEXT NOT NULL,
-  last_seen_at  TEXT,
-  last_note     TEXT,
-  settled_at    TEXT,
-  outcome       TEXT,
-  settle_note   TEXT
-);
+-- Both obstacle reads are by their parent row: the keys an obstacle holds, and the
+-- sightings behind it. The key *lookup* goes through the UNIQUE index on value.
+CREATE INDEX IF NOT EXISTS idx_obstacle_keys_obstacle ON obstacle_keys(obstacle_id);
 
-CREATE TABLE IF NOT EXISTS rate_limit_readings (
-  captured_at               TEXT PRIMARY KEY,
-  five_hour_used_percentage REAL,
-  five_hour_resets_at       TEXT,
-  seven_day_used_percentage REAL,
-  seven_day_resets_at       TEXT
-);
+CREATE INDEX IF NOT EXISTS idx_obstacle_sightings_obstacle ON obstacle_sightings(obstacle_id);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_ejections_live ON ejections(origin_ref) WHERE settled_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
-CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);
-CREATE INDEX IF NOT EXISTS idx_job_schedules_next ON job_schedules(enabled, next_run_at);
--- Both readers select by date: the panel folds a window, and the prior-remedy note
--- takes the most recent few. Neither ever asks for a remedy by id.
-CREATE INDEX IF NOT EXISTS idx_remedies_created ON remedies(created_at);
-CREATE INDEX IF NOT EXISTS idx_pr_thread_labels_answered ON pr_thread_labels(answered_at);
+-- The mid-session desk asks one question per live agent: what has this one already
+-- been told? The primary key leads on the obstacle, so that read needs its own.
+CREATE INDEX IF NOT EXISTS idx_obstacle_notices_agent ON obstacle_notices(agent_id);
+
+-- A suggestion is read from both ends — the intake answers near[] on the row a
+-- report landed on, and the pair may have been proposed the other way round — so
+-- the trailing column of the primary key needs its own.
+CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_suggestions(suggested_id);
 `;

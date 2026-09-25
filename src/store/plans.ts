@@ -32,7 +32,7 @@ import {
   type PlanPartRow,
   type PlanRevisionRow,
   type PlanRow,
-} from '../plans/rows.js';
+} from './rows/plans.js';
 import { keptProse, redeclaredPart } from '../plans/redeclare.js';
 
 // → docs/spec/14-persistence.md

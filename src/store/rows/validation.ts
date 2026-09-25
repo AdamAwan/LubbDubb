@@ -7,7 +7,7 @@ import type {
   ValidationResourceKind,
   ValidationRevision,
   ValidationStep,
-} from '../types.js';
+} from '../../types.js';
 
 export interface ValidationCheckRow {
   origin_ref: string;

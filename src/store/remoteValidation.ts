@@ -35,7 +35,7 @@ import {
   type SheetRowRow,
   type StateQueryRow,
   type TenantRow,
-} from '../remoteValidation/rows.js';
+} from './rows/remoteValidation.js';
 
 // → docs/spec/14-persistence.md
 

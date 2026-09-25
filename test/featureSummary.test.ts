@@ -13,6 +13,7 @@ import { buildFeatureBoard } from '../src/features/featureBoard.js';
 import type { FeatureSummary, Task } from '../src/types.js';
 import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
+import { SCHEMA } from '../src/store/schema.js';
 import { summarySection } from '../web/src/view/summarySection.js';
 import { repoText } from './support/paths.js';
 import { BRIEFS_AT_MOST, drawsRows } from '../web/src/components/FeatureBoard.js';
@@ -429,8 +430,7 @@ test('the column is declared as a migration, because the table predates it', () 
     'CREATE TABLE IF NOT EXISTS never alters a table that already exists — without this entry the ' +
       'column is invisible on every database from before it, and every write to it throws',
   );
-  const schema = repoText('src', 'store', 'schema', 'validationAndTracker.ts');
-  assert.match(schema, /CREATE TABLE IF NOT EXISTS feature_summaries \([^)]*headline\s+TEXT/, 'and on a fresh one');
+  assert.match(SCHEMA, /CREATE TABLE IF NOT EXISTS feature_summaries \([^)]*headline\s+TEXT/, 'and on a fresh one');
 });
 
 test('the card leads with the headline, and says nothing where there is none', () => {

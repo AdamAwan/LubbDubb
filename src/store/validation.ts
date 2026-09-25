@@ -22,7 +22,7 @@ import {
   type ValidationCheckRow,
   type ValidationPlanRow,
   type ValidationResourceRow,
-} from '../validation/rows.js';
+} from './rows/validation.js';
 import { isReworded, mergeCheck } from '../validation/checkMerge.js';
 
 // → docs/spec/14-persistence.md

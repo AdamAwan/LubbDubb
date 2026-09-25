@@ -14,7 +14,7 @@ import type {
   PlanPartInput,
   PlanRevision,
   PlanStatus,
-} from '../types.js';
+} from '../../types.js';
 
 export interface PlanRow {
   id: string;

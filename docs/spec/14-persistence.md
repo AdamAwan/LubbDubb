@@ -1,7 +1,9 @@
 # 14 — Persistence
 
 **`src/store/` is the only directory that touches SQLite.** Everything else goes through the
-`Store`. The schema is `src/store/schema.ts`, concatenated from the fragments under `src/store/schema/`.
+`Store`. The schema is `src/store/schema.ts`, concatenated from the fragments under `src/store/schema/`:
+one per domain module, named after it and holding the tables that module owns, each with its own
+indexes.
 
 ## Shape
 
@@ -69,8 +71,10 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 One file under `src/store/` is deliberately **not** a domain module and is excluded from all three
 assertions above: `verdicts.ts`, the issue-verdict exclusion matrix (#222). It is a dependency-free
 declaration — no SQLite, no `Store` — naming the four verdict tables so a test can walk it, and
-`issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` (with its fragments under `schema/`) and
-`store.ts` itself are excluded for the same kind of reason: none of them owns a table.
+`issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` (with its fragments under
+`schema/`), the row shapes and `rowTo*` mappers under `rows/` and `store.ts` itself are excluded for the same kind of
+reason: none of them owns a table. A domain module's snake_case row types live in `rows/<module>.ts` when they outgrow
+the module, and stay inside `src/store/` because they are the SQLite shape.
 
 `context.ts` carries one read that crosses that line and is bounded on purpose: `labelsById`, the
 `id → label` lookup behind `escalationLabels`, `humanTaskLabels`, `jobLabels`, `landingLabels` and
