@@ -1,4 +1,6 @@
 import type { AppState, EnvironmentHealthReading, SetupPayload } from '../types.js';
+import { refLabel } from '../components/refs.js';
+import { standsFor } from '../view/goalRefs.js';
 import { buildNeedsYou, type NeedKind } from '../view/needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -65,16 +67,34 @@ interface NotifyItem {
   tag: string;
   title: string;
   body: string;
+  name: string;
+}
+
+interface NotifyAgent {
+  id: string;
+  status: string;
+  task: string | null;
+  origin: string | null;
+  note: string | null;
+  numTurns: number | null;
 }
 
 interface NotifySnapshot {
   needsYou: { id: string; kind: NeedKind; title: string }[];
   errors: { id: string; message: string }[];
-  agents: { id: string; status: string }[];
+  agents: NotifyAgent[];
   environments: EnvironmentHealthReading[];
 }
 
-const AGENT_ENDINGS = new Set(['done', 'killed', 'interrupted', 'failed', 'crashed']);
+const ENDING_WORD: Record<string, string> = {
+  done: 'Finished',
+  killed: 'Killed',
+  interrupted: 'Interrupted',
+  failed: 'Failed',
+  crashed: 'Crashed',
+};
+
+const AGENT_ENDINGS = new Set(Object.keys(ENDING_WORD));
 
 const NEED_KIND_LABEL: Record<NeedKind, string> = {
   config: "This harness's own configuration is stopping it",
@@ -110,10 +130,21 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
 };
 
 export function notifySnapshot(state: AppState, setup: SetupPayload | null = null): NotifySnapshot {
+  const tasks = new Map(state.tasks.map((t) => [t.id, t]));
   return {
     needsYou: buildNeedsYou(state, setup).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
     errors: state.errors.map((e) => ({ id: e.id, message: e.message })),
-    agents: state.agents.map((a) => ({ id: a.id, status: a.status })),
+    agents: state.agents.map((a) => {
+      const task = tasks.get(a.taskId);
+      return {
+        id: a.id,
+        status: a.status,
+        task: task?.title ?? null,
+        origin: task ? standsFor(state, task.originRef) : null,
+        note: a.note,
+        numTurns: a.numTurns,
+      };
+    }),
     environments: state.environmentHealth ?? [],
   };
 }
@@ -130,13 +161,20 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
       tag: `need:${row.id}`,
       title: NEED_KIND_LABEL[row.kind],
       body: row.title,
+      name: row.title,
     });
   }
 
   const seenErrors = new Set(prev.errors.map((e) => e.id));
   for (const err of next.errors) {
     if (seenErrors.has(err.id)) continue;
-    items.push({ category: 'errors', tag: `error:${err.id}`, title: 'Error recorded', body: err.message });
+    items.push({
+      category: 'errors',
+      tag: `error:${err.id}`,
+      title: 'Error recorded',
+      body: err.message,
+      name: err.message,
+    });
   }
 
   const before = new Map(prev.agents.map((a) => [a.id, a.status]));
@@ -147,8 +185,9 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
     items.push({
       category: 'agents',
       tag: `agent:${agent.id}`,
-      title: agent.status === 'done' ? 'Agent finished' : `Agent ${agent.status}`,
-      body: agent.id,
+      title: agentTitle(agent),
+      body: agentBody(agent),
+      name: agent.task ?? agent.id,
     });
   }
 
@@ -162,10 +201,26 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
       tag: `env:${env.environment}:${env.changedAt}`,
       title: healthTitle(env),
       body: healthBody(env, was),
+      name: env.environment,
     });
   }
 
   return coalesce(items);
+}
+
+function agentTitle(agent: NotifyAgent): string {
+  const word = ENDING_WORD[agent.status]!;
+  return agent.task ? `${word}: ${agent.task}` : `Agent ${word.toLowerCase()}`;
+}
+
+function agentBody(agent: NotifyAgent): string {
+  const said = agent.note
+    ? `"${agent.note}"`
+    : agent.status !== 'done' && agent.numTurns
+      ? `stopped after ${agent.numTurns} turns`
+      : null;
+  const parts = [agent.origin ? refLabel(agent.origin) : null, said].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(' · ') : agent.id;
 }
 
 function healthTitle(env: EnvironmentHealthReading): string {
@@ -215,13 +270,15 @@ function coalesce(items: readonly NotifyItem[]): NotifyItem[] {
       out.push(batch[0]!);
       continue;
     }
-    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.body);
+    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.name);
     const rest = batch.length - named.length;
+    const title = SUMMARY_TITLE[id](batch.length);
     out.push({
       category: id,
       tag: `${batch[0]!.tag}+${batch.length - 1}`,
-      title: SUMMARY_TITLE[id](batch.length),
+      title,
       body: [...named, ...(rest > 0 ? [`+${rest} more`] : [])].join(' · '),
+      name: title,
     });
   }
   return out;

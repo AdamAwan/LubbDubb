@@ -6446,6 +6446,17 @@ themselves; diffing the queue covers every kind by construction and stays true w
 added. Agents notify on the **transition** into a terminal status rather than on appearing, since an
 agent is in the list from the moment it spawns and a dead one stays there.
 
+**An ended agent is named by its work, never its id.** An id says nothing to someone away from the
+cockpit, so the title is the ending and the task's title (_Finished: Fix login redirect loop_) and the
+body is the origin, read through `standsFor` and drawn with `refLabel`, then the agent's last note —
+or, for a run that did not finish and left none, how many turns it got through. The id is the body
+only when there is nothing else to say.
+
+**A folded batch names subjects, not bodies.** Every item carries a short `name` beside its body — the
+row's title, the error's message, the run's task title, the environment — and `coalesce` lists those.
+A body is written for a notification standing alone; three of them joined read as noise, and an
+environment's body (_Red · Solr down_) does not even say which environment it is.
+
 **One notification per category per batch.** The diff is per subject, and that is the right record of
 what is new — it is not the right number of interruptions. A cascade records thirty errors inside one
 pulse and a restart fills the queue rail in one go, so an operator got thirty desktop banners for one
