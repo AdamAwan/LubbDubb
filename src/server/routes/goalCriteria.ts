@@ -3,6 +3,7 @@ import { criteriaItems } from '../../criteria/items.js';
 import { criteriaCoverage } from '../../criteria/coverage.js';
 import { z } from 'zod';
 import { criteriaAnchors, criteriaStanding } from '../../criteria/standing.js';
+import { ticketCriteria } from '../../criteria/ticketCriteria.js';
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { GoalCriteriaVersion } from '../../types.js';
 import { checked, IssueNumberParams, optionalText, requiredText } from '../validation.js';
@@ -61,10 +62,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const anchors = criteriaAnchors(system, originRef);
       const versions = store.goalCriteria.listCriteriaVersions(originRef).map((version) => withStanding(version));
       const current = versions.length === 0 ? null : versions[versions.length - 1]!;
+      const issue = store.world.getWorldBaseline()?.issues.find((i) => i.number === params.number);
       return {
         current,
         versions,
         alignment: current === null ? null : store.goalCriteria.getAlignment(originRef, current.version),
+        ticketHasCriteria: ticketCriteria(issue?.body) !== null,
         coverage:
           current === null
             ? []

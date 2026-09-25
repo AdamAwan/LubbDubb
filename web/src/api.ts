@@ -111,6 +111,8 @@ export interface GoalCriteriaReading {
   versions: CriteriaVersionReading[];
   /** The alignment check's reading of the current version, where one has been taken. */
   alignment: GoalCriteriaAlignment | null;
+  /** Whether the ticket carries acceptance criteria of its own — the only case the alignment check runs. */
+  ticketHasCriteria: boolean;
   /** One reading per criterion of the current version, off the checks that name it. */
   coverage: CriterionCoverage[];
 }

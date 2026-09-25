@@ -2139,11 +2139,11 @@ The run's state, what steers the work, and what happens somewhere other than thi
 groups, each with a caption saying what the group is for**, drawn through [the control
 kit](#the-control-kit) rather than as class strings.
 
-| caption         | controls                                               |
-| --------------- | ------------------------------------------------------ |
-| Run state       | Working / Done / Abandon… — one segmented control      |
-| Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
-| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
+| caption         | controls                                              |
+| --------------- | ----------------------------------------------------- |
+| Run state       | Working / Done / Abandon… — one segmented control     |
+| Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
+| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug  |
 
 There was a fourth group, _Check the work_, holding the local run's press. It is now on the runner
 panel that draws what a press produced, a pane below ([The validate pane](#the-validate-pane)): the
@@ -2763,8 +2763,11 @@ goal's pickup verdict reads `sitting`, the work pane opens with a **Before plann
 (`IntakeSitting`) above where the plan will be. It offers **Write these down** and **Skip, just plan
 it** at equal weight, for the gate's own reason. Writing draws the same composer — the four slots, the
 containment sentence, and the criteria half behind its rule, each asked only where it is still owed —
-and **Record these** writes both and keeps the card up rather than closing the sitting, because the
-alignment check has to have its chance first. The card then shows what was recorded; while the pickup
+and **Record these** writes both. Where criteria were written **and** the ticket carries its own
+(`ticketHasCriteria`), it keeps the card up rather than closing the sitting, because the alignment
+check has to have its chance first. Otherwise there is no check coming, and **Record these** closes
+the sitting itself: a card that only reads back what was just typed, over a second **Start
+planning**, is a confirmation of nothing. The card then shows what was recorded; while the pickup
 reason says the check is out it says so, and once a reading lands it draws the verdict and every point
 with its tag, a contradiction in red. **Start planning** — **Plan it anyway** over a `conflicting`
 reading — is the press that stamps the sitting closed; **Revise criteria** appends a version restated in

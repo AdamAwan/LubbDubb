@@ -118,6 +118,37 @@ test('the three standings derive through the route at each boundary', async () =
   }
 });
 
+test('the reading says whether the ticket carries criteria of its own, so the sitting knows a check is coming', async () => {
+  const h = await harness(true);
+  try {
+    const issue = (number: number, body: string): Issue => ({
+      id: `issue_${number}`,
+      number,
+      title: `Issue ${number}`,
+      body,
+      state: 'open',
+      labels: [],
+      linkedPrNumber: null,
+    });
+    h.system.store.world.setWorldBaseline({
+      takenAt: '2026-09-25T12:00:00.000Z',
+      pullRequests: [],
+      issues: [issue(46, 'Do it.\n\n## Acceptance criteria\n- it works'), issue(47, 'Do it.')],
+    });
+    const read = async (n: number) =>
+      (
+        (await h.app.inject({ method: 'GET', url: `/api/goals/${n}/criteria` })).json() as {
+          ticketHasCriteria: boolean;
+        }
+      ).ticketHasCriteria;
+    assert.equal(await read(46), true);
+    assert.equal(await read(47), false, 'no heading, no check — the sitting closes on Record');
+    assert.equal(await read(48), false, 'an issue not in the snapshot has nothing to compare');
+  } finally {
+    await h.close();
+  }
+});
+
 test('an edit appends: the first version is untouched and the chain points back', async () => {
   const h = await harness(true);
   try {

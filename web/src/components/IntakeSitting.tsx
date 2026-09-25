@@ -122,9 +122,11 @@ function useIntakeSitting(issueNumber: number, aligning: boolean, onClosed: () =
     }
     setRefusal(null);
     if (asksPrediction && Object.keys(slots).length > 0) await api.predictGoal(issueNumber, slots);
-    if (asksCriteria && text !== '') await api.writeGoalCriteria(issueNumber, { text });
+    const wroteCriteria = asksCriteria && text !== '';
+    if (wroteCriteria) await api.writeGoalCriteria(issueNumber, { text });
     setComposing(false);
     await load();
+    if (!wroteCriteria || loaded.criteria?.ticketHasCriteria !== true) await close();
   };
 
   const revise = async (): Promise<void> => {
