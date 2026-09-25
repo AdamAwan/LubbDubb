@@ -71,6 +71,7 @@ export interface AzureDevOpsApi {
   getPullBody(pullRequestId: number): Promise<string>;
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
+  addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;
 }
 
@@ -100,6 +101,8 @@ export interface AzPull {
 }
 
 export interface AzReviewer {
+  id?: string;
+  displayName?: string;
   uniqueName: string;
   vote: number;
   isRequired: boolean;
@@ -112,6 +115,7 @@ export interface AzClosedPull {
   branch: string;
   baseBranch: string;
   authorUniqueName: string;
+  reviewers?: AzReviewer[];
   url: string;
   merged: boolean;
   closedAt: string;

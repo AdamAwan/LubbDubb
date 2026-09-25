@@ -1,9 +1,12 @@
+import { computeApproved, namedReviewers, viewerApproved, viewerAssignment } from './reviewers.js';
+import { sameIdentity } from '../../pr/prOwnership.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   BranchDeleteInput,
   CiCheckRequeueInput,
   MergeMethod,
   PrBaseInput,
+  PrAssignInput,
   PrBodyInput,
   PrCloseInput,
   PrCreateInput,
@@ -14,7 +17,7 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest, ViewerAssignment } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
@@ -24,6 +27,7 @@ import type {
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
+  PrAssignCapable,
   PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
@@ -40,7 +44,6 @@ import type {
   AzClosedPull,
   AzPolicyEvaluation,
   AzPull,
-  AzReviewer,
   AzThread,
   AzTimelineRecord,
   AzureDevOpsApi,
@@ -79,6 +82,7 @@ export class AzureDevOpsSourceControlIntegration
     PrTitleCapable,
     PrBodyCapable,
     PrBaseCapable,
+    PrAssignCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
     CiCheckRequeueCapable,
@@ -152,6 +156,7 @@ export class AzureDevOpsSourceControlIntegration
           const assignment = viewerAssignment(p.reviewers, viewer);
           if (assignment !== undefined) pr.viewerAssignment = assignment;
           if (viewerApproved(p.reviewers, viewer)) pr.viewerApproved = true;
+          pr.assignees = namedReviewers(p.reviewers);
           const mergeable = mergeableFromStatus(p.mergeStatus);
           if (mergeable !== undefined) pr.mergeable = mergeable;
           return pr;
@@ -294,6 +299,11 @@ export class AzureDevOpsSourceControlIntegration
     return { ok: true };
   }
 
+  async assignPr(input: PrAssignInput): Promise<SendResult> {
+    await this.opts.api.addPullReviewer(input.prNumber, input.personId);
+    return { ok: true, ref: input.personId };
+  }
+
   async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
     const res = await this.opts.api.requeuePolicyEvaluation(input.requeueRef);
     if (res.isExpired === true) return { ok: false };
@@ -360,7 +370,9 @@ export function mapClosedPull(p: AzClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
+    ...(p.authorUniqueName === '' ? {} : { author: p.authorUniqueName }),
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
+    ...(p.reviewers === undefined ? {} : { assignees: namedReviewers(p.reviewers) }),
     url: p.url,
   };
 }
@@ -474,28 +486,6 @@ function checkStatusOf(status: string | null): CiCheck['status'] | null {
   if (status === 'queued' || status === 'running') return 'pending';
   if (status === 'approved') return 'passing';
   return null;
-}
-
-function viewerAssignment(reviewers: readonly AzReviewer[], viewer: string): ViewerAssignment | undefined {
-  if (viewer === '') return undefined;
-  const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
-  if (mine === undefined) return undefined;
-  return mine.isRequired ? 'reviewer-required' : 'reviewer-optional';
-}
-
-function viewerApproved(reviewers: readonly AzReviewer[], viewer: string): boolean {
-  if (viewer === '') return false;
-  const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
-  return mine !== undefined && mine.vote >= 5;
-}
-
-function sameIdentity(a: string, b: string): boolean {
-  return a !== '' && a.toLowerCase() === b.toLowerCase();
-}
-
-export function computeApproved(votes: number[]): boolean {
-  if (votes.some((v) => v < 0)) return false;
-  return votes.some((v) => v >= 5);
 }
 
 export function buildReviewThreads(threads: AzThread[], ourReplies: ReadonlySet<string> = new Set()): PrReviewThread[] {

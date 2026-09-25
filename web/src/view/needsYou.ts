@@ -46,6 +46,7 @@ export type NeedKind =
   | 'supply'
   | 'dispatch'
   | 'assigned'
+  | 'assign'
   | 'upgrade'
   | 'project_pull';
 
@@ -100,6 +101,9 @@ const KIND_URGENCY: Record<NeedKind, NeedUrgency> = {
   burn: 'later',
   placement: 'later',
   assigned: 'later',
+  // Nothing waits on it, but it is asked at the one moment the answer helps: the fleet is done with
+  // the pull request and a person is next. → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
+  assign: 'next',
   upgrade: 'later',
   project_pull: 'later',
 };
@@ -137,6 +141,34 @@ function assignedPrRows(state: AppState): NeedDraft[] {
       originRef: `pr:${pr.number}`,
       opens: prAddress(state, pr.number) === undefined ? opensAt(goalRef, state) : 'provider',
       details: opensAt(goalRef, state),
+      agentId: null,
+      agentLabel: null,
+      holding: 0,
+      raisedAt: pr.attention?.reviewWaitingSince ?? '',
+    });
+  }
+  return rows;
+}
+
+/**
+ * One ask per pull request of the fleet's that is ready for a person and has nobody on it. The
+ * server decides membership and the shortlist; this only draws them.
+ * → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
+ */
+function assignAskRows(state: AppState): NeedDraft[] {
+  const rows: NeedDraft[] = [];
+  for (const pr of state.world.pullRequests) {
+    if (pr.assignAsk === undefined) continue;
+    const goalRef = goalOfPr(state, pr.number);
+    rows.push({
+      id: `assign:pr:${pr.number}`,
+      kind: 'assign',
+      group: 'yours',
+      title: askLine(`PR #${pr.number} is ready — want to assign it to someone?`, goalRef, state),
+      goalRef,
+      originRef: `pr:${pr.number}`,
+      opens: 'pr',
+      prNumber: pr.number,
       agentId: null,
       agentLabel: null,
       holding: 0,
@@ -431,6 +463,7 @@ export function buildNeedsYou(
     ...updateAskRows(state, nowIso),
     ...refusedDispatchRows(state),
     ...assignedPrRows(state),
+    ...assignAskRows(state),
     ...undescribedPartRows(state),
     ...descriptionFeedbackRows(state),
     ...recoveryRows(state),

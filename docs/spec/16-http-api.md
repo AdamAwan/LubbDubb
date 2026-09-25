@@ -503,6 +503,15 @@ It also records a `pr_watch_seeds` row, in **both** directions: the seeding desk
 ([07](07-pull-requests.md#watching)) must not answer for a pull request a person has answered for, or
 un-watching one the harness opened would be undone on the next pulse.
 
+### `POST /api/prs/:number/assign`, `POST /api/prs/:number/assign/decline`
+
+Answer the assign ask ([07](07-pull-requests.md#asking-who-should-look-at-it)). `assign` takes
+`{personId}`, and only a person on the current shortlist is accepted (409 otherwise). It writes the
+assignment through `PrAssignSink.assignPr` and then records the answer. A tracker refusal is a 409
+naming it, and no answer is recorded, so the ask stays. `decline` records "Nah" and writes nothing
+to the tracker. Both refuse (409) an ask already answered, or one whose assignment is still with the
+tracker. Both return 404 for a pull request the world does not carry.
+
 ### `POST /api/prs/:number/threads/:threadId/reopen`
 
 Body `{reopened: boolean}`. Puts one review thread back in front of the fleet, or takes the ask back

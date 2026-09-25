@@ -107,10 +107,18 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
 `PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrCloseCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
-`PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
+`PrBaseCapable`, `PrAssignCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
 `IssueCloseCapable`, `IssueImageCapable`,
 `CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
+
+`PrAssignCapable` puts a person on a pull request: `addPullAssignee` on GitHub, `addPullReviewer`
+(by identity id, as an optional reviewer) on Azure. It reaches callers as `PrAssignSink`, a
+capability beside `ActionSink` in the same way `IssueImageSink` is. Only the cockpit's assign ask
+writes one ([07](07-pull-requests.md#asking-who-should-look-at-it)), and a provider without it simply
+never raises the ask. On the read side, both providers report `PullRequest.assignees`: GitHub's
+assignee logins, and Azure's individually named reviewers (teams left out, the same as for
+`viewerAssignment`). Both come off the list payload the snapshot already reads.
 
 `PrThreadResolveCapable` marks a review thread resolved, and is separate from `PrReplyCapable`
 because the two are different provider operations — GitHub resolves through a GraphQL mutation and

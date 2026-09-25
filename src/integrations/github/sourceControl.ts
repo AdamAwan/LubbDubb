@@ -2,6 +2,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,
+  PrAssignInput,
   PrBaseUpdateInput,
   PrBodyInput,
   PrCloseInput,
@@ -13,7 +14,7 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
@@ -22,6 +23,7 @@ import type {
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
+  PrAssignCapable,
   PrBaseUpdateCapable,
   PrCloseCapable,
   PrCreateCapable,
@@ -98,6 +100,7 @@ export class GitHubSourceControlIntegration
     PrTitleCapable,
     PrBodyCapable,
     PrBaseCapable,
+    PrAssignCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
@@ -151,6 +154,7 @@ export class GitHubSourceControlIntegration
           if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
           if (detail.viewerApproved) pr.viewerApproved = true;
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
+          pr.assignees = loginPeople(p.assigneeLogins);
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
           if (p.body !== undefined) pr.body = p.body;
@@ -313,6 +317,11 @@ export class GitHubSourceControlIntegration
     return { ok: true };
   }
 
+  async assignPr(input: PrAssignInput): Promise<SendResult> {
+    await this.opts.api.addPullAssignee(input.prNumber, input.personId);
+    return { ok: true, ref: input.personId };
+  }
+
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
     await this.opts.api.updatePullBranch(input.prNumber);
     return { ok: true, ref: input.base };
@@ -389,9 +398,15 @@ export function mapClosedPull(p: GhClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
+    ...(p.authorLogin === '' ? {} : { author: p.authorLogin }),
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
+    ...(p.assigneeLogins === undefined ? {} : { assignees: loginPeople(p.assigneeLogins) }),
     url: p.url,
   };
+}
+
+function loginPeople(logins: readonly string[]): PrPerson[] {
+  return logins.map((login) => ({ id: login, name: login }));
 }
 
 function normalizeMergeState(state: string | null): MergeableState {

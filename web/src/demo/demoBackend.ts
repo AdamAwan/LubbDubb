@@ -913,6 +913,26 @@ class DemoServer {
     return { ok: true };
   }
 
+  async assignPr(prNumber: number, personId: string): Promise<{ ok: true }> {
+    const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
+    const person = pr?.assignAsk?.find((p) => p.id === personId);
+    if (pr && person) {
+      pr.assignees = [...(pr.assignees ?? []), person];
+      delete pr.assignAsk;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  async declineAssignPr(prNumber: number): Promise<{ ok: true }> {
+    const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
+    if (pr?.assignAsk !== undefined) {
+      delete pr.assignAsk;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async reopenPrThread(prNumber: number, threadId: string, reopened: boolean): Promise<{ ok: true }> {
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     const thread = pr?.reviewThreads?.find((t) => t.id === threadId);
@@ -4916,6 +4936,8 @@ export const demoApi = {
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
   reopenPrThread: (prNumber: number, threadId: string, reopened: boolean) =>
     getServer().reopenPrThread(prNumber, threadId, reopened),
+  assignPr: (prNumber: number, personId: string) => getServer().assignPr(prNumber, personId),
+  declineAssignPr: (prNumber: number) => getServer().declineAssignPr(prNumber),
   dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),
   ruleRemoteQuery: (issueNumber: number, environment: string, rowId: string, accept: boolean) =>

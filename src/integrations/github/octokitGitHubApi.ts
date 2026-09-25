@@ -169,7 +169,7 @@ export class OctokitGitHubApi implements GitHubApi {
       authorLogin: p.user?.login ?? '',
       url: p.html_url,
       labels: p.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
-      assigneeLogins: (p.assignees ?? []).map((a) => a.login).filter((login) => login !== ''),
+      assigneeLogins: assigneeLogins(p.assignees),
       updatedAt: p.updated_at,
       body: p.body ?? '',
     }));
@@ -194,6 +194,7 @@ export class OctokitGitHubApi implements GitHubApi {
           branch: p.head.ref,
           baseBranch: p.base.ref,
           authorLogin: p.user?.login ?? '',
+          assigneeLogins: assigneeLogins(p.assignees),
           url: p.html_url,
           merged: p.merged_at !== null,
           closedAt: p.closed_at,
@@ -450,6 +451,10 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.octokit.pulls.update({ ...this.base, pull_number: number, base });
   }
 
+  async addPullAssignee(number: number, login: string): Promise<void> {
+    await this.octokit.issues.addAssignees({ ...this.base, issue_number: number, assignees: [login] });
+  }
+
   async updatePullBranch(number: number): Promise<void> {
     await this.octokit.pulls.updateBranch({ ...this.base, pull_number: number });
   }
@@ -511,4 +516,8 @@ function mapIssue(i: {
     createdAt: i.created_at,
     updatedAt: i.updated_at,
   };
+}
+
+function assigneeLogins(assignees: readonly { login: string }[] | null | undefined): string[] {
+  return (assignees ?? []).map((a) => a.login).filter((login) => login !== '');
 }

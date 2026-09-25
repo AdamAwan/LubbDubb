@@ -148,6 +148,22 @@ export interface IssueImageSink {
   attachIssueImage(input: IssueImageInput): Promise<IssueImageResult>;
 }
 
+export interface PrAssignInput {
+  prNumber: number;
+  personId: string;
+}
+
+/**
+ * Putting a person on a pull request in the tracker — a GitHub assignee, an Azure reviewer. A
+ * capability beside `ActionSink` because only the cockpit's assign ask writes one, and a provider
+ * that cannot is an ask never raised rather than a refusal.
+ * → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
+ */
+export interface PrAssignSink {
+  canAssignPr(): boolean;
+  assignPr(input: PrAssignInput): Promise<SendResult>;
+}
+
 export interface FilingTarget {
   target: string;
   identity: string | null;

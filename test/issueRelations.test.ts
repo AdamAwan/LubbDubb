@@ -329,6 +329,7 @@ function relationApi(
     getPullBody: unused,
     setPullBody: unused,
     setPullBase: unused,
+    addPullReviewer: unused,
     abandonPullRequest: unused,
     deleteBranch: unused,
     getBuildTimeline: unused,

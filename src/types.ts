@@ -43,6 +43,11 @@ export interface PullRequest {
   author?: string;
   viewerAuthored?: boolean;
   viewerApproved?: boolean;
+  /**
+   * Who the tracker says is on this pull request: GitHub's assignees, Azure's individually named
+   * reviewers. Absent means the provider did not say, which is never "nobody".
+   */
+  assignees?: PrPerson[];
   changedFiles?: number;
   url?: string;
   /** Undefined where the provider did not read it, which is not an empty body. */
@@ -50,6 +55,12 @@ export interface PullRequest {
 }
 
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
+
+/** A person as a tracker names them: `id` is what an assignment is written with, `name` what is drawn. */
+export interface PrPerson {
+  id: string;
+  name: string;
+}
 
 export interface PrComment {
   id: string;

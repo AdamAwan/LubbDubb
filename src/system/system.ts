@@ -69,6 +69,7 @@ import {
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
+import { PrAssignDesk } from '../pr/prAssignAsk.js';
 import {
   type IntakeDesks,
   buildIntakeDesks,
@@ -109,6 +110,7 @@ export interface System {
   remoteRuns: RemoteRunDesk;
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
+  prAssign: PrAssignDesk;
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -184,6 +186,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteRuns: envs.remoteRuns,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
+    prAssign: new PrAssignDesk({
+      store: base.store,
+      sink: base.sink,
+      errors: base.errors,
+      operator: config.userId,
+      prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
+    }),
     updates: bench.updates,
     runtimeControl: base.runtimeControl,
     pets: pulse.pets,

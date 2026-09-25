@@ -43,10 +43,10 @@ export class PrArchiveStore implements ClosedPrSweep {
       .run(sweptTo, at);
   }
 
-  listArchivedPrs(): PullRequest[] {
+  listArchivedPrs(limit = -1): PullRequest[] {
     const rows = this.ctx
-      .prep(`SELECT snapshot FROM pr_archive ORDER BY COALESCE(closed_at, first_seen_at) DESC, number DESC`)
-      .all() as { snapshot: string }[];
+      .prep(`SELECT snapshot FROM pr_archive ORDER BY COALESCE(closed_at, first_seen_at) DESC, number DESC LIMIT ?`)
+      .all(limit) as { snapshot: string }[];
     return rows.map((row) => JSON.parse(row.snapshot) as PullRequest);
   }
 }

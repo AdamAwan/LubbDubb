@@ -3,6 +3,7 @@ import type { InjectableEvent } from '../connector.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,
+  PrAssignInput,
   PrBodyInput,
   PrBaseUpdateInput,
   PrCloseInput,
@@ -22,6 +23,7 @@ import type {
   Injectable,
   Integration,
   PrBaseCapable,
+  PrAssignCapable,
   PrBaseUpdateCapable,
   PrCloseCapable,
   PrCreateCapable,
@@ -62,6 +64,7 @@ export class FakeGitHubIntegration
     PrTitleCapable,
     PrBodyCapable,
     PrBaseCapable,
+    PrAssignCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
     Injectable
@@ -220,6 +223,17 @@ export class FakeGitHubIntegration
       mutatePr(world, input.prNumber, (pr) => (pr.baseBranch = input.base));
     });
     return { ok: true, ref: `fake-base_${nanoid(6)}` };
+  }
+
+  async assignPr(input: PrAssignInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      mutatePr(world, input.prNumber, (pr) => {
+        const on = pr.assignees ?? [];
+        if (!on.some((p) => p.id === input.personId))
+          pr.assignees = [...on, { id: input.personId, name: input.personId }];
+      });
+    });
+    return { ok: true, ref: input.personId };
   }
 
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {

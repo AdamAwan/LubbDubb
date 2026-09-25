@@ -8,6 +8,8 @@ import type {
   IssueImageInput,
   IssueImageResult,
   IssueImageSink,
+  PrAssignInput,
+  PrAssignSink,
   IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
@@ -43,6 +45,7 @@ import {
   isIssueImageCapable,
   isIssueLabelCapable,
   isPrBaseCapable,
+  isPrAssignCapable,
   isPrBaseUpdateCapable,
   isPrCloseCapable,
   isPrCreateCapable,
@@ -63,7 +66,7 @@ import {
 
 // → docs/spec/15-integrations.md
 
-export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader, IssueImageSink {
+export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader, IssueImageSink, PrAssignSink {
   constructor(
     private readonly integrations: Integration[],
     private readonly now: () => string = () => new Date().toISOString(),
@@ -196,6 +199,16 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isPrBaseCapable);
     if (!handler) throw new Error('no integration can retarget PRs (no sourceControl provider is PrBaseCapable)');
     return handler.setPullBase(input);
+  }
+
+  canAssignPr(): boolean {
+    return this.integrations.some(isPrAssignCapable);
+  }
+
+  async assignPr(input: PrAssignInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrAssignCapable);
+    if (!handler) throw new Error('no integration can assign PRs (no sourceControl provider is PrAssignCapable)');
+    return handler.assignPr(input);
   }
 
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {

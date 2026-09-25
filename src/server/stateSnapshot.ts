@@ -87,23 +87,34 @@ function snapshotReads(system: System, opts: SnapshotOpts | undefined): Reads {
 }
 
 function prReads(r: IssueReadsOn) {
-  const { store, config, world, reviewRows } = r;
+  const { store, config, world, reviewRows, system, archivedPullRequests } = r;
   const attentionCtx = prAttentionContext(r);
   const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
     prReviewState(pr.number, reviewReading(reviewRows(), pr.number), config.review, pr.reviewThreads) ?? undefined;
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
 
   const splitVerdicts = once(() => new Map(store.prSplits.listPrSplitVerdicts().map((v) => [v.prNumber, v])));
-  const openPullRequests = once((): OpenPullRequest[] =>
-    world.pullRequests.map((pr) => ({
-      ...pr,
-      health: prHealth(pr, world.pullRequests),
+  const openPullRequests = once((): OpenPullRequest[] => {
+    const read = world.pullRequests.map((pr) => ({
+      pr,
       attention: prAttentionStatus(pr, attentionCtx()),
-      ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
       review: reviewStateOf(pr),
-      split: splitVerdicts().get(pr.number),
-    })),
-  );
+    }));
+    const facts = new Map(read.map((x) => [x.pr, { review: x.review, fleetOnIt: x.attention.status === 'harness' }]));
+    const asks = system.prAssign.asks(world.pullRequests, archivedPullRequests, (pr) => facts.get(pr)!);
+    return read.map(({ pr, attention, review }) => {
+      const assignAsk = asks.get(pr.number);
+      return {
+        ...pr,
+        health: prHealth(pr, world.pullRequests),
+        attention,
+        ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
+        review,
+        split: splitVerdicts().get(pr.number),
+        ...(assignAsk === undefined ? {} : { assignAsk }),
+      };
+    });
+  });
   const prByBranch = once(() => {
     const map = new Map<string, PullRequest>();
     for (const pr of [...(world.closedPullRequests ?? []), ...openPullRequests()]) map.set(pr.branch, pr);

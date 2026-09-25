@@ -1,6 +1,7 @@
 import type { AreaPathTree } from '../../intake/placement.js';
 import type {
   AzClosedPull,
+  AzReviewer,
   AzPolicyEvaluation,
   AzPull,
   AzThread,
@@ -22,7 +23,14 @@ export interface RawPull {
   description?: string;
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string; displayName?: string };
-  reviewers?: Array<{ vote?: number; uniqueName?: string; isRequired?: boolean; isContainer?: boolean }>;
+  reviewers?: Array<{
+    id?: string;
+    displayName?: string;
+    vote?: number;
+    uniqueName?: string;
+    isRequired?: boolean;
+    isContainer?: boolean;
+  }>;
 }
 
 export interface RawClosedPull {
@@ -33,6 +41,7 @@ export interface RawClosedPull {
   status?: string;
   closedDate?: string;
   createdBy?: { uniqueName?: string };
+  reviewers?: RawPull['reviewers'];
   lastMergeCommit?: { commitId?: string };
 }
 
@@ -133,13 +142,19 @@ export function toPull(p: RawPull, url: string): AzPull {
     isDraft: p.isDraft ?? false,
     mergeStatus: p.mergeStatus ?? 'notSet',
     description: p.description ?? '',
-    reviewers: (p.reviewers ?? []).map((r) => ({
-      uniqueName: r.uniqueName ?? '',
-      vote: r.vote ?? 0,
-      isRequired: r.isRequired ?? false,
-      isContainer: r.isContainer ?? false,
-    })),
+    reviewers: toReviewers(p.reviewers),
   };
+}
+
+function toReviewers(raw: RawPull['reviewers']): AzReviewer[] {
+  return (raw ?? []).map((r) => ({
+    ...(r.id ? { id: r.id } : {}),
+    ...(r.displayName ? { displayName: r.displayName } : {}),
+    uniqueName: r.uniqueName ?? '',
+    vote: r.vote ?? 0,
+    isRequired: r.isRequired ?? false,
+    isContainer: r.isContainer ?? false,
+  }));
 }
 
 export function toClosedPull(p: RawClosedPull, closedAt: string, url: string): AzClosedPull {
@@ -149,6 +164,7 @@ export function toClosedPull(p: RawClosedPull, closedAt: string, url: string): A
     branch: stripRef(p.sourceRefName),
     baseBranch: stripRef(p.targetRefName),
     authorUniqueName: p.createdBy?.uniqueName ?? '',
+    ...(p.reviewers === undefined ? {} : { reviewers: toReviewers(p.reviewers) }),
     url,
     merged: p.status === 'completed',
     closedAt,

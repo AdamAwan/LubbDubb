@@ -36,6 +36,7 @@ export interface GitHubApi {
   setPullTitle(number: number, title: string): Promise<void>;
   setPullBody(number: number, body: string): Promise<void>;
   setPullBase(number: number, base: string): Promise<void>;
+  addPullAssignee(number: number, login: string): Promise<void>;
   updatePullBranch(number: number): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;
 }
@@ -60,6 +61,7 @@ export interface GhClosedPull {
   branch: string;
   baseBranch: string;
   authorLogin: string;
+  assigneeLogins?: string[];
   url: string;
   merged: boolean;
   closedAt: string;

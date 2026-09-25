@@ -792,6 +792,12 @@ checked newest version that found something, off `CockpitState.descriptionFeedba
 is `next`; gaps alone are `later`. Both open the pull request, where the findings are drawn under the
 description. → [07](07-pull-requests.md#what-the-check-raises)
 
+**`assign` asks the operator to put somebody on the fleet's finished pull request.** The server decides
+it and sends the shortlist as `OpenPullRequest.assignAsk`
+([07](07-pull-requests.md#asking-who-should-look-at-it)). The body draws one button per person and a
+"Nah" button, all the same size and tone, so declining is not buried. It is `next`, not `later`: it
+is asked at the one moment the answer helps, and folded away it would be missed at exactly that moment.
+
 **`assigned` is the one kind that did not come from the harness at all.** Every other row here is
 the fleet saying it is stuck; this one is a pull request a colleague put on the operator, which the
 fleet does not know exists and will never act on. It is read off `attention.assignedToYou`

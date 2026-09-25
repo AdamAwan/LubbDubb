@@ -1138,6 +1138,46 @@ Because the first matching arm wins, the ones below it are moot — a PR with an
 reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
 cannot give.
 
+### Asking who should look at it
+
+The other direction. A colleague who assigns the operator in the tracker lands on their rail
+([above](#a-pull-request-a-person-put-on-you)); a colleague asked on chat never does. So once the
+fleet is finished with one of **its own** pull requests, the rail asks the operator _"want to assign
+this to someone?"_. The shortlist is drawn from people they already assign, and "Nah" sits beside it,
+drawn the same size, so saying no is as cheap as picking. The habit spreads by example. Nothing is
+posted to anybody, and nothing is asked twice.
+
+**When it is asked** — `PrAssignDesk.asks` (`src/pr/prAssignAsk.ts`), all of:
+
+| Condition                                                                                                                 | Why                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isOurPr`, open                                                                                                           | A colleague's pull request is theirs to staff.                                                                                                                                                                                                                      |
+| No answer recorded for it                                                                                                 | One question per pull request, ever. "Nah" is as final as a name.                                                                                                                                                                                                   |
+| `prAttentionStatus` is not `harness` (the snapshot passes it in as `fleetOnIt`, so the verdict stays a cockpit-only lens) | An agent still on the branch means the fleet is not finished.                                                                                                                                                                                                       |
+| `assignees` reported, and nobody on it but the operator or the author                                                     | Somebody already on it has already been asked. Absent `assignees` is "the provider did not say", never "nobody".                                                                                                                                                    |
+| Every `unresolvedComments` entry `handled`                                                                                | The operator asked for "comments resolved". `handled` (answered or resolved) is the reading the merge gate already uses. A literal `resolved` would never arrive on the threads a reviewer answers without clicking resolve, and the ask would silently never come. |
+| The fleet review is done                                                                                                  | `clear`, `skipped` or `elsewhere`, or `findings` that are `addressed`. With the fleet review off there is no review to wait for.                                                                                                                                    |
+| The sink `canAssignPr()`, and the shortlist is not empty                                                                  | An ask with no way to answer it, or nobody to offer, is noise.                                                                                                                                                                                                      |
+
+**The shortlist** — `assignShortlist`: everybody the tracker has on the operator's own pull requests,
+open and the last 100 archived, plus the people assigned through this ask. The closed-PR read carries
+assignees for exactly this (GitHub's list payload has them, and so does Azure's reviewer list), so
+the archive holds who each merged pull request went to. Each person is counted
+once per pull request. The operator and each PR's author are left out. People are ranked by how many
+pull requests they were on, then by the most recent one, and the top four are offered. It is learnt
+from what the operator already does, so a deployment whose PRs have never had anyone on them has no
+shortlist and gets no ask.
+
+**Answering it.** A name goes through `PrAssignSink.assignPr` ([15](15-integrations.md)): a GitHub
+assignee, or an Azure reviewer (individual, optional). These are the same fields a colleague's harness
+reads as `viewerAssignment`, so the pull request lands on _their_ rail. Only a shortlisted person,
+on the fleet's own pull request, with no answer yet, is accepted. A second tab pressing a stale row
+cannot assign somebody in the tracker behind an answer already recorded. An assignment still waiting on the
+tracker holds the ask as answered too (in memory, on the desk), so a "Nah" pressed in the meantime
+is refused rather than recorded against a person the tracker is about to have. Merged pull requests
+carry their author like open ones, so a self-assigned PR never offers its own author. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
+answer is one `pr_assign_asks` row ([14](14-persistence.md)).
+
 ### How long it has been waiting on a reviewer
 
 The `waiting on review` arm carries `reviewWaitingSince` — the instant this pull request started
