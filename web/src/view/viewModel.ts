@@ -19,7 +19,8 @@ import type {
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
 import type { AppliedFix, NeedRow } from './needsYou.js';
-import { buildGoalPage, goalOfOrigin } from './goalPage.js';
+import { buildGoalPage } from './goalPage.js';
+import { goalOfOrigin } from './goalRefs.js';
 import type { GoalPageView, GoalTab } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';

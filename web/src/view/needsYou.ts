@@ -10,14 +10,11 @@ import type {
   OpenPullRequest,
   ViewerAssignment,
 } from '../types.js';
-import { goalOfPr } from './goalPage.js';
+import { goalOfPr } from './goalRefs.js';
 import { updateAskRows } from './updateAsks.js';
 import { intakeRows, placementRows, profileRows, sittingRows } from './issueAsks.js';
 import { agentLabelOf, askLine, goalOf, oneLine, opensAt, predictionOpensAt, prAddress } from './needLines.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
-
-export { oneLine } from './needLines.js';
-export { refusedDispatchFor } from './refusedDispatches.js';
 
 // → docs/spec/17-cockpit.md
 

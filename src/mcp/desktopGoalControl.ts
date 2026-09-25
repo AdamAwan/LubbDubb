@@ -9,8 +9,6 @@ import { toolError, toolJson } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
 
-type WatchOutcome = Awaited<ReturnType<typeof applyIssueWatch>>;
-
 const GOAL_CONTROL_INPUT = toolSchema(
   z.object({
     issue: z.number().describe('The goal number, e.g. 284.'),
@@ -39,22 +37,15 @@ const GOAL_CONTROL_INPUT = toolSchema(
   }),
 );
 
-function pinProfile(deps: DesktopToolDeps, issue: number, profile: string): ReturnType<typeof applyProfilePin> {
-  return applyProfilePin(
-    {
-      store: deps.store,
-      sink: deps.connector,
-      errors: deps.errors,
-      labelPrefix: deps.labelPrefix,
-      agentModels: deps.agentModels,
-    },
-    issue,
-    profile.trim() || null,
-  );
-}
+type WatchWrite = { ok: true; watch: Record<string, unknown> } | { ok: false; error: string };
 
-function writeWatch(deps: DesktopToolDeps, issue: number, watched: boolean): Promise<WatchOutcome> {
-  return applyIssueWatch(
+async function writeWatch(
+  deps: DesktopToolDeps,
+  issue: number,
+  watched: boolean,
+  priorityWritten: boolean,
+): Promise<WatchWrite> {
+  const outcome = await applyIssueWatch(
     {
       store: deps.store,
       sink: deps.connector,
@@ -66,31 +57,32 @@ function writeWatch(deps: DesktopToolDeps, issue: number, watched: boolean): Pro
     watched,
     `while ${watched ? 'watching' : 'dropping'} #${issue} from the desktop channel`,
   );
-}
-
-function watchRefused(outcome: WatchOutcome): boolean {
-  return Boolean(outcome.label) && outcome.failed.length > 0 && outcome.landed.length === 0;
-}
-
-function watchRefusal(issue: number, outcome: WatchOutcome, priorityWritten: boolean): string {
-  return (
-    `The provider refused the watch tag on #${issue}: ${outcome.failed[0]?.message ?? 'unknown error'}. ` +
-    `Nothing was tagged${priorityWritten ? ', though the priority mark above was written' : ''}.`
-  );
-}
-
-function describeWatch(outcome: WatchOutcome, watched: boolean): Record<string, unknown> {
-  if (!outcome.label)
+  if (!outcome.label) {
     return {
-      watched,
-      wrote: 0,
-      note: 'This deployment configures no labelPrefix, so the watch gate is off and every ticket is worked. There was no tag to write.',
+      ok: true,
+      watch: {
+        watched,
+        wrote: 0,
+        note: 'This deployment configures no labelPrefix, so the watch gate is off and every ticket is worked. There was no tag to write.',
+      },
     };
+  }
+  if (outcome.failed.length > 0 && outcome.landed.length === 0) {
+    return {
+      ok: false,
+      error:
+        `The provider refused the watch tag on #${issue}: ${outcome.failed[0]?.message ?? 'unknown error'}. ` +
+        `Nothing was tagged${priorityWritten ? ', though the priority mark above was written' : ''}.`,
+    };
+  }
   return {
-    watched,
-    wrote: outcome.landed.length,
-    cascaded: Math.max(outcome.targets.length - 1, 0),
-    kept: outcome.failed.map((f) => `#${f.number}: ${f.message}`),
+    ok: true,
+    watch: {
+      watched,
+      wrote: outcome.landed.length,
+      cascaded: Math.max(outcome.targets.length - 1, 0),
+      kept: outcome.failed.map((f) => `#${f.number}: ${f.message}`),
+    },
   };
 }
 
@@ -134,7 +126,17 @@ export const goalControl: DesktopToolFactory = (deps) => ({
     let profile: { profile: string | null; answered: boolean } | null = null;
     if (wantsProfile) {
       if (typeof args.profile !== 'string') return toolError('profile must be a string, or "" to clear the pin.');
-      const pinned = await pinProfile(deps, ref.issue, args.profile);
+      const pinned = await applyProfilePin(
+        {
+          store: deps.store,
+          sink: deps.connector,
+          errors: deps.errors,
+          labelPrefix: deps.labelPrefix,
+          agentModels: deps.agentModels,
+        },
+        ref.issue,
+        args.profile.trim() || null,
+      );
       if (!pinned.ok) return toolError(pinned.error);
       profile = { profile: pinned.profile, answered: pinned.answered };
     }
@@ -147,10 +149,9 @@ export const goalControl: DesktopToolFactory = (deps) => ({
 
     let watch: Record<string, unknown> | null = null;
     if (wantsWatch) {
-      const watched = args.watched as boolean;
-      const outcome = await writeWatch(deps, ref.issue, watched);
-      if (watchRefused(outcome)) return toolError(watchRefusal(ref.issue, outcome, priority !== null));
-      watch = describeWatch(outcome, watched);
+      const written = await writeWatch(deps, ref.issue, args.watched as boolean, priority !== null);
+      if (!written.ok) return toolError(written.error);
+      watch = written.watch;
     }
 
     await deps.runCycle();

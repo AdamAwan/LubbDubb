@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
-import type { GoalPageView, GoalReachCell, GoalReachRow } from '../view/goalPage.js';
-import { buildGoalReachMatrix } from '../view/goalPage.js';
+import type { GoalPageView } from '../view/goalPage.js';
+import type { GoalReachCell, GoalReachRow } from '../view/goalReachMatrix.js';
+import { buildGoalReachMatrix } from '../view/goalReachMatrix.js';
 import { Ref } from './refs.js';
 
 // → docs/spec/24-environments.md

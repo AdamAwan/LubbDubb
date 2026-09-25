@@ -1,5 +1,5 @@
 import type { AppState, Issue, PrReviewThread, PrThreadState, PullRequest, TaskSummary } from '../types.js';
-import { closedPrs, goalOfPr } from './goalPage.js';
+import { closedPrs, goalOfPr } from './goalRefs.js';
 
 // → docs/spec/17-cockpit.md
 

@@ -1,5 +1,5 @@
 import type { AppState } from '../types.js';
-import { goalIssue, goalOfPr, standsFor } from './goalPage.js';
+import { goalIssue, goalOfPr, standsFor } from './goalRefs.js';
 import type { NeedDestination } from './needsYou.js';
 
 // → docs/spec/17-cockpit.md

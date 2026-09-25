@@ -20,7 +20,7 @@ import {
 } from '../view/localValidation.js';
 import { Disclosure, type Fold } from './goalFold.js';
 
-const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
+export const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
 // → docs/spec/17-cockpit.md
 

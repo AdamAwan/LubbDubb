@@ -14,7 +14,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { needBody } = await import('../web/src/console/NeedsBand.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 const { api } = await import('../web/src/api.js');
 

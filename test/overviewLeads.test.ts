@@ -15,7 +15,7 @@ import { repoText } from './support/paths.js';
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { FocusOverview, Look } = await import('../web/src/console/overviews/FocusOverview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;

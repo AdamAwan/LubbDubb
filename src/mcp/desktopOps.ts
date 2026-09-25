@@ -9,10 +9,6 @@ import { isSealedRule } from './names.js';
 
 // → docs/spec/11-mcp-tools.md
 
-async function settle(deps: DesktopToolDeps): Promise<void> {
-  await deps.runCycle();
-}
-
 function describeAgent(deps: DesktopToolDeps, agent: Agent): Record<string, unknown> {
   const task = deps.store.tasks.getTask(agent.taskId);
   return {
@@ -170,7 +166,7 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
     } catch (err) {
       return toolError((err as Error).message);
     }
-    if (pulse) await settle(deps);
+    if (pulse) await deps.runCycle();
     return toolJson({
       cap: next.cap,
       paused: next.paused,
@@ -333,7 +329,7 @@ export const queueControl: DesktopToolFactory = (deps) => ({
       cancelled = { id: job.id, title: job.title };
     }
 
-    await settle(deps);
+    await deps.runCycle();
     return toolJson({
       pinned,
       cancelled,

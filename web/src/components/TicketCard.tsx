@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { cardReason } from '../ticketBoard.js';
-import { cascadeNote, issueTypeTone, watchReading } from '../issueGroups.js';
+import { cascadeNote, issueTypeTone, watchOff, watchReading } from '../issueGroups.js';
 import type { Issue, TicketRow } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { AsyncButton } from './AsyncButton.js';
@@ -91,13 +91,6 @@ export function TicketCard({
       {refused !== null && <p className="tb-refused">{refused}</p>}
     </article>
   );
-}
-
-function watchOff(watchLabel: string, frozen: boolean, issue: Issue | null): string | null {
-  if (watchLabel === '') return 'No watch label configured — the watch gate is off';
-  if (frozen) return 'Closed in the tracker — there is nothing here to tag';
-  if (issue === null) return 'The world no longer holds this item, so there is nothing to tag';
-  return null;
 }
 
 function cardClass(frozen: boolean, writing: string | null, refused: string | null): string {

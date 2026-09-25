@@ -36,10 +36,6 @@ import {
   type GoalStageTone,
 } from './goalStages.js';
 
-export { closedPrs, goalIssue, goalOfOrigin, goalOfPr, goalPrNumbers, standsFor } from './goalRefs.js';
-export { buildGoalTrack, reachBands } from './goalStages.js';
-export { buildGoalReachMatrix, type GoalReachCell, type GoalReachRow } from './goalReachMatrix.js';
-
 // → docs/spec/17-cockpit.md
 
 export type PartGroup = 'merged' | 'now' | 'held' | 'waiting';

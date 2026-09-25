@@ -2,7 +2,7 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView } from '../view/goalPage.js';
-import type { Agent, Issue, ValidationVerdict } from '../types.js';
+import type { Issue, ValidationVerdict } from '../types.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
@@ -24,8 +24,7 @@ import {
 } from '../components/controls.js';
 import { watchBucket } from '../worldBuckets.js';
 import { StaleChip, StateChip } from './goalChips.js';
-
-const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
+import { LIVE_AGENT } from './goalRunners.js';
 
 // → docs/spec/17-cockpit.md
 

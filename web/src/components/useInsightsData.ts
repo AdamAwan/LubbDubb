@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AllowancePayload,
   InsightsWindow,
@@ -63,11 +63,12 @@ export function useInsightsData(
   }, [chosen, scope]);
 
   const mine = scope === 'mine';
-  const trend = useLazyRead(mine, mine && view === 'trend', chosen, loadTrend);
-  const throughput = useLazyRead(mine, mine && view === 'throughput', chosen, loadThroughput);
-  const mcp = useLazyRead(mine, mine && view === 'mcp', chosen, loadMcp);
-  const allowance = useLazyRead(mine, mine && view === 'allowance', chosen, loadAllowance);
-  const usage = useLazyRead(mine, mine && view === 'usage', chosen, loadUsage);
+  const windowKey = mine ? chosen : null;
+  const trend = useLazyRead(view === 'trend', windowKey, loadTrend);
+  const throughput = useLazyRead(view === 'throughput', windowKey, loadThroughput);
+  const mcp = useLazyRead(view === 'mcp', windowKey, loadMcp);
+  const allowance = useLazyRead(view === 'allowance', windowKey, loadAllowance);
+  const usage = useLazyRead(view === 'usage', windowKey, loadUsage);
   const prediction = usePrediction(mine && view === 'prediction');
   const pool = usePool(scope === 'pool', poolProject);
 
@@ -78,38 +79,28 @@ export function useInsightsData(
   return { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, prediction, pool };
 }
 
-/** A read made only while its tab is open, once per window, and forgotten whenever the window or scope moves. */
-function useLazyRead<T>(mine: boolean, open: boolean, chosen: InsightsWindow, load: Load<T>): Fetched<T> {
+/** A read made only while its tab is open, once per window, and forgotten whenever the window or scope moves. A null key is the pool's scope. */
+function useLazyRead<T>(open: boolean, key: InsightsWindow | null, load: Load<T>): Fetched<T> {
   const [fetched, set] = useState<Fetched<T>>(PENDING);
   const fetchedFor = useRef<InsightsWindow | null>(null);
   useEffect(() => {
-    if (!mine) return;
+    if (key === null) return;
     fetchedFor.current = null;
     set(PENDING);
-  }, [chosen, mine]);
-  useLazyFetch(open, chosen, load, set, fetchedFor);
-  return fetched;
-}
-
-function useLazyFetch<T>(
-  open: boolean,
-  chosen: InsightsWindow,
-  load: Load<T>,
-  set: Dispatch<SetStateAction<Fetched<T>>>,
-  fetchedFor: MutableRefObject<InsightsWindow | null>,
-): void {
+  }, [key]);
   useEffect(() => {
-    if (!open || fetchedFor.current === chosen) return;
-    fetchedFor.current = chosen;
+    if (!open || key === null || fetchedFor.current === key) return;
+    fetchedFor.current = key;
     let live = true;
     set(PENDING);
-    load(chosen)
+    load(key)
       .then((data) => live && set({ state: 'ready', data }))
       .catch(() => live && set({ state: 'failed', data: null }));
     return () => {
       live = false;
     };
-  }, [open, chosen, load, set, fetchedFor]);
+  }, [open, key, load]);
+  return fetched;
 }
 
 /* No window in the dependency list, and no reset when the bar moves: the

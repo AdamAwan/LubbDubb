@@ -1,6 +1,13 @@
 import { useState, type JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
-import { cascadeNote, featureBlocks, issueTypeTone, watchReading, type TicketFeatureBlock } from '../issueGroups.js';
+import {
+  cascadeNote,
+  featureBlocks,
+  issueTypeTone,
+  watchOff,
+  watchReading,
+  type TicketFeatureBlock,
+} from '../issueGroups.js';
 import type { Issue, TicketOrder, TicketRow } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
@@ -364,13 +371,6 @@ function StateChip({ row, colours }: { row: TicketRow; colours: Readonly<Record<
       {label}
     </i>
   );
-}
-
-function watchOff(watchLabel: string, frozen: boolean, issue: Issue | null): string | null {
-  if (watchLabel === '') return 'No watch label configured — the watch gate is off';
-  if (frozen) return 'Closed in the tracker — there is nothing here to tag';
-  if (issue === null) return 'The world no longer holds this item, so there is nothing to tag';
-  return null;
 }
 
 function WatchSwitch({

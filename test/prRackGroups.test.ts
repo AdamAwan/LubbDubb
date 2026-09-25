@@ -13,7 +13,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 const { initials } = await import('../web/src/components/who.js');
 

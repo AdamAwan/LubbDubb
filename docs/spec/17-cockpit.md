@@ -3109,7 +3109,7 @@ rather than the rack's 900px. The subject can give way here because the part's o
 description panel's heading, is the line directly above it: a clipped copy of the pull request's says
 nothing the reader has not just read, which is exactly what is not true on the rack.
 
-**Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part
+**Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalRefs.ts`): a part
 row naming the number, the branch convention (`issue/<n>`, and `issue/<n>/<slug>` for a part whose row
 has not caught up), or `linkedPrNumber` for a PR the provider linked itself. The part rows alone are not
 enough, and that was the bug: a goal delivered **whole** has no parts at all, so the card drew nothing
@@ -3384,7 +3384,7 @@ that named the goal and went to the overview. `web/src/console/PrPage.tsx` draws
 derives what it draws.
 
 **The pull request is resolved out of three lists**: the open world, the closed window, and the
-archive behind it — `closedPrs` in `goalPage.ts`, the same pair the goal page's closed rows are drawn
+archive behind it — `closedPrs` in `goalRefs.ts`, the same pair the goal page's closed rows are drawn
 from. That is what keeps a closed row a link rather than a dead end: a page that could only find a
 pull request the window still held would answer the gone screen for every row the goal page now keeps.
 An archived reading carries no verdicts, exactly as the window's does not, and the page draws what is

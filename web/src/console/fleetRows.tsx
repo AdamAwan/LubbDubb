@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, EjectionView, ReadyingAction, ReadyingStepTiming, ReadyingStep } from '../types.js';
-import { goalOfPr, standsFor } from '../view/goalPage.js';
+import { goalOfPr, standsFor } from '../view/goalRefs.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime, timeLeft } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';

@@ -1,7 +1,8 @@
 import { useState, type JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView } from '../view/goalPage.js';
-import { GOAL_ANCHOR, reachBands, reachCount } from '../view/goalPage.js';
+import { GOAL_ANCHOR, reachCount } from '../view/goalPage.js';
+import { reachBands } from '../view/goalStages.js';
 import type {
   EnvironmentGate,
   GoalReachStatus,

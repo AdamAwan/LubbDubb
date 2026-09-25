@@ -5,7 +5,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { goalIssue } from '../view/goalPage.js';
+import { goalIssue } from '../view/goalRefs.js';
 import { ParentPicker } from '../components/ParentPicker.js';
 import { proposedParentTitle } from '../view/orphanGoal.js';
 import { Ref } from '../components/refs.js';
