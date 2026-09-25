@@ -1,13 +1,8 @@
 import { z } from 'zod';
-import { applyIssueWatch } from '../issueWatch.js';
-import { stuckGoals } from '../environments/stuck.js';
 import { toolSchema } from './schema.js';
-import { applyProfilePin } from '../intake/profilePin.js';
-import { issueConclusionOrigin } from '../issueConclusion.js';
-import { formatAnswers } from '../escalation/questionnaire.js';
-import { settleHumanTask } from '../humanTaskSettle.js';
-import { desktopIssueRef } from '../validation/desktop.js';
-import type { Agent, Escalation } from '../types.js';
+import type { Agent } from '../types.js';
+import type { CycleStanding } from '../harness.js';
+import type { UpcomingPlan } from '../wire.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 import { isSealedRule } from './names.js';
@@ -38,19 +33,50 @@ function describeAgent(deps: DesktopToolDeps, agent: Agent): Record<string, unkn
   };
 }
 
-function inboxKind(
-  deps: DesktopToolDeps,
-  item: Escalation,
-): { kind: 'question' | 'permission' | 'proposal' | 'orphaned'; detail: string | null } {
-  const pending = deps.store.escalations
-    .listProposals()
-    .find((p) => p.escalationId === item.id && p.status === 'pending');
-  if (pending) return { kind: 'proposal', detail: pending.id };
-  if (item.context?.permission) return { kind: 'permission', detail: null };
-  const orphaned = item.agentId ? deps.recovery().pendingForAgent(item.agentId) : null;
-  if (orphaned) return { kind: 'orphaned', detail: orphaned.taskId };
-  return { kind: 'question', detail: null };
+function describeCycle(inFlight: CycleStanding | null): Record<string, unknown> | null {
+  return inFlight === null
+    ? null
+    : {
+        cycleId: inFlight.cycleId,
+        source: inFlight.source,
+        startedAt: inFlight.startedAt,
+        elapsedMs: inFlight.elapsedMs,
+        where: inFlight.where,
+        overdue: inFlight.overdue,
+      };
 }
+
+function describeQueue(upcoming: UpcomingPlan | null, inFlight: CycleStanding | null): Record<string, unknown> {
+  return upcoming === null
+    ? {
+        at: null,
+        items: [],
+        note:
+          inFlight?.overdue === true
+            ? `Cycle ${inFlight.cycleId} has been running for ${Math.round(inFlight.elapsedMs / 1000)}s at ` +
+              `${inFlight.where} and no cycle can start behind it, so there is no queue — this is a wedged ` +
+              'harness, not an idle one.'
+            : 'No cycle has run since the harness started, so there is no queue yet.',
+      }
+    : {
+        at: upcoming.at,
+        items: upcoming.items.map((i) => ({
+          origin: i.origin,
+          title: i.title,
+          rule: i.rule,
+          status: i.status,
+          reason: i.reason,
+          expedited: i.expedited ?? false,
+        })),
+      };
+}
+
+const FLEET_STATUS_NEXT =
+  'Report what is here, not what it implies. A held row names its own reason and that reason is the ' +
+  'answer — "capped", "cooldown", "unapproved" and "ignored" are four different problems and only one of ' +
+  'them is fixed by raising the cap. `accountUsage: null` means nothing has reported a window since this ' +
+  'harness started; it is not room to spare. A `cycle` with `overdue: true` is the fleet stopped: no cycle ' +
+  'can start behind it, so an empty queue and idle agents mean nothing until it settles.';
 
 export const fleetStatus: DesktopToolFactory = (deps) => ({
   description:
@@ -74,40 +100,8 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
         headroom: control.paused ? 0 : Math.max(control.cap - live.length, 0),
       },
       agents: live.map((a) => describeAgent(deps, a)),
-      cycle:
-        inFlight === null
-          ? null
-          : {
-              cycleId: inFlight.cycleId,
-              source: inFlight.source,
-              startedAt: inFlight.startedAt,
-              elapsedMs: inFlight.elapsedMs,
-              where: inFlight.where,
-              overdue: inFlight.overdue,
-            },
-      queue:
-        upcoming === null
-          ? {
-              at: null,
-              items: [],
-              note:
-                inFlight?.overdue === true
-                  ? `Cycle ${inFlight.cycleId} has been running for ${Math.round(inFlight.elapsedMs / 1000)}s at ` +
-                    `${inFlight.where} and no cycle can start behind it, so there is no queue — this is a wedged ` +
-                    'harness, not an idle one.'
-                  : 'No cycle has run since the harness started, so there is no queue yet.',
-            }
-          : {
-              at: upcoming.at,
-              items: upcoming.items.map((i) => ({
-                origin: i.origin,
-                title: i.title,
-                rule: i.rule,
-                status: i.status,
-                reason: i.reason,
-                expedited: i.expedited ?? false,
-              })),
-            },
+      cycle: describeCycle(inFlight),
+      queue: describeQueue(upcoming, inFlight),
       jobs: deps.store.jobs
         .listQueuedJobs()
         .map((j) => ({ id: j.id, title: j.title, kind: j.kind, createdAt: j.createdAt })),
@@ -125,12 +119,7 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
         orphanedRuns: deps.recovery().pending().length,
       },
       errors: errors.map((e) => ({ at: e.createdAt, source: e.source, message: e.message })),
-      next:
-        'Report what is here, not what it implies. A held row names its own reason and that reason is the ' +
-        'answer — "capped", "cooldown", "unapproved" and "ignored" are four different problems and only one of ' +
-        'them is fixed by raising the cap. `accountUsage: null` means nothing has reported a window since this ' +
-        'harness started; it is not room to spare. A `cycle` with `overdue: true` is the fleet stopped: no cycle ' +
-        'can start behind it, so an empty queue and idle agents mean nothing until it settles.',
+      next: FLEET_STATUS_NEXT,
     });
   },
 });
@@ -195,213 +184,6 @@ export const fleetControl: DesktopToolFactory = (deps) => ({
   },
 });
 
-export const attentionRead: DesktopToolFactory = (deps) => ({
-  description:
-    'Everything the harness is waiting on a person for: questions agents have parked on, tool calls blocked ' +
-    'awaiting permission, acts proposed for approval, work only a person can do, runs orphaned by a crash, and ' +
-    'delivered goals held behind an environment their work has not reached. ' +
-    'Each row says what kind it is and what settles it. Call this to find out whether anything is stuck.',
-  inputSchema: toolSchema(z.object({})),
-  handler: () => {
-    const open = deps.store.escalations.listOpenEscalations();
-    return toolJson({
-      inbox: open.map((item) => {
-        const { kind, detail } = inboxKind(deps, item);
-        return {
-          id: item.id,
-          kind,
-          type: item.type,
-          prompt: item.prompt,
-          questions: item.context?.questions ?? null,
-          agentId: item.agentId,
-          originRef: item.context?.originRef ?? null,
-          taskTitle: item.context?.taskTitle ?? null,
-          createdAt: item.createdAt,
-          settledBy:
-            kind === 'question'
-              ? 'escalation_answer with `response` (or `answers`, one per question)'
-              : kind === 'permission'
-                ? "escalation_answer with `permission: 'allow' | 'deny'`"
-                : kind === 'proposal'
-                  ? `the cockpit — proposal ${detail} is a decision, and this channel does not take it`
-                  : `the cockpit — the agent that asked this crashed, and its run (${detail}) needs a recovery verdict first`,
-        };
-      }),
-      humanTasks: deps.store.humanTasks
-        .listAllHumanTasks()
-        .filter((t) => t.status === 'open')
-        .map((t) => ({
-          id: t.id,
-          kind: t.kind,
-          title: t.title,
-          detail: t.detail,
-          originRef: t.originRef,
-          createdAt: t.createdAt,
-          settledBy: "human_task_settle with `status: 'done' | 'declined'`",
-        })),
-      orphanedRuns: deps
-        .recovery()
-        .pending()
-        .map((o) => ({
-          taskId: o.taskId,
-          agentId: o.agentId,
-          title: o.title,
-          originRef: o.originRef,
-          died: o.died,
-          waitingReason: o.waitingReason,
-        })),
-      heldGoals: stuckGoals({
-        delivered: deps.store.verdicts.listDeliveries().map((d) => d.originRef),
-        shortfalled: new Set(deps.store.verdicts.listShortfalls().map((sf) => sf.originRef)),
-        environments: deps.environments,
-        arrivals: deps.store.environments.listGoalArrivals(),
-        releases: deps.store.environments.listEnvironmentGateReleases(),
-        landings: deps.store.environments.listGoalLandings(),
-        readings: deps.store.environments.listEnvironmentReach(),
-        probeIntervalMs: deps.briefConfig().environmentProbeIntervalMs,
-        now: Date.parse(deps.now()),
-      }).map((s) => ({
-        goalRef: s.goalRef,
-        environment: s.environment,
-        hold: s.hold,
-        merges: s.absent,
-        since: s.since,
-        settledBy:
-          "a deployment that carries this work to the environment, or the cockpit — the goal page's " +
-          '"not waiting on an environment" release, for work that is never going to arrive there',
-      })),
-      next:
-        'Answer only the rows whose `settledBy` names this channel. A held goal is neither: it is a delivery ' +
-        'whose validation checks and close-out are withheld because the harness cannot see its work anywhere, ' +
-        'and it is here because that wait is otherwise silent. A human task is work, not a question: it ' +
-        'settles when somebody has actually done it or refused it, never as an answer typed at an agent. The ' +
-        'two kinds that name the cockpit are decisions with consequences a session cannot see — an act about ' +
-        'to be published, a run about to be restored or thrown away. Say what is waiting and let the operator ' +
-        'go there.',
-    });
-  },
-});
-
-export const escalationAnswer: DesktopToolFactory = (deps) => ({
-  description:
-    'Answer something the harness is waiting on a person for. For a question an agent parked on, give ' +
-    '`response` (or `answers`, one per question, when attention_read showed a questionnaire) — it is typed ' +
-    'straight into the agent, which carries on from it. For a blocked tool call, give `permission` instead. ' +
-    'Proposals and crashed runs are not settled here; attention_read says so per row.',
-  inputSchema: toolSchema(
-    z.object({
-      id: z.string().describe('The escalation id, from attention_read.'),
-      response: z.string().describe('Free-text answer to a question. Read by the agent verbatim.').optional(),
-      answers: z
-        .array(z.string().nullable())
-        .describe(
-          'One answer per question, in the order attention_read gave them. Use null for a question you are ' +
-            'not answering. Only for an item that carries `questions`.',
-        )
-        .optional(),
-      permission: z
-        .enum(['allow', 'deny'])
-        .describe('The verdict on a blocked tool call. Only for an item of kind "permission".')
-        .optional(),
-      note: z.string().describe('Optional reason, shown with a denial.').optional(),
-    }),
-  ),
-  handler: (args) => {
-    const id = typeof args.id === 'string' ? args.id.trim() : '';
-    if (!id) return toolError('id required — take it from attention_read.');
-    const item = deps.store.escalations.getEscalation(id);
-    if (!item) {
-      const task = deps.store.humanTasks.getHumanTask(id);
-      if (task)
-        return toolError(
-          `"${id}" is a human task ("${task.title}") — a unit of work, not a question an agent is parked on. ` +
-            'It is settled with human_task_settle (`done` or `declined`), never by typing an answer at an agent.',
-        );
-      return toolError(`No escalation "${id}". Call attention_read for what is actually open.`);
-    }
-    if (item.status !== 'open')
-      return toolError(
-        `Escalation ${id} is already ${item.status}${item.response === null ? '' : ` — "${item.response}"`}. ` +
-          'Somebody has answered it; nothing more is needed on it.',
-      );
-
-    const { kind, detail } = inboxKind(deps, item);
-    if (kind === 'proposal')
-      return toolError(
-        `This item is a proposal (${detail}) — an act waiting to be accepted or rejected, not a question. ` +
-          'Free text cannot be branched on, and answering it here would settle the row while leaving the act ' +
-          'pending for good. The operator takes it in the cockpit.',
-      );
-    if (kind === 'orphaned')
-      return toolError(
-        `The agent that asked this crashed, and its run (${detail}) is waiting on a restore / requeue / remove ` +
-          'verdict in the cockpit. There is nothing to type into. Restoring keeps this question open, so it is ' +
-          'answerable afterwards.',
-      );
-
-    const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
-    if (args.permission !== undefined) {
-      if (args.permission !== 'allow' && args.permission !== 'deny')
-        return toolError('permission must be "allow" or "deny".');
-      if (kind !== 'permission')
-        return toolError(
-          'This item is a question an agent parked on, not a blocked tool call. Answer it with `response`.',
-        );
-      const decided = deps.permissions().decide(id, args.permission === 'allow', note);
-      if (!decided)
-        return toolError(
-          'There is no permission request pending on this item any more — the agent has since died or the ' +
-            'call was already decided. Nothing was changed.',
-        );
-      return toolJson({
-        settled: id,
-        permission: args.permission,
-        means:
-          args.permission === 'allow'
-            ? "the agent's tool call is running now; it was blocked inside it, not at a prompt."
-            : 'the tool call was refused and the agent was told so. It carries on and decides what to do next.',
-      });
-    }
-    if (kind === 'permission')
-      return toolError(
-        'This item is a tool call an agent is blocked inside, not a question — it is not at a prompt, so text ' +
-          "would go nowhere. Answer it with `permission: 'allow'` or `'deny'`.",
-      );
-
-    let response: string;
-    if (args.answers !== undefined) {
-      const questions = item.context?.questions;
-      if (!Array.isArray(args.answers)) return toolError('answers must be an array, one entry per question.');
-      if (!Array.isArray(questions) || questions.length === 0)
-        return toolError('This item has no questionnaire — answer it with `response`.');
-      if (args.answers.length !== questions.length)
-        return toolError(`This item asks ${questions.length} question(s); you sent ${args.answers.length}.`);
-      const answers = args.answers.map((a) => (a === null || a === undefined ? null : String(a)));
-      if (answers.every((a) => a === null || a.trim() === '')) return toolError('Answer at least one question.');
-      response = formatAnswers(questions, answers);
-    } else if (typeof args.response === 'string' && args.response.trim()) {
-      response = args.response;
-    } else {
-      return toolError('Give `response` (free text) or `answers` (one per question).');
-    }
-
-    try {
-      const result = deps.escalations().answer(id, response);
-      return toolJson({
-        settled: id,
-        routing: result.routing,
-        means:
-          result.routing === 'typed_into_agent'
-            ? 'the agent was live and your answer went into its session — it is carrying on from it now.'
-            : 'no live agent was holding this, so the answer is on the record and the next dispatch on this ' +
-              'work reads it. Nothing is running on it at this moment.',
-      });
-    } catch (err) {
-      return toolError((err as Error).message);
-    }
-  },
-});
-
 const TRANSCRIPT_TAIL = 8000;
 
 export const agentRead: DesktopToolFactory = (deps) => ({
@@ -451,35 +233,69 @@ export const agentRead: DesktopToolFactory = (deps) => ({
   },
 });
 
+const QUEUE_CONTROL_INPUT = toolSchema(
+  z.object({
+    order: z
+      .array(z.string())
+      .describe(
+        'Origins (e.g. "issue:284:plan"), highest priority first, from fleet_status. This REPLACES every ' +
+          'standing pin; send an empty array to clear them all and go back to the natural order.',
+      )
+      .optional(),
+    cancelJob: z.string().describe('The id of a queued job to drop. Only works while it is still queued.').optional(),
+    origin: z
+      .string()
+      .describe('The origin to price, e.g. "issue:284:plan", from fleet_status. Only with `profile`.')
+      .optional(),
+    profile: z
+      .string()
+      .describe(
+        'The model profile the next dispatch on `origin` runs on, by name, or "" to clear the override. ' +
+          'This prices one queued row and says nothing about when it runs — a row held by a cap, a cooldown ' +
+          "or an unapproved plan is still held. To pin a whole goal's work, that is goal_control.",
+      )
+      .optional(),
+  }),
+);
+
+type Priced = { origin: string; profile: string | null };
+
+function readPrice(
+  deps: DesktopToolDeps,
+  args: Record<string, unknown>,
+): { ok: true; priced: Priced } | { ok: false; error: string } {
+  const origin = typeof args.origin === 'string' ? args.origin.trim() : '';
+  if (!origin) return { ok: false, error: 'origin required — take it from the queue in fleet_status.' };
+  if (args.profile !== undefined && typeof args.profile !== 'string')
+    return { ok: false, error: 'profile must be a string, or "" to clear the override.' };
+  const wanted = typeof args.profile === 'string' && args.profile.trim() ? args.profile.trim() : null;
+  const known = deps.profileNames();
+  if (wanted !== null && !known.includes(wanted))
+    return {
+      ok: false,
+      error:
+        known.length === 0
+          ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
+          : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
+    };
+  return { ok: true, priced: { origin, profile: wanted } };
+}
+
+function readOrder(order: unknown): { ok: true; origins: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(order) || order.some((o) => typeof o !== 'string'))
+    return { ok: false, error: 'order must be an array of origin strings.' };
+  const origins = (order as string[]).map((o) => o.trim()).filter((o) => o !== '');
+  if (new Set(origins).size !== origins.length)
+    return { ok: false, error: 'order must not name the same origin twice.' };
+  return { ok: true, origins };
+}
+
 export const queueControl: DesktopToolFactory = (deps) => ({
   description:
     'Steer the "Up next" queue: pin origins to the front in the order you give them, or cancel a queued job ' +
     'before it runs. Pinning only re-orders — it never un-holds a row that is held by a cap, a cooldown, an ' +
     'unapproved plan or a missing watch tag, and those are named in fleet_status as the reason.',
-  inputSchema: toolSchema(
-    z.object({
-      order: z
-        .array(z.string())
-        .describe(
-          'Origins (e.g. "issue:284:plan"), highest priority first, from fleet_status. This REPLACES every ' +
-            'standing pin; send an empty array to clear them all and go back to the natural order.',
-        )
-        .optional(),
-      cancelJob: z.string().describe('The id of a queued job to drop. Only works while it is still queued.').optional(),
-      origin: z
-        .string()
-        .describe('The origin to price, e.g. "issue:284:plan", from fleet_status. Only with `profile`.')
-        .optional(),
-      profile: z
-        .string()
-        .describe(
-          'The model profile the next dispatch on `origin` runs on, by name, or "" to clear the override. ' +
-            'This prices one queued row and says nothing about when it runs — a row held by a cap, a cooldown ' +
-            "or an unapproved plan is still held. To pin a whole goal's work, that is goal_control.",
-        )
-        .optional(),
-    }),
-  ),
+  inputSchema: QUEUE_CONTROL_INPUT,
   handler: async (args) => {
     const hasOrder = args.order !== undefined;
     const cancel = typeof args.cancelJob === 'string' ? args.cancelJob.trim() : '';
@@ -490,32 +306,20 @@ export const queueControl: DesktopToolFactory = (deps) => ({
           'fleet_status.',
       );
 
-    let priced: { origin: string; profile: string | null } | null = null;
+    let priced: Priced | null = null;
     if (wantsPrice) {
-      const origin = typeof args.origin === 'string' ? args.origin.trim() : '';
-      if (!origin) return toolError('origin required — take it from the queue in fleet_status.');
-      if (args.profile !== undefined && typeof args.profile !== 'string')
-        return toolError('profile must be a string, or "" to clear the override.');
-      const wanted = typeof args.profile === 'string' && args.profile.trim() ? args.profile.trim() : null;
-      const known = deps.profileNames();
-      if (wanted !== null && !known.includes(wanted))
-        return toolError(
-          known.length === 0
-            ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
-            : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
-        );
-      deps.store.profileOverrides.setProfileOverride(origin, wanted);
-      priced = { origin, profile: wanted };
+      const price = readPrice(deps, args);
+      if (!price.ok) return toolError(price.error);
+      deps.store.profileOverrides.setProfileOverride(price.priced.origin, price.priced.profile);
+      priced = price.priced;
     }
 
     let pinned: string[] | null = null;
     if (hasOrder) {
-      if (!Array.isArray(args.order) || args.order.some((o) => typeof o !== 'string'))
-        return toolError('order must be an array of origin strings.');
-      const origins = (args.order as string[]).map((o) => o.trim()).filter((o) => o !== '');
-      if (new Set(origins).size !== origins.length) return toolError('order must not name the same origin twice.');
-      deps.store.priority.setPriorityOverrides(origins);
-      pinned = origins;
+      const order = readOrder(args.order);
+      if (!order.ok) return toolError(order.error);
+      deps.store.priority.setPriorityOverrides(order.origins);
+      pinned = order.origins;
     }
 
     let cancelled: { id: string; title: string } | null = null;
@@ -538,182 +342,6 @@ export const queueControl: DesktopToolFactory = (deps) => ({
         'the queue is re-ranked and a cycle has run. Pinning changes the order only: a row held by a cap, a ' +
         'cooldown, an unapproved plan or a missing watch tag is still held, and an operator-launched job still ' +
         'goes first. Read fleet_status to see what actually moved.',
-    });
-  },
-});
-
-export const goalControl: DesktopToolFactory = (deps) => ({
-  description:
-    'Say whether the harness should work a goal, and whether it should work it first. `watched` puts the ' +
-    'watch tag on the ticket (and every ticket beneath it) or takes it off — that is what opts work in and ' +
-    "out. `priority` is the harness's own mark and only re-orders its queue. Neither starts or stops an agent " +
-    'that is already running.',
-  inputSchema: toolSchema(
-    z.object({
-      issue: z.number().describe('The goal number, e.g. 284.'),
-      watched: z
-        .boolean()
-        .describe(
-          'true tags the ticket so the harness picks it up; false takes the tag off so nothing further is ' +
-            'dispatched for it. Cascades to every ticket under a container.',
-        )
-        .optional(),
-      priority: z
-        .boolean()
-        .describe(
-          'true ranks everything dispatched under this goal ahead of the natural order until it is cleared; ' +
-            'false clears the mark.',
-        )
-        .optional(),
-      profile: z
-        .string()
-        .describe(
-          'The model profile this goal\'s work runs on, by name, or "" to clear the pin. This is the answer ' +
-            "the appraiser's profile question is waiting for, and giving it settles that question whichever " +
-            'name you pick — including keeping the one the goal already had.',
-        )
-        .optional(),
-    }),
-  ),
-  handler: async (args) => {
-    const ref = desktopIssueRef(args);
-    if (!ref.ok) return toolError(ref.error);
-    const wantsWatch = typeof args.watched === 'boolean';
-    const wantsPriority = typeof args.priority === 'boolean';
-    const wantsProfile = args.profile !== undefined;
-    if (!wantsWatch && !wantsPriority && !wantsProfile)
-      return toolError('Nothing to do — give `watched`, `priority` or `profile`. To read the goal, call goal_read.');
-
-    let profile: { profile: string | null; answered: boolean } | null = null;
-    if (wantsProfile) {
-      if (typeof args.profile !== 'string') return toolError('profile must be a string, or "" to clear the pin.');
-      const pinned = await applyProfilePin(
-        {
-          store: deps.store,
-          sink: deps.connector,
-          errors: deps.errors,
-          labelPrefix: deps.labelPrefix,
-          agentModels: deps.agentModels,
-        },
-        ref.issue,
-        args.profile.trim() || null,
-      );
-      if (!pinned.ok) return toolError(pinned.error);
-      profile = { profile: pinned.profile, answered: pinned.answered };
-    }
-
-    let priority: boolean | null = null;
-    if (wantsPriority) {
-      deps.store.priority.setGoalPriority(issueConclusionOrigin(ref.issue), args.priority as boolean);
-      priority = args.priority as boolean;
-    }
-
-    let watch: Record<string, unknown> | null = null;
-    if (wantsWatch) {
-      const watched = args.watched as boolean;
-      const outcome = await applyIssueWatch(
-        {
-          store: deps.store,
-          sink: deps.connector,
-          errors: deps.errors,
-          labelPrefix: deps.labelPrefix,
-          issueContainerTypes: deps.issueContainerTypes,
-        },
-        ref.issue,
-        watched,
-        `while ${watched ? 'watching' : 'dropping'} #${ref.issue} from the desktop channel`,
-      );
-      if (!outcome.label) {
-        watch = {
-          watched,
-          wrote: 0,
-          note: 'This deployment configures no labelPrefix, so the watch gate is off and every ticket is worked. There was no tag to write.',
-        };
-      } else if (outcome.failed.length > 0 && outcome.landed.length === 0) {
-        return toolError(
-          `The provider refused the watch tag on #${ref.issue}: ${outcome.failed[0]?.message ?? 'unknown error'}. ` +
-            `Nothing was tagged${priority === null ? '' : ', though the priority mark above was written'}.`,
-        );
-      } else {
-        watch = {
-          watched,
-          wrote: outcome.landed.length,
-          cascaded: Math.max(outcome.targets.length - 1, 0),
-          kept: outcome.failed.map((f) => `#${f.number}: ${f.message}`),
-        };
-      }
-    }
-
-    await settle(deps);
-    return toolJson({
-      issue: ref.issue,
-      watch,
-      priority,
-      profile: profile === null ? undefined : profile.profile,
-      profileQuestionAnswered: profile === null ? undefined : profile.answered,
-      means:
-        'this changes what the harness picks up next and in what order. Nothing running was stopped: an agent ' +
-        'already working this goal carries on, and un-watching only stops the next dispatch.' +
-        (profile?.answered === true
-          ? ' The profile question the appraisal was holding this goal on is answered, so it is released.'
-          : ''),
-    });
-  },
-});
-
-export const humanTaskSettle: DesktopToolFactory = (deps) => ({
-  description:
-    'Settle a human task — a unit of work only a person can do, from attention_read. `done` records that it ' +
-    'has actually been done; `declined` records a refusal and takes a required `note`, which is what a ' +
-    'replan reads. Not for questions an agent parked on: those are escalation_answer.',
-  inputSchema: toolSchema(
-    z.object({
-      id: z.string().describe('The human task id, from attention_read (a `hum_…` row).'),
-      status: z.enum(['done', 'declined']).describe('Whether the work was done or refused.'),
-      note: z
-        .string()
-        .describe(
-          'What was done, or why it was refused. Required on `declined`, and on a close-out whose goal has ' +
-            'outstanding validation checks.',
-        )
-        .optional(),
-    }),
-  ),
-  handler: async (args) => {
-    const id = typeof args.id === 'string' ? args.id.trim() : '';
-    if (!id) return toolError('id required — take it from attention_read.');
-    const status = args.status;
-    if (status !== 'done' && status !== 'declined') return toolError('status must be "done" or "declined".');
-
-    const existing = deps.store.humanTasks.getHumanTask(id);
-    if (!existing)
-      return toolError(
-        `No human task "${id}". Call attention_read for what is actually open — an escalation id is answered ` +
-          'with escalation_answer instead.',
-      );
-    if (existing.status !== 'open')
-      return toolError(
-        `Human task ${id} is already ${existing.status}${existing.resolution === null ? '' : ` — "${existing.resolution}"`}. ` +
-          'Somebody has settled it; nothing more is needed on it.',
-      );
-
-    const note = typeof args.note === 'string' ? args.note : undefined;
-    const settled = settleHumanTask(deps.store, { id, status, note });
-    if (!settled.ok) return toolError(settled.error);
-    if (settled.runCycle) await settle(deps);
-    return toolJson({
-      settled: id,
-      status: settled.task.status,
-      part: settled.part === null ? null : { id: settled.part.id, status: settled.part.status },
-      means:
-        status === 'done'
-          ? settled.part === null
-            ? 'the obligation is recorded as met. Nothing was waiting on it — a standalone task blocks no work.'
-            : 'the plan part it backs is concluded, so anything that depended on this step is released on this pulse.'
-          : settled.task.partId === null
-            ? 'the obligation is recorded as refused. Your note is what a later reader finds.'
-            : 'the plan part it backs is NOT concluded — dependents stay pending and the reconciler blocks the ' +
-              'part with your note. The ways out are Replan and Abandon, in the cockpit.',
     });
   },
 });
