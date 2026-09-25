@@ -35,6 +35,7 @@ const STAGE_RANK: Record<NeedKind, number> = {
   description_note: 1,
   reply: 1,
   assigned: 1,
+  assign: 1,
   validate: 2,
   validation_plan: 2,
   bench: 2,

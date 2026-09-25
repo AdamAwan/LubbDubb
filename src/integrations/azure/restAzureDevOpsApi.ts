@@ -507,6 +507,13 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
+  async addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void> {
+    await this.http.request(
+      withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}/reviewers/${encodeURIComponent(reviewerId)}`),
+      { method: 'PUT', body: JSON.stringify({ id: reviewerId, vote: 0 }) },
+    );
+  }
+
   async deleteBranch(branch: string): Promise<boolean> {
     const plain = branch.replace(/^refs\/heads\//, '');
     const refs = await this.http.request<{ value: { name: string; objectId: string }[] }>(

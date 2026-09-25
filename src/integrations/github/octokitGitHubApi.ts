@@ -449,6 +449,10 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.octokit.pulls.update({ ...this.base, pull_number: number, base });
   }
 
+  async addPullAssignee(number: number, login: string): Promise<void> {
+    await this.octokit.issues.addAssignees({ ...this.base, issue_number: number, assignees: [login] });
+  }
+
   async updatePullBranch(number: number): Promise<void> {
     await this.octokit.pulls.updateBranch({ ...this.base, pull_number: number });
   }

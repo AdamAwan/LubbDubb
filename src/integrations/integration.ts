@@ -12,6 +12,7 @@ import type {
   IssueImageResult,
   IssueLabelInput,
   PrBaseInput,
+  PrAssignInput,
   PrBaseUpdateInput,
   PrCloseInput,
   PrCreateInput,
@@ -137,6 +138,14 @@ export interface PrBaseCapable {
 
 export function isPrBaseCapable(x: Integration): x is Integration & PrBaseCapable {
   return typeof (x as Partial<PrBaseCapable>).setPullBase === 'function';
+}
+
+export interface PrAssignCapable {
+  assignPr(input: PrAssignInput): Promise<SendResult>;
+}
+
+export function isPrAssignCapable(x: Integration): x is Integration & PrAssignCapable {
+  return typeof (x as Partial<PrAssignCapable>).assignPr === 'function';
 }
 
 export interface PrBaseUpdateCapable {

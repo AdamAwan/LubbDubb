@@ -8,6 +8,8 @@ import type {
   IssueImageInput,
   IssueImageResult,
   IssueImageSink,
+  PrAssignInput,
+  PrAssignSink,
   IssueCreateInput,
   IssueCloseInput,
   IssueLabelInput,
@@ -36,7 +38,7 @@ import { FakeIssuesIntegration } from './fakeIssues.js';
 
 // → docs/spec/03-world-model.md
 
-export class FakeConnector implements Connector, ActionSink, IssueImageSink {
+export class FakeConnector implements Connector, ActionSink, IssueImageSink, PrAssignSink {
   private readonly composite: CompositeConnector;
   private readonly github: FakeGitHubIntegration;
   private readonly issues: FakeIssuesIntegration;
@@ -150,6 +152,14 @@ export class FakeConnector implements Connector, ActionSink, IssueImageSink {
 
   setPullBase(input: PrBaseInput): Promise<SendResult> {
     return this.composite.setPullBase(input);
+  }
+
+  canAssignPr(): boolean {
+    return this.composite.canAssignPr();
+  }
+
+  assignPr(input: PrAssignInput): Promise<SendResult> {
+    return this.composite.assignPr(input);
   }
 
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {

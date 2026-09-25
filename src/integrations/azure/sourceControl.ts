@@ -4,6 +4,7 @@ import type {
   CiCheckRequeueInput,
   MergeMethod,
   PrBaseInput,
+  PrAssignInput,
   PrBodyInput,
   PrCloseInput,
   PrCreateInput,
@@ -14,7 +15,15 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest, ViewerAssignment } from '../../types.js';
+import type {
+  CiCheck,
+  CiStatus,
+  MergeableState,
+  PrPerson,
+  PrReviewThread,
+  PullRequest,
+  ViewerAssignment,
+} from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
@@ -24,6 +33,7 @@ import type {
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
+  PrAssignCapable,
   PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
@@ -79,6 +89,7 @@ export class AzureDevOpsSourceControlIntegration
     PrTitleCapable,
     PrBodyCapable,
     PrBaseCapable,
+    PrAssignCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
     CiCheckRequeueCapable,
@@ -149,6 +160,7 @@ export class AzureDevOpsSourceControlIntegration
           const assignment = viewerAssignment(p.reviewers, viewer);
           if (assignment !== undefined) pr.viewerAssignment = assignment;
           if (viewerApproved(p.reviewers, viewer)) pr.viewerApproved = true;
+          pr.assignees = namedReviewers(p.reviewers);
           const mergeable = mergeableFromStatus(p.mergeStatus);
           if (mergeable !== undefined) pr.mergeable = mergeable;
           return pr;
@@ -268,6 +280,11 @@ export class AzureDevOpsSourceControlIntegration
   async setPullBase(input: PrBaseInput): Promise<SendResult> {
     await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
+  }
+
+  async assignPr(input: PrAssignInput): Promise<SendResult> {
+    await this.opts.api.addPullReviewer(input.prNumber, input.personId);
+    return { ok: true, ref: input.personId };
   }
 
   async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
@@ -457,6 +474,12 @@ function viewerAssignment(reviewers: readonly AzReviewer[], viewer: string): Vie
   const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
   if (mine === undefined) return undefined;
   return mine.isRequired ? 'reviewer-required' : 'reviewer-optional';
+}
+
+function namedReviewers(reviewers: readonly AzReviewer[]): PrPerson[] {
+  return reviewers.flatMap((r) =>
+    r.isContainer || r.id === undefined ? [] : [{ id: r.id, name: r.displayName ?? r.uniqueName }],
+  );
 }
 
 function viewerApproved(reviewers: readonly AzReviewer[], viewer: string): boolean {

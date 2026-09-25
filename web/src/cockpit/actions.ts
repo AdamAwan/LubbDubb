@@ -128,6 +128,8 @@ export interface CockpitActions {
   openGoalPane(ref: string, pane: GoalTab): void;
   selectPr(prNumber: number | null): void;
   reopenThread(prNumber: number, threadId: string, reopened: boolean): Promise<void>;
+  assignPr(prNumber: number, personId: string): Promise<void>;
+  declineAssignPr(prNumber: number): Promise<void>;
   openPanel(panel: ConsolePanel): void;
   applyConfigFix(checkId: string, set: Record<string, unknown>): Promise<void>;
   undoConfigFix(checkId: string): Promise<void>;

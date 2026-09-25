@@ -117,6 +117,8 @@ function prActions(then: Then) {
     setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
     setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
     reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
+    assignPr: (prNumber, personId) => then(api.assignPr(prNumber, personId)),
+    declineAssignPr: (prNumber) => then(api.declineAssignPr(prNumber)),
   } satisfies Partial<CockpitActions>;
 }
 

@@ -98,6 +98,7 @@ interface Recorded {
   titleSets: Array<{ id: number; title: string }>;
   bodySets: Array<{ id: number; body: string }>;
   baseSets: Array<{ id: number; base: string }>;
+  reviewersAdded: Array<{ id: number; reviewerId: string }>;
   deletedBranches: string[];
   abandoned: number[];
   attachments: Array<{ fileName: string; bytes: number }>;
@@ -132,6 +133,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     titleSets: [],
     bodySets: [],
     baseSets: [],
+    reviewersAdded: [],
     deletedBranches: [],
     abandoned: [],
     attachments: [],
@@ -157,6 +159,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullBase(id, base) {
       recorded.baseSets.push({ id, base });
+    },
+    async addPullReviewer(id, reviewerId) {
+      recorded.reviewersAdded.push({ id, reviewerId });
     },
     async abandonPullRequest(pullRequestId) {
       recorded.abandoned.push(pullRequestId);
@@ -1354,6 +1359,34 @@ test('setPullBase is the retarget Azure never does itself when a rung merges', a
   await sc.setPullBase({ prNumber: 42, base: 'main' });
   assert.deepEqual(recorded.titleSets, [{ id: 42, title: '#12 feat(store): cursor' }]);
   assert.deepEqual(recorded.baseSets, [{ id: 42, base: 'main' }]);
+});
+
+test('a PR reports its individually named reviewers, and assignPr adds one by identity id', async () => {
+  const { api, recorded } = fakeApi({
+    viewer: 'alice@acme.com',
+    pulls: [
+      pull({
+        pullRequestId: 7,
+        authorUniqueName: 'alice@acme.com',
+        reviewers: [
+          {
+            id: 'id-bob',
+            displayName: 'Bob Ferreira',
+            uniqueName: 'bob@acme.com',
+            vote: 0,
+            isRequired: false,
+            isContainer: false,
+          },
+          { id: 'id-team', uniqueName: 'vstfs:///Team', vote: 0, isRequired: true, isContainer: true },
+        ],
+      }),
+    ],
+  });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  const pr = (await sc.snapshot()).pullRequests![0]!;
+  assert.deepEqual(pr.assignees, [{ id: 'id-bob', name: 'Bob Ferreira' }]);
+  await sc.assignPr({ prNumber: 7, personId: 'id-bob' });
+  assert.deepEqual(recorded.reviewersAdded, [{ id: 7, reviewerId: 'id-bob' }]);
 });
 
 test('attachIssueImage uploads the bytes and holds them against the work item', async () => {

@@ -40,6 +40,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   supply: 'Runway',
   dispatch: 'Refused',
   assigned: 'Assigned',
+  assign: 'Assign',
   upgrade: 'Upgrade',
   project_pull: 'Auto-pull off',
 };
@@ -94,6 +95,7 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   supply: 'amber',
   dispatch: 'red',
   assigned: 'blue',
+  assign: 'blue',
   upgrade: 'amber',
   project_pull: 'amber',
 };
@@ -138,6 +140,7 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   supply: '\u25bd',
   dispatch: '\u22a0',
   assigned: '\u2913',
+  assign: '\u2192',
   upgrade: '\u2191',
   project_pull: '\u21a5',
 };
@@ -184,6 +187,7 @@ export const KIND_VERB: Record<NeedKind, string> = {
   supply: 'Top it up',
   dispatch: 'Look',
   assigned: 'Look',
+  assign: 'Pick someone',
   upgrade: 'Upgrade',
   project_pull: 'Turn it on',
 };

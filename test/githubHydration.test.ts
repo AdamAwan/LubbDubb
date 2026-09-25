@@ -113,6 +113,7 @@ function fakeApi(script: Script): { api: GitHubApi; tape: Tape } {
     setPullTitle: unused,
     setPullBody: unused,
     setPullBase: unused,
+    addPullAssignee: unused,
     updatePullBranch: unused,
     closePull: unused,
     deleteBranch: unused,

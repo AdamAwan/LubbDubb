@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { checked, PrNumberParams } from '../validation.js';
+import { checked, PrNumberParams, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store } = system;
+  registerAssignRoutes(app, { system, hub });
 
   const ThreadParams = PrNumberParams.extend({ threadId: z.string().min(1, 'threadId is required') });
 
@@ -27,6 +28,42 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(404).send({ error: 'that pull request carries no such review thread' });
 
       store.threadReopens.setPrThreadReopened(params.number, params.threadId, body.reopened);
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true };
+    }),
+  );
+}
+
+const AssignBody = z.object({
+  personId: requiredText('personId is required — the shortlisted person to put on the pull request'),
+});
+
+function registerAssignRoutes(app: FastifyInstance, { system, hub }: Pick<RouteContext, 'system' | 'hub'>): void {
+  const { store, prAssign } = system;
+  const openPr = (number: number) => store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === number);
+
+  app.post(
+    '/api/prs/:number/assign',
+    checked({ params: PrNumberParams, body: AssignBody }, async ({ params, body, reply }) => {
+      if (openPr(params.number) === undefined)
+        return reply.code(404).send({ error: 'no open pull request with that number' });
+      const outcome = await prAssign.assign(
+        params.number,
+        body.personId,
+        store.world.getWorldBaseline()?.pullRequests ?? [],
+      );
+      if (!outcome.ok) return reply.code(409).send({ error: outcome.refusal });
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true };
+    }),
+  );
+
+  app.post(
+    '/api/prs/:number/assign/decline',
+    checked({ params: PrNumberParams }, ({ params, reply }) => {
+      if (openPr(params.number) === undefined)
+        return reply.code(404).send({ error: 'no open pull request with that number' });
+      prAssign.decline(params.number);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
     }),

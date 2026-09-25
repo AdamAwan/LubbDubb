@@ -47,6 +47,7 @@ import {
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
+import { PrAssignAskStore } from './prAssignAsks.js';
 import { PrReviewStore, PR_REVIEW_COLUMNS } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
@@ -166,6 +167,7 @@ export class Store {
   readonly prWatchSeeds: PrWatchSeedStore;
   readonly workItemLinks: WorkItemLinkStore;
   readonly reviewWaits: ReviewWaitStore;
+  readonly prAssignAsks: PrAssignAskStore;
   readonly prReviews: PrReviewStore;
   readonly prReviewRoutes: PrReviewRouteStore;
   readonly prReviewExternals: PrReviewExternalStore;
@@ -229,6 +231,7 @@ export class Store {
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaits = new ReviewWaitStore(ctx);
+    this.prAssignAsks = new PrAssignAskStore(ctx);
     this.prReviews = new PrReviewStore(ctx);
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewExternals = new PrReviewExternalStore(ctx);

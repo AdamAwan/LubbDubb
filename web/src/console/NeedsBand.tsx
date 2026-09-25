@@ -187,6 +187,7 @@ const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
   placement: placementBody,
   limit: limitBody,
   assigned: assignedBody,
+  assign: assignBody,
   describe: describeBody,
   description_wrong: descriptionFeedbackBody,
   description_note: descriptionFeedbackBody,
@@ -379,6 +380,37 @@ function describeBody(row: NeedRow, view: CockpitView, actions: CockpitActions):
         refTitle="Read the change you are describing"
         actions={actions}
       />
+    </>
+  );
+}
+
+/**
+ * Every person on the shortlist and "Nah" are drawn alike, so declining costs no more than
+ * picking. → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
+ */
+function assignBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const pr = view.state.world.pullRequests.find((p) => `assign:pr:${p.number}` === row.id);
+  if (pr?.assignAsk === undefined) return null;
+  return (
+    <>
+      <p className="cn-tick">
+        The fleet is done with <Ref to={`pr:${pr.number}`} /> and nobody is on it. Put someone on it in the tracker?
+      </p>
+      <ButtonRow bar>
+        {pr.assignAsk.map((person) => (
+          <AsyncButton
+            key={person.id}
+            size="small"
+            onClick={() => actions.assignPr(pr.number, person.id)}
+            title={`Assign ${person.name} in the tracker`}
+          >
+            {person.name}
+          </AsyncButton>
+        ))}
+        <AsyncButton size="small" onClick={() => actions.declineAssignPr(pr.number)} title="Leave it unassigned">
+          Nah
+        </AsyncButton>
+      </ButtonRow>
     </>
   );
 }

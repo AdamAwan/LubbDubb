@@ -83,6 +83,7 @@ interface Recorded {
   titleSets: Array<{ number: number; title: string }>;
   bodySets: Array<{ number: number; body: string }>;
   baseSets: Array<{ number: number; base: string }>;
+  assigned: Array<{ number: number; login: string }>;
   branchUpdates: number[];
   deletedBranches: string[];
   resolvedThreads: Array<{ number: number; rootCommentId: number }>;
@@ -107,6 +108,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     titleSets: [],
     bodySets: [],
     baseSets: [],
+    assigned: [],
     branchUpdates: [],
     deletedBranches: [],
     resolvedThreads: [],
@@ -137,6 +139,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async setPullBase(number, base) {
       recorded.baseSets.push({ number, base });
+    },
+    async addPullAssignee(number, login) {
+      recorded.assigned.push({ number, login });
     },
     async updatePullBranch(number) {
       if (script.throwOn === 'updatePullBranch') throw new Error('merge conflict between base and head');
@@ -475,6 +480,18 @@ test("someone else's assignee is not yours", async () => {
   });
   const sc = new GitHubSourceControlIntegration({ api });
   assert.equal((await sc.snapshot()).pullRequests![0]!.viewerAssignment, undefined);
+});
+
+test('a PR reports who is assigned to it, and assignPr adds an assignee', async () => {
+  const { api, recorded } = fakeApi({
+    viewer: 'lubbdubb-bot',
+    pulls: [pull({ number: 7, authorLogin: 'lubbdubb-bot', assigneeLogins: ['carol'] })],
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
+  });
+  const sc = new GitHubSourceControlIntegration({ api });
+  assert.deepEqual((await sc.snapshot()).pullRequests![0]!.assignees, [{ id: 'carol', name: 'carol' }]);
+  assert.deepEqual(await sc.assignPr({ prNumber: 7, personId: 'dave' }), { ok: true, ref: 'dave' });
+  assert.deepEqual(recorded.assigned, [{ number: 7, login: 'dave' }]);
 });
 
 test('snapshot maps a PR with its CI / approval / mergeability / comments', async () => {

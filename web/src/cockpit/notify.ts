@@ -104,6 +104,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   supply: 'The fleet is running out of work',
   dispatch: 'A dispatch is being refused every pulse',
   assigned: 'A pull request is assigned to you',
+  assign: 'A pull request is ready for somebody to look at',
   upgrade: 'An update to the harness is waiting',
   project_pull: 'The project checkout cannot be pulled',
 };

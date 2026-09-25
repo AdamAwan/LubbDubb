@@ -21,7 +21,14 @@ export interface RawPull {
   mergeStatus?: string;
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string; displayName?: string };
-  reviewers?: Array<{ vote?: number; uniqueName?: string; isRequired?: boolean; isContainer?: boolean }>;
+  reviewers?: Array<{
+    id?: string;
+    displayName?: string;
+    vote?: number;
+    uniqueName?: string;
+    isRequired?: boolean;
+    isContainer?: boolean;
+  }>;
 }
 
 export interface RawClosedPull {
@@ -132,6 +139,8 @@ export function toPull(p: RawPull, url: string): AzPull {
     isDraft: p.isDraft ?? false,
     mergeStatus: p.mergeStatus ?? 'notSet',
     reviewers: (p.reviewers ?? []).map((r) => ({
+      ...(r.id ? { id: r.id } : {}),
+      ...(r.displayName ? { displayName: r.displayName } : {}),
       uniqueName: r.uniqueName ?? '',
       vote: r.vote ?? 0,
       isRequired: r.isRequired ?? false,

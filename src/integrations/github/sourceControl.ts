@@ -2,6 +2,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,
+  PrAssignInput,
   PrBaseUpdateInput,
   PrBodyInput,
   PrCloseInput,
@@ -22,6 +23,7 @@ import type {
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
+  PrAssignCapable,
   PrBaseUpdateCapable,
   PrCloseCapable,
   PrCreateCapable,
@@ -98,6 +100,7 @@ export class GitHubSourceControlIntegration
     PrTitleCapable,
     PrBodyCapable,
     PrBaseCapable,
+    PrAssignCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
@@ -151,6 +154,7 @@ export class GitHubSourceControlIntegration
           if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
           if (detail.viewerApproved) pr.viewerApproved = true;
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
+          pr.assignees = p.assigneeLogins.map((login) => ({ id: login, name: login }));
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
           return pr;
@@ -310,6 +314,11 @@ export class GitHubSourceControlIntegration
   async setPullBase(input: PrBaseInput): Promise<SendResult> {
     await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
+  }
+
+  async assignPr(input: PrAssignInput): Promise<SendResult> {
+    await this.opts.api.addPullAssignee(input.prNumber, input.personId);
+    return { ok: true, ref: input.personId };
   }
 
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {

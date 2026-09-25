@@ -23,6 +23,7 @@ import { REMOTE_VALIDATION_SCHEMA } from './schema/remoteValidation.js';
 import { PR_WATCH_SEEDS_SCHEMA } from './schema/prWatchSeeds.js';
 import { WORK_ITEM_LINKS_SCHEMA } from './schema/workItemLinks.js';
 import { REVIEW_WAITS_SCHEMA } from './schema/reviewWaits.js';
+import { PR_ASSIGN_ASKS_SCHEMA } from './schema/prAssignAsks.js';
 import { PR_REVIEWS_SCHEMA } from './schema/prReviews.js';
 import { PR_REVIEW_ROUTES_SCHEMA } from './schema/prReviewRoutes.js';
 import { PR_SPLITS_SCHEMA } from './schema/prSplits.js';
@@ -79,6 +80,7 @@ export const SCHEMA =
   PR_WATCH_SEEDS_SCHEMA +
   WORK_ITEM_LINKS_SCHEMA +
   REVIEW_WAITS_SCHEMA +
+  PR_ASSIGN_ASKS_SCHEMA +
   PR_REVIEWS_SCHEMA +
   PR_REVIEW_ROUTES_SCHEMA +
   PR_SPLITS_SCHEMA +

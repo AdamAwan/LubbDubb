@@ -102,6 +102,7 @@ import type {
   PlanRevision,
   Proposal,
   PrSplitVerdict,
+  PrPerson,
   PrState,
   PullRequest as WorldPullRequest,
   ReadyingAction,
@@ -145,6 +146,11 @@ export interface OpenPullRequest extends PullRequest {
   health: PrHealth;
   attention: PrAttention;
   ciVerdict: CiVerdict;
+  /**
+   * The people to offer when the fleet's own pull request is ready for somebody to look at — set
+   * only while that ask stands. → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
+   */
+  assignAsk?: PrPerson[];
 }
 
 export interface Issue extends WorldIssue {
@@ -1046,6 +1052,7 @@ export type {
   ValidationStepKind,
   ValidationVerdict,
   ViewerAssignment,
+  PrPerson,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
