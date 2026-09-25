@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { issueOriginRef } from '../../issueOrigins.js';
-import type { InjectableEvent } from '../../connector/connector.js';
+import type { InjectableEvent } from '../connector.js';
 import type {
   IssueCloseInput,
   IssueCommentInput,

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
-import { FakeConnector } from '../src/connector/fakeConnector.js';
+import { FakeConnector } from '../src/integrations/fake/fakeConnector.js';
 
 function newConnector() {
   const store = new Store(':memory:');

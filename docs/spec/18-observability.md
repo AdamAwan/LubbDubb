@@ -1213,7 +1213,7 @@ a file is in would answer, and would drift between dispatches.
 
 ### The area is derived at read time, never stored
 
-The row stores the **path**; `areasForPath` (`src/reviewLabels/areas.ts`) turns it into areas when the
+The row stores the **path**; `areasForPath` (`src/review/areas.ts`) turns it into areas when the
 reading is built, against the `reviewAreas` rules from config ([02](02-configuration.md)). Stored
 labels would freeze a mapping that is certain to be revised — the first time a directory is decided to
 belong somewhere other than where the rules put it, every row written before the fix keeps the old
@@ -1246,7 +1246,7 @@ asked. It is a count beside the others, never a classification of who is worth l
 
 The hard case is not a bot that announces itself — it is **a machine posting as a human**: a service
 account on a personal access token, a review bot commenting under an ordinary user. `authorKind`
-(`src/reviewLabels/authors.ts`) answers it from three sources, in this order.
+(`src/review/authors.ts`) answers it from three sources, in this order.
 
 1. **The provider's own word.** A GitHub App posts as `type: "Bot"` and cannot hide it, so
    `GhReviewComment.authorIsBot` carries it onto the thread. Azure DevOps reports nothing here, and

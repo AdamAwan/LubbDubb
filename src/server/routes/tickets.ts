@@ -48,7 +48,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     TICKETS_RATE_LIMIT,
     checked({ query: TicketQuery }, async ({ query }) => {
       const watchLabel = watchLabelFor(config.labelPrefix);
-      const runs = store.floor.listIssueRuns();
+      const runs = store.runs.listIssueRuns();
       const { goals } = buildSpendGoals({
         agents: store.agents.listAgents(),
         localRuns: store.localRuns.listLocalRuns(),

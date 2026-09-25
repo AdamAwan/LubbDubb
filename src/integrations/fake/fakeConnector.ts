@@ -1,5 +1,5 @@
-import type { Connector, InjectableEvent } from './connector.js';
-import type { ReadPlan } from '../world/readPlan.js';
+import type { Connector, InjectableEvent } from '../connector.js';
+import type { ReadPlan } from '../../world/readPlan.js';
 import type {
   ActionSink,
   BranchDeleteInput,
@@ -26,13 +26,13 @@ import type {
   WorkItemAreaPathInput,
   WorkItemParentInput,
   WorkItemStateInput,
-} from '../sink/actionSink.js';
-import type { Store } from '../store/store.js';
-import type { WorldSnapshot } from '../types.js';
-import { CompositeConnector } from '../integrations/compositeConnector.js';
-import { FakeWorldStore } from '../integrations/fake/fakeWorld.js';
-import { FakeGitHubIntegration } from '../integrations/fake/fakeGitHub.js';
-import { FakeIssuesIntegration } from '../integrations/fake/fakeIssues.js';
+} from '../../sink/actionSink.js';
+import type { Store } from '../../store/store.js';
+import type { WorldSnapshot } from '../../types.js';
+import { CompositeConnector } from '../compositeConnector.js';
+import { FakeWorldStore } from './fakeWorld.js';
+import { FakeGitHubIntegration } from './fakeGitHub.js';
+import { FakeIssuesIntegration } from './fakeIssues.js';
 
 // → docs/spec/03-world-model.md
 

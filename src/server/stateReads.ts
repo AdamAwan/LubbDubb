@@ -266,7 +266,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     const query = deliverySignalQuery(deliveries());
     return query ? store.world.listWorldEventsSince(query.since, query.refs) : [];
   });
-  const issueRuns = store.floor.listIssueRuns();
+  const issueRuns = store.runs.listIssueRuns();
   const runByOrigin = new Map(issueRuns.map((r) => [r.originRef, r]));
   const shortfallsByOrigin = once(() => new Map(store.verdicts.listShortfalls().map((s) => [s.originRef, s])));
   const padsByOrigin = once(() => new Map(store.scratch.listScratchPadSummaries().map((p) => [p.padRef, p])));

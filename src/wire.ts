@@ -1098,7 +1098,7 @@ export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } 
 export type { PoolStatus } from './pool/poolDesk.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
-export type { RunClearOut } from './floor/endRun.js';
+export type { RunClearOut } from './runs/endRun.js';
 export type {
   AllowanceApportionment,
   AllowanceGoal,

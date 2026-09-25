@@ -24,7 +24,7 @@ export class RunwayDesk {
     const reading = readRunway({
       ...input,
       policy: this.policy,
-      runs: this.store.floor.listIssueRuns(),
+      runs: this.store.runs.listIssueRuns(),
       humanTasks: this.store.humanTasks.listAllHumanTasks(),
       escalations: this.store.escalations.listEscalationSpans(),
       standing: existing.some((t) => t.status === 'open'),

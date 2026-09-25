@@ -1,4 +1,4 @@
-import type { Connector, InjectableEvent } from '../connector/connector.js';
+import type { Connector, InjectableEvent } from './connector.js';
 import type {
   ActionSink,
   BranchDeleteInput,

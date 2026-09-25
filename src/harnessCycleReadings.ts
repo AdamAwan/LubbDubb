@@ -18,7 +18,7 @@ import type {
 } from './types.js';
 import { isPrWatched } from './pr/prHealth.js';
 import { isSomeoneElsesPr } from './pr/prOwnership.js';
-import { retainedRunIssues } from './floor/runs.js';
+import { retainedRunIssues } from './runs/runs.js';
 
 // → docs/spec/04-harness-cycle.md
 

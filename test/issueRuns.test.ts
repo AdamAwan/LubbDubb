@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
-import { isGoalComplete, retainedRunIssues, runsToRecord } from '../src/floor/runs.js';
+import { isGoalComplete, retainedRunIssues, runsToRecord } from '../src/runs/runs.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -100,18 +100,18 @@ const RECORD = {
 
 test('a run upserts, refreshes its snapshot, and freezes both instants', () => {
   const store = new Store(':memory:');
-  assert.deepEqual(store.floor.listIssueRuns(), []);
+  assert.deepEqual(store.runs.listIssueRuns(), []);
 
-  store.floor.recordIssueRun(RECORD);
-  const first = store.floor.listIssueRuns();
+  store.runs.recordIssueRun(RECORD);
+  const first = store.runs.listIssueRuns();
   assert.equal(first.length, 1);
   assert.equal(first[0]!.completedAt, null, 'minted at pickup, with no completion');
   assert.equal(first[0]!.dismissedAt, null);
   assert.deepEqual(first[0]!.labels, ['lubbdubb-watch'], 'the labels ride the row, for the watch gates');
   const startedAt = first[0]!.startedAt;
 
-  store.floor.recordIssueRun({ ...RECORD, title: 'Add the thing, renamed', body: 'reworded', complete: true });
-  const again = store.floor.listIssueRuns();
+  store.runs.recordIssueRun({ ...RECORD, title: 'Add the thing, renamed', body: 'reworded', complete: true });
+  const again = store.runs.listIssueRuns();
   assert.equal(again.length, 1, 'one row, not two');
   assert.equal(again[0]!.title, 'Add the thing, renamed');
   assert.equal(again[0]!.body, 'reworded', 'the snapshot tracks the live issue');
@@ -119,28 +119,28 @@ test('a run upserts, refreshes its snapshot, and freezes both instants', () => {
   const completedAt = again[0]!.completedAt;
   assert.ok(completedAt, 'the completion instant is stamped once the signals say so');
 
-  store.floor.recordIssueRun(RECORD);
-  assert.equal(store.floor.listIssueRuns()[0]!.completedAt, completedAt, 'the completion instant is frozen too');
+  store.runs.recordIssueRun(RECORD);
+  assert.equal(store.runs.listIssueRuns()[0]!.completedAt, completedAt, 'the completion instant is frozen too');
   store.close();
 });
 
 test('dismissing is one-way, idempotent, and stamps how the run ended', () => {
   const store = new Store(':memory:');
-  store.floor.recordIssueRun(RECORD);
+  store.runs.recordIssueRun(RECORD);
 
-  assert.equal(store.floor.dismissIssueRun('issue:12'), true, 'the first dismissal changes the row');
-  assert.equal(store.floor.dismissIssueRun('issue:12'), false, 'a second is a no-op');
-  assert.equal(store.floor.dismissIssueRun('issue:99'), false, 'an unrecorded goal cannot be dismissed');
-  const abandoned = store.floor.listIssueRuns()[0]!;
+  assert.equal(store.runs.dismissIssueRun('issue:12'), true, 'the first dismissal changes the row');
+  assert.equal(store.runs.dismissIssueRun('issue:12'), false, 'a second is a no-op');
+  assert.equal(store.runs.dismissIssueRun('issue:99'), false, 'an unrecorded goal cannot be dismissed');
+  const abandoned = store.runs.listIssueRuns()[0]!;
   assert.ok(abandoned.dismissedAt, 'the dismissal stands');
   assert.equal(abandoned.outcome, 'abandoned', 'a run nothing had judged was abandoned');
 
-  store.floor.recordIssueRun({ ...RECORD, complete: true });
-  assert.ok(store.floor.listIssueRuns()[0]!.dismissedAt, 'a re-record does not un-dismiss');
+  store.runs.recordIssueRun({ ...RECORD, complete: true });
+  assert.ok(store.runs.listIssueRuns()[0]!.dismissedAt, 'a re-record does not un-dismiss');
 
-  store.floor.recordIssueRun({ ...RECORD, originRef: 'issue:13', issueNumber: 13, complete: true });
-  store.floor.dismissIssueRun('issue:13');
-  assert.equal(store.floor.listIssueRuns().find((r) => r.issueNumber === 13)!.outcome, 'judged');
+  store.runs.recordIssueRun({ ...RECORD, originRef: 'issue:13', issueNumber: 13, complete: true });
+  store.runs.dismissIssueRun('issue:13');
+  assert.equal(store.runs.listIssueRuns().find((r) => r.issueNumber === 13)!.outcome, 'judged');
   store.close();
 });
 
@@ -155,7 +155,7 @@ test('floor_completions is carried into issue_runs, dismissals and all, then dro
   raw.close();
 
   const store = new Store(path);
-  const rows = store.floor.listIssueRuns();
+  const rows = store.runs.listIssueRuns();
   assert.equal(rows.length, 2, 'both rows carried');
   const kept = rows.find((r) => r.issueNumber === 7)!;
   assert.equal(kept.title, 'Kept');
@@ -173,7 +173,7 @@ test('floor_completions is carried into issue_runs, dismissals and all, then dro
   check.close();
 
   const reopened = new Store(path);
-  assert.equal(reopened.floor.listIssueRuns().length, 2);
+  assert.equal(reopened.runs.listIssueRuns().length, 2);
   reopened.close();
 });
 
@@ -488,7 +488,7 @@ test('the pulse mints a run for a goal it has work under, before anything finish
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
   await system.harness.runCycle('manual');
-  assert.deepEqual(system.store.floor.listIssueRuns(), [], 'a goal nothing has started is not a run');
+  assert.deepEqual(system.store.runs.listIssueRuns(), [], 'a goal nothing has started is not a run');
 
   const seeded = system.store.tasks.createTask({
     kind: 'code',
@@ -499,7 +499,7 @@ test('the pulse mints a run for a goal it has work under, before anything finish
   });
   system.store.tasks.updateTask(seeded.id, { status: 'done' });
   await system.harness.runCycle('manual');
-  const rows = system.store.floor.listIssueRuns();
+  const rows = system.store.runs.listIssueRuns();
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!.title, 'Add the thing', 'the title is captured while the issue is live');
   assert.equal(rows[0]!.completedAt, null, 'nothing has judged it yet');
@@ -513,7 +513,7 @@ test('the pulse mints a run for a goal it has work under, before anything finish
     taskId: null,
   });
   await system.harness.runCycle('manual');
-  assert.ok(system.store.floor.listIssueRuns()[0]!.completedAt, 'the completion is stamped once a verdict stands');
+  assert.ok(system.store.runs.listIssueRuns()[0]!.completedAt, 'the completion is stamped once a verdict stands');
   system.store.close();
 });
 
@@ -531,7 +531,7 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   store.tasks.updateTask(seeded.id, { status: 'done' });
   await system.harness.runCycle('manual');
 
-  store.floor.recordIssueRun({
+  store.runs.recordIssueRun({
     originRef: 'issue:99',
     issueNumber: 99,
     title: 'Forgotten goal',
@@ -579,7 +579,7 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   assert.equal(one!.pickup.status, 'retained');
   assert.deepEqual(one!.pickup.reasons, ['closed; run kept until you dismiss it']);
   assert.equal(one!.retrospective?.summary, 'It shipped in two parts.', 'its report rides the rebuilt issue');
-  assert.equal(one!.stale?.lastSeenAt, store.floor.listIssueRuns().find((r) => r.issueNumber === 99)!.updatedAt);
+  assert.equal(one!.stale?.lastSeenAt, store.runs.listIssueRuns().find((r) => r.issueNumber === 99)!.updatedAt);
   assert.equal(one!.stale?.tracker, null, 'no mirror, so no reading of what the tracker says now');
   assert.equal((present as { stale?: unknown }).stale, undefined, 'a live issue is never marked stale');
 
@@ -590,7 +590,7 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
 test('a retained run says what the tracker now calls the item, off the mirror', async () => {
   const system = build();
   const { store } = system;
-  store.floor.recordIssueRun({
+  store.runs.recordIssueRun({
     originRef: 'issue:99',
     issueNumber: 99,
     title: 'Forgotten goal',
@@ -638,7 +638,7 @@ test('a retained run says what the tracker now calls the item, off the mirror', 
 test('dismissing ends the run — the card goes and it persists', async () => {
   const system = build();
   const { store } = system;
-  store.floor.recordIssueRun({
+  store.runs.recordIssueRun({
     originRef: 'issue:99',
     issueNumber: 99,
     title: 'Forgotten goal',
@@ -669,7 +669,7 @@ test('dismissing ends the run — the card goes and it persists', async () => {
     false,
     'gone after dismissal',
   );
-  const row = store.floor.listIssueRuns()[0]!;
+  const row = store.runs.listIssueRuns()[0]!;
   assert.ok(row.dismissedAt, 'the dismissal persisted to the store');
   assert.equal(row.outcome, 'abandoned', 'nothing had judged it, so that is how it ended');
 

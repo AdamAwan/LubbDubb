@@ -5,11 +5,11 @@ import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
 
-export const FLOOR_COLUMNS: ColumnMigrations = {
+export const RUN_COLUMNS: ColumnMigrations = {
   issue_runs: { dismiss_note: 'TEXT' },
 };
 
-export class FloorStore {
+export class RunStore {
   constructor(private readonly ctx: StoreContext) {}
 
   recordIssueRun(input: {

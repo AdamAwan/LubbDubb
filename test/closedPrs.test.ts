@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
-import { FakeConnector } from '../src/connector/fakeConnector.js';
+import { FakeConnector } from '../src/integrations/fake/fakeConnector.js';
 import { closedReadSince, withinClosedWindow } from '../src/integrations/closedWindow.js';
 import { GitHubSourceControlIntegration, mapClosedPull } from '../src/integrations/github/sourceControl.js';
 import {

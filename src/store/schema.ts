@@ -36,7 +36,7 @@ import { WORLD_SCHEMA } from './schema/world.js';
 import { ERRORS_SCHEMA } from './schema/errors.js';
 import { GRAPH_SCHEMA } from './schema/graph.js';
 import { BUG_FILINGS_SCHEMA } from './schema/bugFilings.js';
-import { FLOOR_SCHEMA } from './schema/floor.js';
+import { RUN_SCHEMA } from './schema/runs.js';
 import { VALIDATION_SCHEMA } from './schema/validation.js';
 import { TICKETS_SCHEMA } from './schema/tickets.js';
 import { SEQUENCES_SCHEMA } from './schema/sequences.js';
@@ -92,7 +92,7 @@ export const SCHEMA =
   ERRORS_SCHEMA +
   GRAPH_SCHEMA +
   BUG_FILINGS_SCHEMA +
-  FLOOR_SCHEMA +
+  RUN_SCHEMA +
   VALIDATION_SCHEMA +
   TICKETS_SCHEMA +
   SEQUENCES_SCHEMA +

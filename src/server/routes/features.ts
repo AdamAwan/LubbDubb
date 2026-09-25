@@ -5,7 +5,7 @@ import { environmentGroups } from '../../environments/groups.js';
 import { allGoalReach } from '../../environments/reach.js';
 import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
 import { buildSpendGoals } from '../../insights/spendInsights.js';
-import { featureRecords } from '../../summaries/featureRecord.js';
+import { featureRecords } from '../../featureSummaries/featureRecord.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { checked, requiredBoolean } from '../validation.js';
@@ -71,7 +71,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
 function featureBoardPayload(system: RouteContext['system']): FeatureBoardPayload {
   const { store, connector, config } = system;
-  const runs = store.floor.listIssueRuns();
+  const runs = store.runs.listIssueRuns();
   const plans = store.plans.listPlans();
   const planParts = store.plans.listAllPlanParts();
   const goalLandings = store.environments.listGoalLandings();

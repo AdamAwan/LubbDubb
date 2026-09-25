@@ -12,7 +12,7 @@ import type {
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
 import { unrecordedWork, workItemTicketFields } from '../src/graph/unrecorded.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { jobBranch } from '../src/jobs.js';
+import { jobBranch } from '../src/jobs/naming.js';
 import { Store } from '../src/store/store.js';
 import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';

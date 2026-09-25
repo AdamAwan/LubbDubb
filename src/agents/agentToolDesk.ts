@@ -16,10 +16,10 @@ import type {
 } from '../types.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
-import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summaries/featureSummary.js';
+import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../featureSummaries/featureSummary.js';
 import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
-import type { ReviewThreadLabelSubmission } from '../reviewLabels/labels.js';
+import type { ReviewThreadLabelSubmission } from '../review/threadLabels.js';
 import { threadStamped } from '../review/prReviewState.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { AgentEmitter, AgentManagerOptions } from './agentContract.js';

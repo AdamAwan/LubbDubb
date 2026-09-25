@@ -1,4 +1,4 @@
-import { jobBranch } from '../../jobs.js';
+import { jobBranch } from '../../jobs/naming.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `manual-job`)

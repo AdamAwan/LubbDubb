@@ -61,7 +61,7 @@ import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
 import { GraphStore, GRAPH_REBUILDS } from './graph.js';
 import { BugFilingStore } from './bugFilings.js';
-import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
+import { adoptFloorCompletions, RunStore, RUN_COLUMNS } from './runs.js';
 import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { GoalCriteriaStore } from './goalCriteria.js';
@@ -88,7 +88,7 @@ function migrate(db: Database.Database, clock: Clock): void {
     JOB_COLUMNS,
     JOB_SCHEDULE_COLUMNS,
     ISSUE_VERDICT_COLUMNS,
-    FLOOR_COLUMNS,
+    RUN_COLUMNS,
     TICKET_COLUMNS,
     PET_COLUMNS,
     LOCAL_RUN_COLUMNS,
@@ -180,7 +180,7 @@ export class Store {
   readonly errors: ErrorStore;
   readonly graph: GraphStore;
   readonly bugFilings: BugFilingStore;
-  readonly floor: FloorStore;
+  readonly runs: RunStore;
   readonly tickets: TicketStore;
   readonly sequences: SequenceStore;
   readonly goalCriteria: GoalCriteriaStore;
@@ -243,7 +243,7 @@ export class Store {
     this.errors = new ErrorStore(ctx);
     this.graph = new GraphStore(ctx);
     this.bugFilings = new BugFilingStore(ctx);
-    this.floor = new FloorStore(ctx);
+    this.runs = new RunStore(ctx);
     this.tickets = new TicketStore(ctx);
     this.sequences = new SequenceStore(ctx);
     this.goalCriteria = new GoalCriteriaStore(ctx);

@@ -37,7 +37,7 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
   const shortfalls = new Map(store.verdicts.listShortfalls().map((s) => [s.originRef, s]));
   const questions = openQuestionsByGoal(store.escalations.listEscalations());
   const running = new Map(
-    store.floor
+    store.runs
       .listIssueRuns()
       .filter((r) => r.completedAt === null && r.dismissedAt === null)
       .map((r) => [r.issueNumber, r.startedAt]),

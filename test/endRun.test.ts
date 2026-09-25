@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { clearGoalWork } from '../src/floor/endRun.js';
+import { clearGoalWork } from '../src/runs/endRun.js';
 import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
@@ -81,7 +81,7 @@ test('the dismiss-run route does the clearing, and reports what it cleared', asy
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
   const { store } = system;
-  store.floor.recordIssueRun({
+  store.runs.recordIssueRun({
     originRef: 'issue:12',
     issueNumber: 12,
     title: 'Add the thing',

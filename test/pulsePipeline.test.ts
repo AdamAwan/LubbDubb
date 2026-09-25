@@ -136,7 +136,7 @@ test('the pull request register is tagged before it is linked', () => {
 function bareDeps(): PulseDeps {
   const store = {
     reviewWaits: { foldReviewWaits: () => [] },
-    floor: { recordIssueRun: () => [] },
+    runs: { recordIssueRun: () => [] },
     prReviewExternals: { prsReviewedElsewhere: () => [], recordPrReviewedElsewhere: () => [] },
   } as unknown as Store;
   return { store, errors: { record: () => [] } as unknown as PulseDeps['errors'], review: DEFAULT_PR_REVIEW };
@@ -150,7 +150,7 @@ function sweepDeps(): { deps: PulseDeps; calls: string[] } {
   };
   const store = {
     reviewWaits: { foldReviewWaits: note('reviewWaits') },
-    floor: { recordIssueRun: note('issueRuns') },
+    runs: { recordIssueRun: note('issueRuns') },
     prReviewExternals: {
       prsReviewedElsewhere: note('reviewedElsewhere'),
       recordPrReviewedElsewhere: note('recordPrReviewedElsewhere'),
