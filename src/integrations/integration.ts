@@ -131,6 +131,14 @@ export function isPrBodyCapable(x: Integration): x is Integration & PrBodyCapabl
   return typeof (x as Partial<PrBodyCapable>).setPullBody === 'function';
 }
 
+export interface PrBodyReadable {
+  readPullBody(prNumber: number): Promise<string>;
+}
+
+export function isPrBodyReadable(x: Integration): x is Integration & PrBodyReadable {
+  return typeof (x as Partial<PrBodyReadable>).readPullBody === 'function';
+}
+
 export interface PrBaseCapable {
   setPullBase(input: PrBaseInput): Promise<SendResult>;
 }

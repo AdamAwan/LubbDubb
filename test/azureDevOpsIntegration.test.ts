@@ -152,6 +152,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async setPullTitle(id, title) {
       recorded.titleSets.push({ id, title });
     },
+    async getPullBody() {
+      return '';
+    },
     async setPullBody(id, body) {
       recorded.bodySets.push({ id, body });
     },

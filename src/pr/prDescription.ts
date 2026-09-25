@@ -1,5 +1,6 @@
 import { issueOriginId } from '../issueOrigins.js';
 import { HUMAN_NOTE } from './prFooter.js';
+import { SIGNOFF_MARKER } from '../sink/signOff.js';
 import type { DescriptionQuestion, PrDescriptionVersion } from '../types.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
@@ -92,6 +93,44 @@ export function composeDescribedBody(text: string, tail: string): string {
   const described = [head, HUMAN_NOTE].join('\n\n');
   if (rest === '') return described;
   return [described, rest].join('\n\n');
+}
+
+/**
+ * The description a live pull request body carries above the harness's footer, or null
+ * for a body with nothing above it.
+ *
+ * The inverse of `composeDescribedBody`, so a body the harness wrote reads back as the
+ * text it was composed from — which is what keeps the desk from adopting its own push.
+ * The footer is found by the tail `open_pr` recorded; failing that, by the rule above
+ * the sign-off marker, because a provider or a person may have reflowed the rest of it.
+ * → docs/spec/07-pull-requests.md#a-description-written-on-the-provider-is-adopted
+ */
+export function descriptionInBody(live: string, tail: string): string | null {
+  const body = normaliseBody(live);
+  const footer = normaliseBody(tail);
+  let head = body;
+  const at = footer === '' ? -1 : body.lastIndexOf(footer);
+  if (at >= 0) head = body.slice(0, at);
+  else {
+    const marker = body.indexOf(SIGNOFF_MARKER);
+    if (marker >= 0) {
+      const rule = body.lastIndexOf('---', marker);
+      head = body.slice(0, rule >= 0 ? rule : marker);
+    }
+  }
+  head = head.trim();
+  if (head.endsWith(HUMAN_NOTE)) head = head.slice(0, -HUMAN_NOTE.length).trim();
+  return head === '' ? null : head;
+}
+
+/** Line endings and trailing spaces are the provider's, never the writer's. */
+export function normaliseBody(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
 }
 
 /** The read-only checkout rule `pr-describe` reads a pull request's diff from. */

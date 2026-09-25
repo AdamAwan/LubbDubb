@@ -31,6 +31,7 @@ import type {
   PrThreadResolveCapable,
   PrTitleCapable,
   PrBodyCapable,
+  PrBodyReadable,
   WorldSlice,
 } from '../integration.js';
 import type { FakeWorld, FakeWorldStore } from './fakeWorld.js';
@@ -46,6 +47,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'pr_approved',
   'pr_mergeable',
   'pr_size',
+  'pr_body_edited',
   'pr_closed',
 ]);
 
@@ -60,6 +62,7 @@ export class FakeGitHubIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBodyCapable,
+    PrBodyReadable,
     PrBaseCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
@@ -84,6 +87,10 @@ export class FakeGitHubIntegration
   }
 
   inject(event: InjectableEvent): void {
+    if (event.kind === 'pr_body_edited') {
+      this.bodies.set(event.prNumber, event.body);
+      return;
+    }
     this.world.mutate((world) => {
       switch (event.kind) {
         case 'ci_failed':
@@ -195,6 +202,10 @@ export class FakeGitHubIntegration
     return { ok: true, ref: `fake-title_${nanoid(6)}` };
   }
 
+  async readPullBody(prNumber: number): Promise<string> {
+    return this.bodies.get(prNumber) ?? '';
+  }
+
   async setPullBody(input: PrBodyInput): Promise<SendResult> {
     this.bodies.set(input.prNumber, input.body);
     return { ok: true, ref: `fake-body_${nanoid(6)}` };
@@ -202,8 +213,8 @@ export class FakeGitHubIntegration
 
   /**
    * The body one pull request carries. Kept beside the world rather than on
-   * `PullRequest`, because no reading the harness makes needs a pull request's body
-   * and a domain field nothing reads is a field the next change has to keep true.
+   * `PullRequest`, because only `PrDescriptionDesk` reads a body back, and it reads it
+   * one pull request at a time through `readPullBody`.
    *
    * @public the seam a test asserts a pushed description through
    */

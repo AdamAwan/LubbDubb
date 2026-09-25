@@ -32,6 +32,7 @@ import type {
   PrThreadResolveCapable,
   PrTitleCapable,
   PrBodyCapable,
+  PrBodyReadable,
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
@@ -78,6 +79,7 @@ export class AzureDevOpsSourceControlIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBodyCapable,
+    PrBodyReadable,
     PrBaseCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
@@ -258,6 +260,10 @@ export class AzureDevOpsSourceControlIntegration
   async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
     const deleted = await this.opts.api.deleteBranch(input.branch);
     return { ok: true, ref: deleted ? input.branch : `${input.branch} (already absent)` };
+  }
+
+  async readPullBody(prNumber: number): Promise<string> {
+    return this.opts.api.getPullBody(prNumber);
   }
 
   async setPullBody(input: PrBodyInput): Promise<SendResult> {

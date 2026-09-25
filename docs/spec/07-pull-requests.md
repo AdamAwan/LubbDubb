@@ -725,15 +725,39 @@ Two things follow, and both are load-bearing:
   is written **after** the send, so a push that throws is retried on the next pulse rather than lost.
 - **The body is recomposed, never patched.** `open_pr` records the footer it wrote in
   `pr_description_bodies`, and a description is put in front of _that_, not in front of whatever the
-  body currently says. Reading the body back off the
-  provider would make the provider a second source of truth for a string the harness composed, and a
-  reviewer's edit to it would be silently overwritten on the operator's next rewrite either way.
+  body currently says. The body _is_ read back, but only for the description above the footer
+  ([below](#a-description-written-on-the-provider-is-adopted)); the footer is never taken from the
+  provider, so an edit to it is overwritten on the next push.
 - **A person's description says so.** `composeDescribedBody` (`src/pr/prDescription.ts`) puts
   `_🫀 Organic human description_` under the operator's text, above the footer's rule. Without it the
   only attribution on the page is the footer's automation note, which names the wrong author for the
   prose above it — and that takes back the only thing the description was for, that a person and not
   the thing that made the change is answering for it. The mark goes with the half it labels: an empty
   description carries no mark, because a mark over nothing labels an author who wrote nothing.
+
+#### A description written on the provider is adopted
+
+An operator may well write the description straight into the pull request on GitHub or Azure DevOps
+rather than in the cockpit. That is the same act, and it gets the same treatment: it becomes a
+version of the part's description, is [checked without asking](#every-description-is-checked-without-asking),
+and is pushed back **recomposed** — the text, `HUMAN_NOTE`, then the recorded footer.
+
+`PrBodyEditDesk` (`src/pr/prBodyEditDesk.ts`) runs on world-read pulses, just above `PrDescriptionDesk`. For every part in
+`pr_description_bodies` whose pull request is open it reads the live body (`readPullBody`, one
+pull request at a time — Azure's list truncates `description`, so it cannot answer this) and takes
+`descriptionInBody`: the text above the recorded tail (or, if the footer was touched, above the rule
+over `SIGNOFF_MARKER`), with a trailing `HUMAN_NOTE` removed. Line endings and trailing spaces are
+normalised on both sides.
+
+- **The harness never adopts its own push.** `descriptionInBody` is the inverse of
+  `composeDescribedBody`, and the result is compared against what the harness last put there — the
+  newest version, else a pushed draft, else nothing. Equal is not an edit.
+- **An owed push outranks the provider.** A part with an unpushed version or handed draft is not read:
+  the cockpit's write is newer, and it overwrites.
+- **Nothing above the footer is not a description.** Clearing the body adopts nothing.
+- **The author is unrecorded** (`author: null`). The provider does not say who edited a body, so
+  anything that edits it — a person, or a tool running under their account — reads as a person's.
+- **The same bound applies.** A body `descriptionRefusal` would refuse is left alone.
 
 #### It holds nothing up
 

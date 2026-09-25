@@ -337,6 +337,7 @@ function buildHarness(
     appraisals: intake.appraisals,
     areaPaths,
     naming: intake.naming,
+    prBodyEdits: intake.prBodyEdits,
     prDescriptions: intake.prDescriptions,
     closeOuts: bench.closeOuts,
     unwatchedChildren: bench.unwatchedChildren,

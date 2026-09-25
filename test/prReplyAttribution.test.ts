@@ -156,6 +156,7 @@ function githubApi(script: GhScript): GitHubApi {
     createIssue: unused,
     createPull: unused,
     setPullTitle: unused,
+    getPullBody: unused,
     setPullBody: unused,
     setPullBase: unused,
     updatePullBranch: unused,

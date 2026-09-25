@@ -326,6 +326,47 @@ export class PrDescriptionStore {
   }
 
   /**
+   * Every part with a pull request on record, with the text the harness last put above
+   * its footer — what a body read back off the provider is compared against.
+   *
+   * `pending` is a write the harness owes and has not made: the desk's push outranks
+   * whatever the provider holds, so a body read then is not compared at all.
+   * → docs/spec/07-pull-requests.md#a-description-written-on-the-provider-is-adopted
+   */
+  bodiesOnRecord(): { originRef: string; prNumber: number; tail: string; standing: string; pending: boolean }[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT b.origin_ref AS origin_ref, b.pr_number AS pr_number, b.tail AS tail,
+                d.text AS version_text, d.id AS version_id, d.pushed_at AS version_pushed_at,
+                h.text AS draft_text, h.handed_at AS draft_handed_at, h.pushed_at AS draft_pushed_at
+           FROM pr_description_bodies b
+           LEFT JOIN pr_descriptions d ON d.origin_ref = b.origin_ref
+            AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = b.origin_ref)
+           LEFT JOIN pr_description_drafts h ON h.origin_ref = b.origin_ref
+          ORDER BY b.opened_at ASC`,
+      )
+      .all() as {
+      origin_ref: string;
+      pr_number: number;
+      tail: string;
+      version_text: string | null;
+      version_id: string | null;
+      version_pushed_at: string | null;
+      draft_text: string | null;
+      draft_handed_at: string | null;
+      draft_pushed_at: string | null;
+    }[];
+    return rows.map((r) => {
+      const base = { originRef: r.origin_ref, prNumber: r.pr_number, tail: r.tail };
+      if (r.version_id !== null)
+        return { ...base, standing: r.version_text ?? '', pending: r.version_pushed_at === null };
+      if (r.draft_handed_at !== null && r.draft_text !== null)
+        return { ...base, standing: r.draft_text, pending: r.draft_pushed_at === null };
+      return { ...base, standing: '', pending: false };
+    });
+  }
+
+  /**
    * The body the agent sent to `open_pr`, kept rather than shipped: the operator
    * decides whether it reaches the pull request.
    * → docs/spec/07-pull-requests.md#the-agents-draft

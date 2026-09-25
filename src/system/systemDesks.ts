@@ -12,6 +12,7 @@ import { TicketSweep } from '../tickets/sweep.js';
 import { ObstacleDesk } from '../obstacles/desk.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { PrNamingDesk } from '../pr/prNamingDesk.js';
+import { PrBodyEditDesk } from '../pr/prBodyEditDesk.js';
 import { PrDescriptionDesk } from '../pr/prDescriptionDesk.js';
 import { DeliveryCloseOutDesk } from '../delivery/closeOutDesk.js';
 import { UnwatchedChildDesk } from '../features/unwatchedDesk.js';
@@ -47,7 +48,7 @@ import type { Channels } from './system.js';
 export type IntakeDesks = ReturnType<typeof buildIntakeDesks>;
 
 export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Foundation, { prompts }: Channels) {
-  const { store, sink, errors, gitObserver, worktrees, watchLabel } = base;
+  const { store, sink, connector, errors, gitObserver, worktrees, watchLabel } = base;
   const plans = new PlanReconciler({
     store,
     git: gitObserver,
@@ -69,6 +70,7 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     errors,
   });
   const prDescriptions = new PrDescriptionDesk({ sink, store, errors });
+  const prBodyEdits = new PrBodyEditDesk({ bodies: connector, store, errors });
 
   const prWatch = new PrWatchDesk({
     sink,
@@ -93,7 +95,7 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     prAuthorConfigured,
     errors,
   });
-  return { plans, appraisals, naming, prDescriptions, prWatch, prWorkItems, branchReaps };
+  return { plans, appraisals, naming, prDescriptions, prBodyEdits, prWatch, prWorkItems, branchReaps };
 }
 
 export type EnvironmentDesks = ReturnType<typeof buildEnvironmentDesks>;

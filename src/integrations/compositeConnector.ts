@@ -52,6 +52,7 @@ import {
   isPrThreadResolveCapable,
   isPrTitleCapable,
   isPrBodyCapable,
+  isPrBodyReadable,
   isRefResolvable,
   isTicketHistoryCapable,
   isWorkItemLinkCapable,
@@ -190,6 +191,17 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isPrBodyCapable);
     if (!handler) throw new Error('no integration can rewrite PR bodies (no sourceControl provider is PrBodyCapable)');
     return handler.setPullBody({ ...input, body: this.signed(handler, input.body) });
+  }
+
+  /**
+   * Null where no provider can read a body back, which is not the same as an empty one.
+   *
+   * @public reached through `PrBodyEditDesk`'s `PrBodyReader`
+   */
+  async readPullBody(prNumber: number): Promise<string | null> {
+    const handler = this.integrations.find(isPrBodyReadable);
+    if (!handler) return null;
+    return handler.readPullBody(prNumber);
   }
 
   async setPullBase(input: PrBaseInput): Promise<SendResult> {
