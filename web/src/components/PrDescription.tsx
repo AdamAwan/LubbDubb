@@ -397,8 +397,7 @@ export function PrDescription({
   desktopFolder: string | null;
   now: number;
 }): JSX.Element | null {
-  const [writing, setWriting] = useState(false);
-  const [text, setText] = useState('');
+  const [text, setText] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
   const held = usePrDescription(prNumber);
@@ -411,15 +410,14 @@ export function PrDescription({
   const checkPrompt = part === null ? null : descriptionPrompt(Number(part[1]), part[2] ?? '');
 
   const submit = async (): Promise<void> => {
-    const body = text.trim();
+    const body = (text ?? '').trim();
     if (body === '') {
       setRefusal('There is nothing here to save. Say what the pull request does, or leave it and it will carry none.');
       return;
     }
     setRefusal(null);
     await api.writePrDescription(prNumber, { text: body });
-    setText('');
-    setWriting(false);
+    setText(null);
     await held.reload();
   };
 
@@ -438,7 +436,7 @@ export function PrDescription({
         {current !== null && current.version > 1 && <i className="cn-n">v{current.version}</i>}
       </h3>
 
-      {!writing && (
+      {text === null && (
         <DescriptionReading
           current={current}
           handedOver={handedOver}
@@ -449,24 +447,24 @@ export function PrDescription({
         />
       )}
 
-      {writing && (
+      {text !== null && (
         <DescriptionForm
           text={text}
           setText={setText}
           refusal={refusal}
-          onCancel={() => setWriting(false)}
+          onCancel={() => setText(null)}
           onSubmit={submit}
         />
       )}
 
-      {!writing && (
+      {text === null && (
         <DescriptionPresses
           current={current}
           handedOver={handedOver}
           hiddenDraft={hiddenDraft}
           revealed={revealed}
           setRevealed={setRevealed}
-          onWrite={() => setWriting(true)}
+          onWrite={() => setText(current?.text ?? '')}
           handOff={handOff}
           desktopFolder={desktopFolder}
           checkPrompt={checkPrompt}
