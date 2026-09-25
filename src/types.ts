@@ -2353,6 +2353,8 @@ export interface PrDescriptionVersion {
   authoredAt: string;
   checkedAt: string | null;
   findings: DescriptionFinding[];
+  /** The operator pressed to leave this check's findings as they are. A re-check clears it. */
+  dismissedAt: string | null;
 }
 
 /**
