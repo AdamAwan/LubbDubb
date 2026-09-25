@@ -24,6 +24,7 @@ import type { StoreContext } from './context.js';
 export const PR_DESCRIPTION_COLUMNS: ColumnMigrations = {
   pr_descriptions: {
     pushed_at: 'TEXT',
+    dismissed_at: 'TEXT',
   },
 };
 
@@ -66,6 +67,7 @@ export class PrDescriptionStore {
         authoredAt: this.ctx.now(),
         checkedAt: null,
         findings: [],
+        dismissedAt: null,
       };
       this.ctx
         .prep(
@@ -232,6 +234,7 @@ export class PrDescriptionStore {
            JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
            JOIN pr_description_findings f ON f.description_id = d.id
           WHERE d.checked_at IS NOT NULL
+            AND d.dismissed_at IS NULL
             AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
           GROUP BY d.id
           ORDER BY d.checked_at ASC`,
@@ -298,10 +301,22 @@ export class PrDescriptionStore {
             question: finding.question,
           });
       }
-      this.ctx.prep(`UPDATE pr_descriptions SET checked_at=@checkedAt WHERE id=@id`).run({ id: input.id, checkedAt });
-      return { ...this.toVersion(row), checkedAt, findings: [...input.findings] };
+      this.ctx
+        .prep(`UPDATE pr_descriptions SET checked_at=@checkedAt, dismissed_at=NULL WHERE id=@id`)
+        .run({ id: input.id, checkedAt });
+      return { ...this.toVersion(row), checkedAt, findings: [...input.findings], dismissedAt: null };
     });
     return write();
+  }
+
+  /**
+   * The operator's press to leave a check's findings as they are. Idempotent — a second
+   * press keeps the first one's stamp. → docs/spec/07-pull-requests.md#leaving-it-as-is
+   */
+  dismissFindings(id: string): void {
+    this.ctx
+      .prep(`UPDATE pr_descriptions SET dismissed_at=COALESCE(dismissed_at, @at) WHERE id=@id`)
+      .run({ id, at: this.ctx.now() });
   }
 
   /**
@@ -458,6 +473,7 @@ export class PrDescriptionStore {
       authoredAt: r.authored_at,
       checkedAt: r.checked_at,
       findings: r.checked_at === null ? [] : this.findingsOf(r.id),
+      dismissedAt: r.dismissed_at,
     };
   }
 }
@@ -471,6 +487,7 @@ interface DescriptionRow {
   author: string | null;
   authored_at: string;
   checked_at: string | null;
+  dismissed_at: string | null;
 }
 
 interface DraftRow {

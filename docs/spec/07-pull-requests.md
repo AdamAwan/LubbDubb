@@ -910,6 +910,15 @@ pull requests in `buildStateSnapshot`:
 A clean check raises nothing. A rewrite takes the row with it, because the row reads the newest
 version and a new version is unchecked.
 
+#### Leaving it as is
+
+A finding is the check's opinion, not a ruling, and the operator may disagree. **Leave it as is**
+under the findings stamps `dismissed_at` on that version (`POST /api/prs/:number/description/dismiss`,
+idempotent) and the rail row goes: `descriptionFeedback` skips a dismissed version. The findings stay
+drawn on the page, marked as left as is, so what the check said is still readable. The stamp is per
+version — a rewrite is a new, undismissed version, and **a re-check of the same version clears it**
+(`recordCheck`), because a new reading is new findings the operator has not yet seen.
+
 **`description_check` takes marks and findings and no text, and that is the invariant.** A session
 that hands back better prose gets it accepted, and then the pull request carries an account that
 reads as the operator's and is not — which is strictly worse than the agent-written body this

@@ -862,6 +862,25 @@ test('every description the operator writes is checked by an agent without askin
     assert.notEqual(current.checkedAt, null, 'the findings are on the pull request’s page');
     assert.equal(current.findings.length, 2);
 
+    const dismissed = await app.inject({ method: 'POST', url: '/api/prs/1/description/dismiss' });
+    assert.equal(dismissed.statusCode, 200, dismissed.body);
+    assert.deepEqual(buildStateSnapshot(system).descriptionFeedback, [], 'left as is, it stops asking');
+    const reread = await app.inject({ method: 'GET', url: '/api/prs/1/description' });
+    const kept = (reread.json() as { current: { dismissedAt: string | null; findings: unknown[] } }).current;
+    assert.notEqual(kept.dismissedAt, null);
+    assert.equal(kept.findings.length, 2, 'the findings stay readable on the page');
+    system.store.prDescriptions.recordCheck({
+      id: versionId,
+      findings: [{ kind: 'gap', note: 'The migration drops the old column.', question: null }],
+    });
+    assert.equal(
+      buildStateSnapshot(system).descriptionFeedback.length,
+      1,
+      'a re-check is a new reading and asks again',
+    );
+    const stray404 = await app.inject({ method: 'POST', url: '/api/prs/999/description/dismiss' });
+    assert.equal(stray404.statusCode, 400, 'a pull request with nothing to dismiss is refused');
+
     const clean = system.store.prDescriptions.appendDescription({
       originRef: 'issue:182:part:cursor',
       text: 'The cursor is now written; reading it back is the next part.',

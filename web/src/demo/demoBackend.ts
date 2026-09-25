@@ -378,6 +378,7 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
             question: 'undone',
           },
         ],
+        dismissedAt: null,
       },
     ],
   ],
@@ -398,6 +399,7 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
         authoredAt: ago(20),
         checkedAt: null,
         findings: [],
+        dismissedAt: null,
       },
     ],
   ],
@@ -585,9 +587,18 @@ class DemoServer {
       authoredAt: new Date().toISOString(),
       checkedAt: null,
       findings: [],
+      dismissedAt: null,
     };
     this.descriptions.set(originRef, [...held, version]);
     return { ok: true, version };
+  }
+
+  dismissFindings(originRef: string): { ok: true } {
+    const held = this.descriptions.get(originRef) ?? [];
+    const current = held[held.length - 1];
+    if (current !== undefined && current.dismissedAt === null)
+      this.descriptions.set(originRef, [...held.slice(0, -1), { ...current, dismissedAt: new Date().toISOString() }]);
+    return { ok: true };
   }
 
   markPrediction(
@@ -4690,6 +4701,12 @@ export const demoApi = {
         ...getServer().descriptionReading(originRef),
         draft: getServer().draftOf(originRef, prNumber),
       };
+    }),
+  dismissPrDescriptionFindings: (prNumber: number) =>
+    Promise.resolve().then(() => {
+      const originRef = getServer().partOfPullRequest(prNumber);
+      if (originRef === null) throw new Error(`PR ${prNumber} is not a part's pull request`);
+      return getServer().dismissFindings(originRef);
     }),
   handOffPrDescription: (prNumber: number) =>
     Promise.resolve().then(() => {
