@@ -1,5 +1,5 @@
 import { issueOriginRef } from '../../issueOrigins.js';
-import { featureSummaryOrigin } from '../../summaries/featureSummary.js';
+import { featureSummaryOrigin } from '../../features/featureSummary.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `feature-summary`)

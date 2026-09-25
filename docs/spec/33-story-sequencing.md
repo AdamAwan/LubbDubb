@@ -83,7 +83,7 @@ composed before the cap existed. It bites on the deployment that raised that num
 refusal to spend was lifted for the rule and nothing then bounded the prompt at all.
 
 It is **`feature-summary`'s shape throughout** (`src/dispatcher/rules/featureSummary.ts`,
-`src/summaries/featureSummary.ts`), deliberately, because that rule already solved this rule's hard
+`src/features/featureSummary.ts`), deliberately, because that rule already solved this rule's hard
 parts: a desk agent with no branch and no worktree, triggered by a standing-key comparison rather
 than an event, ranked at the bottom of the pipeline, failing open and silent. What differs is the
 key and what the agent may write.

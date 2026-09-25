@@ -922,7 +922,7 @@ issue number.
 dispatcher is a statement about what will be _started_: on its own it left the goal's live agents
 mid-turn, its queued jobs waiting for a slot and its standing instructions waiting for whoever picked
 the goal up — so a run the cockpit had already drawn as over went on producing commits and costing
-money. `clearGoalWork` (`src/floor/endRun.ts`) runs **below** the dismissal, so a 409 clears nothing,
+money. `clearGoalWork` (`src/runs/endRun.ts`) runs **below** the dismissal, so a 409 clears nothing,
 and does three things over the `issue:<n>` subtree — so a `pr:` agent is not swept and `issue:1` never
 sweeps up `issue:12`. The goal page counts a pull request's agents as the goal's, which this
 deliberately does not kill: a pull request outlives the run at the goal, and a review round or a CI

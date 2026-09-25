@@ -193,7 +193,7 @@ As one standing check it settled into a permanent scold for doing nothing wrong,
   ([06](06-issue-pickup.md)) — the two are indistinguishable from here, and the same fix serves both.
 - **`wiring`** is the first-hour question — _has this ever picked anything up_ — and is gated on
   `issue_runs` being empty, the durable record of every goal this harness has ever had a run at
-  (`src/store/floor.ts`). One pickup and it is gone permanently, which is what makes it finite by
+  (`src/store/runs.ts`). One pickup and it is gone permanently, which is what makes it finite by
   construction rather than by a flag. A flag would be a second opinion about a thing the database
   already states, and the one that could disagree with reality is the one that would be wrong.
 

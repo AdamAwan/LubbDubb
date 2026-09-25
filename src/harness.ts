@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { nanoid } from 'nanoid';
 import { Heartbeat } from './heartbeat.js';
-import type { Connector } from './connector/connector.js';
+import type { Connector } from './integrations/connector.js';
 import type { DispatchResult, Dispatcher } from './dispatcher/dispatcher.js';
 import { buildDispatchInputs } from './dispatcher/dispatchInputs.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
@@ -313,7 +313,7 @@ export class Harness extends EventEmitter {
     const { store } = this.deps;
     const world = await this.observe(cached, readWorld);
     const r = await this.pulseAndRead(world, readWorld);
-    const issueRuns = store.floor.listIssueRuns();
+    const issueRuns = store.runs.listIssueRuns();
     const { hiddenPrs, retainedIssues, dispatchWorld } = dispatchView(world, this.deps.prWatchLabel, issueRuns);
 
     const featureStandings = this.deps.featureStandings?.() ?? [];

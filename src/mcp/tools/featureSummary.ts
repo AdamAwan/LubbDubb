@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { validateFeatureSummary } from '../../summaries/featureSummary.js';
+import { validateFeatureSummary } from '../../features/featureSummary.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';

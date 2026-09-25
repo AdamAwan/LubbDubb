@@ -14,7 +14,7 @@ import { planIssueNumber, partOrigin, partSettled } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
 import { basePrOf, prState } from '../pr/prHealth.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
-import { jobBranch } from '../jobs.js';
+import { jobBranch } from '../jobs/branch.js';
 
 // → docs/spec/14-persistence.md#the-work-graph
 

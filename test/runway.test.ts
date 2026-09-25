@@ -789,9 +789,9 @@ test('the band reads a standing supply row off the whole bench, not the hundred-
       linkedPrNumber: null,
       workItemState: null,
     };
-    history.floor.recordIssueRun({ ...run, complete: false });
+    history.runs.recordIssueRun({ ...run, complete: false });
     clock += 40 * 60_000;
-    history.floor.recordIssueRun({ ...run, complete: true });
+    history.runs.recordIssueRun({ ...run, complete: true });
     clock += 60_000;
   }
   history.close();

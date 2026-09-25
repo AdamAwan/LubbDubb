@@ -18,7 +18,7 @@ import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { Dispatcher } from '../dispatcher/dispatcher.js';
 import { issueWatchGateReason, type IssuePickupPolicy } from '../dispatcher/issuePickup.js';
 import { featureSummariesOn } from '../features/featureBoard.js';
-import { featureRecords, type FeatureBoardFacts } from '../summaries/featureRecord.js';
+import { featureRecords, type FeatureBoardFacts } from '../features/featureRecord.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { sequenceableFeatures } from '../sequence/sequence.js';
 import { LiveConfig } from '../config/configApply.js';

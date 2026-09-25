@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { InjectableEvent } from '../../connector/connector.js';
+import type { InjectableEvent } from '../connector.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,

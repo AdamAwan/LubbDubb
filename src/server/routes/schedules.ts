@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { deriveJobTitle } from '../../jobs.js';
+import { deriveJobTitle } from '../../jobs/branch.js';
 import { parseCron } from '../../schedules/cron.js';
 import { nextRunAfter, scheduleJobRequest } from '../../schedules/schedule.js';
 import { checked, IdParams, optionalText } from '../validation.js';

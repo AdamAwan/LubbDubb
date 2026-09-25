@@ -6054,7 +6054,7 @@ happens — is the one thing it must not be: an event is lost to any restart tha
 "since **you** last looked" is a per-reader state the harness has no honest source for.
 
 So the summary stores a **digest of where every child stood when it was written**
-(`featureStandingKey`, `src/summaries/featureSummary.ts`), and the rule fires exactly when that digest
+(`featureStandingKey`, `src/features/featureSummary.ts`), and the rule fires exactly when that digest
 no longer matches the standing now. An unmoved Feature costs one string comparison a pulse and no
 agent, for ever.
 

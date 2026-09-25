@@ -375,7 +375,7 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
 
   if (tagged > 0) return [];
 
-  if (store.floor.listIssueRuns().length > 0) return [];
+  if (store.runs.listIssueRuns().length > 0) return [];
   const open = world.issues.length + world.pullRequests.length;
   return [
     {

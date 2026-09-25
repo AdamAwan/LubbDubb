@@ -1,4 +1,4 @@
-import type { Job } from './types.js';
+import type { Job } from '../types.js';
 
 // → docs/spec/13-jobs-and-tickets.md
 

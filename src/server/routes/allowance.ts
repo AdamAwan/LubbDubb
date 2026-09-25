@@ -38,7 +38,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         tasks,
         nodes,
         issues: world?.issues ?? [],
-        runs: store.floor.listIssueRuns(),
+        runs: store.runs.listIssueRuns(),
       });
       const readings = store.rateLimits.listRateLimitReadingsSince(since);
       const allowance = buildAllowanceInsights({

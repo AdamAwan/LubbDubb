@@ -181,7 +181,7 @@ async function server(system: System) {
 test('ending a run on a flagged goal costs a sentence, and a clear one costs nothing', async () => {
   const system = build();
   plan(system, [CHECK]);
-  system.store.floor.recordIssueRun({
+  system.store.runs.recordIssueRun({
     originRef: 'issue:12',
     issueNumber: 12,
     title: 'Ship it',
@@ -196,7 +196,7 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
   const refused = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run', payload: {} });
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /note is required/);
-  assert.equal(system.store.floor.listIssueRuns()[0]!.dismissedAt, null);
+  assert.equal(system.store.runs.listIssueRuns()[0]!.dismissedAt, null);
 
   const withNote = await app.inject({
     method: 'POST',
@@ -204,7 +204,7 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
     payload: { note: 'shipping it anyway, checking A on Monday' },
   });
   assert.equal(withNote.statusCode, 200);
-  const ended = system.store.floor.listIssueRuns()[0]!;
+  const ended = system.store.runs.listIssueRuns()[0]!;
   assert.ok(ended.dismissedAt);
   assert.equal(ended.dismissNote, 'shipping it anyway, checking A on Monday');
   await app.close();
@@ -212,7 +212,7 @@ test('ending a run on a flagged goal costs a sentence, and a clear one costs not
   const clear = build();
   const clearPlan = plan(clear, [CHECK]);
   clear.store.validation.recordValidationResult(clearPlan, 'a', { state: 'passed', note: 'ran it', by: 'operator' });
-  clear.store.floor.recordIssueRun({
+  clear.store.runs.recordIssueRun({
     originRef: 'issue:12',
     issueNumber: 12,
     title: 'Ship it',

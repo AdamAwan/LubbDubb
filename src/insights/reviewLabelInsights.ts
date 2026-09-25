@@ -1,7 +1,7 @@
 import type { PrReplySent, PrThreadLabel } from '../types.js';
 import type { ReviewAreaRule } from '../config/config.js';
-import { areaNames, areasForPath } from '../reviewLabels/areas.js';
-import { authorKind } from '../reviewLabels/authors.js';
+import { areaNames, areasForPath } from '../review/areas.js';
+import { authorKind } from '../review/authors.js';
 
 // → docs/spec/18-observability.md#which-part-of-the-code-a-review-thread-was-about
 

@@ -13,7 +13,7 @@ import { settlePlacement } from '../../intake/placementSettle.js';
 import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
-import { clearGoalWork } from '../../floor/endRun.js';
+import { clearGoalWork } from '../../runs/endRun.js';
 import { applyIssueWatch } from '../../issueWatch.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -372,7 +372,7 @@ function registerDeliveryOutcome(app: FastifyInstance, { system, hub }: RouteCon
         return reply.code(400).send({
           error: `note is required — ${validationHeadline(validation.verdict)} Say what you are doing about them, or waive them first.`,
         });
-      const dismissed = store.floor.dismissIssueRun(origin, body.note ?? null);
+      const dismissed = store.runs.dismissIssueRun(origin, body.note ?? null);
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
       const cleared = clearGoalWork(store, system.agents, params.number);
       hub.broadcast({ type: 'dirty' });

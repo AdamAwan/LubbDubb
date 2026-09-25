@@ -1,4 +1,4 @@
-export const FLOOR_SCHEMA = `
+export const RUN_SCHEMA = `
 -- One run of the harness at a goal (issue #234), from the first pulse that saw
 -- work under it until the operator dismisses it.
 --

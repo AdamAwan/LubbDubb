@@ -9,7 +9,7 @@ import type { PrReviewPolicy } from '../review/policy.js';
 import { askReviewedElsewhere, type ReviewProber } from '../review/reviewedElsewhere.js';
 import { awaitingReview } from '../pr/prHealth.js';
 import { isActiveTask } from '../tasks.js';
-import { runsToRecord, type CompletionSignals } from '../floor/runs.js';
+import { runsToRecord, type CompletionSignals } from '../runs/runs.js';
 import type { PlanReconciler } from '../plans/planReconciler.js';
 import type { PrNamingDesk } from '../pr/prNamingDesk.js';
 import type { PrDescriptionDesk } from '../pr/prDescriptionDesk.js';
@@ -210,7 +210,7 @@ function foldReviewWaits(deps: PulseDeps, at: PulseReadings['afterTasks']): void
 
 function recordIssueRuns(deps: PulseDeps, at: PulseReadings['afterOrigins']): void {
   try {
-    for (const r of runsToRecord(at.world.issues, at.tasks, at.signals)) deps.store.floor.recordIssueRun(r);
+    for (const r of runsToRecord(at.world.issues, at.tasks, at.signals)) deps.store.runs.recordIssueRun(r);
   } catch (err) {
     deps.errors.record({
       source: 'cycle',
