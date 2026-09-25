@@ -22,7 +22,7 @@ import { featureRecords, type FeatureBoardFacts } from './summaries/featureRecor
 import { resolveModelTag } from './modelLabels.js';
 import { sequenceableFeatures } from './sequence/sequence.js';
 import { LiveConfig } from './config/configApply.js';
-import type { BuildOptions, Late, Foundation, AgentRuntime } from './systemFoundation.js';
+import type { BuildOptions, LateBinding, Foundation, AgentRuntime } from './systemFoundation.js';
 import type { Channels } from './system.js';
 
 // → docs/spec/01-overview.md
@@ -36,7 +36,7 @@ export function buildAgentManager(
   base: Foundation,
   { agentSetup, fileEvents }: AgentRuntime,
   { mcp }: Channels,
-  late: Late,
+  late: LateBinding,
 ) {
   const { store, connector, errors, watchLabel } = base;
   const sequenceWatchPolicy: IssuePickupPolicy = {
@@ -100,7 +100,7 @@ export function buildAgentManager(
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
     mcp,
-    watch: { run: (originRef: string): Promise<string[]> => late.watchDryRun.run(originRef) },
+    watch: { run: (originRef: string): Promise<string[]> => late.get().watchDryRun.run(originRef) },
     errors,
   });
   return { sequenceWatchPolicy, featureBoard, agents };

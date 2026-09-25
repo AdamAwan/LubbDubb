@@ -60,9 +60,11 @@ import { ErrorLog } from './errorLog.js';
 import { planIsWithheld } from './server/planReveal.js';
 import {
   type BuildOptions,
-  type Late,
+  type LateBinding,
   type Foundation,
   buildFoundation,
+  lateBinding,
+  lateParts,
   buildAgentRuntime,
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
@@ -135,26 +137,22 @@ export interface System {
 }
 
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
-  const late = {} as Late;
+  const late = lateBinding();
   const base = buildFoundation(config, opts);
   const runtime = buildAgentRuntime(config, opts, base);
   const channels = buildChannels(config, base, late);
   const crew = buildAgentManager(config, base, runtime, channels, late);
   const fleet = buildFleet(config, opts, base, runtime, channels, crew);
-  Object.assign(late, fleet);
   const intake = buildIntakeDesks(config, opts, base, channels);
   const envs = buildEnvironmentDesks(config, opts, base);
-  Object.assign(late, envs);
   const bench = {
     ...buildBenchDesks(config, opts, base, channels, fleet),
     graph: new WorkGraphRecorder({ store: base.store, errors: base.errors }),
   };
-  Object.assign(late, bench);
-  const harness = buildHarness(config, opts, base, channels, fleet, intake, envs, bench, late);
-  late.harness = harness;
+  const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, bench, late });
   const pulse = wirePulse(config, opts, base, fleet, harness);
   const local = buildLocalRuns(config, opts, base, runtime);
-  Object.assign(late, local);
+  late.bind(lateParts({ fleet, envs, bench, harness, local }));
   return {
     config,
     store: base.store,
@@ -207,14 +205,24 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   };
 }
 
+interface HarnessPhases {
+  base: Foundation;
+  channels: Channels;
+  fleet: Fleet;
+  intake: IntakeDesks;
+  envs: EnvironmentDesks;
+  bench: BenchDesks & { graph: WorkGraphRecorder };
+  late: LateBinding;
+}
+
 export type Channels = ReturnType<typeof buildChannels>;
 
-function buildChannels(config: Config, base: Foundation, late: Late) {
+function buildChannels(config: Config, base: Foundation, late: LateBinding) {
   const { store, errors, sink, areaPaths, watchLabel } = base;
   const predictions = store.openPredictions();
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
-    agents: (): AgentManager => late.agents,
+    agents: (): AgentManager => late.get().agents,
     argsRetentionDays: config.mcpArgsRetentionDays,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
@@ -225,7 +233,7 @@ function buildChannels(config: Config, base: Foundation, late: Late) {
     autoUseAgentDescriptions: config.autoUseAgentDescriptions,
     repoRoot: config.repoRoot,
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
-    permissions: (): PermissionDesk => late.permissions,
+    permissions: (): PermissionDesk => late.get().permissions,
     openPr: (): McpToolDeps['openPr'] => ({
       sink,
       defaultBranch: config.defaultBranch,
@@ -233,16 +241,16 @@ function buildChannels(config: Config, base: Foundation, late: Late) {
       watchLabel,
       prRefStyle: prRefStyle(config.integrations.sourceControl),
     }),
-    filing: (): McpToolDeps['filing'] => late.filing,
-    prReply: (): McpToolDeps['prReply'] => late.executor,
-    watch: (): McpToolDeps['watch'] => late.watchDryRun,
-    state: (): McpToolDeps['state'] => late.stateQueries,
-    localValidations: (): LocalValidationDesk => late.localValidations,
-    remoteReadings: (): RemoteReadingDesk => late.remoteReadings,
-    remoteListings: (): RemoteListingDesk => late.remoteListings,
+    filing: (): McpToolDeps['filing'] => late.get().filing,
+    prReply: (): McpToolDeps['prReply'] => late.get().executor,
+    watch: (): McpToolDeps['watch'] => late.get().watchDryRun,
+    state: (): McpToolDeps['state'] => late.get().stateQueries,
+    localValidations: (): LocalValidationDesk => late.get().localValidations,
+    remoteReadings: (): RemoteReadingDesk => late.get().remoteReadings,
+    remoteListings: (): RemoteListingDesk => late.get().remoteListings,
     localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({
-      runner: late.localRun,
-      watch: late.localRunWatch,
+      runner: late.get().localRun,
+      watch: late.get().localRunWatch,
     }),
     // The one agent that may read a prediction is handed it through this seam, never the store.
     judge: judgeSeam(predictions, store),
@@ -269,7 +277,7 @@ function buildDesktop(
   { store, connector, runtimeControl, errors }: Foundation,
   predictions: PredictionStore,
   prompts: PromptTemplates,
-  late: Late,
+  late: LateBinding,
 ): McpDesktopServer {
   return new McpDesktopServer({
     store,
@@ -282,16 +290,16 @@ function buildDesktop(
     validationRoot: config.validationRoot,
     environments: config.environments,
     prRefStyle: prRefStyle(config.integrations.sourceControl),
-    localRun: (): LocalRunner => late.localRun,
-    localRunWatch: (): LocalRunWatch => late.localRunWatch,
+    localRun: (): LocalRunner => late.get().localRun,
+    localRunWatch: (): LocalRunWatch => late.get().localRunWatch,
     runtimeControl,
-    harness: () => late.harness,
-    escalations: () => late.escalations,
-    permissions: () => late.permissions,
-    recovery: () => late.recovery,
-    ejections: () => late.ejections,
-    agents: () => late.agents,
-    filing: () => late.filing,
+    harness: () => late.get().harness,
+    escalations: () => late.get().escalations,
+    permissions: () => late.get().permissions,
+    recovery: () => late.get().recovery,
+    ejections: () => late.get().ejections,
+    agents: () => late.get().agents,
+    filing: () => late.get().filing,
     briefConfig: () => config,
     renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
     profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
@@ -299,8 +307,12 @@ function buildDesktop(
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,
     agentModels: config.agentModels,
-    proposals: () => late.proposals,
-    runCycle: () => late.harness.runCycle('manual').then(() => undefined),
+    proposals: () => late.get().proposals,
+    runCycle: () =>
+      late
+        .get()
+        .harness.runCycle('manual')
+        .then(() => undefined),
     now: () => new Date().toISOString(),
     socketPath: config.validation.desktopSocketPath,
     credentialPath: config.validation.desktopCredentialPath,
@@ -311,13 +323,7 @@ function buildDesktop(
 function buildHarness(
   config: Config,
   opts: BuildOptions,
-  base: Foundation,
-  { predictions }: Channels,
-  fleet: Fleet,
-  intake: IntakeDesks,
-  envs: EnvironmentDesks,
-  bench: BenchDesks & { graph: WorkGraphRecorder },
-  late: Late,
+  { base, channels: { predictions }, fleet, intake, envs, bench, late }: HarnessPhases,
 ): Harness {
   const { store, connector, areaPaths, errors, runtimeControl, ingressInbox, watchLabel } = base;
   const reads = harnessReads(config, store, predictions, fleet.featureBoard);
@@ -353,10 +359,10 @@ function buildHarness(
     updates: config.selfUpdate.enabled ? bench.updates : undefined,
     graph: bench.graph,
     tickets: bench.tickets,
-    localRun: { noteAlive: () => late.localRun.noteAlive() },
+    localRun: { noteAlive: () => late.get().localRun.noteAlive() },
     localValidations: {
       sweep: () => {
-        late.localValidations.sweep();
+        late.get().localValidations.sweep();
       },
     },
     goalIntake: reads.goalIntake,

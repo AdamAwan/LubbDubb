@@ -50,6 +50,9 @@ import { LocalRunWatch } from './localRun/watch.js';
 import type { PortLister } from './localRun/ports.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
+import type { Fleet } from './systemFleet.js';
+import type { BenchDesks, EnvironmentDesks } from './systemDesks.js';
+import type { LocalRuns } from './systemLocalRuns.js';
 
 // → docs/spec/01-overview.md
 
@@ -81,7 +84,7 @@ export interface BuildOptions {
 }
 
 /** Components a later phase builds, reached only from closures that run after that phase. */
-export interface Late {
+interface Late {
   agents: AgentManager;
   escalations: EscalationInbox;
   permissions: PermissionDesk;
@@ -98,6 +101,53 @@ export interface Late {
   localRun: LocalRunner;
   localRunWatch: LocalRunWatch;
   localValidations: LocalValidationDesk;
+}
+
+export interface LateBinding {
+  bind(parts: Late): void;
+  get(): Late;
+}
+
+export function lateBinding(): LateBinding {
+  let bound: Late | undefined;
+  return {
+    bind(parts) {
+      bound = parts;
+    },
+    get() {
+      if (bound === undefined) throw new Error('A late-bound component was read before buildSystem finished.');
+      return bound;
+    },
+  };
+}
+
+export function lateParts({ fleet, envs, bench, harness, local }: LatePhases): Late {
+  return {
+    agents: fleet.agents,
+    escalations: fleet.escalations,
+    permissions: fleet.permissions,
+    recovery: fleet.recovery,
+    ejections: fleet.ejections,
+    proposals: fleet.proposals,
+    executor: fleet.executor,
+    filing: bench.filing,
+    watchDryRun: envs.watchDryRun,
+    stateQueries: envs.stateQueries,
+    remoteReadings: envs.remoteReadings,
+    remoteListings: envs.remoteListings,
+    harness,
+    localRun: local.localRun,
+    localRunWatch: local.localRunWatch,
+    localValidations: local.localValidations,
+  };
+}
+
+interface LatePhases {
+  fleet: Fleet;
+  envs: EnvironmentDesks;
+  bench: BenchDesks;
+  harness: Harness;
+  local: LocalRuns;
 }
 
 export type Foundation = ReturnType<typeof buildFoundation>;

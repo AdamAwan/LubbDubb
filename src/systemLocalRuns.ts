@@ -12,6 +12,8 @@ import type { BuildOptions, Foundation, AgentRuntime } from './systemFoundation.
 
 // → docs/spec/01-overview.md
 
+export type LocalRuns = ReturnType<typeof buildLocalRuns>;
+
 export function buildLocalRuns(config: Config, opts: BuildOptions, base: Foundation, runtime: AgentRuntime) {
   const { store, worktrees, gitObserver, errors } = base;
   const { agentSetup, reapTree, realTransport } = runtime;
