@@ -485,3 +485,23 @@ test('an ordinary ask has no ticket to close', async () => {
   assert.equal(refused.statusCode, 409);
   await app.close();
 });
+
+test('the close waits on a check set still awaiting your accept, and on one sent back to be rewritten', () => {
+  const store = new Store(':memory:');
+  const desk = new DeliveryCloseOutDesk(store);
+  const closeOuts = () => store.humanTasks.listHumanTasksOfKind('close_out');
+
+  store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  store.validation.recordValidationAuthoring('issue:12', { note: 'two checks', emptyReason: null });
+  desk.run({ issues: [issue(12)] });
+  assert.deepEqual(closeOuts(), [], 'checks and close are not asked for in the same breath');
+
+  store.validation.withdrawValidationAuthoring('issue:12');
+  desk.run({ issues: [issue(12)] });
+  assert.deepEqual(closeOuts(), [], 'a set sent back is still being written');
+
+  store.validation.recordValidationAuthoring('issue:12', { note: 'two checks, amended', emptyReason: null });
+  store.validation.releaseValidationPlan('issue:12');
+  desk.run({ issues: [issue(12)] });
+  assert.equal(closeOuts().length, 1, 'once answered, the validate row is what holds it');
+});

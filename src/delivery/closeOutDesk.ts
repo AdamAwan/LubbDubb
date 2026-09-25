@@ -4,7 +4,7 @@ import { coverageLines, criteriaCoverage } from '../criteria/coverage.js';
 import { watchClearedGoals, watchCloseOutLine, watchWindowReadings } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
-import type { Issue } from '../types.js';
+import type { Issue, ValidationPlanRecord } from '../types.js';
 import { goalValidation, type GoalValidation } from '../validation/goal.js';
 import { closeOutPass } from './closeOut.js';
 
@@ -38,12 +38,16 @@ export class DeliveryCloseOutDesk {
       existing,
       validation: this.validationByOrigin(),
       criteria: this.criteriaByOrigin(deliveries.map((d) => d.originRef)),
-      validating: new Set(
-        this.store.humanTasks
+      validating: new Set([
+        ...this.store.humanTasks
           .listHumanTasksOfKind('validate')
           .filter((t) => t.status === 'open' && t.originRef !== null)
           .map((t) => t.originRef!),
-      ),
+        ...this.store.validation
+          .listValidationPlanRecords()
+          .filter(checkSetUnanswered)
+          .map((r) => r.originRef),
+      ]),
       watch: new Map(
         deliveries.flatMap((d) => {
           const said = watchCloseOutLine(d.originRef, readings);
@@ -97,4 +101,8 @@ export class DeliveryCloseOutDesk {
     }
     return out;
   }
+}
+
+function checkSetUnanswered(record: ValidationPlanRecord): boolean {
+  return record.releasedAt === null && (record.authoredAt !== null || record.note !== null);
 }
