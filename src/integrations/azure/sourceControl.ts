@@ -218,7 +218,7 @@ export class AzureDevOpsSourceControlIntegration
     const closed = await api.listRecentlyClosedPullRequests(since);
     closedSweep?.recordClosedSweep(new Date(now).toISOString());
     return closed
-      .filter((p) => !prAuthor || p.authorUniqueName === prAuthor)
+      .filter((p) => !prAuthor || sameIdentity(p.authorUniqueName, prAuthor))
       .map((p) => {
         const pr = mapClosedPull(p);
         if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
@@ -359,6 +359,7 @@ function stripLogTimestamp(line: string): string {
 }
 
 export function mapClosedPull(p: AzClosedPull): PullRequest {
+  const author = p.authorDisplayName || p.authorUniqueName;
   return {
     id: `pr_${p.pullRequestId}`,
     number: p.pullRequestId,
@@ -370,7 +371,7 @@ export function mapClosedPull(p: AzClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
-    ...(p.authorUniqueName === '' ? {} : { author: p.authorUniqueName }),
+    ...(author === '' ? {} : { author }),
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
     ...(p.reviewers === undefined ? {} : { assignees: namedReviewers(p.reviewers) }),
     url: p.url,

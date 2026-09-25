@@ -6,6 +6,7 @@ import { AzureEtagCache } from './conditionalRequests.js';
 const API_VERSION = '7.1';
 
 const MAX_RETRIES = 2;
+const PAGE_SIZE = 100;
 const RETRY_BACKOFF_MS = 300;
 
 export function defaultSleep(ms: number): Promise<void> {
@@ -45,6 +46,17 @@ export class AzureTransport {
     private readonly log: (message: string) => void,
     private readonly sleep: (ms: number) => Promise<void>,
   ) {}
+
+  async pagedValues<T>(url: string, params: Record<string, string>): Promise<T[]> {
+    const out: T[] = [];
+    for (let skip = 0; ; skip += PAGE_SIZE) {
+      const data = await this.request<{ value: T[] }>(
+        withApiVersion(url, { ...params, $top: String(PAGE_SIZE), $skip: String(skip) }),
+      );
+      out.push(...data.value);
+      if (data.value.length < PAGE_SIZE) return out;
+    }
+  }
 
   async request<T>(url: string, init: RequestInit = {}, opts: { conditional?: boolean } = {}): Promise<T> {
     const method = init.method ?? 'GET';

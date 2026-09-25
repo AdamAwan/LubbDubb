@@ -40,7 +40,7 @@ export interface RawClosedPull {
   targetRefName: string;
   status?: string;
   closedDate?: string;
-  createdBy?: { uniqueName?: string };
+  createdBy?: { uniqueName?: string; displayName?: string };
   reviewers?: RawPull['reviewers'];
   lastMergeCommit?: { commitId?: string };
 }
@@ -164,6 +164,7 @@ export function toClosedPull(p: RawClosedPull, closedAt: string, url: string): A
     branch: stripRef(p.sourceRefName),
     baseBranch: stripRef(p.targetRefName),
     authorUniqueName: p.createdBy?.uniqueName ?? '',
+    authorDisplayName: p.createdBy?.displayName ?? '',
     ...(p.reviewers === undefined ? {} : { reviewers: toReviewers(p.reviewers) }),
     url,
     merged: p.status === 'completed',

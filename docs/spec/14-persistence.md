@@ -153,6 +153,12 @@ invisible on databases created by an older build. `ensureColumns` (`src/store/mi
 gap with additive, idempotent `ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe
 to run on every boot.
 
+**An index over a migrated column is created after `ensureColumns`, never in the schema string.** The
+schema runs first, so on a database from before the column its `CREATE INDEX` fails with `no such
+column` and the store does not open — the migration that would have added the column never runs.
+`idx_human_tasks_kind_origin` (over `human_tasks.kind`) is created by `indexHumanTasksByKind` for that
+reason.
+
 ### Retiring a bench-row kind
 
 A `HumanTaskKind` nothing files any more keeps its name, because its rows stay in `human_tasks`, and

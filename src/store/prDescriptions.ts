@@ -428,7 +428,12 @@ export class PrDescriptionStore {
   /** Handed over with no draft to hand: what rule `pr-describe` dispatches for. */
   pendingDrafts(): PrDescriptionDraft[] {
     const rows = this.ctx
-      .prep(`SELECT * FROM pr_description_drafts WHERE handed_at IS NOT NULL AND text IS NULL ORDER BY handed_at ASC`)
+      .prep(
+        `SELECT * FROM pr_description_drafts
+          WHERE handed_at IS NOT NULL AND text IS NULL
+            AND NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = pr_description_drafts.origin_ref)
+          ORDER BY handed_at ASC`,
+      )
       .all() as DraftRow[];
     return rows.map(toDraft);
   }
