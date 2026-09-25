@@ -843,8 +843,9 @@ Where the goal's ticket carries its **own** acceptance criteria, the operator's 
 them before the sitting can close. The ticket's criteria are the Azure DevOps "Acceptance criteria"
 field, which already reaches the body under its own heading
 ([15](15-integrations.md#where-a-work-items-body-lives)), or an "Acceptance criteria" heading in a
-GitHub issue body. A ticket with neither has nothing to compare, and the sitting says so rather than
-dispatching.
+GitHub issue body. A ticket with neither has nothing to compare: nothing is dispatched, and
+**Record these** closes the sitting on the spot rather than drawing back what was just typed with
+nothing to wait for ([17](17-cockpit.md#the-reveal-gate)).
 
 Rule `criteria-alignment` dispatches a desk agent — no worktree, nothing to read but its prompt — on origin `issue:<n>:criteria-alignment`,
 declared as a family in `src/issueOrigins.ts` with the role of a deliberation, prompted with the ticket
