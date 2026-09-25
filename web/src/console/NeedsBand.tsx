@@ -3,7 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import type { Issue } from '../types.js';
-import { AsyncButton } from '../components/AsyncButton.js';
+import { AsyncButton, useAsyncAction } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { GOAL_ANCHOR } from '../view/goalPage.js';
@@ -19,6 +19,8 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './Q
 import { Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
+import { quickAnswer } from '../view/quickAnswer.js';
+import type { QuickAnswer } from '../view/quickAnswer.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -47,6 +49,8 @@ export function NeedsBand({
   const body = needBody(row, view, actions, checksBelow);
   if (body === null) return null;
   if (line) {
+    const quick = quickAnswer(row, view.state);
+    if (quick !== null) return <QuickLine row={row} quick={quick} view={view} actions={actions} />;
     return (
       <button
         type="button"
@@ -65,7 +69,7 @@ export function NeedsBand({
             that nothing is waiting on. It is a span rather than a button because
             the row *is* the button — nesting a second one is invalid.
             → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
-        <span className="cn-needs-do">{KIND_VERB[row.kind]}</span>
+        <span className="cn-needs-do">{needVerb(row)}</span>
       </button>
     );
   }
@@ -87,6 +91,79 @@ export function NeedsBand({
         </button>
       </header>
       <div className="cn-in">{body}</div>
+    </div>
+  );
+}
+
+function needVerb(row: NeedRow): string {
+  return row.id.startsWith('placement:areaPath:') ? 'Pick a board' : KIND_VERB[row.kind];
+}
+
+function applyQuick(quick: QuickAnswer, value: string, actions: CockpitActions): Promise<void> {
+  if (quick.field === 'profile') return actions.setIssueProfile(quick.issue, value);
+  if (quick.field === 'areaPath') return actions.setIssueAreaPath(quick.issue, value);
+  return actions.setIssueParent(quick.issue, Number(value));
+}
+
+function QuickLine({
+  row,
+  quick,
+  view,
+  actions,
+}: {
+  row: NeedRow;
+  quick: QuickAnswer;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const change = useAsyncAction();
+  return (
+    <div className={`cn-needs-line cn-needs-quick cn-t-${KIND_TONE[row.kind]}`}>
+      <button
+        type="button"
+        className="cn-needs-open"
+        onClick={() => actions.openPanel({ ask: row.id })}
+        title="Open this ask"
+      >
+        <span className="cn-sym" aria-hidden="true">
+          {KIND_SYMBOL[row.kind]}
+        </span>
+        <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
+        <span className="cn-needs-what">{oneLine(row.title)}</span>
+        <NeedAge row={row} now={view.now} />
+      </button>
+      <AsyncButton
+        size="small"
+        tone="primary"
+        onClick={() => applyQuick(quick, quick.proposed.value, actions)}
+        title={`Use the proposed answer, “${quick.proposed.label}”`}
+      >
+        ✓ {quick.proposed.label}
+      </AsyncButton>
+      {quick.others.length > 0 ? (
+        <select
+          className="cn-in cn-needs-change"
+          value=""
+          aria-label="Answer with something else"
+          title={change.refusal ?? 'Answer with something else'}
+          disabled={change.phase === 'pending'}
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            if (value !== '') void change.run(() => applyQuick(quick, value, actions));
+          }}
+        >
+          <option value="">Change…</option>
+          {quick.others.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <Button size="small" onClick={() => actions.openPanel({ ask: row.id })}>
+          Change…
+        </Button>
+      )}
     </div>
   );
 }

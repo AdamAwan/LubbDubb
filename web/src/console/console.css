@@ -7010,6 +7010,42 @@ button.cn-grow {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* An ask with a proposal is answered on the row: the text still opens it, the
+   buttons beside it answer it.
+   → docs/spec/17-cockpit.md#an-ask-with-a-proposal-is-answered-on-its-row */
+.cn .cn-needs-quick {
+  padding-block: 6px;
+  cursor: default;
+}
+.cn .cn-needs-quick:hover {
+  background: var(--cn-tone-fill);
+}
+.cn-needs-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.cn-needs-open:hover .cn-needs-what {
+  text-decoration: underline;
+}
+.cn-needs-quick > .btn,
+.cn-needs-change {
+  flex: none;
+}
+.cn-needs-change {
+  width: auto;
+  max-width: 180px;
+  font-size: 12px;
+}
 .cn-needs-line .cn-age,
 .cn-needs-line .cn-open {
   flex: none;

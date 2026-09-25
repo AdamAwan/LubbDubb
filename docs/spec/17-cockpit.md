@@ -2139,11 +2139,11 @@ The run's state, what steers the work, and what happens somewhere other than thi
 groups, each with a caption saying what the group is for**, drawn through [the control
 kit](#the-control-kit) rather than as class strings.
 
-| caption         | controls                                              |
-| --------------- | ----------------------------------------------------- |
-| Run state       | Working / Done / Abandon… — one segmented control     |
-| Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
-| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug  |
+| caption         | controls                                               |
+| --------------- | ------------------------------------------------------ |
+| Run state       | Working / Done / Abandon… — one segmented control      |
+| Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
+| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
 
 There was a fourth group, _Check the work_, holding the local run's press. It is now on the runner
 panel that draws what a press produced, a pane below ([The validate pane](#the-validate-pane)): the
@@ -2333,6 +2333,26 @@ the goal page for the same reason the others are: the page and the rail's panel 
 the write between them. Embedded, never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
 `buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
 the console reaching into their class.
+
+#### An ask with a proposal is answered on its row
+
+The profile ask and the two backlog-placement asks (parent, area path) arrive with the appraisal's
+**proposed answer** already on them, and opening the ask panel only to press "Use it" is a detour
+the operator takes on every goal. So on the goal page's row form (`NeedsBand` with `line`),
+`quickAnswer` (`web/src/view/quickAnswer.ts`) reads the proposal off the issue and the row draws:
+
+- **the text as the opener** — pressing it still opens the ask panel with the whole of the ask;
+- **`✓ <proposed>`**, which makes the same write the panel's "Use …" makes
+  (`setIssueProfile`, `setIssueParent`, `setIssueAreaPath`);
+- **Change…**, a list of the other profiles, parent candidates or area paths that writes the one
+  picked. With nothing else to pick, it opens the panel instead.
+
+A row whose ask has **no proposal** — a parent ask the appraisal suggested nothing for — keeps the
+single-press form with its verb. The answers the panel alone offers ("Leave it unpinned",
+"Not applicable") stay in the panel: the row covers the common answer, never every answer.
+
+The area-path row's verb is **Pick a board**, not the placement kind's "Pick a parent" — the kind
+spans both fields, and the verb names what the press is for.
 
 #### Saying the sentence a refusal asks for
 
