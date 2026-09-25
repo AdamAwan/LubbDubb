@@ -1,44 +1,26 @@
-import type { JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
-import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
-import type { NeedRow } from '../view/needsYou.js';
+import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import type { PrPageView } from '../view/prPage.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
-import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, QueueRail, holdingLabel, subjectLabel } from './QueueRail.js';
-import { needBody } from './NeedsBand.js';
-import { openGoalForAsk } from './jump.js';
+import { QueueRail } from './QueueRail.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
+import { renderPanel } from './ConsoleRootPanels.js';
 
-import { Overview, queueRow } from './Overview.js';
+import { Overview } from './Overview.js';
 import { FocusOverview } from './overviews/FocusOverview.js';
-import { projectName } from '../view/updateAsks.js';
-import { WorldSignals } from './WorldSignals.js';
-import { EnvironmentsPanel } from './EnvironmentsPanel.js';
-import { PanelRows } from './PanelRow.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { FeatureBoard, FeaturePage } from '../components/FeatureBoard.js';
 import { Crumb, type CrumbStep } from './Crumb.js';
 import { isContainerType } from '../issueGroups.js';
 import { ConfigPage } from '../components/ConfigPage.js';
-import { RecordPanel } from '../components/RecordPanel.js';
 import { PoolStatus } from '../components/PoolStatus.js';
-import { LaunchPanel } from '../components/LaunchPanel.js';
-import { SetupPanel } from '../components/SetupPanel.js';
 import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium, openPets } from './Vivarium.js';
-import { BuildPanel } from '../components/BuildPanel.js';
-import { LocalRunPanel } from '../components/LocalRunPanel.js';
-import { TenantCommandsPanel } from '../components/TenantCommandsPanel.js';
 import { InsightsPage } from '../components/InsightsPage.js';
 import { ObstaclesPage } from '../components/ObstaclesPage.js';
-import { SchedulePanel } from '../components/SchedulePanel.js';
-import { InjectPanel } from '../components/InjectPanel.js';
-import { ConfirmButton } from '../components/ConfirmButton.js';
-import { Modal } from '../components/Modal.js';
-import { Button, ButtonRow } from '../components/button.js';
-import { relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
 
 // → docs/spec/17-cockpit.md
@@ -59,57 +41,12 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
     );
   }
 
-  const recovery =
-    view.crashed.length > 0 ? (
-      <div className="cn-recovery">
-        <RecoveryPanel
-          crashed={view.crashed}
-          now={view.now}
-          refUrls={view.state.refUrls}
-          onDecide={(id, verdict) => actions.decideRecovery(id, verdict)}
-        />
-      </div>
-    ) : null;
-
-  const situation =
-    view.prPage !== null ? (
-      <>
-        <PrCrumb page={view.prPage} tab={view.tab} actions={actions} />
-        <PrPage page={view.prPage} view={view} actions={actions} />
-      </>
-    ) : view.selectedPr !== null ? (
-      <PrGone number={view.selectedPr} goalRef={view.selectedGoal} tab={view.tab} actions={actions} />
-    ) : view.goalPage !== null &&
-      view.state.config.featureBoard &&
-      isContainerType(view.goalPage.issue, view.state.config.containerTypes) ? (
-      /* A container is never worked, so its goal page has nothing to draw — its page
-         is the Feature's. → docs/spec/17-cockpit.md#the-feature-page */
-      <FeaturePage
-        number={view.goalPage.issue.number}
-        back={tabStep(view.tab, actions)}
-        view={view}
-        actions={actions}
-      />
-    ) : view.goalPage !== null ? (
-      <>
-        <Crumb
-          trail={[tabStep(view.tab, actions)]}
-          here={`#${view.goalPage.issue.number} ${view.goalPage.issue.title}`}
-        />
-        <GoalPage page={view.goalPage} view={view} actions={actions} />
-      </>
-    ) : view.selectedGoal !== null ? (
-      <GoalGone ref_={view.selectedGoal} tab={view.tab} actions={actions} />
-    ) : (
-      tabBody(view.tab, view, actions)
-    );
-
   const panel = renderPanel(view, actions);
 
   return (
     <div className="cn">
       <TopBar view={view} actions={actions} />
-      {recovery}
+      {recoveryBand(view, actions)}
       {/* The next shape *is* the rail's top ask, at full width and carrying its own
           controls, so drawing the rail beside it is the same queue twice — and the
           copy on the rail is the one with no room for the reason. Only while the
@@ -122,7 +59,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
             <QueueRail view={view} actions={actions} />
           </aside>
         )}
-        <main className="cn-sit">{situation}</main>
+        <main className="cn-sit">{situationOf(view, actions)}</main>
         {/* Last in the body rather than inside the rail, because document order is
             what decides where it lands when the shell collapses to one column: the
             end of the page, scrolled to after the work, instead of a strip wedged
@@ -146,6 +83,48 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       {panel}
     </div>
   );
+}
+
+function situationOf(view: CockpitView, actions: CockpitActions): JSX.Element {
+  return view.prPage !== null ? (
+    <>
+      <PrCrumb page={view.prPage} tab={view.tab} actions={actions} />
+      <PrPage page={view.prPage} view={view} actions={actions} />
+    </>
+  ) : view.selectedPr !== null ? (
+    <PrGone number={view.selectedPr} goalRef={view.selectedGoal} tab={view.tab} actions={actions} />
+  ) : view.goalPage !== null &&
+    view.state.config.featureBoard &&
+    isContainerType(view.goalPage.issue, view.state.config.containerTypes) ? (
+    /* A container is never worked, so its goal page has nothing to draw — its page
+       is the Feature's. → docs/spec/17-cockpit.md#the-feature-page */
+    <FeaturePage number={view.goalPage.issue.number} back={tabStep(view.tab, actions)} view={view} actions={actions} />
+  ) : view.goalPage !== null ? (
+    <>
+      <Crumb
+        trail={[tabStep(view.tab, actions)]}
+        here={`#${view.goalPage.issue.number} ${view.goalPage.issue.title}`}
+      />
+      <GoalPage page={view.goalPage} view={view} actions={actions} />
+    </>
+  ) : view.selectedGoal !== null ? (
+    <GoalGone ref_={view.selectedGoal} tab={view.tab} actions={actions} />
+  ) : (
+    tabBody(view.tab, view, actions)
+  );
+}
+
+function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element | null {
+  return view.crashed.length > 0 ? (
+    <div className="cn-recovery">
+      <RecoveryPanel
+        crashed={view.crashed}
+        now={view.now}
+        refUrls={view.state.refUrls}
+        onDecide={(id, verdict) => actions.decideRecovery(id, verdict)}
+      />
+    </div>
+  ) : null;
 }
 
 /** Whether the overview's shape has absorbed the queue rail. */
@@ -307,267 +286,4 @@ function tabStep(tab: ConsoleTab, actions: CockpitActions): CrumbStep {
 
 function goalLabel(ref: string): string {
   return `#${/^issue:(\d+)$/.exec(ref)?.[1] ?? ref}`;
-}
-
-const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
-  faults: 'Faults',
-  launch: 'Launch',
-  build: 'Build',
-  localRun: 'Running locally',
-  tenants: 'Tenant commands',
-  setup: 'Setup',
-  record: 'The record',
-  upnext: 'Up next',
-  signals: 'World signals',
-  environments: 'Environments',
-};
-
-function PanelShell({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-}): JSX.Element {
-  return (
-    <Modal face="panel" label={title} onClose={onClose}>
-      <header className="cn-panel-head">
-        <h2>{title}</h2>
-        <Button onClick={onClose}>Close</Button>
-      </header>
-      {children}
-    </Modal>
-  );
-}
-
-function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | null {
-  const panel = view.consolePanel;
-  if (panel === null) return null;
-  const close = () => actions.openPanel(null);
-
-  if (typeof panel === 'object') {
-    const row = view.needsYou.find((r) => r.id === panel.ask);
-    if (!row) return null;
-    const body = needBody(row, view, actions);
-    if (body === null) return null;
-    return <AskShell row={row} view={view} actions={actions} onClose={close} body={body} />;
-  }
-
-  return (
-    <PanelShell title={PANEL_TITLE[panel]} onClose={close}>
-      <div className="cn-pbody">{panelBody(panel, view, actions)}</div>
-    </PanelShell>
-  );
-}
-
-/**
- * One ask, alone and in front.
- *
- * The head is chrome and says so: the kind, where the ask came from and how old
- * it is, in one line of small type. It was two stacked bars — a title spelling
- * `Needs you · Escalation` at the panel's largest size, and a subject line under
- * it — which spent the top of the surface, and all of its weight, on the category
- * the operator had just clicked. The ask's own sentence then arrived below them at
- * body size, indistinguishable from the evidence under it. What the panel is for
- * is that sentence, so the body leads with it at headline size and the head gives
- * way. → docs/spec/17-cockpit.md#the-queue-rail--needs-you
- */
-function AskShell({
-  row,
-  view,
-  actions,
-  onClose,
-  body,
-}: {
-  row: NeedRow;
-  view: CockpitView;
-  actions: CockpitActions;
-  onClose: () => void;
-  body: ReactNode;
-}): JSX.Element {
-  const age = [
-    row.raisedAt === '' ? null : relTime(row.raisedAt, view.now),
-    row.holding > 0 ? holdingLabel(row.holding) : null,
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
-  return (
-    <Modal
-      face="panel"
-      className={`cn-ask cn-t-${KIND_TONE[row.kind]}`}
-      label={`Needs you · ${KIND_LABEL[row.kind]}`}
-      onClose={onClose}
-    >
-      <header className="cn-panel-head cn-askhead">
-        <h2>
-          <span className="cn-sym" aria-hidden="true">
-            {KIND_SYMBOL[row.kind]}
-          </span>
-          {KIND_LABEL[row.kind]}
-        </h2>
-        <AskSubject row={row} actions={actions} />
-        {age !== '' && <span className="cn-askage">{age}</span>}
-        <Button ghost size="small" onClick={onClose}>
-          Close
-        </Button>
-      </header>
-      <div className="cn-pbody cn-askbody">{body}</div>
-    </Modal>
-  );
-}
-
-function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions }): JSX.Element {
-  const subject = subjectLabel(row);
-  if (row.goalRef !== null) {
-    const ref = row.goalRef;
-    const read = () => {
-      actions.openPanel(null);
-      openGoalForAsk(actions, ref, row.kind);
-    };
-    return (
-      <span className="cn-psub">
-        on{' '}
-        <button type="button" className="cn-goto" onClick={read}>
-          {subject} — read it in context →
-        </button>
-      </span>
-    );
-  }
-  const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
-  return (
-    <span className="cn-psub cn-noGoal">
-      No linked goal ·{' '}
-      {pr ? (
-        <>
-          raised on <Ref to={`pr:${pr[1]}`} />, a pull request no ticket owns
-        </>
-      ) : (
-        'this ask stands on its own — nothing in the tracker is waiting on it'
-      )}
-    </span>
-  );
-}
-
-function panelBody(
-  panel: Exclude<ConsolePanel, null | { ask: string }>,
-  view: CockpitView,
-  actions: CockpitActions,
-): ReactNode {
-  const { state } = view;
-  switch (panel) {
-    case 'faults':
-      return <FaultLog view={view} actions={actions} />;
-    case 'upnext': {
-      const items = view.upNext;
-      if (items.length === 0) return <p className="cn-empty">Nothing is queued.</p>;
-      return <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />;
-    }
-    case 'signals':
-      return <WorldSignals view={view} />;
-    case 'environments':
-      return <EnvironmentsPanel view={view} />;
-    case 'localRun':
-      return (
-        <LocalRunPanel
-          run={state.localRun}
-          configured={state.config.localRunConfigured}
-          stopConfigured={state.config.localRunStopConfigured}
-          refreshConfigured={state.config.localRunRefreshConfigured}
-          goals={state.world.issues}
-          targets={state.localRunTargets}
-          now={view.now}
-          onStart={(issueNumber, ref) => actions.startLocalRun(issueNumber, ref)}
-          onStop={() => actions.stopLocalRun()}
-          onMessage={(text) => actions.messageLocalRun(text)}
-          onRefresh={() => actions.refreshLocalRun()}
-          onValidate={(issueNumber, opts) => actions.validateLocally(issueNumber, opts)}
-          validation={
-            state.localRun === null
-              ? null
-              : (state.world.issues.find((i) => `issue:${String(i.number)}` === state.localRun?.originRef)
-                  ?.localValidation ?? null)
-          }
-          validationConfigured={state.config.localRunConfigured}
-          fetchOutput={() => actions.localRunOutput()}
-        />
-      );
-    case 'tenants':
-      return (
-        <TenantCommandsPanel
-          commands={state.tenantCommands}
-          now={view.now}
-          fetchOutput={(environment) => actions.tenantCommandOutput(environment)}
-        />
-      );
-    case 'setup':
-      return <SetupPanel onClose={() => actions.openPanel(null)} />;
-    case 'record':
-      return <RecordPanel now={view.now} />;
-    case 'build':
-      return (
-        <BuildPanel
-          build={state.build}
-          project={projectName(state)}
-          now={view.now}
-          onUpgrade={(action, opts) => actions.upgrade(action, opts)}
-          onCheck={() => actions.checkBuild()}
-          onPull={() => actions.pullProject()}
-        />
-      );
-    case 'launch':
-      return (
-        <>
-          <LaunchPanel
-            jobs={state.jobs}
-            attachments={state.attachments}
-            attachmentUrls={state.attachmentUrls}
-            onChanged={() => void actions.refresh()}
-          />
-          <SchedulePanel schedules={state.schedules} onChanged={() => void actions.refresh()} />
-          {/* Injection fakes a world change, which only the static demo has any
-              use for: a real run against a fake provider is still a real run, and
-              a panel that lies to the harness there is a way to lie to yourself
-              about what it is reacting to. `view.demo` is the whole gate — there
-              is no server route behind it for a second predicate to disagree
-              with. */}
-          {view.demo && <InjectPanel onInjected={() => void actions.refresh()} world={state.world} />}
-        </>
-      );
-  }
-}
-
-const FAULT_ROWS = 40;
-
-function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const { errors } = view.state;
-  return (
-    <>
-      <ButtonRow>
-        <ConfirmButton
-          ghost
-          label="Clear"
-          confirmLabel="Delete every recorded fault?"
-          title={`Delete all ${errors.length} recorded faults — this cannot be undone, for any cockpit`}
-          onConfirm={() => actions.clearErrors()}
-        />
-      </ButtonRow>
-      <div className="cn-rows">
-        {errors.length === 0 && <p className="cn-empty">No fault has been recorded.</p>}
-        {errors.slice(0, FAULT_ROWS).map((err) => (
-          <div className="cn-row" key={err.id}>
-            <i className="cn-lamp cn-wait" />
-            <span className="cn-grow">
-              <b className="cn-name">{err.source}</b>
-              <span className="cn-sub cn-wrap">{err.message}</span>
-              {err.detail !== null && <span className="cn-sub cn-wrap">{err.detail}</span>}
-            </span>
-            <span className="cn-num">{relTime(err.createdAt, view.now)}</span>
-          </div>
-        ))}
-        {errors.length > FAULT_ROWS && <p className="cn-empty">…{errors.length - FAULT_ROWS} older</p>}
-      </div>
-    </>
-  );
 }

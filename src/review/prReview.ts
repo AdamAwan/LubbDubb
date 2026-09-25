@@ -1,5 +1,6 @@
 import type { PrReview, PrReviewRoute, PullRequest } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
+import { isStackedPr } from '../pr/prHealth.js';
 
 // → docs/spec/07-pull-requests.md#the-fleet-review
 
@@ -146,4 +147,23 @@ export function reviewReading(
 export interface PrReviewCharters {
   routing: string | null;
   modes: Record<string, string | null>;
+}
+
+export function isMergeReady(
+  pr: PullRequest,
+  defaultBranch: string,
+  reading: PrReviewReading,
+  policy: PrReviewPolicy,
+): boolean {
+  return (
+    !isStackedPr(pr, defaultBranch) &&
+    pr.ciStatus === 'passing' &&
+    pr.approved === true &&
+    pr.mergeable === true &&
+    pr.mergeableState !== 'behind' &&
+    pr.mergeableState !== 'blocked' &&
+    pr.mergeableState !== 'dirty' &&
+    pr.unresolvedComments.every((c) => c.handled) &&
+    reviewSatisfied(pr, reading, policy)
+  );
 }

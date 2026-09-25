@@ -9,6 +9,8 @@ import { PlanModal } from './components/PlanModal.js';
 import { RefLinks } from './components/refs.js';
 import { hasPrPage } from './view/prPage.js';
 import { goalIssue, standsFor } from './view/goalPage.js';
+import type { CockpitView } from './view/viewModel.js';
+import type { CockpitActions } from './cockpit/actions.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -41,44 +43,6 @@ export function App() {
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
   const state = status.view.state;
-  const viewedPlan = (state.plans ?? []).find((p) => p.id === status.view.viewingPlan) ?? null;
-  const planModal = viewedPlan ? (
-    <PlanModal
-      key={viewedPlan.id}
-      plan={viewedPlan}
-      parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
-      atoms={(state.planAtoms ?? []).filter((a) => a.planId === viewedPlan.id)}
-      checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
-      validationPlan={(state.validationPlans ?? []).find((r) => r.originRef === viewedPlan.originRef) ?? null}
-      caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
-      watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
-      queries={(state.stateQueries ?? []).filter((q) => q.originRef === viewedPlan.originRef)}
-      upcoming={state.upcoming?.items ?? []}
-      proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
-      spend={state.world.issues.find((i) => `issue:${i.number}` === viewedPlan.originRef)?.spend ?? null}
-      planning={state.planning}
-      now={status.view.now}
-      refUrls={state.refUrls}
-      onClose={() => status.actions.viewPlan(null)}
-      onReplan={(id) => status.actions.replan(id)}
-      onWatchProposal={(issueNumber, checkId, accept) => status.actions.ruleWatchProposal(issueNumber, checkId, accept)}
-      onDecide={(id, verdict, note, acknowledged, answers) =>
-        status.actions.decideProposal(id, verdict, note, acknowledged, answers)
-      }
-      onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
-      onOpenGoal={(ref) => status.actions.selectGoal(ref)}
-      onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
-      onRestartPart={(id, slug) => status.actions.restartPart(id, slug)}
-      regrouping={status.view.regroupingPlan}
-      onRegroupView={(on) => status.actions.regroupPlanView(on)}
-      onRegroup={(id, groups) => status.actions.regroupPlan(id, groups)}
-      canClosePr={state.config.canClosePr}
-      profiles={state.config.profiles}
-      defaultProfile={state.config.defaultProfile}
-      desktopFolder={state.config.desktopFolder}
-    />
-  ) : null;
-
   const openAgent = status.view.selectedAgent;
 
   return (
@@ -90,32 +54,8 @@ export function App() {
       hasPr={(prNumber) => hasPrPage(state, prNumber)}
     >
       <ConsoleRoot view={status.view} actions={status.actions} />
-      {planModal}
-      {openAgent && (
-        <AgentDrawer
-          agent={openAgent}
-          task={status.view.taskFor(openAgent)}
-          originStandsFor={standsFor(state, status.view.taskFor(openAgent)?.originRef ?? null)}
-          refUrls={state.refUrls}
-          live={status.view.selectedOutput}
-          flags={status.view.flagsByAgent.get(openAgent.id)}
-          artifactUrls={state.artifactUrls ?? {}}
-          limitParked={status.view.limitParked.has(openAgent.id)}
-          onClose={() => status.actions.select(null)}
-          onRespond={(text) => status.actions.respondAgent(openAgent.id, text)}
-          onKill={() => status.actions.killAgent(openAgent.id)}
-          onEject={
-            state.config.ejectionEnabled === false
-              ? undefined
-              : (reason) => status.actions.ejectAgent(openAgent.id, reason)
-          }
-          onComplete={() => status.actions.completeAgent(openAgent.id)}
-          onInterrupt={() => status.actions.interruptAgent(openAgent.id)}
-          onResume={() => status.actions.resumeAgent(openAgent.id)}
-          profiles={state.config.profiles}
-          onLift={(profile) => status.actions.liftAgentProfile(openAgent.id, profile)}
-        />
-      )}
+      <ViewedPlan view={status.view} actions={status.actions} />
+      {openAgent && <OpenAgent agent={openAgent} view={status.view} actions={status.actions} />}
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
       )}
@@ -134,5 +74,93 @@ export function App() {
         <ScratchpadModal issueRef={status.view.viewingScratchpad} onClose={() => status.actions.viewScratchpad(null)} />
       )}
     </RefLinks>
+  );
+}
+
+function ViewedPlan({ view, actions }: { view: CockpitView; actions: CockpitActions }) {
+  const state = view.state;
+  const viewedPlan = (state.plans ?? []).find((p) => p.id === view.viewingPlan) ?? null;
+  if (!viewedPlan) return null;
+  return <PlanView plan={viewedPlan} view={view} actions={actions} />;
+}
+
+function PlanView({
+  plan: viewedPlan,
+  view,
+  actions,
+}: {
+  plan: NonNullable<CockpitView['state']['plans']>[number];
+  view: CockpitView;
+  actions: CockpitActions;
+}) {
+  const state = view.state;
+  return (
+    <PlanModal
+      key={viewedPlan.id}
+      plan={viewedPlan}
+      parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
+      atoms={(state.planAtoms ?? []).filter((a) => a.planId === viewedPlan.id)}
+      checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
+      validationPlan={(state.validationPlans ?? []).find((r) => r.originRef === viewedPlan.originRef) ?? null}
+      caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
+      watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
+      queries={(state.stateQueries ?? []).filter((q) => q.originRef === viewedPlan.originRef)}
+      upcoming={state.upcoming?.items ?? []}
+      proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
+      spend={state.world.issues.find((i) => `issue:${i.number}` === viewedPlan.originRef)?.spend ?? null}
+      planning={state.planning}
+      now={view.now}
+      refUrls={state.refUrls}
+      onClose={() => actions.viewPlan(null)}
+      onReplan={(id) => actions.replan(id)}
+      onWatchProposal={(issueNumber, checkId, accept) => actions.ruleWatchProposal(issueNumber, checkId, accept)}
+      onDecide={(id, verdict, note, acknowledged, answers) =>
+        actions.decideProposal(id, verdict, note, acknowledged, answers)
+      }
+      onBackOut={(id, verdict, note) => actions.backOutProposal(id, verdict, note)}
+      onOpenGoal={(ref) => actions.selectGoal(ref)}
+      onPartProfile={(id, slug, profile) => actions.setPartProfile(id, slug, profile)}
+      onRestartPart={(id, slug) => actions.restartPart(id, slug)}
+      regrouping={view.regroupingPlan}
+      onRegroupView={(on) => actions.regroupPlanView(on)}
+      onRegroup={(id, groups) => actions.regroupPlan(id, groups)}
+      canClosePr={state.config.canClosePr}
+      profiles={state.config.profiles}
+      defaultProfile={state.config.defaultProfile}
+      desktopFolder={state.config.desktopFolder}
+    />
+  );
+}
+
+function OpenAgent({
+  agent,
+  view,
+  actions,
+}: {
+  agent: NonNullable<CockpitView['selectedAgent']>;
+  view: CockpitView;
+  actions: CockpitActions;
+}) {
+  const state = view.state;
+  return (
+    <AgentDrawer
+      agent={agent}
+      task={view.taskFor(agent)}
+      originStandsFor={standsFor(state, view.taskFor(agent)?.originRef ?? null)}
+      refUrls={state.refUrls}
+      live={view.selectedOutput}
+      flags={view.flagsByAgent.get(agent.id)}
+      artifactUrls={state.artifactUrls ?? {}}
+      limitParked={view.limitParked.has(agent.id)}
+      onClose={() => actions.select(null)}
+      onRespond={(text) => actions.respondAgent(agent.id, text)}
+      onKill={() => actions.killAgent(agent.id)}
+      onEject={state.config.ejectionEnabled === false ? undefined : (reason) => actions.ejectAgent(agent.id, reason)}
+      onComplete={() => actions.completeAgent(agent.id)}
+      onInterrupt={() => actions.interruptAgent(agent.id)}
+      onResume={() => actions.resumeAgent(agent.id)}
+      profiles={state.config.profiles}
+      onLift={(profile) => actions.liftAgentProfile(agent.id, profile)}
+    />
   );
 }

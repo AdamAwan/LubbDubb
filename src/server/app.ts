@@ -9,7 +9,7 @@ import type { System } from '../system.js';
 import { Hub } from './hub.js';
 import { authRefusalHint, createAuthThrottle, describeAuthAttempt, guardRequest, resolveCockpitToken } from './auth.js';
 import { debugLog } from '../debug.js';
-import type { RouteModule } from './routes/context.js';
+import type { RouteContext, RouteModule } from './routes/context.js';
 import { register as registerAgents } from './routes/agents.js';
 import { register as registerAllowance } from './routes/allowance.js';
 import {
@@ -116,6 +116,69 @@ interface BuiltApp {
   tokenPath: string | null;
 }
 
+function installFailureHandling(app: FastifyInstance, system: System): void {
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = clientRefusalStatus(err);
+    if (status !== null) return reply.code(status).send({ error: message });
+    system.errors.record({
+      source: 'server',
+      message: `${req.method} ${req.url} failed: ${message}`,
+      detail: err instanceof Error ? (err.stack ?? null) : null,
+    });
+    return reply.code(500).send({ error: message });
+  });
+
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.method !== 'POST' || reply.statusCode >= 400) return;
+    try {
+      system.pets.scan();
+    } catch (err) {
+      system.errors.record({ source: 'server', message: `Pet scan failed: ${(err as Error).message}` });
+    }
+  });
+}
+
+async function serveCockpitBuild(app: FastifyInstance): Promise<void> {
+  const distDir = resolve(process.cwd(), 'web/dist');
+  if (existsSync(distDir)) {
+    await app.register(fastifyStatic, { root: distDir });
+    app.setNotFoundHandler((req, reply) => {
+      if (!wantsAppShell(req.url)) return reply.code(404).send({ error: 'not found' });
+      return reply.sendFile('index.html');
+    });
+  }
+}
+
+function routeContext(system: System, hub: Hub, artifactKey: Buffer | null): RouteContext {
+  return {
+    system,
+    hub,
+    artifactKey,
+    artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
+    attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
+    localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
+    validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
+    remoteCaptureSigner: artifactKey ? remoteCaptureSignerFor(artifactKey) : undefined,
+  };
+}
+
+function installCaptureLinks(system: System, artifactKey: Buffer | null): void {
+  // The one link the harness puts somewhere it cannot reach. The desk is built before this app is, so
+  // the signer is installed rather than constructed — and a deployment that has declared no address
+  // for itself gets a comment carrying the prose alone.
+  // → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
+  const linkBase = system.config.remoteValidation.captureLinkBase;
+  if (linkBase !== null) {
+    const sign = artifactKey ? remoteCaptureLinkSignerFor(artifactKey) : null;
+    system.remoteValidation.linkCapturesWith((runId, rowId) => {
+      const path = `/validation-captures/run/${encodeURIComponent(runId)}/${encodeURIComponent(rowId)}`;
+      const url = `${linkBase.replace(/\/+$/, '')}${path}`;
+      return sign ? `${url}?tk=${encodeURIComponent(sign(runId, rowId))}` : url;
+    });
+  }
+}
+
 export async function buildApp(system: System): Promise<BuiltApp> {
   const app = Fastify({ logger: false });
   const hub = new Hub(system);
@@ -172,30 +235,11 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   await app.register(websocket);
   await app.register(rateLimit, { global: false });
 
-  const { config, errors } = system;
+  const { config } = system;
 
   const artifactKey = auth ? randomBytes(32) : null;
 
-  app.setErrorHandler((err: unknown, req, reply) => {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = clientRefusalStatus(err);
-    if (status !== null) return reply.code(status).send({ error: message });
-    errors.record({
-      source: 'server',
-      message: `${req.method} ${req.url} failed: ${message}`,
-      detail: err instanceof Error ? (err.stack ?? null) : null,
-    });
-    return reply.code(500).send({ error: message });
-  });
-
-  app.addHook('onResponse', async (req, reply) => {
-    if (req.method !== 'POST' || reply.statusCode >= 400) return;
-    try {
-      system.pets.scan();
-    } catch (err) {
-      errors.record({ source: 'server', message: `Pet scan failed: ${(err as Error).message}` });
-    }
-  });
+  installFailureHandling(app, system);
 
   app.register(async (scoped) => {
     scoped.get('/ws', { websocket: true }, (socket) => {
@@ -205,40 +249,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     });
   });
 
-  const ctx = {
-    system,
-    hub,
-    artifactKey,
-    artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
-    attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
-    localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
-    validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
-    remoteCaptureSigner: artifactKey ? remoteCaptureSignerFor(artifactKey) : undefined,
-  };
+  const ctx = routeContext(system, hub, artifactKey);
   for (const registerRoutes of ROUTE_MODULES) registerRoutes(app, ctx);
 
-  // The one link the harness puts somewhere it cannot reach. The desk is built before this app is, so
-  // the signer is installed rather than constructed — and a deployment that has declared no address
-  // for itself gets a comment carrying the prose alone.
-  // → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
-  const linkBase = config.remoteValidation.captureLinkBase;
-  if (linkBase !== null) {
-    const sign = artifactKey ? remoteCaptureLinkSignerFor(artifactKey) : null;
-    system.remoteValidation.linkCapturesWith((runId, rowId) => {
-      const path = `/validation-captures/run/${encodeURIComponent(runId)}/${encodeURIComponent(rowId)}`;
-      const url = `${linkBase.replace(/\/+$/, '')}${path}`;
-      return sign ? `${url}?tk=${encodeURIComponent(sign(runId, rowId))}` : url;
-    });
-  }
+  installCaptureLinks(system, artifactKey);
 
-  const distDir = resolve(process.cwd(), 'web/dist');
-  if (existsSync(distDir)) {
-    await app.register(fastifyStatic, { root: distDir });
-    app.setNotFoundHandler((req, reply) => {
-      if (!wantsAppShell(req.url)) return reply.code(404).send({ error: 'not found' });
-      return reply.sendFile('index.html');
-    });
-  }
+  await serveCockpitBuild(app);
 
   const urlHost = LOOPBACK_HOSTS.has(config.host) ? config.host : '127.0.0.1';
   return {

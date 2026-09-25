@@ -139,26 +139,28 @@ function validateArrival(arrival: EnvironmentArrival | undefined, where: string)
       `${where}: "arrival.workItemState" must be a non-empty tracker state — the column a work item moves to ` +
         'when its goal arrives here — or be left out.',
     );
-  if (arrival.opens !== undefined) {
-    if (!Array.isArray(arrival.opens))
-      throw new Error(`${where}: "arrival.opens" must be a list of ${ENVIRONMENT_GATES.join(' / ')}.`);
-    if (arrival.opens.length === 0)
-      throw new Error(
-        `${where}: "arrival.opens" is empty. It reads as a gate and opens nothing — drop it, or name ` +
-          `${ENVIRONMENT_GATES.join(' / ')}.`,
-      );
-    for (const gate of arrival.opens)
-      if (!ENVIRONMENT_GATES.includes(gate))
-        throw new Error(
-          `${where}: "${String(gate)}" is not an obligation the harness files. ` +
-            `"arrival.opens" names ${ENVIRONMENT_GATES.join(' / ')}.`,
-        );
-  }
+  if (arrival.opens !== undefined) validateArrivalOpens(arrival.opens, where);
   if (arrival.opens === undefined && arrival.comment !== true && arrival.workItemState === undefined)
     throw new Error(
       `${where}: "arrival" declares nothing. Name what arriving here opens, set "comment": true, or name the ` +
         '"workItemState" a work item moves to — or drop it, and the environment is observed and nothing more.',
     );
+}
+
+function validateArrivalOpens(opens: NonNullable<EnvironmentArrival['opens']>, where: string): void {
+  if (!Array.isArray(opens))
+    throw new Error(`${where}: "arrival.opens" must be a list of ${ENVIRONMENT_GATES.join(' / ')}.`);
+  if (opens.length === 0)
+    throw new Error(
+      `${where}: "arrival.opens" is empty. It reads as a gate and opens nothing — drop it, or name ` +
+        `${ENVIRONMENT_GATES.join(' / ')}.`,
+    );
+  for (const gate of opens)
+    if (!ENVIRONMENT_GATES.includes(gate))
+      throw new Error(
+        `${where}: "${String(gate)}" is not an obligation the harness files. ` +
+          `"arrival.opens" names ${ENVIRONMENT_GATES.join(' / ')}.`,
+      );
 }
 
 function validateWatch(env: EnvironmentConfig, where: string): void {
@@ -179,23 +181,27 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
     );
   if (watch.describe !== undefined && (typeof watch.describe !== 'string' || watch.describe.trim() === ''))
     throw new Error(`${where}: "watch.describe" must be a non-empty command, or be left out.`);
-  if (
-    watch.forMs !== undefined &&
-    (typeof watch.forMs !== 'number' || !Number.isFinite(watch.forMs) || watch.forMs <= 0)
-  )
+  if (watch.forMs !== undefined && !isPositiveMs(watch.forMs))
     throw new Error(
       `${where}: "watch.forMs" must be a positive number of milliseconds — how long a window stays open.`,
     );
   validateWatchQueryUrl(watch.queryUrl, where);
-  if (watch.holds === undefined) return;
-  if (!Array.isArray(watch.holds))
+  if (watch.holds !== undefined) validateWatchHolds(watch.holds, where);
+}
+
+function validateWatchHolds(holds: NonNullable<EnvironmentWatch['holds']>, where: string): void {
+  if (!Array.isArray(holds))
     throw new Error(`${where}: "watch.holds" must be a list of ${ENVIRONMENT_GATES.join(' / ')}.`);
-  for (const gate of watch.holds)
+  for (const gate of holds)
     if (!ENVIRONMENT_GATES.includes(gate))
       throw new Error(
         `${where}: "${String(gate)}" is not an obligation the harness files, so holding it holds nothing. ` +
           `"watch.holds" names ${ENVIRONMENT_GATES.join(' / ')}.`,
       );
+}
+
+function isPositiveMs(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 function validateWatchQueryUrl(queryUrl: string | undefined, where: string): void {
@@ -228,23 +234,32 @@ function validateValidate(validate: EnvironmentValidate | undefined, where: stri
   if (typeof validate !== 'object' || validate === null || Array.isArray(validate))
     throw new Error(`${where}: "validate" must be an object — {"permits": ["state"], "state": {"run": "..."}}.`);
 
-  if (!Array.isArray(validate.permits))
+  validatePermits(validate.permits, where);
+  validateValidateStrings(validate, where);
+  validateRunnable(validate, where);
+  validateTenantShape(validate, where);
+}
+
+function validatePermits(permits: RemoteRowKind[], where: string): void {
+  if (!Array.isArray(permits))
     throw new Error(
       `${where}: "validate.permits" must be a list of ${REMOTE_ROW_KINDS.join(' / ')} — the row kinds this ` +
         'environment may be asked for.',
     );
-  if (validate.permits.length === 0)
+  if (permits.length === 0)
     throw new Error(
       `${where}: "validate.permits" is empty. It reads as a configuration and permits nothing, so every row ` +
         `would come back blocked forever — name ${REMOTE_ROW_KINDS.join(' / ')}, or drop the "validate" block.`,
     );
-  for (const kind of validate.permits)
+  for (const kind of permits)
     if (!REMOTE_ROW_KINDS.includes(kind))
       throw new Error(
         `${where}: "${String(kind)}" is not a row kind a sheet has. ` +
           `"validate.permits" names ${REMOTE_ROW_KINDS.join(' / ')}.`,
       );
+}
 
+function validateValidateStrings(validate: EnvironmentValidate, where: string): void {
   for (const path of ['tenant', 'tenantEnv'] as const) {
     const value = validate[path];
     if (value !== undefined && (typeof value !== 'string' || value.trim() === ''))
@@ -260,7 +275,9 @@ function validateValidate(validate: EnvironmentValidate | undefined, where: stri
         `${where}: "validate.${path}" must be a non-empty command, or be left out. An empty one answers ` +
           'nothing, and the row it would have run is blocked with no way to say why.',
       );
+}
 
+function validateRunnable(validate: EnvironmentValidate, where: string): void {
   if (validate.permits.includes('check') && validate.browser === undefined)
     throw new Error(
       `${where}: "validate.permits" names "check" and there is no "validate.browser" block. A kind permitted ` +
@@ -279,7 +296,9 @@ function validateValidate(validate: EnvironmentValidate | undefined, where: stri
         'asks the deployed runner which selectors it offers, from a checkout pinned to the commit that ' +
         'environment is running, and without it no row can be read against what the runner actually holds.',
     );
+}
 
+function validateTenantShape(validate: EnvironmentValidate, where: string): void {
   const shapes = TENANT_SHAPES.filter((shape) => validate[shape] !== undefined);
   if (shapes.length > 1)
     throw new Error(
@@ -299,12 +318,7 @@ function validateValidate(validate: EnvironmentValidate | undefined, where: stri
           'declared here. Name a "tenant", a "tenantEnv" or an "ensureTenant", or drop it.',
       );
   }
-  if (
-    validate.tenantFreshnessMs !== undefined &&
-    (typeof validate.tenantFreshnessMs !== 'number' ||
-      !Number.isFinite(validate.tenantFreshnessMs) ||
-      validate.tenantFreshnessMs <= 0)
-  )
+  if (validate.tenantFreshnessMs !== undefined && !isPositiveMs(validate.tenantFreshnessMs))
     throw new Error(
       `${where}: "validate.tenantFreshnessMs" must be a positive number of milliseconds — how old a tenant ` +
         'may be before a reading against it is drawn as stale.',

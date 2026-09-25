@@ -181,7 +181,7 @@ join `DESKTOP_TOOL_NAMES` (`src/mcp/names.ts`) and `src/mcp/desktopTools.ts`:
 | `ejection_note`   | One line about what the operator is doing now. Writes `last_note` and stamps `last_seen_at`. → [calling home](#calling-home)                                                              |
 | `ejection_settle` | The three arms below, with a note. → [settling](#settling-it)                                                                                                                             |
 
-The `/lubbdubb` skill (`src/validation/desktopSkill.ts`, rewritten into the operator's Claude Code on
+The `/lubbdubb` skill (`src/validation/desktopSkill.ts`, its eject arm in `desktopSkillSections.ts`; rewritten into the operator's Claude Code on
 every boot) grows an `eject <n>` arm beside its `discuss <n>` and `<n>:<letter>` ones. It says: read
 the ejection, say plainly what the agent had done and where it went wrong, then **follow the
 operator's lead**. It does not resume the agent's work on its own — an ejection is a person taking

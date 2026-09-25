@@ -104,7 +104,7 @@ function emptyWeek(startsAt: string, partial: boolean): SpendTrendBucket {
 }
 
 export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
-  const { goals, closures, issues, agents, ciEvents, window, now } = input;
+  const { closures, agents, ciEvents, window, now } = input;
   const span = trendSpan(
     window,
     [...closures.map((c) => Date.parse(c.closedAt)), ...agents.map(runInstant)].reduce<number | null>(
@@ -121,9 +121,29 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     return Math.min(span.buckets - 1, Math.floor((at - start) / span.bucketMs));
   };
 
-  const spendOfGoal = new Map(goals.map((g) => [g.issueNumber, g]));
-  const openNow = new Set(issues.filter((i) => i.state === 'open').map((i) => i.number));
+  const cohorts = closeCohorts(input, buckets, bucketAt);
+  summariseCohorts(buckets, cohorts);
+  tallyRuns(agents, buckets, bucketAt);
+  tallyReds(ciEvents, buckets, bucketAt);
+  for (const week of buckets) {
+    week.completionRate = week.settled > 0 ? week.completed / week.settled : null;
+    week.redsPerGoal = week.goalsClosed > 0 ? week.reds / week.goalsClosed : null;
+  }
 
+  return {
+    generatedAt: new Date(now).toISOString(),
+    window: windowView(window, span),
+    periods: span.buckets,
+    bucketMs: span.bucketMs,
+    startsAt: new Date(start).toISOString(),
+    buckets,
+    comparison: compare(buckets, cohorts, span.bucketMs),
+  };
+}
+
+type BucketAt = (at: number) => number | null;
+
+function latestClosures(closures: readonly TicketClosure[]): Map<number, number> {
   const closedAt = new Map<number, number>();
   for (const closure of closures) {
     const at = Date.parse(closure.closedAt);
@@ -131,9 +151,19 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     const seen = closedAt.get(closure.number);
     if (seen === undefined || at > seen) closedAt.set(closure.number, at);
   }
+  return closedAt;
+}
+
+function closeCohorts(
+  { goals, closures, issues }: SpendTrendInput,
+  buckets: SpendTrendBucket[],
+  bucketAt: BucketAt,
+): Map<number, SpendGoal[]> {
+  const spendOfGoal = new Map(goals.map((g) => [g.issueNumber, g]));
+  const openNow = new Set(issues.filter((i) => i.state === 'open').map((i) => i.number));
 
   const cohorts = new Map<number, SpendGoal[]>();
-  for (const [issueNumber, at] of closedAt) {
+  for (const [issueNumber, at] of latestClosures(closures)) {
     const index = bucketAt(at);
     if (index === null) continue;
     const week = buckets[index];
@@ -149,6 +179,10 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     cohort.push(spend);
     cohorts.set(index, cohort);
   }
+  return cohorts;
+}
+
+function summariseCohorts(buckets: SpendTrendBucket[], cohorts: ReadonlyMap<number, SpendGoal[]>): void {
   for (const [index, cohort] of cohorts) {
     const week = buckets[index];
     if (week === undefined) continue;
@@ -160,7 +194,9 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
       week.byPhase[phase] = roundUsd(total / cohort.length);
     }
   }
+}
 
+function tallyRuns(agents: readonly Agent[], buckets: SpendTrendBucket[], bucketAt: BucketAt): void {
   for (const agent of agents) {
     if (agent.endedAt === null || !SETTLED.includes(agent.status)) continue;
     const index = bucketAt(Date.parse(agent.endedAt));
@@ -171,6 +207,9 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     if (agent.status === 'done') week.completed += 1;
     if (LOST.includes(agent.status)) week.lostCostUsd = roundUsd(week.lostCostUsd + (agent.costUsd ?? 0));
   }
+}
+
+function tallyReds(ciEvents: readonly WorldEvent[], buckets: SpendTrendBucket[], bucketAt: BucketAt): void {
   for (const event of ciEvents) {
     if (ciStatusOf(event) !== 'failing') continue;
     const index = bucketAt(Date.parse(event.createdAt));
@@ -178,20 +217,6 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
     const week = buckets[index];
     if (week !== undefined) week.reds += 1;
   }
-  for (const week of buckets) {
-    week.completionRate = week.settled > 0 ? week.completed / week.settled : null;
-    week.redsPerGoal = week.goalsClosed > 0 ? week.reds / week.goalsClosed : null;
-  }
-
-  return {
-    generatedAt: new Date(now).toISOString(),
-    window: windowView(window, span),
-    periods: span.buckets,
-    bucketMs: span.bucketMs,
-    startsAt: new Date(start).toISOString(),
-    buckets,
-    comparison: compare(buckets, cohorts, span.bucketMs),
-  };
 }
 
 function compare(

@@ -8,9 +8,9 @@ import { renderPrFooter } from '../../pr/prFooter.js';
 import { openPrFailure, resolveOpenPr } from '../openPr.js';
 import { linkPrWorkItem } from '../../pr/prWorkItemDesk.js';
 import { seedPrWatch } from '../../pr/prWatchDesk.js';
-import { toolError } from '../protocol.js';
+import { toolError, type McpTool } from '../protocol.js';
 import type { PrRefStyle } from '../../pr/prRef.js';
-import type { ToolFactory } from './context.js';
+import type { McpToolDeps, ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -21,17 +21,8 @@ function prRefGuidance(style: PrRefStyle): string {
     : 'If you name another pull request in it — the one your work stacks on, say — write it as `#12`.';
 }
 
-export const openPr: ToolFactory = ({ deps, task, ok }) => ({
-  description:
-    'Open the pull request for the work you were dispatched to do. The harness supplies the branch, ' +
-    'the base — which is the rung beneath you when your work is stacked on another part — and the ' +
-    'title convention; you supply what the change does. Commit and push your branch before you call ' +
-    'this — the harness never pushes, and the provider refuses a pull request whose head it cannot ' +
-    'see. You cannot open a pull request for another ' +
-    "agent's work: the branch and base come from your own origin, never from an argument. If this " +
-    'tool reports it is unavailable, open the pull request yourself against the branch and base named ' +
-    'in your prompt.',
-  inputSchema: toolSchema(
+function openPrInput(prRefStyle: PrRefStyle): McpTool['inputSchema'] {
+  return toolSchema(
     z.object({
       summary: z
         .string()
@@ -59,11 +50,24 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
             `a body that breaks them is refused: every line starts with \`- \`, no bullet runs past ` +
             `${PR_BODY.bulletChars} characters, no semicolons, no clauses hung off a dash, and the plainest ` +
             'word that is still true. ' +
-            prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
+            prRefGuidance(prRefStyle),
         )
         .optional(),
     }),
-  ),
+  );
+}
+
+export const openPr: ToolFactory = ({ deps, task, ok }) => ({
+  description:
+    'Open the pull request for the work you were dispatched to do. The harness supplies the branch, ' +
+    'the base — which is the rung beneath you when your work is stacked on another part — and the ' +
+    'title convention; you supply what the change does. Commit and push your branch before you call ' +
+    'this — the harness never pushes, and the provider refuses a pull request whose head it cannot ' +
+    'see. You cannot open a pull request for another ' +
+    "agent's work: the branch and base come from your own origin, never from an argument. If this " +
+    'tool reports it is unavailable, open the pull request yourself against the branch and base named ' +
+    'in your prompt.',
+  inputSchema: openPrInput(deps.openPr?.prRefStyle ?? '#'),
   handler: async (args) => {
     const wiring = deps.openPr;
     if (!wiring) {
@@ -78,28 +82,10 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     const bodyRefusal = prBodyRefusal(given);
     if (bodyRefusal !== null) return toolError(`open_pr rejected: ${bodyRefusal}`);
 
-    const issueNumber = issueSubtreeNumber(task.originRef);
-    const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
-    const target = resolveOpenPr(task.originRef, {
-      issues: deps.store.world.getWorldBaseline()?.issues ?? [],
-      plan,
-      parts: plan ? deps.store.plans.listPlanParts(plan.id) : [],
-      defaultBranch: wiring.defaultBranch,
-    });
+    const target = targetFor(deps, wiring, task.originRef);
     if ('error' in target) return toolError(target.error);
 
-    const title = renderPrTitle(
-      wiring.prompts.render('pr-title', {}),
-      prTitleFields({
-        number: target.issueNumber,
-        title: target.issueTitle,
-        position: target.position,
-        total: target.total,
-        type: typeof args.type === 'string' ? args.type : undefined,
-        scope: typeof args.scope === 'string' ? args.scope : undefined,
-        summary,
-      }),
-    );
+    const title = prTitleFor(wiring, target, args, summary);
 
     const footer = renderPrFooter({
       issueNumber: target.issueNumber,
@@ -120,27 +106,8 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         body,
       });
       const prNumber = result.ref ? Number(result.ref) : null;
-      if (prNumber !== null && Number.isFinite(prNumber)) {
-        await seedPrWatch(
-          { prNumber, branch: target.branch },
-          { sink: wiring.sink, store: deps.store, watchLabel: wiring.watchLabel, errors: deps.errors },
-        );
-        await linkPrWorkItem(
-          { prNumber, workItemNumber: target.issueNumber },
-          { sink: wiring.sink, store: deps.store, errors: deps.errors },
-        );
-        // The footer this body carries, kept so the description written against the
-        // open pull request goes in front of it without the body being read back off
-        // the provider. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
-        if (target.partRef !== null) {
-          deps.store.prDescriptions.recordPrBody({ originRef: target.partRef, prNumber, tail: footer });
-          if (given !== '') {
-            deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: given });
-            if (deps.autoUseAgentDescriptions)
-              deps.store.prDescriptions.handOff({ originRef: target.partRef, prNumber, handedBy: null });
-          }
-        }
-      }
+      if (prNumber !== null && Number.isFinite(prNumber))
+        await recordOpenedPr(deps, wiring, target, { prNumber, footer, draft: given });
       return ok({
         opened: result.ok,
         pullRequest: prNumber,
@@ -157,3 +124,67 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     }
   },
 });
+
+type OpenPrWiring = NonNullable<McpToolDeps['openPr']>;
+
+type ResolvedTarget = Exclude<ReturnType<typeof resolveOpenPr>, { error: string }>;
+
+function targetFor(
+  deps: McpToolDeps,
+  wiring: OpenPrWiring,
+  originRef: string | null,
+): ReturnType<typeof resolveOpenPr> {
+  const issueNumber = issueSubtreeNumber(originRef);
+  const plan = issueNumber === null ? null : deps.store.plans.getPlanByOrigin(issueOrigin(issueNumber));
+  return resolveOpenPr(originRef, {
+    issues: deps.store.world.getWorldBaseline()?.issues ?? [],
+    plan,
+    parts: plan ? deps.store.plans.listPlanParts(plan.id) : [],
+    defaultBranch: wiring.defaultBranch,
+  });
+}
+
+function prTitleFor(
+  wiring: OpenPrWiring,
+  target: ResolvedTarget,
+  args: Record<string, unknown>,
+  summary: string,
+): string {
+  return renderPrTitle(
+    wiring.prompts.render('pr-title', {}),
+    prTitleFields({
+      number: target.issueNumber,
+      title: target.issueTitle,
+      position: target.position,
+      total: target.total,
+      type: typeof args.type === 'string' ? args.type : undefined,
+      scope: typeof args.scope === 'string' ? args.scope : undefined,
+      summary,
+    }),
+  );
+}
+
+async function recordOpenedPr(
+  deps: McpToolDeps,
+  wiring: OpenPrWiring,
+  target: ResolvedTarget,
+  { prNumber, footer, draft }: { prNumber: number; footer: string; draft: string },
+): Promise<void> {
+  await seedPrWatch(
+    { prNumber, branch: target.branch },
+    { sink: wiring.sink, store: deps.store, watchLabel: wiring.watchLabel, errors: deps.errors },
+  );
+  await linkPrWorkItem(
+    { prNumber, workItemNumber: target.issueNumber },
+    { sink: wiring.sink, store: deps.store, errors: deps.errors },
+  );
+  // The footer this body carries, kept so the description written against the
+  // open pull request goes in front of it without the body being read back off
+  // the provider. → docs/spec/07-pull-requests.md#the-operator-writes-the-description
+  if (target.partRef === null) return;
+  deps.store.prDescriptions.recordPrBody({ originRef: target.partRef, prNumber, tail: footer });
+  if (draft === '') return;
+  deps.store.prDescriptions.recordDraft({ originRef: target.partRef, prNumber, text: draft });
+  if (deps.autoUseAgentDescriptions)
+    deps.store.prDescriptions.handOff({ originRef: target.partRef, prNumber, handedBy: null });
+}

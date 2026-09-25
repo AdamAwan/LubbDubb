@@ -92,15 +92,21 @@ export function PlanMap({
           />
         ))}
       </svg>
-      <div className="pm-map-key">
-        <span>
-          <i></i>stacks on — cut from that branch, starts once it pushes
-        </span>
-        <span>
-          <i className="dash"></i>rejoin — waits for <em>every</em> one to merge
-        </span>
-        <span className="human">▭ dashed border — a step a person does</span>
-      </div>
+      <MapKey />
+    </div>
+  );
+}
+
+function MapKey() {
+  return (
+    <div className="pm-map-key">
+      <span>
+        <i></i>stacks on — cut from that branch, starts once it pushes
+      </span>
+      <span>
+        <i className="dash"></i>rejoin — waits for <em>every</em> one to merge
+      </span>
+      <span className="human">▭ dashed border — a step a person does</span>
     </div>
   );
 }
@@ -169,16 +175,19 @@ function stateOf(part: PlanPartView, queue: QueueItem | undefined): { label: str
       return { label: 'running', tone: 'live' };
     case 'blocked':
       return { label: 'held', tone: 'bad' };
-    default: {
-      if (part.expectedKind === 'human') return { label: 'by hand', tone: 'human' };
-      if (queue?.status === 'dispatching') return { label: '▶ next', tone: 'live' };
-      if (queue?.status === 'unapproved') return { label: 'unapproved', tone: 'wait' };
-      if (queue?.status === 'capped') return { label: 'capped', tone: 'wait' };
-      if (part.dependsOn.length > 1) return { label: `waits for all ${part.dependsOn.length}`, tone: 'wait' };
-      if (part.dependsOn.length === 1) return { label: 'after the one above', tone: 'wait' };
-      return { label: 'not started', tone: 'wait' };
-    }
+    default:
+      return unstartedStateOf(part, queue);
   }
+}
+
+function unstartedStateOf(part: PlanPartView, queue: QueueItem | undefined): { label: string; tone: string } {
+  if (part.expectedKind === 'human') return { label: 'by hand', tone: 'human' };
+  if (queue?.status === 'dispatching') return { label: '▶ next', tone: 'live' };
+  if (queue?.status === 'unapproved') return { label: 'unapproved', tone: 'wait' };
+  if (queue?.status === 'capped') return { label: 'capped', tone: 'wait' };
+  if (part.dependsOn.length > 1) return { label: `waits for all ${part.dependsOn.length}`, tone: 'wait' };
+  if (part.dependsOn.length === 1) return { label: 'after the one above', tone: 'wait' };
+  return { label: 'not started', tone: 'wait' };
 }
 
 function layout(parts: PlanPartView[]): Node[][] {

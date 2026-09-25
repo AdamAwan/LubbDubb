@@ -54,48 +54,17 @@ export function LocalValidationReport({
       </p>
     );
 
-  const tone = localValidationTone(validation.status);
   const running = inFlight(validation);
-  const door = (id: string | null, label: string) => {
-    if (id === null) return null;
-    return liveAgents.has(id) ? (
-      <AgentOnIt agentId={id} actions={actions} note={`${label} — open its transcript`} />
-    ) : (
-      <button type="button" className="cn-openagent" title={`Open ${label}`} onClick={() => actions.select(id)}>
-        {label} ↗
-      </button>
-    );
-  };
-
   return (
     <div className={`cn-lv${validation.status === 'passed' ? ' cn-lv-passed' : ''}`}>
-      <div className="cn-row">
-        <i className={`cn-lamp ${LAMP[tone]}`} />
-        <span className="cn-grow">
-          <b className="cn-name">{running ? localValidationSaid(validation) : STATUS_WORD[validation.status]}</b>
-          <span className="cn-sub">
-            {`asked ${relTime(validation.requestedAt, now)}`}
-            {validation.endedAt === null ? '' : ` · ended ${relTime(validation.endedAt, now)}`}
-            {' · '}
-            <code>{validation.ref}</code>
-            {validation.commit === null ? '' : ' @ '}
-            {validation.commit === null ? '' : <code title={validation.commit}>{validation.commit.slice(0, 7)}</code>}
-          </span>
-        </span>
-        <span className="cn-refs">
-          {door(validation.agent?.id ?? null, 'the validator')}
-          {door(validation.fixAgent?.id ?? null, 'the fix agent')}
-        </span>
-        {running && (
-          <ConfirmButton
-            className={CONTROL_CLASS}
-            label="Call it off"
-            confirmLabel="Call it off — really"
-            title="Settle this validation without a reading. The environment is left exactly as it is."
-            onConfirm={() => actions.cancelLocalValidation(issueNumber)}
-          />
-        )}
-      </div>
+      <ReportHeader
+        validation={validation}
+        running={running}
+        issueNumber={issueNumber}
+        liveAgents={liveAgents}
+        now={now}
+        actions={actions}
+      />
 
       {/* Why the control is not on the header, drawn on the card whether or not
           there is a row — an operator asking "why can I not press it again" asks it
@@ -111,41 +80,9 @@ export function LocalValidationReport({
         <p className="cn-sub cn-wrap">{validation.note}</p>
       )}
 
-      {validation.findings.length > 0 && (
-        <div className="cn-rows">
-          {validation.findings.map((finding, index) => (
-            <div className="cn-row" key={`${finding.title}-${String(index)}`}>
-              <Tag tone={SEVERITY[finding.severity]} fill>
-                {finding.severity}
-              </Tag>
-              <span className="cn-grow">
-                <b className="cn-name">{finding.title}</b>
-                <span className="cn-sub cn-wrap">{finding.detail}</span>
-              </span>
-              {finding.url !== null && (
-                <ExtLink href={finding.url} title={finding.url}>
-                  the page
-                </ExtLink>
-              )}
-              {shotFor(validation, finding)}
-            </div>
-          ))}
-        </div>
-      )}
+      {validation.findings.length > 0 && <Findings validation={validation} />}
 
-      {validation.visited.length > 0 && (
-        <p className="cn-sub">
-          {'Visited · '}
-          {validation.visited.map((url, index) => (
-            <span key={url}>
-              {index === 0 ? '' : ', '}
-              <ExtLink href={url} title={url}>
-                {url}
-              </ExtLink>
-            </span>
-          ))}
-        </p>
-      )}
+      {validation.visited.length > 0 && <Visited visited={validation.visited} />}
 
       {/* Everything it saved, including the shots no finding pointed at: a picture
           of the page that worked is how somebody tells "it passed" from "it was
@@ -167,6 +104,118 @@ export function LocalValidationReport({
         </details>
       )}
     </div>
+  );
+}
+
+function AgentDoor({
+  id,
+  label,
+  liveAgents,
+  actions,
+}: {
+  id: string | null;
+  label: string;
+  liveAgents: ReadonlySet<string>;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  if (id === null) return null;
+  return liveAgents.has(id) ? (
+    <AgentOnIt agentId={id} actions={actions} note={`${label} — open its transcript`} />
+  ) : (
+    <button type="button" className="cn-openagent" title={`Open ${label}`} onClick={() => actions.select(id)}>
+      {label} ↗
+    </button>
+  );
+}
+
+function ReportHeader({
+  validation,
+  running,
+  issueNumber,
+  liveAgents,
+  now,
+  actions,
+}: {
+  validation: LocalValidationView;
+  running: boolean;
+  issueNumber: number;
+  liveAgents: ReadonlySet<string>;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <div className="cn-row">
+      <i className={`cn-lamp ${LAMP[localValidationTone(validation.status)]}`} />
+      <span className="cn-grow">
+        <b className="cn-name">{running ? localValidationSaid(validation) : STATUS_WORD[validation.status]}</b>
+        <span className="cn-sub">
+          {`asked ${relTime(validation.requestedAt, now)}`}
+          {validation.endedAt === null ? '' : ` · ended ${relTime(validation.endedAt, now)}`}
+          {' · '}
+          <code>{validation.ref}</code>
+          {validation.commit === null ? '' : ' @ '}
+          {validation.commit === null ? '' : <code title={validation.commit}>{validation.commit.slice(0, 7)}</code>}
+        </span>
+      </span>
+      <span className="cn-refs">
+        <AgentDoor id={validation.agent?.id ?? null} label="the validator" liveAgents={liveAgents} actions={actions} />
+        <AgentDoor
+          id={validation.fixAgent?.id ?? null}
+          label="the fix agent"
+          liveAgents={liveAgents}
+          actions={actions}
+        />
+      </span>
+      {running && (
+        <ConfirmButton
+          className={CONTROL_CLASS}
+          label="Call it off"
+          confirmLabel="Call it off — really"
+          title="Settle this validation without a reading. The environment is left exactly as it is."
+          onConfirm={() => actions.cancelLocalValidation(issueNumber)}
+        />
+      )}
+    </div>
+  );
+}
+
+function Findings({ validation }: { validation: LocalValidationView }): JSX.Element {
+  return (
+    <div className="cn-rows">
+      {validation.findings.map((finding, index) => (
+        <div className="cn-row" key={`${finding.title}-${String(index)}`}>
+          <Tag tone={SEVERITY[finding.severity]} fill>
+            {finding.severity}
+          </Tag>
+          <span className="cn-grow">
+            <b className="cn-name">{finding.title}</b>
+            <span className="cn-sub cn-wrap">{finding.detail}</span>
+          </span>
+          {finding.url !== null && (
+            <ExtLink href={finding.url} title={finding.url}>
+              the page
+            </ExtLink>
+          )}
+          {shotFor(validation, finding)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Visited({ visited }: { visited: LocalValidationView['visited'] }): JSX.Element {
+  return (
+    <p className="cn-sub">
+      {'Visited · '}
+      {visited.map((url, index) => (
+        <span key={url}>
+          {index === 0 ? '' : ', '}
+          <ExtLink href={url} title={url}>
+            {url}
+          </ExtLink>
+        </span>
+      ))}
+    </p>
   );
 }
 

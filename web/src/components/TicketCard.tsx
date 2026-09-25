@@ -39,19 +39,12 @@ export function TicketCard({
   const age = row.changedAt === null ? '' : relAge(row.changedAt, now);
   const reason = cardReason(row, issue, watchLabel, age);
   const watched = watchReading(issue, row, watchLabel) === 'watched';
-  const off =
-    watchLabel === ''
-      ? 'No watch label configured — the watch gate is off'
-      : frozen
-        ? 'Closed in the tracker — there is nothing here to tag'
-        : issue === null
-          ? 'The world no longer holds this item, so there is nothing to tag'
-          : null;
+  const off = watchOff(watchLabel, frozen, issue);
   const also = issue === null ? '' : cascadeNote(issue, containerTypes);
 
   return (
     <article
-      className={`tb-card${frozen ? ' frozen' : ''}${writing !== null ? ' writing' : ''}${refused !== null ? ' refused' : ''}`}
+      className={cardClass(frozen, writing, refused)}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -62,19 +55,14 @@ export function TicketCard({
         <span className="tb-id">#{row.number}</span>
         {row.issueType !== null && <Tag tone={issueTypeTone(row.issueType)}>{row.issueType}</Tag>}
         {reason.tone === 'held' && <i className="tickets-lamp" />}
-        <AsyncButton
-          className={`tb-dot${watched ? ' on' : ''}`}
-          disabled={off !== null}
-          onClick={() => actions.setIssueWatched(row.number, !watched)}
-          title={
-            off ??
-            (watched
-              ? `Take "${watchLabel}" off #${row.number}${also}, so the harness leaves it alone`
-              : `Tag #${row.number}${also} "${watchLabel}" so the harness picks it up`)
-          }
-        >
-          <span aria-hidden="true" />
-        </AsyncButton>
+        <WatchDot
+          number={row.number}
+          watched={watched}
+          off={off}
+          watchLabel={watchLabel}
+          also={also}
+          onToggle={() => actions.setIssueWatched(row.number, !watched)}
+        />
         <span className="tb-gap" />
         {/* The card names the ticket and this is the way to it — drawn with `<Ref>`,
             never as text, and never inside the button above. */}
@@ -90,20 +78,7 @@ export function TicketCard({
       >
         {row.title}
       </button>
-      <div className="tb-meta">
-        {/* An em dash, not `$0.00`: never worked and worked for free are different
-            facts, and a zero would state the wrong one. */}
-        <span className={row.costUsd === null ? 'none' : 'money'}>
-          {row.costUsd === null ? '—' : fmtUsd(row.costUsd)}
-        </span>
-        {age !== '' && <span>{age}</span>}
-        {row.parent && (
-          <span className="tb-feat" title={`Feature #${row.parent.number}`}>
-            <i className={`tickets-sw f${row.featureSlot ?? 0}`} />
-            {row.parent.title}
-          </span>
-        )}
-      </div>
+      <TicketMeta row={row} age={age} />
       <p className={`tb-why ${reason.tone}`}>{reason.words}</p>
       {writing !== null && (
         <p className="tb-writing">
@@ -115,5 +90,67 @@ export function TicketCard({
           and a snap-back with no sentence reads as the board being broken. */}
       {refused !== null && <p className="tb-refused">{refused}</p>}
     </article>
+  );
+}
+
+function watchOff(watchLabel: string, frozen: boolean, issue: Issue | null): string | null {
+  if (watchLabel === '') return 'No watch label configured — the watch gate is off';
+  if (frozen) return 'Closed in the tracker — there is nothing here to tag';
+  if (issue === null) return 'The world no longer holds this item, so there is nothing to tag';
+  return null;
+}
+
+function cardClass(frozen: boolean, writing: string | null, refused: string | null): string {
+  return `tb-card${frozen ? ' frozen' : ''}${writing !== null ? ' writing' : ''}${refused !== null ? ' refused' : ''}`;
+}
+
+function WatchDot({
+  number,
+  watched,
+  off,
+  watchLabel,
+  also,
+  onToggle,
+}: {
+  number: number;
+  watched: boolean;
+  off: string | null;
+  watchLabel: string;
+  also: string;
+  onToggle: () => Promise<void>;
+}): JSX.Element {
+  return (
+    <AsyncButton
+      className={`tb-dot${watched ? ' on' : ''}`}
+      disabled={off !== null}
+      onClick={onToggle}
+      title={
+        off ??
+        (watched
+          ? `Take "${watchLabel}" off #${number}${also}, so the harness leaves it alone`
+          : `Tag #${number}${also} "${watchLabel}" so the harness picks it up`)
+      }
+    >
+      <span aria-hidden="true" />
+    </AsyncButton>
+  );
+}
+
+function TicketMeta({ row, age }: { row: TicketRow; age: string }): JSX.Element {
+  return (
+    <div className="tb-meta">
+      {/* An em dash, not `$0.00`: never worked and worked for free are different
+          facts, and a zero would state the wrong one. */}
+      <span className={row.costUsd === null ? 'none' : 'money'}>
+        {row.costUsd === null ? '—' : fmtUsd(row.costUsd)}
+      </span>
+      {age !== '' && <span>{age}</span>}
+      {row.parent && (
+        <span className="tb-feat" title={`Feature #${row.parent.number}`}>
+          <i className={`tickets-sw f${row.featureSlot ?? 0}`} />
+          {row.parent.title}
+        </span>
+      )}
+    </div>
   );
 }

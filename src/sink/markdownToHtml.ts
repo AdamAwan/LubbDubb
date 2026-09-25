@@ -26,85 +26,78 @@ export function markdownToHtml(body: string): string {
   const lines = body.replace(/\r\n/g, '\n').split('\n');
   let i = 0;
   while (i < lines.length) {
-    const line = lines[i] as string;
-    const trimmed = line.trim();
-    if (trimmed === '') {
+    const trimmed = (lines[i] as string).trim();
+    if (trimmed === '' || trimmed === '<details>' || trimmed === '</details>') {
       i += 1;
       continue;
     }
-    if (isHtmlComment(trimmed)) {
-      out.push(trimmed);
+    const single = singleLineBlock(trimmed);
+    if (single !== null) {
+      out.push(single);
       i += 1;
       continue;
     }
-    if (trimmed === '<details>' || trimmed === '</details>') {
-      i += 1;
-      continue;
-    }
-    const summary = /^<summary>(.*)<\/summary>$/.exec(trimmed);
-    if (summary) {
-      out.push(`<p><strong>${inline(summary[1] as string)}</strong></p>`);
-      i += 1;
-      continue;
-    }
-    if (/^(-{3,}|_{3,}|\*{3,})$/.test(trimmed)) {
-      out.push('<hr>');
-      i += 1;
-      continue;
-    }
-    if (trimmed.startsWith('```')) {
-      const code: string[] = [];
-      i += 1;
-      while (i < lines.length && !(lines[i] as string).trim().startsWith('```')) {
-        code.push(escapeHtml(lines[i] as string));
-        i += 1;
-      }
-      i += 1;
-      out.push(`<pre><code>${code.join('\n')}</code></pre>`);
-      continue;
-    }
-    const heading = /^(#{1,6})\s+(.*)$/.exec(trimmed);
-    if (heading) {
-      const level = Math.min((heading[1] as string).length + 2, 6);
-      out.push(`<h${level}>${inline(heading[2] as string)}</h${level}>`);
-      i += 1;
-      continue;
-    }
-    if (isItem(line)) {
-      const [html, next] = list(lines, i, indentOf(line));
-      out.push(html);
-      i = next;
-      continue;
-    }
-    if (trimmed.startsWith('>')) {
-      const quoted: string[] = [];
-      while (i < lines.length && (lines[i] as string).trim().startsWith('>')) {
-        quoted.push((lines[i] as string).trim().replace(/^>\s?/, ''));
-        i += 1;
-      }
-      out.push(`<blockquote><p>${quoted.map(inline).join('<br>')}</p></blockquote>`);
-      continue;
-    }
-    if (isEmittedHtml(trimmed)) {
-      out.push(trimmed);
-      i += 1;
-      continue;
-    }
-    if (trimmed.startsWith('<')) {
-      out.push(`<p>${inline(trimmed)}</p>`);
-      i += 1;
-      continue;
-    }
-    const paragraph: string[] = [];
-    while (i < lines.length) {
-      const at = lines[i] as string;
-      if (at.trim() === '' || isItem(at) || isHtml(at.trim()) || at.trim().startsWith('```')) break;
-      paragraph.push(at.trim());
-      i += 1;
-    }
-    out.push(`<p>${paragraph.map(inline).join('<br>')}</p>`);
+    const [html, next] = multiLineBlock(lines, i);
+    out.push(html);
+    i = next;
   }
   return out.join('\n');
+}
+
+function singleLineBlock(trimmed: string): string | null {
+  if (isHtmlComment(trimmed)) return trimmed;
+  const summary = /^<summary>(.*)<\/summary>$/.exec(trimmed);
+  if (summary) return `<p><strong>${inline(summary[1] as string)}</strong></p>`;
+  if (/^(-{3,}|_{3,}|\*{3,})$/.test(trimmed)) return '<hr>';
+  const heading = /^(#{1,6})\s+(.*)$/.exec(trimmed);
+  if (heading) {
+    const level = Math.min((heading[1] as string).length + 2, 6);
+    return `<h${level}>${inline(heading[2] as string)}</h${level}>`;
+  }
+  if (isEmittedHtml(trimmed)) return trimmed;
+  if (trimmed.startsWith('<')) return `<p>${inline(trimmed)}</p>`;
+  return null;
+}
+
+function multiLineBlock(lines: string[], start: number): [string, number] {
+  const line = lines[start] as string;
+  const trimmed = line.trim();
+  if (trimmed.startsWith('```')) return fence(lines, start);
+  if (isItem(line)) return list(lines, start, indentOf(line));
+  if (trimmed.startsWith('>')) return quote(lines, start);
+  return paragraph(lines, start);
+}
+
+function fence(lines: string[], start: number): [string, number] {
+  const code: string[] = [];
+  let i = start + 1;
+  while (i < lines.length && !(lines[i] as string).trim().startsWith('```')) {
+    code.push(escapeHtml(lines[i] as string));
+    i += 1;
+  }
+  return [`<pre><code>${code.join('\n')}</code></pre>`, i + 1];
+}
+
+function quote(lines: string[], start: number): [string, number] {
+  const quoted: string[] = [];
+  let i = start;
+  while (i < lines.length && (lines[i] as string).trim().startsWith('>')) {
+    quoted.push((lines[i] as string).trim().replace(/^>\s?/, ''));
+    i += 1;
+  }
+  return [`<blockquote><p>${quoted.map(inline).join('<br>')}</p></blockquote>`, i];
+}
+
+function paragraph(lines: string[], start: number): [string, number] {
+  const kept: string[] = [];
+  let i = start;
+  while (i < lines.length) {
+    const at = lines[i] as string;
+    if (at.trim() === '' || isItem(at) || isHtml(at.trim()) || at.trim().startsWith('```')) break;
+    kept.push(at.trim());
+    i += 1;
+  }
+  return [`<p>${kept.map(inline).join('<br>')}</p>`, i];
 }
 
 function isHtmlComment(line: string): boolean {

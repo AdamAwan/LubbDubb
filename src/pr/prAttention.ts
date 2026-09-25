@@ -26,7 +26,7 @@ import {
   reviewOrigin,
   reviewPendingLabel,
   reviewReading,
-  reviewSatisfied,
+  isMergeReady,
   reviewTriageOrigin,
   triageRuns,
   triagePendingLabel,
@@ -101,6 +101,26 @@ function assignmentReason(pr: PullRequest, assignment: ViewerAssignment): string
 }
 
 function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
+  const settled = ownershipVerdict(pr, ctx) ?? staffingVerdict(pr, ctx);
+  if (settled) return settled;
+
+  const ci = ciReading(pr, ctx);
+
+  const concerns = prConcerns(pr, ctx, ci);
+  if (concerns.length > 0) return concernVerdict(concerns, ci, ctx);
+
+  if (ci.heldByPolicy.length > 0) {
+    return {
+      status: 'you',
+      reasons: [`${ci.heldByPolicy.join(', ')} failing — the CI policy holds it, so no agent will be sent`],
+    };
+  }
+
+  if (isMergeReady(pr, ctx.defaultBranch, reading(pr, ctx), reviewPolicy(ctx))) return mergeVerdict(pr, ctx);
+  return waitingVerdict(pr, ctx, ci);
+}
+
+function ownershipVerdict(pr: PullRequest, ctx: PrAttentionContext): PrAttention | null {
   const state = prState(pr);
   if (state !== 'open') {
     return { status: 'done', reasons: [state === 'merged' ? 'merged' : 'closed without merging'] };
@@ -117,7 +137,10 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
       reasons: [`${who ? `${who} opened this` : 'somebody else opened this'} — the harness only works its own`],
     };
   }
+  return null;
+}
 
+function staffingVerdict(pr: PullRequest, ctx: PrAttentionContext): PrAttention | null {
   const pending = ctx.proposals.find((p) => p.status === 'pending' && p.ref.startsWith(`pr:${pr.number}:`));
   if (pending) {
     return { status: 'you', reasons: [`awaiting your accept/reject of ${actLabel(pending)} (${pending.id})`] };
@@ -135,57 +158,39 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
       ],
     };
   }
+  return null;
+}
 
-  const ci = ciReading(pr, ctx);
-
-  const concerns = prConcerns(pr, ctx, ci);
+function concernVerdict(concerns: PrConcern[], ci: CiReading, ctx: PrAttentionContext): PrAttention {
   const heldNames = ci.heldByPolicy.join(', ');
   const held = ci.heldByPolicy.length > 0 ? [`${heldNames} failing — held by the CI policy`] : [];
-  if (concerns.length > 0) {
-    const top = concerns[0]!;
-    const others = [...concerns.slice(1).map((c) => c.label), ...held];
-    const verdict = dispatchVerdict(top.origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
-    if (verdict.kind === 'escalate' || verdict.kind === 'hold') {
-      return { status: 'you', reasons: [`${top.label} — the attempt cap is spent, escalated to a human`, ...others] };
-    }
-    if (verdict.kind === 'cooldown') {
-      return { status: 'harness', reasons: [`${top.label} — on cooldown, retrying`, ...others] };
-    }
-    return { status: 'harness', reasons: [`${top.label} — an agent will be dispatched`, ...others] };
+  const top = concerns[0]!;
+  const others = [...concerns.slice(1).map((c) => c.label), ...held];
+  const verdict = dispatchVerdict(top.origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
+  if (verdict.kind === 'escalate' || verdict.kind === 'hold') {
+    return { status: 'you', reasons: [`${top.label} — the attempt cap is spent, escalated to a human`, ...others] };
   }
-
-  if (ci.heldByPolicy.length > 0) {
-    return {
-      status: 'you',
-      reasons: [`${heldNames} failing — the CI policy holds it, so no agent will be sent`],
-    };
+  if (verdict.kind === 'cooldown') {
+    return { status: 'harness', reasons: [`${top.label} — on cooldown, retrying`, ...others] };
   }
+  return { status: 'harness', reasons: [`${top.label} — an agent will be dispatched`, ...others] };
+}
 
-  const mergeReady =
-    !isStackedPr(pr, ctx.defaultBranch) &&
-    pr.ciStatus === 'passing' &&
-    pr.approved === true &&
-    pr.mergeable === true &&
-    pr.mergeableState !== 'behind' &&
-    pr.mergeableState !== 'blocked' &&
-    pr.mergeableState !== 'dirty' &&
-    pr.unresolvedComments.every((c) => c.handled) &&
-    reviewSatisfied(pr, reading(pr, ctx), reviewPolicy(ctx));
-
-  if (mergeReady) {
-    const ref = mergeProposalRef(pr.number);
-    const held = proposalHold('merge', ref, ctx.proposals, {
-      rejectionSignals: ctx.rejectionSignals,
-      now: Date.parse(ctx.now),
-    });
-    const standing = ctx.proposals.find((p) => p.kind === 'merge' && p.ref === ref);
-    if (held && standing?.status === 'rejected') {
-      return { status: 'settled', reasons: [held, 'nothing has happened to this PR since'] };
-    }
-    if (held) return { status: 'harness', reasons: [held] };
-    return { status: 'harness', reasons: ['merge-ready — the merge gate runs next cycle'] };
+function mergeVerdict(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
+  const ref = mergeProposalRef(pr.number);
+  const held = proposalHold('merge', ref, ctx.proposals, {
+    rejectionSignals: ctx.rejectionSignals,
+    now: Date.parse(ctx.now),
+  });
+  const standing = ctx.proposals.find((p) => p.kind === 'merge' && p.ref === ref);
+  if (held && standing?.status === 'rejected') {
+    return { status: 'settled', reasons: [held, 'nothing has happened to this PR since'] };
   }
+  if (held) return { status: 'harness', reasons: [held] };
+  return { status: 'harness', reasons: ['merge-ready — the merge gate runs next cycle'] };
+}
 
+function waitingVerdict(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): PrAttention {
   if (isStackedPr(pr, ctx.defaultBranch)) {
     const base = basePrOf(pr, ctx.openPrs);
     const inherited = inheritedCiFailure(pr, ctx.openPrs);

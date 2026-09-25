@@ -47,6 +47,41 @@ export function IntakeSitting({
   aligning: boolean;
   onClosed: () => Promise<void> | void;
 }): JSX.Element {
+  const sitting = useIntakeSitting(issueNumber, aligning, onClosed);
+  const { composing, recorded } = sitting;
+
+  return (
+    <div className="cn-gate cn-sitting">
+      <div className="cn-gate-over">
+        <h4>Before this goal is planned — anything to write down?</h4>
+        <p className="cn-gate-why">{WHY}</p>
+
+        {!composing && !recorded && (
+          <div className="cn-gate-presses">
+            {(sitting.asksPrediction || sitting.asksCriteria) && (
+              <button
+                type="button"
+                className={buttonClass({ tone: 'primary' })}
+                onClick={() => sitting.setComposing(true)}
+              >
+                Write these down
+              </button>
+            )}
+            <AsyncButton tone="primary" onClick={sitting.close}>
+              Skip, just plan it
+            </AsyncButton>
+          </div>
+        )}
+
+        {composing && <IntakeCompose sitting={sitting} />}
+
+        {recorded && !composing && <IntakeRecorded sitting={sitting} aligning={aligning} />}
+      </div>
+    </div>
+  );
+}
+
+function useIntakeSitting(issueNumber: number, aligning: boolean, onClosed: () => Promise<void> | void) {
   const [loaded, setLoaded] = useState<Loaded>({ criteria: null, predicted: null });
   const [composing, setComposing] = useState(false);
   const [revising, setRevising] = useState(false);
@@ -104,147 +139,165 @@ export function IntakeSitting({
     await load();
   };
 
-  const current = loaded.criteria?.current ?? null;
-  const alignment = loaded.criteria?.alignment ?? null;
+  return {
+    predicted: loaded.predicted,
+    current: loaded.criteria?.current ?? null,
+    alignment: loaded.criteria?.alignment ?? null,
+    asksPrediction,
+    asksCriteria,
+    recorded,
+    composing,
+    setComposing,
+    revising,
+    setRevising,
+    draft,
+    setDraft,
+    criteria,
+    setCriteria,
+    refusal,
+    setRefusal,
+    close,
+    record,
+    revise,
+  };
+}
 
+type Sitting = ReturnType<typeof useIntakeSitting>;
+
+function IntakeCompose({ sitting }: { sitting: Sitting }): JSX.Element {
+  const { asksPrediction, asksCriteria, draft, setDraft, refusal } = sitting;
   return (
-    <div className="cn-gate cn-sitting">
-      <div className="cn-gate-over">
-        <h4>Before this goal is planned — anything to write down?</h4>
-        <p className="cn-gate-why">{WHY}</p>
-
-        {!composing && !recorded && (
-          <div className="cn-gate-presses">
-            {(asksPrediction || asksCriteria) && (
-              <button type="button" className={buttonClass({ tone: 'primary' })} onClick={() => setComposing(true)}>
-                Write these down
-              </button>
-            )}
-            <AsyncButton tone="primary" onClick={close}>
-              Skip, just plan it
-            </AsyncButton>
-          </div>
-        )}
-
-        {composing && (
-          <div className="cn-gate-slots">
-            {asksPrediction &&
-              SLOTS.map(({ key, question }) => (
-                <label key={key}>
-                  <span>{question}</span>
-                  <textarea
-                    className="cn-gate-slot"
-                    rows={2}
-                    value={draft[key]}
-                    placeholder="Skip this one by leaving it empty"
-                    onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                  />
-                </label>
-              ))}
-            {asksPrediction && <p className="cn-gate-kept">{CONTAINMENT}</p>}
-            {asksCriteria && (
-              <div className="cn-gate-crit">
-                <label>
-                  <span>What “done” means for this goal</span>
-                  <p className="cn-gate-crit-why">{REACHES_THE_FLEET}</p>
-                  <textarea
-                    className="cn-gate-slot"
-                    rows={4}
-                    value={criteria}
-                    placeholder="One criterion per line — skip this by leaving it empty"
-                    onChange={(e) => setCriteria(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
-            {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
-            <div className="cn-gate-presses">
-              <AsyncButton tone="primary" onClick={record} onRefused={setRefusal}>
-                Record these
-              </AsyncButton>
-              <button type="button" className={buttonClass({})} onClick={() => setComposing(false)}>
-                Back
-              </button>
-            </div>
-          </div>
-        )}
-
-        {recorded && !composing && (
-          <div className="cn-sitting-recorded">
-            {loaded.predicted === true && (
-              <p className="cn-gate-kept">Your prediction is recorded, and kept from every agent but its judge.</p>
-            )}
-            {current !== null && !revising && (
-              <div className="cn-sitting-crit">
-                <span className="cn-sitting-label">Your criteria (version {current.version})</span>
-                <pre className="cn-sitting-text">{current.text}</pre>
-              </div>
-            )}
-            {current !== null && alignment === null && aligning && (
-              <p className="cn-gate-why">Checking your criteria against the ticket’s own…</p>
-            )}
-            {current !== null && alignment !== null && !revising && (
-              <div className={`cn-align cn-align-${alignment.verdict}`}>
-                <p className="cn-align-verdict">
-                  {VERDICT[alignment.verdict]} {alignment.summary}
-                </p>
-                <ul className="cn-align-points">
-                  {alignment.points.map((point, i) => (
-                    <li key={i} className={`cn-align-${point.tag}`}>
-                      <span className="cn-align-tag">{TAG[point.tag]}</span> {point.point}
-                      {point.note !== null && <span className="cn-align-note"> — {point.note}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {revising && (
-              <div className="cn-gate-crit">
-                <label>
-                  <span>Your criteria, restated in full</span>
-                  <textarea
-                    className="cn-gate-slot"
-                    rows={4}
-                    value={criteria}
-                    onChange={(e) => setCriteria(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
-            {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
-            <div className="cn-gate-presses">
-              {revising ? (
-                <>
-                  <AsyncButton tone="primary" onClick={revise} onRefused={setRefusal}>
-                    Record this version
-                  </AsyncButton>
-                  <button type="button" className={buttonClass({})} onClick={() => setRevising(false)}>
-                    Back
-                  </button>
-                </>
-              ) : (
-                <>
-                  <AsyncButton tone="primary" onClick={close}>
-                    {alignment?.verdict === 'conflicting' ? 'Plan it anyway' : 'Start planning'}
-                  </AsyncButton>
-                  {current !== null && (
-                    <button
-                      type="button"
-                      className={buttonClass({})}
-                      onClick={() => {
-                        setCriteria(current.text);
-                        setRevising(true);
-                      }}
-                    >
-                      Revise criteria
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        )}
+    <div className="cn-gate-slots">
+      {asksPrediction &&
+        SLOTS.map(({ key, question }) => (
+          <label key={key}>
+            <span>{question}</span>
+            <textarea
+              className="cn-gate-slot"
+              rows={2}
+              value={draft[key]}
+              placeholder="Skip this one by leaving it empty"
+              onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+            />
+          </label>
+        ))}
+      {asksPrediction && <p className="cn-gate-kept">{CONTAINMENT}</p>}
+      {asksCriteria && (
+        <div className="cn-gate-crit">
+          <label>
+            <span>What “done” means for this goal</span>
+            <p className="cn-gate-crit-why">{REACHES_THE_FLEET}</p>
+            <textarea
+              className="cn-gate-slot"
+              rows={4}
+              value={sitting.criteria}
+              placeholder="One criterion per line — skip this by leaving it empty"
+              onChange={(e) => sitting.setCriteria(e.target.value)}
+            />
+          </label>
+        </div>
+      )}
+      {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
+      <div className="cn-gate-presses">
+        <AsyncButton tone="primary" onClick={sitting.record} onRefused={sitting.setRefusal}>
+          Record these
+        </AsyncButton>
+        <button type="button" className={buttonClass({})} onClick={() => sitting.setComposing(false)}>
+          Back
+        </button>
       </div>
     </div>
+  );
+}
+
+function IntakeRecorded({ sitting, aligning }: { sitting: Sitting; aligning: boolean }): JSX.Element {
+  const { current, alignment, revising, refusal } = sitting;
+  return (
+    <div className="cn-sitting-recorded">
+      {sitting.predicted === true && (
+        <p className="cn-gate-kept">Your prediction is recorded, and kept from every agent but its judge.</p>
+      )}
+      {current !== null && !revising && (
+        <div className="cn-sitting-crit">
+          <span className="cn-sitting-label">Your criteria (version {current.version})</span>
+          <pre className="cn-sitting-text">{current.text}</pre>
+        </div>
+      )}
+      {current !== null && alignment === null && aligning && (
+        <p className="cn-gate-why">Checking your criteria against the ticket’s own…</p>
+      )}
+      {current !== null && alignment !== null && !revising && <AlignmentReading alignment={alignment} />}
+      {revising && (
+        <div className="cn-gate-crit">
+          <label>
+            <span>Your criteria, restated in full</span>
+            <textarea
+              className="cn-gate-slot"
+              rows={4}
+              value={sitting.criteria}
+              onChange={(e) => sitting.setCriteria(e.target.value)}
+            />
+          </label>
+        </div>
+      )}
+      {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
+      <div className="cn-gate-presses">
+        {revising ? <RevisingPresses sitting={sitting} /> : <RecordedPresses sitting={sitting} />}
+      </div>
+    </div>
+  );
+}
+
+function AlignmentReading({ alignment }: { alignment: NonNullable<GoalCriteriaReading['alignment']> }): JSX.Element {
+  return (
+    <div className={`cn-align cn-align-${alignment.verdict}`}>
+      <p className="cn-align-verdict">
+        {VERDICT[alignment.verdict]} {alignment.summary}
+      </p>
+      <ul className="cn-align-points">
+        {alignment.points.map((point, i) => (
+          <li key={i} className={`cn-align-${point.tag}`}>
+            <span className="cn-align-tag">{TAG[point.tag]}</span> {point.point}
+            {point.note !== null && <span className="cn-align-note"> — {point.note}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RevisingPresses({ sitting }: { sitting: Sitting }): JSX.Element {
+  return (
+    <>
+      <AsyncButton tone="primary" onClick={sitting.revise} onRefused={sitting.setRefusal}>
+        Record this version
+      </AsyncButton>
+      <button type="button" className={buttonClass({})} onClick={() => sitting.setRevising(false)}>
+        Back
+      </button>
+    </>
+  );
+}
+
+function RecordedPresses({ sitting }: { sitting: Sitting }): JSX.Element {
+  const { current } = sitting;
+  return (
+    <>
+      <AsyncButton tone="primary" onClick={sitting.close}>
+        {sitting.alignment?.verdict === 'conflicting' ? 'Plan it anyway' : 'Start planning'}
+      </AsyncButton>
+      {current !== null && (
+        <button
+          type="button"
+          className={buttonClass({})}
+          onClick={() => {
+            sitting.setCriteria(current.text);
+            sitting.setRevising(true);
+          }}
+        >
+          Revise criteria
+        </button>
+      )}
+    </>
   );
 }

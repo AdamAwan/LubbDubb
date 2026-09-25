@@ -1,12 +1,4 @@
 {
-  "scripts/smoke.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/agents/agentManager.ts": {
     "complexity": {
       "count": 2
@@ -28,112 +20,13 @@
       "count": 1
     }
   },
-  "src/dispatcher/issuePickup.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/dispatcher/promptTemplates.ts": {
     "max-lines": {
       "count": 1
     }
   },
-  "src/dispatcher/ruleDispatcher.ts": {
-    "complexity": {
-      "count": 3
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/dispatcher/rules/issuePlan.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/dispatcher/rules/prConcerns.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/environments/policy.ts": {
-    "complexity": {
-      "count": 3
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/executor/actionExecutor.ts": {
     "max-lines": {
-      "count": 1
-    }
-  },
-  "src/graph/workGraph.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/harness.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/insights/operatorInsights.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
-  "src/insights/reliabilityInsights.ts": {
-    "complexity": {
-      "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
-  "src/insights/spendInsights.ts": {
-    "complexity": {
-      "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/insights/spendTrend.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/insights/throughputInsights.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -150,30 +43,6 @@
       "count": 1
     },
     "max-lines": {
-      "count": 1
-    }
-  },
-  "src/mcp/assessment.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/mcp/desktopGoal.ts": {
-    "complexity": {
-      "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/mcp/desktopInbox.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -199,78 +68,8 @@
       "count": 1
     }
   },
-  "src/mcp/tools/openPr.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-depth": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
-  "src/pr/prAttention.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/remoteValidation/briefing.ts": {
-    "complexity": {
-      "count": 2
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/remoteValidation/readings.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/remoteValidation/run.ts": {
-    "complexity": {
-      "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/server/app.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/server/main.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/server/stateSnapshot.ts": {
     "max-lines": {
-      "count": 1
-    }
-  },
-  "src/sink/markdownToHtml.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -308,22 +107,12 @@
       "count": 1
     }
   },
-  "src/supply/runway.ts": {
-    "complexity": {
-      "count": 3
-    }
-  },
   "src/system.ts": {
     "max-lines": {
       "count": 1
     }
   },
   "src/types.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "src/validation/desktopSkill.ts": {
     "max-lines": {
       "count": 1
     }
@@ -341,14 +130,6 @@
       "count": 1
     }
   },
-  "web/src/App.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/api.ts": {
     "max-lines": {
       "count": 1
@@ -359,36 +140,12 @@
       "count": 1
     }
   },
-  "web/src/cockpit/useCockpit.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
-  "web/src/components/AgentDrawer.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/components/AllowanceTab.tsx": {
     "max-lines": {
       "count": 1
     },
     "max-lines-per-function": {
       "count": 2
-    }
-  },
-  "web/src/components/CheckSetAsk.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
     }
   },
   "web/src/components/ConfigValues.tsx": {
@@ -421,22 +178,6 @@
       "count": 3
     }
   },
-  "web/src/components/GoalCriteria.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/HumanTaskActions.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/components/InsightsPage.tsx": {
     "complexity": {
       "count": 2
@@ -448,112 +189,9 @@
       "count": 3
     }
   },
-  "web/src/components/IntakeSitting.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/McpUsageTab.tsx": {
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "web/src/components/ObstaclesPage.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 3
-    }
-  },
-  "web/src/components/PetsCollection.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/PetsPage.tsx": {
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
-  "web/src/components/PlanMap.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/components/PlanModal.tsx": {
     "max-lines": {
       "count": 1
-    }
-  },
-  "web/src/components/PlanRegroup.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/PrDescription.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/PredictionReview.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/RawConfigTab.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/SignalsSection.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/SpendTrendTab.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "web/src/components/TicketCard.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/components/TicketsBoard.tsx": {
-    "max-lines-per-function": {
-      "count": 2
     }
   },
   "web/src/components/TicketsPanel.tsx": {
@@ -578,17 +216,6 @@
       "count": 2
     }
   },
-  "web/src/console/ConsoleRoot.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
   "web/src/console/GoalPage.tsx": {
     "complexity": {
       "count": 3
@@ -598,14 +225,6 @@
     },
     "max-lines-per-function": {
       "count": 4
-    }
-  },
-  "web/src/console/LocalValidationReport.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
     }
   },
   "web/src/console/NeedsBand.tsx": {
@@ -673,14 +292,6 @@
       "count": 1
     }
   },
-  "web/src/view/featureHolds.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "web/src/view/goalPage.ts": {
     "complexity": {
       "count": 1
@@ -694,14 +305,6 @@
       "count": 1
     },
     "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "web/src/view/viewModel.ts": {
-    "complexity": {
       "count": 1
     },
     "max-lines-per-function": {

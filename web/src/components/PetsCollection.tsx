@@ -94,34 +94,27 @@ export function PetsCollection({
   );
 }
 
-function PetCard({
-  pet,
-  now,
-  balance,
-  full,
-  slots,
-  duplicate,
-  onFeed,
-  onRename,
-  onPlace,
-  onBlend,
-  onHatch,
-}: {
+type PetActions = {
+  onFeed: (id: string, beats: number) => Promise<unknown>;
+  onRename: (id: string, name: string) => Promise<unknown>;
+  onPlace: (id: string, placed: boolean) => Promise<unknown>;
+  onBlend: (id: string) => Promise<unknown>;
+  onHatch: (id: string) => void;
+};
+
+type PetCardProps = PetActions & {
   pet: PetView;
   now: number;
   balance: number;
   full: boolean;
   slots: number;
   duplicate: boolean;
-  onFeed: (id: string, beats: number) => Promise<unknown>;
-  onRename: (id: string, name: string) => Promise<unknown>;
-  onPlace: (id: string, placed: boolean) => Promise<unknown>;
-  onBlend: (id: string) => Promise<unknown>;
-  onHatch: (id: string) => void;
-}) {
+};
+
+function PetCard(props: PetCardProps) {
+  const { pet, now, onRename } = props;
   const [name, setName] = useState(pet.name ?? '');
   const egg = pet.openedAt === null;
-  const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
   const dissolved = pet.dissolvedAt !== null;
   const flawed = pet.flaw !== null;
   return (
@@ -145,28 +138,7 @@ function PetCard({
         />
         <span className={`pet-rarity is-${pet.rarity}`}>{pet.rarity}</span>
       </div>
-      <p className="pet-origin">
-        {/* The sentence carries the label, so it is the thing that can run long —
-            clamped in CSS with the whole of it on hover, rather than shortened
-            here, since only the layout knows how wide this card came out. */}
-        <span className="pet-origin-said" title={originLine(pet)}>
-          {originLine(pet)}
-        </span>
-        <br />
-        <span className="muted">
-          {relTime(pet.hatchedAt, now)}
-          {/* The ref is already the whole sentence when there is no label, and
-              printing it twice would say nothing. Where there is one it stays
-              here, in mono, because it is what an operator quotes back at a
-              database. */}
-          {pet.originLabel === null ? null : (
-            <>
-              {' · '}
-              <code className="pet-origin-ref">{pet.originRef}</code>
-            </>
-          )}
-        </span>
-      </p>
+      <PetOrigin pet={pet} now={now} />
       {dissolved ? (
         <p className="pet-blended muted small">
           Blended {relTime(pet.dissolvedAt ?? pet.hatchedAt, now)} — its record stays.
@@ -185,19 +157,7 @@ function PetCard({
       {pet.provenance === 'modified' && pet.flaw === null ? (
         <p className="pet-origin">Found by a build with uncommitted changes.</p>
       ) : null}
-      {egg ? null : (
-        <>
-          <div className="pet-meter" title={`${pet.fed.toLocaleString()} beats fed`}>
-            <i style={{ width: `${stageFill(pet)}%` }} />
-          </div>
-          <div className="pet-stage">
-            <span>{pet.stage}</span>
-            <span className="muted">
-              {pet.beatsToNextStage === null ? 'fully grown' : `${pet.beatsToNextStage.toLocaleString()} to go`}
-            </span>
-          </div>
-        </>
-      )}
+      {egg ? null : <PetGrowth pet={pet} />}
       <div className="pet-acts">
         {/* An egg has one act and the server agrees: it cannot be fed, and it
             cannot be blended, because neither is a decision anybody can make about
@@ -205,55 +165,105 @@ function PetCard({
             in the corner of the rail is the whole point of one. */}
         {egg ? (
           <>
-            <button type="button" className="ghost small" onClick={() => onHatch(pet.id)}>
+            <button type="button" className="ghost small" onClick={() => props.onHatch(pet.id)}>
               Open it
             </button>
-            <AsyncButton
-              ghost
-              size="small"
-              disabled={full}
-              title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
-              onClick={() => onPlace(pet.id, !pet.placed)}
-            >
-              {pet.placed ? 'Take out' : 'Put out'}
-            </AsyncButton>
+            <PlaceButton {...props} />
           </>
         ) : dissolved || flawed ? null : (
-          <>
-            <AsyncButton ghost size="small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
-              Feed 100
-            </AsyncButton>
-            <AsyncButton ghost size="small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
-              {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
-            </AsyncButton>
-            <AsyncButton
-              ghost
-              size="small"
-              disabled={full}
-              title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
-              onClick={() => onPlace(pet.id, !pet.placed)}
-            >
-              {pet.placed ? 'Take out' : 'Put out'}
-            </AsyncButton>
-            <AsyncButton
-              ghost
-              size="small"
-              disabled={!duplicate}
-              title={
-                duplicate
-                  ? undefined
-                  : speciesKnown(pet)
-                    ? `This is your only ${pet.display} — blending is for duplicates`
-                    : 'This is the only one of these you have — blending is for duplicates'
-              }
-              onClick={() => onBlend(pet.id)}
-            >
-              Blend
-            </AsyncButton>
-          </>
+          <LiveActs {...props} />
         )}
       </div>
     </Panel>
+  );
+}
+
+function PetOrigin({ pet, now }: { pet: PetView; now: number }) {
+  return (
+    <p className="pet-origin">
+      {/* The sentence carries the label, so it is the thing that can run long —
+          clamped in CSS with the whole of it on hover, rather than shortened
+          here, since only the layout knows how wide this card came out. */}
+      <span className="pet-origin-said" title={originLine(pet)}>
+        {originLine(pet)}
+      </span>
+      <br />
+      <span className="muted">
+        {relTime(pet.hatchedAt, now)}
+        {/* The ref is already the whole sentence when there is no label, and
+            printing it twice would say nothing. Where there is one it stays
+            here, in mono, because it is what an operator quotes back at a
+            database. */}
+        {pet.originLabel === null ? null : (
+          <>
+            {' · '}
+            <code className="pet-origin-ref">{pet.originRef}</code>
+          </>
+        )}
+      </span>
+    </p>
+  );
+}
+
+function PetGrowth({ pet }: { pet: PetView }) {
+  return (
+    <>
+      <div className="pet-meter" title={`${pet.fed.toLocaleString()} beats fed`}>
+        <i style={{ width: `${stageFill(pet)}%` }} />
+      </div>
+      <div className="pet-stage">
+        <span>{pet.stage}</span>
+        <span className="muted">
+          {pet.beatsToNextStage === null ? 'fully grown' : `${pet.beatsToNextStage.toLocaleString()} to go`}
+        </span>
+      </div>
+    </>
+  );
+}
+
+function PlaceButton({ pet, full, slots, onPlace }: PetCardProps) {
+  return (
+    <AsyncButton
+      ghost
+      size="small"
+      disabled={full}
+      title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
+      onClick={() => onPlace(pet.id, !pet.placed)}
+    >
+      {pet.placed ? 'Take out' : 'Put out'}
+    </AsyncButton>
+  );
+}
+
+function blendRefusal(pet: PetView, duplicate: boolean): string | undefined {
+  if (duplicate) return undefined;
+  return speciesKnown(pet)
+    ? `This is your only ${pet.display} — blending is for duplicates`
+    : 'This is the only one of these you have — blending is for duplicates';
+}
+
+function LiveActs(props: PetCardProps) {
+  const { pet, balance, duplicate, onFeed, onBlend } = props;
+  const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
+  return (
+    <>
+      <AsyncButton ghost size="small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
+        Feed 100
+      </AsyncButton>
+      <AsyncButton ghost size="small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
+        {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
+      </AsyncButton>
+      <PlaceButton {...props} />
+      <AsyncButton
+        ghost
+        size="small"
+        disabled={!duplicate}
+        title={blendRefusal(pet, duplicate)}
+        onClick={() => onBlend(pet.id)}
+      >
+        Blend
+      </AsyncButton>
+    </>
   );
 }
 

@@ -3,7 +3,9 @@ import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { toolSchema } from './schema.js';
 import { proposedCaveats, type CaveatAnswerInput } from '../plans/planCaveats.js';
 import type { DesktopToolFactory } from './desktopContext.js';
-import { toolError, toolJson } from './protocol.js';
+import type { ProposalDesk } from '../proposals/proposalDesk.js';
+import type { Proposal } from '../types.js';
+import { toolError, toolJson, type ToolCallResult } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -118,7 +120,7 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
     const verdict = args.verdict;
-    if (verdict !== 'accept' && verdict !== 'reject' && verdict !== 'close_ticket' && verdict !== 'hold_ticket')
+    if (!isProposalVerdict(verdict))
       return toolError('verdict must be "accept", "reject", "close_ticket" or "hold_ticket".');
     const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
 
@@ -132,70 +134,100 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
     const kind = standing.kind;
     const desk = deps.proposals();
 
-    if (verdict === 'close_ticket' || verdict === 'hold_ticket') {
-      if (kind !== 'plan')
-        return toolError(
-          'These two verdicts are about the ticket rather than the plan, and only a plan proposal has a ticket ' +
-            `to back out of — this one is a "${kind}". Accept it or reject it.`,
-        );
-      if (verdict === 'close_ticket' && note === undefined)
-        return toolError(
-          'note is required to close a ticket — it is posted on the ticket as the reason. A ticket closed for ' +
-            'reasons nobody can read is what this refuses.',
-        );
-      const result = await desk.backOut(id, verdict === 'close_ticket' ? 'close' : 'hold', note);
-      if (!result) return toolError('The proposal was decided by something else just now. Nothing was changed.');
-      return toolJson({
-        id,
-        verdict,
-        detail: result.detail,
-        means:
-          verdict === 'close_ticket'
-            ? 'the ticket is closed with your note posted on it, and the watch tag is off. Nothing was built.'
-            : 'the watch tag is off so nothing works it, and the ticket is left open. Nothing was built.',
-      });
-    }
-
-    if (verdict === 'reject') {
-      const result = desk.reject(id, note);
-      if (!result) return toolError('The proposal was decided by something else just now. Nothing was changed.');
-      return toolJson({
-        id,
-        verdict,
-        kind,
-        detail: result.detail,
-        means:
-          kind === 'plan'
-            ? 'nothing was sent, and the goal goes back to a planner for a fresh decomposition. If the ticket ' +
-              'itself is the problem, that is close_ticket or hold_ticket instead.'
-            : 'nothing was sent, and the rule that proposed it will not ask again.',
-      });
-    }
-
+    if (verdict === 'close_ticket' || verdict === 'hold_ticket') return backOutTicket(desk, id, verdict, kind, note);
+    if (verdict === 'reject') return rejectProposal(desk, id, kind, note);
     const acknowledged = Array.isArray(args.acknowledged) ? (args.acknowledged as string[]) : [];
-    const accepted = await desk.accept(id, note, acknowledged, readAnswers(args.answers));
-    if (!accepted) return toolError('The proposal was decided by something else just now. Nothing was changed.');
-    if ('unacknowledged' in accepted)
-      return toolJson({
-        id,
-        verdict: 'refused',
-        reason: `This plan raises ${accepted.unacknowledged.length} thing(s) that must be acknowledged before it can be approved.`,
-        unacknowledged: accepted.unacknowledged.map((c) => ({ id: c.id, label: c.label, detail: c.detail })),
-        next:
-          'Put these to the operator in their own words, and pass their ids in `acknowledged` once they have ' +
-          'read them. They are the planner saying what it is least sure about, so acknowledging one nobody read ' +
-          'is the whole of what this gate exists to stop.',
-      });
-    return toolJson({
-      id,
-      verdict: 'accept',
-      kind,
-      outcome: accepted.outcome,
-      detail: accepted.detail,
-      means: ACCEPT_MEANS[kind] ?? 'the act was performed as recorded.',
-    });
+    return acceptProposal(desk, id, kind, note, acknowledged, readAnswers(args.answers));
   },
 });
+
+function isProposalVerdict(verdict: unknown): verdict is 'accept' | 'reject' | 'close_ticket' | 'hold_ticket' {
+  return verdict === 'accept' || verdict === 'reject' || verdict === 'close_ticket' || verdict === 'hold_ticket';
+}
+
+const RACED = 'The proposal was decided by something else just now. Nothing was changed.';
+
+async function backOutTicket(
+  desk: ProposalDesk,
+  id: string,
+  verdict: 'close_ticket' | 'hold_ticket',
+  kind: Proposal['kind'],
+  note: string | undefined,
+): Promise<ToolCallResult> {
+  if (kind !== 'plan')
+    return toolError(
+      'These two verdicts are about the ticket rather than the plan, and only a plan proposal has a ticket ' +
+        `to back out of — this one is a "${kind}". Accept it or reject it.`,
+    );
+  if (verdict === 'close_ticket' && note === undefined)
+    return toolError(
+      'note is required to close a ticket — it is posted on the ticket as the reason. A ticket closed for ' +
+        'reasons nobody can read is what this refuses.',
+    );
+  const result = await desk.backOut(id, verdict === 'close_ticket' ? 'close' : 'hold', note);
+  if (!result) return toolError(RACED);
+  return toolJson({
+    id,
+    verdict,
+    detail: result.detail,
+    means:
+      verdict === 'close_ticket'
+        ? 'the ticket is closed with your note posted on it, and the watch tag is off. Nothing was built.'
+        : 'the watch tag is off so nothing works it, and the ticket is left open. Nothing was built.',
+  });
+}
+
+function rejectProposal(
+  desk: ProposalDesk,
+  id: string,
+  kind: Proposal['kind'],
+  note: string | undefined,
+): ToolCallResult {
+  const result = desk.reject(id, note);
+  if (!result) return toolError(RACED);
+  return toolJson({
+    id,
+    verdict: 'reject',
+    kind,
+    detail: result.detail,
+    means:
+      kind === 'plan'
+        ? 'nothing was sent, and the goal goes back to a planner for a fresh decomposition. If the ticket ' +
+          'itself is the problem, that is close_ticket or hold_ticket instead.'
+        : 'nothing was sent, and the rule that proposed it will not ask again.',
+  });
+}
+
+async function acceptProposal(
+  desk: ProposalDesk,
+  id: string,
+  kind: Proposal['kind'],
+  note: string | undefined,
+  acknowledged: string[],
+  answers: CaveatAnswerInput[],
+): Promise<ToolCallResult> {
+  const accepted = await desk.accept(id, note, acknowledged, answers);
+  if (!accepted) return toolError(RACED);
+  if ('unacknowledged' in accepted)
+    return toolJson({
+      id,
+      verdict: 'refused',
+      reason: `This plan raises ${accepted.unacknowledged.length} thing(s) that must be acknowledged before it can be approved.`,
+      unacknowledged: accepted.unacknowledged.map((c) => ({ id: c.id, label: c.label, detail: c.detail })),
+      next:
+        'Put these to the operator in their own words, and pass their ids in `acknowledged` once they have ' +
+        'read them. They are the planner saying what it is least sure about, so acknowledging one nobody read ' +
+        'is the whole of what this gate exists to stop.',
+    });
+  return toolJson({
+    id,
+    verdict: 'accept',
+    kind,
+    outcome: accepted.outcome,
+    detail: accepted.detail,
+    means: ACCEPT_MEANS[kind] ?? 'the act was performed as recorded.',
+  });
+}
 
 export const recoveryDecide: DesktopToolFactory = (deps) => ({
   description:

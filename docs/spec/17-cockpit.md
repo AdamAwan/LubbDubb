@@ -2029,8 +2029,8 @@ sheet.
 **There is no second `Panel`.** `console/Panel.tsx` exported one too: a full-surface overlay, under
 the name the frame has, so which box a file got depended on which path its import resolved to. It
 was [`Modal`](#the-modal)'s `panel` face plus a two-element header, used twice — now `PanelShell`,
-local to `ConsoleRoot.tsx`, where those two call sites are. A backdrop and three ways out are the
-modal's; a shared component was never what was left over.
+local to `ConsoleRootPanels.tsx`, where its one remaining call site is. A backdrop and three ways
+out are the modal's; a shared component was never what was left over.
 
 **`className` is a modifier, never a second face.** What makes a frame _that_ frame stays at the call
 site — `.cn-fb-wants` tinting a Feature that wants a person, `.cfg-pending` bordering staged edits,

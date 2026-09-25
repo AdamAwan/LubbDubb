@@ -112,50 +112,70 @@ export function buildOperatorInsights(input: OperatorInput): OperatorInsights {
   };
 }
 
+interface Tally {
+  offered: number;
+  settled: number;
+  declined: number;
+  openPastWindow: number;
+  parkedMs: number;
+  waits: number[];
+}
+
 function reduce(spec: RowSpec, window: ResolvedWindow, now: number, rateUsdPerMs: number): OperatorRow {
-  const start = window.startMs;
-  let offered = 0;
-  let settled = 0;
-  let declined = 0;
-  let openPastWindow = 0;
-  let parkedMs = 0;
-  const waits: number[] = [];
-
-  for (const datum of spec.data) {
-    const openedMs = Date.parse(datum.openedAt);
-    if (Number.isNaN(openedMs)) continue;
-    if (inWindow(window, openedMs)) offered += 1;
-    if (datum.outcome === 'open' && start !== null && openedMs < start) openPastWindow += 1;
-
-    const raw = datum.settledAt === null ? null : Date.parse(datum.settledAt);
-    const settledMs = raw === null || Number.isNaN(raw) ? null : raw;
-    const at = settledMs ?? openedMs;
-    if (datum.outcome !== 'open' && inWindow(window, at)) {
-      if (datum.outcome === 'answered') settled += 1;
-      else declined += 1;
-      if (settledMs !== null) waits.push(Math.max(0, settledMs - openedMs));
-    }
-
-    if (spec.parks && spec.stamps) {
-      const closedMs = settledMs ?? (datum.outcome === 'open' ? now : openedMs);
-      const from = Math.max(openedMs, start ?? openedMs);
-      parkedMs += Math.max(0, Math.min(closedMs, now) - from);
-    }
-  }
-
+  const t = tally(spec, window, now);
   return {
     id: spec.id,
     kind: spec.kind,
     subject: spec.subject,
     label: spec.label,
     blurb: spec.blurb,
-    offered: spec.countsOffers ? offered : null,
-    settled,
-    declined: spec.declinable ? declined : null,
-    openPastWindow,
-    medianAnswerMs: waits.length === 0 ? null : median(waits),
-    parkedCostUsd: spec.parks && spec.stamps ? roundUsd(parkedMs * rateUsdPerMs) : null,
+    offered: spec.countsOffers ? t.offered : null,
+    settled: t.settled,
+    declined: spec.declinable ? t.declined : null,
+    openPastWindow: t.openPastWindow,
+    medianAnswerMs: t.waits.length === 0 ? null : median(t.waits),
+    parkedCostUsd: spec.parks && spec.stamps ? roundUsd(t.parkedMs * rateUsdPerMs) : null,
   };
+}
+
+function tally(spec: RowSpec, window: ResolvedWindow, now: number): Tally {
+  const start = window.startMs;
+  const t: Tally = { offered: 0, settled: 0, declined: 0, openPastWindow: 0, parkedMs: 0, waits: [] };
+
+  for (const datum of spec.data) {
+    const openedMs = Date.parse(datum.openedAt);
+    if (Number.isNaN(openedMs)) continue;
+    if (inWindow(window, openedMs)) t.offered += 1;
+    if (datum.outcome === 'open' && start !== null && openedMs < start) t.openPastWindow += 1;
+
+    const settledMs = parseSettled(datum.settledAt);
+    const at = settledMs ?? openedMs;
+    if (datum.outcome !== 'open' && inWindow(window, at)) {
+      if (datum.outcome === 'answered') t.settled += 1;
+      else t.declined += 1;
+      if (settledMs !== null) t.waits.push(Math.max(0, settledMs - openedMs));
+    }
+
+    if (spec.parks && spec.stamps) t.parkedMs += parkedSpan(datum, openedMs, settledMs, start, now);
+  }
+  return t;
+}
+
+function parseSettled(settledAt: string | null): number | null {
+  const raw = settledAt === null ? null : Date.parse(settledAt);
+  return raw === null || Number.isNaN(raw) ? null : raw;
+}
+
+function parkedSpan(
+  datum: Datum,
+  openedMs: number,
+  settledMs: number | null,
+  start: number | null,
+  now: number,
+): number {
+  const closedMs = settledMs ?? (datum.outcome === 'open' ? now : openedMs);
+  const from = Math.max(openedMs, start ?? openedMs);
+  return Math.max(0, Math.min(closedMs, now) - from);
 }
 
 function median(values: number[]): number {
@@ -173,13 +193,7 @@ function askSpecs(input: OperatorInput): RowSpec[] {
       subject: 'escalation',
       label: 'Escalation',
       blurb: 'The harness stopped and put a question to a person',
-      data: input.escalations.map(
-        (e): Datum => ({
-          openedAt: e.createdAt,
-          settledAt: e.answeredAt,
-          outcome: e.answeredAt !== null ? 'answered' : e.status === 'dismissed' ? 'declined' : 'open',
-        }),
-      ),
+      data: input.escalations.map(fromEscalation),
       declinable: true,
       countsOffers: true,
       parks: true,
@@ -215,20 +229,7 @@ function askSpecs(input: OperatorInput): RowSpec[] {
       subject: 'obstacle',
       label: 'Obstacle ownership',
       blurb: 'Something in the fleet’s way, waiting for somebody to own it',
-      data: input.obstacles
-        .filter((o) => o.kind === 'obstacle')
-        .map(
-          (o): Datum => ({
-            openedAt: o.createdAt,
-            settledAt: null,
-            outcome:
-              o.state === 'owned' || o.state === 'resolved'
-                ? 'answered'
-                : o.endedBy === 'retired' || o.state === 'muted'
-                  ? 'declined'
-                  : 'open',
-          }),
-        ),
+      data: input.obstacles.filter((o) => o.kind === 'obstacle').map(fromObstacle),
       declinable: true,
       countsOffers: true,
       parks: true,
@@ -252,16 +253,7 @@ function askSpecs(input: OperatorInput): RowSpec[] {
       subject: 'upgrade',
       label: 'Upgrade',
       blurb: 'A newer build of the harness itself, waiting to be taken',
-      data:
-        input.upgrade.requestedAt === null
-          ? []
-          : [
-              {
-                openedAt: input.upgrade.requestedAt,
-                settledAt: input.upgrade.state === 'applying' ? input.upgrade.requestedAt : null,
-                outcome: input.upgrade.state === 'applying' ? 'answered' : 'open',
-              },
-            ],
+      data: fromUpgrade(input.upgrade),
       declinable: false,
       countsOffers: true,
       parks: true,
@@ -278,7 +270,7 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       subject: 'pr',
       label: 'Authorising a landing',
       blurb: 'A whole chain cleared to land in one click',
-      data: input.landings.map((l): Datum => ({ openedAt: l.createdAt, settledAt: l.createdAt, outcome: 'answered' })),
+      data: input.landings.map((l) => answered(l.createdAt, l.createdAt)),
       declinable: false,
       countsOffers: false,
       parks: false,
@@ -290,13 +282,7 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       subject: 'plan',
       label: 'Amending a plan',
       blurb: 'A correction to a plan that was already running',
-      data: input.amendments.map(
-        (a): Datum => ({
-          openedAt: a.createdAt,
-          settledAt: a.decidedAt,
-          outcome: a.status === 'applied' ? 'answered' : a.status === 'declined' ? 'declined' : 'open',
-        }),
-      ),
+      data: input.amendments.map(fromAmendment),
       declinable: true,
       countsOffers: true,
       parks: false,
@@ -308,9 +294,7 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       subject: 'plan',
       label: 'Abandoning a plan',
       blurb: 'The plan was dropped and nothing replaced it',
-      data: input.plans
-        .filter((p) => p.status === 'abandoned')
-        .map((p): Datum => ({ openedAt: p.createdAt, settledAt: p.updatedAt, outcome: 'answered' })),
+      data: input.plans.filter((p) => p.status === 'abandoned').map((p) => answered(p.createdAt, p.updatedAt)),
       declinable: false,
       countsOffers: false,
       parks: false,
@@ -322,15 +306,7 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       subject: 'validation',
       label: 'Settling a check',
       blurb: 'A person ran the procedure and recorded what it did',
-      data: input.checks
-        .filter((c) => c.resultBy === 'operator' && c.resultAt !== null)
-        .map(
-          (c): Datum => ({
-            openedAt: c.createdAt,
-            settledAt: c.resultAt,
-            outcome: c.state === 'failed' ? 'declined' : 'answered',
-          }),
-        ),
+      data: input.checks.filter((c) => c.resultBy === 'operator' && c.resultAt !== null).map(fromCheck),
       declinable: true,
       countsOffers: false,
       parks: false,
@@ -342,9 +318,7 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       subject: 'goal',
       label: 'Concluding a goal',
       blurb: 'The operator’s own verdict on whether a goal is finished',
-      data: input.conclusions
-        .filter((c) => c.by === 'operator')
-        .map((c): Datum => ({ openedAt: c.createdAt, settledAt: c.updatedAt, outcome: 'answered' })),
+      data: input.conclusions.filter((c) => c.by === 'operator').map((c) => answered(c.createdAt, c.updatedAt)),
       declinable: false,
       countsOffers: false,
       parks: false,
@@ -358,13 +332,17 @@ function actSpecs(input: OperatorInput): RowSpec[] {
       blurb: 'A run halted by a person rather than by its own end',
       data: input.agents
         .filter((a) => a.status === 'killed' || a.status === 'interrupted')
-        .map((a): Datum => ({ openedAt: a.startedAt, settledAt: a.endedAt, outcome: 'answered' })),
+        .map((a) => answered(a.startedAt, a.endedAt)),
       declinable: false,
       countsOffers: false,
       parks: false,
       stamps: true,
     },
   ];
+}
+
+function answered(openedAt: string, settledAt: string | null): Datum {
+  return { openedAt, settledAt, outcome: 'answered' };
 }
 
 function fromHumanTask(task: HumanTask): Datum {
@@ -380,5 +358,53 @@ function fromProposal(proposal: Proposal): Datum {
     openedAt: proposal.createdAt,
     settledAt: proposal.decidedAt,
     outcome: proposal.status === 'accepted' ? 'answered' : proposal.status === 'rejected' ? 'declined' : 'open',
+  };
+}
+
+function fromEscalation(e: Escalation): Datum {
+  return {
+    openedAt: e.createdAt,
+    settledAt: e.answeredAt,
+    outcome: e.answeredAt !== null ? 'answered' : e.status === 'dismissed' ? 'declined' : 'open',
+  };
+}
+
+function fromObstacle(o: Obstacle): Datum {
+  return {
+    openedAt: o.createdAt,
+    settledAt: null,
+    outcome:
+      o.state === 'owned' || o.state === 'resolved'
+        ? 'answered'
+        : o.endedBy === 'retired' || o.state === 'muted'
+          ? 'declined'
+          : 'open',
+  };
+}
+
+function fromUpgrade(upgrade: UpgradeIntent): Datum[] {
+  if (upgrade.requestedAt === null) return [];
+  return [
+    {
+      openedAt: upgrade.requestedAt,
+      settledAt: upgrade.state === 'applying' ? upgrade.requestedAt : null,
+      outcome: upgrade.state === 'applying' ? 'answered' : 'open',
+    },
+  ];
+}
+
+function fromAmendment(a: PlanAmendment): Datum {
+  return {
+    openedAt: a.createdAt,
+    settledAt: a.decidedAt,
+    outcome: a.status === 'applied' ? 'answered' : a.status === 'declined' ? 'declined' : 'open',
+  };
+}
+
+function fromCheck(c: ValidationCheck): Datum {
+  return {
+    openedAt: c.createdAt,
+    settledAt: c.resultAt,
+    outcome: c.state === 'failed' ? 'declined' : 'answered',
   };
 }
