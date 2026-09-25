@@ -6,6 +6,7 @@ import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { Issue } from '../types.js';
 import { goalValidation, type GoalValidation } from '../validation/goal.js';
+import { checkSetUnanswered } from '../validation/planApproval.js';
 import { closeOutPass } from './closeOut.js';
 
 // → docs/spec/24-environments.md
@@ -38,12 +39,16 @@ export class DeliveryCloseOutDesk {
       existing,
       validation: this.validationByOrigin(),
       criteria: this.criteriaByOrigin(deliveries.map((d) => d.originRef)),
-      validating: new Set(
-        this.store.humanTasks
+      validating: new Set([
+        ...this.store.humanTasks
           .listHumanTasksOfKind('validate')
           .filter((t) => t.status === 'open' && t.originRef !== null)
           .map((t) => t.originRef!),
-      ),
+        ...this.store.validation
+          .listValidationPlanRecords()
+          .filter(checkSetUnanswered)
+          .map((r) => r.originRef),
+      ]),
       watch: new Map(
         deliveries.flatMap((d) => {
           const said = watchCloseOutLine(d.originRef, readings);

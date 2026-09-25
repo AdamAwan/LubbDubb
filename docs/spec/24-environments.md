@@ -722,6 +722,13 @@ Filed together — which is what happened before — the bench says "run these c
 ticket" in the same breath, and the second is an invitation to skip the first: whoever is looking has
 the close in front of them and no reason to believe the order matters.
 
+The close also waits on a check set that is **not yet answered**: authored and still awaiting the
+operator's accept, or sent back and being rewritten (a `validation_plans` record with no `releasedAt`
+and an `authoredAt` or a `note`). The `validate` row is only filed once the set is released
+([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)), so without this the bench
+showed the checks proposal and the close-out together — the same breath this section exists to stop.
+Accepting files the `validate` row on the same pulse, which takes over the hold.
+
 It is read off the **bench**, not off the verdict. A `flagged` verdict would hold the close for good
 on a goal with one failing check, and the operator's way of saying "I am done with this" is the row —
 marked done, or declined — not the checks. The close-out's detail still carries what validation is

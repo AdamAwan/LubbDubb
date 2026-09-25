@@ -35,6 +35,15 @@ export function checkSetReleased(input: {
 }
 
 /**
+ * A set still waiting on the operator: authored and not accepted, or sent back and being rewritten.
+ * Not `!checkSetReleased` — a sent-back set keeps its `note` and its rows.
+ * → docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time
+ */
+export function checkSetUnanswered(record: ValidationPlanRecord): boolean {
+  return record.releasedAt === null && (record.authoredAt !== null || record.note !== null);
+}
+
+/**
  * The set as it is put to the operator: one entry per check, carried on the action so the ask draws
  * structure rather than a paragraph. A card that says "three checks" and hands over prose asks for a
  * verdict on a number; a card that draws the journey and who each step falls to asks for one on the
