@@ -26,7 +26,7 @@ export const ISSUE_PROMPTS = {
       '   "parts": [\n' +
       '     {"slug": "schema", "title": "...", "scope": "...", "touches": ["src/store/"], "size": "s",\n' +
       '      "dependsOn": [], "rationale": "...", "acceptance": "..."},\n' +
-      '     {"slug": "wire-up", "title": "...", "scope": "...", "touches": ["src/system.ts"], "size": "m",\n' +
+      '     {"slug": "wire-up", "title": "...", "scope": "...", "touches": ["src/system/system.ts"], "size": "m",\n' +
       '      "dependsOn": ["schema"], "rationale": "...", "acceptance": "..."}\n' +
       '   ],\n' +
       '   "validation": {"hint": "..."}}\n\n' +

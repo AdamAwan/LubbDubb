@@ -3,7 +3,7 @@ import { issueOriginHead, issueOriginNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import { StateSchema, stateQueryInputs } from '../../validation/stateDocument.js';
-import { NO_STATE_EXECUTOR } from '../../remoteValidation/enabled.js';
+import { NO_STATE_EXECUTOR } from '../../validation/remote/enabled.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 

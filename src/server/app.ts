@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { System } from '../system.js';
+import type { System } from '../system/system.js';
 import { Hub } from './hub.js';
 import { authRefusalHint, createAuthThrottle, describeAuthAttempt, guardRequest, resolveCockpitToken } from './auth.js';
 import { debugLog } from '../debug.js';

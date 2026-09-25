@@ -170,7 +170,7 @@ The gate is `policy.pausedIssues` on `IssuePickupPolicy`, read by `isIssuePickup
 
 `RuleDispatcher.stageContext` builds `pausedIssues` from `ctx.goalPauses` on **every** cycle rather
 than reading it off the boot-time policy, and `stateSnapshot` does the same for the cockpit's lens. The
-policy is assembled once in `src/system.ts` and lives for the process; a pause snapshotted into it
+policy is assembled once in `src/system/system.ts` and lives for the process; a pause snapshotted into it
 would leave the fleet dispatching under a Feature an operator paused ten minutes ago, and nothing about
 that is red — it is the same shape as the worktree pool's cap, which is read by reference for the same
 reason ([09](09-execution.md#exhaustion)).
@@ -194,7 +194,7 @@ and abandoning an open PR mid-flight is not what "pause" says. The hold is on ne
 
 ## `IssuePickupPolicy`
 
-Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
+Assembled once in `src/system/system.ts` from config and handed to whichever dispatcher is selected:
 
 | Field             | From config                         | Effect                                                                                                       |
 | ----------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -216,7 +216,7 @@ The dispatcher carries that policy **whole** — its constructor spreads it and 
 `priorityLabels` and `defaultPriority`, the two fields the type makes required. It does not re-list
 the fields, because every other one is optional: a field the list has not learned about reads as
 `undefined` inside the dispatcher rather than erroring, so the cockpit's pickup lens — which gets the
-policy straight from `src/system.ts` — and the dispatcher come to disagree about the same item with
+policy straight from `src/system/system.ts` — and the dispatcher come to disagree about the same item with
 nothing red. That is exactly what happened to `containerTypes`, where `issueContainerTypes: []` left
 the Feature/Epic gate fully on for dispatch while the cockpit showed it off.
 
@@ -957,7 +957,7 @@ handed to a model.
 
 **Azure only.** A hierarchy parent and a classification node are things only Azure DevOps reports and
 only Azure DevOps accepts, so the whole feature is absent on GitHub — the way `filingType` and
-`ticketAssignee` are (`src/ticketTypes.ts`, `src/ticketAssignment.ts`). The snapshot also gates the
+`ticketAssignee` are (`src/tickets/ticketTypes.ts`, `src/tickets/ticketAssignment.ts`). The snapshot also gates the
 questions on the sink being **able** to make the write (`canPlaceWorkItem`), so a proposal nobody can
 act on is never drawn.
 

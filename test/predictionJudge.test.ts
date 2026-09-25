@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { issueOriginRef } from '../src/issueOrigins.js';
 import { toolsForRule, UNIVERSAL_TOOLS } from '../src/mcp/names.js';

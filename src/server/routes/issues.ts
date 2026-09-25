@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueConclusionOrigin } from '../../issueConclusion.js';
-import { bugTicketFields } from '../../bugFiling.js';
+import { bugTicketFields } from '../../tickets/bugFiling.js';
 import { trackerCoordinates } from '../../mcp/findings.js';
 import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
 import { MAX_INSTRUCTION, withdrawGoalInstruction, writeGoalInstruction } from '../../goalInstructions.js';

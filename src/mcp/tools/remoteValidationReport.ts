@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { remoteValidationOriginParts } from '../../remoteValidation/origin.js';
-import type { RemoteReadingDesk } from '../../remoteValidation/readings.js';
+import { remoteValidationOriginParts } from '../../validation/remote/origin.js';
+import type { RemoteReadingDesk } from '../../validation/remote/readings.js';
 import { toolSchema } from '../schema.js';
 import { toolError, type ToolCallResult } from '../protocol.js';
 import type { ToolFactory } from './context.js';

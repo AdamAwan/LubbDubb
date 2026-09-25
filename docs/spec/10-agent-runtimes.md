@@ -158,7 +158,7 @@ Points that are load-bearing:
 - Operator `claudeArgs` are appended last, so an explicit flag there has the last word.
 - `PostToolUse` hooks fire headless, so file-events capture rides `--settings` here.
 - `mcpConfigPath` is **per-launch** (minted by `AgentManager`, not fixed at wiring time) and is
-  threaded through the `ArgsBuilder` in `src/system.ts` — without that, `--mcp-config` (and the
+  threaded through the `ArgsBuilder` in `src/system/system.ts` — without that, `--mcp-config` (and the
   permission-prompt tool that lives on that server) never reach the agent.
 - `--model` is per-launch for the same reason and carries the same trap (issue #321). It is the
   **task's own** model: resolved from the operator's `agentModels` policy at _dispatch_ — not here —
@@ -863,7 +863,7 @@ Three things are this case's own.
 
 **The successor task row is written _before_ the old agent is killed.** Worktree release hangs off
 `reaped` and skips a branch that an active task still holds
-([above](#terminal-exit-and-reap), `src/system.ts`); the successor row, `queued`, is what holds it. In
+([above](#terminal-exit-and-reap), `src/system/system.ts`); the successor row, `queued`, is what holds it. In
 the other order the slot is released between the two halves of one operation and the worktree the lift
 exists to carry on in is wiped from under the agent resuming into it — `--resume` into a directory
 holding no transcript, which is the silent death this page keeps returning to.
@@ -919,7 +919,7 @@ turn that raised it are two separate events, and an answer can land between them
 stream runtime does not judge a turn with a message queued behind it
 ([above](#a-result-is-the-end-of-a-turn-not-of-the-session)).
 
-`src/system.ts` listens for `waiting` and creates the escalation, idempotently per agent (an agent has
+`src/system/system.ts` listens for `waiting` and creates the escalation, idempotently per agent (an agent has
 at most one open escalation), enriched with the task title, the origin ref, a tail of recent output,
 and — when the park came through the tool — the answer `options` and `detail`.
 
@@ -951,7 +951,7 @@ held `handleWaiting` early-returns, so an agent whose alert was dismissed could 
   `Parked on a usage limit: this account's five-hour usage limit is spent, and it resets at …`. An
   unknown window name is printed verbatim rather than dropped: a park that names no limit is the
   failure the wording exists to prevent.
-- **No escalation.** `waiting` is what `src/system.ts` turns into an inbox item, and an inbox item is a
+- **No escalation.** `waiting` is what `src/system/system.ts` turns into an inbox item, and an inbox item is a
   question put to a human; this one has no answer. It would sit in the queue as a message nobody can
   reply to, under a heading that says somebody must. The park is drawn on the _agent_ instead — the
   fleet row, the drawer, and a `limit` row in "Needs you" built from the fleet rather than from an
@@ -1034,7 +1034,7 @@ touch resources the process pinned, which is why worktree removal hangs off this
 
 ### An ending is what refills the slot
 
-Both terminal events are also what tells the pulse there is room again. `src/system.ts` subscribes to
+Both terminal events are also what tells the pulse there is room again. `src/system/system.ts` subscribes to
 `done` and `reaped` and asks `CycleTrigger` for a
 [local cycle](04-harness-cycle.md#the-local-cycle): `done` is when the row stops counting against the
 cap, `reaped` is when the worktree slot goes back, and neither implies the other in time. Before it,
@@ -1056,7 +1056,7 @@ un-answerable and must leave "Needs you". Nothing else in the inbox is affected:
 stack-landing stop and every rule-raised item carry no `agentId` and stay answerable whatever the
 fleet did.
 
-`src/system.ts` is the fast path, dismissing through `EscalationInbox.dismissEscalationsForAgent` at
+`src/system/system.ts` is the fast path, dismissing through `EscalationInbox.dismissEscalationsForAgent` at
 each terminal transition it hears — `killed` off `status`, and every `done` whatever status it carries
 and whoever declared it. **An agent-declared `done` counts**: an agent that answered its own question
 and finished leaves exactly the same un-answerable card as one that crashed with it open.

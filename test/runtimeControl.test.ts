@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RuntimeControl } from '../src/runtimeControl.js';
 import { loadConfig, type Config } from '../src/config/config.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

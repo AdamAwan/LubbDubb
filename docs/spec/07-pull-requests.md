@@ -518,7 +518,7 @@ withdrawn rows rather than counting them as an ask nobody answered.
 ## Reaping a merged branch
 
 When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
-the branch on the remote. `reapableBranches` (`src/branchReap.ts`) is the predicate, pure and
+the branch on the remote. `reapableBranches` (`src/pr/branchReap.ts`) is the predicate, pure and
 unit-tested; `BranchReapDesk` performs it on the pulse, beside the rename and the retarget and in
 the same register: mechanical bookkeeping through no proposal, a failure recorded and never failing
 the cycle. **Unconditional** — there is no key to turn it off.
@@ -1317,7 +1317,7 @@ Every reply the harness sends leaves through exactly one call site, `sink.postPr
 comment it created — in the same vocabulary `PrThreadMessage.id` uses on the way back in.
 `PrReplyStore` (`src/store/prReplies.ts`) writes one row per reply, keyed on
 `(pr_number, thread_id, comment_ref)`. Both providers read it through the same `SentPrReplies` seam,
-threaded in from `src/system.ts` via the registry, so the reply list a person reads and the comment
+threaded in from `src/system/system.ts` via the registry, so the reply list a person reads and the comment
 list a rule dispatches on cannot come to disagree about a thread — which is why there is one
 derivation in `src/pr/prThreads.ts` at all.
 

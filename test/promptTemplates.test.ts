@@ -11,7 +11,7 @@ import {
   loadPromptTemplates,
 } from '../src/dispatcher/promptTemplates.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';

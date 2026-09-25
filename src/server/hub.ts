@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws';
-import type { System } from '../system.js';
+import type { System } from '../system/system.js';
 import { stripAnsi } from '../agents/streamTranscript.js';
 import type { StateSection } from '../wire.js';
 import { withheldEscalation } from './planReveal.js';

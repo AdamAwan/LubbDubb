@@ -10,11 +10,11 @@ import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { regroupedDocument, regroupRefusal } from '../src/plans/regroup.js';
 import { buildApp } from '../src/server/app.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import type { System } from '../src/system.js';
+import type { System } from '../src/system/system.js';
 import type { PlanAtom, PlanPart } from '../src/types.js';
 import type { PlanPartView } from '../src/wire.js';
 

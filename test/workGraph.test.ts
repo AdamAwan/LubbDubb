@@ -15,7 +15,7 @@ import type {
 } from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
 import { partSettled } from '../src/plans/parts.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
@@ -594,7 +594,7 @@ test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
     .filter((f) => readFileSync(f, 'utf8').includes('graph/workGraph'));
   assert.deepEqual(
     readers,
-    ['src/pulseDesks.ts', 'src/system.ts'],
+    ['src/system/pulseDesks.ts', 'src/system/system.ts'],
     "only the pulse's registry and the composition root may reach the graph in stage 1",
   );
 });

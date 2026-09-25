@@ -10,7 +10,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
 import type { Issue, IssueRun, Task } from '../src/types.js';

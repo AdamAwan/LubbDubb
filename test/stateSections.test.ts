@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../src/server/stateSnapshot.js';
 import type { StateSection } from '../src/wire.js';

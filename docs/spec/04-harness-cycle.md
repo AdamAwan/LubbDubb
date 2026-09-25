@@ -536,7 +536,7 @@ flowchart TD
    dismisses their inbox rows; it staffs nobody, and no rule reads what it writes. Above the
    escalation read the dispatch inputs take,
    `escalations.tidyDeadAgents()` dismisses every open question whose agent has left the fleet — the
-   backstop to the terminal-state listeners in `src/system.ts`, so a dead agent's un-answerable card is
+   backstop to the terminal-state listeners in `src/system/system.ts`, so a dead agent's un-answerable card is
    off "Needs you" on this pulse rather than never
    ([10](10-agent-runtimes.md#the-questions-a-dead-agent-leaves-behind)). It settles inbox rows,
    decides no dispatch, and writes nothing over a clean inbox.
@@ -583,7 +583,7 @@ flowchart TD
 
 Every pass the cycle makes over its own bookkeeping — the desks between the world reading and the
 store read, and the sweeps between those reads and `decide` — is **declared, not written out**:
-`src/pulseDesks.ts` holds `PULSE_PIPELINE`, one entry per pass **in the order they run**, and
+`src/system/pulseDesks.ts` holds `PULSE_PIPELINE`, one entry per pass **in the order they run**, and
 `runCycle` walks it. It is the same answer `DISPATCH_PIPELINE` (`src/dispatcher/rules.ts`) gives one
 layer over, for the same reason — an order that is load-bearing must be a thing a test can read — and
 it is derived the same way: the ordered array **is** the registry, so there is no second list of ids
@@ -643,7 +643,7 @@ breaking silently:
 The same test asserts the walk reaches every entry in the declared order, and that no id is walked
 twice — a duplicate is what would make a position, and so every one of those constraints, mean
 nothing. What it no longer has to assert is that a registry and an ordering agree: there is one list,
-so a pass wired in `src/system.ts` and left out of it cannot sit there dead, and a pass declared and
+so a pass wired in `src/system/system.ts` and left out of it cannot sit there dead, and a pass declared and
 never walked cannot exist. Adding a pass is therefore two things and no more: a field on `PulseDeps`,
 and an entry in its phase's group at the position it should run.
 

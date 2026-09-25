@@ -12,7 +12,7 @@ import type { MirroredTicket } from '../src/store/tickets.js';
 import { issueBranch } from '../src/dispatcher/issuePickup.js';
 import type { Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';

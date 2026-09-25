@@ -468,7 +468,7 @@ export interface CockpitState {
    * event matching the goal's issue ref, so drift written as one would un-park the
    * goal it just reported on. The cockpit merges these at the feed's door, exactly
    * as it merges `environmentArrivals`. Absent when `goalCriteria.enabled` is off:
-   * that flag is read here and in `src/system.ts`, and nowhere downstream.
+   * that flag is read here and in `src/system/system.ts`, and nowhere downstream.
    */
   criteriaDrift?: GoalCriteriaDrift[];
   remoteSheets: RemoteSheetView[];

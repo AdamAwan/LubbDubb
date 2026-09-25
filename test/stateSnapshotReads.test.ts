@@ -2,13 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentHealthProber } from '../src/environments/fakeHealthProber.js';
-import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
+import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
+import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
 
 const COUNTED = ['all', 'get', 'run'] as const;
 

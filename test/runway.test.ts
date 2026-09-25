@@ -13,7 +13,7 @@ import { goalFingerprint } from '../src/intake/appraisal.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';

@@ -4,7 +4,7 @@ import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecov
 import { formatAnswers } from '../../escalation/questionnaire.js';
 import { withheldPlanRefusal } from '../planReveal.js';
 import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
-import type { System } from '../../system.js';
+import type { System } from '../../system/system.js';
 import type { Escalation } from '../../types.js';
 import type { RouteContext } from './context.js';
 

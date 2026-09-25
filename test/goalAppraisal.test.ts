@@ -12,7 +12,7 @@ import { AppraisalDesk, renderAppraisalComment } from '../src/intake/appraisalDe
 import { appraiserOrigin } from '../src/mcp/goalAppraisal.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Agent, Decision, Issue, IssueAppraisal, Plan, Task, WorldSnapshot } from '../src/types.js';
 import type { ActionSink } from '../src/sink/actionSink.js';

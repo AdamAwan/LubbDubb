@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { rollUpIssueSpend } from '../src/insights/issueSpend.js';
 import type { Agent, LocalRun, Task, WorkNode } from '../src/types.js';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';

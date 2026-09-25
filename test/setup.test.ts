@@ -15,7 +15,7 @@ import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
 import { buildSetupReading } from '../src/setup/reading.js';
 import { parseRemote, credentialVar } from '../src/setup/remote.js';
 import { resolveFromRepo } from '../src/setup/resolve.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 
 function probes(over: Partial<SetupProbes> = {}): SetupProbes {
   return {

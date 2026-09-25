@@ -4,14 +4,14 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { FakeStateReader } from '../src/remoteValidation/fakeStateReader.js';
-import { FakeTenantKeeper } from '../src/remoteValidation/fakeTenantKeeper.js';
+import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
+import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
@@ -22,11 +22,11 @@ import {
   runnableDrives,
   runnableScripts,
   runnableSelectors,
-} from '../src/remoteValidation/briefing.js';
-import { sheetRows } from '../src/remoteValidation/sheet.js';
+} from '../src/validation/remote/briefing.js';
+import { sheetRows } from '../src/validation/remote/sheet.js';
 import { NO_STEP_CAPABILITIES, resolveSteps, stepDriven } from '../src/validation/steps.js';
-import { remoteValidationOriginParts, remoteValidationProfileDir } from '../src/remoteValidation/origin.js';
-import { DEFAULT_LOCAL_VALIDATION } from '../src/localValidation/policy.js';
+import { remoteValidationOriginParts, remoteValidationProfileDir } from '../src/validation/remote/origin.js';
+import { DEFAULT_LOCAL_VALIDATION } from '../src/validation/local/policy.js';
 import { extraMcpGrants, ALLOWED_MCP_TOOLS } from '../src/mcp/names.js';
 import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { issueOriginRole } from '../src/issueOrigins.js';

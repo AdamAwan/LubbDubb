@@ -1,5 +1,5 @@
 import type { Config } from '../config/config.js';
-import { briefTicketFields } from '../briefTicket.js';
+import { briefTicketFields } from '../tickets/briefTicket.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { deriveJobTitle } from '../jobs.js';
 import { trackerCoordinates } from '../mcp/findings.js';

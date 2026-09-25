@@ -3,7 +3,7 @@ import { loadDeploymentConfig, type Config } from '../config/config.js';
 import { watchConfigFile } from '../config/configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
-import { buildSystem, type System } from '../system.js';
+import { buildSystem, type System } from '../system/system.js';
 import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
 

@@ -519,7 +519,7 @@ about must not erase a narrative some other write put there.
 - **`.lubbdubb/plan.json`** — fully wired fallback. The file-events `PostToolUse` hook reports the
   written path; `AgentChannels.ingestFileEvent` (`src/agents/agentChannels.ts`) recognises the reserved
   path, and `ingestPlan` reads, validates and persists it. The read must happen **inside the drain**,
-  while `agent.cwd` still exists — `src/system.ts` removes a done agent's worktree on the reap, so a later
+  while `agent.cwd` still exists — `src/system/system.ts` removes a done agent's worktree on the reap, so a later
   read finds nothing. An invalid document writes no plan row and records an error: the issue stays in the
   funnel, the planner is retried, and the cap eventually fails it open.
 
@@ -1947,7 +1947,7 @@ show.
 **Both of them carry the test-part bar, appended rather than interpolated** — as does `plan_read` on
 the desktop channel, so the surface an operator argues from can amend coverage too
 ([the discussion](#discussing-a-plan)). `testPartNote`
-(`src/plans/planning.ts`) is computed once in `src/system.ts`, threaded through `RuleContext`, and
+(`src/plans/planning.ts`) is computed once in `src/system/system.ts`, threaded through `RuleContext`, and
 concatenated after the rendered `issue-plan` / `issue-replan` text — `watchNote`'s arrangement exactly,
 and for its reason: `loadPromptTemplates` rejects only _unknown_ placeholders, so a `{token}` for it
 would be dropped in silence by every override that never learned the token. It returns the empty

@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
-import { buildSystem } from '../src/system.js';
+import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { gitRepo, tmpDir } from './support/gitRepo.js';

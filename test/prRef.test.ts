@@ -7,7 +7,7 @@ import { prRef, prRefStyle } from '../src/pr/prRef.js';
 import { currentPlanSummary, siblingContext } from '../src/plans/parts.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import { buildTools } from '../src/mcp/tools.js';
-import { buildSystem, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
