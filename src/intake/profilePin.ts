@@ -60,6 +60,8 @@ export async function applyProfilePin(
   return { ok: true, profile: wanted, answered };
 }
 
+// → docs/spec/02-configuration.md#pinning-one-goal-to-a-profile
+
 interface PinLookup {
   goal: (issueNumber: number) => string | null;
   part: (issueNumber: number, slug: string) => string | null;

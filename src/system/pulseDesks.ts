@@ -15,7 +15,7 @@ import type { PrNamingDesk } from '../pr/prNamingDesk.js';
 import type { PrDescriptionDesk } from '../pr/prDescriptionDesk.js';
 import type { PrWatchDesk } from '../pr/prWatchDesk.js';
 import type { PrWorkItemDesk } from '../pr/prWorkItemDesk.js';
-import type { BranchReapDesk } from '../worktree/branchReapDesk.js';
+import type { BranchReapDesk } from '../pr/branchReapDesk.js';
 import type { StackLandingDesk } from '../stacks/landingDesk.js';
 import type { ValidationAskDesk } from '../validation/askDesk.js';
 import type { ValidationReadyDesk } from '../validation/readyDesk.js';

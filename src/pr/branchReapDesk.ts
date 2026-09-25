@@ -1,11 +1,11 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Worktrees } from './worktreeManager.js';
+import type { Worktrees } from '../worktree/worktreeManager.js';
 import type { WorldSnapshot } from '../types.js';
 import { reapableBranches } from './branchReap.js';
 
-// → docs/spec/09-execution.md
+// → docs/spec/07-pull-requests.md#reaping-a-merged-branch
 
 interface BranchReapDeskDeps {
   sink: ActionSink;

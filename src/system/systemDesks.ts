@@ -19,7 +19,7 @@ import { ValidationAskDesk } from '../validation/askDesk.js';
 import { ValidationReadyDesk } from '../validation/readyDesk.js';
 import { SpendBurnDesk } from '../insights/spendBurnDesk.js';
 import { RunwayDesk } from '../supply/runwayDesk.js';
-import { BranchReapDesk } from '../worktree/branchReapDesk.js';
+import { BranchReapDesk } from '../pr/branchReapDesk.js';
 import { EnvironmentDesk } from '../environments/environmentDesk.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';

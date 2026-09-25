@@ -518,7 +518,7 @@ withdrawn rows rather than counting them as an ask nobody answered.
 ## Reaping a merged branch
 
 When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
-the branch on the remote. `reapableBranches` (`src/worktree/branchReap.ts`) is the predicate, pure and
+the branch on the remote. `reapableBranches` (`src/pr/branchReap.ts`) is the predicate, pure and
 unit-tested; `BranchReapDesk` performs it on the pulse, beside the rename and the retarget and in
 the same register: mechanical bookkeeping through no proposal, a failure recorded and never failing
 the cycle. **Unconditional** — there is no key to turn it off.

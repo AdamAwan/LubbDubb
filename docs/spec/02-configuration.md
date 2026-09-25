@@ -1104,7 +1104,7 @@ The chain a dispatch resolves through is then three levels, in `resolveAgentProf
 - **It reaches every dispatch on that issue's origins, with two carve-outs.** `issue-retro` runs on its
   `byRule` entry whatever the goal is pinned to: a retrospective **gates nothing**, so inheriting a deep
   pin is real money on a write-up no dispatch reads. `issue-appraisal` runs on its own entry because it is
-  the stage that _produces_ the pin. Both are declared in `UNPINNED_SUFFIXES` in `src/intake/profilePin.ts`.
+  the stage that _produces_ the pin. Both are carved out by origin family in `pinnedProfileFor` (`src/intake/profilePin.ts`).
   Nothing outside the `issue:<n>` subtree is pinned at all, so the CI and review rules on a pull request
   the work produced resolve on `byRule` — following a pin down that lineage is a second mechanism.
 - **A tag naming no configured profile is ignored, and never parks anything.** Config is the operator's
