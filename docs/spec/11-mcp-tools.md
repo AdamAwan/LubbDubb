@@ -858,8 +858,10 @@ The token is a **bearer credential**: it lives in the 0600 launch-config file, n
 `ps` would show it), and it is revoked on kill, interrupt and reap. A resume mints a fresh one for the
 same agent row.
 
-**The `agent → task` half of that chain is resolved in exactly one place**, `AgentManager.withCaller`,
-and every tool-facing method on the fleet runs its body through it. It was copied into all eleven of
+**The `agent → task` half of that chain is resolved in exactly one place**, `AgentToolDesk.withCaller`
+(`src/agents/agentToolDesk.ts`, private to the desk `AgentManager` composes and forwards the tool seam
+to), and every tool-facing method on the fleet runs its body through it. The operator's `lift` and
+`resumeParked` reach the same wrapper through the desk's `forCaller`; nothing else resolves a caller. It was copied into all eleven of
 them, so the channel's one security-relevant step held eleven times by inspection rather than once by
 construction: a twelfth method written from scratch, or one that dropped the `!task` check because its
 store call happens to take only an `agentId` (as `recordProgress`'s genuinely does), would have
@@ -897,8 +899,8 @@ Three things carry the split:
   part, the pad, the issue), so a copy in the tool layer would be a second answer to a question already
   answered next to the write it guards.
 
-`test/mcpChannel.test.ts` asserts both halves structurally: the caller resolution appears once in
-`agentManager.ts`, and `tools.ts` declares no schema and no handler with one module per advertised
+`test/mcpChannel.test.ts` asserts both halves structurally: the caller resolution appears once across
+every file in `src/agents/`, in the file declaring the private `withCaller`, and `tools.ts` declares no schema and no handler with one module per advertised
 tool. Neither is a property any behavioural test can fail on — a tool that re-derived the caller by
 hand works, right up until it works for the wrong agent.
 
@@ -1063,7 +1065,7 @@ with the author, and it has to read the list from somewhere.
 **The history is the dossier the retrospective agent gets, through the same read and the same
 rendering.** `goalRecord` (`src/retro/record.ts`) is the one assembly of "what happened on this goal"
 and `retroDossier` is the one rendering of it; `goal_read` and the retrospective briefing in
-`src/executor/actionExecutor.ts` are its two callers. A second gather beside the first is the obvious
+`src/executor/dispatchBriefing.ts` are its two callers. A second gather beside the first is the obvious
 way to build this — each caller wants a different shape — and what it produces is two answers to one
 question, free to disagree the next time the subtree predicate or the escalation matching changes.
 The reading is shared; the rendering is the caller's.

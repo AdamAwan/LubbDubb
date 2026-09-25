@@ -1,6 +1,6 @@
 import type { Agent, AppState, OpenPullRequest, PullRequest, TaskSummary } from '../types.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
-import { closedPrs, goalOfPr, standsFor } from './goalPage.js';
+import { closedPrs, goalOfPr, standsFor } from './goalRefs.js';
 
 // → docs/spec/17-cockpit.md
 

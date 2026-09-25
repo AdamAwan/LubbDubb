@@ -11,7 +11,7 @@ import { PrDescription } from '../components/PrDescription.js';
 import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
-import { CourtChip } from './GoalPage.js';
+import { CourtChip } from './goalChips.js';
 import { HeadRow } from '../components/panel.js';
 import { Tag, type TagTone } from '../components/tag.js';
 

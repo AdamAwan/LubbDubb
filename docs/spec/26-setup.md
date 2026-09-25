@@ -152,7 +152,7 @@ filter of their own is hiding every tagged item on the tracker.
 ### The credential check asks both routes
 
 A provider is asked for **every way in it has**, not for its variable. Azure has two:
-`resolveAzureAuth` (`src/integrations/azure/restAzureDevOpsApi.ts`) prefers `AZURE_DEVOPS_PAT` and
+`resolveAzureAuth` (`src/integrations/azure/azureAuth.ts`) prefers `AZURE_DEVOPS_PAT` and
 falls back to a token minted by the logged-in `az` CLI — so an operator who has run `az login` and
 exported nothing reads the whole world, and the check that named only the variable told them, in a
 `bad` row, that the provider could not be read at all. That is the worst thing this surface can do:

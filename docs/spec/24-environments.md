@@ -904,7 +904,7 @@ anywhere" would be two answers to the question a ticket comment is posted off.
 
 ## In the cockpit
 
-`buildEnvironmentReach` in `src/server/stateSnapshot.ts` ships `CockpitState.environmentReach`: one
+`buildEnvironmentReach` in `src/server/stateEnvironmentViews.ts` ships `CockpitState.environmentReach`: one
 `GoalReachView` per goal that has landed something or has a merge nothing could attribute. The goal
 set comes from the landings and the work graph, never from the world — a goal is at its most
 interesting to this panel once its ticket has closed, which is precisely when the world stops listing
@@ -917,7 +917,7 @@ configured environments across, one cell per pair. Beneath, because the rows abo
 the one environment the pane is showing and the matrix is the unscoped picture — the question it
 answers is _where is everything_, which is the one the rows deliberately cannot ask. The rows are `GoalReachView.landings` — one
 `GoalLandingReach` per landing, carrying what each environment's probe said about it — folded against
-the plan's parts by `buildGoalReachMatrix` (`web/src/view/goalPage.ts`).
+the plan's parts by `buildGoalReachMatrix` (`web/src/view/goalReachMatrix.ts`).
 
 **It exists because a goal is checked as a whole or not at all, and its parts are not.** `rollUpReach`
 answers `reached` only when every landing the goal owes has been read as present, and `newArrivals`

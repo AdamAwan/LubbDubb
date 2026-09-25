@@ -60,6 +60,13 @@ export function watchReading(
   return watchBucket(issue.labels, watchLabel);
 }
 
+export function watchOff(watchLabel: string, frozen: boolean, issue: Issue | null): string | null {
+  if (watchLabel === '') return 'No watch label configured — the watch gate is off';
+  if (frozen) return 'Closed in the tracker — there is nothing here to tag';
+  if (issue === null) return 'The world no longer holds this item, so there is nothing to tag';
+  return null;
+}
+
 export function issueTypeTone(issueType: string | null | undefined): TagTone | undefined {
   if (issueType === null || issueType === undefined) return undefined;
   switch (issueType.trim().toLowerCase()) {

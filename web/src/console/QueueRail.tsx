@@ -1,13 +1,14 @@
 import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { AppliedFix, NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
+import type { NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
 import { openGoalForAsk } from './jump.js';
-import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
+import type { BuildReading, SetupCheck } from '../types.js';
 import { relTime } from '../components/util.js';
 import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
+import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -247,38 +248,26 @@ export function holdingLabel(holding: number): string {
   return `holding ${holding} ${holding === 1 ? 'part' : 'parts'}`;
 }
 
-function Row({
-  row,
-  now,
-  focus,
-  build,
-  actions,
-}: {
-  row: NeedRow;
-  now: number;
-  focus: string | null;
-  build: BuildReading;
-  actions: CockpitActions;
-}): JSX.Element {
-  const parked = row.group === 'blocking';
-  const current = focus !== null && row.goalRef === focus;
-  const dim = focus !== null && !current && row.kind !== 'recovery';
-  const cls = ['cn-q', `cn-t-${KIND_TONE[row.kind]}`, parked ? 'cn-parked' : '', dim ? 'cn-dim' : '']
-    .filter((c) => c !== '')
-    .join(' ');
+function KindTag({ kind }: { kind: NeedKind }): JSX.Element {
+  return (
+    <Tag>
+      {/* Hidden from the reading order on purpose: the word beside it is
+            the label, and a screen reader announcing "black diamond bench"
+            is worse than one announcing "bench". */}
+      <span className="cn-sym" aria-hidden="true">
+        {KIND_SYMBOL[kind]}
+      </span>
+      {KIND_LABEL[kind]}
+    </Tag>
+  );
+}
+
+function RowBody({ row, now }: { row: NeedRow; now: number }): JSX.Element {
   const goal = subjectBeside(row);
-  const body = (
+  return (
     <>
       <div className="cn-qkind">
-        <Tag>
-          {/* Hidden from the reading order on purpose: the word beside it is
-                the label, and a screen reader announcing "black diamond bench"
-                is worse than one announcing "bench". */}
-          <span className="cn-sym" aria-hidden="true">
-            {KIND_SYMBOL[row.kind]}
-          </span>
-          {KIND_LABEL[row.kind]}
-        </Tag>
+        <KindTag kind={row.kind} />
         {/* The card leaves the cockpit, so it says so where a token would: the
             same arrow the vocabulary's arm carries, and `aria-hidden` because the
             anchor around it already announces where it goes. */}
@@ -302,22 +291,30 @@ function Row({
             reading carried only by opacity is one an operator has to have been
             told about. Drawn on the parked rows alone — the word on every row
             says nothing. */}
-        {parked && <span className="cn-blk">{GROUP_LABEL[row.group]}</span>}
+        {row.group === 'blocking' && <span className="cn-blk">{GROUP_LABEL[row.group]}</span>}
       </div>
     </>
   );
-  const inner = (
-    <>
-      <i className="cn-stripe" />
-      <div className="cn-qin">{body}</div>
-    </>
-  );
+}
 
-  const carded = (onClick: () => void, foot: ReactNode, bodyNode: ReactNode = body): JSX.Element => (
+function Card({
+  cls,
+  current,
+  onClick,
+  foot,
+  children,
+}: {
+  cls: string;
+  current: boolean;
+  onClick: () => void;
+  foot: ReactNode;
+  children: ReactNode;
+}): JSX.Element {
+  return (
     <div className={cls}>
       <i className="cn-stripe" />
       <button type="button" className="cn-qbody" onClick={onClick} aria-current={current ? 'true' : undefined}>
-        <div className="cn-qin">{bodyNode}</div>
+        <div className="cn-qin">{children}</div>
       </button>
       {foot !== null && (
         <>
@@ -327,80 +324,153 @@ function Row({
       )}
     </div>
   );
+}
+
+function ConfigRow({
+  row,
+  check,
+  cls,
+  current,
+  actions,
+}: {
+  row: NeedRow;
+  check: SetupCheck;
+  cls: string;
+  current: boolean;
+  actions: CockpitActions;
+}): JSX.Element {
+  const fix = check.fix;
+  const group = fix?.kind === 'config' ? fix.group : fix?.kind === 'goto' ? fix.group : undefined;
+  return (
+    <Card
+      cls={cls}
+      current={current}
+      onClick={() => actions.openConfig({ configTab: 'values', configGroup: group ?? null })}
+      foot={
+        row.applied === undefined ? (
+          <ConfigFix check={check} actions={actions} />
+        ) : (
+          <SettledFix applied={row.applied} actions={actions} />
+        )
+      }
+    >
+      <div className="cn-qkind">
+        <KindTag kind={row.kind} />
+      </div>
+      <p className="cn-qtitle">{row.title}</p>
+      {check.remedy !== undefined && <div className="cn-qmeta">{check.remedy}</div>}
+    </Card>
+  );
+}
+
+/* Narrowed at the one place that needs it, so `selectPr` is never handed the
+   number of an ask whose destination is not a pull request. */
+function rowDestination(row: NeedRow, dest: NeedRow['opens'], actions: CockpitActions): (() => void) | null {
+  const ref = row.goalRef;
+  const prOf = (r: NeedRow): number => r.prNumber ?? 0;
+  if (dest === 'build') return () => actions.openPanel('build');
+  if (dest === 'goal') return ref === null ? null : () => openGoalForAsk(actions, ref, row.kind);
+  if (dest === 'pr') return row.prNumber === undefined ? null : () => actions.selectPr(prOf(row));
+  if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
+  if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
+  return null;
+}
+
+function rowClass(row: NeedRow, focus: string | null, current: boolean): string {
+  const parked = row.group === 'blocking';
+  const dim = focus !== null && !current && row.kind !== 'recovery';
+  return ['cn-q', `cn-t-${KIND_TONE[row.kind]}`, parked ? 'cn-parked' : '', dim ? 'cn-dim' : '']
+    .filter((c) => c !== '')
+    .join(' ');
+}
+
+function ProviderRow({
+  cls,
+  prNumber,
+  originRef,
+  details,
+  children,
+}: {
+  cls: string;
+  prNumber: number;
+  originRef: string;
+  details: (() => void) | null;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className={cls}>
+      <i className="cn-stripe" />
+      <PrLink number={prNumber} className="cn-qbody">
+        <div className="cn-qin">{children}</div>
+      </PrLink>
+      <i className="cn-stripe" />
+      <CardFoot>
+        {details !== null && (
+          <Button size="small" onClick={details}>
+            Details
+          </Button>
+        )}
+        <span className="cn-refs">
+          <Ref to={originRef} />
+        </span>
+      </CardFoot>
+    </div>
+  );
+}
+
+function Row({
+  row,
+  now,
+  focus,
+  build,
+  actions,
+}: {
+  row: NeedRow;
+  now: number;
+  focus: string | null;
+  build: BuildReading;
+  actions: CockpitActions;
+}): JSX.Element {
+  const current = focus !== null && row.goalRef === focus;
+  const cls = rowClass(row, focus, current);
+  const body = <RowBody row={row} now={now} />;
+  const inner = (
+    <>
+      <i className="cn-stripe" />
+      <div className="cn-qin">{body}</div>
+    </>
+  );
 
   if (row.opens === null) {
     return <div className={cls}>{inner}</div>;
   }
 
   if (row.check !== undefined) {
-    const fix = row.check.fix;
-    const group = fix?.kind === 'config' ? fix.group : fix?.kind === 'goto' ? fix.group : undefined;
-    return carded(
-      () => actions.openConfig({ configTab: 'values', configGroup: group ?? null }),
-      row.applied === undefined ? (
-        <ConfigFix check={row.check} actions={actions} />
-      ) : (
-        <SettledFix applied={row.applied} actions={actions} />
-      ),
-      <>
-        <div className="cn-qkind">
-          <Tag>
-            <span className="cn-sym" aria-hidden="true">
-              {KIND_SYMBOL[row.kind]}
-            </span>
-            {KIND_LABEL[row.kind]}
-          </Tag>
-        </div>
-        <p className="cn-qtitle">{row.title}</p>
-        {row.check.remedy !== undefined && <div className="cn-qmeta">{row.check.remedy}</div>}
-      </>,
-    );
+    return <ConfigRow row={row} check={row.check} cls={cls} current={current} actions={actions} />;
   }
 
-  const ref = row.goalRef;
-  /* Narrowed at the one place that needs it, so `selectPr` is never handed the
-     number of an ask whose destination is not a pull request. */
-  const prOf = (r: NeedRow): number => r.prNumber ?? 0;
-  const goTo = (dest: NeedRow['opens']): (() => void) | null => {
-    if (dest === 'build') return () => actions.openPanel('build');
-    if (dest === 'goal') return ref === null ? null : () => openGoalForAsk(actions, ref, row.kind);
-    if (dest === 'pr') return row.prNumber === undefined ? null : () => actions.selectPr(prOf(row));
-    if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
-    if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
-    return null;
-  };
-  const open = goTo(row.opens) ?? (() => actions.openPanel({ ask: row.id }));
+  const open = rowDestination(row, row.opens, actions) ?? (() => actions.openPanel({ ask: row.id }));
+  const card = (foot: ReactNode): JSX.Element => (
+    <Card cls={cls} current={current} onClick={open} foot={foot}>
+      {body}
+    </Card>
+  );
 
   if (row.kind === 'upgrade' || row.kind === 'project_pull') {
-    return carded(open, <UpdateActs kind={row.kind} build={build} actions={actions} />);
+    return card(<UpdateActs kind={row.kind} build={build} actions={actions} />);
   }
 
-  const details = row.details === undefined ? null : goTo(row.details);
+  const details = row.details === undefined ? null : rowDestination(row, row.details, actions);
   const prNumber = Number(PR_ORIGIN.exec(row.originRef ?? '')?.[1]);
   if (row.opens === 'provider' && !Number.isNaN(prNumber) && row.originRef !== null) {
     return (
-      <div className={cls}>
-        <i className="cn-stripe" />
-        <PrLink number={prNumber} className="cn-qbody">
-          <div className="cn-qin">{body}</div>
-        </PrLink>
-        <i className="cn-stripe" />
-        <CardFoot>
-          {details !== null && (
-            <Button size="small" onClick={details}>
-              Details
-            </Button>
-          )}
-          <span className="cn-refs">
-            <Ref to={row.originRef} />
-          </span>
-        </CardFoot>
-      </div>
+      <ProviderRow cls={cls} prNumber={prNumber} originRef={row.originRef} details={details}>
+        {body}
+      </ProviderRow>
     );
   }
   if (details !== null) {
-    return carded(
-      open,
+    return card(
       <CardFoot>
         <Button size="small" onClick={details}>
           Details
@@ -413,223 +483,6 @@ function Row({
     <button type="button" className={cls} onClick={open} aria-current={current ? 'true' : undefined}>
       {inner}
     </button>
-  );
-}
-
-function CardFoot({
-  why = null,
-  wide = false,
-  settled = false,
-  children,
-}: {
-  why?: ReactNode;
-  wide?: boolean;
-  settled?: boolean;
-  children: ReactNode;
-}): JSX.Element {
-  const cls = ['cn-qfoot', wide ? 'cn-wide' : '', settled ? 'cn-settled' : ''].filter((c) => c !== '').join(' ');
-  return (
-    <div className={cls}>
-      {why !== null && <span className="cn-footwhy">{why}</span>}
-      <span className="cn-footacts">{children}</span>
-    </div>
-  );
-}
-
-function UpdateActs({
-  kind,
-  build,
-  actions,
-}: {
-  kind: 'upgrade' | 'project_pull';
-  build: BuildReading;
-  actions: CockpitActions;
-}): JSX.Element | null {
-  const snooze = (
-    <Button
-      ghost
-      size="small"
-      onClick={() => void actions.snoozeUpdate(kind === 'upgrade' ? 'upgrade' : 'projectPull')}
-    >
-      Snooze
-    </Button>
-  );
-
-  if (kind === 'project_pull')
-    return <CardFoot why="Nothing to answer — the row clears when the checkout does.">{snooze}</CardFoot>;
-
-  const { intent, live, supervised } = build;
-  if (!supervised)
-    return (
-      <CardFoot why="No supervisor, so this build cannot restart itself — the panel says what to run.">
-        {snooze}
-      </CardFoot>
-    );
-
-  if (intent.state === 'applying') return null;
-
-  if (intent.state === 'draining' || intent.state === 'ready')
-    return (
-      <CardFoot why={intent.state === 'ready' ? 'The fleet is clear.' : `Waiting for ${live} to finish.`}>
-        <Button ghost size="small" onClick={() => void actions.upgrade('cancel')}>
-          Cancel
-        </Button>
-        {intent.state === 'ready' ? (
-          <Button tone="primary" size="small" onClick={() => void actions.upgrade('apply')}>
-            Apply now
-          </Button>
-        ) : (
-          <Button size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
-            Don&apos;t wait — interrupt {live}
-          </Button>
-        )}
-      </CardFoot>
-    );
-
-  if (live === 0)
-    return (
-      <CardFoot why="Exits, takes the update and comes back. Nothing is interrupted.">
-        {snooze}
-        <Button tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
-          Upgrade
-        </Button>
-      </CardFoot>
-    );
-
-  return (
-    <CardFoot
-      why={
-        <>
-          Queue waits for {live} to finish; Now stops {live === 1 ? 'it' : 'them'} and restores{' '}
-          {live === 1 ? 'it' : 'them'} on the way back up.
-        </>
-      }
-    >
-      {snooze}
-      <Button size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
-        Now
-      </Button>
-      <Button tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
-        Queue
-      </Button>
-    </CardFoot>
-  );
-}
-
-function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActions }): JSX.Element | null {
-  const fix: SetupFix | undefined = check.fix;
-  const [value, setValue] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
-  if (fix === undefined) return null;
-
-  if (fix.kind === 'shell') {
-    return (
-      <CardFoot why={fix.why} wide>
-        <div className="cn-shell">
-          <span aria-hidden="true">$</span>
-          <code>{fix.command}</code>
-          <button
-            type="button"
-            className={copied ? 'cn-copy cn-copied' : 'cn-copy'}
-            onClick={() => {
-              void navigator.clipboard?.writeText(fix.command).catch(() => undefined);
-              setCopied(true);
-            }}
-          >
-            {copied ? 'Copied' : fix.label}
-          </button>
-        </div>
-      </CardFoot>
-    );
-  }
-
-  if (fix.kind === 'sheet') {
-    return (
-      <CardFoot why={check.remedy ?? null}>
-        <Button tone="primary" size="small" onClick={() => actions.openPanel('setup')}>
-          {fix.label}
-        </Button>
-      </CardFoot>
-    );
-  }
-
-  if (fix.kind === 'goto') {
-    return (
-      <CardFoot why={check.remedy ?? null}>
-        <Button
-          tone="primary"
-          size="small"
-          onClick={() =>
-            fix.to === 'tickets'
-              ? actions.openTab('tickets')
-              : actions.openConfig({
-                  configTab: fix.to === 'prompts' ? 'prompts' : 'values',
-                  configGroup: fix.group ?? null,
-                })
-          }
-        >
-          {fix.label}
-        </Button>
-      </CardFoot>
-    );
-  }
-
-  const paths = Object.keys(fix.set);
-  const only = paths[0];
-  const editable = fix.confidence === 'assumed' && paths.length === 1 && only !== undefined;
-  const typed = value ?? (editable ? String(fix.set[only as string]) : '');
-  const write = (): void => {
-    setBusy(true);
-    const set = editable ? { [only as string]: coerce(typed, fix.set[only as string]) } : fix.set;
-    void actions.applyConfigFix(check.id, set).finally(() => setBusy(false));
-  };
-
-  return (
-    <CardFoot why={editable ? null : (check.remedy ?? null)} wide={editable}>
-      {editable ? (
-        <div className="cn-fixline">
-          <label className="cn-fixedit">
-            Set <code>{only}</code> to
-            <input className="cn-inline" value={typed} onChange={(e) => setValue(e.target.value)} aria-label={only} />
-          </label>
-          <Button size="small" disabled={busy} onClick={write}>
-            Write it
-          </Button>
-        </div>
-      ) : (
-        <Button tone="primary" size="small" disabled={busy} onClick={write}>
-          {fix.label}
-        </Button>
-      )}
-    </CardFoot>
-  );
-}
-
-function coerce(text: string, like: unknown): unknown {
-  if (typeof like === 'boolean') return text === 'true';
-  if (typeof like === 'number') return Number(text);
-  return text;
-}
-
-function SettledFix({ applied, actions }: { applied: AppliedFix; actions: CockpitActions }): JSX.Element {
-  return (
-    <CardFoot
-      settled
-      why={
-        <span className="cn-settled-what">
-          <b>{applied.summary}</b>
-          <i className="cn-settled-file">→ {applied.file}</i>
-        </span>
-      }
-    >
-      <Button size="small" onClick={() => void actions.undoConfigFix(applied.checkId)}>
-        Undo
-      </Button>
-      <Button size="small" onClick={() => actions.dismissConfigFix(applied.checkId)}>
-        Dismiss
-      </Button>
-    </CardFoot>
   );
 }
 

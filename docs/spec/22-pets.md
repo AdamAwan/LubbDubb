@@ -370,7 +370,8 @@ than another means anything.
 
 Pixel grids, hand-placed, drawn at an integer scale with smoothing off.
 
-They live in `web/src/pets/sprites.ts` and never leave it. The wire carries `species`, `stage` and
+They live in `web/src/pets/sprites.ts` (the juvenile and adult grids in its siblings
+`juvenileSprites.ts` and `adultSprites.ts`) and never leave the cockpit. The wire carries `species`, `stage` and
 `seed`; what a species looks like is a cockpit fact, and a server that also knew would be a second
 place to change when a sprite changes.
 

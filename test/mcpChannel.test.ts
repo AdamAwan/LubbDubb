@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connect } from 'node:net';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildClaudeStreamArgs, DONE_REMINDER, MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
@@ -40,7 +40,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config/config.js';
 import type { Agent, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { repoText } from './support/paths.js';
+import { repoPath, repoText } from './support/paths.js';
 
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
@@ -1570,10 +1570,18 @@ test('open_pr degrades to the floor when authoring is unwired — it never silen
 });
 
 test('the caller is resolved in exactly one place, so the identity chain cannot be got wrong twice', () => {
-  const source = repoText('src/agents/agentManager.ts');
-  const preamble = source.match(/agent \? this\.store\.tasks\.getTask\(agent\.taskId\) : null/g) ?? [];
-  assert.equal(preamble.length, 1, 'the agent -> task resolution appears once, inside withCaller');
-  assert.match(source, /private withCaller</, 'and that one copy is the wrapper the tool-facing methods run through');
+  const files = readdirSync(repoPath('src/agents')).filter((name) => name.endsWith('.ts'));
+  const resolutions = files.flatMap((name) =>
+    (repoText('src/agents', name).match(/agent \? this\.store\.tasks\.getTask\(agent\.taskId\) : null/g) ?? []).map(
+      () => name,
+    ),
+  );
+  assert.equal(resolutions.length, 1, 'the agent -> task resolution appears once across src/agents, inside withCaller');
+  assert.match(
+    repoText('src/agents', resolutions[0]!),
+    /private withCaller</,
+    'and that one copy is the wrapper the tool-facing methods run through',
+  );
 });
 
 test('every advertised tool is its own module, and tools.ts is assembly and nothing else', () => {

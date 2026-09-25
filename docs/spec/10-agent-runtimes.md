@@ -403,7 +403,7 @@ what a _person_ must decide — and the two mechanisms below deal with the stops
 
 #### The nudge
 
-`AgentManager.handleStalled` asks the agent before it asks the operator. Up to `agentStallNudges`
+`AgentParks.handleStalled` asks the agent before it asks the operator. Up to `agentStallNudges`
 times (default 2) it types `STALL_NUDGE` (`src/agents/agentProtocol.ts`) into the session, which
 states the three exits — you are done (a pushed PR waiting on CI or review included), a _person_ is
 what you are blocked on, or you are still working and should go and check that build yourself — and
@@ -528,7 +528,7 @@ The only observable a wedged agent has is that it says nothing, so that is what 
 every message written in, and on every transition back to `running`; when it runs out it emits
 `silent`. It is not `stalled`, and the difference is what the manager does about it.
 
-**The wedge is told, not asked.** `AgentManager.handleSilent` goes straight to the park, skipping the
+**The wedge is told, not asked.** `AgentParks.handleSilent` goes straight to the park, skipping the
 nudge budget entirely. A nudge is a message written to stdin, and `claude` reads it at the end of the
 turn it is in — an agent that has not produced a byte has not reached that end and is not going to, so
 the nudge would sit in the pipe of a process nobody will hear from again while the budget was spent
@@ -728,7 +728,23 @@ Tests: `test/ptySentinelScanner.test.ts`, `test/ptySession.test.ts`.
 ## `AgentManager`
 
 `src/agents/agentManager.ts` owns the live fleet. It maps session events onto store updates and
-re-emits them for the server to broadcast.
+re-emits them for the server to broadcast. It is composed, not layered: `AgentManager` owns the
+session lifecycle (spawn, resume, kill, lift, complete, terminal and reap) and the maps that share it —
+`sessions`, `exitCodes`, `exited`, `terminals` — privately, and holds three collaborators, each with
+private state and a narrow way back in:
+
+- `AgentParks` (`agentParks.ts`) owns the park state — `parked`, `limited`, `nudges`, `stalled` — and
+  the waiting, stall, silence and usage-limit handling. It reaches the session side only through a host
+  of four closures (`hasExited`, `noteSent`, `respond`, `shedSession`), so no session map leaves the
+  manager.
+- `AgentToolDesk` (`agentToolDesk.ts`) is the tool channel's records and verdicts, and owns
+  `withCaller` privately ([11](11-mcp-tools.md#identity)); the verdict bodies are plain functions in
+  `agentVerdicts.ts`. `AgentManager` still satisfies
+  `AgentToolTarget` by forwarding to it, so the MCP seam and every caller keep one `agents` object.
+- `AgentChannels` (`agentChannels.ts`) is the file-events spool and MCP credential bookkeeping, and opens
+  each launch's session with its events dir and token.
+
+The options and event contract they share is `agentContract.ts`.
 
 ### Spawn
 

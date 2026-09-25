@@ -15,13 +15,13 @@ import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/sr
 import {
   buildGoalPage,
   buildGoalNav,
-  buildGoalTrack,
   GOAL_TAB_OF,
   goalSectionsOpen,
   planVerdictAsk,
   splitGoalAsks,
-  standsFor,
 } from '../web/src/view/goalPage.js';
+import { buildGoalTrack } from '../web/src/view/goalStages.js';
+import { standsFor } from '../web/src/view/goalRefs.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 

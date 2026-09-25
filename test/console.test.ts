@@ -13,7 +13,7 @@ import type { EnvironmentHealthReading } from '../web/src/types.js';
 import type { GoalPartView, GoalTab } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB } from '../web/src/console/QueueRail.js';
-import { oneLine } from '../web/src/view/needsYou.js';
+import { oneLine } from '../web/src/view/needLines.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
 import { repoPath, repoText } from './support/paths.js';
@@ -23,13 +23,13 @@ import { repoPath, repoText } from './support/paths.js';
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js');
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
-const { usageReading, environmentsReading, menuEntries } = await import('../web/src/console/TopBar.js');
+const { usageReading, environmentsReading, menuEntries } = await import('../web/src/console/topBarReadings.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;

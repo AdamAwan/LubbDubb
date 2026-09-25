@@ -12,11 +12,18 @@ import type {
   ValidationCheckState,
   ValidationResource,
   ValidationResourceInput,
-  ValidationResourceKind,
-  ValidationRevision,
 } from '../types.js';
 import { columnNames, type ColumnMigrations, type TableRebuild } from './migrate.js';
 import type { StoreContext } from './context.js';
+import {
+  rowToCheck,
+  rowToPlanRecord,
+  rowToResource,
+  type ValidationCheckRow,
+  type ValidationPlanRow,
+  type ValidationResourceRow,
+} from './rows/validation.js';
+import { isReworded, mergeCheck } from '../validation/checkMerge.js';
 
 // → docs/spec/14-persistence.md
 
@@ -122,7 +129,7 @@ export class ValidationStore {
       const prev = byId.get(check.id);
       const letter = prev?.letter ?? nextCheckLetter(taken);
       if (!prev) taken.push(letter);
-      return this.mergeCheck({ originRef, prev, input: check, letter, ts, amendNote });
+      return mergeCheck({ originRef, prev, input: check, letter, ts, amendNote });
     });
 
     const write = this.ctx.db.transaction((all: ValidationCheck[]) => {
@@ -153,7 +160,7 @@ export class ValidationStore {
       const letter = prev?.letter ?? nextCheckLetter(taken);
       if (!prev) taken.push(letter);
       const seq = prev?.seq ?? (lastSeq += 1);
-      const row = this.mergeCheck({
+      const row = mergeCheck({
         originRef,
         prev,
         input: { ...check, seq },
@@ -187,65 +194,6 @@ export class ValidationStore {
     write();
     this.upsertValidationResources(originRef, amendment.resources);
     return result;
-  }
-
-  private mergeCheck(args: {
-    originRef: string;
-    prev: ValidationCheck | undefined;
-    input: ValidationCheckInput;
-    letter: string;
-    ts: string;
-    amendNote: string | null;
-  }): ValidationCheck {
-    const { originRef, prev, input, letter, ts, amendNote } = args;
-    const reworded = prev !== undefined && isReworded(prev, input);
-    const keep = prev !== undefined && !reworded;
-    const changed = prev === undefined || reworded || prev.supersededReason !== null;
-    const band = amendNote !== null && changed;
-    return {
-      originRef,
-      id: input.id,
-      letter,
-      seq: input.seq,
-      title: input.title,
-      do: input.do,
-      expect: input.expect,
-      proof: input.proof,
-      uses: input.uses,
-      covers: input.covers,
-      satisfies: input.satisfies ?? prev?.satisfies ?? [],
-      fleetCandidate: input.fleetCandidate,
-      candidateWhy: input.candidateWhy,
-      actor: keep ? prev.actor : 'human',
-      handbackNote: keep ? prev.handbackNote : null,
-      claimedBy: keep ? prev.claimedBy : null,
-      claimedAt: keep ? prev.claimedAt : null,
-      state: keep ? prev.state : 'unrun',
-      resultNote: keep ? prev.resultNote : null,
-      resultBy: keep ? prev.resultBy : null,
-      resultAt: keep ? prev.resultAt : null,
-      deferUntil: keep ? prev.deferUntil : null,
-      supersededReason: null,
-      revision: band
-        ? reworded && prev !== undefined
-          ? (unanswered(prev) ?? priorWording(prev))
-          : null
-        : (prev?.revision ?? null),
-      amendedAt: band ? ts : (prev?.amendedAt ?? null),
-      amendNote: band ? amendNote : (prev?.amendNote ?? null),
-      // Resolved from the configuration at ingestion and recomputed on every amendment — a check's
-      // assignment is a fact about what the deployment declares, and a step whose kind nothing
-      // declares is a step the fleet cannot carry. The area and the expected spec names ride here
-      // too: they are read off the steps wherever they are needed and are held nowhere else.
-      // → docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area
-      steps: input.steps ?? [],
-      // A reworded check loses its reading, and the capture is that reading's evidence: an image of
-      // a screen the procedure no longer describes is worse than no image, because it looks like one
-      // somebody could still judge. Word for word re-declared, it stays.
-      capture: keep ? prev.capture : null,
-      createdAt: prev?.createdAt ?? ts,
-      updatedAt: ts,
-    };
   }
 
   private replaceValidationResources(originRef: string, resources: ValidationResourceInput[]): void {
@@ -574,228 +522,6 @@ export class ValidationStore {
         steps: check.steps.length === 0 ? null : JSON.stringify(check.steps),
       });
   }
-}
-
-function isReworded(prev: ValidationCheck, next: ValidationCheckAmendmentLike): boolean {
-  return (
-    prev.title !== next.title ||
-    prev.do !== next.do ||
-    prev.expect !== next.expect ||
-    // The evidence demanded is part of the terms a reading was taken against: a pass earned by
-    // handing back one screen is not a pass under a `proof` that now asks for another.
-    prev.proof !== next.proof
-  );
-}
-
-interface ValidationCheckAmendmentLike {
-  title: string;
-  do: string;
-  expect: string;
-  proof: string | null;
-}
-
-function unanswered(prev: ValidationCheck): ValidationRevision | null {
-  return prev.state === 'unrun' && prev.revision !== null && prev.revision.state !== null ? prev.revision : null;
-}
-
-function priorWording(prev: ValidationCheck): ValidationRevision {
-  return {
-    title: prev.title,
-    do: prev.do,
-    expect: prev.expect,
-    proof: prev.proof,
-    state: prev.state === 'unrun' ? null : prev.state,
-    note: prev.resultNote,
-  };
-}
-
-interface ValidationCheckRow {
-  origin_ref: string;
-  id: string;
-  letter: string;
-  seq: number;
-  title: string;
-  check_do: string;
-  check_expect: string;
-  proof: string | null | undefined;
-  uses: string;
-  covers: string;
-  satisfies: string | null | undefined;
-  fleet_candidate: number;
-  candidate_why: string | null;
-  actor: string | null | undefined;
-  handback_note: string | null | undefined;
-  claimed_by: string | null | undefined;
-  claimed_at: string | null | undefined;
-  state: string;
-  result_note: string | null;
-  result_by: string | null;
-  result_at: string | null;
-  defer_until: string | null;
-  superseded_reason: string | null;
-  revision: string | null | undefined;
-  amended_at: string | null | undefined;
-  amend_note: string | null | undefined;
-  steps: string | null | undefined;
-  capture: string | null | undefined;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ValidationResourceRow {
-  origin_ref: string;
-  name: string;
-  kind: string | null;
-  note: string | null;
-  provided: number;
-  human_task_id: string | null;
-}
-
-function rowToCheck(r: ValidationCheckRow): ValidationCheck {
-  return {
-    originRef: r.origin_ref,
-    id: r.id,
-    letter: r.letter,
-    seq: r.seq,
-    title: r.title,
-    do: r.check_do,
-    expect: r.check_expect,
-    proof: r.proof ?? null,
-    uses: parseStringArray(r.uses),
-    covers: parseStringArray(r.covers),
-    satisfies: parseStringArray(r.satisfies ?? null),
-    fleetCandidate: r.fleet_candidate === 1,
-    candidateWhy: r.candidate_why,
-    actor: r.actor === 'fleet' ? 'fleet' : 'human',
-    handbackNote: r.handback_note ?? null,
-    claimedBy: r.claimed_by !== null && r.claimed_by !== undefined && r.claimed_at ? r.claimed_by : null,
-    claimedAt: r.claimed_by !== null && r.claimed_by !== undefined && r.claimed_at ? r.claimed_at : null,
-    state: checkStateOf(r.state),
-    resultNote: r.result_note,
-    resultBy: resultByOf(r.result_by),
-    resultAt: r.result_at,
-    deferUntil: r.defer_until,
-    supersededReason: r.superseded_reason,
-    revision: parseRevision(r.revision ?? null),
-    amendedAt: r.amended_at ?? null,
-    amendNote: r.amend_note ?? null,
-    steps: parseSteps(r.steps ?? null),
-    capture: r.capture ?? null,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  };
-}
-
-/**
- * Anything unrecognised narrows to `unrun`, and that direction is what makes `captured` and
- * `declined` safe to add:
- * a row written before the state existed lands on *nobody has got to it* rather than on *there is an
- * image here waiting for you*. Adding a value to a column is not a schema change — `state` gained it
- * the way `result_by` gained `agent`, `desktop` and `spec`.
- */
-function checkStateOf(raw: string): ValidationCheckState {
-  return raw === 'passed' ||
-    raw === 'failed' ||
-    raw === 'waived' ||
-    raw === 'deferred' ||
-    raw === 'captured' ||
-    raw === 'declined'
-    ? raw
-    : 'unrun';
-}
-
-/** `script` is its own answer and is never read back as `spec` — nothing reviewed a one-off script. */
-function resultByOf(raw: string | null): ValidationCheckResultBy | null {
-  return raw === 'operator' || raw === 'agent' || raw === 'desktop' || raw === 'spec' || raw === 'script' ? raw : null;
-}
-
-function resourceKindOf(raw: string | null): ValidationResourceKind | null {
-  return raw === 'fixture' || raw === 'access' || raw === 'reference' || raw === 'data' ? raw : null;
-}
-
-function rowToResource(r: ValidationResourceRow): ValidationResource {
-  return {
-    originRef: r.origin_ref,
-    name: r.name,
-    kind: resourceKindOf(r.kind),
-    note: r.note,
-    provided: r.provided === 1,
-    humanTaskId: r.human_task_id,
-  };
-}
-
-function parseRevision(raw: string | null): ValidationRevision | null {
-  if (raw === null) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const r = parsed as Record<string, unknown>;
-    if (typeof r.title !== 'string' || typeof r.do !== 'string' || typeof r.expect !== 'string') return null;
-    const state = typeof r.state === 'string' ? checkStateOf(r.state) : null;
-    return {
-      title: r.title,
-      do: r.do,
-      expect: r.expect,
-      // Tolerated rather than required: a revision written before the field carries no `proof`, and
-      // reading that blob as unparseable would throw away the whole record of what a check used to
-      // say to gain one line of it.
-      proof: typeof r.proof === 'string' ? r.proof : null,
-      state: state === 'unrun' ? null : state,
-      note: typeof r.note === 'string' ? r.note : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Null is **no steps**, and so is anything this cannot read back — the same rule the rest of this
- * module's JSON columns follow. A column added to an existing table is null on every row from before
- * it, and there is nothing to backfill: a check written before test plans existed genuinely had none.
- */
-function parseSteps(raw: string | null): ValidationStep[] {
-  if (raw === null) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((step): step is ValidationStep => {
-      if (typeof step !== 'object' || step === null) return false;
-      const s = step as Record<string, unknown>;
-      return typeof s.kind === 'string' && typeof s.do === 'string' && typeof s.actor === 'string';
-    });
-  } catch {
-    return [];
-  }
-}
-
-function parseStringArray(raw: string | null): string[] {
-  if (raw === null) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-interface ValidationPlanRow {
-  origin_ref: string;
-  hint: string | null;
-  note: string | null;
-  empty_reason: string | null;
-  authored_at: string | null;
-  released_at: string | null;
-}
-
-function rowToPlanRecord(r: ValidationPlanRow): ValidationPlanRecord {
-  return {
-    originRef: r.origin_ref,
-    hint: r.hint ?? null,
-    note: r.note ?? null,
-    emptyReason: r.empty_reason ?? null,
-    authoredAt: r.authored_at ?? null,
-    releasedAt: r.released_at ?? null,
-  };
 }
 
 /**

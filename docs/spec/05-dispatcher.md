@@ -1579,7 +1579,9 @@ expiry from re-asking on a PR that has merely been commented on.
 
 `src/dispatcher/promptTemplates.ts` holds every agent- and escalation-facing prompt the rule
 dispatcher emits, each under a stable `PromptId`, each with a built-in default, a declared placeholder
-list, and a doc string.
+list, and a doc string. The registry's entries are written in four sibling modules —
+`issuePrompts.ts`, `validationPrompts.ts`, `pullRequestPrompts.ts` and `ticketPrompts.ts` — and
+spread into it in that order, which is the order `describe` returns them in.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `plan-amendment`,
 `issue-shortfall`,

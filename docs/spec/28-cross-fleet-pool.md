@@ -762,7 +762,7 @@ of the answer, spelled out, for a field whose whole job is to be an address nobo
 ### A fleet with no name yet
 
 **A pool selected with no `fleetId` boots.** The other coordinates are refused at load
-(`validatePool`, `src/config/config.ts`) and this one deliberately is not, because of who each of them
+(`validatePool`, `src/config/configChecks.ts`) and this one deliberately is not, because of who each of them
 belongs to: `pool.project`, `pool.remote` and `pool.branch` arrive in the **committed**
 `lubbdubb.project.json`, so a missing one is a mis-committed file every clone shares and every clone
 should refuse. The fleet's own name is the **deployment's**, per machine — so the day a team commits

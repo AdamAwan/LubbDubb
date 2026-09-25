@@ -6,13 +6,13 @@ import type { GoalPageView, GoalTab } from '../web/src/view/goalPage.js';
 import {
   buildGoalNav,
   buildGoalPage,
-  buildGoalReachMatrix,
   goalLanding,
   goalTabOpening,
   GOAL_TABS,
   GOAL_TAB_OF,
   GOAL_ASK_TAB,
 } from '../web/src/view/goalPage.js';
+import { buildGoalReachMatrix } from '../web/src/view/goalReachMatrix.js';
 import { openGoalForAsk } from '../web/src/console/jump.js';
 import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 

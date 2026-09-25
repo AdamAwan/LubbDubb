@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { GoalArrival, GoalCriteriaDrift, WorldEvent } from '../types.js';
-import { goalOfPr } from '../view/goalPage.js';
+import { goalOfPr } from '../view/goalRefs.js';
 import { relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { PanelRows } from './PanelRow.js';

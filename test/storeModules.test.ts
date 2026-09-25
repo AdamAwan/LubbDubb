@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
+import { SCHEMA } from '../src/store/schema.js';
 
 function srcFiles(dir: string): string[] {
   const out: string[] = [];
@@ -24,7 +25,9 @@ const NOT_DOMAIN_MODULES = [
 ];
 
 function domainModules(): string[] {
-  return srcFiles('src/store').filter((f) => !NOT_DOMAIN_MODULES.includes(f));
+  return srcFiles('src/store').filter(
+    (f) => !NOT_DOMAIN_MODULES.includes(f) && !f.startsWith('src/store/schema/') && !f.startsWith('src/store/rows/'),
+  );
 }
 
 test('only src/store/ touches SQLite', () => {
@@ -51,9 +54,7 @@ test('a domain module is handed the database and nothing else', () => {
 });
 
 test('every table is owned by exactly one module', () => {
-  const tables = [...readFileSync('src/store/schema.ts', 'utf8').matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map(
-    (m) => m[1],
-  );
+  const tables = [...SCHEMA.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
   assert.ok(tables.length > 20, 'the schema was read');
   const modules = domainModules();
   for (const table of tables) {

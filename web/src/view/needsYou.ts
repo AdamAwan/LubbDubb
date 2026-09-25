@@ -1,6 +1,5 @@
 import type {
   AppState,
-  CockpitDecision,
   Escalation,
   HumanTask,
   PlanPart,
@@ -11,9 +10,11 @@ import type {
   OpenPullRequest,
   ViewerAssignment,
 } from '../types.js';
-import { goalIssue, goalOfPr, standsFor } from './goalPage.js';
+import { goalOfPr } from './goalRefs.js';
 import { updateAskRows } from './updateAsks.js';
-import { watchBucket } from '../worldBuckets.js';
+import { intakeRows, placementRows, profileRows, sittingRows } from './issueAsks.js';
+import { agentLabelOf, askLine, goalOf, oneLine, opensAt, predictionOpensAt, prAddress } from './needLines.js';
+import { refusedDispatchRows } from './refusedDispatches.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -239,7 +240,7 @@ function assignedLine(pr: OpenPullRequest): string {
 /* `prediction` is `goal` with a pane named: the goal page's prediction card is the
    only surface moment two can be answered on, and the lifecycle rule lands a
    delivered goal on its record. → docs/spec/17-cockpit.md#the-panes */
-type NeedDestination = 'goal' | 'prediction' | 'ask' | 'config' | 'build' | 'provider' | 'pr' | null;
+export type NeedDestination = 'goal' | 'prediction' | 'ask' | 'config' | 'build' | 'provider' | 'pr' | null;
 
 export interface NeedRow {
   id: string;
@@ -275,46 +276,6 @@ export interface AppliedFix {
 
 export function partHolding(planId: string, slug: string, parts: readonly PlanPart[]): number {
   return parts.filter((p) => p.status !== 'retired' && p.planId === planId && p.dependsOn.includes(slug)).length;
-}
-
-function goalOf(ref: string | null | undefined, state: AppState): string | null {
-  const origin = standsFor(state, ref ?? null);
-  const m = /^(issue:\d+)/.exec(origin ?? '');
-  // TECHDEBT: noUncheckedIndexedAccess makes a capture group read as possibly undefined even once `m`
-  // is non-null; the regex guarantees it's set when `m` matches.
-  if (m?.[1]) return m[1];
-  const pr = /^pr:(\d+)/.exec(origin ?? '');
-  return pr?.[1] ? goalOfPr(state, Number(pr[1])) : null;
-}
-
-function agentLabelOf(agentId: string | null, state: AppState): string | null {
-  if (agentId === null) return null;
-  const agent = state.agents.find((a) => a.id === agentId);
-  const title = agent === undefined ? null : (state.tasks.find((t) => t.id === agent.taskId)?.title ?? null);
-  const line = title?.split('\n')[0]?.trim() ?? '';
-  return line === '' ? null : line;
-}
-
-function askLine(summary: string, goalRef: string | null, state: AppState): string {
-  const issue = goalRef === null ? undefined : goalIssue(state, goalRef);
-  if (issue === undefined) return summary;
-  const named = new RegExp(`#${issue.number}(?!\\d)`).test(summary);
-  return `${summary}${named ? '' : ` for #${issue.number}`} · ${issue.title}`;
-}
-
-const MAX_SUMMARY = 110;
-
-/**
- * A summary's first line, clamped. Exported because an ask *body* indexing what is
- * waiting — the threads on an assigned pull request — is asking the same question
- * of the same kind of text, and two clamps drift into two different summaries of
- * one comment.
- *
- * @public shared with the ask bodies in `web/src/console/NeedsBand.tsx`
- */
-export function oneLine(text: string | null | undefined): string {
-  const line = (text ?? '').split('\n')[0]?.trim() ?? '';
-  return line.length <= MAX_SUMMARY ? line : `${line.slice(0, MAX_SUMMARY - 1).trimEnd()}…`;
 }
 
 function commentAuthor(state: AppState, prNumber: unknown, commentId: unknown): string | null {
@@ -405,14 +366,6 @@ function needKindOfTask(kind: HumanTask['kind']): NeedKind {
   return TASK_KIND[kind];
 }
 
-function opensAt(goalRef: string | null, state: AppState): NeedDestination {
-  return goalRef !== null && goalIssue(state, goalRef) !== undefined ? 'goal' : 'ask';
-}
-
-function predictionOpensAt(goalRef: string | null, state: AppState): NeedDestination {
-  return opensAt(goalRef, state) === 'goal' ? 'prediction' : 'ask';
-}
-
 /**
  * Whether the plan this ask is about is still withheld pending the reveal.
  *
@@ -430,10 +383,6 @@ function planWithheld(e: Escalation, state: AppState): boolean {
 
 /** What the rail says a withheld plan's row will do, rather than leaving "Plan ready" to imply a verdict. */
 const REVEAL_NOTE = 'Withheld — reveal it to read it, and the prediction is asked first';
-
-function prAddress(state: AppState, number: number): string | undefined {
-  return state.refUrls[`pr:${number}`] ?? state.refUrls[`#${number}`];
-}
 
 const KIND_FOR_VERDICT: Record<SetupVerdict, NeedKind | null> = {
   bad: 'config',
@@ -466,96 +415,6 @@ function configRows(setup: SetupPayload | null, applied: readonly AppliedFix[]):
     }));
 }
 
-const REFUSAL_PULSES = 3;
-
-/**
- * A dispatch the executor has refused on every recent pulse, and what the last refusal said.
- *
- * @public read back by the needs band, which draws the refusal in full under the row
- */
-export interface RefusedDispatch {
-  key: string;
-  originRef: string | null;
-  branch: string | null;
-  pulses: number;
-  detail: string;
-  rule: string | null;
-  since: string;
-}
-
-function str(v: unknown): string | null {
-  return typeof v === 'string' && v.length > 0 ? v : null;
-}
-
-function refusedDispatches(state: AppState): RefusedDispatch[] {
-  const runs = new Map<string, CockpitDecision[]>();
-  const settled = new Set<string>();
-  for (const d of state.decisions ?? []) {
-    if (d.action.type !== 'dispatch_code_agent' && d.action.type !== 'dispatch_desk_agent') continue;
-    const key = d.subjectRef ?? str(d.action.branch);
-    if (key === null || settled.has(key)) continue;
-    if (d.outcome !== 'rejected') {
-      settled.add(key);
-      continue;
-    }
-    const run = runs.get(key);
-    if (run) run.push(d);
-    else runs.set(key, [d]);
-  }
-  const out: RefusedDispatch[] = [];
-  for (const [key, run] of runs) {
-    const pulses = new Set(run.map((d) => d.cycleId)).size;
-    if (pulses < REFUSAL_PULSES) continue;
-    const newest = run[0];
-    const oldest = run[run.length - 1];
-    if (!newest || !oldest) continue;
-    out.push({
-      key,
-      originRef: newest.subjectRef,
-      branch: str(newest.action.branch),
-      pulses,
-      detail: newest.detail,
-      rule: newest.rule,
-      since: oldest.createdAt,
-    });
-  }
-  return out;
-}
-
-/**
- * One refused run by its row id, through the same derivation the rail's row came from.
- *
- * @public the needs band resolves the row it was handed back to its refusal
- */
-export function refusedDispatchFor(state: AppState, id: string): RefusedDispatch | null {
-  return refusedDispatches(state).find((r) => `dispatch:${r.key}` === id) ?? null;
-}
-
-function refusalLine(detail: string): string {
-  const stop = detail.indexOf('. ');
-  if (stop > 0 && stop < 200) return detail.slice(0, stop + 1);
-  return detail.length > 200 ? `${detail.slice(0, 199)}…` : detail;
-}
-
-function refusedDispatchRows(state: AppState): NeedDraft[] {
-  return refusedDispatches(state).map((r) => {
-    const goalRef = goalOf(r.originRef, state);
-    return {
-      id: `dispatch:${r.key}`,
-      kind: 'dispatch' as const,
-      group: 'yours' as const,
-      title: askLine(`Refused on ${r.pulses} pulses running — ${refusalLine(r.detail)}`, goalRef, state),
-      goalRef,
-      originRef: r.originRef ?? r.branch,
-      opens: opensAt(goalRef, state),
-      agentId: null,
-      agentLabel: null,
-      holding: 0,
-      raisedAt: r.since,
-    };
-  });
-}
-
 const GROUP_RANK: Record<NeedGroup, number> = { blocking: 0, yours: 1 };
 const URGENCY_RANK: Record<NeedUrgency, number> = { now: 0, next: 1, later: 2 };
 
@@ -565,19 +424,38 @@ export function buildNeedsYou(
   applied: readonly AppliedFix[] = [],
   nowIso: string = new Date().toISOString(),
 ): NeedRow[] {
-  const parts = state.planParts ?? [];
-  const proposals = state.proposals ?? [];
-  const rows: NeedDraft[] = [];
+  const rows: NeedDraft[] = [
+    ...configRows(setup, applied),
+    ...updateAskRows(state, nowIso),
+    ...refusedDispatchRows(state),
+    ...assignedPrRows(state),
+    ...undescribedPartRows(state),
+    ...descriptionFeedbackRows(state),
+    ...recoveryRows(state),
+    ...escalationRows(state),
+    ...limitRows(state),
+    ...intakeRows(state),
+    ...sittingRows(state),
+    ...profileRows(state),
+    ...placementRows(state),
+    ...humanTaskRows(state),
+  ];
 
-  rows.push(...configRows(setup, applied));
-  rows.push(...updateAskRows(state, nowIso));
-  rows.push(...refusedDispatchRows(state));
-  rows.push(...assignedPrRows(state));
-  rows.push(...undescribedPartRows(state));
-  rows.push(...descriptionFeedbackRows(state));
+  return rows
+    .map((row) => ({ ...row, urgency: urgencyOf(row) }))
+    .sort((a, b) => {
+      if ((a.kind === 'recovery') !== (b.kind === 'recovery')) return a.kind === 'recovery' ? -1 : 1;
+      if (a.urgency !== b.urgency) return URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];
+      if (a.group !== b.group) return GROUP_RANK[a.group] - GROUP_RANK[b.group];
+      if (a.holding !== b.holding) return b.holding - a.holding;
+      return a.raisedAt.localeCompare(b.raisedAt);
+    });
+}
 
-  if ((state.recovery ?? []).length > 0) {
-    rows.push({
+function recoveryRows(state: AppState): NeedDraft[] {
+  if ((state.recovery ?? []).length === 0) return [];
+  return [
+    {
       id: 'recovery',
       kind: 'recovery',
       group: 'blocking',
@@ -589,30 +467,38 @@ export function buildNeedsYou(
       agentLabel: null,
       holding: 0,
       raisedAt: '',
-    });
-  }
+    },
+  ];
+}
 
-  for (const e of state.escalations.filter((x) => x.status === 'open')) {
-    const proposal = proposals.find((p) => p.escalationId === e.id);
-    const originRef = state.tasks.find((t) => t.id === e.taskId)?.originRef ?? e.context.originRef ?? null;
-    const goalRef = goalOf(originRef, state);
-    const withheld = planWithheld(e, state);
-    rows.push({
-      id: e.id,
-      kind: kindOf(e, proposal, originRef),
-      group: 'blocking',
-      title: askLine(escalationSummary(e, proposal, originRef, state), goalRef, state),
-      goalRef,
-      originRef,
-      opens: withheld ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
-      ...(withheld ? { note: REVEAL_NOTE } : {}),
-      agentId: e.agentId,
-      agentLabel: agentLabelOf(e.agentId, state),
-      holding: holdingForEscalation(e, state),
-      raisedAt: e.createdAt,
+function escalationRows(state: AppState): NeedDraft[] {
+  const proposals = state.proposals ?? [];
+  return state.escalations
+    .filter((x) => x.status === 'open')
+    .map((e) => {
+      const proposal = proposals.find((p) => p.escalationId === e.id);
+      const originRef = state.tasks.find((t) => t.id === e.taskId)?.originRef ?? e.context.originRef ?? null;
+      const goalRef = goalOf(originRef, state);
+      const withheld = planWithheld(e, state);
+      return {
+        id: e.id,
+        kind: kindOf(e, proposal, originRef),
+        group: 'blocking' as const,
+        title: askLine(escalationSummary(e, proposal, originRef, state), goalRef, state),
+        goalRef,
+        originRef,
+        opens: withheld ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
+        ...(withheld ? { note: REVEAL_NOTE } : {}),
+        agentId: e.agentId,
+        agentLabel: agentLabelOf(e.agentId, state),
+        holding: holdingForEscalation(e, state),
+        raisedAt: e.createdAt,
+      };
     });
-  }
+}
 
+function limitRows(state: AppState): NeedDraft[] {
+  const rows: NeedDraft[] = [];
   for (const agentId of state.parkedOnLimit) {
     const agent = state.agents.find((a) => a.id === agentId);
     if (!agent) continue;
@@ -632,116 +518,27 @@ export function buildNeedsYou(
       raisedAt: agent.startedAt,
     });
   }
+  return rows;
+}
 
-  for (const issue of state.world.issues) {
-    if (issue.state !== 'open' || issue.appraisal?.verdict !== 'unclear') continue;
-    if (watchBucket(issue.labels, state.config.watchLabel) !== 'watched') continue;
-    const goalRef = `issue:${issue.number}`;
-    rows.push({
-      id: `intake:${goalRef}`,
-      kind: 'intake',
-      group: 'yours',
-      title: askLine('Held at intake', goalRef, state),
-      goalRef,
-      originRef: goalRef,
-      opens: opensAt(goalRef, state),
-      agentId: null,
-      agentLabel: null,
-      holding: 0,
-      raisedAt: issue.appraisal.decidedAt,
-    });
-  }
-
-  // Planning waits on the operator here, so the ask blocks: nothing is planned for the goal
-  // until the sitting is closed. → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner
-  for (const issue of state.world.issues) {
-    if (issue.state !== 'open' || issue.pickup.status !== 'sitting') continue;
-    const goalRef = `issue:${issue.number}`;
-    rows.push({
-      id: `sitting:${goalRef}`,
-      kind: 'sitting',
-      group: 'blocking',
-      title: askLine('Planning waits on your prediction and criteria', goalRef, state),
-      goalRef,
-      originRef: goalRef,
-      opens: opensAt(goalRef, state),
-      agentId: null,
-      agentLabel: null,
-      holding: 0,
-      raisedAt: issue.appraisal?.decidedAt ?? state.world.takenAt,
-    });
-  }
-
-  for (const issue of state.world.issues) {
-    const appraisal = issue.appraisal;
-    if (!appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) continue;
-    const goalRef = `issue:${issue.number}`;
-    rows.push({
-      id: `profile:${goalRef}`,
-      kind: 'profile',
-      group: 'yours',
-      title: askLine(`Wants to run on “${appraisal.proposedProfile}”`, goalRef, state),
-      goalRef,
-      originRef: goalRef,
-      opens: opensAt(goalRef, state),
-      agentId: null,
-      agentLabel: null,
-      holding: 0,
-      raisedAt: appraisal.decidedAt,
-    });
-  }
-
-  for (const issue of state.world.issues) {
-    for (const ask of issue.appraisal?.placement ?? []) {
-      const goalRef = `issue:${issue.number}`;
-      rows.push({
-        id: `placement:${ask.field}:${goalRef}`,
-        kind: 'placement',
-        group: 'yours',
-        title: askLine(
-          ask.field === 'parent'
-            ? ask.proposedParent === null
-              ? 'No parent Feature'
-              : `No parent — #${ask.proposedParent} proposed`
-            : `On no team's board — “${ask.proposedAreaPath}” proposed`,
-          goalRef,
-          state,
-        ),
+function humanTaskRows(state: AppState): NeedDraft[] {
+  const parts = state.planParts ?? [];
+  return (state.humanTasks ?? [])
+    .filter((x) => x.status === 'open')
+    .map((t) => {
+      const goalRef = goalOf(t.originRef, state);
+      return {
+        id: t.id,
+        kind: needKindOfTask(t.kind),
+        group: 'yours' as const,
+        title: askLine(oneLine(t.title), goalRef, state),
         goalRef,
-        originRef: goalRef,
-        opens: opensAt(goalRef, state),
-        agentId: null,
-        agentLabel: null,
-        holding: 0,
-        raisedAt: issue.appraisal?.decidedAt ?? '',
-      });
-    }
-  }
-
-  for (const t of (state.humanTasks ?? []).filter((x) => x.status === 'open')) {
-    const goalRef = goalOf(t.originRef, state);
-    rows.push({
-      id: t.id,
-      kind: needKindOfTask(t.kind),
-      group: 'yours',
-      title: askLine(oneLine(t.title), goalRef, state),
-      goalRef,
-      originRef: t.originRef ?? null,
-      opens: t.kind === 'outcome' ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
-      agentId: t.kind === 'burn' ? t.agentId : null,
-      agentLabel: t.kind === 'burn' ? agentLabelOf(t.agentId, state) : null,
-      holding: holdingForTask(t, parts),
-      raisedAt: t.createdAt,
-    });
-  }
-
-  return rows
-    .map((row) => ({ ...row, urgency: urgencyOf(row) }))
-    .sort((a, b) => {
-      if ((a.kind === 'recovery') !== (b.kind === 'recovery')) return a.kind === 'recovery' ? -1 : 1;
-      if (a.urgency !== b.urgency) return URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];
-      if (a.group !== b.group) return GROUP_RANK[a.group] - GROUP_RANK[b.group];
-      if (a.holding !== b.holding) return b.holding - a.holding;
-      return a.raisedAt.localeCompare(b.raisedAt);
+        originRef: t.originRef ?? null,
+        opens: t.kind === 'outcome' ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
+        agentId: t.kind === 'burn' ? t.agentId : null,
+        agentLabel: t.kind === 'burn' ? agentLabelOf(t.agentId, state) : null,
+        holding: holdingForTask(t, parts),
+        raisedAt: t.createdAt,
+      };
     });
 }

@@ -11,7 +11,7 @@ import {
   AzureDevOpsSourceControlIntegration,
   aggregatePolicyCiStatus,
 } from '../src/integrations/azure/sourceControl.js';
-import { policyDisplayAliases, policyDisplayName } from '../src/integrations/azure/restAzureDevOpsApi.js';
+import { policyDisplayAliases, policyDisplayName } from '../src/integrations/azure/restShapes.js';
 import { prHealth } from '../src/pr/prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';

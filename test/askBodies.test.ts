@@ -14,7 +14,7 @@ import type { NeedRow } from '../web/src/view/needsYou.js';
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { needBody } = await import('../web/src/console/NeedsBand.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 function view(state: CockpitView['state'] = buildDemoState().state): CockpitView {

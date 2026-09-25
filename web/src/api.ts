@@ -66,6 +66,11 @@ import type {
   TenantCommandOutput,
 } from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
+import { authFetch, del, json, post, put } from './apiTransport.js';
+import { connectRealWs } from './apiSocket.js';
+
+export { UnauthorizedError } from './apiTransport.js';
+export type { WsClient } from './apiSocket.js';
 
 // → docs/spec/16-http-api.md
 
@@ -108,73 +113,6 @@ export interface GoalCriteriaReading {
   alignment: GoalCriteriaAlignment | null;
   /** One reading per criterion of the current version, off the checks that name it. */
   coverage: CriterionCoverage[];
-}
-
-export class UnauthorizedError extends Error {
-  constructor(readonly status: number) {
-    super(status === 403 ? 'Request refused by the cockpit' : 'Cockpit token missing or invalid');
-    this.name = 'UnauthorizedError';
-  }
-}
-
-const TOKEN_KEY = 'lubbdubb.cockpitToken';
-
-function readToken(): string {
-  try {
-    const fromHash = /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
-    if (fromHash) {
-      localStorage.setItem(TOKEN_KEY, fromHash);
-      history.replaceState(null, '', location.pathname + location.search);
-      return fromHash;
-    }
-    return localStorage.getItem(TOKEN_KEY) ?? '';
-  } catch {
-    return typeof location === 'undefined' ? '' : (/[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? '');
-  }
-}
-
-const token = readToken();
-
-async function authFetch(url: string, init?: RequestInit): Promise<Response> {
-  const headers = new Headers(init?.headers);
-  if (token) headers.set('authorization', `Bearer ${token}`);
-  const res = await fetch(url, { ...init, headers });
-  if (res.status === 401 || res.status === 403) throw new UnauthorizedError(res.status);
-  return res;
-}
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error((await refusalText(res)) ?? `${res.status} ${res.statusText}`);
-  return (await res.json()) as T;
-}
-
-async function refusalText(res: Response): Promise<string | null> {
-  try {
-    const body: unknown = await res.json();
-    const error = (body as { error?: unknown }).error;
-    return typeof error === 'string' && error ? error : null;
-  } catch {
-    return null;
-  }
-}
-
-function post<T>(url: string, body?: unknown): Promise<T> {
-  return authFetch(url, {
-    method: 'POST',
-    ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
-  }).then((r) => json<T>(r));
-}
-
-function put<T>(url: string, body: unknown): Promise<T> {
-  return authFetch(url, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then((r) => json<T>(r));
-}
-
-function del<T>(url: string): Promise<T> {
-  return authFetch(url, { method: 'DELETE' }).then((r) => json<T>(r));
 }
 
 const realApi = {
@@ -525,107 +463,6 @@ const realApi = {
   settleEjection: (id: string, outcome: EjectionOutcome, note?: string) =>
     post<{ ok: true; ejection: Ejection; jobId: string | null }>(`/api/ejections/${id}/settle`, { outcome, note }),
 };
-
-class ReconnectingWs {
-  private ws: WebSocket | null = null;
-  private closed = false;
-  private backoff: number;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly subs = new Set<string>();
-  private static readonly BASE = 500;
-  private static readonly CAP = 8000;
-
-  constructor(
-    private readonly onEvent: (ev: unknown) => void,
-    private readonly onStatus?: (connected: boolean) => void,
-  ) {
-    this.backoff = ReconnectingWs.BASE;
-    this.open();
-  }
-
-  private open(): void {
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const query = token ? `?t=${encodeURIComponent(token)}` : '';
-    const ws = new WebSocket(`${proto}://${location.host}/ws${query}`);
-    this.ws = ws;
-    ws.onopen = () => {
-      this.backoff = ReconnectingWs.BASE;
-      this.onStatus?.(true);
-      for (const id of this.subs) this.rawSend({ type: 'subscribe', agentId: id });
-    };
-    ws.onmessage = (msg) => {
-      try {
-        this.onEvent(JSON.parse(msg.data as string));
-      } catch {
-        /* ignore malformed frames */
-      }
-    };
-    ws.onclose = () => {
-      this.onStatus?.(false);
-      this.scheduleReconnect();
-    };
-    ws.onerror = () => {
-      try {
-        ws.close();
-      } catch {
-        /* noop */
-      }
-    };
-  }
-
-  private scheduleReconnect(): void {
-    if (this.closed || this.reconnectTimer) return;
-    const delay = this.backoff;
-    this.backoff = Math.min(this.backoff * 2, ReconnectingWs.CAP);
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      if (!this.closed) this.open();
-    }, delay);
-  }
-
-  private rawSend(frame: unknown): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(frame));
-    }
-  }
-
-  subscribe(agentId: string): void {
-    this.subs.add(agentId);
-    this.rawSend({ type: 'subscribe', agentId });
-  }
-
-  unsubscribe(agentId: string): void {
-    this.subs.delete(agentId);
-    this.rawSend({ type: 'unsubscribe', agentId });
-  }
-
-  close(): void {
-    this.closed = true;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.ws) {
-      this.ws.onclose = null;
-      try {
-        this.ws.close();
-      } catch {
-        /* noop */
-      }
-      this.ws = null;
-    }
-  }
-}
-
-export interface WsClient {
-  subscribe(agentId: string): void;
-  unsubscribe(agentId: string): void;
-  close(): void;
-}
-
-function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
-  return new ReconnectingWs(onEvent, onStatus);
-}
 
 const DEMO = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DEMO === '1';
 

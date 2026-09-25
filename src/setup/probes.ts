@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { runGit } from '../git/gitCli.js';
-import { azCliAccessToken } from '../integrations/azure/restAzureDevOpsApi.js';
+import { azCliAccessToken } from '../integrations/azure/azureAuth.js';
 import { OctokitGitHubApi } from '../integrations/github/octokitGitHubApi.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import type { RemoteTarget } from './remote.js';

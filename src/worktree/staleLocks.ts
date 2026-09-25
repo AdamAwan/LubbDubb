@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { SlotProcess } from './slotProcesses.js';
 
@@ -68,4 +69,20 @@ function hours(ms: number): string {
   if (h >= 48) return `${Math.floor(h / 24)} days`;
   if (h >= 2) return `${Math.floor(h)} hours`;
   return `${Math.max(1, Math.floor(ms / 60_000))} minutes`;
+}
+
+/**
+ * How old a git lock must be before the harness will call it stale and remove it. Longer than any
+ * single git command the harness or an agent runs, and shorter by orders of magnitude than the
+ * lifetime of one left by a process that died mid-write.
+ */
+export const STALE_LOCK_MS = 10 * 60_000;
+
+export function lockAge(path: string): number | null {
+  try {
+    const age = Date.now() - statSync(path).mtimeMs;
+    return age < 0 ? 0 : age;
+  } catch {
+    return null;
+  }
 }

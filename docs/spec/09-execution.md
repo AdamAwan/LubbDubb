@@ -564,7 +564,7 @@ prompt.
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
   widening rule at the level of a whole goal.
 - **Four families under a goal are excluded though `goalOriginFor` accepts them**, declared as one set
-  (`WITHOUT_PRIOR_WORK` in `src/executor/actionExecutor.ts`, keyed on `parseIssueOrigin`'s family so a
+  (`WITHOUT_PRIOR_WORK` in `src/executor/dispatchBriefing.ts`, keyed on `parseIssueOrigin`'s family so a
   hand-rolled origin match can never drift from the vocabulary — [05](05-dispatcher.md#the-issue-origin-vocabulary)).
   Each is an agent that does none of the goal's work and reads none of its pad, and for each the briefing
   is either a second copy or a briefing about the wrong ticket:

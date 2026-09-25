@@ -11,7 +11,7 @@ import type { CockpitActions } from './actions.js';
 import { useCockpitActions } from './useCockpitActions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 import { reconnectWatch } from './reconnect.js';
-import { goalPrNumbers } from '../view/goalPage.js';
+import { goalPrNumbers } from '../view/goalRefs.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 

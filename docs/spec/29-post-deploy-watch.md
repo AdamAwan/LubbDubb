@@ -814,7 +814,7 @@ approval prevents.
 
 **The goal page's Signals card** draws the declarations themselves — every declaration on the goal, its
 query, what it expects, and what the dry run read — with the controls that change them
-(`web/src/components/SignalsSection.tsx`, embedded by `web/src/console/GoalPage.tsx`). Its count reads in **readings**, never in checks: a windowed reading and a point-in-time check are
+(`web/src/components/SignalsSection.tsx`, embedded by `web/src/console/goalRunners.tsx`). Its count reads in **readings**, never in checks: a windowed reading and a point-in-time check are
 different clocks, and one word for both is how the goal page came to mean four things by "check"
 ([17](17-cockpit.md#one-noun-per-thing)). It sits on the **Watch** pane, above the window's own card,
 which is the order the questions are asked in: this is _what should be true of it running_, and the
@@ -832,7 +832,7 @@ goal that has a plan draws the card with whatever list it has, because the add c
 list starts.
 
 **The goal page's Watch card** draws the window one environment's arrival opened, headed
-`Watch · <environment>` (`web/src/console/GoalPage.tsx`, `web/src/console/console.css`). It was drawn
+`Watch · <environment>` (`web/src/console/goalEnvironments.tsx`, `web/src/console/console.css`). It was drawn
 **inside** that environment's own row on the Environments card while the environments and the watch
 shared a pane, because a watch belongs to an arrival and two surfaces drawn as siblings would be free
 to disagree about which environment a reading came from. The heading carries that guarantee now: the
@@ -867,7 +867,7 @@ switches to Light, and nothing in `npm run check` reads the stylesheets but
 `test/cockpitTheme.test.ts`.
 
 **The Needs-you rail** carries one row for a settled-regressed watch, with the reading in it and the
-bug-filing control beside it (`web/src/view/needsYou.ts`, `web/src/console/NeedsBand.tsx`). It is a
+bug-filing control beside it (`web/src/view/needsYou.ts`, `web/src/console/taskAsks.tsx`). It is a
 `human_tasks` row like every other on the rail, so it folds off the reading the desk already took
 rather than computing a second one — which is the disagreement the strip's fold exists to prevent,
 made once for the whole cockpit.
@@ -888,7 +888,7 @@ disabled one.
 
 **The track strip's Environments stage** gains the watch's reading — `reached liveUk · watch clean` —
 folded off the card below it rather than computed a second time, which is the strip's existing rule
-([17](17-cockpit.md), `web/src/view/goalPage.ts`). This is the one place a watch is reduced to a
+([17](17-cockpit.md), `web/src/view/goalStages.ts`). This is the one place a watch is reduced to a
 word, and the reduction is one-directional: `regressed` is answered first, then anything not `clean`
 reads _watch not read_, and only a window whose every check came back clean says so. A row with space
 for one reading must never fold an unread environment into an all-clear — the card underneath still

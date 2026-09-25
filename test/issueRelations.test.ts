@@ -12,7 +12,7 @@ import {
 } from '../src/issueRelations.js';
 import { isIssuePickupEligible, issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import type { IssuePickupContext, IssuePickupPolicy } from '../src/dispatcher/issuePickup.js';
-import { hierarchyIds } from '../src/integrations/azure/restAzureDevOpsApi.js';
+import { hierarchyIds } from '../src/integrations/azure/restShapes.js';
 import { AzureDevOpsWorkItemsIntegration } from '../src/integrations/azure/workItems.js';
 import type { AzWorkItem, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { Issue, IssueRelative } from '../src/types.js';

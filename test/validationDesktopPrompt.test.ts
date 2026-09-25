@@ -21,7 +21,7 @@ import { repoPath, repoText } from './support/paths.js';
 const { DesktopLink } = await import('../web/src/components/DesktopLink.js');
 const { ControlBar, ControlGroup } = await import('../web/src/components/controls.js');
 
-const SOURCE = repoText('web/src/components/ValidationSection.tsx');
+const SOURCE = repoText('web/src/components/validationCheckRows.tsx');
 const GOAL_PAGE = repoText('web/src/console/GoalPage.tsx');
 const TOP_BAR = repoText('web/src/console/TopBar.tsx');
 

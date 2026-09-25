@@ -2,14 +2,11 @@ import { z } from 'zod';
 import { allGoalReach } from '../environments/reach.js';
 import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
-import { validatePlanDocument } from '../plans/planDocument.js';
-import { amendPlanInPlace, proposePlanAmendment } from '../plans/planAmendment.js';
-import { issueOrigin, testPartNote } from '../plans/planning.js';
-import { acceptanceCriteria, currentPlanSummary, planIssueNumber } from '../plans/parts.js';
+import { issueOrigin } from '../plans/planning.js';
 import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
-import type { Plan } from '../types.js';
+import type { Issue, IssueAppraisal, ValidationCheck } from '../types.js';
 import {
   claimStaleBefore,
   desktopCheckRef,
@@ -23,22 +20,15 @@ import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
 import { descriptionCheck, descriptionRead } from './desktopDescription.js';
 import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
-import {
-  agentRead,
-  attentionRead,
-  escalationAnswer,
-  fleetControl,
-  fleetStatus,
-  goalControl,
-  humanTaskSettle,
-  queueControl,
-} from './desktopOps.js';
+import { agentRead, fleetControl, fleetStatus, queueControl } from './desktopOps.js';
+import { attentionRead, escalationAnswer, humanTaskSettle } from './desktopAttention.js';
+import { goalControl } from './desktopGoalControl.js';
 import { agentControl, jobCreate } from './desktopWork.js';
 import { ticketTarget } from './desktopTicket.js';
 import { goalGate, goalInstruct, goalPlacement } from './desktopGoal.js';
+import { planAmend, planRead } from './desktopPlan.js';
 import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
-import { PLAN_DOCUMENT_SHAPE } from './planDocumentSchema.js';
 import { toolSchema } from './schema.js';
 import { toolError, toolJson, type McpTool, type ToolCallResult } from './protocol.js';
 
@@ -182,39 +172,43 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
   },
 });
 
+const REPORT_DESCRIPTION =
+  'Record what you saw when you ran the check you claimed. Say "passed" or "failed" only if you actually ' +
+  'carried the procedure out; a green build, a merged pull request or code that looks correct are none of ' +
+  'them this check, which exists precisely because those had already happened. If you could not run it, say ' +
+  '"blocked" and why — that records no result and gives the check back, and it is the right answer rather ' +
+  'than a last resort.';
+
+const REPORT_INPUT = toolSchema(
+  z.object({
+    result: z
+      .enum(['passed', 'failed', 'blocked', 'captured'])
+      .describe(
+        '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
+          'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you ' +
+          'took the picture and somebody else judges it, so you state no outcome. "blocked" — you could not ' +
+          'run it, so nothing is recorded.',
+      ),
+    capture: z
+      .string()
+      .describe(
+        'The screenshot you wrote into the check’s own resource directory, by file name. Required with ' +
+          '"captured" and accepted with nothing else — a screenshot asserts nothing, so it never rides a ' +
+          'result that does.',
+      )
+      .optional(),
+    note: z
+      .string()
+      .describe(
+        'What you actually saw, or what stopped you. This is the whole of what somebody reads later instead ' +
+          'of running the check again, so "passed" is not a note.',
+      ),
+  }),
+);
+
 const validationReport: DesktopToolFactory = (deps, session) => ({
-  description:
-    'Record what you saw when you ran the check you claimed. Say "passed" or "failed" only if you actually ' +
-    'carried the procedure out; a green build, a merged pull request or code that looks correct are none of ' +
-    'them this check, which exists precisely because those had already happened. If you could not run it, say ' +
-    '"blocked" and why — that records no result and gives the check back, and it is the right answer rather ' +
-    'than a last resort.',
-  inputSchema: toolSchema(
-    z.object({
-      result: z
-        .enum(['passed', 'failed', 'blocked', 'captured'])
-        .describe(
-          '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
-            'not; a real finding about the goal. "captured" — the plan asked you to hand a screen back: you ' +
-            'took the picture and somebody else judges it, so you state no outcome. "blocked" — you could not ' +
-            'run it, so nothing is recorded.',
-        ),
-      capture: z
-        .string()
-        .describe(
-          'The screenshot you wrote into the check’s own resource directory, by file name. Required with ' +
-            '"captured" and accepted with nothing else — a screenshot asserts nothing, so it never rides a ' +
-            'result that does.',
-        )
-        .optional(),
-      note: z
-        .string()
-        .describe(
-          'What you actually saw, or what stopped you. This is the whole of what somebody reads later instead ' +
-            'of running the check again, so "passed" is not a note.',
-        ),
-    }),
-  ),
+  description: REPORT_DESCRIPTION,
+  inputSchema: REPORT_INPUT,
   handler: (args) => {
     const held = session.held;
     if (!held) {
@@ -242,258 +236,78 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
       return toolError(amendedReportReason(check));
     }
 
-    if (result === 'blocked') {
-      const next = deps.store.validation.recordValidationHandback(
-        held.originRef,
-        check.id,
-        handbackReason(note, 'desktop'),
-      );
-      session.held = null;
-      return toolJson({
-        reported: 'blocked',
-        check: `${check.letter}. ${check.id}`,
-        state: next?.state ?? check.state,
-        means:
-          'no result was recorded, the claim is released and your reason is on the row. The state is unchanged, ' +
-          'which is the honest answer — you did not find anything out about the goal.',
-      });
-    }
+    if (result === 'blocked') return handBack(deps, session, held, check, note);
+    return recordReading(deps, session, held, check, { result, note, capture });
+  },
+});
 
-    const next = deps.store.validation.recordValidationResult(held.originRef, check.id, {
-      state: result,
-      note,
-      by: 'desktop',
-      ...(capture === undefined ? {} : { capture }),
-    });
-    session.held = null;
-    if (!next) {
-      return toolError(
-        `Check "${check.id}" could not be written — its plan withdrew it. Nothing was recorded, and nothing ` +
-          'more is needed on it.',
-      );
-    }
-    if (next.state === 'captured')
-      return toolJson({
-        reported: 'captured',
-        check: `${check.letter}. ${check.id}`,
-        capture: next.capture,
-        recordedBy: 'desktop',
-        means:
-          'the screen is on the row and the operator is asked to look at it. You have stated no outcome and the ' +
-          'check is not green — whether what you captured is right is a judgement, which is why the plan asked ' +
-          'for a picture rather than an assertion.',
-      });
+type HeldCheck = NonNullable<DesktopSession['held']>;
+
+function handBack(
+  deps: DesktopToolDeps,
+  session: DesktopSession,
+  held: HeldCheck,
+  check: ValidationCheck,
+  note: string,
+): ToolCallResult {
+  const next = deps.store.validation.recordValidationHandback(
+    held.originRef,
+    check.id,
+    handbackReason(note, 'desktop'),
+  );
+  session.held = null;
+  return toolJson({
+    reported: 'blocked',
+    check: `${check.letter}. ${check.id}`,
+    state: next?.state ?? check.state,
+    means:
+      'no result was recorded, the claim is released and your reason is on the row. The state is unchanged, ' +
+      'which is the honest answer — you did not find anything out about the goal.',
+  });
+}
+
+function recordReading(
+  deps: DesktopToolDeps,
+  session: DesktopSession,
+  held: HeldCheck,
+  check: ValidationCheck,
+  reading: { result: 'passed' | 'failed' | 'captured'; note: string; capture: string | undefined },
+): ToolCallResult {
+  const { result, note, capture } = reading;
+  const next = deps.store.validation.recordValidationResult(held.originRef, check.id, {
+    state: result,
+    note,
+    by: 'desktop',
+    ...(capture === undefined ? {} : { capture }),
+  });
+  session.held = null;
+  if (!next) {
+    return toolError(
+      `Check "${check.id}" could not be written — its plan withdrew it. Nothing was recorded, and nothing ` +
+        'more is needed on it.',
+    );
+  }
+  if (next.state === 'captured')
     return toolJson({
-      reported: next.state,
+      reported: 'captured',
       check: `${check.letter}. ${check.id}`,
+      capture: next.capture,
       recordedBy: 'desktop',
       means:
-        'the operator sees this reading marked as one taken from a desktop session rather than by hand. If you ' +
-        'did not actually carry the procedure out, say so now — a pass nobody ran is the one outcome this ' +
-        'check exists to prevent.',
+        'the screen is on the row and the operator is asked to look at it. You have stated no outcome and the ' +
+        'check is not green — whether what you captured is right is a judgement, which is why the plan asked ' +
+        'for a picture rather than an assertion.',
     });
-  },
-});
-
-function decompositionFor(
-  deps: DesktopToolDeps,
-  issue: number,
-): { ok: true; originRef: string; plan: Plan } | { ok: false; error: string } {
-  const originRef = issueOrigin(issue);
-  const plan = deps.store.plans.getPlanByOrigin(originRef);
-  if (!plan) {
-    return {
-      ok: false,
-      error:
-        `Issue #${issue} has no plan. Nothing has been decomposed for it yet, so there is no verdict to ` +
-        `discuss — say so rather than writing one, because a plan the harness never asked for is not a plan ` +
-        `anybody is waiting to approve.`,
-    };
-  }
-  return { ok: true, originRef, plan };
-}
-
-const planRead: DesktopToolFactory = (deps) => ({
-  description:
-    "Read a goal's delivery plan: the planner's diagnosis and approach, the parts it splits the work into, " +
-    'what it deliberately left out, what it is least sure about, and the validation checks it declared. Call ' +
-    'this first when you are asked to discuss a plan — everything you need to argue with is in here, and the ' +
-    'repository is open beside you to check it against.',
-  inputSchema: toolSchema(z.object({ issue: z.number().describe('The goal number, e.g. 284.') })),
-  handler: (args) => {
-    const ref = desktopIssueRef(args);
-    if (!ref.ok) return toolError(ref.error);
-    const found = decompositionFor(deps, ref.issue);
-    if (!found.ok) return toolError(found.error);
-    const { plan, originRef } = found;
-    if (deps.planWithheld(plan))
-      return toolError(
-        'This plan has not been revealed yet. It is withheld until the operator opens the goal in the ' +
-          'cockpit and presses through the gate there — reading it aloud here would defeat that, which is ' +
-          'the whole point of the gate. Ask them to reveal it first.',
-      );
-
-    const parts = deps.store.plans.listPlanParts(plan.id);
-    const checks = liveChecks(deps.store.validation.listValidationChecks(originRef));
-    return toolJson({
-      issue: ref.issue,
-      title: plan.title,
-      status: plan.status,
-      revisions: deps.store.plans.listPlanRevisions(plan.id).length,
-      reason: plan.reason,
-      diagnosis: plan.diagnosis,
-      approach: plan.approach,
-      risks: plan.risks,
-      outOfScope: plan.outOfScope,
-      alternatives: plan.alternatives,
-      openQuestions: plan.openQuestions,
-      verification: plan.verification,
-      document: plan.document,
-      parts: currentPlanSummary(plan, parts, deps.prRefStyle ?? '#'),
-      acceptance: parts.map((p) => ({ slug: p.slug, criteria: acceptanceCriteria(p).map((c) => c.text) })),
-      validation: checks.map((c) => ({ letter: c.letter, id: c.id, title: c.title, state: c.state })),
-      ...testPartSection(deps),
-      next: PLAN_READ_NEXT,
-    });
-  },
-});
-
-/**
- * The test-part bar, on the discuss surface. It is the same string the planning prompts are given,
- * because an agent that was never told a browser suite exists can only leave `coverage` out. What it
- * asks for is prose, so the bar is the whole of what this surface needs.
- * → docs/spec/08-planning.md#discussing-a-plan
- */
-function testPartSection(deps: DesktopToolDeps): { testPart?: string } {
-  const note = testPartNote(deps.environments).trim();
-  return note === '' ? {} : { testPart: note };
-}
-
-function submittedPlanDocument(args: Record<string, unknown>): Record<string, unknown> {
-  return {
-    version: 1,
-    reason: args.reason,
-    diagnosis: args.diagnosis,
-    approach: args.approach,
-    risks: args.risks,
-    outOfScope: args.outOfScope,
-    alternatives: args.alternatives,
-    openQuestions: args.openQuestions,
-    verification: args.verification,
-    evidence: args.evidence ?? [],
-    document: args.document,
-    parts: args.parts ?? [],
-    validation: args.validation,
-    watch: args.watch,
-  };
-}
-
-const planAmend: DesktopToolFactory = (deps) => ({
-  description:
-    'Rewrite the delivery plan for a goal after talking it through with the operator, as the whole document ' +
-    'rather than a patch — keep every part slug you are not deliberately changing, since the slug is what an ' +
-    'amendment merges on. Validated immediately: on rejection you get the reason back and can fix and ' +
-    'resubmit in the same turn. This schedules nothing and stops nothing. On a plan still awaiting approval ' +
-    'it replaces the plan the operator is about to answer for; on one already running it records a proposed ' +
-    'change for them to accept — pass "note" saying why, and the plan keeps running either way until they do.',
-  inputSchema: toolSchema(
-    z.object({
-      issue: z.number().describe('The goal number whose plan you are amending, e.g. 284.'),
-      note: z
-        .string()
-        .describe(
-          'Why the plan must change, in a few sentences. **Required on a plan that is already running**, ' +
-            'where it is the whole of what the operator reads beside the diff — a change to a plan agents are ' +
-            'working with no reason on it is one they cannot answer. Ignored on a plan still awaiting approval, ' +
-            'which they read whole anyway.',
-        )
-        .optional(),
-      ...PLAN_DOCUMENT_SHAPE,
-    }),
-  ),
-  handler: async (args) => {
-    const ref = desktopIssueRef(args);
-    if (!ref.ok) return toolError(ref.error);
-    const found = decompositionFor(deps, ref.issue);
-    if (!found.ok) return toolError(found.error);
-    const { plan } = found;
-
-    if (plan.status === 'active') return amendRunningPlan(deps, plan, args);
-
-    if (plan.status !== 'awaiting_approval') {
-      return toolError(
-        `The plan for issue #${ref.issue} is "${plan.status}", so it is not yours to amend: it is neither ` +
-          `waiting on an approval you could rewrite nor running work a correction could be proposed against. ` +
-          `Say that rather than writing over it.`,
-      );
-    }
-
-    const parsed = validatePlanDocument(submittedPlanDocument(args));
-    if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
-
-    const result = amendPlanInPlace(
-      { store: deps.store, proposals: deps.proposals() },
-      plan,
-      parsed.document,
-      'superseded by a discussion at the operator’s own keyboard',
-    );
-    await deps.runCycle();
-
-    return toolJson({
-      amended: true,
-      issue: ref.issue,
-      status: result.status,
-      retired: result.retired,
-      means:
-        'the amended plan is recorded and the superseded approval card has been withdrawn. Nothing is ' +
-        'scheduled and nothing more is yours to do here.',
-      next:
-        'Tell the operator, in your own words, that the plan is amended and waiting for them: they ' +
-        'approve it in the LubbDubb cockpit, on the goal’s plan sheet, where "What changed" now shows ' +
-        'this amendment against the version they were reading. Do not carry any of the work out — you ' +
-        'were asked to argue about the plan, not to deliver it.',
-    });
-  },
-});
-
-function amendRunningPlan(deps: DesktopToolDeps, plan: Plan, args: Record<string, unknown>): ToolCallResult {
-  const note = typeof args.note === 'string' ? args.note : '';
-  const proposed = proposePlanAmendment(deps.store, {
-    plan,
-    document: submittedPlanDocument(args),
-    note,
-    author: 'operator',
-    authorRef: null,
-  });
-  if (!proposed.ok) return toolError(proposed.error);
-
   return toolJson({
-    proposed: true,
-    issue: planIssueNumber(plan.originRef),
-    amendmentId: proposed.proposed.amendment.id,
-    changes: proposed.proposed.diff?.parts.filter((p) => p.kind !== 'unchanged').map((p) => `${p.kind} ${p.slug}`),
-    ...(proposed.proposed.warnings.length > 0 ? { warnings: proposed.proposed.warnings } : {}),
+    reported: next.state,
+    check: `${check.letter}. ${check.id}`,
+    recordedBy: 'desktop',
     means:
-      'the amendment is recorded and waiting on the operator. **The plan has not changed**: every part that ' +
-      'was scheduling still is, no agent has been paused, stopped or re-dispatched, and nothing is ingested ' +
-      'until they accept it.',
-    next:
-      'Tell them, in your own words, that the change is waiting for them in the cockpit — on the goal’s ' +
-      'plan sheet, where it is drawn against the version they were reading — and that the plan carries on as ' +
-      'it is meanwhile. Do not propose a second amendment; there can only be one pending, and a further ' +
-      'change is folded into this one once they have answered.',
+      'the operator sees this reading marked as one taken from a desktop session rather than by hand. If you ' +
+      'did not actually carry the procedure out, say so now — a pass nobody ran is the one outcome this ' +
+      'check exists to prevent.',
   });
 }
-
-const PLAN_READ_NEXT =
-  'Argue with it. Check the diagnosis against the code, and say plainly where you think the split is wrong ' +
-  'rather than agreeing with a plan you have not tested. When you and the operator have settled on a change, ' +
-  'call plan_amend once with the whole document — every part you are keeping included, under its existing ' +
-  'slug. What that does depends on "status" above, so read it before you tell them anything: on ' +
-  '"awaiting_approval" the amended plan replaces the one they were about to answer for, and you send them ' +
-  'to the cockpit to approve it; on "active" the plan is already running and your amendment is a proposal ' +
-  'against it — pass "note" saying why, tell them it is waiting for them, and say plainly that nothing has ' +
-  'stopped and nothing has changed until they accept it.';
 
 const READ_NEXT =
   'Claim the one you are going to run with validation_claim before you start, then report it with ' +
@@ -579,27 +393,9 @@ const goalRead: DesktopToolFactory = (deps) => ({
     const pad = deps.store.scratch.listScratchEntries(originRef);
     const appraisal = deps.store.verdicts.getAppraisal(originRef);
     return toolJson({
-      issue: {
-        number: ref.issue,
-        ref: originRef,
-        title: issue?.title ?? record.issueTitle,
-        body: issue?.body ?? null,
-        state: issue?.state ?? null,
-        workItemState: issue?.workItemState ?? null,
-        labels: issue?.labels ?? [],
-        url: issue?.url ?? null,
-      },
+      issue: describeIssue(ref.issue, originRef, issue, record.issueTitle),
       observedAt: world?.takenAt ?? null,
-      appraisal:
-        appraisal === null
-          ? null
-          : {
-              verdict: appraisal.verdict,
-              summary: appraisal.summary,
-              missing: appraisal.missing,
-              by: appraisal.by,
-              decidedAt: appraisal.decidedAt,
-            },
+      appraisal: describeAppraisal(appraisal),
       record: retroDossier(record),
       validation: checks.map((c) => ({
         letter: c.letter,
@@ -619,6 +415,36 @@ const goalRead: DesktopToolFactory = (deps) => ({
     });
   },
 });
+
+function describeIssue(
+  number: number,
+  originRef: string,
+  issue: Issue | null,
+  recordedTitle: string,
+): Record<string, unknown> {
+  return {
+    number,
+    ref: originRef,
+    title: issue?.title ?? recordedTitle,
+    body: issue?.body ?? null,
+    state: issue?.state ?? null,
+    workItemState: issue?.workItemState ?? null,
+    labels: issue?.labels ?? [],
+    url: issue?.url ?? null,
+  };
+}
+
+function describeAppraisal(appraisal: IssueAppraisal | null): Record<string, unknown> | null {
+  return appraisal === null
+    ? null
+    : {
+        verdict: appraisal.verdict,
+        summary: appraisal.summary,
+        missing: appraisal.missing,
+        by: appraisal.by,
+        decidedAt: appraisal.decidedAt,
+      };
+}
 
 function goalEnvironments(deps: DesktopToolDeps, originRef: string): Record<string, unknown>[] {
   if (deps.environments.length === 0) return [];

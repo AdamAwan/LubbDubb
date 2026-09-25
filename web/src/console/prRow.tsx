@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { OpenPullRequest, PullRequest } from '../types.js';
-import { goalOfPr } from '../view/goalPage.js';
+import { goalOfPr } from '../view/goalRefs.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { waitedFor } from '../components/util.js';

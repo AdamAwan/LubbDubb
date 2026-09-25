@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
+import { CONFIG_FIELDS } from '../src/config/configFields.js';
 import { PetKeeper } from '../src/pets/keeper.js';
 import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from '../src/pets/attest.js';
 import { hash32, rollAction, speciesCandidates } from '../src/pets/roll.js';
@@ -714,8 +715,7 @@ test('a clearance is skipped entirely while pets are turned off', () => {
 });
 
 test('no configuration key can reach the roll', () => {
-  const fields = readFileSync('src/config/configFields.ts', 'utf8');
-  const paths = [...fields.matchAll(/path: '(pets\.[a-zA-Z]+)'/g)].map((m) => m[1]);
+  const paths = CONFIG_FIELDS.map((f) => f.path).filter((path) => path.startsWith('pets.'));
   assert.deepEqual(
     paths,
     ['pets.enabled', 'pets.visible'],

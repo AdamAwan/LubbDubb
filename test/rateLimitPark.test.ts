@@ -402,7 +402,7 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
   const { buildDemoState } = await import('../web/src/demo/fixtures.js');
   const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
   const { RefLinks } = await import('../web/src/components/refs.js');
-  const { goalIssue } = await import('../web/src/view/goalPage.js');
+  const { goalIssue } = await import('../web/src/view/goalRefs.js');
   const { hasPrPage } = await import('../web/src/view/prPage.js');
 
   const state = buildDemoState().state;

@@ -271,7 +271,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **A colour written as a literal in a stylesheet is a colour no theme can reach.** Every colour is
   a custom property on one of two `:root` blocks; a hex at a use site stays dark when somebody
   switches to Light, and only `test/cockpitTheme.test.ts` reads CSS. A new tint belongs on `:root`
-  — ideally a `color-mix` of the core — and in the registry in `web/src/cockpit/tokens.ts`.
+  — ideally a `color-mix` of the core — and in the registry in `web/src/cockpit/tokens.ts` (a derived tint in `tokenTints.ts`).
   → [17](docs/spec/17-cockpit.md#tokens)
 - **A reference is drawn with `<Ref to={ref}/>` (`web/src/components/refs.tsx`), never as text.** A
   surface that names a goal or PR with no way there is a dead end that renders correctly. A

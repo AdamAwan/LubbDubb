@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
-import type { EnvironmentHealthReading } from '../types.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { Icon } from '../components/icons.js';
-import { ExtLink, fmtUsd, relTime } from '../components/util.js';
+import { ExtLink } from '../components/util.js';
 import { ControlButton } from '../components/controls.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
 import { useThemeUnsaved } from '../hooks.js';
-import { signalRows } from './WorldSignals.js';
+import { environmentsReading, menuEntries, usageReading } from './topBarReadings.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -140,43 +139,6 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
   );
 }
 
-interface EnvironmentsReading {
-  value: string;
-  quiet: boolean;
-  tone: 'ill' | 'watch' | null;
-  title: string;
-}
-
-function healthRank(reading: EnvironmentHealthReading): number {
-  if (reading.state === 'unhealthy') return reading.tier === 'orange' ? 1 : 0;
-  if (reading.state === 'unknown') return 2;
-  return 3;
-}
-
-function healthWord(reading: EnvironmentHealthReading): string {
-  if (reading.tier !== null) return reading.tier;
-  return reading.state === 'healthy' ? 'well' : reading.state === 'unknown' ? 'no answer' : 'not well';
-}
-
-export function environmentsReading(readings: readonly EnvironmentHealthReading[], now: number): EnvironmentsReading {
-  const worst = [...readings].sort((a, b) => healthRank(a) - healthRank(b))[0]!;
-  const word = healthWord(worst);
-  const count = readings.filter((r) => healthWord(r) === word).length;
-  const rank = healthRank(worst);
-  const read = `read ${relTime(worst.observedAt, now)}`;
-  const said = worst.reasons.length > 0 ? worst.reasons.join(' · ') : worst.detail;
-  const title =
-    rank === 3
-      ? `Every environment answered well — ${read}.`
-      : `${worst.environment} ${worst.state === 'unknown' ? 'did not answer' : 'is not well'} — ${word} since ${relTime(worst.changedAt, now).replace(' ago', '')}, ${read}.${said === null || said === '' ? '' : ` ${said}`}`;
-  return {
-    value: `${count} ${word}`,
-    quiet: rank === 3,
-    tone: rank === 2 ? 'watch' : rank === 3 ? null : 'ill',
-    title,
-  };
-}
-
 function Environments({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
   const readings = view.state.environmentHealth ?? [];
   if (readings.length === 0) return null;
@@ -217,27 +179,6 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
       {reading}
     </button>
   );
-}
-
-function buildReading(view: CockpitView): MenuReading {
-  const build = view.state.build;
-  const due = build.state === 'behind' || build.state === 'ready';
-  const title =
-    build.state === 'behind'
-      ? `LubbDubb is ${build.standing.behind} commit(s) behind upstream — open to see what changed`
-      : build.state === 'draining'
-        ? 'Upgrade pending: dispatch is paused while the fleet finishes — open to apply or cancel'
-        : build.state === 'ready'
-          ? 'Ready to upgrade — open to apply'
-          : build.state === 'unknown'
-            ? `This build could not be checked: ${build.standing.unavailable ?? 'no reason given'}`
-            : 'This build is up to date with upstream — open for details';
-  return {
-    value: build.label,
-    tone: due ? 'watch' : null,
-    quiet: build.state === 'current' || build.state === 'unknown',
-    title,
-  };
 }
 
 function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
@@ -302,69 +243,6 @@ function Tenants({ view, actions }: { view: CockpitView; actions: CockpitActions
   );
 }
 
-const USAGE_STALE_MS = 10 * 60 * 1000;
-
-interface UsageSlot {
-  label: string;
-  value: string;
-  binds: boolean;
-}
-
-interface UsageReading {
-  slots: UsageSlot[];
-  cost: string | null;
-  tone: 'quiet' | 'plain' | 'warn' | 'spent';
-  title: string;
-  age: string | null;
-}
-
-function resetIn(iso: string, now: number): string {
-  const mins = Math.max(0, Math.round((new Date(iso).getTime() - now) / 60_000));
-  if (mins < 60) return `${mins}m`;
-  if (mins < 48 * 60) return `${Math.round(mins / 60)}h`;
-  return `${Math.round(mins / (24 * 60))}d`;
-}
-
-export function usageReading(usage: CockpitView['state']['usage'], now: number): UsageReading {
-  const limits = usage.rateLimits;
-  const five = limits?.fiveHour ?? null;
-  const seven = limits?.sevenDay ?? null;
-
-  if (limits === null || (five === null && seven === null)) {
-    const { fiveHourCostUsd, sevenDayCostUsd } = usage.windows;
-    return {
-      slots: [],
-      cost: fmtUsd(fiveHourCostUsd),
-      tone: fiveHourCostUsd === 0 && sevenDayCostUsd === 0 ? 'quiet' : 'plain',
-      title:
-        'No subscriber usage windows have been reported — API-key auth, or no agent has taken a turn yet. ' +
-        `Spent ${fmtUsd(fiveHourCostUsd)} in the last five hours, ${fmtUsd(sevenDayCostUsd)} over seven days.`,
-      age: null,
-    };
-  }
-
-  const weekBinds = five === null || (seven !== null && seven.usedPercentage > five.usedPercentage);
-  const binding = weekBinds ? seven : five;
-  const pct = (w: typeof five) => (w === null ? '—' : `${Math.round(w.usedPercentage)}%`);
-  const bindingPct = binding === null ? 0 : Math.round(binding.usedPercentage);
-  const other = weekBinds ? five : seven;
-
-  return {
-    slots: [
-      { label: '5h', value: pct(five), binds: !weekBinds },
-      { label: '7d', value: pct(seven), binds: weekBinds },
-    ],
-    cost: null,
-    tone: bindingPct >= 90 ? 'spent' : bindingPct >= 75 ? 'warn' : bindingPct >= 25 ? 'plain' : 'quiet',
-    title:
-      `Claude account: ${weekBinds ? 'weekly' : 'five-hour'} window ${bindingPct}% used` +
-      `${binding?.resetsAt == null ? '' : `, resets in ${resetIn(binding.resetsAt, now)}`}` +
-      `${other === null ? '' : ` · ${weekBinds ? 'five-hour' : 'weekly'} ${Math.round(other.usedPercentage)}%`}. ` +
-      `Read ${relTime(limits.capturedAt, now)} off an agent's turn — the windows keep moving while the fleet is idle.`,
-    age: now - new Date(limits.capturedAt).getTime() >= USAGE_STALE_MS ? relTime(limits.capturedAt, now) : null,
-  };
-}
-
 function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const reading = usageReading(view.state.usage, view.now);
   const tone = reading.tone === 'quiet' ? 'cn-quiet' : reading.tone === 'plain' ? '' : `cn-usage-${reading.tone}`;
@@ -413,109 +291,6 @@ function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }
 function originIssueNumber(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
   return m ? Number(m[1]) : null;
-}
-
-interface MenuReading {
-  value: string | null;
-  tone: 'ill' | 'watch' | null;
-  quiet: boolean;
-  title: string;
-}
-
-interface MenuEntry extends MenuReading {
-  key: string;
-  icon: 'alert' | 'rocket' | 'download' | 'globe' | 'bolt' | 'book' | 'gear';
-  label: string;
-  pending?: boolean;
-  onPick: () => void;
-}
-
-export function menuEntries(view: CockpitView, actions: CockpitActions, themeUnsaved = false): MenuEntry[] {
-  const faults = view.state.errors.length;
-  const queued = view.state.jobs.filter((job) => job.status === 'queued').length;
-  const health = view.state.environmentHealth ?? [];
-  const env = health.length === 0 ? null : environmentsReading(health, view.now);
-  const build = buildReading(view);
-  const signals = signalRows(view).length;
-  return [
-    {
-      key: 'faults',
-      icon: 'alert',
-      label: 'Faults',
-      value: `${faults}`,
-      tone: faults === 0 ? null : 'ill',
-      quiet: faults === 0,
-      title: 'Recorded faults — open the fault log',
-      onPick: () => actions.openPanel('faults'),
-    },
-    {
-      key: 'launch',
-      icon: 'rocket',
-      label: 'Launch',
-      value: `${queued}`,
-      tone: null,
-      quiet: queued === 0,
-      title: 'Briefs waiting for a free slot — open the launch desk',
-      onPick: () => actions.openPanel('launch'),
-    },
-    {
-      key: 'build',
-      icon: 'download',
-      label: 'Build',
-      value: build.value,
-      tone: build.tone,
-      quiet: build.quiet,
-      title: build.title,
-      onPick: () => actions.openPanel('build'),
-    },
-    ...(env === null
-      ? []
-      : [
-          {
-            key: 'env',
-            icon: 'globe' as const,
-            label: 'Env',
-            value: env.value,
-            tone: env.tone,
-            quiet: env.quiet,
-            title: env.title,
-            onPick: () => actions.openPanel('environments'),
-          },
-        ]),
-    {
-      key: 'signals',
-      icon: 'bolt',
-      label: 'Signals',
-      value: `${signals}`,
-      tone: null,
-      quiet: signals === 0,
-      title: 'What the world did — the feed the queue is decided off',
-      onPick: () => actions.openPanel('signals'),
-    },
-    {
-      key: 'record',
-      icon: 'book',
-      label: 'Record',
-      value: null,
-      tone: null,
-      quiet: false,
-      title: 'What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked',
-      onPick: () => actions.openPanel('record'),
-    },
-    {
-      key: 'config',
-      icon: 'gear',
-      label: 'Config',
-      value: null,
-      tone: null,
-      quiet: false,
-      pending: themeUnsaved,
-      title: themeUnsaved
-        ? 'Config — an unsaved theme edit is pending; a reload drops it'
-        : 'Config — how this harness is configured',
-      onPick: () => actions.openConfig({}),
-    },
-  ];
 }
 
 function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {

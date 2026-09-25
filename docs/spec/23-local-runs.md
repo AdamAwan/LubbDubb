@@ -599,7 +599,7 @@ branch, not about a goal: work can sit on an integration branch that combines se
 never opened as a PR, and a goal can carry three PRs none of which describes the branch about to be
 started. So a ref with no pull request of its own **says so**, beside the count of what did land in
 the integration branch — which is a different statement from silence, and from a number borrowed off a
-sibling. That is why `LocalRunRefFacts` is derived per ref in `stateSnapshot.ts`: the cockpit could
+sibling. That is why `LocalRunRefFacts` is derived per ref in `stateLocalRunViews.ts`: the cockpit could
 match a branch to a PR itself, but deciding _which of a goal's PRs speaks for a ref_ is the mistake
 the type exists to make unrepeatable.
 

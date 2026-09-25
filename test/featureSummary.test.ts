@@ -13,6 +13,7 @@ import { buildFeatureBoard } from '../src/features/featureBoard.js';
 import type { FeatureSummary, Task } from '../src/types.js';
 import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
+import { SCHEMA } from '../src/store/schema.js';
 import { summarySection } from '../web/src/view/summarySection.js';
 import { repoText } from './support/paths.js';
 import { BRIEFS_AT_MOST, drawsRows } from '../web/src/components/FeatureBoard.js';
@@ -299,7 +300,7 @@ test('a section is drawn as bullets where it was written as bullets, and as pros
 });
 
 test('the account is on the brief, so a folded card answers “how is this going”', () => {
-  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const board = repoText('web', 'src', 'components', 'featureCards.tsx');
   const account = repoText('web', 'src', 'components', 'featureAccount.tsx');
   const focus = repoText('web', 'src', 'components', 'FeatureFocus.tsx');
 
@@ -359,7 +360,7 @@ test('the account is on the brief, so a folded card answers “how is this going
 });
 
 test('the open card draws no heading over an empty column', () => {
-  const source = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const source = repoText('web', 'src', 'components', 'featureCards.tsx');
   assert.match(
     source,
     /const told = feature\.sequence !== null \|\| feature\.briefing\.delivered\.length > 0;/,
@@ -429,15 +430,15 @@ test('the column is declared as a migration, because the table predates it', () 
     'CREATE TABLE IF NOT EXISTS never alters a table that already exists — without this entry the ' +
       'column is invisible on every database from before it, and every write to it throws',
   );
-  const schema = repoText('src', 'store', 'schema.ts');
-  assert.match(schema, /CREATE TABLE IF NOT EXISTS feature_summaries \([^)]*headline\s+TEXT/, 'and on a fresh one');
+  assert.match(SCHEMA, /CREATE TABLE IF NOT EXISTS feature_summaries \([^)]*headline\s+TEXT/, 'and on a fresh one');
 });
 
 test('the card leads with the headline, and says nothing where there is none', () => {
-  const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const board = repoText('web', 'src', 'components', 'featureCards.tsx');
+  const brief = repoText('web', 'src', 'components', 'featureBrief.tsx');
   assert.match(board, /headline=\{feature\.summary\?\.headline \?\? null\}/, 'the brief is handed it');
   assert.match(
-    board,
+    brief,
     /\{headline !== null && headline !== undefined && <p className="cn-fb-headline">/,
     'an absent headline draws nothing at all, never an empty line',
   );
@@ -460,16 +461,17 @@ test('the board draws briefs while it is short and rows once it is not', () => {
 
 test('a row says the one thing a scan needs, and an opened card is a page of its own', () => {
   const board = repoText('web', 'src', 'components', 'FeatureBoard.tsx');
+  const cards = repoText('web', 'src', 'components', 'featureCards.tsx');
 
-  assert.match(board, /rows \? \(\s*<FeatureRow/, 'in rows every Feature is a row');
-  assert.match(board, /rows \? \(\s*<GoalRow/, 'promoted goals collapse too');
+  assert.match(cards, /rows \? \(\s*<FeatureRow/, 'in rows every Feature is a row');
+  assert.match(cards, /rows \? \(\s*<GoalRow/, 'promoted goals collapse too');
   assert.match(
     board,
     /view\.featureMode === 'board' && view\.featureCard !== null\) \{\s*return \(\s*<FeatureDetail/,
     'a card opened on `?card=` is the Feature’s page, not a card unfolded in the list',
   );
   assert.match(
-    board,
+    cards,
     /\{page && \(\s*<div className=\{`cn-fb-detail/,
     'the detail is drawn on the page and nowhere else',
   );
@@ -481,7 +483,7 @@ test('a row says the one thing a scan needs, and an opened card is a page of its
     'a container’s goal page is its Feature page — the fleet never works a container, so the goal page is empty',
   );
 
-  const row = board.slice(board.indexOf('function FeatureRow('), board.indexOf('function FeatureCard('));
+  const row = cards.slice(cards.indexOf('function FeatureRow('), cards.indexOf('function FeatureCard('));
   assert.match(row, /cn-fb-row-said/, 'a row carries the headline, which is what makes it an answer');
   assert.match(row, /<Courts holds=\{holds\} yoursOnly \/>/, 'only your own court survives the line');
   assert.doesNotMatch(row, /<Reach\b/, 'reach does not — it is detail about a Feature nobody has chosen yet');

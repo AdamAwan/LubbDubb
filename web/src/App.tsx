@@ -8,7 +8,7 @@ import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { RefLinks } from './components/refs.js';
 import { hasPrPage } from './view/prPage.js';
-import { goalIssue, standsFor } from './view/goalPage.js';
+import { goalIssue, standsFor } from './view/goalRefs.js';
 import type { CockpitView } from './view/viewModel.js';
 import type { CockpitActions } from './cockpit/actions.js';
 

@@ -49,7 +49,11 @@ is about.
 | `routes/upgrade.ts`         | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                           |
 | `routes/pets.ts`            | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                      |
 | `routes/setup.ts`           | The first-run surface's two reads, before there is a deployment to configure                                                                                               |
-| `stateSnapshot.ts`          | `buildStateSnapshot` and the readings it folds                                                                                                                             |
+| `stateSnapshot.ts`          | `buildStateSnapshot`, its sections, and the cockpit-only lenses (stacks, PR attention) it folds                                                                            |
+| `stateReads.ts`             | The snapshot's shared reads: world, plans, verdicts, pickup context and the shift log                                                                                      |
+| `stateIssueReads.ts`        | Each world issue enriched with its pickup, verdicts, spend and validation readings                                                                                         |
+| `stateEnvironmentViews.ts`  | Environment reach, health, watch windows, remote sheets and tenant commands                                                                                                |
+| `stateLocalRunViews.ts`     | The local run, its per-ref facts and targets, and a goal's local validation                                                                                                |
 
 Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
 takes a `RouteContext` of `{system, hub, artifactKey, artifactSigner}`. It is the facade shape
@@ -2140,7 +2144,7 @@ nothing goes out, nobody is left blocked. The arms, in order, mirroring the 409s
 A cleared item records the reason in its own `context.dismissal` (no schema change) and in the
 decision log under cycle id `human:<escalation id>`. **Nothing is typed into the agent** — that is the
 point — but the agent's park latch _is_ released, which is load-bearing rather than tidy: while it is
-held `AgentManager.handleWaiting` early-returns, so an agent whose alert was dismissed would otherwise
+held `AgentParks.handleWaiting` early-returns, so an agent whose alert was dismissed would otherwise
 be unable to raise another one. 400 when the item is unknown or not `open`.
 
 ### `POST /api/escalations/:id/permission`
