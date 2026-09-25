@@ -24,7 +24,21 @@ import type {
   ValidationResourceView,
 } from '../types.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
-import { inFlight, localValidationSaid } from './localValidation.js';
+import { belongsToGoal, closedPrs, goalIssue, ownsPr, reachesGoal } from './goalRefs.js';
+import {
+  closeStage,
+  flaggedLocally,
+  planStage,
+  ticketReading,
+  validationStage,
+  watchStage,
+  type GoalStage,
+  type GoalStageTone,
+} from './goalStages.js';
+
+export { closedPrs, goalIssue, goalOfOrigin, goalOfPr, goalPrNumbers, standsFor } from './goalRefs.js';
+export { buildGoalTrack, reachBands } from './goalStages.js';
+export { buildGoalReachMatrix, type GoalReachCell, type GoalReachRow } from './goalReachMatrix.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -107,107 +121,6 @@ export function goalObligations(environments: readonly CockpitEnvironment[]): Go
   };
 }
 
-function belongsToGoal(candidate: string | null | undefined, ref: string): boolean {
-  return candidate === ref || (candidate?.startsWith(`${ref}:`) ?? false);
-}
-
-function reachesGoal(state: AppState, origin: string | null, ref: string): boolean {
-  if (belongsToGoal(origin, ref)) return true;
-  const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
-  return pr !== null && goalOfPr(state, Number(pr[1])) === ref;
-}
-
-/**
- * Every pull request the cockpit knows to be closed: the world's `closedPrWindowMs` window plus
- * the archive, as one list. The window is written **second** so its row wins a collision (fresher).
- *
- * @public shared with prPage, which resolves a pull request through the same pair
- */
-export function closedPrs(state: AppState): PullRequest[] {
-  const byNumber = new Map<number, PullRequest>();
-  for (const pr of state.archivedPullRequests ?? []) byNumber.set(pr.number, pr);
-  for (const pr of state.world.closedPullRequests ?? []) byNumber.set(pr.number, pr);
-  return [...byNumber.values()];
-}
-
-export function goalPrNumbers(state: AppState, ref: string): number[] {
-  const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
-  const parts = plan === null ? [] : (state.planParts ?? []).filter((p) => p.planId === plan.id).map((p) => p.prNumber);
-  const world = [...state.world.pullRequests, ...closedPrs(state)];
-  return [
-    ...new Set([
-      ...parts.flatMap((n) => (n === null ? [] : [n])),
-      ...world.filter((pr) => goalOfPr(state, pr.number) === ref).map((pr) => pr.number),
-    ]),
-  ];
-}
-
-function ownsPr(pr: PullRequest, issue: Issue, partPrs: ReadonlySet<number>): boolean {
-  const ref = `issue:${issue.number}`;
-  return partPrs.has(pr.number) || pr.number === issue.linkedPrNumber || branchGoal(pr.branch) === ref;
-}
-
-function branchGoal(branch: string): string | null {
-  const m = /^issue\/(\d+)(?:\/|$)/.exec(branch);
-  return m ? `issue:${m[1]}` : null;
-}
-
-/**
- * The goal a pull request belongs to, as `issue:<n>`, or null when no ticket owns it — the same
- * three ways {@link ownsPr} matches, read backwards. **Null is a real answer**: the harness works
- * ticketless pull requests as first-class subjects ([05](../../../docs/spec/05-dispatcher.md)).
- *
- * @public shared with buildNeedsYou, which routes a PR-origin ask by it
- */
-export function goalOfPr(state: AppState, prNumber: number): string | null {
-  const part = (state.planParts ?? []).find((p) => p.prNumber === prNumber);
-  const plan = part ? (state.plans ?? []).find((pl) => pl.id === part.planId) : undefined;
-  if (plan) return plan.originRef;
-
-  const linked = state.world.issues.find((i) => i.linkedPrNumber === prNumber);
-  if (linked) return `issue:${linked.number}`;
-
-  const pr = [...state.world.pullRequests, ...closedPrs(state)].find((p) => p.number === prNumber);
-  return pr ? branchGoal(pr.branch) : null;
-}
-
-/**
- * The goal a dispatch was raised against, as `issue:<n>` — the origin ref read through whichever
- * of its two shapes it wears (`issue:390`, or `pr:412`). Null for a ticketless pull request.
- *
- * @public shared with buildViewModel's agentOnGoal
- */
-export function goalOfOrigin(state: AppState, originRef: string | null): string | null {
-  const ref = standsFor(state, originRef);
-  if (ref === null) return null;
-  const issue = /^issue:(\d+)/.exec(ref);
-  if (issue) return `issue:${issue[1]}`;
-  const pr = /^pr:(\d+)$/.exec(ref);
-  return pr ? goalOfPr(state, Number(pr[1])) : null;
-}
-
-const STANDS_FOR_DEPTH = 4;
-
-/**
- * What a dispatch origin **stands in for** — a `job:<id>` origin read through to the work the job
- * is redoing (its `Job.originRef`), every other origin unchanged. Read literally, a crash recovery's
- * requeue would leave the goal whose work is out on the fleet reading as unstaffed. Null in, null
- * out; an origin whose job the snapshot no longer carries comes back **as itself**.
- *
- * @public shared with the console's fleet row, which draws both refs
- */
-export function standsFor(state: AppState, originRef: string | null): string | null {
-  let ref = originRef;
-  for (let hop = 0; ref !== null && hop < STANDS_FOR_DEPTH; hop++) {
-    const id = /^job:(.+)$/.exec(ref)?.[1];
-    if (id === undefined) return ref;
-    const job = state.jobs.find((j) => j.id === id);
-    if (!job || job.originRef === null) return ref;
-    ref = job.originRef;
-  }
-  return ref;
-}
-
 const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
   merged: 'merged',
   concluded: 'merged',
@@ -219,20 +132,6 @@ const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
   retired: null,
 };
 
-/**
- * The issue a goal ref names — the world's copy, or a run retained after the ticket left the
- * world. Undefined for a ref with no goal behind it.
- *
- * @public shared with buildNeedsYou's destination rule
- */
-export function goalIssue(state: AppState, ref: string): Issue | undefined {
-  const number = Number(/^issue:(\d+)$/.exec(ref)?.[1]);
-  if (!Number.isFinite(number)) return undefined;
-  return (
-    state.world.issues.find((i) => i.number === number) ?? (state.retainedRuns ?? []).find((i) => i.number === number)
-  );
-}
-
 export function buildGoalPage(
   state: AppState,
   ref: string,
@@ -242,6 +141,48 @@ export function buildGoalPage(
   const issue = goalIssue(state, ref);
   if (!issue) return null;
 
+  const staffing = goalStaffing(state, ref, history);
+  const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
+  const planParts = (state.planParts ?? []).filter((p) => plan !== null && p.planId === plan.id);
+  const parts = goalParts(ref, planParts, staffing);
+  const retiredParts = planParts.filter((p) => p.status === 'retired').sort((a, b) => a.seq - b.seq);
+
+  const partPrs = new Set(
+    [...parts.map((p) => p.part), ...retiredParts].flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
+  );
+
+  return {
+    issue,
+    needs: needs.filter((n) => n.goalRef === ref),
+    plan,
+    parts,
+    retiredParts,
+    openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
+    closedPullRequests: closedPrs(state).filter((pr) => ownsPr(pr, issue, partPrs)),
+    agents: staffing.goalAgents.map<GoalAgentView>((agent) => {
+      const origin = staffing.originOf(agent);
+      const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
+      return {
+        agent,
+        onPr: pr === null ? null : Number(pr[1]),
+        title: staffing.tasksById.get(agent.taskId)?.title ?? null,
+      };
+    }),
+    ...goalCheckRecords(state, ref),
+    ...goalReach(state, ref),
+    ...goalWatchRecords(state, ref),
+    sequence: goalSequence(state, issue),
+    obligations: goalObligations(state.config.environments),
+  };
+}
+
+interface GoalStaffing {
+  tasksById: Map<string, TaskSummary>;
+  originOf: (agent: Agent) => string | null;
+  goalAgents: Agent[];
+}
+
+function goalStaffing(state: AppState, ref: string, history: GoalAgentsPayload | null): GoalStaffing {
   const tasksById = new Map<string, TaskSummary>(
     [...(history?.ref === ref ? history.tasks : []), ...state.tasks].map((t) => [t.id, t]),
   );
@@ -254,10 +195,15 @@ export function buildGoalPage(
     onGoal.set(agent.id, agent);
   }
   const goalAgents = [...onGoal.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  return { tasksById, originOf, goalAgents };
+}
 
-  const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
-  const parts = (state.planParts ?? [])
-    .filter((p) => plan !== null && p.planId === plan.id)
+function goalParts(
+  ref: string,
+  planParts: readonly PlanPart[],
+  { goalAgents, originOf }: GoalStaffing,
+): GoalPartView[] {
+  return planParts
     .flatMap<GoalPartView>((part) => {
       const group = GROUP_OF[part.status];
       if (!group) return [];
@@ -267,48 +213,39 @@ export function buildGoalPage(
       return [{ part, group, agentId: agent?.id ?? null, agentLive: agent !== undefined && agent.endedAt === null }];
     })
     .sort((a, b) => a.part.seq - b.part.seq);
+}
 
-  const retiredParts = (state.planParts ?? [])
-    .filter((p) => plan !== null && p.planId === plan.id && p.status === 'retired')
-    .sort((a, b) => a.seq - b.seq);
-
-  const partPrs = new Set(
-    [...parts.map((p) => p.part), ...retiredParts].flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
-  );
-
-  const reach = (state.environmentReach ?? []).find((e) => e.goalRef === ref);
-
+function goalCheckRecords(
+  state: AppState,
+  ref: string,
+): Pick<GoalPageView, 'decisions' | 'checks' | 'checkPlan' | 'checkResources'> {
   return {
-    issue,
-    needs: needs.filter((n) => n.goalRef === ref),
-    plan,
-    parts,
-    retiredParts,
-    openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
-    closedPullRequests: closedPrs(state).filter((pr) => ownsPr(pr, issue, partPrs)),
-    agents: goalAgents.map<GoalAgentView>((agent) => {
-      const origin = originOf(agent);
-      const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
-      return {
-        agent,
-        onPr: pr === null ? null : Number(pr[1]),
-        title: tasksById.get(agent.taskId)?.title ?? null,
-      };
-    }),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
     checks: (state.validationChecks ?? []).filter((c) => c.originRef === ref),
     checkPlan: (state.validationPlans ?? []).find((r) => r.originRef === ref) ?? null,
     checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
+  };
+}
+
+function goalReach(
+  state: AppState,
+  ref: string,
+): Pick<GoalPageView, 'environments' | 'groups' | 'landings' | 'gateHold' | 'gateRelease'> {
+  const reach = (state.environmentReach ?? []).find((e) => e.goalRef === ref);
+  return {
     environments: reach?.environments ?? [],
     groups: reach?.groups ?? [],
     landings: reach?.landings ?? [],
     gateHold: reach?.gateHold ?? null,
     gateRelease: reach?.released ?? null,
+  };
+}
+
+function goalWatchRecords(state: AppState, ref: string): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'signals'> {
+  return {
     remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
-    sequence: goalSequence(state, issue),
-    obligations: goalObligations(state.config.environments),
   };
 }
 
@@ -325,195 +262,6 @@ export function furthestEnvironment(state: AppState, goalRef: string): string | 
   return reached.length === 0 ? null : (reached[reached.length - 1]?.environment ?? null);
 }
 
-export function buildGoalTrack(parts: readonly GoalPartView[]): GoalTrack {
-  const count = (g: PartGroup) => parts.filter((p) => p.group === g).length;
-  return {
-    merged: count('merged'),
-    now: count('now'),
-    held: count('held'),
-    waiting: count('waiting'),
-    total: parts.length,
-  };
-}
-
-type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
-
-interface GoalStage {
-  reading: string;
-  tone: GoalStageTone;
-  done: number | null;
-}
-
-function planStage(page: GoalPageView): GoalStage {
-  /* A pull request waiting on the operator outranks how far the plan has got,
-     because it is the one reading on this stage that is about them. The tab row
-     said it and the track did not, and folding the two into one control is how a
-     reading gets lost — so it is said here, where both now read from. */
-  const court = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
-  if (court > 0) {
-    return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done: null };
-  }
-  if (page.plan === null) return { reading: 'not drawn', tone: 'grey', done: null };
-  if (page.plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
-  if (page.plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
-  if (page.plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
-
-  const track = buildGoalTrack(page.parts);
-  if (track.total === 0) return { reading: 'one pull request', tone: 'grey', done: null };
-  return {
-    reading: `${track.merged}/${track.total} parts merged`,
-    tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
-    done: (track.merged / track.total) * 100,
-  };
-}
-
-function validationStage(page: GoalPageView): GoalStage {
-  /* A local check plan that is running outranks the set's own count, because it
-     is the only thing on the goal that is happening right now — and with the
-     header's chip gone this is the one place outside the pane that says so. */
-  const local = page.issue.localValidation;
-  if (local !== null && inFlight(local)) {
-    return { reading: localValidationSaid(local), tone: 'blue', done: null };
-  }
-  const v = page.issue.validation;
-  if (v === null || v.total === 0) {
-    if (flaggedLocally(page)) return { reading: 'flagged locally', tone: 'amber', done: null };
-    return { reading: 'no checks', tone: 'grey', done: null };
-  }
-  const settled = v.passed + v.waived;
-  return {
-    reading: `${settled} of ${v.total} done`,
-    tone: v.state === 'clear' ? 'green' : v.failed > 0 ? 'amber' : 'blue',
-    done: (settled / v.total) * 100,
-  };
-}
-
-/**
- * One place the goal's work can be. A declared group stands for its members and an
- * environment in none stands for itself, in the order the environments are configured — so
- * three regions of production are one reading here rather than three, exactly as they are
- * one reading to the gate that waits on them.
- *
- * It computes no verdict: a group's status is the roll-up the server already shipped.
- * → docs/spec/24-environments.md#groups
- *
- * @public the seam the Environments card and the close-out's reading are drawn from
- */
-export interface GoalReachBand {
-  name: string;
-  environments: string[];
-  status: GoalEnvironmentReachView['status'];
-  landed: number;
-  total: number;
-  grouped: boolean;
-}
-
-export function reachBands(page: GoalPageView): GoalReachBand[] {
-  const byMember = new Map<string, GoalGroupReach>();
-  for (const group of page.groups) for (const name of group.environments) byMember.set(name, group);
-  const out: GoalReachBand[] = [];
-  const drawn = new Set<string>();
-  for (const env of page.environments) {
-    const group = byMember.get(env.environment);
-    if (group === undefined) {
-      out.push({
-        name: env.environment,
-        environments: [env.environment],
-        status: env.status,
-        landed: env.landed,
-        total: env.total,
-        grouped: false,
-      });
-      continue;
-    }
-    if (drawn.has(group.group)) continue;
-    drawn.add(group.group);
-    out.push({
-      name: group.group,
-      environments: group.environments,
-      status: group.status,
-      landed: group.landed,
-      total: group.total,
-      grouped: true,
-    });
-  }
-  return out;
-}
-
-/**
- * What the close-out is waiting on. It reads the delivery and the tail first — the obligation
- * this tab *is* — and falls back to the reach the close is owed against, because a goal that
- * has arrived nowhere is not a goal whose close-out is outstanding, it is one whose close-out
- * cannot be asked for yet. → docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time
- */
-function closeStage(page: GoalPageView): GoalStage {
-  const { issue } = page;
-  if (issue.state !== 'open') return { reading: issue.state, tone: 'green', done: 100 };
-  if (issue.shortfall) return { reading: 'fell short', tone: 'amber', done: null };
-  /* What wants a person outranks how far the work got: a held gate is the operator's to
-     release, and nothing is filed while it holds. */
-  if (page.gateHold !== null) return { reading: 'gate held', tone: 'amber', done: null };
-  if (issue.delivery) return { reading: 'delivered, ticket open', tone: 'blue', done: null };
-  return reachStage(page);
-}
-
-/* Counted in places rather than in commands: a goal that has reached one region of production
-   has not reached production. → docs/spec/24-environments.md#groups */
-function reachStage(page: GoalPageView): GoalStage {
-  const envs = reachBands(page);
-  if (envs.length === 0) return { reading: 'not reached', tone: 'grey', done: null };
-  const reached = envs.filter((e) => e.status === 'reached');
-  const furthest = reached[reached.length - 1];
-  if (furthest !== undefined) {
-    return {
-      reading: `reached ${furthest.name}`,
-      tone: reached.length === envs.length ? 'green' : 'blue',
-      /* The only denominator here that cannot grow: the environments are configuration,
-         not plan. `total` below is `landings + unattributed + partsOwed`, so a meter drawn
-         against it moves *backwards* the moment the plan decomposes further. */
-      done: (reached.length / envs.length) * 100,
-    };
-  }
-  /* Nothing has arrived, so there is nothing to check and nothing failing. A fraction here
-     would read as a part-checked goal; what is true is that the goal is not checkable yet,
-     and what an operator needs is what is still owed before it can be. */
-  const partial = envs.find((e) => e.status === 'partial');
-  if (partial !== undefined) {
-    const owed = partial.total - partial.landed;
-    return {
-      /* Short enough to survive the tab's own width: the row ellipsizes, and a reading
-         cut off mid-word is the reading lost. What it is owed *for* is the card below. */
-      reading: owed === 1 ? '1 landing owed' : `${owed} landings owed`,
-      tone: 'grey',
-      done: null,
-    };
-  }
-  if (envs.some((e) => e.status === 'unknown')) return { reading: 'not known', tone: 'grey', done: null };
-  return { reading: 'not shipped', tone: 'grey', done: null };
-}
-
-/**
- * The Watch tab's reading: the windows this deployment's watched environments opened, each
- * folded by {@link watchFold} and the worst of them taken. A goal with no window open yet reads
- * what is true of the signals instead — a window that never opened and one that opened and read
- * nothing are different answers. → docs/spec/17-cockpit.md#the-panes
- */
-function watchStage(page: GoalPageView): GoalStage {
-  const windows = page.watches.filter((w) => page.obligations.watch.includes(w.environment));
-  const open = windows.filter((w) => w.checks.length > 0);
-  if (open.length === 0) {
-    const pending = page.signals.filter((s) => !s.live || s.proposal !== null).length;
-    if (pending > 0) return { reading: `${pending} awaiting you`, tone: 'amber', done: null };
-    if (page.signals.length === 0) return { reading: 'no signals', tone: 'grey', done: null };
-    return { reading: 'not opened', tone: 'grey', done: null };
-  }
-  const said = open.map(watchFold);
-  if (said.includes('regressed')) return { reading: 'regressed', tone: 'amber', done: null };
-  if (said.some((s) => s !== 'clean')) return { reading: 'not read', tone: 'blue', done: null };
-  const settled = open.every((w) => w.settledAt !== null);
-  return { reading: settled ? 'clean' : 'clean so far', tone: 'green', done: settled ? 100 : null };
-}
-
 /**
  * Every part of this goal has reached an environment. The only state in which a sheet,
  * a watch or a gate exists: `rollUpReach` answers `reached` only when every landing the
@@ -528,19 +276,6 @@ export function reachCount(env: GoalEnvironmentReachView): string {
   if (env.unplaced === 0) return count;
   const merges = env.unplaced === 1 ? 'merge' : 'merges';
   return `${count} · ${env.unplaced} ${merges} not on the integration branch`;
-}
-
-/**
- * One window's every check, folded to a word. The reduction is one-directional and that is the
- * whole of the care here: `regressed` first, then anything not `clean` reads *not read*, and only
- * a window whose every check came back clean says so. A reading with space for one word must never
- * fold an unread environment into an all-clear. → docs/spec/29-post-deploy-watch.md#in-the-cockpit
- */
-function watchFold(window: GoalWatchView): 'regressed' | 'not read' | 'clean' {
-  const verdicts = window.checks.map((c) => c.reading?.verdict ?? null);
-  if (verdicts.includes('regressed')) return 'regressed';
-  if (verdicts.some((v) => v !== 'clean')) return 'not read';
-  return 'clean';
 }
 
 export const GOAL_SECTIONS = [
@@ -996,24 +731,9 @@ export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
   });
 }
 
-/* The ticket is the only entry with no stage behind it: nothing about it
-   progresses, so it reads what was asked for rather than how far it has got. */
-function ticketReading(page: GoalPageView): { reading: string; tone: GoalStageTone; done: number | null } {
-  const instructions = page.issue.instructions.length;
-  if (instructions > 0) {
-    return { reading: instructions === 1 ? '1 instruction' : `${instructions} instructions`, tone: 'blue', done: null };
-  }
-  return { reading: 'as filed', tone: 'grey', done: null };
-}
-
 function settled(page: GoalPageView): boolean {
   const { issue } = page;
   return issue.state !== 'open' || issue.conclusion.verdict === 'done' || issue.run?.dismissed === true;
-}
-
-function flaggedLocally(page: GoalPageView): boolean {
-  const local = page.issue.localValidation;
-  return local !== null && (local.status === 'failed' || local.status === 'blocked');
 }
 
 function validationBegun(page: GoalPageView): boolean {
@@ -1022,89 +742,4 @@ function validationBegun(page: GoalPageView): boolean {
     page.issue.localValidation !== null ||
     page.remoteSheets.length > 0
   );
-}
-
-/**
- * One cell of the reach matrix. `pending` is *not asked yet* — a part with no pull request, or a
- * landing no probe has read — and `unplaced` is a landing the clone says is on no integration
- * branch, which is **dropped from the goal's `total`** and never probed for rather than counted
- * against it. Neither may fold into `absent`, which is a probe that looked and did not find it.
- * → docs/spec/24-environments.md#the-three-verdicts, [what counts](../../../docs/spec/24-environments.md#what-counts-as-a-landing)
- */
-export type GoalReachCell = 'reached' | 'absent' | 'unknown' | 'unplaced' | 'pending';
-
-/** One row of the reach matrix: a plan part, or a merge no part claims. */
-export interface GoalReachRow {
-  key: string;
-  kind: 'part' | 'unattributed';
-  title: string;
-  prNumber: number | null;
-  cells: GoalReachCell[];
-  /** On no integration branch: dropped from the goal's count rather than held against it. */
-  unplaced: boolean;
-}
-
-interface GoalReachMatrixView {
-  environments: string[];
-  rows: GoalReachRow[];
-  /** Landings still owed before any check can begin — the AND the rollup takes, said as work. */
-  owed: number;
-  /** An environment holds every landing this goal owes, so a sheet exists to read. */
-  arrived: boolean;
-}
-
-/**
- * The goal's parts against the environments, one row each. The counts on
- * `GoalEnvironmentReachView` are the AND over these rows; this is the same reading with the
- * rows kept, which is what lets a partial goal say *which* landing is holding it short rather
- * than only how many are.
- *
- * It computes no verdict of its own — every cell is a status the server already shipped, and a
- * part with no landing is `pending` rather than a guess. → docs/spec/24-environments.md
- *
- * @public the seam the Shipped pane's matrix is drawn from
- */
-export function buildGoalReachMatrix(page: GoalPageView): GoalReachMatrixView {
-  const environments = page.environments.map((e) => e.environment);
-  const byPr = new Map(page.landings.map((l) => [l.prNumber, l]));
-  const claimed = new Set<number>();
-  const rows: GoalReachRow[] = page.parts.map(({ part }) => {
-    const landing = part.prNumber === null ? undefined : byPr.get(part.prNumber);
-    if (landing !== undefined) claimed.add(landing.prNumber);
-    return {
-      key: part.id,
-      kind: 'part' as const,
-      title: part.title,
-      prNumber: part.prNumber,
-      cells: environments.map((name) => cellOf(landing, name)),
-      unplaced: landing?.unplaced === true,
-    };
-  });
-  for (const landing of page.landings) {
-    if (claimed.has(landing.prNumber)) continue;
-    /* A merge counted into `total` by `unattributedMerges` and named by no part. It holds the
-       rollup exactly as a part does, so it is a row here — left as a footnote it would be a
-       thing counted against the goal that appears nowhere on its page. */
-    rows.push({
-      key: `pr:${landing.prNumber}`,
-      kind: 'unattributed',
-      title: 'Merged against this goal, claimed by no part',
-      prNumber: landing.prNumber,
-      cells: environments.map((name) => cellOf(landing, name)),
-      unplaced: landing.unplaced,
-    });
-  }
-  const furthest = page.environments.find((e) => e.status === 'partial' || e.status === 'reached');
-  return {
-    environments,
-    rows,
-    owed: furthest === undefined ? 0 : furthest.total - furthest.landed,
-    arrived: page.environments.some((e) => e.status === 'reached'),
-  };
-}
-
-function cellOf(landing: GoalLandingReach | undefined, environment: string): GoalReachCell {
-  if (landing === undefined) return 'pending';
-  if (landing.unplaced) return 'unplaced';
-  return landing.reach[environment] ?? 'pending';
 }
