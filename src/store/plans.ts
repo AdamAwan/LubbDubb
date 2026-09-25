@@ -5,8 +5,6 @@ import type {
   PartOutcomeKind,
   PlanAtom,
   PlanAtomInput,
-  PlanAtomRejection,
-  PartSize,
   Plan,
   PlanEvidence,
   PlanAmendment,
@@ -15,13 +13,27 @@ import type {
   PlanCaveatAnswer,
   PlanNarrative,
   PlanPart,
-  PlanPartBlocker,
   PlanPartInput,
   PlanRevision,
   PlanStatus,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import { labelsById, type StoreContext } from './context.js';
+import {
+  rowToAmendment,
+  rowToCaveatAnswer,
+  rowToPlan,
+  rowToPlanAtom,
+  rowToPlanPart,
+  rowToRevision,
+  type PlanAmendmentRow,
+  type PlanAtomRow,
+  type PlanCaveatAnswerRow,
+  type PlanPartRow,
+  type PlanRevisionRow,
+  type PlanRow,
+} from '../plans/rows.js';
+import { keptProse, redeclaredPart } from '../plans/redeclare.js';
 
 // → docs/spec/14-persistence.md
 
@@ -82,22 +94,23 @@ export class PlanStore {
   }): Plan {
     const existing = this.getPlanByOrigin(input.originRef);
     const ts = this.ctx.now();
+    const kept = keptProse(input, existing);
     const plan: Plan = {
       id: existing?.id ?? `plan_${nanoid(10)}`,
       originRef: input.originRef,
       title: input.title,
       status: input.status,
       reason: input.reason ?? null,
-      diagnosis: input.diagnosis ?? existing?.diagnosis ?? null,
-      approach: input.approach ?? existing?.approach ?? null,
-      risks: input.risks ?? existing?.risks ?? null,
-      outOfScope: input.outOfScope ?? existing?.outOfScope ?? null,
-      alternatives: input.alternatives ?? existing?.alternatives ?? null,
-      openQuestions: input.openQuestions ?? existing?.openQuestions ?? null,
-      verification: input.verification ?? existing?.verification ?? null,
+      diagnosis: kept.diagnosis,
+      approach: kept.approach,
+      risks: kept.risks,
+      outOfScope: kept.outOfScope,
+      alternatives: kept.alternatives,
+      openQuestions: kept.openQuestions,
+      verification: kept.verification,
       evidence: input.evidence ?? existing?.evidence ?? [],
-      document: input.document ?? existing?.document ?? null,
-      statusCommentRef: input.statusCommentRef ?? existing?.statusCommentRef ?? null,
+      document: kept.document,
+      statusCommentRef: kept.statusCommentRef,
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
     };
@@ -272,39 +285,7 @@ export class PlanStore {
   upsertPlanParts(planId: string, parts: PlanPartInput[]): PlanPart[] {
     const ts = this.ctx.now();
     const existing = new Map(this.listPlanParts(planId).map((p) => [p.slug, p]));
-    const rows = parts.map((input) => {
-      const prev = existing.get(input.slug);
-      const part: PlanPart = {
-        id: `${planId}:${input.slug}`,
-        planId,
-        slug: input.slug,
-        seq: input.seq,
-        title: input.title,
-        scope: input.scope,
-        touches: input.touches,
-        atoms: input.atoms ?? prev?.atoms,
-        rationale: input.rationale,
-        acceptance: input.acceptance,
-        acceptanceMet: prev?.acceptanceMet ?? [],
-        size: input.size,
-        expectedKind: input.expectedKind,
-        profile: input.profile,
-        coverage: input.coverage ?? null,
-        outcomeKind: prev?.outcomeKind ?? null,
-        outcomeRef: prev?.outcomeRef ?? null,
-        outcomeSummary: prev?.outcomeSummary ?? null,
-        dependsOn: input.dependsOn,
-        branch: prev?.branch ?? null,
-        prNumber: prev?.prNumber ?? null,
-        status: prev?.status === 'retired' ? 'pending' : (prev?.status ?? 'pending'),
-        blockedReason: prev?.status === 'retired' ? null : (prev?.blockedReason ?? null),
-        blockedBy: prev?.status === 'retired' ? null : (prev?.blockedBy ?? null),
-        taskId: prev?.taskId ?? null,
-        createdAt: prev?.createdAt ?? ts,
-        updatedAt: ts,
-      };
-      return part;
-    });
+    const rows = parts.map((input) => redeclaredPart(planId, input, existing.get(input.slug), ts));
     const stmt = this.ctx.prep(
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, atoms, rationale, acceptance,
          acceptance_met, size, expected_kind, profile, coverage,
@@ -546,341 +527,3 @@ export function backfillWholePlanParts(db: Database.Database, now: string): void
 }
 
 const WHOLE_PART_SLUG = 'whole';
-
-interface PlanRow {
-  id: string;
-  origin_ref: string;
-  title: string;
-  status: string;
-  reason: string | null;
-  diagnosis: string | null | undefined;
-  approach: string | null | undefined;
-  risks: string | null | undefined;
-  out_of_scope: string | null | undefined;
-  alternatives: string | null | undefined;
-  open_questions: string | null | undefined;
-  verification: string | null | undefined;
-  evidence: string | null | undefined;
-  document: string | null | undefined;
-  status_comment_ref: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface PlanRevisionRow {
-  id: string;
-  plan_id: string;
-  seq: number;
-  verdict: string;
-  narrative: string;
-  parts: string;
-  at: string;
-}
-
-interface PlanAmendmentRow {
-  id: string;
-  plan_id: string;
-  origin_ref: string;
-  document: string;
-  note: string;
-  author: string;
-  author_ref: string | null;
-  status: string;
-  resolution: string | null;
-  created_at: string;
-  decided_at: string | null;
-}
-
-interface PlanCaveatAnswerRow {
-  id: string;
-  plan_id: string;
-  caveat_id: string;
-  label: string;
-  answer: string;
-  at: string;
-}
-
-interface PlanPartRow {
-  id: string;
-  plan_id: string;
-  slug: string;
-  seq: number;
-  title: string;
-  scope: string;
-  touches: string | null | undefined;
-  atoms: string | null | undefined;
-  rationale: string | null | undefined;
-  acceptance: string | null | undefined;
-  acceptance_met: string | null | undefined;
-  size: string | null | undefined;
-  expected_kind: string | null | undefined;
-  profile: string | null | undefined;
-  coverage: string | null | undefined;
-  outcome_kind: string | null | undefined;
-  outcome_ref: string | null | undefined;
-  outcome_summary: string | null | undefined;
-  depends_on: string;
-  branch: string | null;
-  pr_number: number | null;
-  status: string;
-  blocked_reason: string | null | undefined;
-  blocked_by: string | null | undefined;
-  task_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-function rowToPlan(r: PlanRow): Plan {
-  return {
-    id: r.id,
-    originRef: r.origin_ref,
-    title: r.title,
-    status: r.status as PlanStatus,
-    diagnosis: r.diagnosis ?? null,
-    approach: r.approach ?? null,
-    reason: r.reason,
-    risks: r.risks ?? null,
-    outOfScope: r.out_of_scope ?? null,
-    alternatives: r.alternatives ?? null,
-    openQuestions: r.open_questions ?? null,
-    verification: r.verification ?? null,
-    evidence: parseEvidence(r.evidence),
-    document: r.document ?? null,
-    statusCommentRef: r.status_comment_ref,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  };
-}
-
-function rowToPlanPart(r: PlanPartRow): PlanPart {
-  return {
-    id: r.id,
-    planId: r.plan_id,
-    slug: r.slug,
-    seq: r.seq,
-    title: r.title,
-    scope: r.scope,
-    touches: parseStringArray(r.touches),
-    atoms: r.atoms === null || r.atoms === undefined ? undefined : parseStringArray(r.atoms),
-    rationale: r.rationale ?? null,
-    acceptance: r.acceptance ?? null,
-    acceptanceMet: parseStringArray(r.acceptance_met),
-    size: partSizeOf(r.size),
-    expectedKind: partOutcomeKindOf(r.expected_kind),
-    profile: r.profile ?? null,
-    coverage: r.coverage ?? null,
-    outcomeKind: partOutcomeKindOf(r.outcome_kind),
-    outcomeRef: r.outcome_ref ?? null,
-    outcomeSummary: r.outcome_summary ?? null,
-    dependsOn: parseDependsOn(r.depends_on),
-    branch: r.branch,
-    prNumber: r.pr_number,
-    status: r.status as PlanPart['status'],
-    blockedReason: r.blocked_reason ?? null,
-    blockedBy: partBlockerOf(r.blocked_by),
-    taskId: r.task_id,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  };
-}
-
-interface PlanAtomRow {
-  id: string;
-  plan_id: string;
-  slug: string;
-  seq: number;
-  title: string;
-  intent: string;
-  touches: string | null | undefined;
-  acceptance: string | null | undefined;
-  depends_on: string;
-  rejected: string | null | undefined;
-}
-
-function rowToPlanAtom(r: PlanAtomRow): PlanAtom {
-  return {
-    id: r.id,
-    planId: r.plan_id,
-    slug: r.slug,
-    seq: r.seq,
-    title: r.title,
-    intent: r.intent,
-    touches: parseStringArray(r.touches),
-    acceptance: r.acceptance ?? null,
-    dependsOn: parseStringArray(r.depends_on),
-    rejected: parseRejected(r.rejected),
-  };
-}
-
-function parseRejected(raw: string | null | undefined): PlanAtomRejection[] {
-  if (raw === null || raw === undefined) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry): PlanAtomRejection[] => {
-      if (typeof entry !== 'object' || entry === null) return [];
-      const { route, because } = entry as Record<string, unknown>;
-      if (typeof route !== 'string' || typeof because !== 'string') return [];
-      return [{ route, because }];
-    });
-  } catch {
-    return [];
-  }
-}
-
-function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | null {
-  return raw === 'code' || raw === 'report' || raw === 'determination' || raw === 'human' ? raw : null;
-}
-
-function partSizeOf(raw: string | null | undefined): PartSize | null {
-  return raw === 's' || raw === 'm' || raw === 'l' ? raw : null;
-}
-
-function partBlockerOf(raw: string | null | undefined): PlanPartBlocker | null {
-  return raw === 'collision' || raw === 'declined' ? raw : null;
-}
-
-function parseDependsOn(raw: string): string[] {
-  return parseStringArray(raw);
-}
-
-function parseStringArray(raw: string | null | undefined): string[] {
-  if (raw === null || raw === undefined) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function parseEvidence(raw: string | null | undefined): PlanEvidence[] {
-  if (raw === null || raw === undefined) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry): PlanEvidence[] => {
-      if (typeof entry !== 'object' || entry === null) return [];
-      const { path, line, note } = entry as Record<string, unknown>;
-      if (typeof path !== 'string' || path === '') return [];
-      return [
-        {
-          path,
-          line: typeof line === 'number' ? line : null,
-          note: typeof note === 'string' ? note : null,
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
-}
-
-function rowToAmendment(r: PlanAmendmentRow): PlanAmendment {
-  return {
-    id: r.id,
-    planId: r.plan_id,
-    originRef: r.origin_ref,
-    document: r.document,
-    note: r.note,
-    author: r.author === 'operator' ? 'operator' : 'agent',
-    authorRef: r.author_ref,
-    status: AMENDMENT_STATUSES.includes(r.status as PlanAmendmentStatus)
-      ? (r.status as PlanAmendmentStatus)
-      : 'pending',
-    resolution: r.resolution,
-    createdAt: r.created_at,
-    decidedAt: r.decided_at,
-  };
-}
-
-function rowToCaveatAnswer(r: PlanCaveatAnswerRow): PlanCaveatAnswer {
-  return {
-    id: r.id,
-    planId: r.plan_id,
-    caveatId: r.caveat_id,
-    label: r.label,
-    answer: r.answer,
-    at: r.at,
-  };
-}
-
-const AMENDMENT_STATUSES: PlanAmendmentStatus[] = ['pending', 'applied', 'declined', 'superseded'];
-
-function rowToRevision(r: PlanRevisionRow): PlanRevision {
-  return {
-    id: r.id,
-    planId: r.plan_id,
-    seq: r.seq,
-    narrative: parseNarrative(r.narrative),
-    parts: parseRevisionParts(r.parts),
-    at: r.at,
-  };
-}
-
-function parseNarrative(raw: string): PlanNarrative {
-  const empty: PlanNarrative = {
-    reason: null,
-    diagnosis: null,
-    approach: null,
-    risks: null,
-    outOfScope: null,
-    alternatives: null,
-    openQuestions: null,
-    verification: null,
-    document: null,
-    evidence: [],
-  };
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return empty;
-    const bag = parsed as Record<string, unknown>;
-    const text = (key: keyof PlanNarrative): string | null => (typeof bag[key] === 'string' ? bag[key] : null);
-    return {
-      reason: text('reason'),
-      diagnosis: text('diagnosis'),
-      approach: text('approach'),
-      risks: text('risks'),
-      outOfScope: text('outOfScope'),
-      alternatives: text('alternatives'),
-      openQuestions: text('openQuestions'),
-      verification: text('verification'),
-      document: text('document'),
-      evidence: parseEvidence(JSON.stringify(bag.evidence ?? [])),
-    };
-  } catch {
-    return empty;
-  }
-}
-
-function parseRevisionParts(raw: string): PlanPartInput[] {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry, index): PlanPartInput[] => {
-      if (typeof entry !== 'object' || entry === null) return [];
-      const bag = entry as Record<string, unknown>;
-      if (typeof bag.slug !== 'string' || bag.slug === '') return [];
-      const text = (key: string): string | null => (typeof bag[key] === 'string' ? bag[key] : null);
-      return [
-        {
-          slug: bag.slug,
-          seq: typeof bag.seq === 'number' ? bag.seq : index + 1,
-          title: text('title') ?? bag.slug,
-          scope: text('scope') ?? '',
-          touches: parseStringArray(JSON.stringify(bag.touches ?? [])),
-          atoms: Array.isArray(bag.atoms) ? parseStringArray(JSON.stringify(bag.atoms)) : undefined,
-          dependsOn: parseStringArray(JSON.stringify(bag.dependsOn ?? [])),
-          rationale: text('rationale'),
-          acceptance: text('acceptance'),
-          size: partSizeOf(text('size')),
-          expectedKind: partOutcomeKindOf(text('expectedKind')),
-          profile: text('profile'),
-          coverage: text('coverage'),
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
-}
