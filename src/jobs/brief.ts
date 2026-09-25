@@ -1,7 +1,7 @@
 import type { Config } from '../config/config.js';
 import { briefTicketFields } from '../tickets/briefTicket.js';
 import type { ErrorRecorder } from '../errorLog.js';
-import { deriveJobTitle } from './branch.js';
+import { deriveJobTitle } from './naming.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import type { Store } from '../store/store.js';
 import type { TicketFiler } from '../tickets/filing.js';
