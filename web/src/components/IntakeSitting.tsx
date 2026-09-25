@@ -125,8 +125,8 @@ function useIntakeSitting(issueNumber: number, aligning: boolean, onClosed: () =
     const wroteCriteria = asksCriteria && text !== '';
     if (wroteCriteria) await api.writeGoalCriteria(issueNumber, { text });
     setComposing(false);
-    if (!wroteCriteria || loaded.criteria?.ticketHasCriteria !== true) return close();
     await load();
+    if (!wroteCriteria || loaded.criteria?.ticketHasCriteria !== true) await close();
   };
 
   const revise = async (): Promise<void> => {
