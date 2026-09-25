@@ -389,7 +389,7 @@ function describeBody(row: NeedRow, view: CockpitView, actions: CockpitActions):
  * picking. → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
  */
 function assignBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  const pr = view.state.world.pullRequests.find((p) => `assign:pr:${p.number}` === row.id);
+  const pr = view.state.world.pullRequests.find((p) => p.number === row.prNumber);
   if (pr?.assignAsk === undefined) return null;
   return (
     <>

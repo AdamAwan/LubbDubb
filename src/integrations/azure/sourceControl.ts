@@ -1,3 +1,4 @@
+import { sameIdentity } from '../../pr/prOwnership.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   BranchDeleteInput,
@@ -486,10 +487,6 @@ function viewerApproved(reviewers: readonly AzReviewer[], viewer: string): boole
   if (viewer === '') return false;
   const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
   return mine !== undefined && mine.vote >= 5;
-}
-
-function sameIdentity(a: string, b: string): boolean {
-  return a !== '' && a.toLowerCase() === b.toLowerCase();
 }
 
 export function computeApproved(votes: number[]): boolean {

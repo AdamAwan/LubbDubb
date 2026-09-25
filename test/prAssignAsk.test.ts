@@ -149,6 +149,6 @@ test('"nah" ends the ask for good, and assigns nobody', async () => {
 });
 
 test('an assignment made through the ask counts towards the shortlist', () => {
-  const list = assignShortlist([], [{ prNumber: 5, person: dave, at: 'now' }], 'me');
+  const list = assignShortlist([], [{ prNumber: 5, person: dave }], 'me');
   assert.deepEqual(list, [dave]);
 });

@@ -11,7 +11,6 @@ import { prHealth } from '../pr/prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../pr/prAttention.js';
 import { reviewReading } from '../review/prReview.js';
 import { prReviewState } from '../review/prReviewState.js';
-import { assignAskDue } from '../pr/prAssignAsk.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
@@ -88,45 +87,34 @@ function snapshotReads(system: System, opts: SnapshotOpts | undefined): Reads {
 }
 
 function prReads(r: IssueReadsOn) {
-  const { store, config, world, reviewRows, system } = r;
+  const { store, config, world, reviewRows, system, archivedPullRequests } = r;
   const attentionCtx = prAttentionContext(r);
-  const assignAsks = once(() => {
-    const desk = system.prAssign;
-    return desk.canAssign() ? { desk, answered: desk.answered(), shortlist: desk.shortlist(world.pullRequests) } : null;
-  });
-  const assignAskOf = (pr: PullRequest, attention: OpenPullRequest['attention']): OpenPullRequest['assignAsk'] => {
-    const asks = assignAsks();
-    if (asks === null || asks.shortlist.length === 0) return undefined;
-    const due = assignAskDue({
-      pr,
-      ours: asks.desk.ours(pr),
-      answered: asks.answered.has(pr.number),
-      review: reviewStateOf(pr),
-      fleetOnIt: attention.status === 'harness',
-      operator: config.userId,
-    });
-    return due ? asks.shortlist : undefined;
-  };
   const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
     prReviewState(pr.number, reviewReading(reviewRows(), pr.number), config.review, pr.reviewThreads) ?? undefined;
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
 
   const splitVerdicts = once(() => new Map(store.prSplits.listPrSplitVerdicts().map((v) => [v.prNumber, v])));
-  const openPullRequests = once((): OpenPullRequest[] =>
-    world.pullRequests.map((pr) => {
-      const attention = prAttentionStatus(pr, attentionCtx());
-      const assignAsk = assignAskOf(pr, attention);
+  const openPullRequests = once((): OpenPullRequest[] => {
+    const read = world.pullRequests.map((pr) => ({
+      pr,
+      attention: prAttentionStatus(pr, attentionCtx()),
+      review: reviewStateOf(pr),
+    }));
+    const facts = new Map(read.map((x) => [x.pr, { review: x.review, fleetOnIt: x.attention.status === 'harness' }]));
+    const asks = system.prAssign.asks(world.pullRequests, archivedPullRequests, (pr) => facts.get(pr)!);
+    return read.map(({ pr, attention, review }) => {
+      const assignAsk = asks.get(pr.number);
       return {
         ...pr,
         health: prHealth(pr, world.pullRequests),
         attention,
         ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
-        review: reviewStateOf(pr),
+        review,
         split: splitVerdicts().get(pr.number),
         ...(assignAsk === undefined ? {} : { assignAsk }),
       };
-    }),
-  );
+    });
+  });
   const prByBranch = once(() => {
     const map = new Map<string, PullRequest>();
     for (const pr of [...(world.closedPullRequests ?? []), ...openPullRequests()]) map.set(pr.branch, pr);

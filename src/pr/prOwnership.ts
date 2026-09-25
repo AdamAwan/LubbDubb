@@ -10,6 +10,10 @@ export function isSomeoneElsesPr(pr: PullRequest): boolean {
   return pr.viewerAuthored === false;
 }
 
+export function sameIdentity(a: string, b: string): boolean {
+  return a !== '' && a.toLowerCase() === b.toLowerCase();
+}
+
 export function isHarnessBranch(branch: string): boolean {
   return /^issue\/\d+(\/.+)?$/.test(branch) || /^job\/.+$/.test(branch);
 }

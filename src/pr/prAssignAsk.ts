@@ -4,29 +4,18 @@ import type { PrReviewState } from '../review/prReviewState.js';
 import type { Store } from '../store/store.js';
 import type { PrAssignment } from '../store/prAssignAsks.js';
 import type { PrPerson, PullRequest } from '../types.js';
-import { isOurPr } from './prOwnership.js';
+import { allCommentsHandled } from '../review/prReview.js';
+import { isOurPr, sameIdentity } from './prOwnership.js';
 
 // → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
 
 const SHORTLIST_SIZE = 4;
 const HISTORY_DEPTH = 100;
 
-interface AssignAskReading {
-  pr: PullRequest;
-  ours: boolean;
-  answered: boolean;
+/** What the snapshot already knows about one open pull request, and the ask reads. */
+interface AssignAskFacts {
   review: PrReviewState | null | undefined;
   fleetOnIt: boolean;
-  operator: string | undefined;
-}
-
-export function assignAskDue(r: AssignAskReading): boolean {
-  const { pr } = r;
-  if (!r.ours || r.answered || pr.merged === true || (pr.state !== undefined && pr.state !== 'open')) return false;
-  if (r.fleetOnIt) return false;
-  if (pr.assignees === undefined || pr.assignees.some((p) => !isOperator(p, pr, r.operator))) return false;
-  if (!pr.unresolvedComments.every((c) => c.handled)) return false;
-  return reviewDone(r.review);
 }
 
 function reviewDone(review: PrReviewState | null | undefined): boolean {
@@ -45,9 +34,8 @@ function reviewDone(review: PrReviewState | null | undefined): boolean {
 }
 
 function isOperator(person: PrPerson, pr: PullRequest, operator: string | undefined): boolean {
-  const same = (a: string | undefined, b: string): boolean =>
-    a !== undefined && a !== '' && a.toLowerCase() === b.toLowerCase();
-  return [person.id, person.name].some((v) => same(operator, v) || same(pr.author, v));
+  const selves = [operator ?? '', pr.author ?? ''];
+  return selves.some((self) => sameIdentity(self, person.id) || sameIdentity(self, person.name));
 }
 
 /**
@@ -59,18 +47,22 @@ export function assignShortlist(
   answers: readonly PrAssignment[],
   operator: string | undefined,
 ): PrPerson[] {
+  const sightings = [
+    ...mine.flatMap((pr) =>
+      (pr.assignees ?? [])
+        .filter((p) => !isOperator(p, pr, operator))
+        .map((person) => ({ person, prNumber: pr.number })),
+    ),
+    ...answers,
+  ].sort((a, b) => a.prNumber - b.prNumber);
   const seen = new Map<string, { person: PrPerson; prs: Set<number>; latest: number }>();
-  const note = (person: PrPerson, prNumber: number): void => {
+  for (const { person, prNumber } of sightings) {
     const entry = seen.get(person.id) ?? { person, prs: new Set<number>(), latest: prNumber };
     entry.prs.add(prNumber);
-    if (prNumber >= entry.latest) entry.person = person;
-    entry.latest = Math.max(entry.latest, prNumber);
+    entry.person = person;
+    entry.latest = prNumber;
     seen.set(person.id, entry);
-  };
-  for (const pr of mine) {
-    for (const person of pr.assignees ?? []) if (!isOperator(person, pr, operator)) note(person, pr.number);
   }
-  for (const a of answers) note(a.person, a.prNumber);
   return [...seen.values()]
     .sort((a, b) => b.prs.size - a.prs.size || b.latest - a.latest)
     .slice(0, SHORTLIST_SIZE)
@@ -90,32 +82,54 @@ export class PrAssignDesk {
     },
   ) {}
 
-  canAssign(): boolean {
-    return this.opts.sink.canAssignPr?.() === true && this.opts.sink.assignPr !== undefined;
+  private assigner(): PrAssignSink['assignPr'] | undefined {
+    const { sink } = this.opts;
+    return sink.canAssignPr?.() === true ? sink.assignPr?.bind(sink) : undefined;
   }
 
-  ours(pr: PullRequest): boolean {
+  private ours(pr: PullRequest): boolean {
     return isOurPr(pr, this.opts.prAuthorConfigured);
   }
 
-  answered(): ReadonlySet<number> {
-    return this.opts.store.prAssignAsks.answeredPrs();
+  private shortlist(open: readonly PullRequest[], archived: readonly PullRequest[]): PrPerson[] {
+    const mine = [...open, ...archived.slice(0, HISTORY_DEPTH)].filter((pr) => this.ours(pr));
+    return assignShortlist(mine, this.opts.store.prAssignAsks.assignments(), this.opts.operator);
   }
 
-  shortlist(open: readonly PullRequest[]): PrPerson[] {
-    const { store, operator } = this.opts;
-    const mine = [...open, ...store.prArchive.listArchivedPrs(HISTORY_DEPTH)].filter((pr) => this.ours(pr));
-    return assignShortlist(mine, store.prAssignAsks.assignments(), operator);
+  /**
+   * The shortlist each due pull request is offered. The cheap per-PR gates run first, so the
+   * common snapshot — nothing due — reads no history at all.
+   */
+  asks(
+    open: readonly PullRequest[],
+    archived: readonly PullRequest[],
+    factsOf: (pr: PullRequest) => AssignAskFacts,
+  ): ReadonlyMap<number, PrPerson[]> {
+    const candidates = open.filter((pr) => this.candidate(pr, factsOf(pr)));
+    if (candidates.length === 0 || this.assigner() === undefined) return new Map();
+    const answered = this.opts.store.prAssignAsks.answeredPrs();
+    const due = candidates.filter((pr) => !answered.has(pr.number));
+    if (due.length === 0) return new Map();
+    const shortlist = this.shortlist(open, archived);
+    return shortlist.length === 0 ? new Map() : new Map(due.map((pr) => [pr.number, shortlist]));
+  }
+
+  private candidate(pr: PullRequest, facts: AssignAskFacts): boolean {
+    if (!this.ours(pr) || pr.merged === true || (pr.state !== undefined && pr.state !== 'open')) return false;
+    if (facts.fleetOnIt) return false;
+    if (pr.assignees === undefined || pr.assignees.some((p) => !isOperator(p, pr, this.opts.operator))) return false;
+    return allCommentsHandled(pr) && reviewDone(facts.review);
   }
 
   async assign(prNumber: number, personId: string, open: readonly PullRequest[]): Promise<AssignOutcome> {
-    const { sink, store, errors } = this.opts;
-    if (!this.canAssign() || sink.assignPr === undefined)
+    const { store, errors } = this.opts;
+    const assignPr = this.assigner();
+    if (assignPr === undefined)
       return { ok: false, refusal: 'the tracker this harness is connected to cannot assign pull requests' };
-    const person = this.shortlist(open).find((p) => p.id === personId);
+    const person = this.shortlist(open, store.prArchive.listArchivedPrs(HISTORY_DEPTH)).find((p) => p.id === personId);
     if (person === undefined) return { ok: false, refusal: 'that person is not on the shortlist' };
     try {
-      const sent = await sink.assignPr({ prNumber, personId });
+      const sent = await assignPr({ prNumber, personId });
       if (!sent.ok) return { ok: false, refusal: 'the tracker did not take the assignment' };
     } catch (err) {
       errors.record({ source: 'provider', message: `assigning PR #${prNumber} failed: ${(err as Error).message}` });

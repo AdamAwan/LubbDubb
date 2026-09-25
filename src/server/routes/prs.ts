@@ -40,18 +40,15 @@ const AssignBody = z.object({
 
 function registerAssignRoutes(app: FastifyInstance, { system, hub }: Pick<RouteContext, 'system' | 'hub'>): void {
   const { store, prAssign } = system;
-  const openPr = (number: number) => store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === number);
+  const openPrs = () => store.world.getWorldBaseline()?.pullRequests ?? [];
 
   app.post(
     '/api/prs/:number/assign',
     checked({ params: PrNumberParams, body: AssignBody }, async ({ params, body, reply }) => {
-      if (openPr(params.number) === undefined)
+      const open = openPrs();
+      if (!open.some((p) => p.number === params.number))
         return reply.code(404).send({ error: 'no open pull request with that number' });
-      const outcome = await prAssign.assign(
-        params.number,
-        body.personId,
-        store.world.getWorldBaseline()?.pullRequests ?? [],
-      );
+      const outcome = await prAssign.assign(params.number, body.personId, open);
       if (!outcome.ok) return reply.code(409).send({ error: outcome.refusal });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
@@ -61,7 +58,7 @@ function registerAssignRoutes(app: FastifyInstance, { system, hub }: Pick<RouteC
   app.post(
     '/api/prs/:number/assign/decline',
     checked({ params: PrNumberParams }, ({ params, reply }) => {
-      if (openPr(params.number) === undefined)
+      if (!openPrs().some((p) => p.number === params.number))
         return reply.code(404).send({ error: 'no open pull request with that number' });
       prAssign.decline(params.number);
       hub.broadcast({ type: 'world:changed' });

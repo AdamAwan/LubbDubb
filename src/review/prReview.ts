@@ -56,6 +56,10 @@ export function needsFleetReview(pr: PullRequest, reading: PrReviewReading, poli
   if (pr.merged || reading.review !== null) return false;
   if (reviewSkipped(reading.route, policy)) return false;
   if (reading.elsewhere.has(pr.number)) return false;
+  return allCommentsHandled(pr);
+}
+
+export function allCommentsHandled(pr: PullRequest): boolean {
   return pr.unresolvedComments.every((c) => c.handled);
 }
 
@@ -163,7 +167,7 @@ export function isMergeReady(
     pr.mergeableState !== 'behind' &&
     pr.mergeableState !== 'blocked' &&
     pr.mergeableState !== 'dirty' &&
-    pr.unresolvedComments.every((c) => c.handled) &&
+    allCommentsHandled(pr) &&
     reviewSatisfied(pr, reading, policy)
   );
 }
