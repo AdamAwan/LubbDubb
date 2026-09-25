@@ -594,10 +594,12 @@ class DemoServer {
   }
 
   dismissFindings(originRef: string): { ok: true } {
-    const held = this.descriptions.get(originRef) ?? [];
-    const current = held[held.length - 1];
-    if (current !== undefined && current.dismissedAt === null)
-      this.descriptions.set(originRef, [...held.slice(0, -1), { ...current, dismissedAt: new Date().toISOString() }]);
+    const { current, versions } = this.descriptionReading(originRef);
+    if (current !== null && current.dismissedAt === null)
+      this.descriptions.set(originRef, [
+        ...versions.slice(0, -1),
+        { ...current, dismissedAt: new Date().toISOString() },
+      ]);
     return { ok: true };
   }
 
