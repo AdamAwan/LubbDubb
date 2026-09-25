@@ -95,6 +95,8 @@ export interface AzPull {
   isDraft: boolean;
   mergeStatus: string;
   reviewers: AzReviewer[];
+  /** Truncated by the list endpoint; `getPullBody` reads it whole. */
+  description?: string;
 }
 
 export interface AzReviewer {

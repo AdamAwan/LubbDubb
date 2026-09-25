@@ -46,6 +46,7 @@ import type { AreaPathTree } from '../src/intake/placement.js';
 interface Script {
   viewer?: string;
   pulls?: AzPull[];
+  fullBodies?: Record<number, string>;
   closedPulls?: AzClosedPull[];
   threads?: Record<number, AzThread[]>;
   policyEvals?: Record<number, AzPolicyEvaluation[]>;
@@ -97,6 +98,7 @@ interface Recorded {
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
   bodySets: Array<{ id: number; body: string }>;
+  bodyReads: number[];
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
   abandoned: number[];
@@ -131,6 +133,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     createdPulls: [],
     titleSets: [],
     bodySets: [],
+    bodyReads: [],
     baseSets: [],
     deletedBranches: [],
     abandoned: [],
@@ -152,8 +155,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async setPullTitle(id, title) {
       recorded.titleSets.push({ id, title });
     },
-    async getPullBody() {
-      return '';
+    async getPullBody(id) {
+      recorded.bodyReads.push(id);
+      return script.fullBodies?.[id] ?? '';
     },
     async setPullBody(id, body) {
       recorded.bodySets.push({ id, body });
@@ -878,6 +882,28 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
   assert.equal(pr.unresolvedComments.length, 1);
   assert.equal(pr.unresolvedComments[0]!.handled, false);
   store.close();
+});
+
+test('the body is read whole, because the list truncates it, and read again only when the listed text moves', async () => {
+  const script: Script = {
+    pulls: [pull({ pullRequestId: 7, description: 'Written on Azure, cut sh' })],
+    fullBodies: { 7: 'Written on Azure, cut short by the list.' },
+  };
+  const { api, recorded } = fakeApi(script);
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, 'Written on Azure, cut short by the list.');
+  await sc.snapshot();
+  assert.deepEqual(recorded.bodyReads, [7], 'an unchanged listing reuses the whole body');
+
+  script.pulls = [pull({ pullRequestId: 7, description: 'Rewritten on Azure' })];
+  script.fullBodies = { 7: 'Rewritten on Azure, whole.' };
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, 'Rewritten on Azure, whole.');
+  assert.deepEqual(recorded.bodyReads, [7, 7]);
+
+  script.pulls = [pull({ pullRequestId: 7, description: '' })];
+  assert.equal((await sc.snapshot()).pullRequests![0]!.body, '', 'an empty body needs no second read');
+  assert.equal(recorded.bodyReads.length, 2);
 });
 
 test('snapshot leaves mergeable undefined while Azure is still computing', async () => {

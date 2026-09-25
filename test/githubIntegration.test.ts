@@ -132,9 +132,6 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async setPullTitle(number, title) {
       recorded.titleSets.push({ number, title });
     },
-    async getPullBody() {
-      return '';
-    },
     async setPullBody(number, body) {
       recorded.bodySets.push({ number, body });
     },

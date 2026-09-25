@@ -48,7 +48,7 @@ import type { Channels } from './system.js';
 export type IntakeDesks = ReturnType<typeof buildIntakeDesks>;
 
 export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Foundation, { prompts }: Channels) {
-  const { store, sink, connector, errors, gitObserver, worktrees, watchLabel } = base;
+  const { store, sink, errors, gitObserver, worktrees, watchLabel } = base;
   const plans = new PlanReconciler({
     store,
     git: gitObserver,
@@ -70,7 +70,7 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     errors,
   });
   const prDescriptions = new PrDescriptionDesk({ sink, store, errors });
-  const prBodyEdits = new PrBodyEditDesk({ bodies: connector, store, errors });
+  const prBodyEdits = new PrBodyEditDesk({ store });
 
   const prWatch = new PrWatchDesk({
     sink,

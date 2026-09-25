@@ -742,17 +742,19 @@ rather than in the cockpit. That is the same act, and it gets the same treatment
 version of the part's description, is [checked without asking](#every-description-is-checked-without-asking),
 and is pushed back **recomposed** — the text, `HUMAN_NOTE`, then the recorded footer.
 
-`PrBodyEditDesk` (`src/pr/prBodyEditDesk.ts`) runs on world-read pulses, just above `PrDescriptionDesk`. For every part in
-`pr_description_bodies` whose pull request is open it reads the live body (`readPullBody`, one
-pull request at a time — Azure's list truncates `description`, so it cannot answer this) and takes
-`descriptionInBody`: the text above the recorded tail (or, if the footer was touched, above the rule
-over `SIGNOFF_MARKER`), with a trailing `HUMAN_NOTE` removed. Line endings and trailing spaces are
-normalised on both sides.
+`PrBodyEditDesk` (`src/pr/prBodyEditDesk.ts`) runs on world-read pulses, just above
+`PrDescriptionDesk`. The body rides on the world read as `PullRequest.body`: GitHub's list carries it
+whole; Azure's list truncates `description`, so the Azure read fetches the pull request itself, and
+only again when the listed text moves or the hydration lane expires. Undefined means the provider did
+not read it, never an empty body. For every part in `pr_description_bodies` whose pull request is open
+the desk takes `descriptionInBody`: the text above the recorded tail (or, if the footer was touched,
+above the rule over `SIGNOFF_MARKER`), with a trailing `HUMAN_NOTE` removed. Line endings and
+trailing spaces are normalised on both sides.
 
 - **The harness never adopts its own push.** `descriptionInBody` is the inverse of
   `composeDescribedBody`, and the result is compared against what the harness last put there — the
   newest version, else a pushed draft, else nothing. Equal is not an edit.
-- **An owed push outranks the provider.** A part with an unpushed version or handed draft is not read:
+- **An owed push outranks the provider.** A part in `unpushedDescriptions` or `unpushedDrafts` is skipped:
   the cockpit's write is newer, and it overwrites.
 - **Nothing above the footer is not a description.** Clearing the body adopts nothing.
 - **The author is unrecorded** (`author: null`). The provider does not say who edited a body, so

@@ -171,6 +171,7 @@ export class OctokitGitHubApi implements GitHubApi {
       labels: p.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
       assigneeLogins: (p.assignees ?? []).map((a) => a.login).filter((login) => login !== ''),
       updatedAt: p.updated_at,
+      body: p.body ?? '',
     }));
   }
 
@@ -439,11 +440,6 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async setPullTitle(number: number, title: string): Promise<void> {
     await this.octokit.pulls.update({ ...this.base, pull_number: number, title });
-  }
-
-  async getPullBody(number: number): Promise<string> {
-    const { data } = await this.octokit.pulls.get({ ...this.base, pull_number: number });
-    return data.body ?? '';
   }
 
   async setPullBody(number: number, body: string): Promise<void> {

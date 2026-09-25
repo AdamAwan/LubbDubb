@@ -98,7 +98,6 @@ function ghApi(script: GhScript): GitHubApi {
     createIssue: unused('createIssue'),
     createPull: unused('createPull'),
     setPullTitle: unused('setPullTitle'),
-    getPullBody: unused('getPullBody'),
     setPullBody: unused('setPullBody'),
     setPullBase: unused('setPullBase'),
     updatePullBranch: unused('updatePullBranch'),

@@ -34,7 +34,6 @@ export interface GitHubApi {
   }>;
   createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ number: number }>;
   setPullTitle(number: number, title: string): Promise<void>;
-  getPullBody(number: number): Promise<string>;
   setPullBody(number: number, body: string): Promise<void>;
   setPullBase(number: number, base: string): Promise<void>;
   updatePullBranch(number: number): Promise<void>;
@@ -52,6 +51,7 @@ export interface GhPullSummary {
   labels: string[];
   assigneeLogins: string[];
   updatedAt?: string;
+  body?: string;
 }
 
 export interface GhClosedPull {

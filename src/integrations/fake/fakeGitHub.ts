@@ -31,7 +31,6 @@ import type {
   PrThreadResolveCapable,
   PrTitleCapable,
   PrBodyCapable,
-  PrBodyReadable,
   WorldSlice,
 } from '../integration.js';
 import type { FakeWorld, FakeWorldStore } from './fakeWorld.js';
@@ -62,7 +61,6 @@ export class FakeGitHubIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBodyCapable,
-    PrBodyReadable,
     PrBaseCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
@@ -87,10 +85,6 @@ export class FakeGitHubIntegration
   }
 
   inject(event: InjectableEvent): void {
-    if (event.kind === 'pr_body_edited') {
-      this.bodies.set(event.prNumber, event.body);
-      return;
-    }
     this.world.mutate((world) => {
       switch (event.kind) {
         case 'ci_failed':
@@ -127,6 +121,9 @@ export class FakeGitHubIntegration
           break;
         case 'new_pr':
           openFromEvent(world, event, this.defaultBranch);
+          break;
+        case 'pr_body_edited':
+          mutatePr(world, event.prNumber, (pr) => (pr.body = event.body));
           break;
       }
     });
@@ -202,19 +199,15 @@ export class FakeGitHubIntegration
     return { ok: true, ref: `fake-title_${nanoid(6)}` };
   }
 
-  async readPullBody(prNumber: number): Promise<string> {
-    return this.bodies.get(prNumber) ?? '';
-  }
-
   async setPullBody(input: PrBodyInput): Promise<SendResult> {
     this.bodies.set(input.prNumber, input.body);
+    this.world.mutate((world) => mutatePr(world, input.prNumber, (pr) => (pr.body = input.body)));
     return { ok: true, ref: `fake-body_${nanoid(6)}` };
   }
 
   /**
-   * The body one pull request carries. Kept beside the world rather than on
-   * `PullRequest`, because only `PrDescriptionDesk` reads a body back, and it reads it
-   * one pull request at a time through `readPullBody`.
+   * The body one pull request carries, kept whether or not the pull request is in
+   * the world yet.
    *
    * @public the seam a test asserts a pushed description through
    */

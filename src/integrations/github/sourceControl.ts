@@ -31,7 +31,6 @@ import type {
   PrThreadResolveCapable,
   PrTitleCapable,
   PrBodyCapable,
-  PrBodyReadable,
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
@@ -98,7 +97,6 @@ export class GitHubSourceControlIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBodyCapable,
-    PrBodyReadable,
     PrBaseCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
@@ -155,6 +153,7 @@ export class GitHubSourceControlIntegration
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
+          if (p.body !== undefined) pr.body = p.body;
           return pr;
         }),
       );
@@ -297,10 +296,6 @@ export class GitHubSourceControlIntegration
   async setPullTitle(input: PrTitleInput): Promise<SendResult> {
     await this.opts.api.setPullTitle(input.prNumber, input.title);
     return { ok: true };
-  }
-
-  async readPullBody(prNumber: number): Promise<string> {
-    return this.opts.api.getPullBody(prNumber);
   }
 
   async setPullBody(input: PrBodyInput): Promise<SendResult> {

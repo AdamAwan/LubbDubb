@@ -213,7 +213,6 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
     createIssue: unused,
     createPull: unused,
     setPullTitle: unused,
-    getPullBody: unused,
     setPullBody: unused,
     setPullBase: unused,
     updatePullBranch: unused,

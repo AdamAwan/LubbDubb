@@ -107,20 +107,18 @@ export function composeDescribedBody(text: string, tail: string): string {
  */
 export function descriptionInBody(live: string, tail: string): string | null {
   const body = normaliseBody(live);
-  const footer = normaliseBody(tail);
-  let head = body;
-  const at = footer === '' ? -1 : body.lastIndexOf(footer);
-  if (at >= 0) head = body.slice(0, at);
-  else {
-    const marker = body.indexOf(SIGNOFF_MARKER);
-    if (marker >= 0) {
-      const rule = body.lastIndexOf('---', marker);
-      head = body.slice(0, rule >= 0 ? rule : marker);
-    }
-  }
-  head = head.trim();
+  let head = body.slice(0, footerStart(body, normaliseBody(tail))).trim();
   if (head.endsWith(HUMAN_NOTE)) head = head.slice(0, -HUMAN_NOTE.length).trim();
   return head === '' ? null : head;
+}
+
+function footerStart(body: string, footer: string): number {
+  const at = footer === '' ? -1 : body.lastIndexOf(footer);
+  if (at >= 0) return at;
+  const marker = body.indexOf(SIGNOFF_MARKER);
+  if (marker < 0) return body.length;
+  const rule = body.lastIndexOf('---', marker);
+  return rule >= 0 ? rule : marker;
 }
 
 /** Line endings and trailing spaces are the provider's, never the writer's. */

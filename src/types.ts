@@ -45,6 +45,8 @@ export interface PullRequest {
   viewerApproved?: boolean;
   changedFiles?: number;
   url?: string;
+  /** Undefined where the provider did not read it, which is not an empty body. */
+  body?: string;
 }
 
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
