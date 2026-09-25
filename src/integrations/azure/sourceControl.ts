@@ -208,7 +208,6 @@ export class AzureDevOpsSourceControlIntegration
       .map((p) => {
         const pr = mapClosedPull(p);
         if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
-        if (p.reviewers !== undefined) pr.assignees = namedReviewers(p.reviewers);
         return pr;
       });
   }
@@ -356,6 +355,7 @@ export function mapClosedPull(p: AzClosedPull): PullRequest {
     merged: p.merged,
     closedAt: p.closedAt,
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
+    ...(p.reviewers === undefined ? {} : { assignees: namedReviewers(p.reviewers) }),
     url: p.url,
   };
 }

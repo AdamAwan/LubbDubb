@@ -129,7 +129,7 @@ export class PrAssignDesk {
     const pr = open.find((p) => p.number === prNumber);
     if (pr === undefined || !this.ours(pr))
       return { ok: false, refusal: 'the ask is only for the fleet’s own pull requests' };
-    if (store.prAssignAsks.answeredPrs().has(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
+    if (store.prAssignAsks.isAnswered(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
     const person = this.shortlist(open, store.prArchive.listArchivedPrs(HISTORY_DEPTH)).find((p) => p.id === personId);
     if (person === undefined) return { ok: false, refusal: 'that person is not on the shortlist' };
     try {

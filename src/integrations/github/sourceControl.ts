@@ -14,7 +14,7 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
@@ -154,7 +154,7 @@ export class GitHubSourceControlIntegration
           if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
           if (detail.viewerApproved) pr.viewerApproved = true;
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
-          pr.assignees = p.assigneeLogins.map((login) => ({ id: login, name: login }));
+          pr.assignees = loginPeople(p.assigneeLogins);
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;
           if (detail.changedFiles !== null) pr.changedFiles = detail.changedFiles;
           return pr;
@@ -248,8 +248,6 @@ export class GitHubSourceControlIntegration
       .map((p) => {
         const pr = mapClosedPull(p);
         if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
-        if (p.assigneeLogins !== undefined)
-          pr.assignees = p.assigneeLogins.map((login) => ({ id: login, name: login }));
         return pr;
       });
   }
@@ -400,8 +398,13 @@ export function mapClosedPull(p: GhClosedPull): PullRequest {
     merged: p.merged,
     closedAt: p.closedAt,
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
+    ...(p.assigneeLogins === undefined ? {} : { assignees: loginPeople(p.assigneeLogins) }),
     url: p.url,
   };
+}
+
+function loginPeople(logins: readonly string[]): PrPerson[] {
+  return logins.map((login) => ({ id: login, name: login }));
 }
 
 function normalizeMergeState(state: string | null): MergeableState {

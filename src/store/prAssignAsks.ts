@@ -24,6 +24,10 @@ export class PrAssignAskStore {
       .run(prNumber, answer.answer, person?.id ?? null, person?.name ?? null, this.ctx.now());
   }
 
+  isAnswered(prNumber: number): boolean {
+    return this.ctx.prep(`SELECT 1 FROM pr_assign_asks WHERE pr_number = ?`).get(prNumber) !== undefined;
+  }
+
   answeredPrs(): ReadonlySet<number> {
     const rows = this.ctx.prep(`SELECT pr_number FROM pr_assign_asks`).all() as { pr_number: number }[];
     return new Set(rows.map((r) => r.pr_number));
