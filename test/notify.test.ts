@@ -111,6 +111,52 @@ test('a cascade of errors is one notification, not one each', () => {
   assert.equal(items[0]!.title, '30 errors recorded');
 });
 
+test('an ended agent says what it was doing, not its id', () => {
+  const [item] = notifiableChanges(
+    snap({ agents: [{ id: 'xy12343', status: 'running' }] }),
+    snap({
+      agents: [
+        {
+          id: 'xy12343',
+          status: 'done',
+          task: 'Fix login redirect loop',
+          origin: 'issue:412',
+          note: 'Redirect now respects returnTo',
+        },
+      ],
+    }),
+  );
+  assert.equal(item!.title, 'Finished: Fix login redirect loop');
+  assert.equal(item!.body, '#412 · "Redirect now respects returnTo"');
+});
+
+test('a failed agent with no note says how far it got', () => {
+  const [item] = notifiableChanges(
+    snap({ agents: [{ id: 'a1', status: 'running' }] }),
+    snap({ agents: [{ id: 'a1', status: 'failed', task: 'Add CSV export', origin: 'pr:397', numTurns: 14 }] }),
+  );
+  assert.equal(item!.title, 'Failed: Add CSV export');
+  assert.equal(item!.body, 'PR 397 · stopped after 14 turns');
+});
+
+test('several ended agents are summarised by their tasks', () => {
+  const [item] = notifiableChanges(
+    snap({
+      agents: [
+        { id: 'a1', status: 'running' },
+        { id: 'a2', status: 'running' },
+      ],
+    }),
+    snap({
+      agents: [
+        { id: 'a1', status: 'done', task: 'Fix login' },
+        { id: 'a2', status: 'crashed', task: 'Add export' },
+      ],
+    }),
+  );
+  assert.equal(item!.body, 'Fix login · Add export');
+});
+
 test('a batch is folded per category, not across them', () => {
   const items = notifiableChanges(
     snap({

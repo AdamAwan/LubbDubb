@@ -1,4 +1,6 @@
 import type { AppState, EnvironmentHealthReading, SetupPayload } from '../types.js';
+import { refLabel } from '../components/refs.js';
+import { standsFor } from '../view/goalRefs.js';
 import { buildNeedsYou, type NeedKind } from '../view/needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -65,12 +67,22 @@ interface NotifyItem {
   tag: string;
   title: string;
   body: string;
+  summary?: string;
+}
+
+interface NotifyAgent {
+  id: string;
+  status: string;
+  task?: string | null;
+  origin?: string | null;
+  note?: string | null;
+  numTurns?: number | null;
 }
 
 interface NotifySnapshot {
   needsYou: { id: string; kind: NeedKind; title: string }[];
   errors: { id: string; message: string }[];
-  agents: { id: string; status: string }[];
+  agents: NotifyAgent[];
   environments: EnvironmentHealthReading[];
 }
 
@@ -112,7 +124,17 @@ export function notifySnapshot(state: AppState, setup: SetupPayload | null = nul
   return {
     needsYou: buildNeedsYou(state, setup).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
     errors: state.errors.map((e) => ({ id: e.id, message: e.message })),
-    agents: state.agents.map((a) => ({ id: a.id, status: a.status })),
+    agents: state.agents.map((a) => {
+      const task = state.tasks.find((t) => t.id === a.taskId);
+      return {
+        id: a.id,
+        status: a.status,
+        task: task?.title ?? null,
+        origin: task ? standsFor(state, task.originRef) : null,
+        note: a.note,
+        numTurns: a.numTurns,
+      };
+    }),
     environments: state.environmentHealth ?? [],
   };
 }
@@ -146,8 +168,9 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
     items.push({
       category: 'agents',
       tag: `agent:${agent.id}`,
-      title: agent.status === 'done' ? 'Agent finished' : `Agent ${agent.status}`,
-      body: agent.id,
+      title: agentTitle(agent),
+      body: agentBody(agent),
+      summary: agent.task ?? agent.id,
     });
   }
 
@@ -165,6 +188,26 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
   }
 
   return coalesce(items);
+}
+
+const ENDING_WORD: Record<string, string> = {
+  done: 'Finished',
+  killed: 'Killed',
+  interrupted: 'Interrupted',
+  failed: 'Failed',
+  crashed: 'Crashed',
+};
+
+function agentTitle(agent: NotifyAgent): string {
+  const word = ENDING_WORD[agent.status] ?? agent.status;
+  return agent.task ? `${word}: ${agent.task}` : `Agent ${word.toLowerCase()}`;
+}
+
+function agentBody(agent: NotifyAgent): string {
+  const stopped = agent.status !== 'done' && agent.numTurns ? `stopped after ${agent.numTurns} turns` : null;
+  const said = agent.note ? `"${agent.note}"` : stopped;
+  const parts = [agent.origin ? refLabel(agent.origin) : null, said].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(' · ') : agent.id;
 }
 
 function healthTitle(env: EnvironmentHealthReading): string {
@@ -214,7 +257,7 @@ function coalesce(items: readonly NotifyItem[]): NotifyItem[] {
       out.push(batch[0]!);
       continue;
     }
-    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.body);
+    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.summary ?? i.body);
     const rest = batch.length - named.length;
     out.push({
       category: id,
