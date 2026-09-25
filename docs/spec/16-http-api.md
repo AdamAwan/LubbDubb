@@ -503,7 +503,8 @@ Answer the assign ask ([07](07-pull-requests.md#asking-who-should-look-at-it)). 
 `{personId}`, and only a person on the current shortlist is accepted (409 otherwise). It writes the
 assignment through `PrAssignSink.assignPr` and then records the answer. A tracker refusal is a 409
 naming it, and no answer is recorded, so the ask stays. `decline` records "Nah" and writes nothing
-to the tracker. Both return 404 for a pull request the world does not carry.
+to the tracker. Both refuse (409) an ask already answered, or one whose assignment is still with the
+tracker. Both return 404 for a pull request the world does not carry.
 
 ### `POST /api/prs/:number/threads/:threadId/reopen`
 

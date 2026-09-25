@@ -72,6 +72,8 @@ export function assignShortlist(
 type AssignOutcome = { ok: true } | { ok: false; refusal: string };
 
 export class PrAssignDesk {
+  private readonly inFlight = new Set<number>();
+
   constructor(
     private readonly opts: {
       store: Store;
@@ -129,21 +131,30 @@ export class PrAssignDesk {
     const pr = open.find((p) => p.number === prNumber);
     if (pr === undefined || !this.ours(pr))
       return { ok: false, refusal: 'the ask is only for the fleet’s own pull requests' };
-    if (store.prAssignAsks.isAnswered(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
+    if (this.settled(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
     const person = this.shortlist(open, store.prArchive.listArchivedPrs(HISTORY_DEPTH)).find((p) => p.id === personId);
     if (person === undefined) return { ok: false, refusal: 'that person is not on the shortlist' };
+    this.inFlight.add(prNumber);
     try {
       const sent = await assignPr({ prNumber, personId });
       if (!sent.ok) return { ok: false, refusal: 'the tracker did not take the assignment' };
     } catch (err) {
       errors.record({ source: 'provider', message: `assigning PR #${prNumber} failed: ${(err as Error).message}` });
       return { ok: false, refusal: `the tracker refused: ${(err as Error).message}` };
+    } finally {
+      this.inFlight.delete(prNumber);
     }
     store.prAssignAsks.recordAssignAnswer(prNumber, { answer: 'assigned', person });
     return { ok: true };
   }
 
-  decline(prNumber: number): void {
+  decline(prNumber: number): AssignOutcome {
+    if (this.settled(prNumber)) return { ok: false, refusal: 'this ask was already answered' };
     this.opts.store.prAssignAsks.recordAssignAnswer(prNumber, { answer: 'declined' });
+    return { ok: true };
+  }
+
+  private settled(prNumber: number): boolean {
+    return this.inFlight.has(prNumber) || this.opts.store.prAssignAsks.isAnswered(prNumber);
   }
 }

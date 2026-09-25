@@ -1126,7 +1126,10 @@ shortlist and gets no ask.
 assignee, or an Azure reviewer (individual, optional). These are the same fields a colleague's harness
 reads as `viewerAssignment`, so the pull request lands on _their_ rail. Only a shortlisted person,
 on the fleet's own pull request, with no answer yet, is accepted. A second tab pressing a stale row
-cannot assign somebody in the tracker behind an answer already recorded. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
+cannot assign somebody in the tracker behind an answer already recorded. An assignment still waiting on the
+tracker holds the ask as answered too (in memory, on the desk), so a "Nah" pressed in the meantime
+is refused rather than recorded against a person the tracker is about to have. Merged pull requests
+carry their author like open ones, so a self-assigned PR never offers its own author. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
 answer is one `pr_assign_asks` row ([14](14-persistence.md)).
 
 ### How long it has been waiting on a reviewer

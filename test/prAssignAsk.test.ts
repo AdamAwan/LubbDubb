@@ -148,8 +148,41 @@ test('"nah" ends the ask for good, and assigns nobody', async () => {
   assert.equal(stale.statusCode, 409, 'a stale row in another tab cannot assign behind a recorded "nah"');
   assert.deepEqual(assigned, []);
 
+  const again = await app.inject({ method: 'POST', url: '/api/prs/7/assign/decline' });
+  assert.equal(again.statusCode, 409);
+
   const missing = await app.inject({ method: 'POST', url: '/api/prs/99/assign/decline' });
   assert.equal(missing.statusCode, 404);
+});
+
+test('a second answer is refused while the first is still with the tracker', async () => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  let entered!: () => void;
+  const reached = new Promise<void>((r) => (entered = r));
+  const { sink, assigned } = recordingSink();
+  const slow = sink.assignPr.bind(sink);
+  sink.assignPr = async (input) => {
+    entered();
+    await held;
+    return slow(input);
+  };
+  const system = build(sink);
+  seed(system, [pr(7)]);
+  const { app } = await buildApp(system);
+
+  const first = app.inject({ method: 'POST', url: '/api/prs/7/assign', payload: { personId: 'dave' } });
+  await reached;
+  const nah = await app.inject({ method: 'POST', url: '/api/prs/7/assign/decline' });
+  assert.equal(nah.statusCode, 409, 'a nah behind an assignment still in flight would contradict the tracker');
+  release();
+  assert.equal((await first).statusCode, 200);
+  assert.deepEqual(assigned, [{ prNumber: 7, personId: 'dave' }]);
+});
+
+test('a merged pull request’s own author is never offered, even when they self-assigned it', () => {
+  const selfAssigned = { ...pr(3, { assignees: [carol] }), author: 'carol' };
+  assert.deepEqual(assignShortlist([selfAssigned], [], undefined), []);
 });
 
 test('an assignment made through the ask counts towards the shortlist', () => {

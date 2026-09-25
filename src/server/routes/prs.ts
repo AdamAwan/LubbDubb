@@ -60,7 +60,8 @@ function registerAssignRoutes(app: FastifyInstance, { system, hub }: Pick<RouteC
     checked({ params: PrNumberParams }, ({ params, reply }) => {
       if (!openPrs().some((p) => p.number === params.number))
         return reply.code(404).send({ error: 'no open pull request with that number' });
-      prAssign.decline(params.number);
+      const outcome = prAssign.decline(params.number);
+      if (!outcome.ok) return reply.code(409).send({ error: outcome.refusal });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
     }),

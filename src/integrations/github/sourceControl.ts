@@ -397,6 +397,7 @@ export function mapClosedPull(p: GhClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
+    ...(p.authorLogin === '' ? {} : { author: p.authorLogin }),
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
     ...(p.assigneeLogins === undefined ? {} : { assignees: loginPeople(p.assigneeLogins) }),
     url: p.url,

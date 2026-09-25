@@ -354,6 +354,7 @@ export function mapClosedPull(p: AzClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
+    ...(p.authorUniqueName === '' ? {} : { author: p.authorUniqueName }),
     ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
     ...(p.reviewers === undefined ? {} : { assignees: namedReviewers(p.reviewers) }),
     url: p.url,
