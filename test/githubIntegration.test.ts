@@ -612,6 +612,16 @@ test('an unrecognised mergeable_state normalises to unknown', async () => {
   store.close();
 });
 
+test('a draft PR normalises to blocked, as on Azure', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'draft', merged: false } },
+  });
+  const sc = new GitHubSourceControlIntegration({ api });
+  const pr = (await sc.snapshot()).pullRequests![0]!;
+  assert.equal(pr.mergeableState, 'blocked');
+});
+
 test('snapshot applies the prAuthor filter client-side', async () => {
   const { api } = fakeApi({
     pulls: [pull({ number: 7, authorLogin: 'alice' }), pull({ number: 8, authorLogin: 'bob' })],

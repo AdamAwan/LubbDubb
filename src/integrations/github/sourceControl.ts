@@ -416,6 +416,8 @@ function normalizeMergeState(state: string | null): MergeableState {
     case 'blocked':
     case 'clean':
       return state;
+    case 'draft':
+      return 'blocked';
     default:
       return 'unknown';
   }

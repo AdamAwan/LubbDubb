@@ -533,7 +533,7 @@ The field-mapping logic is exported as **pure functions** and tested directly:
 | `aggregateCiStatus(checkRuns, status)`      | Folds check runs and the combined status into one `CiStatus`.                                      |
 | `computeApproved(reviews)`                  | Folds reviews into a single approval flag.                                                         |
 | `buildUnresolvedComments(comments, viewer)` | Threads review comments and marks the ones the viewer has **replied** to as handled.               |
-| `normalizeMergeState(state)`                | GitHub `mergeable_state` → `MergeableState`.                                                       |
+| `normalizeMergeState(state)`                | GitHub `mergeable_state` → `MergeableState`; `draft` → `blocked`, as Azure reads `isDraft`.        |
 | `mapClosedPull(p)`                          | A closed PR in domain shape.                                                                       |
 | `linkedPrFromTimeline(events)`              | The last PR to cross-reference an issue. No open/merged filter — hence `linkedPrNumber` is sticky. |
 | `viewerAddedLabels(events, viewer, labels)` | Labels the viewer added, from `labeled`/`unlabeled` timeline events.                               |

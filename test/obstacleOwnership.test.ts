@@ -442,3 +442,31 @@ test('with approval off, the door is the one it has always been', async () => {
   assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, 'issue:841');
   system.store.close();
 });
+
+test('an obstacle whose repairs are spent and escalated does not hold the others back', async () => {
+  const decision = (action: Record<string, unknown>, i: number) =>
+    ({
+      id: `d${i}`,
+      cycleId: 'c',
+      action,
+      outcome: 'executed',
+      detail: '',
+      rule: 'obstacle-repair',
+      admission: null,
+      createdAt: '2026-07-27T00:00:00.000Z',
+    }) as never;
+  const spent = [0, 1, 2].map((i) =>
+    decision({ type: 'dispatch_code_agent', originRef: 'obstacle:obs-a', branch: 'obstacle/obs-a' }, i),
+  );
+  const escalated = decision({ type: 'escalate_to_human', context: { originRef: 'obstacle:obs-a' } }, 3);
+  const { upcoming } = await new RuleDispatcher().decide(
+    ctx({
+      obstacles: [standing({ id: 'obs-a' }, { voices: 3 }), standing({ id: 'obs-b' }, { voices: 3 })],
+      recentDecisions: [...spent, escalated],
+    }),
+  );
+  assert.deepEqual(
+    (upcoming ?? []).filter((q) => q.rule === 'obstacle-repair').map((q) => q.origin),
+    ['obstacle:obs-b'],
+  );
+});

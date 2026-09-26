@@ -33,6 +33,7 @@ import type {
 } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItem, AzWorkItemUpdate } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
+import { sameIdentity } from '../../pr/prOwnership.js';
 import { HydrationCache } from '../hydrationCache.js';
 import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
 
@@ -334,7 +335,7 @@ export function viewerAddedTags(updates: AzWorkItemUpdate[], viewer: string): Se
     const afterSet = new Set(after);
     for (const tag of after) {
       if (before.has(tag)) continue;
-      if (u.revisedByUniqueName === viewer) owned.add(tag);
+      if (sameIdentity(u.revisedByUniqueName, viewer)) owned.add(tag);
       else owned.delete(tag);
     }
     for (const tag of before) {

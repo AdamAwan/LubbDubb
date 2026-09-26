@@ -278,7 +278,7 @@ test('the table is the default view, so it costs no query parameter', () => {
 });
 
 test('hidden columns are the exception, so an untouched board is a bare URL', () => {
-  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'card' })), '?tab=tickets&view=card');
+  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'card' })), '?tab=tickets&layout=card');
   assert.deepEqual(readPlace('?tab=tickets').ticketColumns, []);
 });
 
@@ -360,4 +360,11 @@ test('a link to the retired Work mix tab lands on Economics', () => {
   const place = readPlace('?tab=insights&view=mix');
   assert.equal(place.insightsView, 'economics');
   assert.equal(place.insightsScope, 'mine');
+});
+
+test('the Tickets layout and the Insights tab do not share a key', () => {
+  const place = at({ tab: 'insights', insightsView: 'reliability', ticketView: 'card' });
+  const back = readPlace(placeQuery(place));
+  assert.equal(back.insightsView, 'reliability');
+  assert.equal(back.ticketView, 'card');
 });

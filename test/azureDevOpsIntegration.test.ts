@@ -1299,6 +1299,11 @@ test('viewerAddedTags: attributes each add to the revision author', () => {
   assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['agent-ready']);
 });
 
+test('viewerAddedTags: the viewer is matched case-insensitively, as a UPN is', () => {
+  const updates: AzWorkItemUpdate[] = [{ revisedByUniqueName: 'Me@Acme.com', tagsOld: '', tagsNew: 'agent-ready' }];
+  assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['agent-ready']);
+});
+
 test('viewerAddedTags: a re-add by someone else transfers ownership away', () => {
   const updates: AzWorkItemUpdate[] = [
     { revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'agent-ready' },

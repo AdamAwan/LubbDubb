@@ -176,3 +176,33 @@ test('non-zero exit without done is a failure', () => {
   assert.equal(failed, true);
   assert.equal(s.status, 'failed');
 });
+
+function rejected() {
+  return {
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'rejected',
+      resetsAt: Math.floor((Date.now() + 3_600_000) / 1000),
+      rateLimitType: 'five_hour',
+      overageStatus: 'allowed',
+      isUsingOverage: false,
+    },
+  };
+}
+
+test('a second usage limit after a resume parks the session again', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  let limited = 0;
+  s.on('limited', () => (limited += 1));
+  s.start();
+  child.emitLine(rejected());
+  child.emitLine({ type: 'result', subtype: 'error_during_execution', is_error: true });
+  assert.equal(limited, 1);
+  s.send('carry on');
+  assert.equal(s.status, 'running');
+  child.emitLine(rejected());
+  child.emitLine({ type: 'result', subtype: 'error_during_execution', is_error: true });
+  assert.equal(limited, 2);
+  assert.equal(s.status, 'waiting');
+});

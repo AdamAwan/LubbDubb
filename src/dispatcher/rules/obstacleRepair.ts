@@ -37,7 +37,7 @@ export function obstacleRepair(s: StageContext): void {
         reason,
       } satisfies RawAction,
     };
-    s.consider(candidate, {
+    const proposed = s.consider(candidate, {
       escalate: (attempts) => ({
         type: 'escalate_to_human',
         escalationType: 'resolve_ambiguity',
@@ -51,7 +51,7 @@ export function obstacleRepair(s: StageContext): void {
         reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing the obstacle.`,
       }),
     });
-    return;
+    if (proposed) return;
   }
 }
 

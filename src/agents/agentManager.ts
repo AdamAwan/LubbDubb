@@ -120,6 +120,15 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       session.start();
     } catch (err) {
       this.sessions.delete(agent.id);
+      this.channels.disposeFileEvents(agent.id);
+      this.channels.releaseMcp(agent.id);
+      this.store.agents.updateAgent(agent.id, {
+        status: agent.status,
+        pid: agent.pid,
+        endedAt: agent.endedAt,
+        waitingReason: agent.waitingReason,
+      });
+      this.store.tasks.updateTask(task.id, { status: task.status });
       throw new Error(`resume spawn failed for agent ${agent.id}: ${(err as Error).message}`);
     }
 
@@ -464,6 +473,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   private failSpawn(agentId: string, taskId: string, err: Error): void {
     this.sessions.delete(agentId);
+    this.channels.disposeFileEvents(agentId);
+    this.channels.releaseMcp(agentId);
     this.store.transcripts.appendTranscript(agentId, err.message);
     this.store.transcripts.flushTranscript(agentId);
     this.store.agents.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
