@@ -37,21 +37,23 @@ export function obstacleRepair(s: StageContext): void {
         reason,
       } satisfies RawAction,
     };
-    s.consider(candidate, {
-      escalate: (attempts) => ({
-        type: 'escalate_to_human',
-        escalationType: 'resolve_ambiguity',
-        prompt:
-          `The fleet has hit "${claim}" ${row.voices} times and ${attempts} agents have failed to clear it. ` +
-          `Nothing further will be dispatched for it. It is still on the board and still in front of every ` +
-          `dispatch it matches, so the fleet is working around it rather than into it.`,
-        context: { originRef: origin, taskTitle: title },
-        rule: 'obstacle-repair',
-        admission: 'cooldown-escalate',
-        reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing the obstacle.`,
-      }),
-    });
-    return;
+    if (
+      s.consider(candidate, {
+        escalate: (attempts) => ({
+          type: 'escalate_to_human',
+          escalationType: 'resolve_ambiguity',
+          prompt:
+            `The fleet has hit "${claim}" ${row.voices} times and ${attempts} agents have failed to clear it. ` +
+            `Nothing further will be dispatched for it. It is still on the board and still in front of every ` +
+            `dispatch it matches, so the fleet is working around it rather than into it.`,
+          context: { originRef: origin, taskTitle: title },
+          rule: 'obstacle-repair',
+          admission: 'cooldown-escalate',
+          reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing the obstacle.`,
+        }),
+      })
+    )
+      return;
   }
 }
 

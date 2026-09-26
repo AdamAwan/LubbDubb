@@ -174,7 +174,12 @@ export class AgentChannels {
     this.eventsKeys.delete(agentId);
   }
 
-  releaseMcp(agentId: string): void {
+  release(agentId: string): void {
+    this.disposeFileEvents(agentId);
+    this.releaseMcp(agentId);
+  }
+
+  private releaseMcp(agentId: string): void {
     const token = this.mcpTokens.get(agentId);
     if (!token) return;
     this.mcpTokens.delete(agentId);

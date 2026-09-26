@@ -305,7 +305,7 @@ function readTicketFilters(
     ticketFeature: readFeature(param(query, 'feature')),
     ticketGroup: TICKET_GROUP.find((g) => g === param(query, 'group')) ?? 'feature',
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
-    ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? 'table',
+    ticketView: TICKET_VIEW.find((v) => v === (param(query, 'layout') ?? param(query, 'view'))) ?? 'table',
     ticketColumns: readStrings(param(query, 'hide')),
   };
 }
@@ -468,7 +468,7 @@ function writeTicketFilters(query: URLSearchParams, place: Place): void {
   if (place.ticketFeature !== null) query.set('feature', String(place.ticketFeature));
   if (place.ticketGroup !== 'feature') query.set('group', place.ticketGroup);
   if (place.ticketOrder !== 'added') query.set('order', place.ticketOrder);
-  if (place.ticketView !== 'table') query.set('view', place.ticketView);
+  if (place.ticketView !== 'table') query.set('layout', place.ticketView);
   if (place.ticketColumns.length > 0) {
     query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
   }

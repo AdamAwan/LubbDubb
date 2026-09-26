@@ -8,7 +8,13 @@ import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { obstacleDesk } from './support/obstacles.js';
-import { obstacleRepairOrigin, ownershipDoor, redBaseChecks } from '../src/obstacles/ownership.js';
+import {
+  obstacleRepairBranch,
+  obstacleRepairOrigin,
+  ownershipDoor,
+  redBaseChecks,
+} from '../src/obstacles/ownership.js';
+import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { blockedGoals, releasedBlocks } from '../src/obstacles/blocked.js';
 import { reachesAgents } from '../src/obstacles/lifecycle.js';
 import { obstacleOriginId } from '../src/issueOrigins.js';
@@ -441,4 +447,33 @@ test('with approval off, the door is the one it has always been', async () => {
   assert.equal(filed.length, 1);
   assert.equal(system.store.obstacles.getObstacle(id)!.ownerRef, 'issue:841');
   system.store.close();
+});
+
+test('an obstacle whose repairs are spent and escalated does not hold the others back', async () => {
+  const decision = (action: Record<string, unknown>, i: number) =>
+    ({
+      id: `d${i}`,
+      cycleId: 'c',
+      action,
+      outcome: 'executed',
+      detail: '',
+      rule: 'obstacle-repair',
+      admission: null,
+      createdAt: '2026-07-27T00:00:00.000Z',
+    }) as never;
+  const origin = obstacleRepairOrigin('obs-a');
+  const spent = Array.from({ length: DEFAULT_COOLDOWN.maxAttempts }, (_, i) =>
+    decision({ type: 'dispatch_code_agent', originRef: origin, branch: obstacleRepairBranch('obs-a') }, i),
+  );
+  const escalated = decision({ type: 'escalate_to_human', context: { originRef: origin } }, spent.length);
+  const { upcoming } = await new RuleDispatcher().decide(
+    ctx({
+      obstacles: [standing({ id: 'obs-a' }, { voices: 3 }), standing({ id: 'obs-b' }, { voices: 3 })],
+      recentDecisions: [...spent, escalated],
+    }),
+  );
+  assert.deepEqual(
+    (upcoming ?? []).filter((q) => q.rule === 'obstacle-repair').map((q) => q.origin),
+    [obstacleRepairOrigin('obs-b')],
+  );
 });

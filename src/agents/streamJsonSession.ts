@@ -85,6 +85,7 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     const msg = { type: 'user', message: { role: 'user', content: text } };
     this.child.stdin.write(JSON.stringify(msg) + '\n');
     this.pendingTurns += 1;
+    this.limitParked = false;
     if (this._status === 'waiting') this.setStatus('running');
     this.armSilence();
   }

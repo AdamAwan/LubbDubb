@@ -532,7 +532,9 @@ schedule things. It is bounded once more on top of the cut: **one repair in flig
 the whole fleet, because the cut bounds how many agents run and not how many of them this rule may be.
 A board that went to twenty standing rows on a bad afternoon would otherwise propose twenty repairs,
 and the subsystem whose point is not spending the fleet twice on one thing would be spending it on
-itself.
+itself. A row whose repairs are spent and already escalated is not in flight, so the rule passes over it
+to the next row at the door — held first on a board sorted by last sighting, it would otherwise stand
+in front of every other repair until its decisions aged out.
 
 **The claim is the transition, and the ticket comes after it.** `Store.claimObstacle` is one
 `UPDATE … WHERE state='standing' AND owner_ref IS NULL`, so two passes cannot both take one row —
