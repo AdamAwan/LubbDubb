@@ -333,9 +333,10 @@ export function viewerAddedTags(updates: AzWorkItemUpdate[], viewer: string): Se
     const before = new Set(parseTags(u.tagsOld));
     const after = parseTags(u.tagsNew);
     const afterSet = new Set(after);
+    const byViewer = sameIdentity(u.revisedByUniqueName, viewer);
     for (const tag of after) {
       if (before.has(tag)) continue;
-      if (sameIdentity(u.revisedByUniqueName, viewer)) owned.add(tag);
+      if (byViewer) owned.add(tag);
       else owned.delete(tag);
     }
     for (const tag of before) {

@@ -120,8 +120,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       session.start();
     } catch (err) {
       this.sessions.delete(agent.id);
-      this.channels.disposeFileEvents(agent.id);
-      this.channels.releaseMcp(agent.id);
+      this.channels.release(agent.id);
       this.store.agents.updateAgent(agent.id, {
         status: agent.status,
         pid: agent.pid,
@@ -254,8 +253,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     const session = this.sessions.get(agentId);
     if (!session && !this.parks.isLimited(agentId)) return false;
     session?.kill();
-    this.channels.disposeFileEvents(agentId);
-    this.channels.releaseMcp(agentId);
+    this.channels.release(agentId);
     this.parks.clear(agentId);
     this.store.transcripts.flushTranscript(agentId);
     const agent = this.store.agents.getAgent(agentId);
@@ -352,8 +350,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       } catch {
         /* process already gone */
       }
-      this.channels.disposeFileEvents(id);
-      this.channels.releaseMcp(id);
+      this.channels.release(id);
       this.store.transcripts.flushTranscript(id);
       this.store.agents.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
       this.sessions.delete(id);
@@ -442,8 +439,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (agent.resumeAttempts >= limit) return agent.resumeAttempts;
 
     const attempts = this.store.agents.countAgentResumeAttempt(agentId);
-    this.channels.disposeFileEvents(agentId);
-    this.channels.releaseMcp(agentId);
+    this.channels.release(agentId);
     this.sessions.delete(agentId);
     this.exitCodes.delete(agentId);
     this.exited.delete(agentId);
@@ -473,8 +469,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   private failSpawn(agentId: string, taskId: string, err: Error): void {
     this.sessions.delete(agentId);
-    this.channels.disposeFileEvents(agentId);
-    this.channels.releaseMcp(agentId);
+    this.channels.release(agentId);
     this.store.transcripts.appendTranscript(agentId, err.message);
     this.store.transcripts.flushTranscript(agentId);
     this.store.agents.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
@@ -523,13 +518,11 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (!status || !this.exited.has(agentId)) return;
     this.terminals.delete(agentId);
     this.exited.delete(agentId);
-    this.channels.disposeFileEvents(agentId);
-    this.channels.releaseMcp(agentId);
+    this.channels.release(agentId);
     this.emit('reaped', { agentId, taskId, status });
   }
   private shedLimitedSession(agentId: string): void {
-    this.channels.disposeFileEvents(agentId);
-    this.channels.releaseMcp(agentId);
+    this.channels.release(agentId);
     this.sessions.delete(agentId);
     this.exitCodes.delete(agentId);
     this.exited.delete(agentId);
