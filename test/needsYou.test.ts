@@ -772,3 +772,18 @@ test('a goal waiting on its intake sitting is a blocking row that opens the goal
     'a closed sitting asks nothing',
   );
 });
+
+test('an assign ask opens where its buttons are drawn, never the pull request page', () => {
+  const base = stateWith({});
+  const pullRequests = base.world.pullRequests.map((pr) => ({
+    ...pr,
+    assignAsk: [{ id: 'u1', name: 'Sam' }],
+  }));
+  const rows = buildNeedsYou({ ...base, world: { ...base.world, pullRequests } }).filter((r) => r.kind === 'assign');
+  assert.ok(rows.length > 0);
+  assert.ok(
+    rows.some((r) => r.goalRef !== null),
+    'the demo has a pull request under a goal',
+  );
+  for (const row of rows) assert.equal(row.opens, row.goalRef === null ? 'ask' : 'goal', row.id);
+});
