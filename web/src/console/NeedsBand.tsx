@@ -20,6 +20,7 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './Q
 import { Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
+import { AssignButtons, assignAskOf, assignBody } from './assignAsks.js';
 import { quickAnswer } from '../view/quickAnswer.js';
 import { awaitedProfile } from '../view/issueAsks.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
@@ -53,6 +54,13 @@ export function NeedsBand({
   if (line) {
     const quick = quickAnswer(row, view.state);
     if (quick !== null) return <QuickLine row={row} quick={quick} view={view} actions={actions} />;
+    const assign = assignAskOf(row, view.state);
+    if (assign !== null)
+      return (
+        <AnswerLine row={row} view={view} actions={actions}>
+          <AssignButtons ask={assign} actions={actions} />
+        </AnswerLine>
+      );
     return (
       <button
         type="button"
@@ -124,15 +132,7 @@ function QuickLine({
 }): JSX.Element {
   const change = useAsyncAction();
   return (
-    <div className={`cn-needs-line cn-needs-quick cn-t-${KIND_TONE[row.kind]}`}>
-      <button
-        type="button"
-        className="cn-needs-open"
-        onClick={() => actions.openPanel({ ask: row.id })}
-        title="Open this ask"
-      >
-        <LineFace row={row} now={view.now} />
-      </button>
+    <AnswerLine row={row} view={view} actions={actions}>
       <AsyncButton
         size="small"
         tone="primary"
@@ -161,6 +161,33 @@ function QuickLine({
           ))}
         </select>
       )}
+    </AnswerLine>
+  );
+}
+
+/** A one-line ask answered on the row: the text opens the ask panel, the controls after it answer. */
+function AnswerLine({
+  row,
+  view,
+  actions,
+  children,
+}: {
+  row: NeedRow;
+  view: CockpitView;
+  actions: CockpitActions;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className={`cn-needs-line cn-needs-quick cn-t-${KIND_TONE[row.kind]}`}>
+      <button
+        type="button"
+        className="cn-needs-open"
+        onClick={() => actions.openPanel({ ask: row.id })}
+        title="Open this ask"
+      >
+        <LineFace row={row} now={view.now} />
+      </button>
+      {children}
     </div>
   );
 }
@@ -376,37 +403,6 @@ function describeBody(row: NeedRow, view: CockpitView): ReactNode {
           → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer */}
       <PrDescription prNumber={waiting.prNumber} open desktopFolder={view.state.config.desktopFolder} now={view.now} />
       <RefLine to={`pr:${waiting.prNumber}`} title="Read the change you are describing" />
-    </>
-  );
-}
-
-/**
- * Every person on the shortlist and "Nah" are drawn alike, so declining costs no more than
- * picking. → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
- */
-function assignBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  const pr = view.state.world.pullRequests.find((p) => p.number === row.prNumber);
-  if (pr?.assignAsk === undefined) return null;
-  return (
-    <>
-      <p className="cn-tick">
-        The fleet is done with <Ref to={`pr:${pr.number}`} /> and nobody is on it. Put someone on it in the tracker?
-      </p>
-      <ButtonRow bar>
-        {pr.assignAsk.map((person) => (
-          <AsyncButton
-            key={person.id}
-            size="small"
-            onClick={() => actions.assignPr(pr.number, person.id)}
-            title={`Assign ${person.name} in the tracker`}
-          >
-            {person.name}
-          </AsyncButton>
-        ))}
-        <AsyncButton size="small" onClick={() => actions.declineAssignPr(pr.number)} title="Leave it unassigned">
-          Nah
-        </AsyncButton>
-      </ButtonRow>
     </>
   );
 }

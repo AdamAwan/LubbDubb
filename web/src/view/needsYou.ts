@@ -167,7 +167,7 @@ function assignAskRows(state: AppState): NeedDraft[] {
       title: askLine(`PR #${pr.number} is ready — want to assign it to someone?`, goalRef, state),
       goalRef,
       originRef: `pr:${pr.number}`,
-      opens: 'pr',
+      opens: opensAt(goalRef, state),
       prNumber: pr.number,
       agentId: null,
       agentLabel: null,

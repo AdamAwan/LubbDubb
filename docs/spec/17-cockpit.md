@@ -796,7 +796,10 @@ description. → [07](07-pull-requests.md#what-the-check-raises)
 it and sends the shortlist as `OpenPullRequest.assignAsk`
 ([07](07-pull-requests.md#asking-who-should-look-at-it)). The body draws one button per person and a
 "Nah" button, all the same size and tone, so declining is not buried. It is `next`, not `later`: it
-is asked at the one moment the answer helps, and folded away it would be missed at exactly that moment.
+is asked at the one moment the answer helps, and folded away it would be missed at exactly that moment. It
+opens the goal page (the ask panel without one), never the pull request page: the buttons are drawn
+where the ask is, and a row that sends the operator somewhere without them is a dead end. On the goal
+page's one-line ask the same buttons sit in the line itself, so the answer is one press.
 
 **`assigned` is the one kind that did not come from the harness at all.** Every other row here is
 the fleet saying it is stuck; this one is a pull request a colleague put on the operator, which the
@@ -2353,6 +2356,9 @@ So on the goal page's row form (`NeedsBand` with `line`), `quickAnswer`
   `setIssueAreaPath`);
 - **Change…**, a list of the other profiles or area paths that writes the one picked — drawn only
   when there is another to pick.
+
+The assign ask is answered on its row too, with no proposal: every shortlisted name and **Nah**,
+the same buttons as its body (`AssignButtons`). Both go through one row shell, `AnswerLine`.
 
 The parent ask is not among them: it is never a row on the goal page (the band at the foot draws
 it). The answers the panel alone offers ("Leave it unpinned", "Not applicable") stay in the panel:
