@@ -10642,11 +10642,31 @@ button.rv.rv {
    glance — which one a person has to carry, which reads the store, what each
    journey actually is. Every colour is a token; a literal here is a colour no
    theme can reach. → docs/spec/17-cockpit.md#tokens */
+/* The checks and the planner's case side by side where the card is wide, stacked
+   where it is not: one column of 400px text in a 2000px card is what made it tall. */
 .vp-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 20px;
+  margin: 10px 0;
+}
+.vp-main,
+.vp-side {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin: 10px 0;
+}
+.vp-main {
+  flex: 3 1 480px;
+}
+.vp-side {
+  flex: 2 1 300px;
+}
+.vp-hint > summary,
+.esc-fold > summary {
+  cursor: pointer;
 }
 .vp-note,
 .vp-hint,

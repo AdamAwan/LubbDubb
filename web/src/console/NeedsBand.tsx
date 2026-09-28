@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react';
+import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
@@ -20,7 +20,8 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './Q
 import { Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
-import { AssignButtons, assignAskOf, assignBody } from './assignAsks.js';
+import { AssignButtons, assignBody } from './assignAsks.js';
+import { assignAskOf } from '../view/askGroups.js';
 import { quickAnswer } from '../view/quickAnswer.js';
 import { awaitedProfile } from '../view/issueAsks.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
@@ -40,8 +41,8 @@ export function NeedsBand({
   /** This band is drawn on the goal page, whose Checks pane holds the same rows. */
   checksBelow?: boolean;
   /**
-   * Draw the ask as one row rather than the whole thing, pressing it open in the
-   * ask panel. It is what the goal page gives every ask it carries: a band
+   * Draw the ask as one row rather than the whole thing, answered on the row where
+   * the answer fits and opened in place under it where it does not. It is what the goal page gives every ask it carries: a band
    * between the navigation and the pane it selects leaves the two reading as
    * unrelated surfaces, and three hundred pixels of band is what put the pane's
    * own content below the fold.
@@ -61,22 +62,7 @@ export function NeedsBand({
           <AssignButtons ask={assign} actions={actions} />
         </AnswerLine>
       );
-    return (
-      <button
-        type="button"
-        className={`cn-needs-line cn-t-${KIND_TONE[row.kind]}`}
-        onClick={() => actions.openPanel({ ask: row.id })}
-        title="Open this ask"
-      >
-        <LineFace row={row} now={view.now} />
-        {/* The verb, drawn as the press it is. A faint "Open" beside a pane's own
-            filled primary is a row that loses the page to the one control on it
-            that nothing is waiting on. It is a span rather than a button because
-            the row *is* the button — nesting a second one is invalid.
-            → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
-        <span className="cn-needs-do">{row.verb ?? KIND_VERB[row.kind]}</span>
-      </button>
-    );
+    return <FoldLine row={row} view={view} actions={actions} />;
   }
   return (
     <div className={`cn-needs cn-t-${KIND_TONE[row.kind]}`}>
@@ -96,6 +82,35 @@ export function NeedsBand({
         </button>
       </header>
       <div className="cn-in">{body}</div>
+    </div>
+  );
+}
+
+/**
+ * An ask whose answer does not fit on a row: the row is its headline and the press opens the whole of
+ * it underneath, where the operator already is. The card's own Open still takes it to the ask panel.
+ * → docs/spec/17-cockpit.md#a-row-opens-in-place
+ */
+function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="cn-needs-fold">
+      <button
+        type="button"
+        className={`cn-needs-line cn-t-${KIND_TONE[row.kind]}`}
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        title={open ? 'Fold this ask away' : 'Read and answer this ask here'}
+      >
+        <LineFace row={row} now={view.now} />
+        {/* The verb, drawn as the press it is. It is a span rather than a button because
+            the row *is* the button — nesting a second one is invalid.
+            → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
+        <span className="cn-needs-do">
+          {row.verb ?? KIND_VERB[row.kind]} {open ? '\u25be' : '\u25b8'}
+        </span>
+      </button>
+      {open && <NeedsBand row={row} view={view} actions={actions} checksBelow={row.kind === 'validate'} />}
     </div>
   );
 }

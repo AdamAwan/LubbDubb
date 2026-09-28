@@ -29,41 +29,52 @@ export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines
   const queries = set.checks.filter((c) => c.carriesQuery).map((c) => c.letter);
   return (
     <div className="vp-ask">
-      {set.note !== null && (
-        <div className="vp-note vp-prose">
-          <span className="lb lb-sm">What the planner says</span>
-          {renderMarkdown(set.note)}
+      {/* The checks first, the planner's case beside them: the verdict is on the set, and three
+          paragraphs above it put the thing being approved below the fold.
+          → docs/spec/17-cockpit.md#a-check-set-ask-is-named-by-its-checks */}
+      <div className="vp-main">
+        {set.checks.length === 0 ? (
+          <p className="vp-empty">
+            The planner declared no checks. Accepting agrees that nothing here needs running; rejecting asks for them
+            again.
+          </p>
+        ) : (
+          <ul className="vp-rows">
+            {set.checks.map((check) => (
+              <Row key={check.letter} check={check} declines={declines} />
+            ))}
+          </ul>
+        )}
+        {declines !== undefined && declines.whole && (
+          <p className="vp-whole">
+            You have struck out every check, so this is a rejection: they go back to be written again, and your reasons
+            go with them.
+          </p>
+        )}
+        {queries.length > 0 && (
+          <p className="vp-queries">
+            <b>{queries.join(', ')}</b> read live data from the deployment. Accepting does not approve the query each
+            reads it with — you read that beside what it returns, on its own dry run, per environment.
+          </p>
+        )}
+      </div>
+      {(set.note !== null || set.hint !== null) && (
+        <div className="vp-side">
+          {set.note !== null && (
+            <div className="vp-note vp-prose">
+              <span className="lb lb-sm">What the planner says</span>
+              {renderMarkdown(set.note)}
+            </div>
+          )}
+          {set.hint !== null && (
+            <details className="vp-hint">
+              <summary>
+                <span className="lb lb-sm">What the plan asked for</span>
+              </summary>
+              {set.hint}
+            </details>
+          )}
         </div>
-      )}
-      {set.hint !== null && (
-        <p className="vp-hint">
-          <span className="lb lb-sm">What the plan asked for</span>
-          {set.hint}
-        </p>
-      )}
-      {set.checks.length === 0 ? (
-        <p className="vp-empty">
-          The planner declared no checks. Accepting agrees that nothing here needs running; rejecting asks for them
-          again.
-        </p>
-      ) : (
-        <ul className="vp-rows">
-          {set.checks.map((check) => (
-            <Row key={check.letter} check={check} declines={declines} />
-          ))}
-        </ul>
-      )}
-      {declines !== undefined && declines.whole && (
-        <p className="vp-whole">
-          You have struck out every check, so this is a rejection: they go back to be written again, and your reasons go
-          with them.
-        </p>
-      )}
-      {queries.length > 0 && (
-        <p className="vp-queries">
-          <b>{queries.join(', ')}</b> read live data from the deployment. Accepting does not approve the query each
-          reads it with — you read that beside what it returns, on its own dry run, per environment.
-        </p>
       )}
     </div>
   );

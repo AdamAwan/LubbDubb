@@ -68,6 +68,9 @@ export function readCard(props: CardProps) {
     /* A check set is a set, not a paragraph: it rides on the proposal as structure and is drawn as rows
        rather than through `context.detail`'s markdown. → docs/spec/17-cockpit.md */
     checkSet: checkSetOf(proposal),
+    /* What accepting and rejecting a check set do is the same on every set, so it is kept but folded
+       under the checks it is about. → docs/spec/17-cockpit.md#a-check-set-ask-is-named-by-its-checks */
+    bodyFolded: proposal?.kind === 'validation_plan',
     /* The goal number, from the escalation's context or from the origin it was
        raised on. Both spell the same goal, and only the first is always set: a card
        that has just the origin was dropping the Claude Code hand-off, which is the

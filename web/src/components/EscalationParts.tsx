@@ -86,7 +86,16 @@ export function CardProse({
           always in the string and the renderer was eating them — `plan-approval`
           and a wedged plan both write what accepting and rejecting do as their own
           paragraphs, and both arrived as one run-on sentence. */}
-      {card.body ? <div className="escalation-body">{renderMarkdown(card.body, refUrls)}</div> : null}
+      {card.body ? (
+        card.bodyFolded ? (
+          <details className="escalation-body esc-fold">
+            <summary className="muted small">What accepting and rejecting do</summary>
+            {renderMarkdown(card.body, refUrls)}
+          </details>
+        ) : (
+          <div className="escalation-body">{renderMarkdown(card.body, refUrls)}</div>
+        )
+      ) : null}
 
       {context.taskTitle ? <div className="muted small">re: {linkify(String(context.taskTitle), refUrls)}</div> : null}
 

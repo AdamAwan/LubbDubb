@@ -1170,8 +1170,8 @@ ways, not several asks.
 **Except on the goal page, where the rows are already a pane away.** The rule is about _reaching_ the
 work from where the ask is read, and on the rail and in the panel that means drawing it. On the goal
 page it means the opposite: a second live copy of the whole sheet is the ask drawing the page it is
-standing on. The goal page answers this twice over — the ask is a row there, so no body is drawn at
-all, and `NeedsBand` still takes `checksBelow` for a body drawn on that surface, which says how many
+standing on. The goal page answers this twice over — the ask is a row there, so no body is drawn
+until the row is opened in place, and `NeedsBand` still takes `checksBelow` for a body drawn on that surface, which says how many
 checks it is about and offers the way to them: selecting the Checks pane through `GOAL_TAB_OF` and
 scrolling to `GOAL_ANCHOR.validation`. The rows themselves stay in one place on that surface, and it is
 the place that already owns them. `test/askBodies.test.ts` pins both halves: the body draws no sheet
@@ -2321,6 +2321,9 @@ and `splitGoalAsks` decides which:
   about the goal as a whole or the fleet carrying it, so they have no pane to be drawn in and can
   only ever be a row; a row that says _open_ on a page whose panes say _Write the criteria_ is the
   one ask on the page wearing no verb.
+  Pressed, a row whose answer does not fit on it opens the whole ask **underneath itself**
+  ([a row opens in place](#a-row-opens-in-place)); the ask panel is one press further, on the card's
+  own **Open**.
 
 **Two rows are never in the pane's set.** The parent ask is drawn by the band at the foot. And the
 plan's own ask belongs to the plan card in **both** of its states — the gate while the plan is
@@ -2369,6 +2372,43 @@ it, and every reader — the goal page's split, the ask body, `quickAnswer` — 
 parsing the row's id. The area-path row also carries its own `verb`, **Pick a board**, over the
 placement kind's "Pick a parent": the kind spans both fields, and the verb names what the press is
 for.
+
+#### A row opens in place
+
+A row that only ever opened the ask panel made every ask on the goal page two trips: read the line,
+open the panel, answer, come back. So a row whose answer does not fit on it — anything `quickAnswer`
+and the assign row do not cover — is a disclosure (`FoldLine` in `NeedsBand`): its verb wears `▾`,
+and pressing the row draws the same full `NeedsBand` card directly under it, with `checksBelow` for a
+`validate` ask as the pane would. Pressed again it folds. Answering it removes the row as it always
+did, because the row and the card read the same `needBody`. The card's own **Open** still takes the
+ask to the panel. The open state is the row's own and not on `Place`: it is a disclosure, like a
+`<details>`, not where the operator is.
+
+#### The same ask twice is one ask
+
+Three pull requests from one goal, each ready and each unassigned, used to be three rows asking one
+question — and, in the pane that owns them, three full cards. `groupAsks`
+(`web/src/view/askGroups.ts`) folds assign asks on **one goal with the same shortlist** into one
+item, drawn where the first of them stood; `AssignGroup` (`web/src/console/assignAsks.tsx`) draws it
+as one band: a line per pull request, each ticked, and the shortlist and **Nah** once. A name makes
+the same `assignPr` write per ticked pull request that its own row's button makes, so the group adds
+no route and no refusal of its own; unticking one leaves it for its own answer. A different
+shortlist or a different goal is a different question and stays its own row, and a group of one is
+the ordinary row. Both the rows above the navigation and the pane's cards go through it.
+`test/goalAskLines.test.ts` pins the fold.
+
+#### A check set ask is named by its checks
+
+The `validation_plan` ask's prompt opens on a count and the ticket's title ("1 check(s) written
+against the delivered code for issue #…"), so the one line a row shows of it said nothing about the
+check. Its row title is the checks instead: `OK check: <title>`, or `OK 3 checks: <first> (+2 more)`
+(`checkSetLine` in `web/src/view/needsYou.ts`, read off the proposal through `checkSetOf`).
+
+The card is reordered for the same reason. `CheckSetAsk` draws **the checks first** and the
+planner's note beside them — two columns where the card is wide, stacked where it is not — with
+"What the plan asked for" folded. The harness's prose under the headline, which is what accepting
+and rejecting do and the same on every set, is folded too (`CardProse`). Nothing is dropped: every
+line is one press away, and the thing the verdict is about is what the operator reads first.
 
 #### Saying the sentence a refusal asks for
 
