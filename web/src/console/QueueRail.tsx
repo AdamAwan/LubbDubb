@@ -9,7 +9,7 @@ import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
-import { groupAsks, type AssignAsk } from '../view/askGroups.js';
+import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
 import { askLine } from '../view/needLines.js';
 
 // → docs/spec/17-cockpit.md
@@ -378,6 +378,10 @@ function rowDestination(row: NeedRow, dest: NeedRow['opens'], actions: CockpitAc
   return null;
 }
 
+function openRow(row: NeedRow, actions: CockpitActions): () => void {
+  return rowDestination(row, row.opens, actions) ?? (() => actions.openPanel({ ask: row.id }));
+}
+
 function rowClass(row: NeedRow, focus: string | null, current: boolean): string {
   const parked = row.group === 'blocking';
   const dim = focus !== null && !current && row.kind !== 'recovery';
@@ -451,7 +455,7 @@ function Row({
     return <ConfigRow row={row} check={row.check} cls={cls} current={current} actions={actions} />;
   }
 
-  const open = rowDestination(row, row.opens, actions) ?? (() => actions.openPanel({ ask: row.id }));
+  const open = openRow(row, actions);
   const card = (foot: ReactNode): JSX.Element => (
     <Card cls={cls} current={current} onClick={open} foot={foot}>
       {body}
@@ -488,11 +492,8 @@ function Row({
   );
 }
 
-/**
- * Several assign asks folded by `groupAsks` are one card: one line, the pull requests as refs, and
- * the press opens where the first would have — the goal page, which answers them as one group.
- * → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask
- */
+/* Several assign asks folded by `groupAsks` are one card, the pull requests as refs in its foot.
+   → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask */
 function AssignGroupRow({
   first,
   asks,
@@ -506,17 +507,13 @@ function AssignGroupRow({
   focus: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  const row: NeedRow = {
-    ...first,
-    title: askLine(`${asks.length} pull requests are ready — want to assign them?`, first.goalRef, view.state),
-  };
+  const row: NeedRow = { ...first, title: askLine(assignGroupLine(asks.length), first.goalRef, view.state) };
   const current = focus !== null && row.goalRef === focus;
-  const open = rowDestination(row, row.opens, actions) ?? (() => actions.openPanel({ ask: row.id }));
   return (
     <Card
       cls={rowClass(row, focus, current)}
       current={current}
-      onClick={open}
+      onClick={openRow(row, actions)}
       foot={
         <CardFoot>
           <span className="cn-refs">
@@ -583,25 +580,27 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
               ) : (
                 <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
               )}
-              {groupAsks(section.urgency === 'later' && !openLater ? [] : section.rows, view.state).map((item) => {
-                const row =
-                  item.kind === 'one'
-                    ? item.row
-                    : section.rows.find((r) => r.kind === 'assign' && r.prNumber === item.asks[0]?.number);
-                if (row === undefined) return null;
-                return item.kind === 'assign' ? (
+              {groupAsks(section.urgency === 'later' && !openLater ? [] : section.rows, view.state).map((item) =>
+                item.kind === 'assign' ? (
                   <AssignGroupRow
-                    key={`assign:${row.id}`}
-                    first={row}
+                    key={`assign:${item.first.id}`}
+                    first={item.first}
                     asks={item.asks}
                     view={view}
                     focus={focus}
                     actions={actions}
                   />
                 ) : (
-                  <Row key={row.id} row={row} now={view.now} focus={focus} build={view.state.build} actions={actions} />
-                );
-              })}
+                  <Row
+                    key={item.row.id}
+                    row={item.row}
+                    now={view.now}
+                    focus={focus}
+                    build={view.state.build}
+                    actions={actions}
+                  />
+                ),
+              )}
             </Fragment>
           ))
         )}

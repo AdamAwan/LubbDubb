@@ -6,7 +6,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { Ref } from '../components/refs.js';
 import { ButtonRow } from '../components/button.js';
 import { oneLine } from '../view/needLines.js';
-import { assignAskOf, type AssignAsk } from '../view/askGroups.js';
+import { assignAskOf, assignGroupLine, type AssignAsk } from '../view/askGroups.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './QueueRail.js';
 
 // → docs/spec/17-cockpit.md
@@ -104,7 +104,7 @@ export function AssignGroup({
           {KIND_SYMBOL.assign}
         </span>
         <span className="cn-needs-kind">{KIND_LABEL.assign}</span>
-        <span className="cn-needs-what">{asks.length} pull requests are ready and nobody is on them</span>
+        <span className="cn-needs-what">{assignGroupLine(asks.length)}</span>
       </header>
       <ul>
         {asks.map((ask) => (

@@ -149,7 +149,7 @@ test('the Needs you rail draws the folded assign asks as one card naming each pu
       children: createElement(QueueRail, { view, actions }),
     }),
   );
-  assert.ok(html.includes('2 pull requests are ready'));
+  assert.ok(html.includes('2 pull requests are ready and nobody is on them'));
   assert.ok(!html.includes('PR #10 is ready'), 'the folded rows are not drawn again');
   assert.equal(html.match(/cn-qtitle/g)?.length, 1);
 });

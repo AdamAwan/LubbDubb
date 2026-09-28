@@ -149,7 +149,7 @@ function AskItems({
     <>
       {groupAsks(rows, view.state).map((item) =>
         item.kind === 'assign' ? (
-          <AssignGroup key={`assign:${item.asks[0]?.number}`} asks={item.asks} actions={actions} />
+          <AssignGroup key={`assign:${item.first.id}`} asks={item.asks} actions={actions} />
         ) : (
           <NeedsBand
             key={item.row.id}

@@ -2396,8 +2396,8 @@ no route and no refusal of its own; unticking one leaves it for its own answer. 
 shortlist or a different goal is a different question and stays its own row, and a group of one is
 the ordinary row. Both the rows above the navigation and the pane's cards go through it, and so
 does the **Needs you** rail: `QueueRail` runs each urgency section through `groupAsks` and draws a
-group as one card (`AssignGroupRow`) — "N pull requests are ready — want to assign them?", the pull
-requests as refs in its foot — whose press opens the goal page, where the group is answered. The
+group as one card (`AssignGroupRow`) — the goal page's line (`assignGroupLine`), the pull requests
+as refs in its foot — whose press opens the goal page, where the group is answered. The
 rail's count stays every row, folded ones included. `test/goalAskLines.test.ts` pins the fold.
 
 #### A check set ask is named by its checks
