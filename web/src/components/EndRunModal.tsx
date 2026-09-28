@@ -62,7 +62,7 @@ export function EndRunModal({
     >
       <p className="rb-intro">
         On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher, so
-        nothing is scheduled for it again, though the report stays readable.
+        nothing is scheduled for it again and its watch tag comes off, though the report stays readable.
       </p>
       <RunCosts agents={agents} prAgents={prAgents} instructions={instructions} />
       {outstanding !== null && <p className="rb-intro">{outstanding}</p>}

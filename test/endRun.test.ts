@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
 import { clearGoalWork } from '../src/runs/endRun.js';
-import { buildSystem } from '../src/system/system.js';
+import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { dispatchView } from '../src/harnessCycleReadings.js';
 
 function store(): Store {
   return new Store(':memory:');
@@ -20,6 +21,22 @@ function liveAgent(s: Store, originRef: string, status: 'running' | 'done' = 'ru
   const agent = s.agents.createAgent({ taskId: task.id, cwd: '/tmp', pid: 1 });
   s.agents.updateAgent(agent.id, { status });
   return agent.id;
+}
+
+function endRunSystem(labelPrefix: string): System {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-endrun-'));
+  return buildSystem(
+    loadConfig({
+      auth: { enabled: false } as never,
+      labelPrefix,
+      dbPath: ':memory:',
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      heartbeatIntervalMs: 999_999,
+    }),
+    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
+  );
 }
 
 test('ending a run kills the goal’s agents, cancels its jobs and settles its instructions', () => {
@@ -67,19 +84,7 @@ test('ending a run at a quiet goal clears nothing and says so', () => {
 });
 
 test('the dismiss-run route does the clearing, and reports what it cleared', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-endrun-'));
-  const system = buildSystem(
-    loadConfig({
-      auth: { enabled: false } as never,
-      labelPrefix: '',
-      dbPath: ':memory:',
-      agentMode: 'raw',
-      deskRoot: join(dir, 'desk'),
-      worktreeRoot: join(dir, 'wt'),
-      heartbeatIntervalMs: 999_999,
-    }),
-    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
-  );
+  const system = endRunSystem('');
   const { store } = system;
   store.runs.recordIssueRun({
     originRef: 'issue:12',
@@ -103,6 +108,61 @@ test('the dismiss-run route does the clearing, and reports what it cleared', asy
 
   const again = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run' });
   assert.equal(again.statusCode, 409);
+
+  await app.close();
+  store.close();
+});
+
+test('abandoning a goal drops its watch tag, and the dispatcher never sees the open ticket again', async () => {
+  const system = endRunSystem('lubbdubb');
+  const { store } = system;
+  const open = {
+    id: 'i12',
+    number: 12,
+    title: 'Add the thing',
+    body: '',
+    labels: ['lubbdubb-watch'],
+    state: 'open' as const,
+    linkedPrNumber: null,
+  };
+  store.world.setWorldBaseline({
+    takenAt: new Date().toISOString(),
+    pullRequests: [],
+    closedPullRequests: [],
+    issues: [open],
+  });
+  store.runs.recordIssueRun({
+    originRef: 'issue:12',
+    issueNumber: 12,
+    title: open.title,
+    body: '',
+    labels: open.labels,
+    linkedPrNumber: null,
+    workItemState: null,
+    complete: false,
+  });
+  const writes: { number: number; label: string; present: boolean }[] = [];
+  (system.connector as unknown as { setIssueLabel: (i: (typeof writes)[number]) => Promise<unknown> }).setIssueLabel =
+    async (input) => {
+      writes.push({ ...input });
+      return { ok: true };
+    };
+
+  const { app } = await buildApp(system);
+  const ended = await app.inject({ method: 'POST', url: '/api/issues/12/dismiss-run' });
+  assert.equal(ended.statusCode, 200);
+  assert.deepEqual(writes, [{ number: 12, label: 'lubbdubb-watch', present: false }]);
+
+  const { dispatchWorld } = dispatchView(
+    { ...store.world.getWorldBaseline()!, issues: [open] },
+    'lubbdubb-watch',
+    store.runs.listIssueRuns(),
+  );
+  assert.deepEqual(
+    dispatchWorld.issues.map((i) => i.number),
+    [],
+    'an abandoned goal is out of the dispatch world even while the tracker still returns it, tag and all',
+  );
 
   await app.close();
   store.close();

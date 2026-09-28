@@ -21,6 +21,22 @@ interface IssueWatchOutcome {
   failed: { number: number; message: string }[];
 }
 
+export function issueWatchContext(system: {
+  store: IssueWatchContext['store'];
+  connector: IssueWatchContext['sink'];
+  errors: ErrorRecorder;
+  config: { labelPrefix: string; issueContainerTypes: string[] };
+}): IssueWatchContext {
+  const { store, connector, errors, config } = system;
+  return {
+    store,
+    sink: connector,
+    errors,
+    labelPrefix: config.labelPrefix,
+    issueContainerTypes: config.issueContainerTypes,
+  };
+}
+
 export async function applyIssueWatch(
   ctx: IssueWatchContext,
   issueNumber: number,

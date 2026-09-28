@@ -109,6 +109,7 @@ export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): s
 type IssuePickupStatusKind =
   | 'done'
   | 'retained'
+  | 'abandoned'
   | 'has_pr'
   | 'active'
   | 'container'
@@ -152,8 +153,7 @@ export interface IssuePickupContext {
 
 type HeldStatus = IssuePickupStatus | null;
 
-function closedStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
-  const run = ctx.runs?.find((r) => r.issueNumber === issue.number) ?? null;
+function closedStatus(run: IssueRun | null): IssuePickupStatus {
   if (run !== null && run.dismissedAt === null) {
     return {
       eligible: false,
@@ -166,6 +166,13 @@ function closedStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus 
     };
   }
   return { eligible: false, status: 'done', reasons: ['closed'] };
+}
+
+function endedStatus(issue: Issue, ctx: IssuePickupContext): HeldStatus {
+  const run = ctx.runs?.find((r) => r.issueNumber === issue.number) ?? null;
+  if (issue.state !== 'open') return closedStatus(run);
+  if (run?.dismissedAt == null) return null;
+  return { eligible: false, status: 'abandoned', reasons: ['abandoned; nothing is scheduled for it again'] };
 }
 
 function planGateStatus(planVerdict: PlanRouteVerdict, plan: Plan | null, parts: PlanPart[]): HeldStatus {
@@ -283,7 +290,8 @@ function attemptStatus(origin: string, ctx: IssuePickupContext): HeldStatus {
 }
 
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
-  if (issue.state !== 'open') return closedStatus(issue, ctx);
+  const ended = endedStatus(issue, ctx);
+  if (ended) return ended;
 
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
   const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];

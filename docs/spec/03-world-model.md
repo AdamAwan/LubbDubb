@@ -73,6 +73,10 @@ The snapshot above is the connector's answer and stays that way — everything t
   longer comes back from the connector, and which the operator has not dismissed, is rebuilt from its
   `issue_runs` row by `retainedRunIssues` and appended to `issues`. Their numbers ride alongside as
   `DispatchContext.retainedIssues`.
+- **Abandoned goals are removed.** An issue whose `issue_runs` row is dismissed
+  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)) is cut from `issues` even when the tracker
+  still returns it open and watched, so no `issue:<n>` rule can staff it again. Abandon is a kill
+  switch; a watch tag the operator forgot, or one whose removal failed, must not undo it.
 
 The second exists because a run's life is not the tracker's answer. `listOpenIssues` fetches open
 issues only, so a PR carrying `closes #N` takes the goal out of the world at the exact moment

@@ -67,6 +67,10 @@ export function runsToRecord(issues: readonly Issue[], tasks: TaskSummary[], sig
   return records;
 }
 
+export function abandonedRunIssues(runs: readonly IssueRun[]): Set<number> {
+  return new Set(runs.filter((r) => r.dismissedAt !== null).map((r) => r.issueNumber));
+}
+
 export function retainedRunIssues(runs: readonly IssueRun[], live: readonly Issue[]): Issue[] {
   const present = new Set(live.map((i) => i.number));
   return runs

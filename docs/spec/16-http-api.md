@@ -925,8 +925,11 @@ them ran the feature.
 End the harness's run at a goal (issues #203, #234). A run is otherwise retained — minted while the
 issue is still live, and drawn _and acted on_ even once the tracker has forgotten the issue — so this
 is the **one** thing that ends it. No body. Since #234 it is terminal for the dispatcher as well as
-for the card: a dismissed run is not unioned back into the issue list, so nothing further is
-scheduled for the goal, which is what makes this the way to abandon one. How it ended is stamped from
+for the card: a dismissed run is not unioned back into the issue list, and an issue whose run is
+dismissed is **taken out** of the dispatch world even while the tracker still returns it open and
+tagged ([03](03-world-model.md)) — so nothing further is scheduled for the goal, which is what makes
+this the way to abandon one. Before that second half, abandoning a goal whose ticket was still open
+and watched stopped nothing: the next cycle read it as fresh work and picked it up again. How it ended is stamped from
 the row — `judged` if the harness had judged the work, `abandoned` if it had not — so the outcome is
 never claimed beyond the evidence. The write is one-way and idempotent: dismissing a goal with no run,
 or one already dismissed, is a **409** rather than an error state, and the dismissal persists across a
@@ -952,6 +955,10 @@ confirmation modal **says which is which** rather than leaving an operator to in
   field that says whose work a job redoes. A job's own `job:<id>` origin says nothing about a goal.
 - **Standing instructions are settled**, not deleted: the append-only record of what the operator
   asked for survives, and only its standing-ness ends.
+- **The watch tag is dropped** from the ticket, cascading as `POST /api/issues/:number/watch` does
+  ([06](06-issue-pickup.md)), so the tracker says what the harness now does. A tag write that fails is
+  recorded and does not fail the abandonment: the dispatch-world cut above is what holds the goal, the
+  tag is its visible half.
 
 The response carries the counts — `{ok: true, cleared: {agents, jobs, instructions}}`, the
 `RunClearOut` on the wire — so the cockpit can report the destruction rather than a bare `ok`. None of

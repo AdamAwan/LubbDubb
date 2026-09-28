@@ -371,6 +371,7 @@ chip.
 | ----------- | ------------------------------------------------------------------------------------ |
 | `done`      | Closed, and the harness holds no run at it.                                          |
 | `retained`  | Closed, but its run lives until the operator dismisses it.                           |
+| `abandoned` | Open, but the operator abandoned its run — nothing is scheduled for it again.        |
 | `planning`  | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
 | `has_pr`    | An open PR resolves it; the PR rules own it now.                                     |
 | `active`    | A task on this origin is queued / running / waiting on you.                          |
