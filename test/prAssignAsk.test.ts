@@ -108,6 +108,16 @@ test('it is not asked while a comment is unanswered, once somebody is on it, or 
   for (const n of [7, 8, 9, 10]) assert.equal(askOf(system, n), undefined, `PR #${n}`);
 });
 
+test('a part’s pull request is not asked about until its description is written', () => {
+  const system = build(recordingSink().sink);
+  seed(system, [pr(7)]);
+  system.store.prDescriptions.recordPrBody({ originRef: 'plan:1:part:a', prNumber: 7, tail: 'footer' });
+  assert.equal(askOf(system, 7), undefined, 'a reviewer is not sent to a pull request with nothing above the footer');
+
+  system.store.prDescriptions.appendDescription({ originRef: 'plan:1:part:a', text: 'Why it changes.', author: 'me' });
+  assert.deepEqual(askOf(system, 7), [carol, dave]);
+});
+
 test('it is not asked when the tracker cannot assign, or when there is nobody to offer', () => {
   const unable = build(recordingSink(false).sink);
   seed(unable, [pr(7)]);
