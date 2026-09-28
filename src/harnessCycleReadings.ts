@@ -18,7 +18,7 @@ import type {
 } from './types.js';
 import { isPrWatched } from './pr/prHealth.js';
 import { isSomeoneElsesPr } from './pr/prOwnership.js';
-import { retainedRunIssues } from './runs/runs.js';
+import { abandonedRunIssues, retainedRunIssues } from './runs/runs.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -48,12 +48,14 @@ export function dispatchView(
   const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
   const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
   const retainedIssues = retainedRunIssues(issueRuns, world.issues);
+  const abandoned = abandonedRunIssues(issueRuns);
+  const liveIssues = world.issues.filter((i) => !abandoned.has(i.number));
   const dispatchWorld: WorldSnapshot =
-    hiddenPrs.length > 0 || retainedIssues.length > 0
+    hiddenPrs.length > 0 || retainedIssues.length > 0 || liveIssues.length < world.issues.length
       ? {
           ...world,
           pullRequests: world.pullRequests.filter(actedOn),
-          issues: [...world.issues, ...retainedIssues],
+          issues: [...liveIssues, ...retainedIssues],
         }
       : world;
   return { hiddenPrs, retainedIssues, dispatchWorld };

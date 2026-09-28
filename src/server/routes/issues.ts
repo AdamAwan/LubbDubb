@@ -14,7 +14,7 @@ import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { clearGoalWork } from '../../runs/endRun.js';
-import { applyIssueWatch } from '../../issueWatch.js';
+import { applyIssueWatch, issueWatchContext } from '../../issueWatch.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { GoalAgentsPayload } from '../../wire.js';
@@ -34,7 +34,7 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
 }
 
 function registerWatchAndState(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, connector, harness, config, errors } = system;
+  const { store, connector, harness, errors } = system;
   const WatchBody = z.object({ watched: requiredBoolean('watched must be a boolean') });
   app.post(
     '/api/issues/:number/watch',
@@ -42,13 +42,7 @@ function registerWatchAndState(app: FastifyInstance, { system, hub }: RouteConte
       const { number: issueNumber } = params;
       const { watched } = body;
       const outcome = await applyIssueWatch(
-        {
-          store,
-          sink: connector,
-          errors,
-          labelPrefix: config.labelPrefix,
-          issueContainerTypes: config.issueContainerTypes,
-        },
+        issueWatchContext(system),
         issueNumber,
         watched,
         `while ${watched ? 'watching' : 'dropping'} #${issueNumber}`,
@@ -375,6 +369,7 @@ function registerDeliveryOutcome(app: FastifyInstance, { system, hub }: RouteCon
       const dismissed = store.runs.dismissIssueRun(origin, body.note ?? null);
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
       const cleared = clearGoalWork(store, system.agents, params.number);
+      await applyIssueWatch(issueWatchContext(system), params.number, false, `while abandoning #${params.number}`);
       hub.broadcast({ type: 'dirty' });
       return { ok: true, cleared };
     }),
