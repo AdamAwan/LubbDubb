@@ -13,6 +13,8 @@ import type {
   FeatureRollup,
 } from '../types.js';
 import { Panel } from './panel.js';
+import { DesktopLink } from './DesktopLink.js';
+import { featurePrompt } from '../cockpit/desktopLink.js';
 import { relAge } from './util.js';
 import { FeatureAccount, FeatureMarks } from './featureAccount.js';
 import { Bar, Brief, Reach, Standing, wantsYou } from './featureBrief.js';
@@ -217,6 +219,7 @@ export function FeatureCard({
       >
         <FeatureCardNotes feature={feature} view={view} />
       </Brief>
+      {page && <TalkAbout feature={feature.number} folder={view.state.config.desktopFolder} />}
       {page && (
         <div className={`cn-fb-detail${told ? '' : ' cn-fb-detail-2'}`}>
           {told && (
@@ -249,6 +252,18 @@ export function FeatureCard({
         </div>
       )}
     </Panel>
+  );
+}
+
+function TalkAbout({ feature, folder }: { feature: number; folder: string }): JSX.Element | null {
+  if (!folder) return null;
+  return (
+    <DesktopLink
+      folder={folder}
+      prompt={featurePrompt(feature)}
+      ready="ready for your question"
+      explain="answered from what the harness holds about this Feature — its account, its order, and where every story under it is up to."
+    />
   );
 }
 

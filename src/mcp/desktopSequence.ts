@@ -7,7 +7,7 @@ import { sequenceableFeatures, validateSequenceSubmission } from '../sequence/se
 import { watchLabelFor } from '../watchLabels.js';
 import { toolJson, toolError } from './protocol.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
-import type { Issue } from '../types.js';
+import type { FeatureSequence, Issue } from '../types.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -31,16 +31,7 @@ const sequenceRead: DesktopToolFactory = (deps) => ({
     return toolJson({
       feature: found.number,
       stories: found.stories.map((s) => ({ number: s.number, title: s.title, state: s.workItemState ?? s.state })),
-      order:
-        sequence === null
-          ? null
-          : {
-              status: sequence.status,
-              reason: sequence.reason,
-              unsure: sequence.unsure,
-              answeredBy: sequence.answeredBy,
-              edges: sequence.edges,
-            },
+      order: describeSequence(sequence),
       next:
         sequence === null
           ? 'No order stands. sequence_amend writes one, and it lands accepted — so only write one you and the operator have agreed.'
@@ -115,11 +106,32 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
   },
 });
 
-function featureFor(
+export interface FoundFeature {
+  number: number;
+  originRef: string;
+  feature: Issue | null;
+  stories: Issue[];
+  observedAt: string | null;
+}
+
+export function describeSequence(sequence: FeatureSequence | null): Record<string, unknown> | null {
+  return sequence === null
+    ? null
+    : {
+        status: sequence.status,
+        reason: sequence.reason,
+        unsure: sequence.unsure,
+        answeredBy: sequence.answeredBy,
+        edges: sequence.edges,
+      };
+}
+
+export function featureFor(
   deps: DesktopToolDeps,
   issue: number,
-): { ok: true; number: number; originRef: string; stories: Issue[] } | { ok: false; error: string } {
-  const issues = deps.store.world.getWorldBaseline()?.issues ?? [];
+): ({ ok: true } & FoundFeature) | { ok: false; error: string } {
+  const world = deps.store.world.getWorldBaseline();
+  const issues = world?.issues ?? [];
   const self = issues.find((i) => i.number === issue);
   const number = self?.parent?.number ?? issue;
   const stories = issues.filter((i) => i.parent?.number === number);
@@ -127,12 +139,18 @@ function featureFor(
     return {
       ok: false,
       error:
-        `#${issue} resolves to Feature #${number}, and the harness can see no stories under it. An order is a ` +
-        'statement about the stories a Feature has, so there is nothing here to order. Check the number, or ' +
-        'that the stories carry the watch tag.',
+        `#${issue} resolves to Feature #${number}, and the harness can see no stories under it. Check the ` +
+        'number, or that the stories carry the watch tag.',
     };
   }
-  return { ok: true, number, originRef: issueOriginRef('root', number), stories };
+  return {
+    ok: true,
+    number,
+    originRef: issueOriginRef('root', number),
+    feature: issues.find((i) => i.number === number) ?? null,
+    stories,
+    observedAt: world?.takenAt ?? null,
+  };
 }
 
 function standingFor(deps: DesktopToolDeps, feature: number): { key: string; members: number[] } {

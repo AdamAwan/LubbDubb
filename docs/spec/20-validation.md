@@ -1576,7 +1576,9 @@ watched the thing happen. → [36](36-remote-validation.md#what-a-spec-reading-i
 
 `/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …`,
 `/lubbdubb fleet`, `/lubbdubb order 500`, `/lubbdubb file`, `/lubbdubb clarify 284`,
-`/lubbdubb eject 412` — nine jobs told apart by the argument, one file. The fifth is about the harness rather than about a goal and is
+`/lubbdubb eject 412`, `/lubbdubb describe 390:validate`, `/lubbdubb feature 500` — eleven jobs told apart by the argument, one file. The last is
+[owned by 11](11-mcp-tools.md#talking-about-a-feature): a conversation about a Feature rather than one goal, read
+through `feature_read` and handed to `order`, `file` or `discuss` for anything it would change. The fifth is about the harness rather than about a goal and is
 [owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); its section here is only that a
 question with no goal number in it is that job. **Filing is the one job that starts from nothing**, and it is the reason a wish with no number in it
 — "we should fix the export" — is a job here at all rather than a conversation: nothing in LubbDubb

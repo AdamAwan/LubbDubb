@@ -21,6 +21,10 @@ export function askPrompt(issueNumber: number): string {
   return `/lubbdubb ask ${issueNumber} `;
 }
 
+export function featurePrompt(issueNumber: number): string {
+  return `/lubbdubb feature ${issueNumber} `;
+}
+
 export function checkPrompt(issueNumber: number, letter: string): string {
   return `/lubbdubb ${issueNumber}:${letter}`;
 }

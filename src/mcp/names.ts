@@ -228,6 +228,7 @@ export const DESKTOP_TOOL_NAMES = [
   'plan_amend',
   'sequence_read',
   'sequence_amend',
+  'feature_read',
   'local_run',
   'description_read',
   'description_check',

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { allGoalReach } from '../environments/reach.js';
 import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
+import { DESKTOP_FEATURE_TOOLS } from './desktopFeature.js';
 import { issueOrigin } from '../plans/planning.js';
 import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
@@ -499,6 +500,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   plan_read: planRead,
   plan_amend: planAmend,
   ...DESKTOP_SEQUENCE_TOOLS,
+  ...DESKTOP_FEATURE_TOOLS,
   local_run: localRun,
   description_read: descriptionRead,
   description_check: descriptionCheck,

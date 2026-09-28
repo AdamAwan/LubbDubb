@@ -12,14 +12,15 @@ import {
 
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Write a new ticket onto the tracker LubbDubb actually reads, carrying what the harness needs to pick it up — or answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, take over a piece of work an operator has pulled off the fleet, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to put new work to it: "/lubbdubb file", "raise a ticket for …", "can LubbDubb do X?" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — to pick up work taken off the fleet: "/lubbdubb eject 412" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
+description: Write a new ticket onto the tracker LubbDubb actually reads, carrying what the harness needs to pick it up — or answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or talk through a Feature and the stories under it, or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, change the order the stories under a feature are worked in, take over a piece of work an operator has pulled off the fleet, or help rewrite a ticket the goal check could not start on. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to talk about a Feature: "/lubbdubb feature 500", "how is the export feature going?" — to put new work to it: "/lubbdubb file", "raise a ticket for …", "can LubbDubb do X?" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — to change what waits on what: "/lubbdubb order 500" — to pick up work taken off the fleet: "/lubbdubb eject 412" — or to fix a ticket LubbDubb is holding: "/lubbdubb clarify 284", "why won't it pick up 284?".
 ---
 
 # LubbDubb at your keyboard
 
-Ten jobs, told apart by the argument. \`fleet\` — or anything about the harness
+Eleven jobs, told apart by the argument. \`fleet\` — or anything about the harness
 rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
 \`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
+\`feature 500 …\` is [a conversation about a Feature](#talk-about-a-feature),
 \`file\` — or anything asking for work that has no ticket yet — is
 [writing one the harness can ingest](#file-a-ticket),
 \`clarify 284\` — or "why won't it pick up 284" — is
@@ -231,6 +232,32 @@ alone — and the operator cannot tell that apart from the real one.
 - **Do not defend the fleet.** If the record shows three agents went round in
   circles on a part, that is the answer. An account that smooths it over is worth
   nothing to somebody deciding what to change about how this goal is being worked.
+
+## Talk about a feature
+
+The operator wants to talk about a **Feature** — the container a set of stories
+hangs off — rather than one goal: how it is going, what is left, whether the split
+into stories is right, what to do next. \`feature 500\` on its own means "where is
+this up to"; \`feature 500 <anything>\` is that conversation.
+
+1. **Read it.** \`feature_read\` with the Feature number, or any story under it.
+   It comes back with the ticket, the summariser's own account of how it is going,
+   the order the stories are worked in, and every story with its state, its plan,
+   and whether the goal check is holding it.
+2. **Go into a story only where the conversation does.** \`goal_read\` on that
+   story. Reading all of them up front answers a question nobody asked.
+3. **Talk.** Answer what was asked, with the story numbers. Where the question is
+   about the code, read the repository. Where the record is silent, say so.
+4. **Change things only through the job that owns them, and only on a yes.** The
+   order is [order 500](#discuss-the-order-the-stories-go-in); a missing story is
+   [filing a ticket](#file-a-ticket); one story's plan is
+   [discuss](#discuss-a-plan). Say which one you are moving to before you do.
+
+- **\`summary: null\` means nobody summarised it.** Do not write your own account
+  and present it as the harness's.
+- **A Feature is never worked directly.** The fleet works its stories; a Feature
+  with nothing moving is a question about its stories, not about the Feature.
+- **Do not do the work.** Nothing here opens a branch or writes code.
 
 ## File a ticket
 
