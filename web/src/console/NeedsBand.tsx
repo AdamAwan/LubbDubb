@@ -20,7 +20,7 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './Q
 import { Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
-import { AssignButtons, assignBody } from './assignAsks.js';
+import { AssignButtons, assignAskOf, assignBody } from './assignAsks.js';
 import { quickAnswer } from '../view/quickAnswer.js';
 import { awaitedProfile } from '../view/issueAsks.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
@@ -54,7 +54,13 @@ export function NeedsBand({
   if (line) {
     const quick = quickAnswer(row, view.state);
     if (quick !== null) return <QuickLine row={row} quick={quick} view={view} actions={actions} />;
-    if (row.kind === 'assign') return <AssignLine row={row} view={view} actions={actions} />;
+    const assign = assignAskOf(row, view.state);
+    if (assign !== null)
+      return (
+        <AnswerLine row={row} view={view} actions={actions}>
+          <AssignButtons ask={assign} actions={actions} />
+        </AnswerLine>
+      );
     return (
       <button
         type="button"
@@ -126,15 +132,7 @@ function QuickLine({
 }): JSX.Element {
   const change = useAsyncAction();
   return (
-    <div className={`cn-needs-line cn-needs-quick cn-t-${KIND_TONE[row.kind]}`}>
-      <button
-        type="button"
-        className="cn-needs-open"
-        onClick={() => actions.openPanel({ ask: row.id })}
-        title="Open this ask"
-      >
-        <LineFace row={row} now={view.now} />
-      </button>
+    <AnswerLine row={row} view={view} actions={actions}>
       <AsyncButton
         size="small"
         tone="primary"
@@ -163,21 +161,22 @@ function QuickLine({
           ))}
         </select>
       )}
-    </div>
+    </AnswerLine>
   );
 }
 
-function AssignLine({
+/** A one-line ask answered on the row: the text opens the ask panel, the controls after it answer. */
+function AnswerLine({
   row,
   view,
   actions,
+  children,
 }: {
   row: NeedRow;
   view: CockpitView;
   actions: CockpitActions;
-}): JSX.Element | null {
-  const pr = view.state.world.pullRequests.find((p) => p.number === row.prNumber);
-  if (pr?.assignAsk === undefined) return null;
+  children: ReactNode;
+}): JSX.Element {
   return (
     <div className={`cn-needs-line cn-needs-quick cn-t-${KIND_TONE[row.kind]}`}>
       <button
@@ -188,7 +187,7 @@ function AssignLine({
       >
         <LineFace row={row} now={view.now} />
       </button>
-      <AssignButtons prNumber={pr.number} people={pr.assignAsk} actions={actions} />
+      {children}
     </div>
   );
 }

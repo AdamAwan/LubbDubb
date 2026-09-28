@@ -144,7 +144,6 @@ export type {
   PlanningPolicy,
   PolicyKindDescription,
   PrComment,
-  PrPerson,
   Proposal,
   PullRequest,
   QueueItem,

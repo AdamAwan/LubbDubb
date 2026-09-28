@@ -2357,6 +2357,9 @@ So on the goal page's row form (`NeedsBand` with `line`), `quickAnswer`
 - **Change…**, a list of the other profiles or area paths that writes the one picked — drawn only
   when there is another to pick.
 
+The assign ask is answered on its row too, with no proposal: every shortlisted name and **Nah**,
+the same buttons as its body (`AssignButtons`). Both go through one row shell, `AnswerLine`.
+
 The parent ask is not among them: it is never a row on the goal page (the band at the foot draws
 it). The answers the panel alone offers ("Leave it unpinned", "Not applicable") stay in the panel:
 the row covers the common answer, never every answer.
