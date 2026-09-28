@@ -9,6 +9,8 @@ import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
+import { groupAsks, type AssignAsk } from '../view/askGroups.js';
+import { askLine } from '../view/needLines.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -486,6 +488,50 @@ function Row({
   );
 }
 
+/**
+ * Several assign asks folded by `groupAsks` are one card: one line, the pull requests as refs, and
+ * the press opens where the first would have — the goal page, which answers them as one group.
+ * → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask
+ */
+function AssignGroupRow({
+  first,
+  asks,
+  view,
+  focus,
+  actions,
+}: {
+  first: NeedRow;
+  asks: readonly AssignAsk[];
+  view: CockpitView;
+  focus: string | null;
+  actions: CockpitActions;
+}): JSX.Element {
+  const row: NeedRow = {
+    ...first,
+    title: askLine(`${asks.length} pull requests are ready — want to assign them?`, first.goalRef, view.state),
+  };
+  const current = focus !== null && row.goalRef === focus;
+  const open = rowDestination(row, row.opens, actions) ?? (() => actions.openPanel({ ask: row.id }));
+  return (
+    <Card
+      cls={rowClass(row, focus, current)}
+      current={current}
+      onClick={open}
+      foot={
+        <CardFoot>
+          <span className="cn-refs">
+            {asks.map((ask) => (
+              <Ref key={ask.number} to={`pr:${ask.number}`} />
+            ))}
+          </span>
+        </CardFoot>
+      }
+    >
+      <RowBody row={row} now={view.now} />
+    </Card>
+  );
+}
+
 export function QueueRail({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = view.needsYou;
   const focus = view.goalPage === null ? null : `issue:${view.goalPage.issue.number}`;
@@ -537,9 +583,25 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
               ) : (
                 <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
               )}
-              {(section.urgency === 'later' && !openLater ? [] : section.rows).map((row) => (
-                <Row key={row.id} row={row} now={view.now} focus={focus} build={view.state.build} actions={actions} />
-              ))}
+              {groupAsks(section.urgency === 'later' && !openLater ? [] : section.rows, view.state).map((item) => {
+                const row =
+                  item.kind === 'one'
+                    ? item.row
+                    : section.rows.find((r) => r.kind === 'assign' && r.prNumber === item.asks[0]?.number);
+                if (row === undefined) return null;
+                return item.kind === 'assign' ? (
+                  <AssignGroupRow
+                    key={`assign:${row.id}`}
+                    first={row}
+                    asks={item.asks}
+                    view={view}
+                    focus={focus}
+                    actions={actions}
+                  />
+                ) : (
+                  <Row key={row.id} row={row} now={view.now} focus={focus} build={view.state.build} actions={actions} />
+                );
+              })}
             </Fragment>
           ))
         )}

@@ -2149,11 +2149,11 @@ The run's state, what steers the work, and what happens somewhere other than thi
 groups, each with a caption saying what the group is for**, drawn through [the control
 kit](#the-control-kit) rather than as class strings.
 
-| caption         | controls                                               |
-| --------------- | ------------------------------------------------------ |
-| Run state       | Working / Done / Abandon… — one segmented control      |
-| Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
-| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
+| caption         | controls                                              |
+| --------------- | ----------------------------------------------------- |
+| Run state       | Working / Done / Abandon… — one segmented control     |
+| Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
+| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug  |
 
 There was a fourth group, _Check the work_, holding the local run's press. It is now on the runner
 panel that draws what a press produced, a pane below ([The validate pane](#the-validate-pane)): the
@@ -2394,8 +2394,11 @@ as one band: a line per pull request, each ticked, and the shortlist and **Nah**
 the same `assignPr` write per ticked pull request that its own row's button makes, so the group adds
 no route and no refusal of its own; unticking one leaves it for its own answer. A different
 shortlist or a different goal is a different question and stays its own row, and a group of one is
-the ordinary row. Both the rows above the navigation and the pane's cards go through it.
-`test/goalAskLines.test.ts` pins the fold.
+the ordinary row. Both the rows above the navigation and the pane's cards go through it, and so
+does the **Needs you** rail: `QueueRail` runs each urgency section through `groupAsks` and draws a
+group as one card (`AssignGroupRow`) — "N pull requests are ready — want to assign them?", the pull
+requests as refs in its foot — whose press opens the goal page, where the group is answered. The
+rail's count stays every row, folded ones included. `test/goalAskLines.test.ts` pins the fold.
 
 #### A check set ask is named by its checks
 
