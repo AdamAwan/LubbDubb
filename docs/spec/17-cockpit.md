@@ -5886,8 +5886,8 @@ type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same pa
 and the goal page stands.
 
 **The page carries one deep link: _Open in Claude Code_ with `/lubbdubb feature <n> `** (`featurePrompt`,
-`web/src/cockpit/desktopLink.ts`), beside the crumb and only on a Feature — a promoted goal's page has
-the goal's own. Like the goal's `ask`, it fills the composer and waits, because it starts a
+`web/src/cockpit/desktopLink.ts`), drawn by `FeatureCard` on its page and only on a Feature — a promoted
+goal's page has the goal's own. Like the goal's `ask`, it fills the composer and waits, because it starts a
 conversation rather than a job ([11](11-mcp-tools.md#talking-about-a-feature)).
 
 The detail is three columns from 1200px and one below: **its order, and what landed** (the story

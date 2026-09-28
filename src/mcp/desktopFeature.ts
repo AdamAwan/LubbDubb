@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { issueOrigin } from '../plans/planning.js';
 import { desktopIssueRef } from '../validation/desktop.js';
-import { featureFor } from './desktopSequence.js';
+import { describeSequence, featureFor, type FoundFeature } from './desktopSequence.js';
 import { toolSchema } from './schema.js';
 import { toolError, toolJson } from './protocol.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
@@ -32,17 +32,17 @@ const featureRead: DesktopToolFactory = (deps) => ({
   },
 });
 
-function featureRecord(
-  deps: DesktopToolDeps,
-  found: { number: number; originRef: string; stories: Issue[] },
-): Record<string, unknown> {
-  const world = deps.store.world.getWorldBaseline();
-  const self = world?.issues.find((i) => i.number === found.number) ?? null;
+function featureRecord(deps: DesktopToolDeps, found: FoundFeature): Record<string, unknown> {
   const summary = deps.store.tickets.getFeatureSummary(found.originRef);
-  const sequence = deps.store.sequences.getFeatureSequence(found.originRef);
   return {
-    feature: featureTicket(found.number, self),
-    observedAt: world?.takenAt ?? null,
+    feature: {
+      number: found.number,
+      title: found.feature?.title ?? null,
+      body: found.feature?.body ?? null,
+      state: found.feature?.workItemState ?? found.feature?.state ?? null,
+      url: found.feature?.url ?? null,
+    },
+    observedAt: found.observedAt,
     summary:
       summary === null
         ? null
@@ -54,18 +54,8 @@ function featureRecord(
             remaining: summary.remaining,
             writtenAt: summary.updatedAt,
           },
-    order: sequence === null ? null : { status: sequence.status, reason: sequence.reason, edges: sequence.edges },
+    order: describeSequence(deps.store.sequences.getFeatureSequence(found.originRef)),
     stories: found.stories.map((s) => storyLine(deps, s)),
-  };
-}
-
-function featureTicket(number: number, self: Issue | null): Record<string, unknown> {
-  return {
-    number,
-    title: self?.title ?? null,
-    body: self?.body ?? null,
-    state: self?.workItemState ?? self?.state ?? null,
-    url: self?.url ?? null,
   };
 }
 

@@ -109,5 +109,5 @@ test('the skill and the cockpit name the same command', () => {
   assert.equal(featurePrompt(500), '/lubbdubb feature 500 ');
   assert.match(DESKTOP_SKILL, /## Talk about a feature/);
   assert.match(DESKTOP_SKILL, /feature_read/);
-  assert.match(repoText('web/src/components/FeatureBoard.tsx'), /prompt=\{featurePrompt\(number\)\}/);
+  assert.match(repoText('web/src/components/featureCards.tsx'), /prompt=\{featurePrompt\(feature\)\}/);
 });
