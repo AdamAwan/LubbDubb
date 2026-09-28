@@ -5,7 +5,11 @@ import type { NeedRow } from './needsYou.js';
 
 export type AssignAsk = Required<Pick<OpenPullRequest, 'number' | 'title' | 'assignAsk'>>;
 
-type AskItem = { kind: 'one'; row: NeedRow } | { kind: 'assign'; asks: AssignAsk[] };
+type AskItem = { kind: 'one'; row: NeedRow } | { kind: 'assign'; first: NeedRow; asks: AssignAsk[] };
+
+export function assignGroupLine(count: number): string {
+  return `${count} pull requests are ready and nobody is on them`;
+}
 
 export function assignAskOf(row: NeedRow, state: AppState): AssignAsk | null {
   if (row.kind !== 'assign') return null;
@@ -23,8 +27,12 @@ export function groupAsks(rows: readonly NeedRow[], state: AppState): AskItem[] 
     return { row, ask, key: ask === null ? null : `${row.goalRef ?? ''}|${ask.assignAsk.map((p) => p.id).join(',')}` };
   });
   const groups = new Map<string, AssignAsk[]>();
-  for (const { ask, key } of resolved)
-    if (ask !== null && key !== null) groups.set(key, [...(groups.get(key) ?? []), ask]);
+  for (const { ask, key } of resolved) {
+    if (ask === null || key === null) continue;
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [ask]);
+    else group.push(ask);
+  }
   const drawn = new Set<string>();
   const items: AskItem[] = [];
   for (const { row, key } of resolved) {
@@ -32,7 +40,7 @@ export function groupAsks(rows: readonly NeedRow[], state: AppState): AskItem[] 
     if (key === null || group === undefined || group.length === 1) items.push({ kind: 'one', row });
     else if (!drawn.has(key)) {
       drawn.add(key);
-      items.push({ kind: 'assign', asks: group });
+      items.push({ kind: 'assign', first: row, asks: group });
     }
   }
   return items;

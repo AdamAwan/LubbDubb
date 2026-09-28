@@ -5,6 +5,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { AppState, Escalation, Proposal } from '../web/src/types.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
+import type { CockpitView } from '../web/src/view/viewModel.js';
+import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -119,4 +121,35 @@ test('the check set card draws the checks before the planner’s note', () => {
   );
   assert.ok(html.indexOf('The one check') < html.indexOf('The planner’s case.'));
   assert.match(html, /<details class="vp-hint">/);
+});
+
+test('the Needs you rail draws the folded assign asks as one card naming each pull request', async () => {
+  const { QueueRail } = await import('../web/src/console/QueueRail.js');
+  const state = stateWithShortlists({ 10: [sam, kim], 11: [sam, kim] });
+  const needsYou = [10, 11].map((n) => ({
+    ...assignRow(n),
+    urgency: 'next',
+    group: 'yours',
+    title: `PR #${n} is ready`,
+    opens: 'goal',
+    agentId: null,
+    holding: 0,
+    raisedAt: '',
+  })) as NeedRow[];
+  const view = { state, needsYou, goalPage: null, now: Date.now() } as unknown as CockpitView;
+  const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
+  const { RefLinks } = await import('../web/src/components/refs.js');
+  const html = renderToStaticMarkup(
+    createElement(RefLinks, {
+      refUrls: state.refUrls,
+      openGoal: () => undefined,
+      hasGoal: () => true,
+      openPr: () => undefined,
+      hasPr: () => true,
+      children: createElement(QueueRail, { view, actions }),
+    }),
+  );
+  assert.ok(html.includes('2 pull requests are ready and nobody is on them'));
+  assert.ok(!html.includes('PR #10 is ready'), 'the folded rows are not drawn again');
+  assert.equal(html.match(/cn-qtitle/g)?.length, 1);
 });
