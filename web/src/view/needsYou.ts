@@ -15,6 +15,7 @@ import { updateAskRows } from './updateAsks.js';
 import { intakeRows, placementRows, profileRows, sittingRows } from './issueAsks.js';
 import { agentLabelOf, askLine, goalOf, oneLine, opensAt, predictionOpensAt, prAddress } from './needLines.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
+import { checkSetOf } from '../checkSet.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -340,6 +341,8 @@ function escalationSummary(
         return `Merge waiting on your verdict${pr}`;
       case 'shortfall':
         return 'The delivered work did not reach the goal';
+      case 'validation_plan':
+        return checkSetLine(proposal);
     }
   }
   if (context.permission) return oneLine(`${context.permission.toolName}: ${context.permission.summary}`);
@@ -347,6 +350,19 @@ function escalationSummary(
   const questions = Array.isArray(context.questions) ? context.questions.length : 0;
   if (questions > 0) return `${questions} questions from the agent`;
   return oneLine(e.prompt);
+}
+
+/**
+ * The checks by name, first one first: the desk's own prompt opens on a count and the ticket's title,
+ * which is all a one-line row ever showed of it.
+ * → docs/spec/17-cockpit.md#a-check-set-ask-is-named-by-its-checks
+ */
+function checkSetLine(proposal: Proposal): string {
+  const checks = checkSetOf(proposal)?.checks ?? [];
+  const [first] = checks;
+  if (first === undefined) return 'No checks proposed — agree nothing needs running?';
+  const rest = checks.length - 1;
+  return `OK ${checks.length === 1 ? 'check' : `${checks.length} checks`}: ${first.title}${rest > 0 ? ` (+${rest} more)` : ''}`;
 }
 
 function holdingForTask(task: HumanTask, parts: readonly PlanPart[]): number {
