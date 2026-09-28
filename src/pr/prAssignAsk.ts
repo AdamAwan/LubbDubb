@@ -112,7 +112,8 @@ export class PrAssignDesk {
     const candidates = open.filter((pr) => this.candidate(pr, factsOf(pr)));
     if (candidates.length === 0 || this.assigner() === undefined) return new Map();
     const answered = this.opts.store.prAssignAsks.answeredPrs();
-    const due = candidates.filter((pr) => !answered.has(pr.number));
+    const undescribed = new Set(this.opts.store.prDescriptions.undescribedOpenParts().map((p) => p.prNumber));
+    const due = candidates.filter((pr) => !answered.has(pr.number) && !undescribed.has(pr.number));
     if (due.length === 0) return new Map();
     const shortlist = this.shortlist(open, archived);
     return shortlist.length === 0 ? new Map() : new Map(due.map((pr) => [pr.number, shortlist]));
