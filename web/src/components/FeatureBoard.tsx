@@ -18,6 +18,8 @@ import { fmtUsd } from './util.js';
 import type { FeatureBoardPayload } from '../types.js';
 import { Crumb, type CrumbStep } from '../console/Crumb.js';
 import { BoardCard, buildCards, FeatureCard, GoalCard, orderCards } from './featureCards.js';
+import { DesktopLink } from './DesktopLink.js';
+import { featurePrompt } from '../cockpit/desktopLink.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -201,6 +203,14 @@ function FeatureDetail({
   return (
     <RefLinksExtended refUrls={board.refUrls}>
       <Crumb trail={[back]} here={title === null ? `#${number}` : `#${number} ${title}`} />
+      {card?.kind === 'feature' && view.state.config.desktopFolder && (
+        <DesktopLink
+          folder={view.state.config.desktopFolder}
+          prompt={featurePrompt(number)}
+          ready="ready for your question"
+          explain="answered from what the harness holds about this Feature — its account, its order, and where every story under it is up to."
+        />
+      )}
       <div className="cn-fb cn-fb-page">
         {card === undefined ? (
           <p className="muted">

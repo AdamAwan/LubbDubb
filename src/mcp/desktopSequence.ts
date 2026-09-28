@@ -115,7 +115,7 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
   },
 });
 
-function featureFor(
+export function featureFor(
   deps: DesktopToolDeps,
   issue: number,
 ): { ok: true; number: number; originRef: string; stories: Issue[] } | { ok: false; error: string } {

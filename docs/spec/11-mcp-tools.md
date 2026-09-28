@@ -997,7 +997,7 @@ risk is editing the fleet's tool and leaving the operator's on the old behaviour
 built across the fleet's surfaces and the operator's channel kept the door open.
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
-spawned agent. Six jobs go there — four about one goal, one about a Feature, and
+spawned agent. Seven jobs go there — four about one goal, two about a Feature, and
 [one about the harness itself](#watching-and-steering-the-fleet): a validation check needing a browser and a login the fleet does
 not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
 where there is room to have one; asking for the application itself to be brought up, which most
@@ -1006,7 +1006,7 @@ than instructs ([23](23-local-runs.md#two-triggers-one-owner));
 [a question about a goal](#answering-a-question-about-a-goal), which is the only one of the four that
 settles nothing; and the order the stories under a Feature are worked in, which has no
 drag-to-reorder anywhere and is amended by talking about it
-([33](33-story-sequencing.md#amending-it)). **Unconditional** — every start binds the stable socket, mints the
+([33](33-story-sequencing.md#amending-it)); and [a conversation about a Feature as a whole](#talking-about-a-feature). **Unconditional** — every start binds the stable socket, mints the
 credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
 `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
 of what the channel costs a deployment that never uses it, and it is the price of the cockpit's four
@@ -1017,35 +1017,36 @@ and [the run](20-validation.md#getting-the-application-up);
 [33](33-story-sequencing.md#amending-it) owns the Feature one, and
 [Watching and steering the fleet](#watching-and-steering-the-fleet) the sixth.
 
-| Tool                | Purpose                                                                                                                                                                                                   |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.                                                                                                               |
-| `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                                                                                                                            |
-| `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                                                                                                                       |
-| `validation_report` | Record what was seen: `passed`, `failed`, or `blocked`. Reported against the claim, not an argument.                                                                                                      |
-| `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda, and — where an environment declares a browser suite — the test-part bar the planning prompts carry. Records nothing.     |
-| `plan_amend`        | Amend it after talking it through. On `awaiting_approval` a rewrite that withdraws the stale card; on `active` a proposal, with a required `note`. Refuses on anything else.                              |
-| `sequence_read`     | Read the order the stories under a Feature are worked in: the edges, why the sequencer said so, and whether anybody accepted it. A story number resolves to its parent. Records nothing.                  |
-| `sequence_amend`    | Rewrite that order, as the whole order rather than a patch — what is sent replaces what stands. Lands `accepted`, so it holds work immediately; an empty order releases everything the last one held.     |
-| `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment.                         |
-| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the cycle in flight, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, failures.    |
-| `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing.                                       |
-| `agent_read`        | One agent close up: its row, the files it wrote, the tail of its transcript, and any question it is parked on. Records nothing.                                                                           |
-| `ejection_*`        | Three tools: `ejection_read` an ejected run, `ejection_note` a line about what you are doing with it, `ejection_settle` it. The channel's other half of [35](35-ejection.md#what-the-session-gets).       |
-| `fleet_control`     | The three live dispatch controls: `cap`, `paused`, and `pulse`. In memory, exactly as the cockpit's are.                                                                                                  |
-| `queue_control`     | The Up next queue's three verbs: replace the pin set, cancel a still-queued job, and price one row with `origin` + `profile`.                                                                             |
-| `escalation_answer` | Settle one inbox row: `response`/`answers` for a question, `permission` for a blocked tool call. Refuses the other two kinds by name.                                                                     |
-| `human_task_settle` | Settle one bench row — work only a person can do: `done` once it has been, `declined` with a required note. Not an escalation, and not answered as one.                                                   |
-| `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (the model tag, which also answers the appraiser's profile question). |
-| `goal_gate`         | The escape hatches a blocking gate has to have: override an `appraisal`, `overrule` a standing shortfall, release or re-apply the `environmentGate`.                                                      |
-| `goal_placement`    | The two placement questions: `parent` and `areaPath`. Either sent with no value answers "this goal wants no such thing" and settles it.                                                                   |
-| `goal_instruct`     | Say what you want on a goal, in your own words — it stands in front of every later dispatch and restarts the goal. `withdraw` takes one back.                                                             |
-| `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing.                                                                                   |
-| `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**.                                                                      |
-| `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned.                                                                                                                                                  |
-| `ticket_target`     | Where a ticket filed from here lands and what it will carry: tracker, watch tag, assignee, type, container types, pickup states, and what would stop a filed item being picked up. Records nothing.       |
-| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise. Answers with the tracker and the tag the item actually carried.                             |
-| `agent_control`     | The six verbs on a live agent: respond, interrupt, complete, kill, extend a stall park, resume a usage-limit park.                                                                                        |
+| Tool                | Purpose                                                                                                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.                                                                                                                    |
+| `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                                                                                                                                 |
+| `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                                                                                                                            |
+| `validation_report` | Record what was seen: `passed`, `failed`, or `blocked`. Reported against the claim, not an argument.                                                                                                           |
+| `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda, and — where an environment declares a browser suite — the test-part bar the planning prompts carry. Records nothing.          |
+| `plan_amend`        | Amend it after talking it through. On `awaiting_approval` a rewrite that withdraws the stale card; on `active` a proposal, with a required `note`. Refuses on anything else.                                   |
+| `sequence_read`     | Read the order the stories under a Feature are worked in: the edges, why the sequencer said so, and whether anybody accepted it. A story number resolves to its parent. Records nothing.                       |
+| `sequence_amend`    | Rewrite that order, as the whole order rather than a patch — what is sent replaces what stands. Lands `accepted`, so it holds work immediately; an empty order releases everything the last one held.          |
+| `feature_read`      | A Feature as the harness holds it: its ticket, the summariser's account, its story order, and every story with its state, plan and any appraisal hold. A story number resolves to its parent. Records nothing. |
+| `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment.                              |
+| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the cycle in flight, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, failures.         |
+| `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing.                                            |
+| `agent_read`        | One agent close up: its row, the files it wrote, the tail of its transcript, and any question it is parked on. Records nothing.                                                                                |
+| `ejection_*`        | Three tools: `ejection_read` an ejected run, `ejection_note` a line about what you are doing with it, `ejection_settle` it. The channel's other half of [35](35-ejection.md#what-the-session-gets).            |
+| `fleet_control`     | The three live dispatch controls: `cap`, `paused`, and `pulse`. In memory, exactly as the cockpit's are.                                                                                                       |
+| `queue_control`     | The Up next queue's three verbs: replace the pin set, cancel a still-queued job, and price one row with `origin` + `profile`.                                                                                  |
+| `escalation_answer` | Settle one inbox row: `response`/`answers` for a question, `permission` for a blocked tool call. Refuses the other two kinds by name.                                                                          |
+| `human_task_settle` | Settle one bench row — work only a person can do: `done` once it has been, `declined` with a required note. Not an escalation, and not answered as one.                                                        |
+| `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (the model tag, which also answers the appraiser's profile question).      |
+| `goal_gate`         | The escape hatches a blocking gate has to have: override an `appraisal`, `overrule` a standing shortfall, release or re-apply the `environmentGate`.                                                           |
+| `goal_placement`    | The two placement questions: `parent` and `areaPath`. Either sent with no value answers "this goal wants no such thing" and settles it.                                                                        |
+| `goal_instruct`     | Say what you want on a goal, in your own words — it stands in front of every later dispatch and restarts the goal. `withdraw` takes one back.                                                                  |
+| `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing.                                                                                        |
+| `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**.                                                                           |
+| `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned.                                                                                                                                                       |
+| `ticket_target`     | Where a ticket filed from here lands and what it will carry: tracker, watch tag, assignee, type, container types, pickup states, and what would stop a filed item being picked up. Records nothing.            |
+| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise. Answers with the tracker and the tag the item actually carried.                                  |
+| `agent_control`     | The six verbs on a live agent: respond, interrupt, complete, kill, extend a stall park, resume a usage-limit park.                                                                                             |
 
 ### Answering a question about a goal
 
@@ -1099,6 +1100,22 @@ the defence. What actually differs is who may write — the fleet's is fenced by
 was dispatched on, this one by the plan's own status — and what settles afterwards: `plan_amend`
 withdraws the superseded approval card (status write first, so `refusePlan` no-ops rather than
 retiring every unstarted part) and runs a cycle to put a fresh one up.
+
+### Talking about a feature
+
+`/lubbdubb feature 500` is a conversation about a **Feature** rather than one goal — how it is going,
+what is left, whether the split into stories is right. The cockpit's feature page carries a deep link
+to it ([17](17-cockpit.md#the-feature-page)). `feature_read` (`src/mcp/desktopFeature.ts`) is its one
+read: the Feature's ticket, the summariser's `FeatureSummary` passed through as written, the stored
+order, and one line per story — state, plan status, and the appraisal summary where the goal check is
+holding it. It resolves a story to its parent through the same `featureFor` as `sequence_read`, so the
+two tools can never disagree about which Feature a number means.
+
+**It changes nothing, and the skill hands off rather than acting.** Reordering is `order`, a missing
+story is `file`, one story's plan is `discuss` — each of which already owns its write and its
+caveats. A second door to any of them here would be a second copy of the rules that fence it.
+**A null summary is passed through as null**, and the skill says so rather than composing one: an
+account the session wrote itself, presented beside the harness's record, reads as the summariser's.
 
 ### Watching and steering the fleet
 

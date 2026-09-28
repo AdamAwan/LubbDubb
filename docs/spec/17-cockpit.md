@@ -2149,11 +2149,11 @@ The run's state, what steers the work, and what happens somewhere other than thi
 groups, each with a caption saying what the group is for**, drawn through [the control
 kit](#the-control-kit) rather than as class strings.
 
-| caption         | controls                                              |
-| --------------- | ----------------------------------------------------- |
-| Run state       | Working / Done / Abandon… — one segmented control     |
-| Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
-| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug  |
+| caption         | controls                                               |
+| --------------- | ------------------------------------------------------ |
+| Run state       | Working / Done / Abandon… — one segmented control      |
+| Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
+| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
 
 There was a fourth group, _Check the work_, holding the local run's press. It is now on the runner
 panel that draws what a press produced, a pane below ([The validate pane](#the-validate-pane)): the
@@ -5884,6 +5884,11 @@ row, a `Ref`) leads there. So where the feature board is drawn and the goal's is
 type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same page, reached by
 `?goal=`, with its crumb back to the tab it came from. On a tracker with no hierarchy there is no page to draw,
 and the goal page stands.
+
+**The page carries one deep link: _Open in Claude Code_ with `/lubbdubb feature <n> `** (`featurePrompt`,
+`web/src/cockpit/desktopLink.ts`), beside the crumb and only on a Feature — a promoted goal's page has
+the goal's own. Like the goal's `ask`, it fills the composer and waits, because it starts a
+conversation rather than a job ([11](11-mcp-tools.md#talking-about-a-feature)).
 
 The detail is three columns from 1200px and one below: **its order, and what landed** (the story
 order when there is one, and what was delivered, in its authors' words — an accepted order is listed
