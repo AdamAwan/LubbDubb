@@ -98,19 +98,7 @@ export function GoalPage({
             → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
         {asks.inPane.length > 0 && (
           <div className="cn-paneasks">
-            {groupAsks(asks.inPane, view.state).map((item) =>
-              item.kind === 'assign' ? (
-                <AssignGroup key={item.rows[0]?.id} rows={item.rows} view={view} actions={actions} />
-              ) : (
-                <NeedsBand
-                  key={item.row.id}
-                  row={item.row}
-                  view={view}
-                  actions={actions}
-                  checksBelow={item.row.kind === 'validate'}
-                />
-              ),
-            )}
+            <AskItems rows={asks.inPane} view={view} actions={actions} />
           </div>
         )}
         {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
@@ -140,14 +128,40 @@ function AskLines({
   if (rows.length === 0) return null;
   return (
     <div className="cn-asklines">
+      <AskItems rows={rows} view={view} actions={actions} line />
+    </div>
+  );
+}
+
+/** The asks in rank order, the same assign ask on several pull requests folded into one. */
+function AskItems({
+  rows,
+  view,
+  actions,
+  line = false,
+}: {
+  rows: readonly NeedRow[];
+  view: CockpitView;
+  actions: CockpitActions;
+  line?: boolean;
+}): JSX.Element {
+  return (
+    <>
       {groupAsks(rows, view.state).map((item) =>
         item.kind === 'assign' ? (
-          <AssignGroup key={item.rows[0]?.id} rows={item.rows} view={view} actions={actions} />
+          <AssignGroup key={`assign:${item.asks[0]?.number}`} asks={item.asks} actions={actions} />
         ) : (
-          <NeedsBand key={item.row.id} row={item.row} view={view} actions={actions} line />
+          <NeedsBand
+            key={item.row.id}
+            row={item.row}
+            view={view}
+            actions={actions}
+            line={line}
+            checksBelow={!line && item.row.kind === 'validate'}
+          />
         ),
       )}
-    </div>
+    </>
   );
 }
 

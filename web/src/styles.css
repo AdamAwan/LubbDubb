@@ -10651,23 +10651,20 @@ button.rv.rv {
   gap: 10px 20px;
   margin: 10px 0;
 }
-.vp-main {
-  flex: 3 1 480px;
+.vp-main,
+.vp-side {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.vp-main {
+  flex: 3 1 480px;
 }
 .vp-side {
   flex: 2 1 300px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
-.vp-hint > summary {
-  cursor: pointer;
-}
+.vp-hint > summary,
 .esc-fold > summary {
   cursor: pointer;
 }

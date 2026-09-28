@@ -41,7 +41,7 @@ test('assign asks on one goal with one shortlist fold into one item, where the f
   const items = groupAsks([assignRow(10), other, assignRow(11), assignRow(12)], state);
   assert.equal(items.length, 2);
   assert.equal(items[0]?.kind, 'assign');
-  assert.deepEqual(items[0]?.kind === 'assign' ? items[0].rows.map((r) => r.prNumber) : [], [10, 11, 12]);
+  assert.deepEqual(items[0]?.kind === 'assign' ? items[0].asks.map((a) => a.number) : [], [10, 11, 12]);
   assert.equal(items[1]?.kind, 'one');
 });
 

@@ -1,42 +1,39 @@
-import type { AppState } from '../types.js';
+import type { AppState, OpenPullRequest } from '../types.js';
 import type { NeedRow } from './needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask
 
-type AskItem = { kind: 'one'; row: NeedRow } | { kind: 'assign'; rows: NeedRow[] };
+export type AssignAsk = Required<Pick<OpenPullRequest, 'number' | 'title' | 'assignAsk'>>;
+
+type AskItem = { kind: 'one'; row: NeedRow } | { kind: 'assign'; asks: AssignAsk[] };
+
+export function assignAskOf(row: NeedRow, state: AppState): AssignAsk | null {
+  if (row.kind !== 'assign') return null;
+  const pr = state.world.pullRequests.find((p) => p.number === row.prNumber);
+  return pr?.assignAsk === undefined ? null : { number: pr.number, title: pr.title, assignAsk: pr.assignAsk };
+}
 
 /**
  * Folds the assign asks that would be answered with the same buttons into one item, drawn where the
  * first of them stood. Two asks with different shortlists are two questions and stay apart.
  */
 export function groupAsks(rows: readonly NeedRow[], state: AppState): AskItem[] {
-  const items: AskItem[] = [];
-  const groups = new Map<string, NeedRow[]>();
-  for (const row of rows) {
-    const key = assignKey(row, state);
-    if (key === null) {
-      items.push({ kind: 'one', row });
-      continue;
-    }
-    const held = groups.get(key);
-    if (held !== undefined) {
-      held.push(row);
-      continue;
-    }
-    const fresh = [row];
-    groups.set(key, fresh);
-    items.push({ kind: 'assign', rows: fresh });
-  }
-  return items.map((item) => {
-    if (item.kind !== 'assign') return item;
-    const [only, ...rest] = item.rows;
-    return only !== undefined && rest.length === 0 ? { kind: 'one', row: only } : item;
+  const resolved = rows.map((row) => {
+    const ask = assignAskOf(row, state);
+    return { row, ask, key: ask === null ? null : `${row.goalRef ?? ''}|${ask.assignAsk.map((p) => p.id).join(',')}` };
   });
-}
-
-function assignKey(row: NeedRow, state: AppState): string | null {
-  if (row.kind !== 'assign') return null;
-  const pr = state.world.pullRequests.find((p) => p.number === row.prNumber);
-  if (pr?.assignAsk === undefined) return null;
-  return `${row.goalRef ?? ''}|${pr.assignAsk.map((p) => p.id).join(',')}`;
+  const groups = new Map<string, AssignAsk[]>();
+  for (const { ask, key } of resolved)
+    if (ask !== null && key !== null) groups.set(key, [...(groups.get(key) ?? []), ask]);
+  const drawn = new Set<string>();
+  const items: AskItem[] = [];
+  for (const { row, key } of resolved) {
+    const group = key === null ? undefined : groups.get(key);
+    if (key === null || group === undefined || group.length === 1) items.push({ kind: 'one', row });
+    else if (!drawn.has(key)) {
+      drawn.add(key);
+      items.push({ kind: 'assign', asks: group });
+    }
+  }
+  return items;
 }

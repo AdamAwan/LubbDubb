@@ -20,7 +20,8 @@ import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './Q
 import { Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
-import { AssignButtons, assignAskOf, assignBody } from './assignAsks.js';
+import { AssignButtons, assignBody } from './assignAsks.js';
+import { assignAskOf } from '../view/askGroups.js';
 import { quickAnswer } from '../view/quickAnswer.js';
 import { awaitedProfile } from '../view/issueAsks.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
@@ -106,7 +107,7 @@ function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; act
             the row *is* the button — nesting a second one is invalid.
             → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
         <span className="cn-needs-do">
-          {row.verb ?? KIND_VERB[row.kind]} {open ? '\u25b4' : '\u25be'}
+          {row.verb ?? KIND_VERB[row.kind]} {open ? '\u25be' : '\u25b8'}
         </span>
       </button>
       {open && <NeedsBand row={row} view={view} actions={actions} checksBelow={row.kind === 'validate'} />}

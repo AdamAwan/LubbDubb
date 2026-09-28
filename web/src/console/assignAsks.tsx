@@ -2,22 +2,14 @@ import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
-import type { AppState, OpenPullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Ref } from '../components/refs.js';
 import { ButtonRow } from '../components/button.js';
 import { oneLine } from '../view/needLines.js';
-import { KIND_SYMBOL, KIND_TONE } from './QueueRail.js';
+import { assignAskOf, type AssignAsk } from '../view/askGroups.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './QueueRail.js';
 
 // → docs/spec/17-cockpit.md
-
-type AssignAsk = Required<Pick<OpenPullRequest, 'number' | 'assignAsk'>>;
-
-export function assignAskOf(row: NeedRow, state: AppState): AssignAsk | null {
-  if (row.kind !== 'assign') return null;
-  const pr = state.world.pullRequests.find((p) => p.number === row.prNumber);
-  return pr?.assignAsk === undefined ? null : { number: pr.number, assignAsk: pr.assignAsk };
-}
 
 /**
  * Every person on the shortlist and "Nah" are drawn alike, so declining costs no more than
@@ -39,20 +31,40 @@ export function assignBody(row: NeedRow, view: CockpitView, actions: CockpitActi
 }
 
 export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: CockpitActions }): JSX.Element {
-  const prNumber = ask.number;
+  return (
+    <ShortlistButtons
+      people={ask.assignAsk}
+      onPick={(id) => actions.assignPr(ask.number, id)}
+      onDecline={() => actions.declineAssignPr(ask.number)}
+    />
+  );
+}
+
+function ShortlistButtons({
+  people,
+  onPick,
+  onDecline,
+  disabled = false,
+}: {
+  people: AssignAsk['assignAsk'];
+  onPick: (personId: string) => Promise<void>;
+  onDecline: () => Promise<void>;
+  disabled?: boolean;
+}): JSX.Element {
   return (
     <>
-      {ask.assignAsk.map((person) => (
+      {people.map((person) => (
         <AsyncButton
           key={person.id}
           size="small"
-          onClick={() => actions.assignPr(prNumber, person.id)}
+          disabled={disabled}
+          onClick={() => onPick(person.id)}
           title={`Assign ${person.name} in the tracker`}
         >
           {person.name}
         </AsyncButton>
       ))}
-      <AsyncButton size="small" onClick={() => actions.declineAssignPr(prNumber)} title="Leave it unassigned">
+      <AsyncButton size="small" disabled={disabled} onClick={onDecline} title="Leave it unassigned">
         Nah
       </AsyncButton>
     </>
@@ -65,19 +77,13 @@ export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: Cockp
  * for its own answer. → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask
  */
 export function AssignGroup({
-  rows,
-  view,
+  asks,
   actions,
 }: {
-  rows: readonly NeedRow[];
-  view: CockpitView;
+  asks: readonly AssignAsk[];
   actions: CockpitActions;
 }): JSX.Element | null {
   const [skipped, setSkipped] = useState<ReadonlySet<number>>(new Set());
-  const asks = rows.flatMap((row) => {
-    const ask = assignAskOf(row, view.state);
-    return ask === null ? [] : [ask];
-  });
   const [first] = asks;
   if (first === undefined) return null;
   const ticked = asks.map((a) => a.number).filter((n) => !skipped.has(n));
@@ -87,7 +93,7 @@ export function AssignGroup({
       if (!next.delete(n)) next.add(n);
       return next;
     });
-  const each = (write: (n: number) => Promise<void>) => async (): Promise<void> => {
+  const each = async (write: (n: number) => Promise<void>): Promise<void> => {
     await Promise.all(ticked.map(write));
   };
   const none = ticked.length === 0;
@@ -97,52 +103,11 @@ export function AssignGroup({
         <span className="cn-sym" aria-hidden="true">
           {KIND_SYMBOL.assign}
         </span>
-        <span className="cn-needs-kind">Assign</span>
+        <span className="cn-needs-kind">{KIND_LABEL.assign}</span>
         <span className="cn-needs-what">{asks.length} pull requests are ready and nobody is on them</span>
       </header>
-      <GroupPicks asks={asks} skipped={skipped} toggle={toggle} view={view} />
-      <div className="cn-needs-group-do">
-        <span className="cn-needs-group-lead">{none ? 'Tick one to answer' : `Assign ${ticked.length} to`}</span>
-        {first.assignAsk.map((person) => (
-          <AsyncButton
-            key={person.id}
-            size="small"
-            disabled={none}
-            onClick={each((n) => actions.assignPr(n, person.id))}
-            title={`Assign ${person.name} to every ticked pull request in the tracker`}
-          >
-            {person.name}
-          </AsyncButton>
-        ))}
-        <AsyncButton
-          size="small"
-          disabled={none}
-          onClick={each((n) => actions.declineAssignPr(n))}
-          title="Leave every ticked pull request unassigned"
-        >
-          Nah
-        </AsyncButton>
-      </div>
-    </div>
-  );
-}
-
-function GroupPicks({
-  asks,
-  skipped,
-  toggle,
-  view,
-}: {
-  asks: readonly AssignAsk[];
-  skipped: ReadonlySet<number>;
-  toggle: (n: number) => void;
-  view: CockpitView;
-}): JSX.Element {
-  return (
-    <ul>
-      {asks.map((ask) => {
-        const pr = view.state.world.pullRequests.find((p) => p.number === ask.number);
-        return (
+      <ul>
+        {asks.map((ask) => (
           <li key={ask.number}>
             <input
               type="checkbox"
@@ -153,11 +118,20 @@ function GroupPicks({
             />
             <Ref to={`pr:${ask.number}`} />
             <label htmlFor={`assign-pick-${ask.number}`} className="cn-grow">
-              {oneLine(pr?.title)}
+              {oneLine(ask.title)}
             </label>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+      <div className="cn-needs-group-do">
+        <span className="cn-needs-group-lead">{none ? 'Tick one to answer' : `Assign ${ticked.length} to`}</span>
+        <ShortlistButtons
+          people={first.assignAsk}
+          disabled={none}
+          onPick={(id) => each((n) => actions.assignPr(n, id))}
+          onDecline={() => each((n) => actions.declineAssignPr(n))}
+        />
+      </div>
+    </div>
   );
 }
