@@ -277,6 +277,8 @@ function goalsSection(
             nodes: r.workNodes(),
             delivered: r.deliveries(),
             shortfalled: r.shortfallsByOrigin(),
+            probeIntervalMs: config.environmentProbeIntervalMs,
+            now: Date.now(),
           }),
     featureSequences: store.sequences.listFeatureSequences(),
     environmentHealth: buildEnvironmentHealth(store, environments),

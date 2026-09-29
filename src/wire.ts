@@ -542,10 +542,7 @@ export interface GoalReachView {
 export interface GoalEnvironmentReachView extends GoalEnvironmentReach {
   /** `check plan · 4 checks · 1 blocked`, or null where this goal has no check plan against this environment. */
   sheet: string | null;
-  /**
-   * Why this environment offers this goal no remote run, where it declares a `validate` block and holds
-   * no sheet for the goal. Null where there is a sheet, or no `validate` block to run one.
-   */
+  /** Why a validating environment holds no sheet for this goal; null where it has one or cannot run one. */
   noSheet: string | null;
 }
 

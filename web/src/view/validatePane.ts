@@ -168,45 +168,39 @@ export function pressBreakdown(sheet: RemoteSheetView): { checks: number; own: n
   return { checks, own: rows.length - checks };
 }
 
-/** A remote runner this goal has no sheet on, and why. `environment` is null where no environment could be one. */
+/** A remote runner offering this goal no run, and why. `environment` null: no environment could. */
 export interface RemoteRunGap {
   environment: string | null;
   why: string;
 }
 
 /**
- * Every remote runner that offers this goal no run, with the reason in its place — so the remote half
- * of the pane never simply vanishes. The reason is the server's (`noSheet`, folded beside the reach
- * reading it comes from); what the cockpit adds is only the two cases it holds no row for: a deployment
- * with no `validate` block anywhere, and a goal none of whose work has landed.
- * → docs/spec/17-cockpit.md#the-validate-pane, docs/spec/36-remote-validation.md#when-there-is-no-sheet
+ * The remote runners with no sheet for this goal, each with its reason — the server's `noSheet` where a
+ * reach row carries one. `showing` narrows to the environment the pane is showing.
+ * → docs/spec/36-remote-validation.md#when-there-is-no-sheet
  */
 export function remoteRunGaps(
   environments: readonly CockpitEnvironment[],
   sheets: readonly RemoteSheetView[],
   reach: readonly GoalEnvironmentReachView[],
+  showing: string | null = null,
 ): RemoteRunGap[] {
   const validating = environments.filter((e) => e.validates);
   if (validating.length === 0)
     return [
       {
         environment: null,
-        why:
-          environments.length === 0
-            ? 'No environments are configured, so nothing can run these checks remotely.'
-            : 'No environment declares a `validate` block, so nothing can run these checks remotely.',
+        why: 'No environment declares a `validate` block, so nothing can run these checks remotely.',
       },
     ];
+  if (showing !== null && !validating.some((e) => e.name === showing))
+    return [{ environment: showing, why: `${showing} declares no \`validate\` block, so it cannot run these checks.` }];
   return validating
-    .filter((env) => !sheets.some((sheet) => sheet.environment === env.name))
-    .map((env) => {
-      const row = reach.find((r) => r.environment === env.name);
-      return {
-        environment: env.name,
-        why:
-          row === undefined
-            ? `None of this goal's work has landed yet — a run is offered once it reaches ${env.name}.`
-            : (row.noSheet ?? `No run is set up on ${env.name} for this goal yet.`),
-      };
-    });
+    .filter((env) => (showing === null || env.name === showing) && !sheets.some((s) => s.environment === env.name))
+    .map((env) => ({
+      environment: env.name,
+      why:
+        reach.find((r) => r.environment === env.name)?.noSheet ??
+        `This goal's work has not reached ${env.name} yet — a run is offered once it does.`,
+    }));
 }

@@ -5,6 +5,7 @@ import { resolveTenant } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
+  GoalReachStatus,
   GoalWatch,
   IssueDelivery,
   IssueShortfall,
@@ -23,6 +24,7 @@ import type {
   TenantPreparation,
 } from '../wire.js';
 import { allGoalReach } from '../environments/reach.js';
+import { arrivalSheetStep } from '../environments/watchWindow.js';
 import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 
@@ -46,6 +48,8 @@ export function buildEnvironmentReach(input: {
   nodes: WorkNode[];
   delivered: readonly IssueDelivery[];
   shortfalled: ReadonlyMap<string, IssueShortfall>;
+  probeIntervalMs: number;
+  now: number;
 }): GoalReachView[] {
   const { store, environments, sheets, plans, parts, arrivals, nodes } = input;
   const releases = store.environments.listEnvironmentGateReleases();
@@ -58,6 +62,7 @@ export function buildEnvironmentReach(input: {
     if (hold !== null) holds.set(goalRef, hold);
     if (hold !== null || released.has(goalRef)) gated.add(goalRef);
   }
+  const noSheet = noSheetFold(input);
   const sheetByGoalEnvironment = new Map<string, RemoteSheetView>();
   for (const sheet of sheets) {
     const key = `${sheet.goalRef} ${sheet.environment}`;
@@ -78,29 +83,57 @@ export function buildEnvironmentReach(input: {
     // → 36-remote-validation.md#the-cockpit
     environments: goal.environments.map((env) => {
       const sheet = sheetByGoalEnvironment.get(`${goal.goalRef} ${env.environment}`);
-      const validates = environments.some((e) => e.name === env.environment && e.validate !== undefined);
-      return {
-        ...env,
-        sheet: sheetFold(sheet),
-        noSheet:
-          sheet !== undefined || !validates
-            ? null
-            : noSheetReason({
-                environment: env.environment,
-                status: env.status,
-                arrival: arrivals.find((a) => a.goalRef === goal.goalRef && a.environment === env.environment),
-                checkSetAccepted:
-                  env.status === 'reached' &&
-                  checkSetReleased({
-                    record: store.validation.getValidationPlanRecord(goal.goalRef),
-                    checks: store.validation.listValidationChecks(goal.goalRef),
-                  }),
-              }),
-      };
+      return { ...env, sheet: sheetFold(sheet), noSheet: sheet === undefined ? noSheet(goal.goalRef, env) : null };
     }),
     gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
   }));
+}
+
+/** Why a validating environment holds no sheet for a goal, read off the desk's own cut. */
+function noSheetFold(input: {
+  store: System['store'];
+  environments: EnvironmentConfig[];
+  arrivals: GoalArrival[];
+  probeIntervalMs: number;
+  now: number;
+}): (goalRef: string, env: { environment: string; status: GoalReachStatus }) => string | null {
+  const validating = new Set(input.environments.filter((e) => e.validate !== undefined).map((e) => e.name));
+  const arrivals = new Map<string, GoalArrival>();
+  for (const arrival of input.arrivals) {
+    const key = `${arrival.goalRef} ${arrival.environment}`;
+    if (!arrivals.has(key)) arrivals.set(key, arrival);
+  }
+  const accepted = new Map<string, boolean>();
+  const authored = (goalRef: string): boolean => {
+    let held = accepted.get(goalRef);
+    if (held === undefined) {
+      held = checkSetReleased({
+        record: input.store.validation.getValidationPlanRecord(goalRef),
+        checks: input.store.validation.listValidationChecks(goalRef),
+      });
+      accepted.set(goalRef, held);
+    }
+    return held;
+  };
+  return (goalRef, env) => {
+    if (!validating.has(env.environment)) return null;
+    const arrival = arrivals.get(`${goalRef} ${env.environment}`);
+    return noSheetReason({
+      environment: env.environment,
+      status: env.status,
+      step:
+        arrival === undefined
+          ? null
+          : arrivalSheetStep({
+              arrival,
+              validates: true,
+              authored: () => authored(goalRef),
+              probeIntervalMs: input.probeIntervalMs,
+              now: input.now,
+            }),
+    });
+  };
 }
 
 function sheetFold(sheet: RemoteSheetView | undefined): string | null {

@@ -135,9 +135,6 @@ export function RunStrip({
           onRefused={setRefusal}
         />
       ))}
-      {/* A remote runner with no sheet says why in its press's place, rather than leaving no line at
-          all — an absent runner reads as there being no way to run the check remotely, and leaves
-          the hand-over looking like the way. → docs/spec/17-cockpit.md#the-validate-pane */}
       {gaps.map((gap) => (
         <GapRow key={gap.environment ?? ''} gap={gap} />
       ))}
@@ -311,12 +308,7 @@ export function Signals({
   );
 }
 
-/**
- * Always drawn. Where the environment the pane is showing holds no sheet for this goal — or no
- * environment can hold one — the card says why in place of the rows, in the server's words: a
- * panel that vanished read as there being no remote run at all, and left the hand-over looking like
- * the way to have the fleet run a browser check. → docs/spec/17-cockpit.md#the-validate-pane
- */
+/** Always drawn: with no sheet to show, it says why in place of the rows. → 17-cockpit.md#the-validate-pane */
 export function RemoteValidation({
   page,
   view,
@@ -334,12 +326,7 @@ export function RemoteValidation({
      back to the first would put another environment's rows under this one's heading. */
   const open = showing === null ? sheets[0] : sheets.find((s) => s.environment === showing);
   if (open === undefined) {
-    const all = remoteRunGaps(view.state.config.environments, sheets, page.environments);
-    const shown = all.filter((gap) => showing === null || gap.environment === null || gap.environment === showing);
-    const gaps: RemoteRunGap[] =
-      shown.length > 0 || showing === null
-        ? shown
-        : [{ environment: showing, why: `${showing} declares no \`validate\` block, so it cannot run these checks.` }];
+    const gaps = remoteRunGaps(view.state.config.environments, sheets, page.environments, showing);
     return (
       <section className="cn-card" id="cn-remote-validation">
         <h3>

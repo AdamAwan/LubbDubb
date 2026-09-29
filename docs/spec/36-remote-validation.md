@@ -2440,17 +2440,19 @@ of the press ([17](17-cockpit.md#the-validate-pane)).
 **Built.** `noSheetReason` (`src/validation/remote/sheet.ts`) says why an environment that declares a
 `validate` block holds no sheet for a goal, and it is folded on the **server** onto the goal's reach
 row as `noSheet` — beside `sheet`, off the same readings — because a cockpit that worked it out would
-be a second opinion on the desk's own cut. Its arms are the steps still to come, in the order
-[`sheetableArrivals`](#the-desk) takes them: the work has not reached the environment, only part of it
-has, the probe could not say, the arrival is not recorded yet, the arrival came before remote runs
-could take it (stamped and never assembled — no sheet will come), the check set is not accepted yet,
-or the sheet is simply the next pulse's. `noSheet` is null where there is a sheet, and where the
-environment declares no `validate` block.
+be a second opinion on the desk's own cut. Its first arms are the reach verdict: the work has not
+reached the environment, only part of it has, the probe could not say. Past those it words the
+arrival's **`arrivalSheetStep`** (`src/environments/watchWindow.ts`) — the one statement of the cut
+[`sheetableArrivals`](#the-desk) acts on, so the reason and the desk cannot drift apart: not recorded
+yet, stamped or stale (no sheet will come), the check set not accepted yet, or ready for the next
+pulse. `noSheet` is null where there is a sheet, and where the environment declares no `validate`
+block.
 
-The cockpit (`remoteRunGaps`, `web/src/view/validatePane.ts`) adds only the two cases it holds no
-reach row for: **no environment declares a `validate` block** — one line saying so — and **a goal none
-of whose work has landed**, which has no reach row to carry a reason. `CockpitEnvironment.validates`
-is what it reads for the first.
+The cockpit (`remoteRunGaps`, `web/src/view/validatePane.ts`) adds only what it holds no reach row
+for: **no environment declares a `validate` block** — one line saying so, read off
+`CockpitEnvironment.validates` — the **shown environment declaring none**, and **a goal none of whose
+work has landed**, which has no reach row to carry a reason and reads as the reach verdict `absent`
+does.
 
 It draws one block per environment that has a sheet: the tenant and its age against the declared
 freshness window, the deployed commit, every row with its kind, its outcome and its reason, the
