@@ -120,6 +120,17 @@ test('an empty command anywhere in the block is refused', () => {
   );
 });
 
+test('an empty sign-in instruction is refused — it reads as one and says nothing', () => {
+  assert.match(
+    refusal({ permits: ['state'], state: { run: './q.sh' }, instruction: '  ' }),
+    /"validate\.instruction" must be non-empty/,
+  );
+  assert.equal(
+    refusal({ permits: ['state'], state: { run: './q.sh' }, instruction: 'Sign in as qa@example.com.' }),
+    '',
+  );
+});
+
 test('no secret is a config key — tenantEnv names a variable and never carries its value', () => {
   const dir = temp();
   process.env['VALIDATION_TENANT'] = 'tenant-42-the-actual-value';

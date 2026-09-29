@@ -97,6 +97,7 @@ function runBrief(input: BriefInput, run: RemoteRun, rows: readonly RemoteSheetR
       listSelectors: browser.listSelectors ?? null,
       publish: browser.publishArtefacts ?? null,
       tenant,
+      instruction: instructionOf(environment),
       selectors,
       scripts,
       screens,
@@ -109,6 +110,11 @@ function runBrief(input: BriefInput, run: RemoteRun, rows: readonly RemoteSheetR
       deployedSha: run.startedSha,
     }),
   };
+}
+
+function instructionOf(environment: EnvironmentConfig): string | null {
+  const instruction = environment.validate?.instruction?.trim() ?? '';
+  return instruction === '' ? null : instruction;
 }
 
 // The run's own artefact directory is what the browser writes into, so a screen it took is
