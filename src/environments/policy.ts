@@ -22,6 +22,7 @@ interface EnvironmentValidate {
   ensureTenant?: string;
   reseed?: string;
   tenantFreshnessMs?: number;
+  instruction?: string;
   browser?: EnvironmentValidateBrowser;
   state?: { run: string };
 }
@@ -261,20 +262,30 @@ function validatePermits(permits: RemoteRowKind[], where: string): void {
 
 function validateValidateStrings(validate: EnvironmentValidate, where: string): void {
   for (const path of ['tenant', 'tenantEnv'] as const) {
-    const value = validate[path];
-    if (value !== undefined && (typeof value !== 'string' || value.trim() === ''))
+    if (isBlank(validate[path]))
       throw new Error(
         `${where}: "validate.${path}" must be a non-empty name, or be left out. The harness never generates ` +
           'or infers a tenant identifier, so an empty one names nothing it could fall back to.',
       );
   }
 
+  if (isBlank(validate.instruction))
+    throw new Error(
+      `${where}: "validate.instruction" must be non-empty text, or be left out — what a run agent is told ` +
+        'about reaching this environment: which account to sign in as, and how.',
+    );
+
   for (const { path, value } of commandFields(validate))
-    if (value !== undefined && (typeof value !== 'string' || value.trim() === ''))
+    if (isBlank(value))
       throw new Error(
         `${where}: "validate.${path}" must be a non-empty command, or be left out. An empty one answers ` +
           'nothing, and the row it would have run is blocked with no way to say why.',
       );
+}
+
+/** Set, and not a non-empty string. Left out is not blank. */
+function isBlank(value: unknown): boolean {
+  return value !== undefined && (typeof value !== 'string' || value.trim() === '');
 }
 
 function validateRunnable(validate: EnvironmentValidate, where: string): void {

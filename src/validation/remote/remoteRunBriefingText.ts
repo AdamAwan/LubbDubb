@@ -67,8 +67,20 @@ function browserSection(input: BriefingInput): string[] {
     '',
     '**It acts, so it stays inside this run’s tenant** — ' +
       `${input.tenant === null || input.tenant === '' ? 'and this environment declares none, which is why any row that needed one is blocked rather than driven' : `\`${input.tenant}\``}` +
-      '. Do not sign in as anybody else, and do not invent a tenant.',
+      '. Do not sign in to any other tenant, and do not invent one.',
+    '',
+    ...signInSection(input.instruction),
   ];
+}
+
+// → docs/spec/36-remote-validation.md#signing-in
+function signInSection(instruction: string | null): string[] {
+  if (instruction === null)
+    return [
+      'Nobody has said which account to sign in as here. A sign-in that needs a person — a passkey, a ' +
+        'security key, single sign-on as somebody’s own account — is `blocked`, naming what it asked for.',
+    ];
+  return ['### What the operator says about reaching it', '', instruction];
 }
 
 /**
@@ -133,6 +145,8 @@ interface BriefingInput {
   publish: string | null;
   /** The tenant's **name** — for a `tenantEnv` shape, the variable's own name. Never its value. */
   tenant: string | null;
+  /** `validate.instruction` — which account to sign in as, and how. Never a secret. */
+  instruction: string | null;
   selectors: readonly string[];
   scripts: readonly RunScript[];
   screens: readonly RunScreen[];

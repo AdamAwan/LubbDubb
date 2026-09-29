@@ -705,6 +705,29 @@ test('everything the agent must read is appended, and an override that names no 
   }
 });
 
+test('the environment’s sign-in instruction is appended, and without one a sign-in needing a person is blocked', async () => {
+  const b = bench();
+  try {
+    seed(b);
+    press(b.store);
+    const said: EnvironmentConfig[] = [
+      { ...ACCEPTANCE, validate: { ...ACCEPTANCE.validate!, instruction: 'Sign in as qa@example.com, never by SSO.' } },
+    ];
+    const overridden = new PromptTemplates({ 'remote-validation': 'Go and run the sheet.' });
+    const { actions } = await dispatcher(true, overridden).decide(ctx({ remoteRuns: briefs(b.store, said) }));
+    const { prompt } = dispatchOf(actions);
+    assert.match(prompt, /What the operator says about reaching it\n\nSign in as qa@example\.com, never by SSO\./);
+    assert.doesNotMatch(prompt, /Nobody has said which account/);
+
+    const unsaid = await promptFor(b.store);
+    assert.doesNotMatch(unsaid, /What the operator says about reaching it/);
+    assert.match(unsaid, /Nobody has said which account to sign in as here/);
+    assert.match(unsaid, /needs a person .* is `blocked`/);
+  } finally {
+    b.close();
+  }
+});
+
 test('a tenantEnv’s value never reaches the prompt — the variable’s own name does', () => {
   const b = bench();
   try {

@@ -1721,6 +1721,24 @@ words.
 separate program — so a run still invokes what the environment declares; what the agent cannot do is
 open a page itself, and the brief says so rather than leaving it to describe a screen it never saw.
 
+### Signing in
+
+**Built.** What a run agent is told about reaching an environment is the operator's to say, per
+environment, in `validate.instruction` — free text appended to the brief under _What the operator
+says about reaching it_, exactly as `localValidation.instruction` is for a local run
+([32](32-local-validation.md#configuration)). Its first job is sign-in: which account, which button on
+the sign-in page, and where the credential comes from — a vault lookup the agent runs, never the
+credential itself.
+
+**Unsaid, the agent signs in as whoever owns the machine.** A sign-in page offering single sign-on
+completes silently for a profile that has a session, and otherwise hands the agent the operator's own
+account behind a passkey nobody is there to press. So with no instruction the brief says nobody has
+named an account, and that a sign-in needing a person is `blocked` — naming what it asked for, so the
+operator can see which account the page reached for and write the instruction that avoids it.
+
+**Never a secret.** It is committed with the environment in a project layer and read into every run's
+prompt; a password in it is a password in the repository.
+
 ### A check the agent drives itself
 
 **Built, and now the ordinary case rather than the fallback.** A `browser` step the fleet carries, on
@@ -2165,6 +2183,9 @@ rather than `error`.
         "reseed": "./scripts/reseed-validation-tenant.sh",
         "tenantFreshnessMs": 604800000,
 
+        // which account the run's browser signs in as, and how — never a secret
+        "instruction": "Sign in as validation@example.com with its password from the team vault.",
+
         "browser": {
           "runner": "npm run e2e -- --project=validation",
           "listSelectors": "npm run e2e -- --project=validation --list",
@@ -2230,6 +2251,7 @@ silent:
 - a `reseed` or a `tenantFreshnessMs` with **no tenant of any shape**, which is freshness about
   nothing;
 - an **empty** command anywhere in the block, which is a command that answers nothing.
+- an **empty** `instruction`, which reads as one and says nothing ([Signing in](#signing-in)).
 
 ## Routes
 
