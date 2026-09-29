@@ -217,9 +217,9 @@ export function buildDemoState(): DemoSeed {
          too, so that tab draws a picker; preview opens nothing and is observed and no more.
          → docs/spec/17-cockpit.md#the-panes */
       environments: [
-        { name: 'staging', opens: ['validate', 'close_out'], watched: true },
-        { name: 'prod', opens: ['close_out'], watched: false },
-        { name: 'preview', opens: [], watched: false },
+        { name: 'staging', opens: ['validate', 'close_out'], watched: true, validates: true },
+        { name: 'prod', opens: ['close_out'], watched: false, validates: false },
+        { name: 'preview', opens: [], watched: false, validates: false },
       ],
       heartbeatIntervalMs: 15_000,
       maxConcurrentAgents: 5,
@@ -1957,6 +1957,7 @@ export function buildDemoState(): DemoSeed {
             at: ago(6),
             opens: ['validate', 'close_out'],
             sheet: 'check plan · 6 checks · 1 blocked · 1 awaiting approval',
+            noSheet: null,
           },
           {
             environment: 'prod',
@@ -1967,6 +1968,7 @@ export function buildDemoState(): DemoSeed {
             at: ago(2),
             opens: ['close_out'],
             sheet: 'check plan · 3 checks · 2 run',
+            noSheet: null,
           },
           {
             environment: 'preview',
@@ -1977,6 +1979,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: [],
             sheet: null,
+            noSheet: null,
           },
         ],
         landings: [
@@ -2008,6 +2011,7 @@ export function buildDemoState(): DemoSeed {
             at: ago(66),
             opens: ['validate', 'close_out'],
             sheet: 'check plan · 2 checks · both passed',
+            noSheet: null,
           },
           {
             environment: 'prod',
@@ -2018,6 +2022,7 @@ export function buildDemoState(): DemoSeed {
             at: ago(20),
             opens: ['close_out'],
             sheet: null,
+            noSheet: null,
           },
           {
             environment: 'preview',
@@ -2028,6 +2033,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: [],
             sheet: null,
+            noSheet: null,
           },
         ],
         groups: [],
@@ -2050,6 +2056,7 @@ export function buildDemoState(): DemoSeed {
                reads the release stamp rather than the authoring one.
                → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */
             sheet: null,
+            noSheet: null,
           },
           {
             environment: 'prod',
@@ -2060,6 +2067,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: ['close_out'],
             sheet: null,
+            noSheet: null,
           },
         ],
         groups: [],
@@ -2083,6 +2091,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: ['validate', 'close_out'],
             sheet: null,
+            noSheet: null,
           },
           {
             environment: 'prod',
@@ -2093,6 +2102,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: [],
             sheet: null,
+            noSheet: null,
           },
         ],
         landings: [
@@ -2129,6 +2139,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: ['validate', 'close_out'],
             sheet: null,
+            noSheet: null,
           },
           {
             environment: 'prod',
@@ -2139,6 +2150,7 @@ export function buildDemoState(): DemoSeed {
             at: null,
             opens: [],
             sheet: null,
+            noSheet: null,
           },
         ],
         landings: [

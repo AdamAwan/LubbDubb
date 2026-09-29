@@ -283,6 +283,7 @@ test('the Environments card’s folded line is folded on the server, off the sam
       'check plan · 3 checks · 1 blocked',
       'the line the card draws is already a string on the wire',
     );
+    assert.equal(row?.noSheet, null, 'a goal with a sheet here has no reason to give for lacking one');
 
     // The same fold, off the same rows, so a change to one is a change to both.
     const sheets = state['remoteSheets'] as RemoteSheetView[];

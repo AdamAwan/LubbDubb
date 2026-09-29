@@ -127,9 +127,13 @@ sixth surface that misses one:
 | No `validate.browser` anywhere          | The test-part bar is not appended, so a planner cannot declare a part nobody can build. → [Browser coverage is a plan part](#browser-coverage-is-a-plan-part-and-it-holds-the-goal) |
 | No `validate` block anywhere            | Rule `remote-validation` is drawn **inert** in the rule book rather than live-and-never-firing, on a `RuleConditions` flag. → [The dispatch](#the-dispatch--rule-remote-validation) |
 
-**Nothing here is drawn empty rather than absent.** A card of question marks on a deployment that
-configured nothing is a feature announcing itself as broken, which is the rule the environments card
-and the signals card are both already built to.
+**Nothing here is drawn empty rather than absent — with one exception, on the Validate pane.** A card
+of question marks on a deployment that configured nothing is a feature announcing itself as broken,
+which is the rule the environments card and the signals card are both already built to. The remote
+runner on the Validate pane is the exception, and it is not drawn empty either: it is drawn with **the
+reason there is no run** ([When there is no sheet](#when-there-is-no-sheet)). Left absent, a check
+every step of which the fleet would carry sat beside no runner at all, and the only fleet control in
+sight was the hand-over — which puts an agent with no browser and no tenant on it.
 
 **One thing does happen on every deployment, and it is the only one**: the tables are created and the
 columns are added on the boot that takes the build. All of them are inert, none is backfilled, and
@@ -2423,10 +2427,30 @@ run answered by hand (the local plan), and what the environment's own run answer
 qualified by whichever environment declares `arrival.opens: 'validate'` — which is the same
 environment this sheet is put to.
 
-**The card is absent entirely where no environment declares a `validate` block**, and absent on a
-goal with no sheet — not an empty card, and not a row of question marks. That is the rule the
-Environments card and the Signals card are both built to, and it is what keeps a deployment that has
-not turned this on from reading as a deployment where it is broken.
+**The card is always drawn, and where there is no sheet it says why** — never an empty card and never
+a row of question marks, but never absent either. It used to be absent where no environment declared
+a `validate` block and on a goal with no sheet, on the Environments card's rule; on this pane that
+left an operator looking at checks the fleet would carry with no remote runner anywhere, and the
+hand-over reading as the way to have the fleet run them. So where the environment the pane is showing
+holds no sheet, the card carries the reason in place of the rows, and so does the run strip in place
+of the press ([17](17-cockpit.md#the-validate-pane)).
+
+### When there is no sheet
+
+**Built.** `noSheetReason` (`src/validation/remote/sheet.ts`) says why an environment that declares a
+`validate` block holds no sheet for a goal, and it is folded on the **server** onto the goal's reach
+row as `noSheet` — beside `sheet`, off the same readings — because a cockpit that worked it out would
+be a second opinion on the desk's own cut. Its arms are the steps still to come, in the order
+[`sheetableArrivals`](#the-desk) takes them: the work has not reached the environment, only part of it
+has, the probe could not say, the arrival is not recorded yet, the arrival came before remote runs
+could take it (stamped and never assembled — no sheet will come), the check set is not accepted yet,
+or the sheet is simply the next pulse's. `noSheet` is null where there is a sheet, and where the
+environment declares no `validate` block.
+
+The cockpit (`remoteRunGaps`, `web/src/view/validatePane.ts`) adds only the two cases it holds no
+reach row for: **no environment declares a `validate` block** — one line saying so — and **a goal none
+of whose work has landed**, which has no reach row to carry a reason. `CockpitEnvironment.validates`
+is what it reads for the first.
 
 It draws one block per environment that has a sheet: the tenant and its age against the declared
 freshness window, the deployed commit, every row with its kind, its outcome and its reason, the

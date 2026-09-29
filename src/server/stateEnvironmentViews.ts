@@ -1,5 +1,6 @@
 import type { System } from '../system/system.js';
-import { sheetFoldLine } from '../validation/remote/sheet.js';
+import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
+import { checkSetReleased } from '../validation/planApproval.js';
 import { resolveTenant } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -75,10 +76,28 @@ export function buildEnvironmentReach(input: {
     ...goal,
     // Folded here rather than in the cockpit, off the same rows the sheet card draws.
     // → 36-remote-validation.md#the-cockpit
-    environments: goal.environments.map((env) => ({
-      ...env,
-      sheet: sheetFold(sheetByGoalEnvironment.get(`${goal.goalRef} ${env.environment}`)),
-    })),
+    environments: goal.environments.map((env) => {
+      const sheet = sheetByGoalEnvironment.get(`${goal.goalRef} ${env.environment}`);
+      const validates = environments.some((e) => e.name === env.environment && e.validate !== undefined);
+      return {
+        ...env,
+        sheet: sheetFold(sheet),
+        noSheet:
+          sheet !== undefined || !validates
+            ? null
+            : noSheetReason({
+                environment: env.environment,
+                status: env.status,
+                arrival: arrivals.find((a) => a.goalRef === goal.goalRef && a.environment === env.environment),
+                checkSetAccepted:
+                  env.status === 'reached' &&
+                  checkSetReleased({
+                    record: store.validation.getValidationPlanRecord(goal.goalRef),
+                    checks: store.validation.listValidationChecks(goal.goalRef),
+                  }),
+              }),
+      };
+    }),
     gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
   }));

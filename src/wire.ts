@@ -369,6 +369,8 @@ export interface CockpitEnvironment {
   opens: EnvironmentGate[];
   /** The environment declares a `watch` block, so an arrival here opens a watch window. */
   watched: boolean;
+  /** The environment declares a `validate` block, so a goal's work arriving here can be run remotely. */
+  validates: boolean;
 }
 
 interface CockpitConfig {
@@ -540,6 +542,11 @@ export interface GoalReachView {
 export interface GoalEnvironmentReachView extends GoalEnvironmentReach {
   /** `check plan · 4 checks · 1 blocked`, or null where this goal has no check plan against this environment. */
   sheet: string | null;
+  /**
+   * Why this environment offers this goal no remote run, where it declares a `validate` block and holds
+   * no sheet for the goal. Null where there is a sheet, or no `validate` block to run one.
+   */
+  noSheet: string | null;
 }
 
 /**

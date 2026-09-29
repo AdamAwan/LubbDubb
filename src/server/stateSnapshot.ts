@@ -170,6 +170,7 @@ function harnessSection(
         name: env.name,
         opens: [...(env.arrival?.opens ?? [])],
         watched: env.watch !== undefined,
+        validates: env.validate !== undefined,
       })),
       heartbeatIntervalMs: config.heartbeatIntervalMs,
       maxConcurrentAgents: config.maxConcurrentAgents,

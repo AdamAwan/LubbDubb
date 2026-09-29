@@ -1,6 +1,8 @@
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import { queryDigest } from '../../store/remoteValidation.js';
 import type {
+  GoalArrival,
+  GoalReachStatus,
   GoalWatch,
   RemoteRowKind,
   RemoteRowOutcome,
@@ -286,6 +288,34 @@ export function sheetFoldLine(rows: readonly SheetFoldRow[]): string | null {
     ...(captured === 0 ? [] : [`${String(captured)} captured`]),
     ...(blocked === 0 ? [] : [`${String(blocked)} blocked`]),
   ].join(' · ');
+}
+
+/**
+ * Why an environment that declares a `validate` block offers this goal no remote run. Said rather than
+ * left as an absent panel: an operator reading a check the fleet would carry, with no run anywhere to
+ * carry it, is otherwise left to conclude the hand-over is the way. Each arm names the step that is
+ * still to come, in the order `sheetableArrivals` takes them.
+ * → docs/spec/36-remote-validation.md#when-there-is-no-sheet
+ */
+export function noSheetReason(input: {
+  environment: string;
+  status: GoalReachStatus;
+  arrival: GoalArrival | undefined;
+  checkSetAccepted: boolean;
+}): string {
+  const { environment: env, status, arrival } = input;
+  if (status === 'absent') return `This goal's work has not reached ${env} yet — a run is offered once it does.`;
+  if (status === 'partial')
+    return `Only part of this goal's work has reached ${env} — a run is offered once all of it has.`;
+  if (status === 'unknown')
+    return `Could not tell whether this goal's work is on ${env} — the last probe of it did not answer.`;
+  if (arrival === undefined)
+    return `The work is on ${env}; its arrival is recorded on the next pulse, then a run is offered.`;
+  if (arrival.sheetedAt !== null)
+    return `The work reached ${env} before remote runs could take it, so no run was set up for this goal.`;
+  if (!input.checkSetAccepted)
+    return `The work is on ${env}, but this goal's checks are not accepted yet — a run is offered once they are.`;
+  return `The work is on ${env}; its run is set up on the next pulse.`;
 }
 
 /** What the fold reads, which is exactly what the card reads: a row's own block, and its reading. */

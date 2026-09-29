@@ -2549,7 +2549,11 @@ onto that check, so the set, the local run and the sheet are one list seen at th
 
 **One list of checks, and a panel per runner.** The pane draws `Checks` first, full width, and below
 it one panel for each runner the deployment has — the machine in front of the operator, then each
-environment the goal has a sheet for. A check appears once, in `Checks`; a run appears once, in its
+environment the goal has a sheet for. **The remote panel is never absent**: where the environment the
+pane is showing holds no sheet, or no environment declares a `validate` block, it is drawn with the
+reason in place of its rows ([36](36-remote-validation.md#when-there-is-no-sheet)). A panel that
+vanished read as there being no remote run at all, and left the hand-over looking like the way to have
+the fleet run a browser check. A check appears once, in `Checks`; a run appears once, in its
 runner's panel; each names the other. A runner panel never re-lists the checks, which is what three
 cards of the same shape were doing to a reader.
 
@@ -2577,9 +2581,11 @@ dev environment and a remote run holds the lock on `(environment, tenant)`
 proceed at once: a press takes every check that runner can answer and a second press queues behind the
 first. A per-check run button would be offering a run that cannot be had.
 
-**Every press is on the run strip, above the list.** One line per runner — the machine, then each
-environment with a sheet — carrying that runner's press, or, where there is none, the reason in its
-place: no branch to run, nothing configured, a run already going. It is above the checks because that
+**Every press is on the run strip, above the list.** One line per runner — the machine, each
+environment with a sheet, then each environment that declares a `validate` block and holds no sheet
+for this goal (or one line saying no environment declares one) — carrying that runner's press, or,
+where there is none, the reason in its place: no branch to run, nothing configured, a run already
+going, the work not arrived yet. It is above the checks because that
 is the order the question arrives in — _is there a run that would answer some of this, before I start
 answering by hand_ — which is precisely the order the pane had backwards.
 
