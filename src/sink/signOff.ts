@@ -150,14 +150,14 @@ function ending(body: string): string {
  * whole second sign-off. `seed` is what the ending is drawn from, and is stable for
  * a given string so an edited-in-place body does not churn its joke.
  */
-export function signOffTail(seed: string, kind: SignOffKind = 'comment'): string {
-  return `${SIGN_OFFS[kind].tail}${ending(seed)}.`;
+export function signOffTail(seed: string): string {
+  return `${SIGN_OFFS.comment.tail}${ending(seed)}.`;
 }
 
 export function signOff(body: string, format: BodyFormat, kind: SignOffKind = 'comment'): string {
   if (body.includes(SIGNOFF_MARKER)) return body;
-  const { lead } = SIGN_OFFS[kind];
-  const line = signOffTail(body, kind);
+  const { lead, tail } = SIGN_OFFS[kind];
+  const line = `${tail}${ending(body)}.`;
   if (format === 'html') return `${body}\n${SIGNOFF_MARKER}\n<hr>\n<p>${lead}<strong>${NAME}</strong>${line}</p>`;
   return `${body}\n\n${SIGNOFF_MARKER}\n\n---\n\n${lead}**${NAME}**${line}`;
 }

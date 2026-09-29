@@ -3,7 +3,6 @@ import type { AgentManager } from '../agents/agentManager.js';
 import type { Config } from '../config/config.js';
 import { submitBrief } from '../jobs/brief.js';
 import { ticketFilingTarget } from '../tickets/target.js';
-import { chooseFilingType } from '../tickets/ticketTypes.js';
 import { enumOf, toolSchema } from './schema.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson, type ToolCallResult } from './protocol.js';
@@ -70,8 +69,6 @@ export const jobCreate: DesktopToolFactory = (deps) => ({
     const branch = trimmed(args.branch);
 
     const config = deps.briefConfig();
-    const chosen = chooseFilingType(config, trimmed(args.type));
-    if (!chosen.ok) return toolError(chosen.error);
     const outcome = await submitBrief(
       {
         store: deps.store,
@@ -80,11 +77,11 @@ export const jobCreate: DesktopToolFactory = (deps) => ({
         errors: deps.errors ?? { record: () => ({}) as never },
         renderTicketBody: (vars) => deps.renderTicketBody(vars),
       },
-      { prompt, title, kind, branch, type: chosen.type },
+      { prompt, title, kind, branch, type: trimmed(args.type) },
     );
     if (!outcome.ok) return toolError(outcome.error);
     await deps.runCycle();
-    if (outcome.kind === 'ticket') return filedAnswer(config, outcome.ticketRef, chosen.type);
+    if (outcome.kind === 'ticket') return filedAnswer(config, outcome.ticketRef, outcome.type);
     return toolJson({
       job: { id: outcome.job.id, title: outcome.job.title, kind: outcome.job.kind, status: outcome.job.status },
       means:
@@ -108,8 +105,8 @@ function filedAnswer(config: Config, ticketRef: string, type: string | null): To
     type,
     cautions: target.cautions,
     means:
-      'a ticket was filed on that tracker carrying the watch tag, the type and the assignee the config ' +
-      'names, so the harness will appraise it, plan it and work its parts in its own order. Nothing has ' +
+      'a ticket was filed on that tracker carrying the watch tag and assignee the config names, as the type ' +
+      'above, so the harness will appraise it, plan it and work its parts in its own order. Nothing has ' +
       'been dispatched by this call. Read fleet_status to see where it sits in the queue, and say the ' +
       'cautions out loud rather than promising a pickup they rule out.',
   });
