@@ -68,8 +68,6 @@ function browserSection(input: BriefingInput): string[] {
     '**It acts, so it stays inside this run’s tenant** — ' +
       `${input.tenant === null || input.tenant === '' ? 'and this environment declares none, which is why any row that needed one is blocked rather than driven' : `\`${input.tenant}\``}` +
       '. Do not sign in to any other tenant, and do not invent one.',
-    '',
-    ...signInSection(input.instruction),
   ];
 }
 
@@ -172,6 +170,8 @@ export function briefing(input: BriefingInput): string {
   return [
     ...runSection(input),
     ...browserSection(input),
+    '',
+    ...signInSection(input.instruction),
     '',
     ...(input.listSelectors === null ? [] : listingSection(input.listSelectors, input.listingDir)),
     ...commandSection(input),

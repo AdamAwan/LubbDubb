@@ -719,6 +719,9 @@ test('the environment’s sign-in instruction is appended, and without one a sig
     assert.match(prompt, /What the operator says about reaching it\n\nSign in as qa@example\.com, never by SSO\./);
     assert.doesNotMatch(prompt, /Nobody has said which account/);
 
+    const headless = briefs(b.store, said, null)[0];
+    assert.match(headless?.briefing ?? '', /Sign in as qa@example\.com/, 'and it rides a brief with no browser too');
+
     const unsaid = await promptFor(b.store);
     assert.doesNotMatch(unsaid, /What the operator says about reaching it/);
     assert.match(unsaid, /Nobody has said which account to sign in as here/);
