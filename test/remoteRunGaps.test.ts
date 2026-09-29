@@ -41,7 +41,7 @@ function reach(over: Partial<GoalEnvironmentReachView> = {}): GoalEnvironmentRea
 }
 
 const reason = (over: Partial<Parameters<typeof noSheetReason>[0]>) =>
-  noSheetReason({ environment: 'staging', status: 'reached', step: 'ready', checksAccepted: true, ...over });
+  noSheetReason({ environment: 'staging', status: 'reached', step: 'ready', ...over });
 
 test('each arm of a missing sheet names the step still to come', () => {
   assert.match(reason({ status: 'absent' }).why, /not reached staging yet/);
@@ -52,16 +52,12 @@ test('each arm of a missing sheet names the step still to come', () => {
   assert.match(reason({ step: 'ready' }).why, /set up on the next pulse/);
 });
 
-test('a run the pulse will never set up is offered to be set up by hand, once its checks are accepted', () => {
-  for (const step of ['sheeted', 'stale'] as const) {
+test('a run the pulse will never set up is offered to be set up by hand', () => {
+  for (const step of ['sheeted', 'stale'] as const)
     assert.deepEqual(reason({ step }), {
       why: 'No run was set up automatically: the work reached staging before remote runs there could take it.',
       setUp: true,
     });
-    const unaccepted = reason({ step, checksAccepted: false });
-    assert.equal(unaccepted.setUp, false);
-    assert.match(unaccepted.why, /accept them first/);
-  }
   for (const step of [null, 'awaiting-checks', 'ready'] as const) assert.equal(reason({ step }).setUp, false);
 });
 
@@ -78,6 +74,11 @@ test('an arrival waiting on its checks is never stale, and is fresh again the mo
     });
   assert.equal(step({}), 'ready');
   assert.equal(step({ arrival: arrival({ sheetedAt: NOW }) }), 'sheeted');
+  assert.equal(
+    step({ arrival: arrival({ sheetedAt: NOW }), checkSet: () => ({ accepted: false, acceptedAt: null }) }),
+    'awaiting-checks',
+    'a stamped arrival is offered by hand only once its checks are accepted',
+  );
   assert.equal(step({ validates: false }), 'not-validating');
   assert.equal(
     step({ now: later, checkSet: () => ({ accepted: false, acceptedAt: null }) }),

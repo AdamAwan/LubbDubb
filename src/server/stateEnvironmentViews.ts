@@ -1,6 +1,6 @@
 import type { System } from '../system/system.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
-import { checkSetStanding, type CheckSetStanding } from '../validation/planApproval.js';
+import type { CheckSetStanding } from '../validation/planApproval.js';
 import { resolveTenant } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -51,6 +51,7 @@ export function buildEnvironmentReach(input: {
   shortfalled: ReadonlyMap<string, IssueShortfall>;
   probeIntervalMs: number;
   now: number;
+  checkSet: (goalRef: string) => CheckSetStanding;
 }): GoalReachView[] {
   const { store, environments, sheets, plans, parts, arrivals, nodes } = input;
   const releases = store.environments.listEnvironmentGateReleases();
@@ -93,7 +94,7 @@ export function buildEnvironmentReach(input: {
 
 /** Why a validating environment holds no sheet for a goal, read off the desk's own cut. */
 function noSheetFold(input: {
-  store: System['store'];
+  checkSet: (goalRef: string) => CheckSetStanding;
   environments: EnvironmentConfig[];
   arrivals: GoalArrival[];
   probeIntervalMs: number;
@@ -105,18 +106,6 @@ function noSheetFold(input: {
     const key = `${arrival.goalRef} ${arrival.environment}`;
     if (!arrivals.has(key)) arrivals.set(key, arrival);
   }
-  const standings = new Map<string, CheckSetStanding>();
-  const checkSet = (goalRef: string): CheckSetStanding => {
-    let held = standings.get(goalRef);
-    if (held === undefined) {
-      held = checkSetStanding({
-        record: input.store.validation.getValidationPlanRecord(goalRef),
-        checks: input.store.validation.listValidationChecks(goalRef),
-      });
-      standings.set(goalRef, held);
-    }
-    return held;
-  };
   return (goalRef, env) => {
     if (!validating.has(env.environment)) return null;
     const arrival = arrivals.get(`${goalRef} ${env.environment}`);
@@ -126,16 +115,11 @@ function noSheetFold(input: {
         : arrivalSheetStep({
             arrival,
             validates: true,
-            checkSet: () => checkSet(goalRef),
+            checkSet: () => input.checkSet(goalRef),
             probeIntervalMs: input.probeIntervalMs,
             now: input.now,
           });
-    return noSheetReason({
-      environment: env.environment,
-      status: env.status,
-      step,
-      checksAccepted: (step === 'sheeted' || step === 'stale') && checkSet(goalRef).accepted,
-    });
+    return noSheetReason({ environment: env.environment, status: env.status, step });
   };
 }
 

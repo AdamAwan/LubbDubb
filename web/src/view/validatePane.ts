@@ -173,7 +173,7 @@ export interface RemoteRunGap {
   environment: string | null;
   why: string;
   /** An operator can set the run up by hand. → 36-remote-validation.md#setting-one-up-by-hand */
-  setUp: boolean;
+  setUp?: boolean;
 }
 
 /**
@@ -193,24 +193,16 @@ export function remoteRunGaps(
       {
         environment: null,
         why: 'No environment declares a `validate` block, so nothing can run these checks remotely.',
-        setUp: false,
       },
     ];
   if (showing !== null && !validating.some((e) => e.name === showing))
-    return [
-      {
-        environment: showing,
-        why: `${showing} declares no \`validate\` block, so it cannot run these checks.`,
-        setUp: false,
-      },
-    ];
+    return [{ environment: showing, why: `${showing} declares no \`validate\` block, so it cannot run these checks.` }];
   return validating
     .filter((env) => (showing === null || env.name === showing) && !sheets.some((s) => s.environment === env.name))
     .map((env) => ({
       environment: env.name,
       ...(reach.find((r) => r.environment === env.name)?.noSheet ?? {
         why: `This goal's work has not reached ${env.name} yet — a run is offered once it does.`,
-        setUp: false,
       }),
     }));
 }

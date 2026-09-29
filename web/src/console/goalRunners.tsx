@@ -216,11 +216,11 @@ function GapRow({
   onSetUp: (environment: string) => Promise<void>;
   onRefused: (reason: string) => void;
 }): JSX.Element {
-  const environment = gap.environment;
+  const { environment } = gap;
   return (
     <div className="cn-runstrip-row">
       <span className="cn-runstrip-who">{environment ?? 'remote'}</span>
-      {gap.setUp && environment !== null && (
+      {gap.setUp === true && environment !== null && (
         <AsyncButton
           className={CONTROL_CLASS}
           onClick={() => onSetUp(environment)}

@@ -672,9 +672,11 @@ pulse — and `ready` for one whose set was accepted within two probe intervals,
 `CheckSetStanding` carries the acceptance time (`validation_plans.released_at`); a set released before
 that stamp existed has none, and is judged on the arrival alone. The backfill guard is intact where it
 matters: the pulse an operator adds a `validate` block stamps every goal whose work **and** checks were
-both settled long ago, which is the history it exists to keep out. What it costs is a check-set read
-per unstamped arrival per pulse, on goals whose checks are still unwritten — cheaper than a sheet lost
-for good.
+both settled long ago, which is the history it exists to keep out. The acceptance is read before the
+stamp as well, so a stamped arrival whose checks are still unaccepted reads `awaiting-checks` — never
+`sheeted`, which therefore always means a set is there to run. What it costs is one read of the plan
+records per pulse (`RemoteValidationDesk.checkSets`), with a goal's checks read only where no stamp
+decides.
 
 An arrival assembles a sheet and **never starts a browser run**. That gate is the only moment in a
 goal's life when somebody looks at the list of checks with the delivered thing actually in front of
@@ -2470,9 +2472,10 @@ no `validate` block; `setUp` is true exactly where the pulse never will and a pe
 run up, so the run strip offers **Set up a run** on its line, and
 `POST /api/issues/:number/remote-validation/:environment/sheet` reaches
 `RemoteValidationDesk.setUpSheet`. It assembles the sheet exactly as the pulse would — same rows, same
-deterministic reads — and stamps the arrival. It is refused, in words and a 409, where the pulse would
-refuse for a reason a press cannot overrule: the environment declares no `validate` block, a sheet
-already exists, no arrival is recorded, or the check set is not accepted. It is the operator deciding
+deterministic reads — and stamps the arrival. It is refused, in words and a 409, where a sheet already
+exists or no arrival is recorded, and otherwise by the arrival's own `arrivalSheetStep`, worded by
+`noSheetReason`: an environment that declares no `validate` block, or a check set not accepted yet. So
+the route and the button (`noSheet.setUp`, true exactly on `sheeted` and `stale`) read one rule. It is the operator deciding
 that this one piece of history is wanted, which is the one thing the backfill guard could never know.
 
 The cockpit (`remoteRunGaps`, `web/src/view/validatePane.ts`) adds only what it holds no reach row

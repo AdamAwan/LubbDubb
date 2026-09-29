@@ -29,9 +29,7 @@ export function checkSetReleased(input: {
   record: ValidationPlanRecord | null;
   checks: readonly ValidationCheck[];
 }): boolean {
-  if (input.record?.releasedAt != null) return true;
-  if (input.record?.authoredAt != null) return false;
-  return input.checks.length > 0;
+  return checkSetStanding(input.record, () => input.checks).accepted;
 }
 
 /**
@@ -43,11 +41,13 @@ export interface CheckSetStanding {
   acceptedAt: string | null;
 }
 
-export function checkSetStanding(input: {
-  record: ValidationPlanRecord | null;
-  checks: readonly ValidationCheck[];
-}): CheckSetStanding {
-  return { accepted: checkSetReleased(input), acceptedAt: input.record?.releasedAt ?? null };
+export function checkSetStanding(
+  record: ValidationPlanRecord | null,
+  checks: () => readonly ValidationCheck[],
+): CheckSetStanding {
+  if (record?.releasedAt != null) return { accepted: true, acceptedAt: record.releasedAt };
+  if (record?.authoredAt != null) return { accepted: false, acceptedAt: null };
+  return { accepted: checks().length > 0, acceptedAt: null };
 }
 
 /**

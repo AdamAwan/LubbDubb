@@ -24,6 +24,8 @@ import { candidateParents } from '../issueRelations.js';
 import { environmentGroups } from '../environments/groups.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { once, type SnapshotOpts, baseReads, planReads, verdictReads, contextReads } from './stateReads.js';
+import { checkSetStanding, type CheckSetStanding } from '../validation/planApproval.js';
+import type { ValidationCheck, ValidationPlanRecord } from '../types.js';
 import { type IssueReadsOn, issueReads } from './stateIssueReads.js';
 import {
   buildEnvironmentHealth,
@@ -279,6 +281,7 @@ function goalsSection(
             shortfalled: r.shortfallsByOrigin(),
             probeIntervalMs: config.environmentProbeIntervalMs,
             now: Date.now(),
+            checkSet: checkSets(r.validationPlanRecords(), r.checksByGoal()),
           }),
     featureSequences: store.sequences.listFeatureSequences(),
     environmentHealth: buildEnvironmentHealth(store, environments),
@@ -377,7 +380,7 @@ function plansSection(
     planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks: r.validationChecks(),
-    validationPlans: store.validation.listValidationPlanRecords(),
+    validationPlans: r.validationPlanRecords(),
     validationResources: r.wireValidationResources(),
     goalWatches: [...r.goalWatches(), ...store.watches.listProposedGoalWatches()],
     stateQueries: store.remoteValidation.listStateQueries(),
@@ -516,4 +519,12 @@ function workItemStateRules(config: Config): CockpitState['config']['stateRules'
     inReview: config.issueInReviewState ?? null,
     returnsTo: config.issuePickupStates?.[0] ?? null,
   };
+}
+
+function checkSets(
+  records: readonly ValidationPlanRecord[],
+  checksByGoal: ReadonlyMap<string, readonly ValidationCheck[]>,
+): (goalRef: string) => CheckSetStanding {
+  const byGoal = new Map(records.map((r) => [r.originRef, r]));
+  return (goalRef) => checkSetStanding(byGoal.get(goalRef) ?? null, () => checksByGoal.get(goalRef) ?? []);
 }

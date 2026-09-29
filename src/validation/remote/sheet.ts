@@ -296,7 +296,6 @@ export function noSheetReason(input: {
   environment: string;
   status: GoalReachStatus;
   step: ArrivalSheetStep | null;
-  checksAccepted: boolean;
 }): NoSheet {
   const env = input.environment;
   const why = (text: string): NoSheet => ({ why: text, setUp: false });
@@ -311,14 +310,10 @@ export function noSheetReason(input: {
       return why(`The work is on ${env}; its arrival is recorded on the next pulse, then a run is offered.`);
     case 'sheeted':
     case 'stale':
-      return input.checksAccepted
-        ? {
-            why: `No run was set up automatically: the work reached ${env} before remote runs there could take it.`,
-            setUp: true,
-          }
-        : why(
-            `No run was set up automatically on ${env}, and this goal's checks are not accepted — accept them first.`,
-          );
+      return {
+        why: `No run was set up automatically: the work reached ${env} before remote runs there could take it.`,
+        setUp: true,
+      };
     case 'awaiting-checks':
       return why(
         `The work is on ${env}, but this goal's checks are not accepted yet — a run is offered once they are.`,

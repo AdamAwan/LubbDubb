@@ -80,12 +80,8 @@ interface SheetArrivalVerdict {
  * next pulse sees. Deliberately smaller than the watch's twenty — what this bounds is a command per
  * approved row on each sheet, where that one bounds a query.
  *
- * **An arrival whose goal has no accepted check set yet is deferred the same way**, and left unstamped
- * however long that takes: the set is written after the assessor records `delivered`, which routinely
- * takes longer than two probe intervals. It is fresh again the moment the set is accepted — freshness
- * is the arrival's **or** the acceptance's — so the backfill guard still stamps a goal whose work and
- * checks were both settled long ago, and never one still waiting on its checks.
- * → docs/spec/36-remote-validation.md#a-sheet-waits-for-its-checks
+ * **An arrival waiting on its check set is deferred the same way, however long that takes**; freshness
+ * is the arrival's or the acceptance's. → docs/spec/36-remote-validation.md#a-sheet-waits-for-its-checks
  *
  * → docs/spec/36-remote-validation.md#the-desk
  */
@@ -131,10 +127,10 @@ export function arrivalSheetStep(input: {
   probeIntervalMs: number;
   now: number;
 }): ArrivalSheetStep {
-  if (input.arrival.sheetedAt !== null) return 'sheeted';
   if (!input.validates) return 'not-validating';
   const checks = input.checkSet();
   if (!checks.accepted) return 'awaiting-checks';
+  if (input.arrival.sheetedAt !== null) return 'sheeted';
   const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
   const since = (at: string | null): boolean => at !== null && Date.parse(at) >= floor;
   return since(input.arrival.arrivedAt) || since(checks.acceptedAt) ? 'ready' : 'stale';
