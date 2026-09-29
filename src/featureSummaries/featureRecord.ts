@@ -7,8 +7,8 @@ import type { Escalation, GoalEnvironmentReach } from '../types.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { lastLandingByGoal } from '../features/featureBoard.js';
 import {
-  featureStandingKey,
-  featureStandingLines,
+  featureStanding,
+  featureStandingLine,
   standingMoves,
   type FeatureChildStandingFacts,
 } from './featureSummary.js';
@@ -73,8 +73,7 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
   return [...groups].map(([number, group]) => ({
     number,
     title: group.title,
-    key: featureStandingKey(group.children),
-    lines: featureStandingLines(group.children),
+    ...featureStanding(group.children),
     children: group.children.sort((a, b) => a.number - b.number),
   }));
 }
@@ -101,17 +100,11 @@ export function renderFeatureDossier(
   lines.push(`${record.children.length} item(s) hang off it.`, '');
 
   for (const child of record.children) {
-    const state = [child.state, child.workItemState].filter(Boolean).join(' / ');
     lines.push(`### #${child.number} — ${child.title}`);
-    lines.push(`- State: ${state}${child.watched ? '' : ' — **not watched**: no agent has ever been on it'}`);
-    if (child.runningSince) lines.push(`- An agent has been on this since ${child.runningSince}`);
-    if (child.delivered) lines.push(`- Delivered: "${child.delivered}"`);
-    if (child.shortfall) {
-      const cause = child.shortfall.cause ? ` (${child.shortfall.cause})` : '';
-      lines.push(`- Fell short${cause}: "${child.shortfall.summary}"`);
-    }
+    lines.push(
+      `- ${featureStandingLine(child)}${child.watched ? '' : ' — **not watched**: no agent has ever been on it'}`,
+    );
     for (const ask of child.questions) lines.push(`- Waiting on a person since ${ask.since}: "${ask.prompt}"`);
-    if (child.landedAt) lines.push(`- Last landed a commit at ${child.landedAt}`);
     for (const env of reach.get(issueOriginRef('root', child.number)) ?? []) {
       lines.push(`- ${env.environment}: ${env.status} (${env.landed}/${env.total} landings)`);
     }
@@ -133,15 +126,8 @@ export function renderFeatureDossier(
 }
 
 function movedSection(before: string[] | null, after: string[]): string[] {
-  const { gone, came } = standingMoves(before, after);
-  if (gone.length === 0 && came.length === 0) return [];
-  return [
-    '## What moved since the summary on file',
-    '',
-    ...gone.map((l) => `- was: ${l}`),
-    ...came.map((l) => `- now: ${l}`),
-    '',
-  ];
+  const moves = standingMoves(before, after, { gone: '- was: ', came: '- now: ' });
+  return moves.length === 0 ? [] : ['## What moved since the summary on file', '', ...moves, ''];
 }
 
 export function featureReach(store: Store, opts: FeatureBoardFacts): Map<string, GoalEnvironmentReach[]> {

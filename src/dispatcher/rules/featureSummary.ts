@@ -1,5 +1,5 @@
 import { issueOriginRef } from '../../issueOrigins.js';
-import { featureSummaryOrigin, standingMoves } from '../../featureSummaries/featureSummary.js';
+import { featureSummaryOrigin, standingMoves, summaryHeld } from '../../featureSummaries/featureSummary.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `feature-summary`)
@@ -13,7 +13,7 @@ export function featureSummary(s: StageContext): void {
     const origin = featureSummaryOrigin(feature.number);
     const onFile = written.get(issueOriginRef('root', feature.number));
     if (onFile?.standingKey === feature.key) continue;
-    if (onFile?.heldKeys.includes(feature.key)) continue;
+    if (onFile && summaryHeld(onFile, feature.key)) continue;
     if (s.activeOrigins.has(origin)) continue;
 
     const title = `Summarise feature #${feature.number}`;
@@ -40,8 +40,7 @@ export function featureSummary(s: StageContext): void {
 
 function movedReason(number: number, before: string[] | null, after: string[]): string {
   const head = `Work under feature #${number} has moved since it was last summarised.`;
-  const { gone, came } = standingMoves(before, after);
-  const moves = [...gone.map((l) => `was ${l}`), ...came.map((l) => `now ${l}`)];
+  const moves = standingMoves(before, after, { gone: 'was ', came: 'now ' });
   if (moves.length === 0) return head;
   const shown = moves.slice(0, MOVES_IN_REASON);
   const more = moves.length > shown.length ? `; and ${moves.length - shown.length} more` : '';

@@ -223,13 +223,14 @@ export class TicketStore {
   }): FeatureSummary {
     const ts = this.ctx.now();
     const prev = this.getFeatureSummary(input.originRef);
-    const unchanged = prev !== null && sameAccount(prev, input);
+    const unchanged =
+      prev !== null && (sameAccount(prev, input) || [...prev.repeatKeys, prev.standingKey].includes(input.standingKey));
     const row: FeatureSummary = {
       ...input,
       standingLines: input.standingLines ?? null,
       repeats: unchanged ? prev.repeats + 1 : 0,
       repeatKeys: unchanged
-        ? [...new Set([...prev.repeatKeys, prev.standingKey, input.standingKey])]
+        ? [...new Set([...prev.repeatKeys, prev.standingKey, input.standingKey])].slice(-REPEAT_KEYS_KEPT)
         : [input.standingKey],
       createdAt: prev?.createdAt ?? ts,
       updatedAt: ts,
@@ -355,17 +356,11 @@ interface FeatureSummaryRow {
   updated_at: string;
 }
 
-function sameAccount(
-  a: Pick<FeatureSummary, 'headline' | 'standing' | 'usable' | 'blocked' | 'remaining'>,
-  b: Pick<FeatureSummary, 'headline' | 'standing' | 'usable' | 'blocked' | 'remaining'>,
-): boolean {
-  return (
-    a.headline === b.headline &&
-    a.standing === b.standing &&
-    a.usable === b.usable &&
-    a.blocked === b.blocked &&
-    a.remaining === b.remaining
-  );
+const ACCOUNT_FIELDS = ['headline', 'standing', 'usable', 'blocked', 'remaining'] as const;
+const REPEAT_KEYS_KEPT = 8;
+
+function sameAccount(a: Pick<FeatureSummary, (typeof ACCOUNT_FIELDS)[number]>, b: typeof a): boolean {
+  return ACCOUNT_FIELDS.every((f) => a[f] === b[f]);
 }
 
 function rowToFeatureSummary(r: FeatureSummaryRow): FeatureSummary {

@@ -1,4 +1,5 @@
 import type {
+  FeatureSummary,
   Agent,
   Decision,
   Escalation,
@@ -89,7 +90,7 @@ export interface DispatchContext {
   judgeOwed?: readonly string[];
   retrospectiveOrigins?: string[];
   featureStandings?: { number: number; title: string; key: string; lines: string[] }[];
-  featureSummaryKeys?: { originRef: string; standingKey: string; standingLines: string[] | null; heldKeys: string[] }[];
+  featureSummaryKeys?: Pick<FeatureSummary, 'originRef' | 'standingKey' | 'standingLines' | 'repeats' | 'repeatKeys'>[];
   featureSequences?: FeatureSequence[];
   obstacles?: ObstacleStanding[];
   obstacleBlocks?: ObstacleBlock[];

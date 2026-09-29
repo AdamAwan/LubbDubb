@@ -118,26 +118,31 @@ export function featureStandingLine(c: FeatureChildStandingFacts): string {
   return parts.join(' · ');
 }
 
-export function featureStandingLines(children: readonly FeatureChildStandingFacts[]): string[] {
+function featureStandingLines(children: readonly FeatureChildStandingFacts[]): string[] {
   return [...children].sort((a, b) => a.number - b.number).map(featureStandingLine);
 }
 
-export function featureStandingKey(children: readonly FeatureChildStandingFacts[]): string {
-  return standingKeyOf(featureStandingLines(children));
+export function featureStanding(children: readonly FeatureChildStandingFacts[]): { key: string; lines: string[] } {
+  const lines = featureStandingLines(children);
+  return { key: createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 32), lines };
 }
 
-function standingKeyOf(lines: readonly string[]): string {
-  return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 32);
+export function featureStandingKey(children: readonly FeatureChildStandingFacts[]): string {
+  return featureStanding(children).key;
 }
 
 export function standingMoves(
   before: readonly string[] | null,
   after: readonly string[],
-): { gone: string[]; came: string[] } {
-  if (before === null) return { gone: [], came: [] };
+  marks: { gone: string; came: string },
+): string[] {
+  if (before === null) return [];
   const was = new Set(before);
   const now = new Set(after);
-  return { gone: before.filter((l) => !now.has(l)), came: after.filter((l) => !was.has(l)) };
+  return [
+    ...before.filter((l) => !now.has(l)).map((l) => `${marks.gone}${l}`),
+    ...after.filter((l) => !was.has(l)).map((l) => `${marks.came}${l}`),
+  ];
 }
 
 export function summaryHeld(summary: { repeats: number; repeatKeys: readonly string[] }, key: string): boolean {

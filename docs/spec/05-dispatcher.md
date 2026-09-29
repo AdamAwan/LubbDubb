@@ -1453,29 +1453,33 @@ dispatcher's half is:
   Feature costs one string comparison a pulse and no agent, for ever.
 - **The digest covers only what the summariser is shown.** `featureStandingKey` hashes one line per
   child (`featureStandingLine`): its state and work state, when an agent went on it, the delivered and
-  fell-short sentences, and when it last landed — every fact the dossier draws, and nothing it does not.
-  It used to hash `deliveredAt` and `shortfallAt`, which the dossier leaves out: a hidden input that
-  moves dispatches an agent that cannot see the movement, refiles the same account, and cannot clear
-  the mismatch — so any input that flips does it for ever. Changing what the digest covers moves every
-  stored key, so a deployment taking the change re-summarises each Feature once.
+  fell-short sentences, and when it last landed. The dossier draws **that same line** for each child, so
+  the two cannot drift: a fact added to one is added to both. It used to hash `deliveredAt` and
+  `shortfallAt`, which the dossier left out: a hidden input that moves dispatches an agent that cannot
+  see the movement, refiles the same account, and cannot clear the mismatch — so any input that flips
+  does it for ever. Changing what the digest covers moves every stored key, so a deployment taking the
+  change re-summarises each Feature once.
 - **It says what moved.** The lines the summary was written against are kept on the row; the dispatch
   reason names the lines that went and came (at most six), the dossier opens with a "What moved"
   section, and the harness logs `[lubbdubb] feature #n standing moved` with the same diff whenever a
   Feature's key changes between pulses. A loop is then diagnosable from the task list rather than
   from a two-week audit.
-- **An account refiled unchanged three times is held.** A summary written word for word as the one on
-  file bumps `repeats` and adds the standing it was written at to `repeat_keys`; any other account
-  resets both. At `FEATURE_SUMMARY_REPEAT_CAP` (3) the rule stops dispatching at **any standing in
-  `repeat_keys`** — so a fact flipping between two values stops costing an agent — and dispatches again
-  the moment the standing reaches somewhere it has not been refiled at. The judgement is the store's
-  (it compares the prose); the rule reads keys only (`DispatchContext.featureSummaryKeys[].heldKeys`).
-  The filing that reaches the cap records one error (`source: agent`) naming the Feature and carrying
-  its lines, and the board's stamp reads "refiled unchanged n times" in place of "moved since this was
-  written". This is a fail-safe, not the fix: the rule's cooldown only paces a loop (it is what set
-  the fifteen-minute rhythm of the one that found this), and its attempt cap counts within the last
-  200 decisions, which a busy fleet rolls through long before the next attempt.
-- **It reads no lens and no prose.** `DispatchContext.featureStandings` carries a number, a title and
-  a digest per Feature and `featureSummaryKeys` carries origins and digests —
+- **Three refilings that said nothing new hold it.** A filing is a repeat when its account is word for
+  word the one on file, **or** its standing is one this run of repeats was already written at (an A→B→A
+  flip reworded is still a flip). A repeat bumps `repeats` and adds its standing to `repeat_keys`
+  (the last eight kept); anything else resets both. At `FEATURE_SUMMARY_REPEAT_CAP` (3) the rule stops
+  dispatching at **any standing in `repeat_keys`** — so a fact flipping between two values stops
+  costing an agent — and dispatches again the moment the standing reaches somewhere new. The prose
+  comparison is the store's; the rule calls `summaryHeld` on the counts and keys, which is also what
+  the board reads, so the two agree. The filing that reaches the cap records one error
+  (`source: agent`) naming the Feature and carrying its lines, and the board's stamp reads "refiled
+  unchanged n times" in place of "moved since this was written". This is a fail-safe, not the fix:
+  the rule's cooldown only paces a loop (it is what set the fifteen-minute rhythm of the one that found
+  this), and its attempt cap counts within the last 200 decisions, which a busy fleet rolls through
+  long before the next attempt.
+- **It reads no lens and no prose.** `DispatchContext.featureStandings` carries a number, a title, a
+  digest and its fact lines per Feature and `featureSummaryKeys` carries origins, digests, lines and
+  repeat counts —
   `retrospectiveOrigins`' rule, and for its reason: a rule branching on what an agent wrote about a
   Feature would let one account of it change what the harness schedules next. Nothing under
   `src/dispatcher/` touches `buildFeatureBoard`.

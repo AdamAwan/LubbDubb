@@ -402,7 +402,7 @@ function buildHarness(
 }
 
 function harnessReads(config: Config, store: Store, predictions: PredictionStore, featureBoard: Fleet['featureBoard']) {
-  const lastStanding = new Map<number, { key: string; lines: string[] }>();
+  let lastStanding = new Map<number, { key: string; lines: string[] }>();
   return {
     featureStandings: (): { number: number; title: string; key: string; lines: string[] }[] => {
       const facts = featureBoard();
@@ -411,8 +411,8 @@ function harnessReads(config: Config, store: Store, predictions: PredictionStore
       for (const f of records) {
         const before = lastStanding.get(f.number);
         if (before && before.key !== f.key) logStandingMove(f.number, before.lines, f.lines);
-        lastStanding.set(f.number, { key: f.key, lines: f.lines });
       }
+      lastStanding = new Map(records.map((f) => [f.number, f]));
       return records.map((f) => ({ number: f.number, title: f.title, key: f.key, lines: f.lines }));
     },
     // Computed here rather than in the rule: `src/validation/remote/` is a lens as far as the
@@ -435,10 +435,8 @@ function harnessReads(config: Config, store: Store, predictions: PredictionStore
 }
 
 function logStandingMove(feature: number, before: string[], after: string[]): void {
-  const { gone, came } = standingMoves(before, after);
-  console.log(
-    `[lubbdubb] feature #${feature} standing moved\n${[...gone.map((l) => `  - ${l}`), ...came.map((l) => `  + ${l}`)].join('\n')}`,
-  );
+  const moves = standingMoves(before, after, { gone: '  - ', came: '  + ' });
+  console.log(`[lubbdubb] feature #${feature} standing moved\n${moves.join('\n')}`);
 }
 
 function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, escalations }: Fleet): void {

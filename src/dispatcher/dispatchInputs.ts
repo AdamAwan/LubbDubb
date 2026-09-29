@@ -1,4 +1,3 @@
-import { FEATURE_SUMMARY_REPEAT_CAP } from '../featureSummaries/featureSummary.js';
 import type { Store } from '../store/store.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import type { DispatchContext } from './dispatcher.js';
@@ -60,7 +59,8 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
             originRef: f.originRef,
             standingKey: f.standingKey,
             standingLines: f.standingLines,
-            heldKeys: f.repeats >= FEATURE_SUMMARY_REPEAT_CAP ? f.repeatKeys : [],
+            repeats: f.repeats,
+            repeatKeys: f.repeatKeys,
           })),
     featureSequences: store.sequences.listFeatureSequences(),
     proposals,

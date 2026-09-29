@@ -143,8 +143,8 @@ test('a Feature is summarised when it has moved, and never again until it does',
   assert.match(again.reason ?? '', /was #1 closed; now #1 open/, 'the dispatch says what moved');
 });
 
-function onFile(standingKey: string, standingLines: string[] | null = null, heldKeys: string[] = []) {
-  return { originRef: 'issue:29857', standingKey, standingLines, heldKeys };
+function onFile(standingKey: string, standingLines: string[] | null = null, repeatKeys: string[] = []) {
+  return { originRef: 'issue:29857', standingKey, standingLines, repeats: repeatKeys.length ? 3 : 0, repeatKeys };
 }
 
 test('a Feature held on a loop is not re-dispatched at a standing it has already been refiled at', async () => {
