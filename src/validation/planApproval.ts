@@ -29,9 +29,25 @@ export function checkSetReleased(input: {
   record: ValidationPlanRecord | null;
   checks: readonly ValidationCheck[];
 }): boolean {
-  if (input.record?.releasedAt != null) return true;
-  if (input.record?.authoredAt != null) return false;
-  return input.checks.length > 0;
+  return checkSetStanding(input.record, () => input.checks).accepted;
+}
+
+/**
+ * Whether the set is released, and when, where a stamp says so. `acceptedAt` null on a released set is
+ * one released before the stamp existed — the ingested set `checkSetReleased`'s second arm reads.
+ */
+export interface CheckSetStanding {
+  accepted: boolean;
+  acceptedAt: string | null;
+}
+
+export function checkSetStanding(
+  record: ValidationPlanRecord | null,
+  checks: () => readonly ValidationCheck[],
+): CheckSetStanding {
+  if (record?.releasedAt != null) return { accepted: true, acceptedAt: record.releasedAt };
+  if (record?.authoredAt != null) return { accepted: false, acceptedAt: null };
+  return { accepted: checks().length > 0, acceptedAt: null };
 }
 
 /**

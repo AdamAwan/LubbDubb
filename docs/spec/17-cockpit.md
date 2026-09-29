@@ -2585,7 +2585,8 @@ first. A per-check run button would be offering a run that cannot be had.
 environment with a sheet, then each environment that declares a `validate` block and holds no sheet
 for this goal (or one line saying no environment declares one) — carrying that runner's press, or,
 where there is none, the reason in its place: no branch to run, nothing configured, a run already
-going, the work not arrived yet. It is above the checks because that
+going, the work not arrived yet. Where the pulse will never set a remote run up and a person can, the
+line carries **Set up a run** beside its reason ([36](36-remote-validation.md#setting-one-up-by-hand)). It is above the checks because that
 is the order the question arrives in — _is there a run that would answer some of this, before I start
 answering by hand_ — which is precisely the order the pane had backwards.
 

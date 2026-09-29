@@ -370,7 +370,10 @@ test('a set a plan document ingested before the gate reads as released, on both 
   const considered = sheetableArrivals({
     arrivals: [arrival],
     environments: [{ name: 'acceptance', validate: { permits: ['state'] } } as never],
-    authored: (goalRef) => checkSetReleased({ record: null, checks: goalRef === GOAL ? checks : [] }),
+    checkSet: (goalRef: string) => ({
+      accepted: checkSetReleased({ record: null, checks: goalRef === GOAL ? checks : [] }),
+      acceptedAt: null,
+    }),
     probeIntervalMs: 60_000,
     now: Date.parse(NOW) + 1_000,
   });

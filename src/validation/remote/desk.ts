@@ -1,7 +1,7 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { EnvironmentObserver } from '../../environments/observer.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
-import { sheetableArrivals, watchWindowMs } from '../../environments/watchWindow.js';
+import { arrivalSheetStep, sheetableArrivals, watchWindowMs } from '../../environments/watchWindow.js';
 import { watchCheckVerdict } from '../../environments/watchVerdict.js';
 import type { WatchResult } from '../../environments/watchResult.js';
 import { issueOriginNumber } from '../../issueOrigins.js';
@@ -10,12 +10,12 @@ import type { ActionSink, IssueImageSink } from '../../sink/actionSink.js';
 import { validationResourcePath } from '../resources.js';
 import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
-import { checkSetReleased } from '../planApproval.js';
+import { checkSetStanding, type CheckSetStanding } from '../planApproval.js';
 import { sweptScripts } from '../steps.js';
 import { queryDigest } from '../../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../../types.js';
 import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
-import { sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
+import { noSheetReason, sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type TenantEnvironment } from './tenants.js';
 
@@ -98,6 +98,42 @@ export class RemoteValidationDesk {
     await this.postCaptures();
     this.sweep();
     this.sweepScripts();
+  }
+
+  /**
+   * → docs/spec/36-remote-validation.md#setting-one-up-by-hand
+   *
+   * @public the seam the `…/sheet` route reaches
+   */
+  async setUpSheet(goalRef: string, environment: string): Promise<string | null> {
+    const { store } = this.deps;
+    const validates = this.deps.environments.find((e) => e.name === environment)?.validate !== undefined;
+    if (!validates) return noSheetReason({ environment, status: 'reached', step: 'not-validating' }).why;
+    if (store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environment))
+      return `A run is already set up on "${environment}" for this goal.`;
+    const arrival = store.environments
+      .listGoalArrivals()
+      .find((a) => a.goalRef === goalRef && a.environment === environment);
+    if (arrival === undefined) return `This goal's work is not recorded as having reached "${environment}".`;
+    const step = arrivalSheetStep({
+      arrival,
+      validates,
+      checkSet: () => this.checkSets()(goalRef),
+      probeIntervalMs: this.deps.probeIntervalMs,
+      now: this.now(),
+    });
+    if (step === 'awaiting-checks') return noSheetReason({ environment, status: 'reached', step }).why;
+    await this.assemble(arrival);
+    store.environments.markArrivalSheeted(goalRef, environment);
+    return null;
+  }
+
+  /** Every goal's check-set standing off one read of the plan records; a goal's checks only where no stamp decides. */
+  private checkSets(): (goalRef: string) => CheckSetStanding {
+    const { store } = this.deps;
+    const records = new Map(store.validation.listValidationPlanRecords().map((r) => [r.originRef, r]));
+    return (goalRef) =>
+      checkSetStanding(records.get(goalRef) ?? null, () => store.validation.listValidationChecks(goalRef));
   }
 
   /**
@@ -196,11 +232,7 @@ export class RemoteValidationDesk {
       considered = sheetableArrivals({
         arrivals: store.environments.listGoalArrivals(),
         environments: this.deps.environments,
-        authored: (goalRef) =>
-          checkSetReleased({
-            record: store.validation.getValidationPlanRecord(goalRef),
-            checks: store.validation.listValidationChecks(goalRef),
-          }),
+        checkSet: this.checkSets(),
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       });

@@ -279,11 +279,13 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     }
     return byOrigin;
   });
+  const validationPlanRecords = once(() => store.validation.listValidationPlanRecords());
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
   return {
     validationChecks,
     checksByGoal,
+    validationPlanRecords,
     wireValidationResources,
     goalWatches,
     conclusions,

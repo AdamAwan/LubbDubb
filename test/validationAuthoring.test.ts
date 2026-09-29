@@ -454,8 +454,9 @@ test('validation_plan is refused from any other origin, and validation_amend fro
   system.store.close();
 });
 
-test('sheet assembly waits for the check set, and the staleness guard is cut first', () => {
+test('sheet assembly waits for the check set however long it takes, and the guard stamps only a settled backfill', () => {
   const now = Date.parse('2025-01-01T12:00:00.000Z');
+  const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
   const environments = [{ name: 'acceptance', at: 'echo', validate: { permits: ['check' as const] } }];
   const arrival = (over: Partial<GoalArrival> = {}): GoalArrival => ({
     goalRef: GOAL,
@@ -466,11 +467,11 @@ test('sheet assembly waits for the check set, and the staleness guard is cut fir
     sheetedAt: null,
     ...over,
   });
-  const call = (authored: boolean, over: Partial<GoalArrival> = {}) =>
+  const call = (accepted: boolean, over: Partial<GoalArrival> = {}, acceptedAt: string | null = null) =>
     sheetableArrivals({
       arrivals: [arrival(over)],
       environments,
-      authored: () => authored,
+      checkSet: () => ({ accepted, acceptedAt }),
       probeIntervalMs: 5 * 60 * 1000,
       now,
     });
@@ -479,12 +480,22 @@ test('sheet assembly waits for the check set, and the staleness guard is cut fir
   assert.deepEqual(
     call(true).map((v) => v.assemble),
     [true],
-    'and assembled once the set is written, however long that took',
+    'and assembled once the set is written',
   );
   assert.deepEqual(
-    call(false, { arrivedAt: new Date(now - 60 * 60 * 1000).toISOString() }).map((v) => v.assemble),
+    call(false, { arrivedAt: hourAgo }),
+    [],
+    'an arrival still waiting on its checks an hour on is still waiting — never stamped away',
+  );
+  assert.deepEqual(
+    call(true, { arrivedAt: hourAgo }, new Date(now - 1_000).toISOString()).map((v) => v.assemble),
+    [true],
+    'and assembled once they are accepted, however long that took',
+  );
+  assert.deepEqual(
+    call(true, { arrivedAt: hourAgo }, hourAgo).map((v) => v.assemble),
     [false],
-    'an arrival older than the guard is stamped and not assembled — the backfill guard is cut before authoring',
+    'work and checks both settled long ago is the backfill: stamped and not assembled',
   );
 });
 

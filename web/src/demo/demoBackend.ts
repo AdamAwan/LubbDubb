@@ -1248,6 +1248,11 @@ class DemoServer {
     return Promise.resolve({ ok: true });
   }
 
+  /* Setting up a run by hand has no sheet to build in the demo; it is refused, as the server refuses one. */
+  setUpRemoteSheet(_issueNumber: number, environment: string): Promise<{ ok: true }> {
+    return Promise.reject(new Error(`The demo cannot set up a run on ${environment}.`));
+  }
+
   /*
    * The press, in the demo: it re-reads the confirmed rows and records the commits the run
    * straddled. → docs/spec/36-remote-validation.md#the-press
@@ -4944,6 +4949,8 @@ export const demoApi = {
     getServer().ruleRemoteQuery(issueNumber, environment, rowId, accept),
   selectRemoteRow: (issueNumber: number, environment: string, rowId: string, selected: boolean) =>
     getServer().selectRemoteRow(issueNumber, environment, rowId, selected),
+  setUpRemoteSheet: (issueNumber: number, environment: string) =>
+    getServer().setUpRemoteSheet(issueNumber, environment),
   pressRemoteSheet: (issueNumber: number, environment: string) =>
     getServer().pressRemoteSheet(issueNumber, environment),
   cancelRemoteRun: (issueNumber: number, environment: string) => getServer().cancelRemoteRun(issueNumber, environment),

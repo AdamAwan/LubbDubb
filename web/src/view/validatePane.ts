@@ -172,6 +172,8 @@ export function pressBreakdown(sheet: RemoteSheetView): { checks: number; own: n
 export interface RemoteRunGap {
   environment: string | null;
   why: string;
+  /** An operator can set the run up by hand. → 36-remote-validation.md#setting-one-up-by-hand */
+  setUp?: boolean;
 }
 
 /**
@@ -199,8 +201,8 @@ export function remoteRunGaps(
     .filter((env) => (showing === null || env.name === showing) && !sheets.some((s) => s.environment === env.name))
     .map((env) => ({
       environment: env.name,
-      why:
-        reach.find((r) => r.environment === env.name)?.noSheet ??
-        `This goal's work has not reached ${env.name} yet — a run is offered once it does.`,
+      ...(reach.find((r) => r.environment === env.name)?.noSheet ?? {
+        why: `This goal's work has not reached ${env.name} yet — a run is offered once it does.`,
+      }),
     }));
 }

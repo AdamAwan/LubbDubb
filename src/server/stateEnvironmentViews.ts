@@ -1,11 +1,12 @@
 import type { System } from '../system/system.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
-import { checkSetReleased } from '../validation/planApproval.js';
+import type { CheckSetStanding } from '../validation/planApproval.js';
 import { resolveTenant } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
   GoalReachStatus,
+  NoSheet,
   GoalWatch,
   IssueDelivery,
   IssueShortfall,
@@ -50,6 +51,7 @@ export function buildEnvironmentReach(input: {
   shortfalled: ReadonlyMap<string, IssueShortfall>;
   probeIntervalMs: number;
   now: number;
+  checkSet: (goalRef: string) => CheckSetStanding;
 }): GoalReachView[] {
   const { store, environments, sheets, plans, parts, arrivals, nodes } = input;
   const releases = store.environments.listEnvironmentGateReleases();
@@ -92,47 +94,32 @@ export function buildEnvironmentReach(input: {
 
 /** Why a validating environment holds no sheet for a goal, read off the desk's own cut. */
 function noSheetFold(input: {
-  store: System['store'];
+  checkSet: (goalRef: string) => CheckSetStanding;
   environments: EnvironmentConfig[];
   arrivals: GoalArrival[];
   probeIntervalMs: number;
   now: number;
-}): (goalRef: string, env: { environment: string; status: GoalReachStatus }) => string | null {
+}): (goalRef: string, env: { environment: string; status: GoalReachStatus }) => NoSheet | null {
   const validating = new Set(input.environments.filter((e) => e.validate !== undefined).map((e) => e.name));
   const arrivals = new Map<string, GoalArrival>();
   for (const arrival of input.arrivals) {
     const key = `${arrival.goalRef} ${arrival.environment}`;
     if (!arrivals.has(key)) arrivals.set(key, arrival);
   }
-  const accepted = new Map<string, boolean>();
-  const authored = (goalRef: string): boolean => {
-    let held = accepted.get(goalRef);
-    if (held === undefined) {
-      held = checkSetReleased({
-        record: input.store.validation.getValidationPlanRecord(goalRef),
-        checks: input.store.validation.listValidationChecks(goalRef),
-      });
-      accepted.set(goalRef, held);
-    }
-    return held;
-  };
   return (goalRef, env) => {
     if (!validating.has(env.environment)) return null;
     const arrival = arrivals.get(`${goalRef} ${env.environment}`);
-    return noSheetReason({
-      environment: env.environment,
-      status: env.status,
-      step:
-        arrival === undefined
-          ? null
-          : arrivalSheetStep({
-              arrival,
-              validates: true,
-              authored: () => authored(goalRef),
-              probeIntervalMs: input.probeIntervalMs,
-              now: input.now,
-            }),
-    });
+    const step =
+      arrival === undefined
+        ? null
+        : arrivalSheetStep({
+            arrival,
+            validates: true,
+            checkSet: () => input.checkSet(goalRef),
+            probeIntervalMs: input.probeIntervalMs,
+            now: input.now,
+          });
+    return noSheetReason({ environment: env.environment, status: env.status, step });
   };
 }
 

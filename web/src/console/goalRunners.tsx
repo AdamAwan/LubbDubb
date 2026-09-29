@@ -136,7 +136,12 @@ export function RunStrip({
         />
       ))}
       {gaps.map((gap) => (
-        <GapRow key={gap.environment ?? ''} gap={gap} />
+        <GapRow
+          key={gap.environment ?? ''}
+          gap={gap}
+          onSetUp={(environment) => actions.setUpRemoteSheet(issue.number, environment)}
+          onRefused={setRefusal}
+        />
       ))}
       {refusal !== null && (
         <p className="launch-error" role="alert">
@@ -202,10 +207,29 @@ function LocalRunRow({
   );
 }
 
-function GapRow({ gap }: { gap: RemoteRunGap }): JSX.Element {
+function GapRow({
+  gap,
+  onSetUp,
+  onRefused,
+}: {
+  gap: RemoteRunGap;
+  onSetUp: (environment: string) => Promise<void>;
+  onRefused: (reason: string) => void;
+}): JSX.Element {
+  const { environment } = gap;
   return (
     <div className="cn-runstrip-row">
-      <span className="cn-runstrip-who">{gap.environment ?? 'remote'}</span>
+      <span className="cn-runstrip-who">{environment ?? 'remote'}</span>
+      {gap.setUp === true && environment !== null && (
+        <AsyncButton
+          className={CONTROL_CLASS}
+          onClick={() => onSetUp(environment)}
+          onRefused={onRefused}
+          title={`Set up the run on ${environment} that was not set up automatically, from this goal's accepted checks`}
+        >
+          Set up a run
+        </AsyncButton>
+      )}
       <span className="cn-sub">{gap.why}</span>
     </div>
   );

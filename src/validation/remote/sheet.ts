@@ -3,6 +3,7 @@ import { queryDigest } from '../../store/remoteValidation.js';
 import type { ArrivalSheetStep } from '../../environments/watchWindow.js';
 import type {
   GoalReachStatus,
+  NoSheet,
   GoalWatch,
   RemoteRowKind,
   RemoteRowOutcome,
@@ -295,25 +296,32 @@ export function noSheetReason(input: {
   environment: string;
   status: GoalReachStatus;
   step: ArrivalSheetStep | null;
-}): string {
+}): NoSheet {
   const env = input.environment;
-  if (input.status === 'absent') return `This goal's work has not reached ${env} yet — a run is offered once it does.`;
+  const why = (text: string): NoSheet => ({ why: text, setUp: false });
+  if (input.status === 'absent')
+    return why(`This goal's work has not reached ${env} yet — a run is offered once it does.`);
   if (input.status === 'partial')
-    return `Only part of this goal's work has reached ${env} — a run is offered once all of it has.`;
+    return why(`Only part of this goal's work has reached ${env} — a run is offered once all of it has.`);
   if (input.status === 'unknown')
-    return `Could not tell whether this goal's work is on ${env} — the last probe of it did not answer.`;
+    return why(`Could not tell whether this goal's work is on ${env} — the last probe of it did not answer.`);
   switch (input.step) {
     case null:
-      return `The work is on ${env}; its arrival is recorded on the next pulse, then a run is offered.`;
+      return why(`The work is on ${env}; its arrival is recorded on the next pulse, then a run is offered.`);
     case 'sheeted':
     case 'stale':
-      return `The work reached ${env} before remote runs could take it, so no run was set up for this goal.`;
+      return {
+        why: `No run was set up automatically: the work reached ${env} before remote runs there could take it.`,
+        setUp: true,
+      };
     case 'awaiting-checks':
-      return `The work is on ${env}, but this goal's checks are not accepted yet — a run is offered once they are.`;
+      return why(
+        `The work is on ${env}, but this goal's checks are not accepted yet — a run is offered once they are.`,
+      );
     case 'not-validating':
-      return `${env} declares no \`validate\` block, so it cannot run these checks.`;
+      return why(`${env} declares no \`validate\` block, so it cannot run these checks.`);
     case 'ready':
-      return `The work is on ${env}; its run is set up on the next pulse.`;
+      return why(`The work is on ${env}; its run is set up on the next pulse.`);
   }
 }
 
