@@ -625,7 +625,17 @@ test('the close tab is drawn without environments, and never folds unknown into 
   const unknown = buildGoalNav({
     ...bare,
     environments: [
-      { environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'unknown',
+        landed: 0,
+        total: 2,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   }).find((t) => t.tab === 'close')!;
   assert.equal(unknown.reading, 'not known', 'a probe that could not say is not work that has not shipped');
@@ -640,7 +650,17 @@ test('validation and signals stay folded until the work is somewhere', () => {
     checks: [],
     signals: [],
     environments: [
-      { environment: 'prod', status: 'absent', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'absent',
+        landed: 0,
+        total: 2,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   };
 
@@ -654,7 +674,17 @@ test('validation and signals stay folded until the work is somewhere', () => {
     checks: page.checks,
     signals: page.signals,
     environments: [
-      { environment: 'prod', status: 'partial', landed: 1, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'partial',
+        landed: 1,
+        total: 2,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   };
   assert.equal(
@@ -674,7 +704,17 @@ test('validation and signals stay folded until the work is somewhere', () => {
   const unknown: GoalPageView = {
     ...nowhere,
     environments: [
-      { environment: 'prod', status: 'unknown', landed: 0, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'unknown',
+        landed: 0,
+        total: 2,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   };
   assert.equal(
@@ -706,7 +746,17 @@ test('a check anyone has ruled on opens validation wherever the work is', () => 
   const grounded: GoalPageView = {
     ...page,
     environments: [
-      { environment: 'prod', status: 'absent', landed: 0, total: 1, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'absent',
+        landed: 0,
+        total: 1,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   };
   const settled = grounded.checks.some((c) => c.state !== 'unrun');

@@ -173,7 +173,17 @@ test('reaching an environment opens on the close-out it is owed against', () => 
     ...page,
     openPullRequests: [openPr()],
     environments: [
-      { environment: 'prod', status: 'reached', landed: 2, total: 2, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'reached',
+        landed: 2,
+        total: 2,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   };
   assert.equal(goalTabOpening(shipped).tab, 'close');
@@ -224,6 +234,7 @@ test('the close tab says the gate before it says the count', () => {
       at: null,
       opens: [],
       sheet: null,
+      noSheet: null,
     },
   ];
   const reached = buildGoalNav({ ...page, environments: envs }).find((e) => e.tab === 'close')!;
@@ -265,7 +276,17 @@ test('the landing is decided on arrival and held, however the goal moves under i
   const shipped: GoalPageView = {
     ...called,
     environments: [
-      { environment: 'prod', status: 'reached', landed: 1, total: 1, unplaced: 0, at: null, opens: [], sheet: null },
+      {
+        environment: 'prod',
+        status: 'reached',
+        landed: 1,
+        total: 1,
+        unplaced: 0,
+        at: null,
+        opens: [],
+        sheet: null,
+        noSheet: null,
+      },
     ],
   };
   assert.equal(goalTabOpening(shipped).tab, 'plan', 'the court arm outranks the shipped one');
@@ -284,7 +305,17 @@ test('the landing is decided on arrival and held, however the goal moves under i
 // → docs/spec/24-environments.md
 
 function env(over: Partial<GoalEnvironmentReachView> & { environment: string }): GoalEnvironmentReachView {
-  return { status: 'absent', landed: 0, total: 0, unplaced: 0, at: null, opens: [], sheet: null, ...over };
+  return {
+    status: 'absent',
+    landed: 0,
+    total: 0,
+    unplaced: 0,
+    at: null,
+    opens: [],
+    sheet: null,
+    noSheet: null,
+    ...over,
+  };
 }
 
 function shipped(page: GoalPageView): { reading: string; done: number | null } {

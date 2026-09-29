@@ -1,6 +1,8 @@
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import { queryDigest } from '../../store/remoteValidation.js';
+import type { ArrivalSheetStep } from '../../environments/watchWindow.js';
 import type {
+  GoalReachStatus,
   GoalWatch,
   RemoteRowKind,
   RemoteRowOutcome,
@@ -286,6 +288,33 @@ export function sheetFoldLine(rows: readonly SheetFoldRow[]): string | null {
     ...(captured === 0 ? [] : [`${String(captured)} captured`]),
     ...(blocked === 0 ? [] : [`${String(blocked)} blocked`]),
   ].join(' · ');
+}
+
+/** Why a validating environment holds no sheet for a goal. → 36-remote-validation.md#when-there-is-no-sheet */
+export function noSheetReason(input: {
+  environment: string;
+  status: GoalReachStatus;
+  step: ArrivalSheetStep | null;
+}): string {
+  const env = input.environment;
+  if (input.status === 'absent') return `This goal's work has not reached ${env} yet — a run is offered once it does.`;
+  if (input.status === 'partial')
+    return `Only part of this goal's work has reached ${env} — a run is offered once all of it has.`;
+  if (input.status === 'unknown')
+    return `Could not tell whether this goal's work is on ${env} — the last probe of it did not answer.`;
+  switch (input.step) {
+    case null:
+      return `The work is on ${env}; its arrival is recorded on the next pulse, then a run is offered.`;
+    case 'sheeted':
+    case 'stale':
+      return `The work reached ${env} before remote runs could take it, so no run was set up for this goal.`;
+    case 'awaiting-checks':
+      return `The work is on ${env}, but this goal's checks are not accepted yet — a run is offered once they are.`;
+    case 'not-validating':
+      return `${env} declares no \`validate\` block, so it cannot run these checks.`;
+    case 'ready':
+      return `The work is on ${env}; its run is set up on the next pulse.`;
+  }
 }
 
 /** What the fold reads, which is exactly what the card reads: a row's own block, and its reading. */

@@ -99,24 +99,44 @@ export function sheetableArrivals(input: {
   now: number;
 }): SheetArrivalVerdict[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
-  const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
   const oldestFirst = [...input.arrivals].sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
   const out: SheetArrivalVerdict[] = [];
   let assembling = 0;
   for (const arrival of oldestFirst) {
-    if (arrival.sheetedAt !== null) continue;
-    if (byName.get(arrival.environment)?.validate === undefined) continue;
-    const seen = Date.parse(arrival.arrivedAt);
-    if (!Number.isFinite(seen) || seen < floor) {
-      out.push({ arrival, assemble: false });
-      continue;
-    }
-    if (!input.authored(arrival.goalRef)) continue;
-    if (assembling >= MAX_SHEETS_PER_PULSE) continue;
+    const step = arrivalSheetStep({
+      arrival,
+      validates: byName.get(arrival.environment)?.validate !== undefined,
+      authored: () => input.authored(arrival.goalRef),
+      probeIntervalMs: input.probeIntervalMs,
+      now: input.now,
+    });
+    if (step === 'stale') out.push({ arrival, assemble: false });
+    if (step !== 'ready' || assembling >= MAX_SHEETS_PER_PULSE) continue;
     assembling += 1;
     out.push({ arrival, assemble: true });
   }
   return out;
+}
+
+/**
+ * Where one arrival stands in `sheetableArrivals`' cut, before the per-pulse cap. The one statement of
+ * that cut: the desk acts on it and the cockpit's reason for a missing sheet words it.
+ * → docs/spec/36-remote-validation.md#when-there-is-no-sheet
+ */
+export type ArrivalSheetStep = 'not-validating' | 'sheeted' | 'stale' | 'awaiting-checks' | 'ready';
+
+export function arrivalSheetStep(input: {
+  arrival: GoalArrival;
+  validates: boolean;
+  authored: () => boolean;
+  probeIntervalMs: number;
+  now: number;
+}): ArrivalSheetStep {
+  if (input.arrival.sheetedAt !== null) return 'sheeted';
+  if (!input.validates) return 'not-validating';
+  const seen = Date.parse(input.arrival.arrivedAt);
+  if (!Number.isFinite(seen) || seen < input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS) return 'stale';
+  return input.authored() ? 'ready' : 'awaiting-checks';
 }
 
 export function settlingWindows(windows: readonly WatchWindow[], now: number): WatchWindow[] {

@@ -6,7 +6,7 @@ import type { Agent, Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { CONTROL_CLASS } from '../components/controls.js';
-import { pressBreakdown, pressableRows } from '../view/validatePane.js';
+import { pressBreakdown, pressableRows, remoteRunGaps, type RemoteRunGap } from '../view/validatePane.js';
 import { SignalsSection } from '../components/SignalsSection.js';
 import { RemoteValidationSection } from '../components/RemoteValidationSection.js';
 import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
@@ -108,6 +108,7 @@ export function RunStrip({
   /* The press asks first where a live run is on another goal or has fallen behind the branch: what
      it starts is the machine's *one* dev environment, so the question is which goal gets it.
      → docs/spec/23-local-runs.md */
+  const gaps = remoteRunGaps(view.state.config.environments, page.remoteSheets, page.environments);
   const onValidate = async (): Promise<void> => {
     const question = validateLocallyQuestion(issue.number, run);
     if (question !== null) {
@@ -133,6 +134,9 @@ export function RunStrip({
           actions={actions}
           onRefused={setRefusal}
         />
+      ))}
+      {gaps.map((gap) => (
+        <GapRow key={gap.environment ?? ''} gap={gap} />
       ))}
       {refusal !== null && (
         <p className="launch-error" role="alert">
@@ -194,6 +198,15 @@ function LocalRunRow({
       ) : (
         <span className="cn-sub">{offer.why}</span>
       )}
+    </div>
+  );
+}
+
+function GapRow({ gap }: { gap: RemoteRunGap }): JSX.Element {
+  return (
+    <div className="cn-runstrip-row">
+      <span className="cn-runstrip-who">{gap.environment ?? 'remote'}</span>
+      <span className="cn-sub">{gap.why}</span>
     </div>
   );
 }
@@ -295,11 +308,7 @@ export function Signals({
   );
 }
 
-/**
- * Absent entirely where the goal has no sheet — and, on the server, where no environment declares a
- * `validate` block at all. Not an empty card and not a row of question marks: a deployment that has
- * not turned this on must not read as a deployment where it is broken.
- */
+/** Always drawn: with no sheet to show, it says why in place of the rows. → 17-cockpit.md#the-validate-pane */
 export function RemoteValidation({
   page,
   view,
@@ -310,14 +319,29 @@ export function RemoteValidation({
   view: CockpitView;
   actions: CockpitActions;
   fold: Fold;
-}): JSX.Element | null {
+}): JSX.Element {
   const sheets = page.remoteSheets;
-  if (sheets.length === 0) return null;
   const showing = view.sheetEnvironment;
   /* The pane above picks the environment, so a pick with no sheet draws no sheet — falling
      back to the first would put another environment's rows under this one's heading. */
   const open = showing === null ? sheets[0] : sheets.find((s) => s.environment === showing);
-  if (open === undefined) return null;
+  if (open === undefined) {
+    const gaps = remoteRunGaps(view.state.config.environments, sheets, page.environments, showing);
+    return (
+      <section className="cn-card" id="cn-remote-validation">
+        <h3>
+          <span>{showing === null ? 'Runs remotely' : `Runs on ${showing}`}</span>
+          <i className="cn-n">no run offered</i>
+        </h3>
+        {gaps.map((gap) => (
+          <p key={gap.environment ?? ''} className="cn-sub">
+            {gap.environment !== null && showing === null && <b>{gap.environment}: </b>}
+            {gap.why}
+          </p>
+        ))}
+      </section>
+    );
+  }
   const waiting = open.rows.filter((r) => r.awaitingApproval).length;
   /* The same count the gate's own button carries, said on the header so an operator scanning the
      pane knows a press is waiting without opening it. → docs/spec/36-remote-validation.md */
