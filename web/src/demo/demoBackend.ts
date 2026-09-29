@@ -5415,6 +5415,9 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
     originRef: `issue:${feature}`,
     ...text,
     standingKey,
+    standingLines: null,
+    repeats: 0,
+    repeatKeys: [standingKey],
     agentId: `agent_fs${feature}`,
     taskId: `task_fs${feature}`,
     createdAt: iso(hoursAgo + 30),
@@ -5551,6 +5554,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       lastLandingAt: landed[0]?.at ?? null,
       landings: landed,
       standingKey: extra.standingKey,
+      summaryHeld: false,
       paused: ((since) => (since === undefined ? null : { originRef: `issue:${number}`, since }))(
         DEMO_FEATURE_PAUSES.get(number),
       ),

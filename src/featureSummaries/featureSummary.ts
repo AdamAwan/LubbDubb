@@ -98,25 +98,53 @@ export interface FeatureChildStandingFacts {
   number: number;
   state: string;
   workItemState: string | null;
-  deliveredAt: string | null;
-  shortfallAt: string | null;
+  delivered: string | null;
+  shortfall: { summary: string; cause: string | null } | null;
   runningSince: string | null;
   landedAt: string | null;
 }
 
+// → docs/spec/05-dispatcher.md#feature-summary--where-a-feature-is
+export const FEATURE_SUMMARY_REPEAT_CAP = 3;
+
+export function featureStandingLine(c: FeatureChildStandingFacts): string {
+  const parts = [`#${c.number} ${[c.state, c.workItemState].filter(Boolean).join(' / ')}`];
+  if (c.runningSince) parts.push(`running since ${c.runningSince}`);
+  if (c.delivered) parts.push(`delivered "${c.delivered}"`);
+  if (c.shortfall) {
+    parts.push(`fell short${c.shortfall.cause ? ` (${c.shortfall.cause})` : ''} "${c.shortfall.summary}"`);
+  }
+  if (c.landedAt) parts.push(`landed ${c.landedAt}`);
+  return parts.join(' · ');
+}
+
+function featureStandingLines(children: readonly FeatureChildStandingFacts[]): string[] {
+  return [...children].sort((a, b) => a.number - b.number).map(featureStandingLine);
+}
+
+export function featureStanding(children: readonly FeatureChildStandingFacts[]): { key: string; lines: string[] } {
+  const lines = featureStandingLines(children);
+  return { key: createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 32), lines };
+}
+
 export function featureStandingKey(children: readonly FeatureChildStandingFacts[]): string {
-  const lines = children
-    .map((c) =>
-      [
-        c.number,
-        c.state,
-        c.workItemState ?? '',
-        c.deliveredAt ?? '',
-        c.shortfallAt ?? '',
-        c.runningSince ?? '',
-        c.landedAt ?? '',
-      ].join(' '),
-    )
-    .sort();
-  return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 32);
+  return featureStanding(children).key;
+}
+
+export function standingMoves(
+  before: readonly string[] | null,
+  after: readonly string[],
+  marks: { gone: string; came: string },
+): string[] {
+  if (before === null) return [];
+  const was = new Set(before);
+  const now = new Set(after);
+  return [
+    ...before.filter((l) => !now.has(l)).map((l) => `${marks.gone}${l}`),
+    ...after.filter((l) => !was.has(l)).map((l) => `${marks.came}${l}`),
+  ];
+}
+
+export function summaryHeld(summary: { repeats: number; repeatKeys: readonly string[] }, key: string): boolean {
+  return summary.repeats >= FEATURE_SUMMARY_REPEAT_CAP && summary.repeatKeys.includes(key);
 }

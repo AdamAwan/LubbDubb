@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import {
+  FEATURE_SUMMARY_REPEAT_CAP,
   featureStandingKey,
+  featureStandingLine,
+  summaryHeld,
   featureSummaryOrigin,
   featureSummarySubmitOrigin,
   validateFeatureSummary,
   type FeatureChildStandingFacts,
 } from '../src/featureSummaries/featureSummary.js';
 import { buildFeatureBoard } from '../src/features/featureBoard.js';
+import { renderFeatureDossier } from '../src/featureSummaries/featureRecord.js';
 import type { FeatureSummary, Task } from '../src/types.js';
 import { TICKET_COLUMNS, type MirroredTicket } from '../src/store/tickets.js';
 import { Store } from '../src/store/store.js';
@@ -25,22 +29,22 @@ function child(over: Partial<FeatureChildStandingFacts> = {}): FeatureChildStand
     number: 1,
     state: 'open',
     workItemState: 'Doing',
-    deliveredAt: null,
-    shortfallAt: null,
+    delivered: null,
+    shortfall: null,
     runningSince: null,
     landedAt: null,
     ...over,
   };
 }
 
-test('the standing key moves when an item moves and not when its text does', () => {
+test('the standing key moves when something the summariser is shown moves', () => {
   const before = [child({ number: 1 }), child({ number: 2 })];
   assert.equal(featureStandingKey(before), featureStandingKey([child({ number: 2 }), child({ number: 1 })]));
   for (const moved of [
     child({ number: 2, state: 'closed' }),
     child({ number: 2, workItemState: 'In Review' }),
-    child({ number: 2, deliveredAt: NOW }),
-    child({ number: 2, shortfallAt: NOW }),
+    child({ number: 2, delivered: 'PR #40 landed it' }),
+    child({ number: 2, shortfall: { summary: 'Half of it', cause: null } }),
     child({ number: 2, runningSince: NOW }),
     child({ number: 2, landedAt: NOW }),
   ]) {
@@ -112,7 +116,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
     queuedJobs: [],
     recentDecisions: [],
     agentHeadroom: 3,
-    featureStandings: [{ number: 29857, title: 'Wider matching', key: 'abc123' }],
+    featureStandings: [{ number: 29857, title: 'Wider matching', key: 'abc123', lines: ['#1 open'] }],
     ...over,
   };
 }
@@ -127,19 +131,97 @@ test('a Feature is summarised when it has moved, and never again until it does',
   assert.equal(dispatch.originRef, 'issue:29857:summary');
   assert.equal('branch' in dispatch ? dispatch.branch : null, null);
 
-  const settled = await dispatcher.decide(
-    ctx({ featureSummaryKeys: [{ originRef: 'issue:29857', standingKey: 'abc123' }] }),
-  );
+  const settled = await dispatcher.decide(ctx({ featureSummaryKeys: [onFile('abc123')] }));
   assert.equal(
     settled.actions.some((a) => a.rule === 'feature-summary'),
     false,
   );
 
-  const moved = await dispatcher.decide(
-    ctx({ featureSummaryKeys: [{ originRef: 'issue:29857', standingKey: 'older' }] }),
-  );
-  assert.ok(moved.actions.some((a) => a.rule === 'feature-summary'));
+  const moved = await dispatcher.decide(ctx({ featureSummaryKeys: [onFile('older', ['#1 closed'])] }));
+  const again = moved.actions.find((a) => a.rule === 'feature-summary');
+  assert.ok(again);
+  assert.match(again.reason ?? '', /was #1 closed; now #1 open/, 'the dispatch says what moved');
 });
+
+function onFile(standingKey: string, standingLines: string[] | null = null, repeatKeys: string[] = []) {
+  return { originRef: 'issue:29857', standingKey, standingLines, repeats: repeatKeys.length ? 3 : 0, repeatKeys };
+}
+
+test('a Feature held on a loop is not re-dispatched at a standing it has already been refiled at', async () => {
+  const dispatcher = new RuleDispatcher();
+  const held = await dispatcher.decide(ctx({ featureSummaryKeys: [onFile('older', null, ['older', 'abc123'])] }));
+  assert.equal(
+    held.actions.some((a) => a.rule === 'feature-summary'),
+    false,
+  );
+  const elsewhere = await dispatcher.decide(ctx({ featureSummaryKeys: [onFile('older', null, ['older', 'other'])] }));
+  assert.ok(
+    elsewhere.actions.some((a) => a.rule === 'feature-summary'),
+    'somewhere it has never been is movement',
+  );
+});
+
+test('an identical refiling counts, and a changed one starts the count again', () => {
+  const store = new Store(':memory:');
+  const same = {
+    originRef: 'issue:29857',
+    headline: null,
+    standing: 'Nothing has moved.',
+    usable: null,
+    blocked: null,
+    remaining: null,
+    agentId: 'a1',
+    taskId: 't1',
+  };
+  const keys = ['A', 'B', 'A', 'B'];
+  for (const standingKey of keys) store.tickets.recordFeatureSummary({ ...same, standingKey });
+  const looping = store.tickets.getFeatureSummary('issue:29857');
+  assert.equal(looping?.repeats, FEATURE_SUMMARY_REPEAT_CAP);
+  assert.deepEqual(looping?.repeatKeys, ['A', 'B']);
+  assert.ok(looping && summaryHeld(looping, 'A') && summaryHeld(looping, 'B'));
+  assert.ok(looping && !summaryHeld(looping, 'C'), 'a standing it was never refiled at is not held');
+
+  store.tickets.recordFeatureSummary({ ...same, standing: 'Something moved.', standingKey: 'C' });
+  const moved = store.tickets.getFeatureSummary('issue:29857');
+  assert.equal(moved?.repeats, 0);
+  assert.deepEqual(moved?.repeatKeys, ['C']);
+});
+
+test('the dossier shows every fact the key digests, and what moved since the last account', () => {
+  const record = {
+    number: 29857,
+    title: 'Wider matching',
+    key: 'k',
+    lines: ['#1 closed / Done · delivered "PR #40 landed it"'],
+    children: [
+      {
+        ...child({ number: 1, state: 'closed', workItemState: 'Done', delivered: 'PR #40 landed it' }),
+        title: 'One',
+        watched: true,
+        questions: [],
+      },
+    ],
+  };
+  const dossier = renderFeatureDossier(record, new Map(), {
+    text: 'It is going.',
+    lines: ['#1 open / Doing'],
+  });
+  assert.match(dossier, /- was: #1 open \/ Doing/);
+  assert.match(dossier, /- now: #1 closed \/ Done · delivered "PR #40 landed it"/);
+  for (const fact of Object.keys(child()) as (keyof FeatureChildStandingFacts)[]) {
+    assert.ok(
+      featureStandingLine(child({ number: 1 })) !== featureStandingLine(child({ number: 1, [fact]: varied(fact) })) ||
+        fact === 'number',
+      `${fact} is in the key's line`,
+    );
+  }
+});
+
+function varied(fact: keyof FeatureChildStandingFacts): unknown {
+  if (fact === 'shortfall') return { summary: 'short', cause: null };
+  if (fact === 'number') return 2;
+  return 'changed';
+}
 
 test('a summariser already on the Feature is not joined by a second', async () => {
   const live: Task = {
@@ -201,6 +283,9 @@ test('the board quotes the summary whole and composes nothing', () => {
     blocked: null,
     remaining: 'The bucket switch, and four items nobody is watching.',
     standingKey: 'abc123',
+    standingLines: null,
+    repeats: 0,
+    repeatKeys: ['abc123'],
     agentId: 'a1',
     taskId: 't1',
     createdAt: NOW,

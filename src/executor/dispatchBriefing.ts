@@ -228,14 +228,17 @@ function featureBriefing(
     record,
     featureReach(store, board),
     previous
-      ? [
-          `**Where this is:** ${previous.standing}`,
-          previous.usable ? `**Usable now:** ${previous.usable}` : null,
-          previous.blocked ? `**Blocked:** ${previous.blocked}` : null,
-          previous.remaining ? `**Left to do:** ${previous.remaining}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n\n')
+      ? {
+          text: [
+            `**Where this is:** ${previous.standing}`,
+            previous.usable ? `**Usable now:** ${previous.usable}` : null,
+            previous.blocked ? `**Blocked:** ${previous.blocked}` : null,
+            previous.remaining ? `**Left to do:** ${previous.remaining}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          lines: previous.standingLines,
+        }
       : null,
   );
 }

@@ -6,7 +6,12 @@ import type { Store } from '../store/store.js';
 import type { Escalation, GoalEnvironmentReach } from '../types.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { lastLandingByGoal } from '../features/featureBoard.js';
-import { featureStandingKey, type FeatureChildStandingFacts } from './featureSummary.js';
+import {
+  featureStanding,
+  featureStandingLine,
+  standingMoves,
+  type FeatureChildStandingFacts,
+} from './featureSummary.js';
 
 // → docs/spec/14-persistence.md
 
@@ -14,14 +19,13 @@ interface FeatureRecord {
   number: number;
   title: string;
   key: string;
+  lines: string[];
   children: FeatureChildRecord[];
 }
 
 interface FeatureChildRecord extends FeatureChildStandingFacts {
   title: string;
   watched: boolean;
-  delivered: string | null;
-  shortfall: { summary: string; cause: string | null } | null;
   questions: { prompt: string; since: string }[];
 }
 
@@ -55,8 +59,6 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
       state: item.state,
       workItemState: item.workItemState,
       watched: isWatched(item.labels, opts.watchLabel),
-      deliveredAt: deliveries.get(goalRef)?.decidedAt ?? null,
-      shortfallAt: shortfall?.decidedAt ?? null,
       runningSince: running.get(item.number) ?? null,
       landedAt: landedAt.get(goalRef) ?? null,
       delivered: deliveries.get(goalRef)?.summary ?? null,
@@ -71,7 +73,7 @@ export function featureRecords(store: Store, opts: FeatureBoardFacts): FeatureRe
   return [...groups].map(([number, group]) => ({
     number,
     title: group.title,
-    key: featureStandingKey(group.children),
+    ...featureStanding(group.children),
     children: group.children.sort((a, b) => a.number - b.number),
   }));
 }
@@ -92,23 +94,17 @@ function openQuestionsByGoal(escalations: readonly Escalation[]): Map<number, { 
 export function renderFeatureDossier(
   record: FeatureRecord,
   reach: ReadonlyMap<string, GoalEnvironmentReach[]>,
-  previous: string | null,
+  previous: { text: string; lines: string[] | null } | null,
 ): string {
   const lines: string[] = [`## Feature #${record.number} — ${record.title}`, ''];
   lines.push(`${record.children.length} item(s) hang off it.`, '');
 
   for (const child of record.children) {
-    const state = [child.state, child.workItemState].filter(Boolean).join(' / ');
     lines.push(`### #${child.number} — ${child.title}`);
-    lines.push(`- State: ${state}${child.watched ? '' : ' — **not watched**: no agent has ever been on it'}`);
-    if (child.runningSince) lines.push(`- An agent has been on this since ${child.runningSince}`);
-    if (child.delivered) lines.push(`- Delivered: "${child.delivered}"`);
-    if (child.shortfall) {
-      const cause = child.shortfall.cause ? ` (${child.shortfall.cause})` : '';
-      lines.push(`- Fell short${cause}: "${child.shortfall.summary}"`);
-    }
+    lines.push(
+      `- ${featureStandingLine(child)}${child.watched ? '' : ' — **not watched**: no agent has ever been on it'}`,
+    );
     for (const ask of child.questions) lines.push(`- Waiting on a person since ${ask.since}: "${ask.prompt}"`);
-    if (child.landedAt) lines.push(`- Last landed a commit at ${child.landedAt}`);
     for (const env of reach.get(issueOriginRef('root', child.number)) ?? []) {
       lines.push(`- ${env.environment}: ${env.status} (${env.landed}/${env.total} landings)`);
     }
@@ -116,16 +112,22 @@ export function renderFeatureDossier(
   }
 
   if (previous) {
+    lines.push(...movedSection(previous.lines, record.lines));
     lines.push(
       '## The summary on file',
       '',
       'Something under this Feature has moved since this was written. Revise it — keep what is still true',
       'rather than restating it differently, and say what the movement changed.',
       '',
-      previous,
+      previous.text,
     );
   }
   return lines.join('\n');
+}
+
+function movedSection(before: string[] | null, after: string[]): string[] {
+  const moves = standingMoves(before, after, { gone: '- was: ', came: '- now: ' });
+  return moves.length === 0 ? [] : ['## What moved since the summary on file', '', ...moves, ''];
 }
 
 export function featureReach(store: Store, opts: FeatureBoardFacts): Map<string, GoalEnvironmentReach[]> {

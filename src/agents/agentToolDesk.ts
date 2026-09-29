@@ -16,7 +16,11 @@ import type {
 } from '../types.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
-import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../featureSummaries/featureSummary.js';
+import {
+  FEATURE_SUMMARY_REPEAT_CAP,
+  featureSummarySubmitOrigin,
+  type FeatureSummaryInput,
+} from '../featureSummaries/featureSummary.js';
 import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../review/threadLabels.js';
@@ -226,13 +230,24 @@ export class AgentToolDesk implements AgentToolTarget {
       const { task } = caller;
       const origin = featureSummarySubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
-      this.store.tickets.recordFeatureSummary({
+      const standing = this.opts.featureStanding?.(origin.featureOrigin) ?? null;
+      const row = this.store.tickets.recordFeatureSummary({
         originRef: origin.featureOrigin,
         ...input,
-        standingKey: this.opts.featureStanding?.(origin.featureOrigin) ?? '',
+        standingKey: standing?.key ?? '',
+        standingLines: standing?.lines ?? null,
         agentId,
         taskId: task.id,
       });
+      if (row.repeats === FEATURE_SUMMARY_REPEAT_CAP) {
+        this.opts.errors?.record({
+          source: 'agent',
+          message:
+            `feature #${origin.featureNumber} was summarised ${row.repeats + 1} times in a row with the same account; ` +
+            `no longer re-dispatched until something its summariser is shown moves`,
+          detail: (row.standingLines ?? []).join('\n') || null,
+        });
+      }
       return { ok: true, featureOrigin: origin.featureOrigin };
     });
   }

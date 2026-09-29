@@ -16,7 +16,12 @@ export const TICKET_COLUMNS: ColumnMigrations = {
   },
   tracker_sweep: { restated_at: 'TEXT' },
   feature_colors: {},
-  feature_summaries: { headline: 'TEXT' },
+  feature_summaries: {
+    headline: 'TEXT',
+    standing_lines: 'TEXT',
+    repeats: 'INTEGER NOT NULL DEFAULT 0',
+    repeat_keys: "TEXT NOT NULL DEFAULT '[]'",
+  },
 };
 
 const FEATURE_SLOTS = 12;
@@ -74,7 +79,9 @@ export class TicketStore {
       `UPDATE tracker_items SET
          tracking='live',
          labels=@labels,
-         work_item_state=@workItemState,
+         -- The history's own pair wins where it has one; overlaid on it, the baseline's word flips with the item's place
+         -- in the live set, and leaves a closed item with an open work state.
+         work_item_state=CASE WHEN @historyState IS NULL AND state = 'open' THEN COALESCE(@workItemState, work_item_state) ELSE work_item_state END,
          issue_type=@issueType,
          parent_number=CASE WHEN @parentKnown = 1 THEN @parentNumber ELSE parent_number END,
          parent_title=CASE WHEN @parentKnown = 1 THEN @parentTitle ELSE parent_title END,
@@ -103,9 +110,11 @@ export class TicketStore {
         if (item.changedAt > newest) newest = item.changedAt;
       }
 
+      const restated = new Map(items.map((i) => [i.number, i.workItemState]));
       for (const fact of live) {
         enrich.run({
           number: fact.number,
+          historyState: restated.get(fact.number) ?? null,
           labels: JSON.stringify(fact.labels),
           workItemState: fact.workItemState,
           issueType: fact.issueType,
@@ -208,24 +217,43 @@ export class TicketStore {
     blocked: string | null;
     remaining: string | null;
     standingKey: string;
+    standingLines?: string[] | null;
     agentId: string;
     taskId: string;
   }): FeatureSummary {
     const ts = this.ctx.now();
     const prev = this.getFeatureSummary(input.originRef);
-    const row: FeatureSummary = { ...input, createdAt: prev?.createdAt ?? ts, updatedAt: ts };
+    const unchanged =
+      prev !== null && (sameAccount(prev, input) || [...prev.repeatKeys, prev.standingKey].includes(input.standingKey));
+    const row: FeatureSummary = {
+      ...input,
+      standingLines: input.standingLines ?? null,
+      repeats: unchanged ? prev.repeats + 1 : 0,
+      repeatKeys: unchanged
+        ? [...new Set([...prev.repeatKeys, prev.standingKey, input.standingKey])].slice(-REPEAT_KEYS_KEPT)
+        : [input.standingKey],
+      createdAt: prev?.createdAt ?? ts,
+      updatedAt: ts,
+    };
     this.ctx
       .prep(
         `INSERT INTO feature_summaries
-           (origin_ref, headline, standing, usable, blocked, remaining, standing_key, agent_id, task_id, created_at, updated_at)
-         VALUES (@originRef, @headline, @standing, @usable, @blocked, @remaining, @standingKey, @agentId, @taskId, @createdAt, @updatedAt)
+           (origin_ref, headline, standing, usable, blocked, remaining, standing_key, standing_lines, repeats, repeat_keys,
+            agent_id, task_id, created_at, updated_at)
+         VALUES (@originRef, @headline, @standing, @usable, @blocked, @remaining, @standingKey, @standingLines, @repeats,
+                 @repeatKeys, @agentId, @taskId, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET
            headline=excluded.headline,
            standing=excluded.standing, usable=excluded.usable, blocked=excluded.blocked,
-           remaining=excluded.remaining, standing_key=excluded.standing_key, agent_id=excluded.agent_id,
+           remaining=excluded.remaining, standing_key=excluded.standing_key, standing_lines=excluded.standing_lines,
+           repeats=excluded.repeats, repeat_keys=excluded.repeat_keys, agent_id=excluded.agent_id,
            task_id=excluded.task_id, updated_at=excluded.updated_at`,
       )
-      .run(row);
+      .run({
+        ...row,
+        standingLines: row.standingLines === null ? null : JSON.stringify(row.standingLines),
+        repeatKeys: JSON.stringify(row.repeatKeys),
+      });
     return row;
   }
 
@@ -319,10 +347,20 @@ interface FeatureSummaryRow {
   blocked: string | null;
   remaining: string | null;
   standing_key: string;
+  standing_lines: string | null;
+  repeats: number;
+  repeat_keys: string;
   agent_id: string;
   task_id: string;
   created_at: string;
   updated_at: string;
+}
+
+const ACCOUNT_FIELDS = ['headline', 'standing', 'usable', 'blocked', 'remaining'] as const;
+const REPEAT_KEYS_KEPT = 8;
+
+function sameAccount(a: Pick<FeatureSummary, (typeof ACCOUNT_FIELDS)[number]>, b: typeof a): boolean {
+  return ACCOUNT_FIELDS.every((f) => a[f] === b[f]);
 }
 
 function rowToFeatureSummary(r: FeatureSummaryRow): FeatureSummary {
@@ -334,6 +372,9 @@ function rowToFeatureSummary(r: FeatureSummaryRow): FeatureSummary {
     blocked: r.blocked,
     remaining: r.remaining,
     standingKey: r.standing_key,
+    standingLines: r.standing_lines === null ? null : (JSON.parse(r.standing_lines) as string[]),
+    repeats: r.repeats,
+    repeatKeys: JSON.parse(r.repeat_keys) as string[],
     agentId: r.agent_id,
     taskId: r.task_id,
     createdAt: r.created_at,

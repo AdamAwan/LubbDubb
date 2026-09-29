@@ -15,6 +15,7 @@ import type {
   IssueShortfall,
 } from '../types.js';
 import { isWatched } from '../watchLabels.js';
+import { summaryHeld } from '../featureSummaries/featureSummary.js';
 import type {
   FeatureBlockRow,
   FeatureBoardPayload,
@@ -153,9 +154,14 @@ function featureRollup(
     lastLandingAt: latestLanding(group.rows, lenses.landedAt),
     landings: landingsUnder(group.rows, lenses.landingsByGoal),
     standingKey: input.standingKeys.get(number) ?? '',
+    summaryHeld: held(input.summaries.get(issueOriginRef('root', number)), input.standingKeys.get(number)),
     paused: input.pauses?.get(issueOriginRef('root', number)) ?? null,
     priority: input.priorities?.get(issueOriginRef('root', number)) ?? null,
   };
+}
+
+function held(summary: FeatureSummary | undefined, key: string | undefined): boolean {
+  return summary !== undefined && key !== undefined && summaryHeld(summary, key);
 }
 
 function childRow(

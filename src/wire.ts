@@ -823,6 +823,8 @@ export interface FeatureRollup {
   lastLandingAt: string | null;
   landings: FeatureLandingRow[];
   standingKey: string;
+  /** The summary was refiled unchanged until rule `feature-summary` stopped re-dispatching. → docs/spec/05-dispatcher.md */
+  summaryHeld: boolean;
   paused: GoalPause | null;
   priority: GoalPriority | null;
 }
@@ -846,6 +848,7 @@ export interface FeatureBoardPayload {
     | 'summary'
     | 'sequence'
     | 'standingKey'
+    | 'summaryHeld'
     | 'paused'
     | 'priority'
   > | null;

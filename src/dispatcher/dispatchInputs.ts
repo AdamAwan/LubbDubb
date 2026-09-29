@@ -55,7 +55,13 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     featureSummaryKeys:
       featureStandings.length === 0
         ? []
-        : store.tickets.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey })),
+        : store.tickets.listFeatureSummaries().map((f) => ({
+            originRef: f.originRef,
+            standingKey: f.standingKey,
+            standingLines: f.standingLines,
+            repeats: f.repeats,
+            repeatKeys: f.repeatKeys,
+          })),
     featureSequences: store.sequences.listFeatureSequences(),
     proposals,
     rejectionSignals: signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [],

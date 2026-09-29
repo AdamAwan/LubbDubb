@@ -6165,6 +6165,12 @@ summary was stamped with — the same comparison rule `feature-summary` makes, s
 exactly when a rewrite is coming. **`being rewritten`**, when a task at `issue:<n>:summary` is queued
 or running.
 
+A fourth replaces the second when the rule has stopped: **`refiled unchanged n times — not rewritten
+again until something it is shown moves`**, when `FeatureRollup.summaryHeld` is set — the account was
+refiled word for word up to the cap and the standing now is one it was already refiled at
+([05](05-dispatcher.md#feature-summary--where-a-feature-is)). Drawing "moved" there would promise a
+rewrite that is not coming; it is the operator's one sight of a summariser loop.
+
 A digest says _whether_, never what or how much. `2 things have changed since` and `since this was
 written, #376 hit a conflict` are both sentences the harness would be composing about a Feature, which
 is the verdict this surface refuses — so neither is drawn, and the marker is the whole of it.

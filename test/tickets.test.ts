@@ -514,6 +514,31 @@ test('a provider with no native states never wipes one the overlay wrote', () =>
   store.close();
 });
 
+test('the history’s own work state is never overwritten by the baseline’s, so it cannot flip with the live set', () => {
+  const store = new Store(':memory:');
+  store.tickets.ensureTrackerSweep(MONTH_MS);
+  const closed = item({ number: 1, state: 'closed', workItemState: 'Closed' });
+  const seen: [string, string | null][] = [];
+  for (const live of [[fact(1, { workItemState: 'Active' })], [], [fact(1, { workItemState: 'Active' })], []]) {
+    store.tickets.recordSweep(SINCE, [closed], live.length ? live : [fact(2)]);
+    const row = store.tickets.listTrackerItems().find((r) => r.number === 1);
+    seen.push([row!.state, row!.workItemState]);
+  }
+  assert.deepEqual(
+    seen,
+    Array(4).fill(['closed', 'Closed']),
+    'one reading, whole — a closed item is never given the open set’s work state',
+  );
+
+  store.tickets.recordSweep(SINCE, [], [fact(1, { workItemState: 'Active' })]);
+  assert.equal(
+    store.tickets.listTrackerItems().find((r) => r.number === 1)?.workItemState,
+    'Closed',
+    'nor on a later sweep that did not read it, while the mirror holds it closed',
+  );
+  store.close();
+});
+
 test('an empty live set freezes nothing at all', () => {
   const store = new Store(':memory:');
   store.tickets.ensureTrackerSweep(MONTH_MS);

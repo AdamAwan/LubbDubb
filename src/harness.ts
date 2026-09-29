@@ -45,7 +45,7 @@ interface HarnessDeps extends PulseDeps {
   runtime: RuntimeControl;
   prWatchLabel: string;
   modelPins?: { labelPrefix: string; models: AgentModels };
-  featureStandings?: () => { number: number; title: string; key: string }[];
+  featureStandings?: () => { number: number; title: string; key: string; lines: string[] }[];
   upNextOverrideTtlMs: number;
   runway?: RunwayDesk;
   issuePickup?: IssuePickupPolicy;

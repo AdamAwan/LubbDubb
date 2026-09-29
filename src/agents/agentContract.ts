@@ -42,7 +42,7 @@ export interface AgentManagerOptions {
   goalProfile?: {
     effective: (issueOrigin: string) => string | null;
   };
-  featureStanding?: (featureOrigin: string) => string | null;
+  featureStanding?: (featureOrigin: string) => { key: string; lines: string[] } | null;
   featureSequenceStanding?: (featureOrigin: string) => { key: string; members: number[] } | null;
   whitelistedApprovals: WhitelistRule[];
   reviewPolicy?: PrReviewPolicy;
