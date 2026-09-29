@@ -88,8 +88,8 @@ export interface DispatchContext {
   /** Goals owed a judge's second reading, as root origin refs. → 14-persistence.md#the-prediction-judge */
   judgeOwed?: readonly string[];
   retrospectiveOrigins?: string[];
-  featureStandings?: { number: number; title: string; key: string }[];
-  featureSummaryKeys?: { originRef: string; standingKey: string }[];
+  featureStandings?: { number: number; title: string; key: string; lines: string[] }[];
+  featureSummaryKeys?: { originRef: string; standingKey: string; standingLines: string[] | null; heldKeys: string[] }[];
   featureSequences?: FeatureSequence[];
   obstacles?: ObstacleStanding[];
   obstacleBlocks?: ObstacleBlock[];

@@ -72,10 +72,11 @@ export function buildAgentManager(
             },
           }
         : undefined,
-    featureStanding: (featureOrigin: string): string | null => {
+    featureStanding: (featureOrigin: string): { key: string; lines: string[] } | null => {
       const facts = featureBoard();
       if (!facts) return null;
-      return featureRecords(store, facts).find((f) => issueOriginRef('root', f.number) === featureOrigin)?.key ?? null;
+      const found = featureRecords(store, facts).find((f) => issueOriginRef('root', f.number) === featureOrigin);
+      return found ? { key: found.key, lines: found.lines } : null;
     },
     featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
       const found = sequenceableFeatures(

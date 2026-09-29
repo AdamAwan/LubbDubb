@@ -98,25 +98,48 @@ export interface FeatureChildStandingFacts {
   number: number;
   state: string;
   workItemState: string | null;
-  deliveredAt: string | null;
-  shortfallAt: string | null;
+  delivered: string | null;
+  shortfall: { summary: string; cause: string | null } | null;
   runningSince: string | null;
   landedAt: string | null;
 }
 
+// → docs/spec/05-dispatcher.md#feature-summary--where-a-feature-is
+export const FEATURE_SUMMARY_REPEAT_CAP = 3;
+
+export function featureStandingLine(c: FeatureChildStandingFacts): string {
+  const parts = [`#${c.number} ${[c.state, c.workItemState].filter(Boolean).join(' / ')}`];
+  if (c.runningSince) parts.push(`running since ${c.runningSince}`);
+  if (c.delivered) parts.push(`delivered "${c.delivered}"`);
+  if (c.shortfall) {
+    parts.push(`fell short${c.shortfall.cause ? ` (${c.shortfall.cause})` : ''} "${c.shortfall.summary}"`);
+  }
+  if (c.landedAt) parts.push(`landed ${c.landedAt}`);
+  return parts.join(' · ');
+}
+
+export function featureStandingLines(children: readonly FeatureChildStandingFacts[]): string[] {
+  return [...children].sort((a, b) => a.number - b.number).map(featureStandingLine);
+}
+
 export function featureStandingKey(children: readonly FeatureChildStandingFacts[]): string {
-  const lines = children
-    .map((c) =>
-      [
-        c.number,
-        c.state,
-        c.workItemState ?? '',
-        c.deliveredAt ?? '',
-        c.shortfallAt ?? '',
-        c.runningSince ?? '',
-        c.landedAt ?? '',
-      ].join(' '),
-    )
-    .sort();
+  return standingKeyOf(featureStandingLines(children));
+}
+
+function standingKeyOf(lines: readonly string[]): string {
   return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 32);
+}
+
+export function standingMoves(
+  before: readonly string[] | null,
+  after: readonly string[],
+): { gone: string[]; came: string[] } {
+  if (before === null) return { gone: [], came: [] };
+  const was = new Set(before);
+  const now = new Set(after);
+  return { gone: before.filter((l) => !now.has(l)), came: after.filter((l) => !was.has(l)) };
+}
+
+export function summaryHeld(summary: { repeats: number; repeatKeys: readonly string[] }, key: string): boolean {
+  return summary.repeats >= FEATURE_SUMMARY_REPEAT_CAP && summary.repeatKeys.includes(key);
 }

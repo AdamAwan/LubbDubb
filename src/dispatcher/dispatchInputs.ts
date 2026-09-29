@@ -1,3 +1,4 @@
+import { FEATURE_SUMMARY_REPEAT_CAP } from '../featureSummaries/featureSummary.js';
 import type { Store } from '../store/store.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import type { DispatchContext } from './dispatcher.js';
@@ -55,7 +56,12 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     featureSummaryKeys:
       featureStandings.length === 0
         ? []
-        : store.tickets.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey })),
+        : store.tickets.listFeatureSummaries().map((f) => ({
+            originRef: f.originRef,
+            standingKey: f.standingKey,
+            standingLines: f.standingLines,
+            heldKeys: f.repeats >= FEATURE_SUMMARY_REPEAT_CAP ? f.repeatKeys : [],
+          })),
     featureSequences: store.sequences.listFeatureSequences(),
     proposals,
     rejectionSignals: signals ? store.world.listWorldEventsSince(signals.since, signals.refs) : [],

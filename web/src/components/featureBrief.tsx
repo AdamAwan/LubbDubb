@@ -130,7 +130,7 @@ export function Standing({ feature, view }: { feature: FeatureRollup; view: Cock
       </p>
     );
   }
-  const moved = feature.standingKey !== '' && feature.standingKey !== summary.standingKey;
+  const moved = !feature.summaryHeld && feature.standingKey !== '' && feature.standingKey !== summary.standingKey;
   const rewriting = view.state.tasks.some(
     (t) => t.originRef === `issue:${feature.number}:summary` && (t.status === 'queued' || t.status === 'running'),
   );
@@ -146,6 +146,14 @@ export function Standing({ feature, view }: { feature: FeatureRollup; view: Cock
           </>
         )}
         {rewriting && ' · being rewritten'}
+        {feature.summaryHeld && (
+          <>
+            {' · '}
+            <span className="cn-fb-moved">
+              refiled unchanged {summary.repeats + 1} times — not rewritten again until something it is shown moves
+            </span>
+          </>
+        )}
       </p>
     </>
   );

@@ -46,6 +46,7 @@ import { reviewModeNames } from '../review/prReview.js';
 import type { Dispatcher } from '../dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from '../dispatcher/issuePickup.js';
 import { featureRecords } from '../featureSummaries/featureRecord.js';
+import { standingMoves } from '../featureSummaries/featureSummary.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { Harness } from '../harness.js';
 import { CycleTrigger } from '../cycleTrigger.js';
@@ -401,11 +402,18 @@ function buildHarness(
 }
 
 function harnessReads(config: Config, store: Store, predictions: PredictionStore, featureBoard: Fleet['featureBoard']) {
+  const lastStanding = new Map<number, { key: string; lines: string[] }>();
   return {
-    featureStandings: (): { number: number; title: string; key: string }[] => {
+    featureStandings: (): { number: number; title: string; key: string; lines: string[] }[] => {
       const facts = featureBoard();
       if (!facts) return [];
-      return featureRecords(store, facts).map((f) => ({ number: f.number, title: f.title, key: f.key }));
+      const records = featureRecords(store, facts);
+      for (const f of records) {
+        const before = lastStanding.get(f.number);
+        if (before && before.key !== f.key) logStandingMove(f.number, before.lines, f.lines);
+        lastStanding.set(f.number, { key: f.key, lines: f.lines });
+      }
+      return records.map((f) => ({ number: f.number, title: f.title, key: f.key, lines: f.lines }));
     },
     // Computed here rather than in the rule: `src/validation/remote/` is a lens as far as the
     // dispatcher is concerned, so what reaches it is a run row and a rendered string.
@@ -424,6 +432,13 @@ function harnessReads(config: Config, store: Store, predictions: PredictionStore
         browser: config.localValidation.browser,
       }),
   };
+}
+
+function logStandingMove(feature: number, before: string[], after: string[]): void {
+  const { gone, came } = standingMoves(before, after);
+  console.log(
+    `[lubbdubb] feature #${feature} standing moved\n${[...gone.map((l) => `  - ${l}`), ...came.map((l) => `  + ${l}`)].join('\n')}`,
+  );
 }
 
 function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, escalations }: Fleet): void {

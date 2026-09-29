@@ -655,6 +655,12 @@ export interface FeatureSummary {
   blocked: string | null;
   remaining: string | null;
   standingKey: string;
+  /** The child fact lines the summary was written against; null on a row from before they were kept. */
+  standingLines: string[] | null;
+  /** How many times in a row the same account was refiled. → docs/spec/05-dispatcher.md */
+  repeats: number;
+  /** The standing keys that identical account was refiled at. */
+  repeatKeys: string[];
   agentId: string;
   taskId: string;
   createdAt: string;

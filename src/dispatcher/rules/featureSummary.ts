@@ -1,19 +1,23 @@
 import { issueOriginRef } from '../../issueOrigins.js';
-import { featureSummaryOrigin } from '../../featureSummaries/featureSummary.js';
+import { featureSummaryOrigin, standingMoves } from '../../featureSummaries/featureSummary.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `feature-summary`)
 
+const MOVES_IN_REASON = 6;
+
 export function featureSummary(s: StageContext): void {
   const { ctx } = s;
-  const written = new Map((ctx.featureSummaryKeys ?? []).map((k) => [k.originRef, k.standingKey]));
+  const written = new Map((ctx.featureSummaryKeys ?? []).map((k) => [k.originRef, k]));
   for (const feature of ctx.featureStandings ?? []) {
     const origin = featureSummaryOrigin(feature.number);
-    if (written.get(issueOriginRef('root', feature.number)) === feature.key) continue;
+    const onFile = written.get(issueOriginRef('root', feature.number));
+    if (onFile?.standingKey === feature.key) continue;
+    if (onFile?.heldKeys.includes(feature.key)) continue;
     if (s.activeOrigins.has(origin)) continue;
 
     const title = `Summarise feature #${feature.number}`;
-    const reason = `Work under feature #${feature.number} has moved since it was last summarised.`;
+    const reason = movedReason(feature.number, onFile?.standingLines ?? null, feature.lines);
     s.consider({
       origin,
       rule: 'feature-summary',
@@ -32,4 +36,14 @@ export function featureSummary(s: StageContext): void {
       } satisfies RawAction,
     });
   }
+}
+
+function movedReason(number: number, before: string[] | null, after: string[]): string {
+  const head = `Work under feature #${number} has moved since it was last summarised.`;
+  const { gone, came } = standingMoves(before, after);
+  const moves = [...gone.map((l) => `was ${l}`), ...came.map((l) => `now ${l}`)];
+  if (moves.length === 0) return head;
+  const shown = moves.slice(0, MOVES_IN_REASON);
+  const more = moves.length > shown.length ? `; and ${moves.length - shown.length} more` : '';
+  return `${head} ${shown.join('; ')}${more}`;
 }

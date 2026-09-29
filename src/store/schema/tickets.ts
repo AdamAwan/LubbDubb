@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS feature_summaries (
   blocked      TEXT,                  -- what is stopping the rest
   remaining    TEXT,                  -- what is left
   standing_key TEXT NOT NULL,
+  standing_lines TEXT,                -- JSON: the child fact lines standing_key digests
+  repeats      INTEGER NOT NULL DEFAULT 0,  -- identical refilings in a row
+  repeat_keys  TEXT NOT NULL DEFAULT '[]',  -- JSON: the keys those refilings were at
   agent_id     TEXT NOT NULL,
   task_id      TEXT NOT NULL,
   created_at   TEXT NOT NULL,
