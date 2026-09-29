@@ -10,7 +10,7 @@ import type { ActionSink, IssueImageSink } from '../../sink/actionSink.js';
 import { validationResourcePath } from '../resources.js';
 import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
-import { checkSetReleased } from '../planApproval.js';
+import { checkSetStanding, type CheckSetStanding } from '../planApproval.js';
 import { sweptScripts } from '../steps.js';
 import { queryDigest } from '../../store/remoteValidation.js';
 import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../../types.js';
@@ -98,6 +98,38 @@ export class RemoteValidationDesk {
     await this.postCaptures();
     this.sweep();
     this.sweepScripts();
+  }
+
+  /**
+   * An operator setting up the sheet the pulse did not: the arrival the backfill guard stamped, or one
+   * stamped before a check set could be accepted. Refused in words wherever the pulse would still
+   * refuse it for a reason a press cannot overrule.
+   * → docs/spec/36-remote-validation.md#setting-one-up-by-hand
+   *
+   * @public the seam the `…/sheet` route reaches
+   */
+  async setUpSheet(goalRef: string, environment: string): Promise<string | null> {
+    const { store } = this.deps;
+    if (this.deps.environments.find((e) => e.name === environment)?.validate === undefined)
+      return `"${environment}" declares no \`validate\` block, so it cannot run these checks.`;
+    if (store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environment))
+      return `A run is already set up on "${environment}" for this goal.`;
+    const arrival = store.environments
+      .listGoalArrivals()
+      .find((a) => a.goalRef === goalRef && a.environment === environment);
+    if (arrival === undefined) return `This goal's work is not recorded as having reached "${environment}".`;
+    if (!this.checkSet(goalRef).accepted) return "This goal's checks are not accepted yet — accept them first.";
+    await this.assemble(arrival);
+    store.environments.markArrivalSheeted(goalRef, environment);
+    return null;
+  }
+
+  private checkSet(goalRef: string): CheckSetStanding {
+    const { store } = this.deps;
+    return checkSetStanding({
+      record: store.validation.getValidationPlanRecord(goalRef),
+      checks: store.validation.listValidationChecks(goalRef),
+    });
   }
 
   /**
@@ -196,11 +228,7 @@ export class RemoteValidationDesk {
       considered = sheetableArrivals({
         arrivals: store.environments.listGoalArrivals(),
         environments: this.deps.environments,
-        authored: (goalRef) =>
-          checkSetReleased({
-            record: store.validation.getValidationPlanRecord(goalRef),
-            checks: store.validation.listValidationChecks(goalRef),
-          }),
+        checkSet: (goalRef) => this.checkSet(goalRef),
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       });

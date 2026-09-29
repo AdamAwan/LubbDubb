@@ -57,6 +57,7 @@ import type {
   ErrorLogEntry,
   Escalation,
   GoalArrival,
+  NoSheet,
   GoalAppraisalVerdict,
   GoalCriteriaDrift,
   GoalPause,
@@ -543,7 +544,7 @@ export interface GoalEnvironmentReachView extends GoalEnvironmentReach {
   /** `check plan · 4 checks · 1 blocked`, or null where this goal has no check plan against this environment. */
   sheet: string | null;
   /** Why a validating environment holds no sheet for this goal; null where it has one or cannot run one. */
-  noSheet: string | null;
+  noSheet: NoSheet | null;
 }
 
 /**
@@ -963,6 +964,7 @@ export type {
   ErrorLogEntry,
   Escalation,
   GoalArrival,
+  NoSheet,
   CriterionCoverage,
   CriteriaAlignmentPoint,
   GoalCriteriaAlignment,

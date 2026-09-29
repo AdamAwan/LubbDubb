@@ -1,5 +1,6 @@
 import type { GoalArrival, WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
+import type { CheckSetStanding } from '../validation/planApproval.js';
 
 // → docs/spec/24-environments.md
 
@@ -79,22 +80,20 @@ interface SheetArrivalVerdict {
  * next pulse sees. Deliberately smaller than the watch's twenty — what this bounds is a command per
  * approved row on each sheet, where that one bounds a query.
  *
- * **A fresh arrival whose goal has no check set yet is deferred the same way**, and the order of the
- * two cuts is what makes that safe. The set is authored after the assessor writes `delivered`
- * ([20](../../docs/spec/20-validation.md#when-the-check-set-is-written)), which routinely takes
- * longer than two probe intervals, so a sheet assembled first carries only the watch-derived rows —
- * a bench that offers nothing to run, reads as a misconfiguration, and is not one. The staleness cut
- * runs **first**, so the arrivals that would flood in on the pulse an operator turns this on are
- * stamped and not assembled before authoring is ever consulted; only an arrival that entered fresh
- * waits, and it waits as long as the planner takes.
+ * **An arrival whose goal has no accepted check set yet is deferred the same way**, and left unstamped
+ * however long that takes: the set is written after the assessor records `delivered`, which routinely
+ * takes longer than two probe intervals. It is fresh again the moment the set is accepted — freshness
+ * is the arrival's **or** the acceptance's — so the backfill guard still stamps a goal whose work and
+ * checks were both settled long ago, and never one still waiting on its checks.
+ * → docs/spec/36-remote-validation.md#a-sheet-waits-for-its-checks
  *
  * → docs/spec/36-remote-validation.md#the-desk
  */
 export function sheetableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: readonly EnvironmentConfig[];
-  /** Whether this goal's validation check set has been authored. A fresh arrival waits until it has. */
-  authored: (goalRef: string) => boolean;
+  /** This goal's check set: whether it is accepted, and when. An arrival waits until it is. */
+  checkSet: (goalRef: string) => CheckSetStanding;
   probeIntervalMs: number;
   now: number;
 }): SheetArrivalVerdict[] {
@@ -106,7 +105,7 @@ export function sheetableArrivals(input: {
     const step = arrivalSheetStep({
       arrival,
       validates: byName.get(arrival.environment)?.validate !== undefined,
-      authored: () => input.authored(arrival.goalRef),
+      checkSet: () => input.checkSet(arrival.goalRef),
       probeIntervalMs: input.probeIntervalMs,
       now: input.now,
     });
@@ -128,15 +127,17 @@ export type ArrivalSheetStep = 'not-validating' | 'sheeted' | 'stale' | 'awaitin
 export function arrivalSheetStep(input: {
   arrival: GoalArrival;
   validates: boolean;
-  authored: () => boolean;
+  checkSet: () => CheckSetStanding;
   probeIntervalMs: number;
   now: number;
 }): ArrivalSheetStep {
   if (input.arrival.sheetedAt !== null) return 'sheeted';
   if (!input.validates) return 'not-validating';
-  const seen = Date.parse(input.arrival.arrivedAt);
-  if (!Number.isFinite(seen) || seen < input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS) return 'stale';
-  return input.authored() ? 'ready' : 'awaiting-checks';
+  const checks = input.checkSet();
+  if (!checks.accepted) return 'awaiting-checks';
+  const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
+  const since = (at: string | null): boolean => at !== null && Date.parse(at) >= floor;
+  return since(input.arrival.arrivedAt) || since(checks.acceptedAt) ? 'ready' : 'stale';
 }
 
 export function settlingWindows(windows: readonly WatchWindow[], now: number): WatchWindow[] {

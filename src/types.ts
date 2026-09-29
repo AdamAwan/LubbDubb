@@ -1520,6 +1520,15 @@ export interface GoalLandingReach {
 
 export type EnvironmentGate = 'validate' | 'close_out';
 
+/**
+ * Why a validating environment holds no sheet for a goal, and whether an operator can set one up by
+ * hand. → docs/spec/36-remote-validation.md#when-there-is-no-sheet
+ */
+export interface NoSheet {
+  why: string;
+  setUp: boolean;
+}
+
 export interface GoalArrival {
   goalRef: string;
   environment: string;

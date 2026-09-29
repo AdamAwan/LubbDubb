@@ -175,6 +175,7 @@ export interface CockpitActions {
   openRemoteSheet(environment: string | null): void;
   ruleRemoteQuery(issueNumber: number, environment: string, rowId: string, accept: boolean): Promise<void>;
   selectRemoteRow(issueNumber: number, environment: string, rowId: string, selected: boolean): Promise<void>;
+  setUpRemoteSheet(issueNumber: number, environment: string): Promise<void>;
   pressRemoteSheet(issueNumber: number, environment: string): Promise<void>;
   cancelRemoteRun(issueNumber: number, environment: string): Promise<void>;
   reseedRemoteTenant(issueNumber: number, environment: string): Promise<void>;

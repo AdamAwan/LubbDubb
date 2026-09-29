@@ -35,6 +35,22 @@ export function checkSetReleased(input: {
 }
 
 /**
+ * Whether the set is released, and when, where a stamp says so. `acceptedAt` null on a released set is
+ * one released before the stamp existed — the ingested set `checkSetReleased`'s second arm reads.
+ */
+export interface CheckSetStanding {
+  accepted: boolean;
+  acceptedAt: string | null;
+}
+
+export function checkSetStanding(input: {
+  record: ValidationPlanRecord | null;
+  checks: readonly ValidationCheck[];
+}): CheckSetStanding {
+  return { accepted: checkSetReleased(input), acceptedAt: input.record?.releasedAt ?? null };
+}
+
+/**
  * A set still waiting on the operator: authored and not accepted, or sent back and being rewritten.
  * Not `!checkSetReleased` — a sent-back set keeps its `note` and its rows.
  * → docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time

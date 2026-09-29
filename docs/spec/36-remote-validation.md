@@ -655,14 +655,26 @@ The gate is an `authored` predicate on `sheetableArrivals` — `checkSetReleased
 `validation_plans.released_at`, or live checks no gate of the operator's ever stood in front of (a set a
 plan document ingested, or a record holding only a hint). **The accept is part of the gate**: an authored
 set is a proposal until the operator answers it, and a sheet assembled off one would offer rows nobody
-agreed to run ([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)). Its **position among
-the cuts is load-bearing**. Authoring routinely takes longer than the two probe intervals the freshness guard
-allows, so an arrival deferred for the planner and then aged out by that guard would be stamped
-without a sheet and lose it for good. So the staleness cut runs **first**: the arrivals that would
-flood in on the pulse an operator adds a `validate` block are stamped and not assembled before
-authoring is consulted at all, and the backfill guard is intact. Only an arrival that entered fresh
-waits on the planner, and it waits as long as the planner takes — deferred unstamped, the cap's own
-arrangement, and re-considered every pulse until the set exists and has been accepted.
+agreed to run ([20](20-validation.md#the-check-set-is-proposed-before-it-is-work)).
+
+#### A sheet waits for its checks
+
+**An arrival waiting on its check set is never stamped away.** Authoring routinely takes longer than
+the two probe intervals the freshness guard allows, and the gate used to run the staleness cut
+**first** — so an arrival deferred for the planner aged out while it waited and was stamped without a
+sheet, for good, on exactly the goals whose checks took longest to write. Nothing was red: the Validate
+pane read _no run was set up_, and no pulse would ever set one up.
+
+So the check set is read first, and **freshness is the arrival's or the acceptance's**:
+`arrivalSheetStep` (`src/environments/watchWindow.ts`) answers `awaiting-checks` for an arrival whose set
+is not accepted, however old — deferred unstamped, the cap's own arrangement, and re-considered every
+pulse — and `ready` for one whose set was accepted within two probe intervals, however old the arrival.
+`CheckSetStanding` carries the acceptance time (`validation_plans.released_at`); a set released before
+that stamp existed has none, and is judged on the arrival alone. The backfill guard is intact where it
+matters: the pulse an operator adds a `validate` block stamps every goal whose work **and** checks were
+both settled long ago, which is the history it exists to keep out. What it costs is a check-set read
+per unstamped arrival per pulse, on goals whose checks are still unwritten — cheaper than a sheet lost
+for good.
 
 An arrival assembles a sheet and **never starts a browser run**. That gate is the only moment in a
 goal's life when somebody looks at the list of checks with the delivered thing actually in front of
@@ -2074,7 +2086,8 @@ passes applies unchanged and for its reason: the first pulse after this ships �
 adds a `validate` block to an environment that has been probing for a month — would otherwise assemble
 a sheet for **every goal that ever arrived**, spawn a state command per approved query for each of
 them, and put a bench row on work that shipped in March. So a sheet is assembled only for an arrival
-confirmed within two probe intervals of now — `sheetableArrivals` in `src/environments/watchWindow.ts`,
+confirmed — or whose check set was accepted ([A sheet waits for its checks](#a-sheet-waits-for-its-checks)) —
+within two probe intervals of now — `sheetableArrivals` in `src/environments/watchWindow.ts`,
 beside the `openableArrivals` whose guard it is — and **every arrival is stamped either way** —
 `goal_arrivals.sheeted_at`, beside `announced_at` and `watched_at`. The stamp is what makes the next
 arrival the first one sheeted rather than the whole history arriving at once, and it is spent only
@@ -2219,7 +2232,7 @@ silent:
 ## Routes
 
 `src/server/routes/remoteValidation.ts`, a module and a `ROUTE_MODULES` entry — `app.ts` stays wiring
-only ([16](16-http-api.md#shape)). **All seven are built**, in that one module: a second module for
+only ([16](16-http-api.md#shape)). **All eight are built**, in that one module: a second module for
 the press would put two representations of one surface in two places. Every handler is wrapped in `checked(schemas, handler)` and handed
 `{params, body, req, reply}` already parsed; **a refusal is a returned value and a 400, never a
 throw**.
@@ -2227,6 +2240,7 @@ throw**.
 | Route                                                                            | Does                                                                                                                                           |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /api/issues/:number/remote-validation/:environment/run`                    | **built.** Press go. The only route here that runs a cycle.                                                                                    |
+| `POST /api/issues/:number/remote-validation/:environment/sheet`                  | **built.** Set up a sheet the pulse did not. → [Setting one up by hand](#setting-one-up-by-hand)                                               |
 | `POST /api/issues/:number/remote-validation/:environment/cancel`                 | **built.** Settle an open run `abandoned`.                                                                                                     |
 | `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`            | **built.** `{selected}` — deselect a row, or take it back.                                                                                     |
 | `POST /api/issues/:number/remote-validation/:environment/queries/:queryId`       | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval.                                     |
@@ -2444,9 +2458,22 @@ be a second opinion on the desk's own cut. Its first arms are the reach verdict:
 reached the environment, only part of it has, the probe could not say. Past those it words the
 arrival's **`arrivalSheetStep`** (`src/environments/watchWindow.ts`) — the one statement of the cut
 [`sheetableArrivals`](#the-desk) acts on, so the reason and the desk cannot drift apart: not recorded
-yet, stamped or stale (no sheet will come), the check set not accepted yet, or ready for the next
-pulse. `noSheet` is null where there is a sheet, and where the environment declares no `validate`
-block.
+yet, stamped or stale (no pulse will set one up), the check set not accepted yet, or ready for the
+next pulse. `noSheet` is `{why, setUp}`, null where there is a sheet and where the environment declares
+no `validate` block; `setUp` is true exactly where the pulse never will and a person can
+([Setting one up by hand](#setting-one-up-by-hand)).
+
+### Setting one up by hand
+
+**Built.** An arrival stamped without a sheet — the backfill guard's, or one stamped before
+[a sheet waited for its checks](#a-sheet-waits-for-its-checks) — has no pulse that will ever set its
+run up, so the run strip offers **Set up a run** on its line, and
+`POST /api/issues/:number/remote-validation/:environment/sheet` reaches
+`RemoteValidationDesk.setUpSheet`. It assembles the sheet exactly as the pulse would — same rows, same
+deterministic reads — and stamps the arrival. It is refused, in words and a 409, where the pulse would
+refuse for a reason a press cannot overrule: the environment declares no `validate` block, a sheet
+already exists, no arrival is recorded, or the check set is not accepted. It is the operator deciding
+that this one piece of history is wanted, which is the one thing the backfill guard could never know.
 
 The cockpit (`remoteRunGaps`, `web/src/view/validatePane.ts`) adds only what it holds no reach row
 for: **no environment declares a `validate` block** — one line saying so, read off
@@ -2578,7 +2605,8 @@ against one environment is still `blocked` on another; a state row on a store no
 `blocked` while every other row on the same sheet still reports; a row of an unpermitted kind is
 `blocked`; **no reading is a `WorldEvent` and nothing is written into `watch_readings`**, asserted
 against the world's own list; an arrival older than two probe intervals is stamped and assembles
-nothing; an arrival on an environment with no `validate` block is left **unstamped**; the cap of five
+nothing, unless its checks were accepted within them, and one still waiting on its checks is never stamped
+(`test/validationAuthoring.test.ts`, `test/remoteRunGaps.test.ts`); an arrival on an environment with no `validate` block is left **unstamped**; the cap of five
 defers rather than drops, asserted on a backlog of seven; a database written before
 `goal_arrivals.sheeted_at` gains it on boot and **no backfill runs** over it; the desk's position in
 the pulse; that nothing under `src/dispatcher/` imports `src/validation/remote/` or

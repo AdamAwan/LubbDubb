@@ -141,6 +141,17 @@ function registerSheetRoutes(app: FastifyInstance, { system, hub }: RouteContext
     }),
   );
 
+  /* Setting up the sheet the pulse did not. → docs/spec/36-remote-validation.md#setting-one-up-by-hand */
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/sheet',
+    checked({ params: EnvironmentParams }, async ({ params, reply }) => {
+      const refused = await system.remoteValidation.setUpSheet(issueOrigin(params.number), params.environment);
+      if (refused !== null) return reply.code(409).send({ error: refused });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      return { ok: true };
+    }),
+  );
+
   /*
    * Required rather than a convenience, `validate-locally/cancel`'s reason: an operator who abandons
    * a run by hand otherwise leaves it live for ever, and the sheet's press absent with it.

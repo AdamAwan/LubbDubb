@@ -365,6 +365,8 @@ const realApi = {
         `${encodeURIComponent(rowId)}`,
       { selected },
     ),
+  setUpRemoteSheet: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/sheet`),
   pressRemoteSheet: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/run`),
   cancelRemoteRun: (issueNumber: number, environment: string) =>

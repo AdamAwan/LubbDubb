@@ -40,26 +40,38 @@ function reach(over: Partial<GoalEnvironmentReachView> = {}): GoalEnvironmentRea
   };
 }
 
-const reason = (over: Partial<Parameters<typeof noSheetReason>[0]>): string =>
-  noSheetReason({ environment: 'staging', status: 'reached', step: 'ready', ...over });
+const reason = (over: Partial<Parameters<typeof noSheetReason>[0]>) =>
+  noSheetReason({ environment: 'staging', status: 'reached', step: 'ready', checksAccepted: true, ...over });
 
 test('each arm of a missing sheet names the step still to come', () => {
-  assert.match(reason({ status: 'absent' }), /not reached staging yet/);
-  assert.match(reason({ status: 'partial' }), /Only part/);
-  assert.match(reason({ status: 'unknown' }), /Could not tell/);
-  assert.match(reason({ step: null }), /arrival is recorded on the next pulse/);
-  assert.match(reason({ step: 'sheeted' }), /before remote runs could take it/);
-  assert.match(reason({ step: 'stale' }), /before remote runs could take it/);
-  assert.match(reason({ step: 'awaiting-checks' }), /checks are not accepted yet/);
-  assert.match(reason({ step: 'ready' }), /set up on the next pulse/);
+  assert.match(reason({ status: 'absent' }).why, /not reached staging yet/);
+  assert.match(reason({ status: 'partial' }).why, /Only part/);
+  assert.match(reason({ status: 'unknown' }).why, /Could not tell/);
+  assert.match(reason({ step: null }).why, /arrival is recorded on the next pulse/);
+  assert.match(reason({ step: 'awaiting-checks' }).why, /checks are not accepted yet/);
+  assert.match(reason({ step: 'ready' }).why, /set up on the next pulse/);
 });
 
-test('the reason reads the same cut the desk acts on', () => {
+test('a run the pulse will never set up is offered to be set up by hand, once its checks are accepted', () => {
+  for (const step of ['sheeted', 'stale'] as const) {
+    assert.deepEqual(reason({ step }), {
+      why: 'No run was set up automatically: the work reached staging before remote runs there could take it.',
+      setUp: true,
+    });
+    const unaccepted = reason({ step, checksAccepted: false });
+    assert.equal(unaccepted.setUp, false);
+    assert.match(unaccepted.why, /accept them first/);
+  }
+  for (const step of [null, 'awaiting-checks', 'ready'] as const) assert.equal(reason({ step }).setUp, false);
+});
+
+test('an arrival waiting on its checks is never stale, and is fresh again the moment they are accepted', () => {
+  const later = Date.parse(NOW) + 60 * 60_000;
   const step = (over: Partial<Parameters<typeof arrivalSheetStep>[0]>) =>
     arrivalSheetStep({
       arrival: arrival(),
       validates: true,
-      authored: () => true,
+      checkSet: () => ({ accepted: true, acceptedAt: null }),
       probeIntervalMs: 60_000,
       now: Date.parse(NOW),
       ...over,
@@ -67,8 +79,21 @@ test('the reason reads the same cut the desk acts on', () => {
   assert.equal(step({}), 'ready');
   assert.equal(step({ arrival: arrival({ sheetedAt: NOW }) }), 'sheeted');
   assert.equal(step({ validates: false }), 'not-validating');
-  assert.equal(step({ now: Date.parse(NOW) + 3 * 60_000 }), 'stale');
-  assert.equal(step({ authored: () => false }), 'awaiting-checks');
+  assert.equal(
+    step({ now: later, checkSet: () => ({ accepted: false, acceptedAt: null }) }),
+    'awaiting-checks',
+    'an hour of waiting on the checks does not make the arrival stale',
+  );
+  assert.equal(
+    step({ now: later, checkSet: () => ({ accepted: true, acceptedAt: new Date(later - 1_000).toISOString() }) }),
+    'ready',
+    'accepted just now, so the sheet is assembled',
+  );
+  assert.equal(
+    step({ now: later, checkSet: () => ({ accepted: true, acceptedAt: NOW }) }),
+    'stale',
+    'work and checks both settled long ago is the backfill the guard exists for',
+  );
 });
 
 test('a deployment with no validate block says so rather than drawing nothing', () => {
@@ -79,8 +104,8 @@ test('a deployment with no validate block says so rather than drawing nothing', 
 });
 
 test('an environment that can run remotely but holds no sheet says why, in the server’s words', () => {
-  const why = 'This goal’s work has not reached staging yet — a run is offered once it does.';
-  assert.deepEqual(remoteRunGaps([env()], [], [reach({ noSheet: why })]), [{ environment: 'staging', why }]);
+  const noSheet = { why: 'No run was set up automatically.', setUp: true };
+  assert.deepEqual(remoteRunGaps([env()], [], [reach({ noSheet })]), [{ environment: 'staging', ...noSheet }]);
 });
 
 test('a goal with no landing at all still gets a line for every environment that could run it', () => {
