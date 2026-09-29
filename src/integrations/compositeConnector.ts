@@ -30,7 +30,7 @@ import type {
 } from '../sink/actionSink.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
-import { signOff } from '../sink/signOff.js';
+import { signOff, type SignOffKind } from '../sink/signOff.js';
 import { markdownToHtml } from '../sink/markdownToHtml.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
@@ -128,9 +128,9 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return this.integrations.some(isTicketHistoryCapable);
   }
 
-  private signed(handler: Integration, body: string): string {
+  private signed(handler: Integration, body: string, kind: SignOffKind = 'comment'): string {
     const format = handler.bodyFormat ?? 'markdown';
-    return signOff(format === 'html' ? markdownToHtml(body) : body, format);
+    return signOff(format === 'html' ? markdownToHtml(body) : body, format, kind);
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
@@ -284,7 +284,7 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
   async createIssue(input: IssueCreateInput): Promise<SendResult> {
     const handler = this.integrations.find(isIssueCreateCapable);
     if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
-    return handler.createIssue({ ...input, body: this.signed(handler, input.body) });
+    return handler.createIssue({ ...input, body: this.signed(handler, input.body, 'ticket') });
   }
 
   /**

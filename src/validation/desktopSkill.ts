@@ -270,7 +270,8 @@ is read, ignored, and looks exactly like a fleet that has decided not to answer.
 
 1. **Find out where one would land, before drafting.** \`ticket_target\` — it names
    the tracker this harness reads issues from, the watch tag, who the item is
-   assigned to, the work item type, which types are containers, and the states an
+   assigned to, the work item type it defaults to and the others it knows
+   (\`filingTypes\`), which types are containers, and the states an
    item has to be in to be picked up. A non-empty \`blockers\` means nothing can be
    filed from this deployment at all: say that, and stop. \`cautions\` are the things
    that would keep a filed ticket from being worked — read them now, not after.
@@ -280,14 +281,17 @@ is read, ignored, and looks exactly like a fleet that has decided not to answer.
    and let them confirm it rather than sending them away to find it; where it is a
    product decision, ask. Every gap you leave here comes back as a hold on the
    ticket and they end up in [clarify](#clarify-a-ticket) for the same answers.
-3. **Show them the whole thing and wait.** Title and body, in their words and the
+3. **Show them the whole thing and wait.** Title, type and body, in their words and the
    tracker's own formatting. Filing writes to a shared tracker under the harness's
    credential and puts work in front of a fleet — it happens when they say yes.
 4. **File it with \`job_create\`, \`kind: "code"\`.** Never \`gh issue create\`, never
    \`az boards work-item update\`, and never the repository this session happens to be
    open on. The harness resolves the tracker, the watch tag, the type and the
    assignee per call; each of those, left to a command line, fails by producing a
-   perfectly good ticket that is never dispatched for. Hand back the number the
+   perfectly good ticket that is never dispatched for. On Azure DevOps, pass
+   \`type\` when it is not a story — a bug, a feature, tech debt, whatever the
+   project calls it, spelled exactly as the project spells it; left off, it is filed
+   as \`storyType\`. Hand back the number the
    call returns, the tracker it names, and the tag it carried.
 5. **Say what happens next, precisely.** Nothing was dispatched by that call. The
    harness appraises the ticket on its next pass and decides its own order. If the

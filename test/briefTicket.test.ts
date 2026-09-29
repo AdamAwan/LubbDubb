@@ -46,6 +46,7 @@ test('the ticket body is the operator’s request, verbatim', () => {
   assert.equal(title, 'Add a rate limiter to the ingest API');
 
   const body = defaultPromptTemplates().render('brief-ticket-body', vars);
+  assert.equal(body, 'Add a rate limiter to the ingest API\nit keeps falling over');
   assert.match(body, /Add a rate limiter to the ingest API/);
   assert.match(body, /it keeps falling over/);
   assert.doesNotMatch(body, /link_ticket|do not do the work/i);

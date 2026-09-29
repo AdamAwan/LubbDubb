@@ -1313,7 +1313,9 @@ mechanisms that happen to share a name.
 ### What type a filed item is
 
 `issueFilingTypes` names the Azure work item types the harness **creates** at, and the **first** entry
-is the one it uses (`filingType`, `src/tickets/ticketTypes.ts`). The three non-bug filing arms — a deferred
+is the one it uses (`filingType`, `src/tickets/ticketTypes.ts`) unless the filing names another — the
+desktop channel's `job_create` can ([13](13-jobs-and-tickets.md#filing-one-from-the-desktop-channel)).
+The three non-bug filing arms — a deferred
 finding, a brief, unrecorded work — used to hardcode `--type Task`, which is the altitude a story
 is **broken down** at rather than the one a backlog is filed at: an item created there has no story
 above it, rolls up to nothing, and appears on no backlog anybody grooms.

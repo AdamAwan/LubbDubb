@@ -389,6 +389,19 @@ and the pickup states, plus **`blockers`** (nothing can be filed from this deplo
   unwatched, created, and dispatched for never. Pickup states do the same one layer over. Both are
   states a filed ticket can sit in for good with nothing red, so they are read **before** the draft
   rather than diagnosed after the silence.
+- **The type is the operator's to choose, on the one tracker that has types.** A backlog holds more
+  than stories — bugs, features, tech debt, whatever a process template adds — and a brief that could
+  only be filed as the head of `issueFilingTypes` made every other kind a story somebody had to
+  retype by hand. `job_create` takes an optional `type`, sent to Azure verbatim; `ticket_target`
+  lists the ones the config already names (`filingTypes`: `issueFilingTypes`, `issueBugType`,
+  `issueContainerTypes`) so the session can offer them. The list is a hint, not a gate: Azure refuses
+  a type the project does not have, loudly, which is the failure worth having. On a tracker whose items
+  are not created _as_ anything (GitHub) a `type` is **refused**, not dropped, because dropping it
+  files a story the operator was told was a bug (`chooseFilingType`, `src/tickets/ticketTypes.ts`).
+- **The brief's body is the request and nothing else.** `brief-ticket-body` used to open with a
+  paragraph saying the item came from a brief, then "the request, verbatim:" — on a ticket the
+  operator wrote, every one of them started with two sentences about the harness before the work.
+  The sign-off already says who filed it ([15](15-integrations.md#signing-what-the-harness-says)).
 - **`job_create`'s answer names what the item actually carried** — the tracker, the tag, the assignee,
   the type — rather than asserting a watch tag it may not have written. On `labelPrefix: ''` there is
   no tag and the gate is off, and a fixed sentence saying "carrying the watch tag" was a claim the

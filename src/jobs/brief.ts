@@ -29,6 +29,7 @@ interface BriefInput {
   title?: string | null;
   kind: 'code' | 'desk';
   branch?: string | null;
+  type?: string | null;
 }
 
 export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise<BriefOutcome> {
@@ -38,7 +39,7 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
   const branch = input.branch ?? null;
 
   const tracker = kind === 'code' ? trackerCoordinates(config) : null;
-  if (tracker) return fileBrief(ctx, prompt, providedTitle);
+  if (tracker) return fileBrief(ctx, prompt, providedTitle, input.type ?? null);
 
   if (kind === 'code' && branch) {
     const ejected = store.ejections.ejectionOnBranch(branch);
@@ -67,7 +68,12 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
   return { ok: true, kind: 'job', job };
 }
 
-async function fileBrief(ctx: BriefContext, prompt: string, providedTitle: string | null): Promise<BriefOutcome> {
+async function fileBrief(
+  ctx: BriefContext,
+  prompt: string,
+  providedTitle: string | null,
+  type: string | null,
+): Promise<BriefOutcome> {
   const { config, errors } = ctx;
   const watchLabel = watchLabelFor(config.labelPrefix);
   const derived = briefTicketFields(prompt);
@@ -77,6 +83,7 @@ async function fileBrief(ctx: BriefContext, prompt: string, providedTitle: strin
       title: providedTitle ?? derived.title,
       body: ctx.renderTicketBody(derived.vars),
       labels: watchLabel ? [watchLabel] : [],
+      type,
     });
   } catch (err) {
     errors.record({ source: 'provider', message: `filing a brief as a ticket failed: ${(err as Error).message}` });

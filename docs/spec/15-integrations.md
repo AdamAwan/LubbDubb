@@ -401,6 +401,10 @@ So the composite **signs every piece of prose on its way out**, in `signed()`:
 
 > 🤖 Automated comment from **LubbDubb** — automating PR busy work so the user can go to the beach.
 
+A filed ticket is not a comment, so `createIssue` signs with its own line (`signOff`'s `ticket` kind):
+
+> 🤖 Filed via **LubbDubb** — automating busy work so the user can go to the beach.
+
 Four decisions hold it up.
 
 **It is appended at the seam, not rendered by the callers.** Six surfaces write prose today — the
