@@ -12,6 +12,7 @@ import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
+import { planIssueOf } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { Button, ButtonRow } from '../components/button.js';
 
@@ -382,13 +383,12 @@ function UnwatchedAsk({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const number = Number(/^issue:(\d+)$/.exec(task.originRef ?? '')?.[1]);
-  const known = Number.isFinite(number);
+  const number = task.originRef === null ? null : planIssueOf(task.originRef);
   const unseen = view.state.world.issues.filter((i) => i.parent?.number === number && i.pickup.status === 'unwatched');
   return (
     <>
       <TaskLede task={task} view={view} />
-      {known && (
+      {number !== null && (
         <p className="cn-tick">
           <span className="cn-refs">
             Feature <Ref to={`issue:${number}`} />
@@ -400,19 +400,19 @@ function UnwatchedAsk({
         </p>
       )}
       <ButtonRow bar>
-        {known && (
-          <Button tone="secondary" onClick={() => actions.openFeature(number)} title="Open this Feature's card">
-            Open feature
-          </Button>
-        )}
-        {known && (
-          <AsyncButton
-            tone="primary"
-            onClick={() => actions.setIssueWatched(number, true)}
-            title="Put the watch tag on the Feature and every story under it"
-          >
-            Watch all
-          </AsyncButton>
+        {number !== null && (
+          <>
+            <Button tone="secondary" onClick={() => actions.openFeature(number)} title="Open this Feature's card">
+              Open feature
+            </Button>
+            <AsyncButton
+              tone="primary"
+              onClick={() => actions.setIssueWatched(number, true)}
+              title="Put the watch tag on the Feature and every story under it"
+            >
+              Watch all
+            </AsyncButton>
+          </>
         )}
         <AsyncButton
           tone="secondary"
