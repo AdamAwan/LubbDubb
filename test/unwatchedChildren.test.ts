@@ -274,3 +274,15 @@ test('the row says which unseen stories are holding other work, and only when an
   assert.match(detail, /#11 is holding other work/);
   store.close();
 });
+
+test('a dismissal of many stories is read back whole, so none of them brings the row back', () => {
+  const store = new Store(':memory:');
+  const pass = desk(store);
+  const issues = [feature(), story(11), unwatched(12), unwatched(13), unwatched(14)];
+  pass.run(world(issues));
+  const filed = store.humanTasks.listHumanTasksOfKind('unwatched')[0]!;
+  store.humanTasks.settleHumanTask(filed.id, 'done', 'Out of scope.');
+  pass.run(world(issues));
+  assert.equal(store.humanTasks.listHumanTasksOfKind('unwatched')[0]!.status, 'done');
+  store.close();
+});
