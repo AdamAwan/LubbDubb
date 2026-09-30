@@ -1859,6 +1859,13 @@ element in the cockpit that draws `<button>`, and it wears no look; `Button`, th
 control kit all render through it and all require `usage`. Why, and what the prop may hold, is
 [34](34-usage-metrics.md#every-button-names-its-event).
 
+**A control that is not a `<button>` is held to the same rule.** An anchor wearing the look —
+`DesktopLink`, `ExtLink` with a `look` or `control` — draws through `BareLink` / `LinkButton`, and a
+press inside an `<svg>` through `SvgButton`; each requires a `usage`. `buttonClass` is called by the
+button components alone, and `role="button"` or an `onClick` on a plain element is a lint error.
+[34](34-usage-metrics.md#a-control-that-is-not-a-button) has the rules and what stays out: a plain
+navigation link, which the place already counts.
+
 **`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a
 toggle, a drop target, a close cross — passes that class beside the props, which is the bargain
 [the review mark](#the-fleet-reviews-mark) already makes with `t-green`.

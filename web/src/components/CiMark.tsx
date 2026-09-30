@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { CiCheck, PullRequest } from '../types.js';
+import { PrMark } from './prMark.js';
 import { Icon } from './icons.js';
 import { Tip, useTip } from './tip.js';
 
@@ -151,25 +152,24 @@ export function CiMark({
   const read = reading(pr);
   if (read === null) return reserve === true ? <CiSlot /> : null;
 
-  const Tag = onOpen === undefined ? 'span' : 'button';
-  return (
-    <Tag
-      ref={tip.anchor as never}
-      className={`ck ${read.tone}${onOpen === undefined ? '' : ' ck-open'}`}
-      {...(onOpen === undefined ? { tabIndex: 0 } : { type: 'button' as const, onClick: onOpen })}
-      aria-label={`Checks: ${read.said}${onOpen === undefined ? '' : ' — open the pull request'}`}
-      onMouseEnter={tip.open}
-      onFocus={tip.open}
-      onMouseLeave={tip.close}
-      onBlur={tip.close}
-    >
-      <Icon name="flask" size={14} />
-      {read.badge !== null && <span className="ck-badge">{read.badge}</span>}
-      {tip.at !== null && (
-        <Tip at={tip.at}>
-          <CiTipBody pr={pr} read={read} onOpen={onOpen} />
-        </Tip>
-      )}
-    </Tag>
-  );
+  const mark = {
+    className: `ck ${read.tone}${onOpen === undefined ? '' : ' ck-open'}`,
+    'aria-label': `Checks: ${read.said}${onOpen === undefined ? '' : ' — open the pull request'}`,
+    onMouseEnter: tip.open,
+    onFocus: tip.open,
+    onMouseLeave: tip.close,
+    onBlur: tip.close,
+    children: (
+      <>
+        <Icon name="flask" size={14} />
+        {read.badge !== null && <span className="ck-badge">{read.badge}</span>}
+        {tip.at !== null && (
+          <Tip at={tip.at}>
+            <CiTipBody pr={pr} read={read} onOpen={onOpen} />
+          </Tip>
+        )}
+      </>
+    ),
+  };
+  return <PrMark anchor={tip.anchor} onOpen={onOpen} {...mark} />;
 }

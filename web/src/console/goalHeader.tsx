@@ -356,6 +356,7 @@ function LeaveGroup({
           title as well as the href — the standing rule for every one of these,
           and the one this row would otherwise have to remember. */}
       <DesktopLink
+        usage="goal.open"
         folder={config.desktopFolder}
         prompt={askPrompt(issue.number)}
         ready="ready for your question"

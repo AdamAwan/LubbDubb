@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { desktopDeepLink } from '../cockpit/desktopLink.js';
-import { buttonClass } from './button.js';
+import { BareLink, LinkButton, type OpenUsage } from './button.js';
 import { CONTROL_CLASS, useInControlRow } from './controls.js';
 import { Icon } from './icons.js';
 
@@ -13,6 +13,7 @@ export function DesktopLink({
   ready = 'ready to send',
   label = 'Open in Claude Code',
   control,
+  usage,
 }: {
   folder: string;
   prompt: string;
@@ -20,17 +21,20 @@ export function DesktopLink({
   ready?: string;
   label?: 'Open in Claude Code' | 'Question?' | 'Check my description';
   control?: boolean;
+  usage: OpenUsage;
 }): JSX.Element {
   const inControlRow = useInControlRow();
   const asControl = control ?? inControlRow;
-  return (
-    <a
-      className={asControl ? CONTROL_CLASS : buttonClass({ ghost: true, size: 'small' })}
-      href={desktopDeepLink(folder, prompt)}
-      title={`Opens your own Claude Code with "${prompt.trim()}" ${ready}, ${explain}`}
-    >
-      <Icon name="chat" />
-      {label} ↗
-    </a>
-  );
+  const link = {
+    usage,
+    href: desktopDeepLink(folder, prompt),
+    title: `Opens your own Claude Code with "${prompt.trim()}" ${ready}, ${explain}`,
+    children: (
+      <>
+        <Icon name="chat" />
+        {label} ↗
+      </>
+    ),
+  };
+  return asControl ? <BareLink className={CONTROL_CLASS} {...link} /> : <LinkButton {...link} ghost size="small" />;
 }

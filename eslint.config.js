@@ -5,6 +5,28 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
+const SPEC = '→ docs/spec/34-usage-metrics.md#a-control-that-is-not-a-button';
+
+const CLICKABLE = [
+  {
+    selector: "JSXAttribute[name.name='role'][value.value='button']",
+    message: `A role="button" is a button nobody named a usage event for. Draw it with BareButton, or SvgButton inside an <svg> (web/src/components/button.tsx). ${SPEC}`,
+  },
+  {
+    selector: "JSXOpeningElement[name.name=/^(?!details$|summary$)[a-z]/] > JSXAttribute[name.name='onClick']",
+    message: `An onClick on a plain element is a control nobody named a usage event for. Draw it with Button or BareButton (web/src/components/button.tsx), which require one. ${SPEC}`,
+  },
+  {
+    selector: ":matches(ConditionalExpression, LogicalExpression, VariableDeclarator) > Literal[value='button']",
+    message: `A tag chosen at runtime draws a <button> the element rule cannot see. Render BareButton on that branch instead. ${SPEC}`,
+  },
+];
+
+const STYLED_AS_BUTTON = {
+  selector: "CallExpression[callee.name='buttonClass']",
+  message: `Only the button components wear buttonClass — anything else wearing it is a control that logs nothing. Use Button, AsyncButton, ConfirmButton or DesktopLink. ${SPEC}`,
+};
+
 export default tseslint.config(
   {
     // `.claude/worktrees/` holds sibling checkouts of this same repo — linting them
@@ -74,8 +96,20 @@ export default tseslint.config(
     },
   },
   {
+    files: ['web/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...CLICKABLE, STYLED_AS_BUTTON] },
+  },
+  {
+    files: [
+      'web/src/components/AsyncButton.tsx',
+      'web/src/components/ConfirmButton.tsx',
+      'web/src/components/DesktopLink.tsx',
+    ],
+    rules: { 'no-restricted-syntax': ['error', ...CLICKABLE] },
+  },
+  {
     files: ['web/src/components/button.tsx'],
-    rules: { 'react/forbid-elements': 'off' },
+    rules: { 'react/forbid-elements': 'off', 'no-restricted-syntax': 'off' },
   },
 
   // Complexity limits. Existing breaches are frozen in eslint-suppressions.json;

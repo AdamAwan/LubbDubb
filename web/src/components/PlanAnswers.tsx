@@ -157,7 +157,12 @@ function AnswerRow({
         </Button>
       )}
       {issueNumber !== null && (
-        <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discussExplain} />
+        <DesktopLink
+          usage="plan.open"
+          folder={desktopFolder}
+          prompt={discussPrompt(issueNumber)}
+          explain={discussExplain}
+        />
       )}
     </HeadRow>
   );

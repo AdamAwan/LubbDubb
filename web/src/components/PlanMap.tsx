@@ -1,4 +1,5 @@
 import type { PlanPartView, QueueItem } from '../types.js';
+import { SvgButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -126,17 +127,10 @@ function PartNode({
   const human = part.expectedKind === 'human';
   const state = stateOf(part, queue);
   return (
-    <g
+    <SvgButton
+      usage="plan.expand"
       className={`pm-node ${state.tone}${human ? ' human' : ''}${selected ? ' on' : ''}`}
-      onClick={() => onSelect(part.slug)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(part.slug);
-        }
-      }}
+      onPress={() => onSelect(part.slug)}
     >
       <title>{`${part.title} (${part.slug}) — ${state.label}`}</title>
       <rect x={x} y={y} width={NODE_W} height={NODE_H} className="pm-node-box" />
@@ -159,7 +153,7 @@ function PartNode({
           #{part.prNumber}
         </text>
       )}
-    </g>
+    </SvgButton>
   );
 }
 

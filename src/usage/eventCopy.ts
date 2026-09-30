@@ -266,4 +266,39 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'schedule.close': { label: 'Closed a schedule form', blurb: 'The new-schedule form was hidden' },
   'demo.close': { label: 'Closed the raw injector', blurb: 'The raw JSON event form was hidden' },
   'watch.close': { label: 'Folded the signals', blurb: 'The goal’s signals section was folded away' },
+  'plan.open': { label: 'Discussed a plan', blurb: 'The plan was taken into the operator’s own Claude Code' },
+  'goal.open': {
+    label: 'Asked about a goal',
+    blurb: 'The goal’s record was taken into the operator’s own Claude Code',
+  },
+  'pr-description.open': {
+    label: 'Had a description checked',
+    blurb: 'A written description was taken into Claude Code to be read against the diff',
+  },
+  'validation.open': {
+    label: 'Ran a check at the keyboard',
+    blurb: 'A check was taken into the operator’s own Claude Code',
+  },
+  'ticket.open': { label: 'Opened the issue form', blurb: 'The LubbDubb tracker’s new-issue page was opened' },
+  'feature.open': {
+    label: 'Asked about a feature',
+    blurb: 'The feature was taken into the operator’s own Claude Code',
+  },
+  'local-run.open': {
+    label: 'Ran a goal locally',
+    blurb: 'A goal’s local run was taken into the operator’s own Claude Code',
+  },
+  'fleet.open': { label: 'Asked about the fleet', blurb: 'A question was opened in the operator’s own Claude Code' },
+  'intake.open': {
+    label: 'Discussed an intake hold',
+    blurb: 'The gaps were taken into the operator’s own Claude Code',
+  },
+  'sequence.open': {
+    label: 'Argued with a story order',
+    blurb: 'The order was taken into the operator’s own Claude Code',
+  },
+  'ejection.open': {
+    label: 'Opened ejected work',
+    blurb: 'The held worktree was opened in the operator’s own Claude Code',
+  },
 };

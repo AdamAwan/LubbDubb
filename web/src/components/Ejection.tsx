@@ -39,6 +39,7 @@ export function EjectionControls({ held, actions }: { held: EjectionView; action
     <>
       {held.worktreePath !== null && (
         <DesktopLink
+          usage="ejection.open"
           folder={held.worktreePath}
           prompt={ejectPrompt(issueOf(held.originRef))}
           explain="in the worktree this work is held in, so the branch and its uncommitted changes are in front of you"
