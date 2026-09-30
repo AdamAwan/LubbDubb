@@ -354,7 +354,7 @@ the escape hatch for the case where the build must not run — a checkout instal
 ### The chunks
 
 `web/vite.config.ts` cuts the bundle along `node_modules` and four directories under `web/src/` —
-`cockpit`, `components`, `console`, `view` — with `components/`'s `*Tab.tsx` and `*Page.tsx` split off
+`cockpit`, `components`, `console`, `view` — with `components/`'s `*Tab` and `*Page` modules split off
 into their own `insights` chunk, so `web:build` emits a handful of chunks rather than one file.
 Three things about that cut are load-bearing:
 

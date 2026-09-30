@@ -9,11 +9,7 @@ import { resolve } from 'node:path';
  * actually load-bearing and `web:build`'s own per-chunk sizes are what settles
  * whether a new one is.
  *
- * Order is load-bearing: a group also takes whatever its modules import that no
- * earlier group claimed. `insights` — the `components/` tabs and pages, which
- * `components` excludes — sits after `components` so it does not pull shared
- * components in, and before `console`, or `console` takes the tabs it imports
- * and `insights` folds away.
+ * Order is load-bearing: see docs/spec/19-development.md#the-chunks.
  *
  * Only `.ts`/`.tsx` are matched. `main.tsx` imports `styles.css`, `console.css`
  * and `theme.css` in that order and the last is written to override the first
@@ -21,12 +17,14 @@ import { resolve } from 'node:path';
  * emitted sheet rather than its import position, which reorders the cascade with
  * nothing red and a symptom only on whichever surface the two sheets tie on.
  */
+const SEP = '[\\\\/]';
+const INSIGHT = `components${SEP}[^\\\\/?]*(?:Tab|Page)`;
 const CHUNKS: [name: string, path: string][] = [
-  ['cockpit', 'cockpit[\\\\/][^?]*'],
-  ['components', 'components[\\\\/](?![^\\\\/?]*(?:Tab|Page)\\.tsx$)[^?]*'],
-  ['insights', 'components[\\\\/][^\\\\/?]*(?:Tab|Page)'],
-  ['console', 'console[\\\\/][^?]*'],
-  ['view', 'view[\\\\/][^?]*'],
+  ['cockpit', `cockpit${SEP}[^?]*`],
+  ['components', `(?!${INSIGHT}\\.tsx?$)components${SEP}[^?]*`],
+  ['insights', INSIGHT],
+  ['console', `console${SEP}[^?]*`],
+  ['view', `view${SEP}[^?]*`],
 ];
 
 // The SPA lives in web/ and builds to web/dist, which the Fastify server serves
@@ -67,7 +65,7 @@ export default defineConfig({
             // quietly, since the only symptom is a chunk that is never emitted.
             ...CHUNKS.map(([name, path]) => ({
               name,
-              test: new RegExp(`[\\\\/]web[\\\\/]src[\\\\/]${path}\\.tsx?$`),
+              test: new RegExp(`${SEP}web${SEP}src${SEP}${path}\\.tsx?$`),
             })),
           ],
         },
