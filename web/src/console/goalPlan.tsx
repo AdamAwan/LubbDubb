@@ -309,7 +309,7 @@ function Part({
          keyboard — a control inside it (the PR reference, the agent) is its own
          press and must not also open the page. A move to the place, which logs
          the view. */
-      // eslint-disable-next-line no-restricted-syntax
+      // eslint-disable-next-line no-restricted-syntax -- the title's BareButton is this press; the card only widens its target
       onClick={
         pickable
           ? (event) => {

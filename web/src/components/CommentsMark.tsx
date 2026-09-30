@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import type { PrComment } from '../types.js';
-import { BareButton } from './button.js';
+import { PrMark } from './prMark.js';
 import { Icon } from './icons.js';
 import { Tip, useTip } from './tip.js';
 
@@ -51,11 +51,7 @@ export function CommentsMark({
       </>
     ),
   };
-  return onOpen === undefined ? (
-    <span ref={tip.anchor as never} tabIndex={0} role="img" {...mark} />
-  ) : (
-    <BareButton buttonRef={tip.anchor as never} usage={{ counted: 'pr.view' }} onClick={onOpen} {...mark} />
-  );
+  return <PrMark anchor={tip.anchor} onOpen={onOpen} idleRole="img" {...mark} />;
 }
 
 const TIP_THREADS = 3;

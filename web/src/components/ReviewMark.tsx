@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import type { PrReviewState, PrReviewStatus } from '../types.js';
-import { BareButton } from './button.js';
+import { PrMark } from './prMark.js';
 import { Icon } from './icons.js';
 import { Tip, useTip } from './tip.js';
 import { relTime } from './util.js';
@@ -123,11 +123,7 @@ export function ReviewMark({
       </>
     ),
   };
-  return onOpen === undefined ? (
-    <span ref={tip.anchor as never} tabIndex={0} role="img" {...drawn} />
-  ) : (
-    <BareButton buttonRef={tip.anchor as never} usage={{ counted: 'pr.view' }} onClick={onOpen} {...drawn} />
-  );
+  return <PrMark anchor={tip.anchor} onOpen={onOpen} idleRole="img" {...drawn} />;
 }
 
 export function ReviewDetail({ review, now }: { review: PrReviewState; now?: number }): JSX.Element {

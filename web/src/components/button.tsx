@@ -25,17 +25,15 @@ export type ButtonLook = {
  * The class a button wears: the base, its tone, its size, and whatever shape the
  * surface owns.
  *
- * Exported for the async components, and for the handful of controls that are
- * *anchors* — a deep link into the operator's own Claude Code is a destination, so
- * `DesktopLink` draws an `<a>` and wears the button's look through this, the same
- * seam `CONTROL_CLASS` is for the control kit.
+ * Exported for the async components, which compose their lifecycle classes onto
+ * it. An anchor that wears the look draws through `LinkButton` instead, so it
+ * cannot skip its usage event.
  *
  * The base is written twice on purpose. `.btn.btn` in `styles.css` is what
  * survives `console.css`'s `.cn button` reset, and it only survives if the markup
  * carries the class twice as well.
  *
- * @public — the seam `AsyncButton`, `SubmitButton`, `ConfirmButton` and
- * `DesktopLink` share.
+ * @public — the seam `AsyncButton`, `SubmitButton` and `ConfirmButton` share.
  */
 export function buttonClass({ tone, ghost, size, className }: ButtonLook, ...extra: string[]): string {
   const parts = ['btn', 'btn'];
