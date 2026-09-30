@@ -146,6 +146,20 @@ test('a watched Feature with a story nothing can see files one row, and it names
   store.close();
 });
 
+test('a Feature tagged only on a story files nothing — the operator scoped the story, not the Feature', () => {
+  const store = new Store(':memory:');
+  desk(store).run(world([feature({ labels: [] }), story(11), unwatched(12)]));
+  assert.deepEqual(store.humanTasks.listHumanTasksOfKind('unwatched'), []);
+  store.close();
+});
+
+test('a Feature the world does not hold files nothing — its tag was never read', () => {
+  const store = new Store(':memory:');
+  desk(store).run(world([story(11), unwatched(12)]));
+  assert.deepEqual(store.humanTasks.listHumanTasksOfKind('unwatched'), []);
+  store.close();
+});
+
 test('a Feature the fleet can see all of files nothing', () => {
   const store = new Store(':memory:');
   desk(store).run(world([feature(), story(11), story(12)]));

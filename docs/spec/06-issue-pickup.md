@@ -102,10 +102,16 @@ is a **reading, not a fix**: it writes no tag, holds nothing, and dispatches not
 on the harness's own initiative would be the harness deciding what the operator's scope is, which is
 the one judgement the watch tag exists to leave with them.
 
-Which Features it reports on is `featureGroups`' answer and not a second one
-([33](33-story-sequencing.md#which-features-are-asked-about)), so the set the order is written over
-and the set this row is filed for can never disagree — a Feature ordered over a story it then failed
-to mention would be the worst of both.
+**It reports only on a Feature that carries the watch tag itself.** It starts from
+`featureGroups` ([33](33-story-sequencing.md#which-features-are-asked-about)) and keeps the groups
+whose `containerWatched` is set: the parent is in the world snapshot, is a container type (the same
+`containerTypes` the cascade walks), and carries the tag. The sequencing set is deliberately
+wider — a Feature is in it when any one story is tagged — and reporting on that set nagged the
+operator who tags stories one at a time: tag one, and every untagged sibling came back as a story
+"nothing can see", under a Feature they never said was theirs. A tagged story scopes that story; only
+a tagged Feature says the work under it is wanted. A Feature the snapshot does not hold is not
+reported either: the harness cannot read a tag it was never shown, and a row claiming the Feature is
+watched would be a guess.
 
 Four things about it are load-bearing:
 
@@ -115,8 +121,8 @@ Four things about it are load-bearing:
   every pulse, `ValidationReadyDesk`'s discipline ([13](13-jobs-and-tickets.md)).
 - **It settles itself**, and for the reason that one does: it names something the harness refetches
   every pulse, so leaving it to a click would ask the operator to tell the harness what it can see.
-  The last story tagged settles the row; so does the Feature dropping out of the watched set
-  entirely, and the resolution says the harness no longer reads it as watched work rather than
+  The last story tagged settles the row; so does the Feature losing its own watch tag,
+  and the resolution says the harness no longer reads it as watched work rather than
   claiming anybody tagged anything.
 - **An operator's dismissal covers the stories it named, and no others.** A row the desk settled
   reopens whenever the Feature goes unseen again. A row the operator answered — **Dismiss**, Done

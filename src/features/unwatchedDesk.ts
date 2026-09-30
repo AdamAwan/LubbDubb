@@ -58,7 +58,9 @@ export class UnwatchedChildDesk {
   }
 
   private readFeatures(world: WorldSnapshot): UnwatchedFeature[] {
-    const groups = featureGroups(world.issues, this.deps.containerTypes, this.deps.watched);
+    const groups = featureGroups(world.issues, this.deps.containerTypes, this.deps.watched).filter(
+      (group) => group.containerWatched,
+    );
     const sequences = new Map(this.deps.store.sequences.listFeatureSequences().map((s) => [s.originRef, s]));
     return groups.map((group) => {
       const standing = sequences.get(issueOriginRef('root', group.feature.number)) ?? null;

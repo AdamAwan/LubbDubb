@@ -754,7 +754,7 @@ Tests: `test/validationReady.test.ts`.
   is one thing an operator does about it, and four rows would be the rail burying one press under
   its own arithmetic. Its title carries the Feature's number and not its count, because the count
   moves and the title is the dedup key. It settles itself when the last story is tagged or the
-  Feature leaves the watched set, wearing `DESK_SETTLED` so an operator's own Done is never
+  Feature loses its own watch tag, wearing `DESK_SETTLED` so an operator's own Done is never
   overwritten, and it holds nothing and dispatches nobody.
   → [06](06-issue-pickup.md#a-watched-feature-reports-the-children-nothing-can-see)
 - **The runway watch**: `kind: 'supply'`, a null `agentId` and a **null
