@@ -109,6 +109,12 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     why: 'How long an ensureTenant or reseed command may take before it is killed. Provisioning a tenant is a job of tens of minutes by the spec’s own account, so the thirty seconds every other command gets would kill both of them on every invocation.',
   },
   {
+    path: 'remoteValidation.tenants',
+    type: 'json',
+    access: 'fileOnly',
+    why: 'Your own remote-validation tenant per environment, as {"environment": "tenant name"}. Read only where the environment declares a tenantEnv, and only from lubbdubb.config.json — a tenant here is one person’s, so the project file refuses it. A name, never a credential.',
+  },
+  {
     path: 'remoteValidation.scriptGraceMs',
     type: 'number',
     ms: true,

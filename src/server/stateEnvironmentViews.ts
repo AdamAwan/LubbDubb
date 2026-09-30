@@ -1,7 +1,7 @@
 import type { System } from '../system/system.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
-import { resolveTenant } from '../validation/remote/tenants.js';
+import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -179,6 +179,7 @@ export function buildRemoteSheets(
   environments: EnvironmentConfig[],
   tasks: readonly TaskSummary[],
   captureSigner?: (runId: string, rowId: string) => string,
+  operatorTenants?: OperatorTenants,
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
@@ -217,7 +218,7 @@ export function buildRemoteSheets(
     const standing =
       environment === undefined
         ? { tenant: null, reseededAt: null, ageMs: null, freshnessMs: null, stale: false, blockedReason: null }
-        : resolveTenant({ environment, stamped: tenants, now }).standing;
+        : resolveTenant({ environment, stamped: tenants, now, operatorTenants }).standing;
     return {
       ...sheet,
       rows: (rowsByGoalEnvironment.get(key) ?? []).map((row) => ({

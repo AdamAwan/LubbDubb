@@ -18,7 +18,7 @@ import { validateAgentModels, type AgentModels } from '../agents/modelPolicy.js'
 import { DEFAULT_FILING_TYPES } from '../tickets/ticketTypes.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../store/mcpCalls.js';
 import type { PetPolicy } from '../pets/keeper.js';
-import { validateEnvironments, type EnvironmentConfig } from '../environments/policy.js';
+import { validateEnvironments, validateOperatorTenants, type EnvironmentConfig } from '../environments/policy.js';
 import { DEFAULT_READ_LANES } from '../world/readPlan.js';
 import type { IssueSequencing } from '../sequence/readiness.js';
 import { DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
@@ -153,12 +153,19 @@ interface RemoteValidationPolicy {
    * → docs/spec/36-remote-validation.md#posting-the-screen-to-the-ticket
    */
   captureLinkBase: string | null;
+  /**
+   * The operator's own tenant per environment, answering where the environment declares `tenantEnv`.
+   * Operator layer only: the project file refuses it.
+   * → docs/spec/36-remote-validation.md#an-operators-own-tenant
+   */
+  tenants?: Readonly<Record<string, string>>;
 }
 
 const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
   tenantTimeoutMs: 60 * 60 * 1000,
   scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
   captureLinkBase: null,
+  tenants: {},
 };
 
 interface AuthConfig {
@@ -449,9 +456,16 @@ export function projectConfigLayer(filePath: string): Partial<Config> {
   const layer = readFileLayer(readFileSync(filePath, 'utf8'), filePath);
   if (Object.hasOwn(layer, 'repoRoot')) {
     throw new Error(
-      `Refusing to start: ${filePath} sets "repoRoot", which is the one key a project config cannot set — ` +
+      `Refusing to start: ${filePath} sets "repoRoot", which a project config cannot set — ` +
         `this file was read because repoRoot had already resolved, so a value here could only describe the ` +
         `search that found it. Point the harness with lubbdubb.config.json or LUBBDUBB_REPO_ROOT instead, and delete the key.`,
+    );
+  }
+  if (layer.remoteValidation !== undefined && Object.hasOwn(layer.remoteValidation, 'tenants')) {
+    throw new Error(
+      `Refusing to start: ${filePath} sets "remoteValidation.tenants", which names each operator's own tenant ` +
+        `and so belongs to one person, not the project. Move it to lubbdubb.config.json — keep "validate.tenantEnv" ` +
+        `on the environment here, which is what lets an operator name one.`,
     );
   }
   return layer;
@@ -508,6 +522,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   validateRunwayPolicy(merged.runway);
 
   validateEnvironments(merged.environments);
+
+  validateOperatorTenants(merged.remoteValidation.tenants, merged.environments);
 
   validateWorkItemStates(merged);
 

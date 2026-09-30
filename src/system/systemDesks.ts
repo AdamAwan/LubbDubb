@@ -147,6 +147,7 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
     sink,
     validationRoot: config.validationRoot,
     errors,
+    operatorTenants: config.remoteValidation.tenants,
   });
 
   const remoteRuns = new RemoteRunDesk({
@@ -163,6 +164,7 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
         timeoutMs: config.remoteValidation.tenantTimeoutMs,
       }),
     errors,
+    operatorTenants: config.remoteValidation.tenants,
   });
 
   // A tenant preparation the last process left open. The command outlives the harness, so one still

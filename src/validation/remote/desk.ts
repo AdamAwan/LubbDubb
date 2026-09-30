@@ -17,7 +17,7 @@ import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../..
 import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
 import { noSheetReason, sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
-import { resolveTenant, type TenantEnvironment } from './tenants.js';
+import { resolveTenant, type OperatorTenants, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md
 
@@ -57,6 +57,7 @@ interface RemoteValidationDeskDeps {
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
   env?: TenantEnvironment;
+  operatorTenants?: OperatorTenants;
 }
 
 /**
@@ -382,6 +383,7 @@ export class RemoteValidationDesk {
         stamped: store.remoteValidation.listRemoteTenants(),
         now: this.now(),
         env: this.deps.env,
+        operatorTenants: this.deps.operatorTenants,
       }).standing,
     });
     store.remoteValidation.openRemoteSheet({ goalRef, environment: environment.name });

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { Config } from '../../config/config.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { RemoteTenant, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
 import { firstLine } from '../../primitives.js';
@@ -153,6 +154,13 @@ export function tenantLogRoot(validationRoot: string): string {
 /** What a `tenantEnv`'s value is read out of. Injected so a test never reads the machine's own. */
 export type TenantEnvironment = Record<string, string | undefined>;
 
+/**
+ * `remoteValidation.tenants` — an operator's own tenant per environment, read only from the operator
+ * layer. It answers only where the environment declares `tenantEnv`.
+ * → docs/spec/36-remote-validation.md#an-operators-own-tenant
+ */
+export type OperatorTenants = NonNullable<Config['remoteValidation']['tenants']>;
+
 interface ResolvedTenant {
   standing: TenantStanding;
   /**
@@ -176,6 +184,7 @@ export function resolveTenant(input: {
   stamped: readonly RemoteTenant[];
   now: number;
   env?: TenantEnvironment;
+  operatorTenants?: OperatorTenants;
 }): ResolvedTenant {
   const validate = input.environment.validate;
   const freshnessMs = validate?.tenantFreshnessMs ?? null;
@@ -184,26 +193,8 @@ export function resolveTenant(input: {
   if (validate?.tenant !== undefined)
     return dated({ tenant: validate.tenant, value: validate.tenant, stamps, freshnessMs, now: input.now });
 
-  if (validate?.tenantEnv !== undefined) {
-    const variable = validate.tenantEnv;
-    const value = (input.env ?? process.env)[variable] ?? null;
-    if (value === null || value.trim() === '')
-      return {
-        value: null,
-        standing: {
-          tenant: `$${variable}`,
-          reseededAt: null,
-          ageMs: null,
-          freshnessMs,
-          stale: false,
-          blockedReason:
-            `"${input.environment.name}" reads its tenant from the environment variable ${variable}, and ` +
-            'nothing set it here. Export it before pressing — the harness never invents a tenant name, ' +
-            'because an invented one is reaped within the hour and its disappearance reads as mass failure.',
-        },
-      };
-    return dated({ tenant: `$${variable}`, value, stamps, freshnessMs, now: input.now });
-  }
+  if (validate?.tenantEnv !== undefined)
+    return fromTenantEnv({ ...input, variable: validate.tenantEnv, stamps, freshnessMs });
 
   if (validate?.ensureTenant !== undefined) {
     const provisioned = stamps.find((t) => t.ensuredAt !== null) ?? stamps[0];
@@ -228,6 +219,41 @@ export function resolveTenant(input: {
   return {
     value: null,
     standing: { tenant: null, reseededAt: null, ageMs: null, freshnessMs, stale: false, blockedReason: null },
+  };
+}
+
+/**
+ * A per-operator tenant: the variable where it is set, else the operator's own config entry. Only the
+ * variable's value is kept off every surface; a name the operator wrote in config is drawn as itself.
+ */
+function fromTenantEnv(input: {
+  environment: EnvironmentConfig;
+  variable: string;
+  stamps: readonly RemoteTenant[];
+  freshnessMs: number | null;
+  now: number;
+  env?: TenantEnvironment;
+  operatorTenants?: OperatorTenants;
+}): ResolvedTenant {
+  const { variable, stamps, freshnessMs, now } = input;
+  const value = (input.env ?? process.env)[variable] ?? null;
+  if (value !== null && value.trim() !== '') return dated({ tenant: `$${variable}`, value, stamps, freshnessMs, now });
+  const named = input.operatorTenants?.[input.environment.name];
+  if (named !== undefined) return dated({ tenant: named, value: named, stamps, freshnessMs, now });
+  return {
+    value: null,
+    standing: {
+      tenant: `$${variable}`,
+      reseededAt: null,
+      ageMs: null,
+      freshnessMs,
+      stale: false,
+      blockedReason:
+        `"${input.environment.name}" takes a tenant each operator names for themselves, and nothing names one ` +
+        `here. Set "remoteValidation.tenants": { "${input.environment.name}": "<your tenant's name>" } in ` +
+        `lubbdubb.config.json, or export ${variable} — the harness never invents a tenant name, because an ` +
+        'invented one is reaped within the hour and its disappearance reads as mass failure.',
+    },
   };
 }
 
