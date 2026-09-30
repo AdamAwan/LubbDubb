@@ -221,7 +221,9 @@ So the hold is paid for by being **loud**, on every surface, and `sequenceReadin
 thing that distinguishes this wait from every other — that it does not end on its own — and points
 at both ways out: tag the story, or amend the order. Beside it, a
 ["Needs you" row](06-issue-pickup.md#a-watched-feature-reports-the-children-nothing-can-see) is
-standing for the Feature that has an unseen story at all, and it names the ones holding work.
+standing for a **tagged** Feature that has an unseen story at all, and it names the ones holding work.
+A Feature ordered only because a story under it is tagged files no such row, so there the hold
+reason is the whole of the warning.
 
 Fold `unworkable` back into `on` and the hold is still correct and still stated — but the sentence
 stops saying that waiting will not help, and the row that would have said it is the only thing left
