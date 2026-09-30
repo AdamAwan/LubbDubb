@@ -249,7 +249,9 @@ function goalsSection(
   const { store, config, opts, baseline, world, tasks, stacks, withReview } = r;
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
-  const remoteSheets = once(() => buildRemoteSheets(store, config.environments, tasks, opts?.remoteCaptureSigner));
+  const remoteSheets = once(() =>
+    buildRemoteSheets(store, config.environments, tasks, opts?.remoteCaptureSigner, config.remoteValidation.tenants),
+  );
   const environments = config.environments;
   const arrivals = environments.length === 0 ? [] : store.environments.listGoalArrivals();
   const prByNumber = new Map<number, PullRequest>();

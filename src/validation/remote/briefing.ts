@@ -1,6 +1,7 @@
 import { issueOriginNumber } from '../../issueOrigins.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import { substituteBrowserArgs } from '../local/policy.js';
+import type { Config } from '../../config/config.js';
 import type { Store } from '../../store/store.js';
 import type { ExtraMcpServer, RemoteRun, RemoteRunBrief, RemoteSheetRow } from '../../types.js';
 import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../steps.js';
@@ -11,7 +12,7 @@ import {
   remoteValidationRunDir,
 } from './origin.js';
 import { briefing, type RunDrive, type RunScreen, type RunScript } from './remoteRunBriefingText.js';
-import { resolveTenant, type TenantEnvironment } from './tenants.js';
+import { resolveTenant, type OperatorTenants, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
 
@@ -28,6 +29,7 @@ interface BriefInput {
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Never folded into a brief — the *name* is. */
   env?: TenantEnvironment;
+  operatorTenants?: OperatorTenants;
 }
 
 /**
@@ -40,6 +42,21 @@ interface BriefInput {
  * press already read that sheet's deterministic rows synchronously, and there is no browser half to
  * put an agent on.
  */
+export function configuredRemoteRunBriefs(
+  config: Pick<Config, 'environments' | 'validationRoot' | 'localValidation' | 'remoteValidation'>,
+  store: Store,
+): RemoteRunBrief[] {
+  return remoteRunBriefs({
+    store,
+    environments: config.environments,
+    validationRoot: config.validationRoot,
+    // The one browser block, read by both dispatches. Off the live config each pulse, so an
+    // operator who configures one does not have to restart the harness to use it.
+    browser: config.localValidation.browser,
+    operatorTenants: config.remoteValidation.tenants,
+  });
+}
+
 export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
   const { store } = input;
   const runs = store.remoteValidation
@@ -77,6 +94,7 @@ function runBrief(input: BriefInput, run: RemoteRun, rows: readonly RemoteSheetR
     stamped: store.remoteValidation.listRemoteTenants(),
     now: input.now?.() ?? Date.now(),
     env: input.env,
+    operatorTenants: input.operatorTenants,
   }).standing.tenant;
 
   return {

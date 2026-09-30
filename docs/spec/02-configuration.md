@@ -189,13 +189,20 @@ Each member's `lubbdubb.config.json` sits above it and wins: who they are, which
 dispatch on, how many agents their machine runs, where their database lives. Nobody has to choose
 between sharing a config and having their own.
 
-**Any key may appear in it, with one exception: `repoRoot`.** That file was read _because_ `repoRoot`
+**Any key may appear in it, with two exceptions: `repoRoot` and `remoteValidation.tenants`.** That file was read _because_ `repoRoot`
 already resolved, so a value in it could only describe the search that found it — honouring it would
 mean re-reading from somewhere else, and dropping it would leave the fleet pointed at a repository
 the file in front of the operator disagrees with. It is refused by name, like a removed key. Where
 the harness points is settled by `lubbdubb.config.json` or `LUBBDUBB_REPO_ROOT`, from the operator's
 layers alone and _before_ the project's file is looked for: a layer cannot be consulted about where to
 find itself.
+
+`remoteValidation.tenants` is refused for the opposite reason: it names each operator's **own**
+remote-validation tenant, so a value in the shared file is one person's tenant handed to the whole
+team. It is the narrow answer to a list that replaces wholesale — `environments` is not merged by
+`name`, so without it an operator naming their tenant would have to copy every environment into their
+own file, and that copy stops tracking the project's silently. With it they name one tenant and
+inherit every environment. → [36](36-remote-validation.md#an-operators-own-tenant)
 
 Two consequences worth stating rather than discovering:
 

@@ -31,7 +31,7 @@ import { RemoteRunDesk } from '../validation/remote/run.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { stepCapabilities } from '../validation/steps.js';
-import { remoteRunBriefs } from '../validation/remote/briefing.js';
+import { configuredRemoteRunBriefs } from '../validation/remote/briefing.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
 import { isSealedRule } from '../mcp/names.js';
@@ -424,15 +424,7 @@ function harnessReads(config: Config, store: Store, predictions: PredictionStore
       criteria: config.goalCriteria.enabled ? store.goalCriteria.listCurrentCriteria() : [],
       judgeOwed: config.prediction.enabled ? predictions.listJudgeOwed() : [],
     }),
-    remoteRuns: () =>
-      remoteRunBriefs({
-        store,
-        environments: config.environments,
-        validationRoot: config.validationRoot,
-        // The one browser block, read by both dispatches. Off the live config each pulse, so an
-        // operator who configures one does not have to restart the harness to use it.
-        browser: config.localValidation.browser,
-      }),
+    remoteRuns: () => configuredRemoteRunBriefs(config, store),
   };
 }
 

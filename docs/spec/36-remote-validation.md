@@ -1130,15 +1130,46 @@ case and is the whole ballgame in the hard one.
 A project supplies one of three shapes, and the schema does not force the awkward one on a project
 that has the easy one:
 
-| Shape          | When                                                                                                                                                                                                                                                                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenant`       | A literal name — **the shape to prefer**. A stable name means a failed row points at something that still exists and can be opened.                                                                                                                                                                                                     |
-| `tenantEnv`    | The name of an env var carrying a per-operator value. Config names the variable; the harness reads it into the spawn env and nowhere else — the **lock and every surface carry the variable's own name**, `$VALIDATION_TENANT`, never what it holds. A variable nobody set blocks the press, naming it.                                 |
-| `ensureTenant` | An idempotent command, where tenancy is provisioned on demand. Possibly very slow, so it is an **operator-invoked setup step, never run per arrival**; a missing tenant produces a legible `blocked` naming the command. It **prints the tenant it provisioned**, and that name — the project's own — is what is stamped and locked on. |
+| Shape          | When                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant`       | A literal name — **the shape to prefer**. A stable name means a failed row points at something that still exists and can be opened.                                                                                                                                                                                                                                  |
+| `tenantEnv`    | A **per-operator** tenant. Config names an env var; the harness reads it into the spawn env and nowhere else — the **lock and every surface carry the variable's own name**, `$VALIDATION_TENANT`, never what it holds. Unset, the operator's own `remoteValidation.tenants` answers ([below](#an-operators-own-tenant)); neither set blocks the press, naming both. |
+| `ensureTenant` | An idempotent command, where tenancy is provisioned on demand. Possibly very slow, so it is an **operator-invoked setup step, never run per arrival**; a missing tenant produces a legible `blocked` naming the command. It **prints the tenant it provisioned**, and that name — the project's own — is what is stamped and locked on.                              |
 
 An environment that supplies none of the three permits no row kind that needs one, and says so. A
 deterministic row needs none, so such an environment presses on the **empty key** — the absence,
 rather than a name the harness made up.
+
+### An operator's own tenant
+
+`tenantEnv` is how a project says _each person here has their own tenant_. A variable works, but it is
+a user env var and a restart, invisible in any config — so the operator can instead name it in their
+own `lubbdubb.config.json`:
+
+```jsonc
+{ "remoteValidation": { "tenants": { "hallway": "adam" } } }
+```
+
+**Built**, in `resolveTenant` (`src/validation/remote/tenants.ts`), refused and checked by
+`projectConfigLayer` and `validateOperatorTenants` (`src/environments/policy.ts`).
+
+- **It answers only a `tenantEnv` environment**, and only where the variable is unset or blank — the
+  variable wins, env over file, as in [02](02-configuration.md#precedence). A `tenant` literal is the
+  project's and an `ensureTenant` name is its command's; neither is the operator's to override.
+- **It is a name, and surfaces draw it.** Unlike a variable's value, a key the operator wrote is a
+  tenant name by definition, so the standing, the lock and the brief carry `adam` itself — the same
+  footing as a literal `tenant`, which is the shape a failed row can be opened from.
+- **Operator layer only.** `lubbdubb.project.json` setting it refuses to boot, naming
+  `lubbdubb.config.json`: a tenant in the shared file is one person's handed to everyone. This is why
+  it is a map on `remoteValidation` and not a merge of `environments` by name — `environments` is a list
+  that replaces wholesale ([02](02-configuration.md#precedence)), and merging it by name would change
+  how every environment field layers to fix the one per-person value in it.
+- **An entry nothing would read is refused at load** — a name no environment has, one whose
+  environment declares no `tenantEnv`, or an empty name. Left alone it would look like it works.
+- **Neither set is `blocked`**, naming the key and the variable; the harness still invents nothing. The
+  wording asks for a tenant's _name_ and never for a credential — no secret is a config key
+  ([02](02-configuration.md#secrets)).
+- Read at boot, like `environments`: a change takes a restart.
 
 The two operator acts on a tenant are one route,
 `POST /api/issues/:number/remote-validation/:environment/reseed`: where the environment provisions on
@@ -2201,6 +2232,8 @@ rather than `error`.
     "tenantTimeoutMs": 3600000,
     "scriptGraceMs": 2592000000,
     "captureLinkBase": "https://lubbdubb.internal.example",
+    // lubbdubb.config.json only — refused in the project file
+    "tenants": { "hallway": "adam" },
   },
 }
 ```
@@ -2228,7 +2261,9 @@ still setting it boots with a warning naming it. It carries `tenantTimeoutMs`,
 default one hour, the kill for `ensureTenant` and `reseed`. Every other command, `state.run` included,
 keeps the 30-second kill. And `captureLinkBase`, default **null** — the address this harness is
 reachable at from wherever its tickets are read, used for the one link the harness posts somewhere it
-cannot reach ([Posting the screen to the ticket](#posting-the-screen-to-the-ticket)). It is a key
+cannot reach ([Posting the screen to the ticket](#posting-the-screen-to-the-ticket)). And `tenants`,
+default empty, the operator's own tenant per `tenantEnv` environment, read from the operator's file
+alone ([An operator's own tenant](#an-operators-own-tenant)). `captureLinkBase` is a key
 rather than something derived because the harness does not know its own address: the only URL it can
 name for itself is a loopback, and null posts the comment with no link rather than a broken one. The tenant commands get their own key rather than sharing the runner's
 because the two are unrelated lengths — a suite's runtime against a provisioning job's — and they get

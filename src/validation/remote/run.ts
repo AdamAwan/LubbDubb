@@ -8,7 +8,13 @@ import type { RemoteRun, RemoteSheetRow, TenantCall, TenantLaunch, TenantStandin
 import { runnableDrives, runnableScreens, runnableScripts, runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
 import { rowRun } from './sheet.js';
-import { resolveTenant, stalenessNote, type TenantEnvironment, type TenantKeeper } from './tenants.js';
+import {
+  resolveTenant,
+  stalenessNote,
+  type OperatorTenants,
+  type TenantEnvironment,
+  type TenantKeeper,
+} from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#the-press
 
@@ -23,6 +29,7 @@ interface RemoteRunDeps {
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
   env?: TenantEnvironment;
+  operatorTenants?: OperatorTenants;
 }
 
 /** A refusal is a returned value, never a throw — the route turns `code` into its status. */
@@ -78,6 +85,7 @@ export class RemoteRunDesk extends EventEmitter {
       stamped: store.remoteValidation.listRemoteTenants(),
       now: this.now(),
       env: this.deps.env,
+      operatorTenants: this.deps.operatorTenants,
     });
     if (tenant.standing.blockedReason !== null) {
       for (const row of rows)
@@ -163,6 +171,7 @@ export class RemoteRunDesk extends EventEmitter {
         stamped: this.deps.store.remoteValidation.listRemoteTenants(),
         now: this.now(),
         env: this.deps.env,
+        operatorTenants: this.deps.operatorTenants,
       }).standing.tenant ??
       '';
     const live = this.deps.store.remoteValidation.liveRemoteRun(environmentName, key);
@@ -235,6 +244,7 @@ export class RemoteRunDesk extends EventEmitter {
           stamped: this.deps.store.remoteValidation.listRemoteTenants(),
           now: this.now(),
           env: this.deps.env,
+          operatorTenants: this.deps.operatorTenants,
         }).standing;
   }
 
@@ -305,6 +315,7 @@ export class RemoteRunDesk extends EventEmitter {
       stamped: this.deps.store.remoteValidation.listRemoteTenants(),
       now: this.now(),
       env: this.deps.env,
+      operatorTenants: this.deps.operatorTenants,
     });
     if (validate.reseed !== undefined) {
       const refused = await this.reseedStep(environmentName, validate.reseed, resolved, resumed, said);

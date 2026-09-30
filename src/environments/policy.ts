@@ -51,6 +51,35 @@ interface EnvironmentArrival {
   workItemState?: string;
 }
 
+/**
+ * `remoteValidation.tenants`. An entry for an environment that takes no operator tenant would be read
+ * by nothing, so it is refused rather than left to look like it works.
+ * → docs/spec/36-remote-validation.md#an-operators-own-tenant
+ */
+export function validateOperatorTenants(tenants: unknown, environments: readonly EnvironmentConfig[]): void {
+  if (tenants === undefined) return;
+  if (typeof tenants !== 'object' || tenants === null || Array.isArray(tenants))
+    throw new Error(
+      'remoteValidation.tenants: must be an object naming your own tenant per environment, e.g. { "hallway": "adam" }.',
+    );
+  for (const [name, tenant] of Object.entries(tenants)) {
+    const where = `remoteValidation.tenants["${name}"]`;
+    if (typeof tenant !== 'string' || tenant.trim() === '')
+      throw new Error(
+        `${where}: must be a non-empty tenant name. The harness never generates or infers a tenant, so an ` +
+          'empty one names nothing it could fall back to.',
+      );
+    const environment = environments.find((e) => e.name === name);
+    if (environment === undefined)
+      throw new Error(`${where}: no environment is named "${name}", so this tenant would be read by nothing.`);
+    if (environment.validate?.tenantEnv === undefined)
+      throw new Error(
+        `${where}: "${name}" does not take a per-operator tenant — only an environment declaring ` +
+          '"validate.tenantEnv" reads one from here, so this entry would be read by nothing.',
+      );
+  }
+}
+
 export function validateEnvironments(environments: EnvironmentConfig[]): void {
   if (!Array.isArray(environments))
     throw new Error('environments: must be a list of {name, at} entries — one per environment to probe.');
