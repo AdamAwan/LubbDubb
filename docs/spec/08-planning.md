@@ -1110,6 +1110,12 @@ whole of it or none — an operator ticking a box cannot see what they cut off. 
 `issue-plan` template's field guide and `planDocumentSchema.ts` both say a sentence or two, and name
 the tick box as the reason. The write-up is where the long version goes.
 
+**Both are optional, and the prompt says leaving them out is a real answer.** Planners asked for a field
+fill it, so every plan arrived with an open question and a risk whether or not it had one — and a gate
+that fires on every plan is one operators learn to tick blind. The field guide and the schema both say
+to omit either when there is nothing genuine to raise; `planCaveats` already draws no box for an empty
+field.
+
 `outOfScope` and `alternatives` are deliberately **not** caveats. Both are the planner being explicit
 about the shape it chose, which is what the plan sheet is for; neither goes wrong if unread, and a gate
 that fires on every plan ever written is one operators learn to tick blind. A plan whose planner

@@ -27,7 +27,7 @@ export const PLAN_DOCUMENT_SHAPE = {
     .describe(
       'What could go wrong with this split — one or two short sentences, or a couple of brief bullets. ' +
         'It is drawn as a tick box the operator must read before they may approve, so keep it to what ' +
-        'would change a mind.',
+        'would change a mind. Omit it when there is no real risk — filler here costs the operator a tick.',
     )
     .optional(),
   outOfScope: z.string().describe('What you deliberately left out, and why.').optional(),
@@ -45,7 +45,8 @@ export const PLAN_DOCUMENT_SHAPE = {
       'What you are least sure about: the assumption you would most like argued with, and what would ' +
         'change your mind. This is the agenda if the operator opens a discussion, so be specific about ' +
         'the decision rather than modest about the plan. One or two short sentences — it is drawn as a ' +
-        'tick box on the approval card, and the write-up is where the long version belongs.',
+        'tick box on the approval card, and the write-up is where the long version belongs. Omit it when ' +
+        'nothing is genuinely open — an invented question costs the operator a tick.',
     )
     .optional(),
   verification: z
