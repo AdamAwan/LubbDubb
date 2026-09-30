@@ -1,29 +1,10 @@
 import type { BotPr, BotPrDetail, BotPrFile, UpdateKind } from '../types.js';
+import { isLockfile } from './lockfiles.js';
 
 // → docs/spec/37-bot-prs.md#what-the-agent-is-given
 
 const MAX_NOTES = 6_000;
 const MAX_PATCHES = 8_000;
-
-const LOCKFILES = new Set([
-  'package-lock.json',
-  'npm-shrinkwrap.json',
-  'yarn.lock',
-  'pnpm-lock.yaml',
-  'bun.lockb',
-  'packages.lock.json',
-  'poetry.lock',
-  'Pipfile.lock',
-  'uv.lock',
-  'Cargo.lock',
-  'go.sum',
-  'Gemfile.lock',
-  'composer.lock',
-  'mix.lock',
-  'pubspec.lock',
-  'Podfile.lock',
-  'gradle.lockfile',
-]);
 
 const NOT_A_SOURCE = new Set(['renovatebot', 'dependabot', 'apps', 'marketplace', 'settings']);
 
@@ -31,10 +12,6 @@ const KIND_ORDER: Record<UpdateKind, number> = { major: 0, minor: 1, patch: 2, u
 
 export function riskOrder(a: BotPr, b: BotPr): number {
   return KIND_ORDER[a.update.kind] - KIND_ORDER[b.update.kind] || a.number - b.number;
-}
-
-export function isLockfile(path: string): boolean {
-  return LOCKFILES.has(path.slice(path.lastIndexOf('/') + 1));
 }
 
 /** Renovate's "### Release Notes" section, or Dependabot's `<summary>Release notes</summary>` block. */

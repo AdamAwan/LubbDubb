@@ -145,7 +145,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
       return { base: null, head: null, files: [] };
     },
     async getFileAtCommit() {
-      return null;
+      return '';
     },
     async abandonPullRequest() {},
     async deleteBranch() {

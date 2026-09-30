@@ -175,7 +175,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       return { base: null, head: null, files: [] };
     },
     async getFileAtCommit() {
-      return null;
+      return '';
     },
     async abandonPullRequest(pullRequestId) {
       recorded.abandoned.push(pullRequestId);

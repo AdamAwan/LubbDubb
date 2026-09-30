@@ -73,8 +73,8 @@ export interface AzureDevOpsApi {
   getPullBody(pullRequestId: number): Promise<string>;
   /** The paths the pull request's latest iteration changes, and the merge base and head it sits between. */
   listPullChanges(pullRequestId: number): Promise<AzPullChanges>;
-  /** A file's text at one commit; null where it does not exist there. Azure serves no patch, so a diff is ours to take. */
-  getFileAtCommit(path: string, commit: string): Promise<string | null>;
+  /** A file's text at one commit; empty where it does not exist there. Azure serves no patch, so a diff is ours to take. */
+  getFileAtCommit(path: string, commit: string): Promise<string>;
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;

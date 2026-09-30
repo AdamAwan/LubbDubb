@@ -2,7 +2,7 @@ import type { SendResult } from '../../sink/actionSink.js';
 import type { BotPrDetail, BotPrFile, BotPullRequest, CiStatus } from '../../types.js';
 import { lineDiff } from '../../botPrs/lineDiff.js';
 import type { ErrorRecorder } from '../../errorLog.js';
-import { isLockfile } from '../../botPrs/riskBrief.js';
+import { isLockfile } from '../../botPrs/lockfiles.js';
 import { authoredBy } from '../integration.js';
 import type { AzPolicyEvaluation, AzureDevOpsApi } from './azureDevOpsApi.js';
 import { namedReviewers, viewerAssignment } from './reviewers.js';
@@ -58,28 +58,39 @@ export async function readAzureBotPrDetail(
 ): Promise<BotPrDetail> {
   const [body, changes] = await Promise.all([api.getPullBody(prNumber), api.listPullChanges(prNumber)]);
   const { base, head } = changes;
+  const diffable = new Set(
+    base === null || head === null ? [] : changes.files.filter((f) => !isLockfile(f.path)).slice(0, MAX_DIFFED_FILES),
+  );
   const files: BotPrFile[] = [];
-  let diffed = 0;
-  for (const { path, from } of changes.files) {
-    const bare: BotPrFile = { path, additions: null, deletions: null, patch: null };
-    if (isLockfile(path) || base === null || head === null || diffed >= MAX_DIFFED_FILES) {
-      files.push(bare);
-      continue;
-    }
-    diffed += 1;
-    try {
-      const [before, after] = await Promise.all([
-        api.getFileAtCommit(from ?? path, base),
-        api.getFileAtCommit(path, head),
-      ]);
-      files.push({ path, ...lineDiff(before ?? '', after ?? '') });
-    } catch (err) {
-      errors?.record({
-        source: 'provider',
-        message: `Reading ${path} on bot PR ${String(prNumber)} failed; it goes out without its diff: ${(err as Error).message}`,
-      });
-      files.push(bare);
-    }
+  for (const file of changes.files) {
+    files.push(
+      diffable.has(file)
+        ? await diffedFile(api, file, base!, head!, prNumber, errors)
+        : { path: file.path, additions: null, deletions: null, patch: null },
+    );
   }
   return { body, files };
+}
+
+async function diffedFile(
+  api: AzureDevOpsApi,
+  { path, from }: { path: string; from: string | null },
+  base: string,
+  head: string,
+  prNumber: number,
+  errors: ErrorRecorder | undefined,
+): Promise<BotPrFile> {
+  try {
+    const [before, after] = await Promise.all([
+      api.getFileAtCommit(from ?? path, base),
+      api.getFileAtCommit(path, head),
+    ]);
+    return { path, ...lineDiff(before, after) };
+  } catch (err) {
+    errors?.record({
+      source: 'provider',
+      message: `Reading ${path} on bot PR ${String(prNumber)} failed; it goes out without its diff: ${(err as Error).message}`,
+    });
+    return { path, additions: null, deletions: null, patch: null };
+  }
 }

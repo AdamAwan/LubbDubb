@@ -47,9 +47,10 @@ interface AzIterationChanges {
  */
 export async function readPullChanges(http: AzureTransport, iterations: string): Promise<AzPullChanges> {
   const listed = await http.request<{ value: AzIteration[] }>(withApiVersion(iterations));
-  const latest = listed.value.reduce<AzIteration | null>((a, b) => ((b.id ?? 0) > (a?.id ?? 0) ? b : a), null);
-  if (latest?.id === undefined) return { base: null, head: null, files: [] };
-  const changes = await http.request<AzIterationChanges>(withApiVersion(`${iterations}/${latest.id}/changes`));
+  const newest = Math.max(0, ...listed.value.map((i) => i.id ?? 0));
+  const latest = listed.value.find((i) => i.id === newest);
+  if (latest === undefined) return { base: null, head: null, files: [] };
+  const changes = await http.request<AzIterationChanges>(withApiVersion(`${iterations}/${newest}/changes`));
   return {
     base: latest.commonRefCommit?.commitId ?? null,
     head: latest.sourceRefCommit?.commitId ?? null,
@@ -65,13 +66,17 @@ function repoPath(path: string): string {
   return path.replace(/^\//, '');
 }
 
-/** A file's text at one commit; null where the file does not exist there. */
+function isAzNotFound(err: unknown): boolean {
+  return /-> 404\b/.test((err as Error).message);
+}
+
+/** A file's text at one commit; empty where the file does not exist there, which is what a diff wants. */
 export async function readFileAtCommit(
   http: AzureTransport,
   repoUrl: string,
   path: string,
   commit: string,
-): Promise<string | null> {
+): Promise<string> {
   const url = withApiVersion(`${repoUrl}/items`, {
     path: `/${path}`,
     'versionDescriptor.versionType': 'commit',
@@ -82,7 +87,7 @@ export async function readFileAtCommit(
     const item = await http.request<{ content?: string }>(url, {}, { conditional: false });
     return item.content ?? '';
   } catch (err) {
-    if (/-> 404\b/.test((err as Error).message)) return null;
+    if (isAzNotFound(err)) return '';
     throw err;
   }
 }

@@ -155,7 +155,7 @@ test('azure diffs each changed manifest between the merge base and the head, and
     getFileAtCommit: async (path: string, commit: string) => {
       reads.push(`${commit}:${path}`);
       if (path === 'broken.json') throw new Error('-> 403 Forbidden');
-      return files[`${commit}:${path}`] ?? null;
+      return files[`${commit}:${path}`] ?? '';
     },
   } as unknown as AzureDevOpsApi;
   const detail = await readAzureBotPrDetail(api, 5);
