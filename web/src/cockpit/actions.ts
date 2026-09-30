@@ -147,6 +147,8 @@ export interface CockpitActions {
   validateLocally(issueNumber: number, opts?: { swap?: boolean; refresh?: boolean }): Promise<void>;
   cancelLocalValidation(issueNumber: number): Promise<void>;
   openTab(tab: ConsoleTab): void;
+  /** The Features tab, opened on one Feature's card. */
+  openFeature(issueNumber: number): void;
   setTicketQuery(
     next: Partial<
       Pick<

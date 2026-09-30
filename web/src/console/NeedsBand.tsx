@@ -223,6 +223,7 @@ const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
   validate: taskBody,
   close_out: taskBody,
   supply: taskBody,
+  unwatched: taskBody,
   bench: taskBody,
   burn: taskBody,
   intake: intakeBody,

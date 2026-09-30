@@ -58,7 +58,8 @@ export function unwatchedChildFindings(input: {
     owed.add(key);
     const detail = unwatchedDetail(feature);
     if (existing && existing.status !== 'open') {
-      if (deskSettled(existing)) steps.push({ kind: 'reopen', taskId: existing.id, detail });
+      if (deskSettled(existing) || hasNewStory(feature.unwatched, existing))
+        steps.push({ kind: 'reopen', taskId: existing.id, detail });
       continue;
     }
     steps.push({ kind: 'file', originRef: feature.originRef, title, detail });
@@ -81,6 +82,20 @@ export function unwatchedChildFindings(input: {
   }
 
   return steps;
+}
+
+/**
+ * Whether a story is unseen that the operator's dismissal did not cover. A dismissed row keeps the
+ * detail it had when it was answered, so the stories it named are the ones they looked at.
+ */
+function hasNewStory(unwatched: readonly number[], dismissed: HumanTask): boolean {
+  const seen = namedStories(dismissed.detail);
+  return unwatched.some((n) => !seen.has(n));
+}
+
+function namedStories(detail: string | null): Set<number> {
+  const list = /no watch tag: ([^\n]*?)\. /.exec(detail ?? '')?.[1] ?? '';
+  return new Set([...list.matchAll(/#(\d+)/g)].map((m) => Number(m[1])));
 }
 
 function unwatchedDetail(feature: UnwatchedFeature): string {
@@ -110,8 +125,8 @@ function unwatchedDetail(feature: UnwatchedFeature): string {
 
   lines.push(
     '',
-    'Press **Watch** on the Feature to cascade the tag over all of it again. **Done** says you have looked and ' +
-      `${one ? 'that story is' : 'those stories are'} deliberately out of scope; the harness re-files this row ` +
+    '**Watch all** cascades the tag over the whole Feature again. **Dismiss** says you have looked and ' +
+      `${one ? 'that story is' : 'those stories are'} deliberately out of scope; the harness brings this row back ` +
       'only if the Feature gains another story it cannot see.',
   );
   return lines.join('\n');
