@@ -223,6 +223,7 @@ const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
   validate: taskBody,
   close_out: taskBody,
   supply: taskBody,
+  unwatched: taskBody,
   bench: taskBody,
   burn: taskBody,
   intake: intakeBody,
@@ -247,7 +248,8 @@ const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
  * @public shared with the ask panel, which draws the body under its own header
  */
 export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions, checksBelow = false): ReactNode {
-  return (BODY_OF[row.kind] ?? escalationBody)(row, view, actions, checksBelow);
+  const isTask = (view.state.humanTasks ?? []).some((t) => t.id === row.id);
+  return (BODY_OF[row.kind] ?? (isTask ? taskBody : escalationBody))(row, view, actions, checksBelow);
 }
 
 function rowIssue(row: NeedRow, view: CockpitView): Issue | undefined {

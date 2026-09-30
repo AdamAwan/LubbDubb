@@ -12,6 +12,7 @@ import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
+import { planIssueOf } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { Button, ButtonRow } from '../components/button.js';
 
@@ -59,6 +60,8 @@ export function taskBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
     case 'supply':
       return <SupplyAsk task={task} view={view} actions={actions} />;
+    case 'unwatched':
+      return <UnwatchedAsk task={task} view={view} actions={actions} />;
     default:
       return (
         <BenchAsk
@@ -364,6 +367,61 @@ function WatchFinding({
           onClose={() => setRaising(false)}
         />
       )}
+    </>
+  );
+}
+
+/* The Feature and the stories it names are links, and the row's two answers are buttons: watch the
+   lot, or dismiss it until another unseen story appears.
+   → docs/spec/06-issue-pickup.md#a-watched-feature-reports-the-children-nothing-can-see */
+function UnwatchedAsk({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const number = task.originRef === null ? null : planIssueOf(task.originRef);
+  const unseen = view.state.world.issues.filter((i) => i.parent?.number === number && i.pickup.status === 'unwatched');
+  return (
+    <>
+      <TaskLede task={task} view={view} />
+      {number !== null && (
+        <p className="cn-tick">
+          <span className="cn-refs">
+            Feature <Ref to={`issue:${number}`} />
+            {unseen.length > 0 && <> · not watched: </>}
+            {unseen.map((i) => (
+              <Ref key={i.number} to={`issue:${i.number}`} />
+            ))}
+          </span>
+        </p>
+      )}
+      <ButtonRow bar>
+        {number !== null && (
+          <>
+            <Button tone="secondary" onClick={() => actions.openFeature(number)} title="Open this Feature's card">
+              Open feature
+            </Button>
+            <AsyncButton
+              tone="primary"
+              onClick={() => actions.setIssueWatched(number, true)}
+              title="Put the watch tag on the Feature and every story under it"
+            >
+              Watch all
+            </AsyncButton>
+          </>
+        )}
+        <AsyncButton
+          tone="secondary"
+          onClick={() => actions.completeHumanTask(task.id, 'Dismissed — the unwatched stories are out of scope.')}
+          title="Hide this until another story under the Feature has no watch tag"
+        >
+          Dismiss
+        </AsyncButton>
+      </ButtonRow>
     </>
   );
 }

@@ -200,16 +200,39 @@ test('a Feature that goes unseen again reopens the harness’s own row', () => {
   store.close();
 });
 
-test('an operator’s own Done is never reopened by the desk', () => {
+test('an operator’s dismissal stands while the unseen stories are the ones they looked at', () => {
+  const store = new Store(':memory:');
+  const pass = desk(store);
+  pass.run(world([feature(), story(11), unwatched(12), unwatched(13)]));
+  const filed = store.humanTasks.listHumanTasksOfKind('unwatched')[0]!;
+  store.humanTasks.settleHumanTask(filed.id, 'done', 'Out of scope for now.');
+  pass.run(world([feature(), story(11), unwatched(12), unwatched(13)]));
+  pass.run(world([feature(), story(11), story(12), unwatched(13)]));
+  const rows = store.humanTasks.listHumanTasksOfKind('unwatched');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.status, 'done', 'a story tagged since is no reason to ask again');
+  store.close();
+});
+
+test('a story added after the operator dismissed the row brings it back, naming the new story', () => {
   const store = new Store(':memory:');
   const pass = desk(store);
   pass.run(world([feature(), story(11), unwatched(12)]));
   const filed = store.humanTasks.listHumanTasksOfKind('unwatched')[0]!;
-  store.humanTasks.settleHumanTask(filed.id, 'done', 'Out of scope for now.');
-  pass.run(world([feature(), story(11), unwatched(12)]));
+  store.humanTasks.settleHumanTask(filed.id, 'declined', 'Not now.');
+  pass.run(world([feature(), story(11), unwatched(12), unwatched(15)]));
   const rows = store.humanTasks.listHumanTasksOfKind('unwatched');
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0]!.status, 'done', 'the harness retracts and re-files its own row, never yours');
+  assert.equal(rows.length, 1, 'the dismissed row reopens rather than a second one filing beside it');
+  assert.equal(rows[0]!.status, 'open');
+  assert.match(rows[0]!.detail ?? '', /#15/);
+
+  store.humanTasks.settleHumanTask(rows[0]!.id, 'done', 'Both out of scope.');
+  pass.run(world([feature(), story(11), unwatched(12), unwatched(15)]));
+  assert.equal(
+    store.humanTasks.listHumanTasksOfKind('unwatched')[0]!.status,
+    'done',
+    'the second dismissal covers #15',
+  );
   store.close();
 });
 
@@ -249,5 +272,17 @@ test('the row says which unseen stories are holding other work, and only when an
   desk(store).run(world(issues));
   const detail = store.humanTasks.listHumanTasksOfKind('unwatched')[0]!.detail ?? '';
   assert.match(detail, /#11 is holding other work/);
+  store.close();
+});
+
+test('a dismissal of many stories is read back whole, so none of them brings the row back', () => {
+  const store = new Store(':memory:');
+  const pass = desk(store);
+  const issues = [feature(), story(11), unwatched(12), unwatched(13), unwatched(14)];
+  pass.run(world(issues));
+  const filed = store.humanTasks.listHumanTasksOfKind('unwatched')[0]!;
+  store.humanTasks.settleHumanTask(filed.id, 'done', 'Out of scope.');
+  pass.run(world(issues));
+  assert.equal(store.humanTasks.listHumanTasksOfKind('unwatched')[0]!.status, 'done');
   store.close();
 });

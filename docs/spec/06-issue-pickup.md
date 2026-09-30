@@ -118,12 +118,20 @@ Four things about it are load-bearing:
   The last story tagged settles the row; so does the Feature dropping out of the watched set
   entirely, and the resolution says the harness no longer reads it as watched work rather than
   claiming anybody tagged anything.
-- **It reopens only its own settlements.** `deskSettled` gates the reopen arm, so an operator's own
-  Done — "those stories are deliberately out of scope" — stands for good. The harness retracts and
-  re-files its own row, never theirs.
+- **An operator's dismissal covers the stories it named, and no others.** A row the desk settled
+  reopens whenever the Feature goes unseen again. A row the operator answered — **Dismiss**, Done
+  or Decline: "those stories are deliberately out of scope" — reopens only when an unseen story
+  appears that the row did not name when they answered it. A settled row's detail is never
+  rewritten, so the `#n` list in its first sentence is the set they looked at; a story tagged since
+  is no reason to ask again, and a new one is. Reopening the same row rather than filing another
+  keeps it one row per Feature.
 - **An empty world settles nothing.** A provider that is down on a first boot returns no issues at
   all, and settling every standing row off that reading is the one way this can be wrong at scale —
   the gone-arm's rule in [13](13-jobs-and-tickets.md), one desk over.
+
+In the cockpit the row opens an ask panel with the Feature and each unseen story drawn as refs,
+and three buttons: **Open feature** (the Features tab on that Feature's card), **Watch all** (the
+same cascade as the Feature's own Watch) and **Dismiss** (settles the row as above).
 
 Where a story it names is a predecessor in an **accepted** order, the row says so and says what it
 is holding: that is the one case where an untagged story is not merely invisible but is stopping

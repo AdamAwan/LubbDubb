@@ -58,7 +58,9 @@ export function unwatchedChildFindings(input: {
     owed.add(key);
     const detail = unwatchedDetail(feature);
     if (existing && existing.status !== 'open') {
-      if (deskSettled(existing)) steps.push({ kind: 'reopen', taskId: existing.id, detail });
+      const seen = dismissedStories(existing.detail);
+      if (deskSettled(existing) || feature.unwatched.some((n) => !seen.has(n)))
+        steps.push({ kind: 'reopen', taskId: existing.id, detail });
       continue;
     }
     steps.push({ kind: 'file', originRef: feature.originRef, title, detail });
@@ -83,12 +85,27 @@ export function unwatchedChildFindings(input: {
   return steps;
 }
 
+/** Where the detail lists the unseen stories; `dismissedStories` reads the list back from here. */
+const LIST_LEAD = 'no watch tag: ';
+
+/**
+ * The stories an answered row named. A settled row's detail is never rewritten, so this is the set
+ * the operator looked at when they dismissed it.
+ */
+function dismissedStories(detail: string | null): Set<number> {
+  const text = detail ?? '';
+  const start = text.indexOf(LIST_LEAD);
+  if (start < 0) return new Set();
+  const list = text.slice(start + LIST_LEAD.length).split('. ', 1)[0]!;
+  return new Set([...list.matchAll(/#(\d+)/g)].map((m) => Number(m[1])));
+}
+
 function unwatchedDetail(feature: UnwatchedFeature): string {
   const list = (numbers: readonly number[]): string => numbers.map((n) => `#${n}`).join(', ');
   const one = feature.unwatched.length === 1;
   const lines = [
     `You are watching **${feature.title}** (#${feature.number}), and ${one ? 'one' : feature.unwatched.length} of ` +
-      `its ${feature.open} open stories ${one ? 'carries' : 'carry'} no watch tag: ${list(feature.unwatched)}. ` +
+      `its ${feature.open} open stories ${one ? 'carries' : 'carry'} ${LIST_LEAD}${list(feature.unwatched)}. ` +
       `${one ? 'It is' : 'They are'} not behind and not in the queue — no agent has read ` +
       `${one ? 'it' : 'them'}, and none will.`,
     '',
@@ -110,8 +127,8 @@ function unwatchedDetail(feature: UnwatchedFeature): string {
 
   lines.push(
     '',
-    'Press **Watch** on the Feature to cascade the tag over all of it again. **Done** says you have looked and ' +
-      `${one ? 'that story is' : 'those stories are'} deliberately out of scope; the harness re-files this row ` +
+    '**Watch all** cascades the tag over the whole Feature again. **Dismiss** says you have looked and ' +
+      `${one ? 'that story is' : 'those stories are'} deliberately out of scope; the harness brings this row back ` +
       'only if the Feature gains another story it cannot see.',
   );
   return lines.join('\n');

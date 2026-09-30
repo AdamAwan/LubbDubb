@@ -1116,6 +1116,12 @@ goal did not load" is answering blind.
 several asks or a page scrolled past one. It is the same `needBody`, so it is one ask reachable two
 ways rather than two asks.
 
+**A human-task row always has a body.** `needBody` picks a body by the row's kind, and a kind with
+no entry of its own that is a human task falls to `taskBody`, whose default draws the task's detail
+and its Done / Decline. It never falls to the escalation body: that one finds no escalation by the
+row's id and draws nothing, so the row opens an empty panel and the click reads as dead. That is how
+the `unwatched` row shipped.
+
 **The demo carries no goal-less ask.** Every fixture pull request under work is owned by a ticket
 (`#388` → PR #412, `#376` → PR #409, `#396` → PR #426, `#390` → PRs #413 and #414), so every row in
 the demo's rail leads to a goal page. The
