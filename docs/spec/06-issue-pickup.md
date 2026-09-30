@@ -104,7 +104,8 @@ the one judgement the watch tag exists to leave with them.
 
 **It reports only on a Feature that carries the watch tag itself.** It starts from
 `featureGroups` ([33](33-story-sequencing.md#which-features-are-asked-about)) and keeps the groups
-whose container the world snapshot holds _and_ reads as watched. The sequencing set is deliberately
+whose `containerWatched` is set: the parent is in the world snapshot, is a container type (the same
+`containerTypes` the cascade walks), and carries the tag. The sequencing set is deliberately
 wider — a Feature is in it when any one story is tagged — and reporting on that set nagged the
 operator who tags stories one at a time: tag one, and every untagged sibling came back as a story
 "nothing can see", under a Feature they never said was theirs. A tagged story scopes that story; only

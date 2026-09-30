@@ -12,6 +12,8 @@ interface FeatureGroup {
   members: number[];
   /** The open children carrying no watch tag — the stories the order covers that nothing will work. */
   unwatched: number[];
+  /** The Feature carries the watch tag itself — false when it is in only through a child, or absent. */
+  containerWatched: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ interface FeatureGroup {
  * when any one of its children does — the second arm for the operator who tags stories and not the
  * container, whose Features were the only ones sequenced before this. Once a Feature is in, every
  * child is a member whatever its own tag says, because an order over the watched half of a Feature
- * is an order over a set the operator never described.
+ * is an order over a set the operator never described. `containerWatched` narrows to the first arm.
  * → docs/spec/33-story-sequencing.md#which-features-are-asked-about
  */
 export function featureGroups(
@@ -32,7 +34,7 @@ export function featureGroups(
   const containers = new Map<number, Issue>();
   for (const issue of issues) if (isContainerIssue(issue, containerTypes)) containers.set(issue.number, issue);
 
-  const groups = new Map<number, FeatureGroup & { anyWatched: boolean }>();
+  const groups = new Map<number, Omit<FeatureGroup, 'containerWatched'> & { anyWatched: boolean }>();
   for (const issue of issues) {
     const parent = issue.parent;
     if (!parent) continue;
@@ -59,11 +61,18 @@ export function featureGroups(
     const container = containers.get(number);
     // No container in the world snapshot is not "unwatched" — the harness cannot read a tag it was
     // never shown, so the children's own tags are the only statement there is.
-    if (!(container === undefined ? false : watched(container)) && !group.anyWatched) continue;
+    const containerWatched = container === undefined ? false : watched(container);
+    if (!containerWatched && !group.anyWatched) continue;
     group.children.sort((a, b) => a.number - b.number);
     group.members.sort((a, b) => a - b);
     group.unwatched.sort((a, b) => a - b);
-    out.push({ feature: group.feature, children: group.children, members: group.members, unwatched: group.unwatched });
+    out.push({
+      feature: group.feature,
+      children: group.children,
+      members: group.members,
+      unwatched: group.unwatched,
+      containerWatched,
+    });
   }
   return out.sort((a, b) => a.feature.number - b.feature.number);
 }
