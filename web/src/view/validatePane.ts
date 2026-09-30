@@ -1,6 +1,7 @@
 import type {
   CockpitEnvironment,
   GoalEnvironmentReachView,
+  RemoteSheetRowView,
   RemoteSheetView,
   ValidationCheckResultBy,
   ValidationCheckView,
@@ -33,6 +34,12 @@ export interface CheckStanding {
    * saying which, and each panel's own rows still carry theirs.
    */
   row: CheckRow | null;
+  /**
+   * What each environment's last run made of this check: its sheet rows that carry a reading or a
+   * block, one per environment. Drawn under the check itself, so a check and what the runs said about
+   * it are read in one place rather than matched up across two panels.
+   */
+  runs: RemoteSheetRowView[];
 }
 
 interface CheckRow {
@@ -47,7 +54,7 @@ interface CheckRow {
 
 export const BAND_HEADING: Record<CheckBand, string> = {
   running: 'a run is on them',
-  open: 'no run yet',
+  open: 'a run can take them',
   yours: 'only you can answer',
   answered: 'answered',
 };
@@ -105,23 +112,78 @@ export function checkStandings(
   for (const check of checks) {
     if (check.supersededReason !== null) continue;
     const row = boxRow(sheets, check.id, showing);
+    const runs = checkRuns(sheets, check.id);
     if (check.state === 'passed' || check.state === 'waived') {
-      standings.set(check.id, { band: 'answered', label: answeredBy(check, sheets), row });
+      standings.set(check.id, { band: 'answered', label: answeredBy(check, sheets), row, runs });
       continue;
     }
     const onIt = sheets.filter((sheet) => live(sheet) && readable(sheet, check.id));
     if (onIt.length > 0) {
-      standings.set(check.id, { band: 'running', label: `a run on ${onIt.map((s) => s.environment).join(', ')}`, row });
+      standings.set(check.id, {
+        band: 'running',
+        label: `a run on ${onIt.map((s) => s.environment).join(', ')}`,
+        row,
+        runs,
+      });
       continue;
     }
     const could = sheets.filter((sheet) => readable(sheet, check.id)).map((sheet) => sheet.environment);
     if (could.length > 0) {
-      standings.set(check.id, { band: 'open', label: `${could.join(' or ')} can take it`, row });
+      standings.set(check.id, { band: 'open', label: `${could.join(' or ')} can take it`, row, runs });
       continue;
     }
-    standings.set(check.id, { band: 'yours', label: 'no run offers to take this', row });
+    standings.set(check.id, { band: 'yours', label: 'no run offers to take this', row, runs });
   }
   return standings;
+}
+
+/** A check's rows that something happened on — a reading taken, or a block said — in sheet order. */
+function checkRuns(sheets: readonly RemoteSheetView[], checkId: string): RemoteSheetRowView[] {
+  return sheets.flatMap((sheet) =>
+    sheet.rows.filter(
+      (row) => row.kind === 'check' && row.sourceId === checkId && (row.reading !== null || row.blockedReason !== null),
+    ),
+  );
+}
+
+/**
+ * The rows an environment panel still lists: everything that is not a check's own row. A check row
+ * is read on its check, and listed again here it is the second copy of the set that made the pane
+ * hard to follow. A check row still waiting on an approval stays, since the approval is taken here.
+ */
+export function panelRows(sheet: RemoteSheetView): RemoteSheetRowView[] {
+  return sheet.rows.filter((row) => row.kind !== 'check' || row.awaitingApproval);
+}
+
+/** Why an environment's tenant cannot be trusted right now, or nothing where it can. */
+export interface TenantAlert {
+  environment: string;
+  tenant: string | null;
+  why: 'blocked' | 'failed' | 'stale';
+  /** The record's own words: the tenant's block, or what the failed preparation said. */
+  detail: string | null;
+}
+
+/**
+ * One alert per sheet whose tenant would make a reading on it untrustworthy, in the order that
+ * matters: a tenant nothing can be put to, a preparation that ran and failed, then one past the
+ * freshness window its environment declares. A preparation still running, or one whose outcome is
+ * unknown, is not an alert — the gate follows it. `showing` narrows to the environment the pane shows.
+ * → docs/spec/36-remote-validation.md#tenants
+ */
+export function tenantAlerts(sheets: readonly RemoteSheetView[], showing: string | null = null): TenantAlert[] {
+  return sheets
+    .filter((sheet) => showing === null || sheet.environment === showing)
+    .flatMap((sheet): TenantAlert[] => {
+      const { tenant } = sheet;
+      const base = { environment: sheet.environment, tenant: tenant.tenant };
+      if (tenant.blockedReason !== null) return [{ ...base, why: 'blocked', detail: tenant.blockedReason }];
+      const prep = tenant.preparation;
+      if (prep !== null && prep.finishedAt === null) return [];
+      if (prep?.ok === false) return [{ ...base, why: 'failed', detail: prep.detail }];
+      if (tenant.stale) return [{ ...base, why: 'stale', detail: null }];
+      return [];
+    });
 }
 
 /**

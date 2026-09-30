@@ -7369,10 +7369,67 @@ button.cn-grow {
   padding: 7px 10px;
   background: var(--cn-panel);
 }
-.cn-runstrip-stale {
-  flex-basis: 100%;
-  color: var(--cn-amber-ink);
+/* An unhealthy tenant, first on the validate pane: it decides whether any reading below is worth
+   reading, so it is said before them and carries the control that fixes it.
+   → docs/spec/17-cockpit.md#the-validate-pane */
+.cn-tenant-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--cn-red-bg);
+  border: 1px solid var(--cn-red-line);
+  border-radius: 6px;
+  color: var(--cn-red-ink);
+}
+.cn-tenant-alert-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.cn-tenant-alert-body .cn-sub {
+  color: var(--cn-fg-dim);
   white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
+}
+/* A check and what each environment's run made of it, read together.
+   → docs/spec/17-cockpit.md#a-check-carries-its-runs */
+.vq-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 4px 28px;
+}
+.vq-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+}
+.vq-run-env {
+  flex: none;
+  min-width: 9ch;
+  color: var(--cn-fg-dim);
+}
+.vq-run-said {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cn-fg-dim);
+}
+.vq-run .cn-openagent {
+  flex: none;
+  font: 11px var(--cn-mono);
+  color: var(--cn-accent);
+}
+.vq-run .cn-openagent:hover {
+  text-decoration: underline;
+}
+.cn-sheet-checks {
+  margin: 6px 0 0;
+  padding: 0 13px 0 10px;
 }

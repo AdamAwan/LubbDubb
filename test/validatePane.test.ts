@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkStandings, pressBreakdown, pressableRows } from '../web/src/view/validatePane.js';
+import {
+  checkStandings,
+  panelRows,
+  pressBreakdown,
+  pressableRows,
+  tenantAlerts,
+} from '../web/src/view/validatePane.js';
 import type { RemoteSheetRowView, RemoteSheetView, ValidationCheckView } from '../src/wire.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
@@ -196,6 +202,66 @@ test('a check carries the box of the environment the pane is showing, and none w
     null,
     'and none where two environments hold one and the pane is showing neither',
   );
+});
+
+test('a check carries what each environment’s run made of it, and nothing where no run touched it', () => {
+  /* The pane read a check at the top and its run at the foot, so a check marked "not run" above sat
+     over a "blocked" row of the same check below. The check now carries its own runs. */
+  const blocked = row({ blockedReason: 'hallway moved under this run' });
+  const hallway = sheet({ environment: 'hallway', rows: [{ ...blocked, environment: 'hallway' }] });
+  const passed = sheet({ rows: [row({ reading: reading() })] });
+  const runs = checkStandings([check()], [hallway, passed]).get('c1')?.runs ?? [];
+  assert.deepEqual(
+    runs.map((r) => r.environment),
+    ['hallway', 'staging'],
+  );
+
+  assert.deepEqual(checkStandings([check()], [sheet()]).get('c1')?.runs, [], 'an unread row is no run');
+  const query = sheet({ rows: [row({ kind: 'state', sourceId: 'c1', reading: reading() })] });
+  assert.deepEqual(checkStandings([check()], [query]).get('c1')?.runs, [], 'and only a check row is the check’s');
+});
+
+test('the environment panel lists only the rows that are not a check’s own, bar one awaiting approval', () => {
+  const s = sheet({
+    rows: [
+      row({ rowId: 'r1' }),
+      row({ rowId: 'r2', awaitingApproval: true }),
+      row({ rowId: 'q1', kind: 'signal', sourceId: 'q1' }),
+    ],
+  });
+  assert.deepEqual(
+    panelRows(s).map((r) => r.rowId),
+    ['r2', 'q1'],
+  );
+});
+
+test('an unhealthy tenant is an alert: blocked, then a failed preparation, then stale', () => {
+  const tenant = sheet().tenant;
+  const prep = (over: Partial<NonNullable<typeof tenant.preparation>>): NonNullable<typeof tenant.preparation> => ({
+    environment: 'staging',
+    tenant: 'validation-1',
+    startedAt: NOW,
+    finishedAt: NOW,
+    ok: true,
+    detail: null,
+    call: null,
+    launchedAt: null,
+    ...over,
+  });
+  const alerted = (over: Partial<typeof tenant>) => tenantAlerts([sheet({ tenant: { ...tenant, ...over } })]);
+
+  assert.deepEqual(alerted({}), [], 'a healthy tenant says nothing');
+  assert.equal(alerted({ blockedReason: 'no tenant variable', stale: true })[0]?.why, 'blocked');
+  assert.deepEqual(alerted({ stale: true, preparation: prep({ ok: false, detail: 'exited 1' }) }), [
+    { environment: 'staging', tenant: 'validation-1', why: 'failed', detail: 'exited 1' },
+  ]);
+  assert.equal(alerted({ stale: true })[0]?.why, 'stale');
+  /* A preparation still running is the gate's to follow, and an unknown outcome is not a failure. */
+  assert.deepEqual(alerted({ stale: true, preparation: prep({ finishedAt: null, ok: null }) }), []);
+  assert.equal(alerted({ preparation: prep({ ok: null }) }).length, 0);
+
+  const prod = sheet({ environment: 'prod', tenant: { ...tenant, stale: true } });
+  assert.equal(tenantAlerts([prod], 'staging').length, 0, 'narrowed to the environment the pane shows');
 });
 
 function reading(): NonNullable<RemoteSheetRowView['reading']> {
