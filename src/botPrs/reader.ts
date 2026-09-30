@@ -94,7 +94,7 @@ export function toBotPr(pr: BotPullRequest): BotPr {
     viewerReviewing: pr.viewerReviewing,
     url: pr.url ?? null,
     createdAt: pr.createdAt ?? null,
-    headSha: pr.headSha ?? null,
+    headSha: pr.headSha || null,
     update: readDependencyUpdate(pr.title, pr.body),
   };
 }

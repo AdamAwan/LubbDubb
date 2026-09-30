@@ -29,8 +29,8 @@ export async function listAzureBotPulls(
         reviewers: namedReviewers(optional),
         viewerReviewing: viewer !== '' && viewerAssignment(optional, viewer) !== undefined,
         url: p.url,
-        headSha: p.lastMergeSourceCommit,
       };
+      if (p.lastMergeSourceCommit) pr.headSha = p.lastMergeSourceCommit;
       if (p.createdAt !== undefined) pr.createdAt = p.createdAt;
       if (p.description !== undefined) pr.body = p.description;
       return pr;
