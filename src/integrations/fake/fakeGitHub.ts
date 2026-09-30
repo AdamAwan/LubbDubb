@@ -15,9 +15,12 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { PrThreadState, PullRequest } from '../../types.js';
+import type { BotPullRequest, PrThreadState, PullRequest } from '../../types.js';
 import { threadComments } from '../../pr/prThreads.js';
+import { authoredBy } from '../integration.js';
 import type {
+  BotPrClaimable,
+  BotPrReadable,
   BranchDeleteCapable,
   WorldCapability,
   Injectable,
@@ -52,6 +55,8 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'pr_closed',
 ]);
 
+export const FAKE_VIEWER = 'you';
+
 export class FakeGitHubIntegration
   implements
     Integration,
@@ -67,6 +72,8 @@ export class FakeGitHubIntegration
     PrAssignCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
+    BotPrReadable,
+    BotPrClaimable,
     Injectable
 {
   private readonly bodies = new Map<number, string>();
@@ -81,6 +88,26 @@ export class FakeGitHubIntegration
   async snapshot(): Promise<WorldSlice> {
     const world = this.world.read();
     return { pullRequests: world.pullRequests, closedPullRequests: world.closedPullRequests };
+  }
+
+  async listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]> {
+    return this.world
+      .read()
+      .pullRequests.filter((pr) => pr.author !== undefined && authoredBy(authors, pr.author))
+      .map((pr) => ({
+        number: pr.number,
+        title: pr.title,
+        author: pr.author!,
+        ciStatus: pr.ciStatus,
+        reviewers: pr.assignees ?? [],
+        viewerReviewing: (pr.assignees ?? []).some((p) => p.id === FAKE_VIEWER),
+        ...(pr.url === undefined ? {} : { url: pr.url }),
+        ...(pr.body === undefined ? {} : { body: pr.body }),
+      }));
+  }
+
+  async claimBotPr(prNumber: number): Promise<SendResult> {
+    return this.assignPr({ prNumber, personId: FAKE_VIEWER });
   }
 
   handles(kind: InjectableEvent['kind']): boolean {

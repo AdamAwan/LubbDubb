@@ -5674,6 +5674,13 @@ moment an operator has something to report, and a way to report it that is only 
 is healthy is missing exactly then. Both arms are asserted, since the offline one is the return a change
 to the bar forgets.
 
+## The Bot PRs tab
+
+Tab `bots`, `web/src/components/BotPrsPage.tsx`, in the nav beside Insights only while
+`CockpitConfig.botPrs` is true. A dependency bot's pull requests grouped by the size of the jump, with
+who has taken each on and **Add me** to take one. Its links go out to the provider rather than through
+`<Ref>`, because a bot pull request is in no world snapshot. Owned by [37](37-bot-prs.md#the-tab).
+
 ## The feature board
 
 `web/src/components/FeatureBoard.tsx`, off `/api/features`, derived by `src/features/featureBoard.ts`.

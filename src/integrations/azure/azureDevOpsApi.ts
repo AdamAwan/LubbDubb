@@ -5,6 +5,8 @@ import type { MergeMethod } from '../../sink/actionSink.js';
 
 export interface AzureDevOpsApi {
   viewerUniqueName(): Promise<string>;
+  /** The credential's identity id — what a reviewer is added by. Empty where connectionData names none. */
+  viewerId(): Promise<string>;
 
   listActivePullRequests(): Promise<AzPull[]>;
   listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]>;
@@ -98,6 +100,7 @@ export interface AzPull {
   reviewers: AzReviewer[];
   /** Truncated by the list endpoint; `getPullBody` reads it whole. */
   description?: string;
+  createdAt?: string;
 }
 
 export interface AzReviewer {

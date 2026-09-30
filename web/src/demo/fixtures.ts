@@ -227,6 +227,7 @@ export function buildDemoState(): DemoSeed {
       containerTypes: ['Feature', 'Epic'],
       featureBoard: true,
       featureSummaries: DEMO_FEATURE_SUMMARIES,
+      botPrs: true,
       canPlaceWorkItem: true,
       desktopFolder: '/Users/you/code/inkwell-books',
       ejectionEnabled: true,

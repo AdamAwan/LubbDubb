@@ -72,6 +72,7 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
     throw new Error(`${name} is not scripted in this test`);
   };
   return {
+    viewerId: async () => '',
     async viewerUniqueName() {
       return 'bot@example.com';
     },

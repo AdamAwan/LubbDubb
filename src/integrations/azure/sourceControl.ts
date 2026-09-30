@@ -20,7 +20,11 @@ import type {
 import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
+import { azAuthorName, claimAzureBotPr, listAzureBotPulls } from './botPulls.js';
+import { stripLogTimestamp, taskIssueLine } from '../ciLogLines.js';
 import type {
+  BotPrClaimable,
+  BotPrReadable,
   BranchDeleteCapable,
   WorldCapability,
   CiCheckRequeueCapable,
@@ -40,14 +44,7 @@ import type {
   WorldSlice,
 } from '../integration.js';
 import { closedReadSince, type ClosedPrSweep } from '../closedWindow.js';
-import type {
-  AzClosedPull,
-  AzPolicyEvaluation,
-  AzPull,
-  AzThread,
-  AzTimelineRecord,
-  AzureDevOpsApi,
-} from './azureDevOpsApi.js';
+import type { AzClosedPull, AzPolicyEvaluation, AzPull, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
 import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
 import { HydrationCache } from '../hydrationCache.js';
@@ -86,7 +83,9 @@ export class AzureDevOpsSourceControlIntegration
     BranchDeleteCapable,
     CiEvidenceCapable,
     CiCheckRequeueCapable,
-    RefResolvable
+    RefResolvable,
+    BotPrReadable,
+    BotPrClaimable
 {
   readonly id = 'sourceControl:azure';
   readonly capability: WorldCapability = 'sourceControl';
@@ -180,6 +179,10 @@ export class AzureDevOpsSourceControlIntegration
       return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
     }
   }
+
+  listBotPullRequests = (authors: readonly RegExp[]) =>
+    listAzureBotPulls(this.opts.api, authors, aggregatePolicyCiStatus);
+  claimBotPr = (prNumber: number) => claimAzureBotPr(this.opts.api, prNumber);
 
   private async pullBody(p: AzPull, maxAgeMs: number): Promise<string | undefined> {
     if (p.description === undefined) return undefined;
@@ -351,18 +354,6 @@ export class AzureDevOpsSourceControlIntegration
     }
     return found;
   }
-}
-
-function taskIssueLine(record: AzTimelineRecord, message: string): string {
-  return `${record.name}: ${message.replace(/\s*\n\s*/g, ' ').trim()}`;
-}
-
-function stripLogTimestamp(line: string): string {
-  return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, '');
-}
-
-function azAuthorName(p: { authorDisplayName?: string; authorUniqueName: string }): string {
-  return p.authorDisplayName || p.authorUniqueName;
 }
 
 export function mapClosedPull(p: AzClosedPull): PullRequest {

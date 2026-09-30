@@ -5486,6 +5486,96 @@ button.cn-grow {
    anywhere else in the situation area, and a second vocabulary for it would be a
    second thing to retune.
    --------------------------------------------------------------------------- */
+.bp {
+  display: grid;
+  gap: 14px;
+  max-width: 1040px;
+}
+.bp-head > h2 {
+  margin: 0;
+  font: 600 15px/1.2 var(--cn-ui);
+}
+.bp-blurb,
+.bp-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  max-width: 80ch;
+}
+.bp-note {
+  margin: 2px 0 8px;
+}
+.bp-error {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+.bp-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  font-size: 12px;
+}
+.bp-oldest {
+  margin-left: auto;
+  color: var(--cn-fg-dim);
+}
+.bp-group > h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.bp-n {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cn-fg-dim);
+}
+.bp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  padding: 7px 10px;
+  margin-bottom: 4px;
+}
+.bp-title {
+  font: 500 13px/1.4 var(--cn-ui);
+  overflow-wrap: anywhere;
+}
+.bp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.bp-ver {
+  font-family: var(--cn-mono);
+}
+.bp-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 11.5px;
+}
+.bp-who-l,
+.bp-nobody {
+  color: var(--cn-fg-faint);
+}
+.bp-refusal {
+  color: var(--cn-red-ink);
+}
+
 .ob {
   display: grid;
   gap: 16px;

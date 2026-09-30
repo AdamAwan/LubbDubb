@@ -187,6 +187,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.logReads.push({ buildId, logId });
       return script.buildLogs?.[`${buildId}/${logId}`] ?? [];
     },
+    viewerId: async () => '',
     async viewerUniqueName() {
       return script.viewer ?? 'bot@acme.com';
     },

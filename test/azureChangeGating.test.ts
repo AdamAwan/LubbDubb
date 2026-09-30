@@ -76,6 +76,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     throw new Error('not scripted');
   };
   const api: AzureDevOpsApi = {
+    viewerId: async () => '',
     async viewerUniqueName() {
       return 'bot@acme.com';
     },

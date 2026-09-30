@@ -122,6 +122,7 @@ deliberately left unchecked, and why, is in
 | [34](spec/34-usage-metrics.md)       | Usage metrics              | What the harness asks of a person and what they do about it: the ledger, surface reach, the digest section              |
 | [35](spec/35-ejection.md)            | Ejection                   | Taking a running agent's work into your own Claude Code: the claim, the held slot, the handoff, the three ways back     |
 | [36](spec/36-remote-validation.md)   | Remote validation          | The sheet a goal's arrival assembles: its three row kinds, the gate, the runner contract, and what a `spec` reading is  |
+| [37](spec/37-bot-prs.md)             | Bot pull requests          | The separate read of a dependency bot's pull requests, how an update's size is read, and the tab that draws them        |
 
 ## Conventions used throughout
 

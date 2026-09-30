@@ -9,6 +9,7 @@ import type { SelfUpdatePolicy } from '../selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
 import { DEFAULT_EJECTION, type EjectionPolicy } from '../ejection/policy.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
+import { DEFAULT_BOT_PRS, type BotPrPolicy } from '../botPrs/policy.js';
 import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from '../localRun/policy.js';
 import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../validation/local/policy.js';
 import { validateCiPolicy, type CiPolicy } from '../ci/ciPolicy.js';
@@ -84,6 +85,7 @@ export interface Config {
   validation: ValidationPolicy;
   ejection: EjectionPolicy;
   review: PrReviewPolicy;
+  botPrs: BotPrPolicy;
   localRun: LocalRunPolicy;
   localValidation: LocalValidationPolicy;
   closedPrWindowMs: number;
@@ -269,6 +271,7 @@ const DEFAULTS: Config = {
   validation: DEFAULT_VALIDATION,
   ejection: DEFAULT_EJECTION,
   review: DEFAULT_PR_REVIEW,
+  botPrs: DEFAULT_BOT_PRS,
   localRun: DEFAULT_LOCAL_RUN,
   localValidation: DEFAULT_LOCAL_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
@@ -352,6 +355,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
   merged.review = { ...DEFAULTS.review, ...overrides.review };
+  merged.botPrs = { ...DEFAULTS.botPrs, ...overrides.botPrs };
   merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
   merged.localValidation = { ...DEFAULTS.localValidation, ...overrides.localValidation };
   merged.remoteValidation = { ...DEFAULTS.remoteValidation, ...overrides.remoteValidation };
@@ -394,6 +398,7 @@ export const DEEP_MERGED_BLOCKS = [
   'validation',
   'ejection',
   'review',
+  'botPrs',
   'localRun',
   'localValidation',
   'remoteValidation',

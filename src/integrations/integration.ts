@@ -31,7 +31,7 @@ import type {
 import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
-import type { TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
 import type { ReadPlan } from '../world/readPlan.js';
 
 // → docs/spec/15-integrations.md
@@ -90,6 +90,27 @@ export interface PrCloseCapable {
 
 export function isPrCloseCapable(x: Integration): x is Integration & PrCloseCapable {
   return typeof (x as Partial<PrCloseCapable>).closePr === 'function';
+}
+
+export interface BotPrReadable {
+  listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]>;
+}
+
+export function isBotPrReadable(x: Integration): x is Integration & BotPrReadable {
+  return typeof (x as Partial<BotPrReadable>).listBotPullRequests === 'function';
+}
+
+/** Puts the credential's own identity on a bot's pull request: an optional reviewer, a GitHub assignee. */
+export interface BotPrClaimable {
+  claimBotPr(prNumber: number): Promise<SendResult>;
+}
+
+export function isBotPrClaimable(x: Integration): x is Integration & BotPrClaimable {
+  return typeof (x as Partial<BotPrClaimable>).claimBotPr === 'function';
+}
+
+export function authoredBy(authors: readonly RegExp[], ...names: readonly string[]): boolean {
+  return names.some((name) => name !== '' && authors.some((pattern) => pattern.test(name)));
 }
 
 export interface RefResolvable {

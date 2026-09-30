@@ -21,6 +21,7 @@ export interface RawPull {
   isDraft?: boolean;
   mergeStatus?: string;
   description?: string;
+  creationDate?: string;
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string; displayName?: string };
   reviewers?: Array<{
@@ -143,6 +144,7 @@ export function toPull(p: RawPull, url: string): AzPull {
     mergeStatus: p.mergeStatus ?? 'notSet',
     description: p.description ?? '',
     reviewers: toReviewers(p.reviewers),
+    ...(p.creationDate ? { createdAt: p.creationDate } : {}),
   };
 }
 

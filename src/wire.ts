@@ -133,6 +133,7 @@ import type {
   WorkNode,
   WorldEvent,
   WorldSnapshot,
+  BotPrsReading,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -398,6 +399,7 @@ interface CockpitConfig {
   canPlaceWorkItem: boolean;
   featureBoard: boolean;
   featureSummaries: boolean;
+  botPrs: boolean;
   areaPaths: string[];
   stateRules: { pickup: string[]; inProgress: string | null; inReview: string | null; returnsTo: string | null } | null;
 }
@@ -908,6 +910,8 @@ export interface ThroughputPayload {
   insights: ThroughputInsights;
 }
 
+export type BotPrsPayload = BotPrsReading;
+
 export interface PromptsPayload {
   dir: string | null;
   templates: PromptTemplateDescription[];
@@ -1107,6 +1111,7 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
+export type { BotPr, DependencyUpdate, UpdateKind } from './types.js';
 export type { McpChannel } from './types.js';
 export type { CiCheck } from './types.js';
 export type { PrComment } from './types.js';

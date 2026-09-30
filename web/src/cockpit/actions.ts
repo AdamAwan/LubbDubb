@@ -40,7 +40,7 @@ export type ConsolePanel =
   | { ask: string }
   | null;
 
-export type ConsoleTab = 'overview' | 'tickets' | 'obstacles' | 'features' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'obstacles' | 'features' | 'bots' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
   | 'economics'

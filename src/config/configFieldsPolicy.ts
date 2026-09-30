@@ -88,6 +88,12 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     why: 'Author names that are machines, as regular expressions over the login the provider reports. The third and last source, for a poster neither of the others can see: a service account on a personal access token, a review bot commenting under an ordinary user. Belongs beside publishedThreadProperty in lubbdubb.project.json — which machines comment on a repository is a fact about that repository.',
   },
   {
+    path: 'botPrs.authors',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Authors whose open pull requests the Bot PRs tab lists, as regular expressions over the author the provider reports — the login on GitHub, the unique or display name on Azure DevOps. Read past ownWorkOnly, which would otherwise hide a bot’s pull requests from you. Empty, and the tab reads nothing. Belongs in lubbdubb.project.json: which bots raise pull requests is a fact about the repository.',
+  },
+  {
     path: 'review.publishedThreadRole',
     type: 'string',
     access: 'plain',
