@@ -1,4 +1,5 @@
 import type { Config } from '../config/config.js';
+import { chooseFilingType } from '../tickets/ticketTypes.js';
 import { briefTicketFields } from '../tickets/briefTicket.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { deriveJobTitle } from './naming.js';
@@ -20,15 +21,16 @@ interface BriefContext {
 }
 
 type BriefOutcome =
-  | { ok: true; kind: 'ticket'; ticketRef: string }
+  | { ok: true; kind: 'ticket'; ticketRef: string; type: string | null }
   | { ok: true; kind: 'job'; job: Job }
-  | { ok: false; reason: 'branch_busy' | 'tracker_refused'; error: string };
+  | { ok: false; reason: 'branch_busy' | 'tracker_refused' | 'type_refused'; error: string };
 
 interface BriefInput {
   prompt: string;
   title?: string | null;
   kind: 'code' | 'desk';
   branch?: string | null;
+  type?: string | null;
 }
 
 export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise<BriefOutcome> {
@@ -38,7 +40,7 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
   const branch = input.branch ?? null;
 
   const tracker = kind === 'code' ? trackerCoordinates(config) : null;
-  if (tracker) return fileBrief(ctx, prompt, providedTitle);
+  if (tracker) return fileBrief(ctx, input);
 
   if (kind === 'code' && branch) {
     const ejected = store.ejections.ejectionOnBranch(branch);
@@ -67,16 +69,19 @@ export async function submitBrief(ctx: BriefContext, input: BriefInput): Promise
   return { ok: true, kind: 'job', job };
 }
 
-async function fileBrief(ctx: BriefContext, prompt: string, providedTitle: string | null): Promise<BriefOutcome> {
+async function fileBrief(ctx: BriefContext, input: BriefInput): Promise<BriefOutcome> {
   const { config, errors } = ctx;
+  const chosen = chooseFilingType(config, input.type ?? null);
+  if (!chosen.ok) return { ok: false, reason: 'type_refused', error: chosen.error };
+  const derived = briefTicketFields(input.prompt);
   const watchLabel = watchLabelFor(config.labelPrefix);
-  const derived = briefTicketFields(prompt);
   let ticketRef: string;
   try {
     ticketRef = await ctx.filing({
-      title: providedTitle ?? derived.title,
+      title: input.title ?? derived.title,
       body: ctx.renderTicketBody(derived.vars),
       labels: watchLabel ? [watchLabel] : [],
+      type: chosen.type,
     });
   } catch (err) {
     errors.record({ source: 'provider', message: `filing a brief as a ticket failed: ${(err as Error).message}` });
@@ -94,5 +99,5 @@ async function fileBrief(ctx: BriefContext, prompt: string, providedTitle: strin
       message: `The ticket ${ticketRef} was filed but its attachment(s) could not be stored: ${(err as Error).message}. Agents working it will not see them.`,
     });
   }
-  return { ok: true, kind: 'ticket', ticketRef };
+  return { ok: true, kind: 'ticket', ticketRef, type: chosen.type };
 }

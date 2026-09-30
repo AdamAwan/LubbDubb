@@ -1,7 +1,7 @@
 import type { Config } from '../config/config.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { ticketAssignee } from './ticketAssignment.js';
-import { bugFilingType, filingType } from './ticketTypes.js';
+import { bugFilingType, filingType, knownFilingTypes } from './ticketTypes.js';
 import { watchLabelFor } from '../watchLabels.js';
 
 // → docs/spec/13-jobs-and-tickets.md
@@ -15,6 +15,7 @@ interface TicketFilingTarget {
   assignee: string | null;
   storyType: string | null;
   bugType: string | null;
+  filingTypes: string[];
   containerTypes: string[];
   parentedTypes: string[];
   pickupStates: string[] | null;
@@ -70,6 +71,7 @@ export function ticketFilingTarget(config: Config): TicketFilingTarget {
     assignee,
     storyType: filingType(config),
     bugType: bugFilingType(config),
+    filingTypes: knownFilingTypes(config),
     containerTypes: config.issueContainerTypes,
     parentedTypes: config.issueParentedTypes,
     pickupStates,

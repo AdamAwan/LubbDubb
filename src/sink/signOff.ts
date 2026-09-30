@@ -12,11 +12,14 @@ export type BodyFormat = 'markdown' | 'html';
  */
 export const SIGNOFF_MARKER = '<!-- lubbdubb:signoff -->';
 
-const SIGN_OFF = {
-  lead: '\u{1F916} Automated comment from ',
-  name: 'LubbDubb',
-  tail: ' \u2014 automating PR busy work so the user can ',
-} as const;
+export type SignOffKind = 'comment' | 'ticket';
+
+const SIGN_OFFS: Record<SignOffKind, { lead: string; tail: string }> = {
+  comment: { lead: '\u{1F916} Automated comment from ', tail: ' \u2014 automating PR busy work so the user can ' },
+  ticket: { lead: '\u{1F916} Filed via ', tail: ' \u2014 automating busy work so the user can ' },
+};
+
+const NAME = 'LubbDubb';
 
 const ENDINGS = [
   'go to the beach',
@@ -148,13 +151,13 @@ function ending(body: string): string {
  * a given string so an edited-in-place body does not churn its joke.
  */
 export function signOffTail(seed: string): string {
-  return `${SIGN_OFF.tail}${ending(seed)}.`;
+  return `${SIGN_OFFS.comment.tail}${ending(seed)}.`;
 }
 
-export function signOff(body: string, format: BodyFormat): string {
+export function signOff(body: string, format: BodyFormat, kind: SignOffKind = 'comment'): string {
   if (body.includes(SIGNOFF_MARKER)) return body;
-  const { lead, name } = SIGN_OFF;
-  const line = signOffTail(body);
-  if (format === 'html') return `${body}\n${SIGNOFF_MARKER}\n<hr>\n<p>${lead}<strong>${name}</strong>${line}</p>`;
-  return `${body}\n\n${SIGNOFF_MARKER}\n\n---\n\n${lead}**${name}**${line}`;
+  const { lead, tail } = SIGN_OFFS[kind];
+  const line = `${tail}${ending(body)}.`;
+  if (format === 'html') return `${body}\n${SIGNOFF_MARKER}\n<hr>\n<p>${lead}<strong>${NAME}</strong>${line}</p>`;
+  return `${body}\n\n${SIGNOFF_MARKER}\n\n---\n\n${lead}**${NAME}**${line}`;
 }

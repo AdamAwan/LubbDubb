@@ -109,7 +109,17 @@ test('every prose method signs on its way to the provider, whichever surface it 
   await connector.upsertIssueComment({ number: 1, body: 'A status.', commentRef: null });
 
   assert.equal(provider.sent.length, 4);
-  for (const body of provider.sent) assert.match(body, new RegExp(DISCLAIMER));
+  for (const body of provider.sent) assert.match(body, /LubbDubb/);
+  const [reply, , filing, status] = provider.sent;
+  for (const body of [reply!, status!]) assert.match(body, new RegExp(DISCLAIMER));
+  assert.match(filing!, /Filed via \*\*LubbDubb\*\*/);
+});
+
+test('a filed ticket is not called a comment', () => {
+  const signed = signOff('A story.', 'markdown', 'ticket');
+  assert.doesNotMatch(signed, /comment/i);
+  assert.doesNotMatch(signed, /PR busy work/);
+  assert.match(signed, /Filed via \*\*LubbDubb\*\*/);
 });
 
 test('a provider that renders HTML is signed in HTML', async () => {

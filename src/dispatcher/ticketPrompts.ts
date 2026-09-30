@@ -184,14 +184,13 @@ export const TICKET_PROMPTS = {
   },
   'brief-ticket-body': {
     placeholders: ['request'],
-    template:
-      'An operator asked for this work from the cockpit, as a brief. It is filed as a ticket ' +
-      'rather than coded straight off, so it flows through the same planning funnel as any other ' +
-      'issue.\n\nThe request, verbatim:\n\n{request}',
+    template: '{request}',
     doc:
       'The **body** of the ticket the harness files when an operator injects a code brief and a ' +
       'tracker is configured (issue #198). Not a prompt: it is written straight into the tracker, so ' +
-      'an override is house style for how such a ticket reads. The harness adds the watch label ' +
+      'an override is house style for how such a ticket reads. The default is the request alone, with ' +
+      'no preamble: the ticket is the operator\u2019s, and the sign-off already says the harness filed it. ' +
+      'The harness adds the watch label ' +
       'itself, which is what makes the funnel pick the ticket up. Replaces the retired ' +
       '`blueprint-ticket` (#394), and the `blueprint-ticket-body` this was called before the rename. ' +
       'Placeholders: {request}.',

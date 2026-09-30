@@ -10,6 +10,7 @@ interface TicketFiling {
   body: string;
   labels?: string[];
   bug?: boolean;
+  type?: string | null;
   relatedTo?: number;
 }
 
@@ -21,7 +22,7 @@ export function ticketFiler(config: Config, sink: ActionSink): TicketFiler {
       title: input.title,
       body: input.body,
       labels: input.labels ?? [],
-      type: input.bug ? bugFilingType(config) : filingType(config),
+      type: input.bug ? bugFilingType(config) : (input.type ?? filingType(config)),
       assignee: ticketAssignee(config),
       relatedTo: input.relatedTo ?? null,
     });
