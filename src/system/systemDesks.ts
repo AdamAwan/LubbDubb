@@ -41,6 +41,7 @@ import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
 import type { BuildOptions, Foundation } from './systemFoundation.js';
 import { BotPrReader } from '../botPrs/reader.js';
+import { BotPrRiskDesk } from '../botPrs/riskDesk.js';
 import type { Fleet } from './systemFleet.js';
 import type { Channels } from './system.js';
 
@@ -246,6 +247,8 @@ export function buildBenchDesks(
     errors,
   });
 
+  const botPrs = new BotPrReader({ source: connector, authors: () => config.botPrs.authors, errors });
+
   return {
     closeOuts,
     unwatchedChildren,
@@ -259,7 +262,14 @@ export function buildBenchDesks(
     upstream,
     tickets,
     obstacles,
-    botPrs: new BotPrReader({ source: connector, authors: () => config.botPrs.authors, errors }),
+    botPrs,
+    botPrRisks: new BotPrRiskDesk({
+      store,
+      source: connector,
+      authors: () => config.botPrs.authors,
+      schedule: () => config.botPrs.riskSchedule,
+      errors,
+    }),
     pool: buildPool(config, opts, base),
   };
 }

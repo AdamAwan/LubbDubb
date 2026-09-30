@@ -1,5 +1,5 @@
 import type { SendResult } from '../../sink/actionSink.js';
-import type { BotPullRequest, CiStatus } from '../../types.js';
+import type { BotPrDetail, BotPullRequest, CiStatus } from '../../types.js';
 import { authoredBy } from '../integration.js';
 import type { AzPolicyEvaluation, AzureDevOpsApi } from './azureDevOpsApi.js';
 import { namedReviewers, viewerAssignment } from './reviewers.js';
@@ -29,6 +29,7 @@ export async function listAzureBotPulls(
         reviewers: namedReviewers(optional),
         viewerReviewing: viewer !== '' && viewerAssignment(optional, viewer) !== undefined,
         url: p.url,
+        headSha: p.lastMergeSourceCommit,
       };
       if (p.createdAt !== undefined) pr.createdAt = p.createdAt;
       if (p.description !== undefined) pr.body = p.description;
@@ -42,4 +43,9 @@ export async function claimAzureBotPr(api: AzureDevOpsApi, prNumber: number): Pr
   if (id === '') return { ok: false };
   await api.addPullReviewer(prNumber, id);
   return { ok: true, ref: id };
+}
+
+export async function readAzureBotPrDetail(api: AzureDevOpsApi, prNumber: number): Promise<BotPrDetail> {
+  const [body, paths] = await Promise.all([api.getPullBody(prNumber), api.listPullChangedPaths(prNumber)]);
+  return { body, files: paths.map((path) => ({ path, additions: null, deletions: null, patch: null })) };
 }

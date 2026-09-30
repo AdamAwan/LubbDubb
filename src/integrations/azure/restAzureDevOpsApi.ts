@@ -35,7 +35,7 @@ import {
   type RawWorkItem,
   type RawWorkItemUpdate,
 } from './restShapes.js';
-import { chunkIds, headsRef, sameTag, tagWriteOp } from './restHelpers.js';
+import { chunkIds, headsRef, readPullChangedPaths, sameTag, tagWriteOp } from './restHelpers.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
@@ -515,6 +515,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`),
     );
     return data.description ?? '';
+  }
+
+  listPullChangedPaths(pullRequestId: number): Promise<string[]> {
+    return readPullChangedPaths(this.http, `${this.repoUrl}/pullRequests/${pullRequestId}/iterations`);
   }
 
   async setPullBody(pullRequestId: number, body: string): Promise<void> {

@@ -71,6 +71,8 @@ export interface AzureDevOpsApi {
   setPullTitle(pullRequestId: number, title: string): Promise<void>;
   /** One pull request's own read: the list truncates `description`, so it cannot answer this. */
   getPullBody(pullRequestId: number): Promise<string>;
+  /** The paths the pull request's latest iteration changes. Azure serves no patch text here. */
+  listPullChangedPaths(pullRequestId: number): Promise<string[]>;
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;

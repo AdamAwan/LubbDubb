@@ -171,6 +171,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async addPullReviewer(id, reviewerId) {
       recorded.reviewersAdded.push({ id, reviewerId });
     },
+    async listPullChangedPaths() {
+      return [];
+    },
     async abandonPullRequest(pullRequestId) {
       recorded.abandoned.push(pullRequestId);
     },

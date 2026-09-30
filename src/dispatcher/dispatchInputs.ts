@@ -48,6 +48,7 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     validationChecks: store.validation.listAllValidationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
     localRun: store.localRuns.liveLocalRun(),
+    botPrRiskRun: store.botPrRisks.pendingRun(),
     localValidations: [
       ...store.localValidations.listOpenLocalValidations(),
       ...store.localValidations.listLocalValidationsAwaitingFix(),

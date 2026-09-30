@@ -253,6 +253,8 @@ export class ActionExecutor {
   private markDispatched(action: DispatchAction, taskId: string): void {
     const { store } = this.deps;
     if (action.jobId) store.jobs.markJobDispatched(action.jobId, taskId);
+    if (action.type === 'dispatch_desk_agent' && action.botPrRiskRun)
+      store.botPrRisks.claimRun(action.botPrRiskRun.id, taskId);
     if (action.type !== 'dispatch_code_agent') return;
     if (action.partId) store.plans.markPartDispatched(action.partId, taskId, action.branch);
     if (action.localValidation) {

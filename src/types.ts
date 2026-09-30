@@ -66,6 +66,21 @@ export interface BotPullRequest {
   url?: string;
   createdAt?: string;
   body?: string;
+  headSha?: string;
+}
+
+/** One file a bot's pull request changes. `patch` is null where the provider reports paths only. */
+export interface BotPrFile {
+  path: string;
+  additions: number | null;
+  deletions: number | null;
+  patch: string | null;
+}
+
+/** `body` null: the listing's body was already whole. `files` null: the provider cannot list them. */
+export interface BotPrDetail {
+  body: string | null;
+  files: BotPrFile[] | null;
 }
 
 export type UpdateKind = 'major' | 'minor' | 'patch' | 'unknown';
@@ -86,6 +101,7 @@ export interface BotPr {
   viewerReviewing: boolean;
   url: string | null;
   createdAt: string | null;
+  headSha: string | null;
   update: DependencyUpdate;
 }
 
@@ -95,6 +111,55 @@ export interface BotPrsReading {
   readAt: string | null;
   pullRequests: BotPr[];
   error: string | null;
+}
+
+export type BotPrRiskLevel = 'low' | 'medium' | 'high';
+
+/** → docs/spec/37-bot-prs.md#the-risk-summary */
+export interface BotPrRisk {
+  prNumber: number;
+  headSha: string;
+  risk: BotPrRiskLevel;
+  summary: string;
+  runId: string;
+  assessedAt: string;
+}
+
+export interface BotPrRiskSubject {
+  number: number;
+  headSha: string;
+  title: string;
+}
+
+export type BotPrRiskRunStatus = 'pending' | 'dispatched' | 'done';
+
+export type BotPrRiskTrigger = 'schedule' | 'operator';
+
+export interface BotPrRiskRun {
+  id: string;
+  status: BotPrRiskRunStatus;
+  trigger: BotPrRiskTrigger;
+  subjects: BotPrRiskSubject[];
+  taskId: string | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+/** A run waiting for its agent carries what that agent is to be shown, assembled when it opened. */
+export interface PendingBotPrRiskRun extends BotPrRiskRun {
+  briefing: string;
+}
+
+/** Where the risk summary stands: the schedule, when it next fires, and the latest run. */
+export interface BotPrRiskStanding {
+  schedule: string | null;
+  nextRunAt: string | null;
+  run: (Pick<BotPrRiskRun, 'id' | 'status' | 'trigger' | 'createdAt' | 'settledAt'> & { prs: number }) | null;
+}
+
+/** `risk` is the verdict on this head only: a push to the pull request leaves it null until re-read. */
+export interface AssessedBotPr extends BotPr {
+  risk: BotPrRisk | null;
 }
 
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';

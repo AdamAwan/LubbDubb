@@ -17,10 +17,11 @@ import type {
 import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
-import { claimGitHubBotPr, listGitHubBotPulls } from './botPulls.js';
+import { claimGitHubBotPr, listGitHubBotPulls, readGitHubBotPrDetail, readGitHubReleaseNotes } from './botPulls.js';
 import { stripLogTimestamp } from '../ciLogLines.js';
 import type {
   BotPrClaimable,
+  BotPrDetailReadable,
   BotPrReadable,
   BranchDeleteCapable,
   WorldCapability,
@@ -38,6 +39,7 @@ import type {
   PrTitleCapable,
   PrBodyCapable,
   RefResolvable,
+  ReleaseNotesReadable,
   WorldSlice,
 } from '../integration.js';
 import { closedReadSince, type ClosedPrSweep } from '../closedWindow.js';
@@ -110,7 +112,9 @@ export class GitHubSourceControlIntegration
     CiEvidenceCapable,
     RefResolvable,
     BotPrReadable,
-    BotPrClaimable
+    BotPrClaimable,
+    BotPrDetailReadable,
+    ReleaseNotesReadable
 {
   readonly id = 'sourceControl:github';
   readonly capability: WorldCapability = 'sourceControl';
@@ -213,6 +217,8 @@ export class GitHubSourceControlIntegration
   listBotPullRequests = (authors: readonly RegExp[]) =>
     listGitHubBotPulls(this.opts.api, authors, async (p) => (await this.pullCi(p, 0)).ciStatus);
   claimBotPr = (prNumber: number) => claimGitHubBotPr(this.opts.api, prNumber);
+  readBotPrDetail = (prNumber: number) => readGitHubBotPrDetail(this.opts.api, prNumber);
+  readReleaseNotes: ReleaseNotesReadable['readReleaseNotes'] = (s, t) => readGitHubReleaseNotes(this.opts.api, s, t);
 
   private async pullCi(p: GhPullSummary, maxAgeMs: number): Promise<CachedPullCi> {
     const { api } = this.opts;

@@ -73,6 +73,11 @@ const ActionSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
+    /** The risk run this dispatch claims, `remoteRun`'s shape. → docs/spec/37-bot-prs.md#the-risk-summary */
+    botPrRiskRun: z
+      .object({ id: z.string().min(1) })
+      .nullable()
+      .default(null),
     ...origin,
     ...job,
     ...pin,

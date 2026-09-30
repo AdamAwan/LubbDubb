@@ -33,6 +33,7 @@ import type {
   LocalRun,
   LocalValidation,
   RemoteRunBrief,
+  PendingBotPrRiskRun,
   ValidationCheck,
   ValidationPlanRecord,
   Ejection,
@@ -74,6 +75,8 @@ export interface DispatchContext {
   localRun?: LocalRun | null;
   localValidations?: LocalValidation[];
   remoteRuns?: RemoteRunBrief[];
+  /** The one risk run waiting for its agent, if there is one. → 37-bot-prs.md#the-risk-summary */
+  botPrRiskRun?: PendingBotPrRiskRun | null;
   priorityOverrides?: PriorityOverride[];
   goalPriorities?: GoalPriority[];
   goalPauses?: GoalPause[];

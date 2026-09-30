@@ -23,6 +23,7 @@ import type { ValidationReadyDesk } from '../validation/readyDesk.js';
 import type { DeliveryCloseOutDesk } from '../delivery/closeOutDesk.js';
 import type { UnwatchedChildDesk } from '../features/unwatchedDesk.js';
 import type { ScheduleDesk } from '../schedules/scheduleDesk.js';
+import type { BotPrRiskDesk } from '../botPrs/riskDesk.js';
 import type { WorkGraphRecorder } from '../graph/workGraphRecorder.js';
 import type { EnvironmentDesk } from '../environments/environmentDesk.js';
 import type { RemoteValidationDesk } from '../validation/remote/desk.js';
@@ -46,6 +47,7 @@ export interface PulseDeps {
   landings?: StackLandingDesk;
   validationAsks?: ValidationAskDesk;
   schedules?: ScheduleDesk;
+  botPrRisks?: BotPrRiskDesk;
   updates?: { run(): Promise<void> };
   graph?: WorkGraphRecorder;
   environments?: EnvironmentDesk;
@@ -118,6 +120,7 @@ const ENTRIES = [
     { id: 'landings', readWorld: false, run: (d, at) => d.landings?.settle(at.world) },
     { id: 'validationAsks', readWorld: false, run: (d) => d.validationAsks?.run() },
     { id: 'schedules', readWorld: false, run: (d) => d.schedules?.run() },
+    { id: 'botPrRisks', readWorld: false, run: (d) => void d.botPrRisks?.run() },
     { id: 'updates', readWorld: true, run: (d) => d.updates?.run() },
     { id: 'graph', readWorld: false, run: (d, at) => d.graph?.record(at.world) },
     { id: 'environments', readWorld: true, run: (d, at) => d.environments?.run(at.world) },

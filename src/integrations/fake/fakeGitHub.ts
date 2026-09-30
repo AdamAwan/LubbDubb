@@ -15,11 +15,12 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { BotPullRequest, PrThreadState, PullRequest } from '../../types.js';
+import type { BotPrDetail, BotPullRequest, PrThreadState, PullRequest } from '../../types.js';
 import { threadComments } from '../../pr/prThreads.js';
 import { authoredBy } from '../integration.js';
 import type {
   BotPrClaimable,
+  BotPrDetailReadable,
   BotPrReadable,
   BranchDeleteCapable,
   WorldCapability,
@@ -74,6 +75,7 @@ export class FakeGitHubIntegration
     BranchDeleteCapable,
     BotPrReadable,
     BotPrClaimable,
+    BotPrDetailReadable,
     Injectable
 {
   private readonly bodies = new Map<number, string>();
@@ -103,7 +105,12 @@ export class FakeGitHubIntegration
         viewerReviewing: (pr.assignees ?? []).some((p) => p.id === FAKE_VIEWER),
         ...(pr.url === undefined ? {} : { url: pr.url }),
         ...(pr.body === undefined ? {} : { body: pr.body }),
+        headSha: pr.headSha,
       }));
+  }
+
+  async readBotPrDetail(): Promise<BotPrDetail> {
+    return { body: null, files: [] };
   }
 
   async claimBotPr(prNumber: number): Promise<SendResult> {

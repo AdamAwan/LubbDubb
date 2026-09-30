@@ -143,6 +143,12 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async addPullAssignee(number, login) {
       recorded.assigned.push({ number, login });
     },
+    async listPullFiles() {
+      return [];
+    },
+    async getReleaseBody() {
+      return null;
+    },
     async updatePullBranch(number) {
       if (script.throwOn === 'updatePullBranch') throw new Error('merge conflict between base and head');
       recorded.branchUpdates.push(number);

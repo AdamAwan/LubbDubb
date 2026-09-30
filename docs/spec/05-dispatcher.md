@@ -207,6 +207,7 @@ unconditional.
 | `validate-check`           | Handed-over validation check             | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                                               |
 | `remote-validation`        | Validation sheet pressed                 | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed      | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                                                |
+| `bot-pr-risk`              | Bot pull requests unread for risk        | —                    | A risk run over up to twenty dependency-bot pull requests is open and waiting ([37](37-bot-prs.md#the-risk-summary)). One desk agent for the whole batch; advice only.                                                                                                                                                                                                                                                          |
 | `feature-summary`          | Feature has moved                        | —                    | A Feature's children stand somewhere other than where its summary was written, or it has none. One desk agent says where the Feature is. Produces no work at all, so nothing may wait behind it.                                                                                                                                                                                                                                |
 | `feature-sequence`         | Feature has unsequenced stories          | `sequencer`          | A Feature has gained or lost stories since anybody wrote an order for them, or has never had one. One desk agent proposes which go first; holds nothing until an operator accepts. Beside `feature-summary` at the bottom, for its reason. → [33](33-story-sequencing.md)                                                                                                                                                       |
 
@@ -597,11 +598,15 @@ is no second list to keep in step with it. What each stage contributes:
     check waiting to be run is work nobody has done; this is a second opinion on work somebody has,
     so it goes below — and below every rule that produces work for `validate-check`'s reason, which is
     the same promise.
-12. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
+12. **Bot PR risk** (`bot-pr-risk`), one desk agent over a batch of dependency-bot pull requests —
+    below every rule that produces work, because what it writes is advice beside a pull request
+    nobody is obliged to act on, and above the Feature desks only because somebody may have pressed
+    for it and be watching the tab. → [37](37-bot-prs.md#the-risk-summary)
+13. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
     below even a handed-over validation check, because it is the only kind of rule in the book that
     produces no work at all: a check is a reading somebody asked for, and this is a paragraph about
     readings already taken. Nothing may wait behind it.
-13. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
+14. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
     in an order — **last**, beside `feature-summary` and for its reason: it proposes an ordering and
     holds nothing, so it produces no work either. → [33](33-story-sequencing.md)
 

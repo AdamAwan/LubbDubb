@@ -76,7 +76,7 @@ test('a grouped or unfamiliar title is unknown, never guessed', () => {
 });
 
 test('the route lists only the named authors, past the fleet’s own filter, with the update read', async () => {
-  const system = build({ botPrs: { authors: ['^renovate\\[bot\\]$'] } });
+  const system = build({ botPrs: { authors: ['^renovate\\[bot\\]$'], riskSchedule: '' } });
   system.connector.inject({
     kind: 'new_pr',
     number: 7,
@@ -108,7 +108,7 @@ test('the route lists only the named authors, past the fleet’s own filter, wit
 });
 
 test('claiming adds you as a reviewer, shows on the next read, and is refused twice or off the list', async () => {
-  const system = build({ botPrs: { authors: ['^renovate\\[bot\\]$'] } });
+  const system = build({ botPrs: { authors: ['^renovate\\[bot\\]$'], riskSchedule: '' } });
   system.connector.inject({
     kind: 'new_pr',
     number: 7,
@@ -197,7 +197,13 @@ test('with no author named, the route reads nothing and says so', async () => {
   const { app } = await buildApp(system);
   try {
     const body = (await app.inject({ method: 'GET', url: '/api/bot-prs' })).json<BotPrsPayload>();
-    assert.deepEqual(body, { configured: false, readAt: null, pullRequests: [], error: null });
+    assert.deepEqual(body, {
+      configured: false,
+      readAt: null,
+      pullRequests: [],
+      error: null,
+      risk: { schedule: null, nextRunAt: null, run: null },
+    });
   } finally {
     await app.close();
     system.store.close();

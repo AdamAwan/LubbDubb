@@ -5575,6 +5575,25 @@ button.cn-grow {
 .bp-refusal {
   color: var(--cn-red-ink);
 }
+.bp-risk {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+.bp-risk-why {
+  color: var(--cn-fg-dim);
+}
+.bp-summarise {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
 
 .ob {
   display: grid;

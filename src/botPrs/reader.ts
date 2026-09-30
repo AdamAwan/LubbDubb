@@ -5,7 +5,7 @@ import { readDependencyUpdate } from './dependencyUpdate.js';
 
 // → docs/spec/37-bot-prs.md#the-read
 
-interface BotPrSource {
+export interface BotPrSource {
   listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]>;
   claimBotPr(prNumber: number): Promise<SendResult>;
 }
@@ -84,7 +84,7 @@ export class BotPrReader {
   }
 }
 
-function toBotPr(pr: BotPullRequest): BotPr {
+export function toBotPr(pr: BotPullRequest): BotPr {
   return {
     number: pr.number,
     title: pr.title,
@@ -94,11 +94,12 @@ function toBotPr(pr: BotPullRequest): BotPr {
     viewerReviewing: pr.viewerReviewing,
     url: pr.url ?? null,
     createdAt: pr.createdAt ?? null,
+    headSha: pr.headSha ?? null,
     update: readDependencyUpdate(pr.title, pr.body),
   };
 }
 
-function compile(sources: readonly string[]): RegExp[] {
+export function compile(sources: readonly string[]): RegExp[] {
   return sources.flatMap((source) => {
     try {
       return [new RegExp(source)];

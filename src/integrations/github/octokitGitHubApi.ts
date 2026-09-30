@@ -13,6 +13,7 @@ import type {
   GhIssue,
   GhMergeResult,
   GhPullDetail,
+  GhPullFile,
   GhPullSummary,
   GhReview,
   GhReviewComment,
@@ -454,6 +455,30 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async addPullAssignee(number: number, login: string): Promise<void> {
     await this.octokit.issues.addAssignees({ ...this.base, issue_number: number, assignees: [login] });
+  }
+
+  async listPullFiles(number: number): Promise<GhPullFile[]> {
+    const files = await this.octokit.paginate(this.octokit.pulls.listFiles, {
+      ...this.base,
+      pull_number: number,
+      per_page: 100,
+    });
+    return files.map((f) => ({
+      path: f.filename,
+      additions: f.additions,
+      deletions: f.deletions,
+      patch: f.patch ?? null,
+    }));
+  }
+
+  async getReleaseBody(owner: string, repo: string, tag: string): Promise<string | null> {
+    try {
+      const { data } = await this.octokit.repos.getReleaseByTag({ owner, repo, tag });
+      return data.body ?? null;
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) return null;
+      throw err;
+    }
   }
 
   async updatePullBranch(number: number): Promise<void> {

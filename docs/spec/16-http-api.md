@@ -1604,6 +1604,17 @@ The open pull requests `botPrs.authors` names, as a `BotPrsReading`:
 `System.botPrs.read()`, which reuses a reading for a minute and keeps the last good rows beside `error`
 when a read fails. `configured: false` reads nothing from the provider. → [37](37-bot-prs.md)
 
+Each row also carries `risk` — the verdict an agent wrote on **this head**, or null — and the payload
+carries `risk` as a `BotPrRiskStanding`: the schedule, when it next fires, and the latest run.
+→ [37](37-bot-prs.md#the-risk-summary)
+
+### `POST /api/bot-prs/risk`
+
+Opens a risk run now, as `botPrs.riskSchedule` would: `{ ok: true, prs }` with how many pull requests
+it took. 409 when a run is already out or there is nothing unread, 422 when no bot is named, 502 when
+assembling the briefing failed at the provider. It dispatches nothing itself; the next pulse does.
+→ [37](37-bot-prs.md#the-risk-summary)
+
 ### `POST /api/bot-prs/:number/claim`
 
 Puts the credential's own identity on that bot pull request — an optional reviewer on Azure, an
