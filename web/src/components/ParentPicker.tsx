@@ -27,6 +27,7 @@ export function ParentPicker({
     <ButtonRow>
       {proposed !== null && (
         <AsyncButton
+          usage="placement.accept"
           tone="primary"
           onClick={() => actions.setIssueParent(issue.number, proposed)}
           title={`Hang this goal off #${proposed}${proposedTitle === null ? '' : ` — ${proposedTitle}`}`}
@@ -53,6 +54,7 @@ export function ParentPicker({
             ))}
           </select>
           <AsyncButton
+            usage="placement.edit"
             tone={proposed === null ? 'primary' : undefined}
             disabled={chosen === ''}
             onClick={() => actions.setIssueParent(issue.number, Number(chosen))}
@@ -63,6 +65,7 @@ export function ParentPicker({
         </>
       )}
       <AsyncButton
+        usage="placement.reject"
         onClick={() => actions.setIssueParent(issue.number, null)}
         title="This goal belongs under nothing — stop asking"
       >

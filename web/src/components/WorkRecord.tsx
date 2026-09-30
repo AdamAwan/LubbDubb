@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { WorkNodeView } from '../types.js';
 import { RefLinksExtended } from './refs.js';
 import { WorkRow } from './workTree.js';
+import { Disclosure } from '../console/goalFold.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -42,10 +43,7 @@ export function WorkRecord({
   return (
     <>
       <h3>
-        <button type="button" className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
-          <i className="cn-caret">{open ? '▾' : '▸'}</i>
-          The record
-        </button>
+        <Disclosure subject="goal" open={open} onToggle={onToggle} label="The record" />
         {nodes.length > 0 && <i className="cn-n">{nodes.length}</i>}
         <span className="cn-more">what happened, after the world forgot</span>
       </h3>

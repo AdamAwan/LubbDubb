@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
+import { tabUsage } from '../cockpit/usage.js';
 import type { PrPageView } from '../view/prPage.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
 import { QueueRail } from './QueueRail.js';
@@ -241,7 +242,13 @@ function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; ac
       trail={[
         tabStep(tab, actions),
         ...(page.goal !== null && goalRef !== null
-          ? [{ label: `#${page.goal.number} ${page.goal.title}`, go: () => actions.selectGoal(goalRef) }]
+          ? [
+              {
+                label: `#${page.goal.number} ${page.goal.title}`,
+                usage: { counted: 'goal.view' } as const,
+                go: () => actions.selectGoal(goalRef),
+              },
+            ]
           : []),
       ]}
       here={`PR #${page.pr.number}`}
@@ -265,7 +272,15 @@ function PrGone({
       <Crumb
         trail={[
           tabStep(tab, actions),
-          ...(goalRef !== null ? [{ label: goalLabel(goalRef), go: () => actions.selectPr(null) }] : []),
+          ...(goalRef !== null
+            ? [
+                {
+                  label: goalLabel(goalRef),
+                  usage: { counted: 'goal.view' } as const,
+                  go: () => actions.selectPr(null),
+                },
+              ]
+            : []),
         ]}
         here={`PR #${number}`}
       />
@@ -284,7 +299,7 @@ function PrGone({
 }
 
 function tabStep(tab: ConsoleTab, actions: CockpitActions): CrumbStep {
-  return { label: TAB_LABEL[tab], go: () => actions.selectGoal(null) };
+  return { label: TAB_LABEL[tab], usage: tabUsage(tab), go: () => actions.selectGoal(null) };
 }
 
 function goalLabel(ref: string): string {

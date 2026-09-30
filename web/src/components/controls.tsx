@@ -1,5 +1,6 @@
 import { createContext, useContext, type JSX, type ReactNode } from 'react';
 import { Icon } from './icons.js';
+import { BareButton, type Usage } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -61,6 +62,7 @@ export function ControlGroup({
 }
 
 export function ControlButton({
+  usage,
   icon,
   tone,
   count,
@@ -74,13 +76,13 @@ export function ControlButton({
   title: string;
   onClick: () => void;
   children: ReactNode;
-}): JSX.Element {
+} & Usage): JSX.Element {
   return (
-    <button type="button" className={toneClass(tone)} onClick={onClick} title={title}>
+    <BareButton usage={usage} className={toneClass(tone)} onClick={onClick} title={title}>
       <Icon name={icon} />
       {children}
       {count !== undefined && count > 0 && <i className="cn-ctlcount">{count}</i>}
-    </button>
+    </BareButton>
   );
 }
 
@@ -93,6 +95,7 @@ export function ControlSegments({ label, children }: { label: string; children: 
 }
 
 export function ControlSegment({
+  usage,
   icon,
   tone,
   pressed,
@@ -108,7 +111,7 @@ export function ControlSegment({
   title: string;
   onClick?: () => void;
   children: ReactNode;
-}): JSX.Element {
+} & Usage): JSX.Element {
   const cls = toneClass(tone, 'cn-ctlsegb');
   if (inert === true) {
     return (
@@ -119,10 +122,17 @@ export function ControlSegment({
     );
   }
   return (
-    <button type="button" className={cls} aria-pressed={pressed === true} onClick={onClick} title={title}>
+    <BareButton
+      usage={usage}
+      logs={pressed !== true}
+      className={cls}
+      aria-pressed={pressed === true}
+      onClick={onClick}
+      title={title}
+    >
       <Icon name={icon} />
       {children}
-    </button>
+    </BareButton>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
+import { BareButton } from '../components/button.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { Icon } from '../components/icons.js';
 import { ExtLink } from '../components/util.js';
@@ -10,6 +11,7 @@ import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
+import { tabUsage } from '../cockpit/usage.js';
 import { useThemeUnsaved } from '../hooks.js';
 import { environmentsReading, menuEntries, usageReading } from './topBarReadings.js';
 
@@ -48,16 +50,16 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
       {tabs.map((tab) => {
         const badge = navBadge(tab, view);
         return (
-          <button
+          <BareButton
             key={tab}
-            type="button"
+            usage={tabUsage(tab)}
             className={goal === null && view.tab === tab ? 'cn-on' : ''}
             onClick={go(tab)}
             {...(badge === null ? {} : { title: badge.title })}
           >
             {TAB_LABEL[tab]}
             {badge !== null && <i className="cn-badge">{badge.count}</i>}
-          </button>
+          </BareButton>
         );
       })}
     </nav>
@@ -92,6 +94,7 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
       {canCompose ? (
         <ControlButton
           icon="bug"
+          usage="ticket.expand"
           title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
           onClick={() => setComposing(true)}
         >
@@ -149,8 +152,8 @@ function Environments({ view, actions }: { view: CockpitView; actions: CockpitAc
   if (reading.quiet) return null;
   const title = `${reading.title} Open the readings.`;
   return (
-    <button
-      type="button"
+    <BareButton
+      usage={{ counted: 'environment.view' }}
       className={`cn-read cn-act cn-env-${reading.tone ?? 'watch'}`}
       onClick={() => actions.openPanel('environments')}
       title={title}
@@ -159,7 +162,7 @@ function Environments({ view, actions }: { view: CockpitView; actions: CockpitAc
       <span>Env</span>
       <b>{reading.value}</b>
       <i className="cn-chev">›</i>
-    </button>
+    </BareButton>
   );
 }
 
@@ -172,15 +175,15 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
       ? 'Scan paused — press to run one now'
       : `Next scan in about ${view.nextPulseIn} seconds — press to run one now`;
   return (
-    <button
-      type="button"
+    <BareButton
+      usage="scan.create"
       className={`cn-countdown ${stopped ? 'cn-quiet' : ''}`}
       onClick={() => void actions.pulse()}
       title={title}
       aria-label={title}
     >
       {reading}
-    </button>
+    </BareButton>
   );
 }
 
@@ -195,8 +198,8 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
       ? 'Nothing has been run locally — open to start a goal on this machine'
       : `Nothing is running locally; the last attempt ${run.status === 'failed' ? 'did not start' : 'was stopped'} — open for the reason`;
   return (
-    <button
-      type="button"
+    <BareButton
+      usage={{ counted: 'local-run.view' }}
       className={`cn-sub cn-act ${live ? '' : 'cn-quiet'} ${stale ? 'cn-stale' : ''}`}
       onClick={() => actions.openPanel('localRun')}
       title={title}
@@ -204,7 +207,7 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
     >
       <span>Local</span>
       <b>{live && number !== null ? `#${String(number)}` : 'off'}</b>
-    </button>
+    </BareButton>
   );
 }
 
@@ -232,8 +235,8 @@ function Tenants({ view, actions }: { view: CockpitView; actions: CockpitActions
   return (
     <>
       <i className="cn-pill-sep" />
-      <button
-        type="button"
+      <BareButton
+        usage={{ counted: 'environment.view' }}
         className={`cn-sub cn-act ${running.length > 0 ? '' : 'cn-quiet'} ${failed ? 'cn-stale' : ''}`}
         onClick={() => actions.openPanel('tenants')}
         title={title}
@@ -241,7 +244,7 @@ function Tenants({ view, actions }: { view: CockpitView; actions: CockpitActions
       >
         <span>{label}</span>
         <b>{value}</b>
-      </button>
+      </BareButton>
     </>
   );
 }
@@ -252,8 +255,8 @@ function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const stale = reading.age === null ? '' : 'cn-usage-old';
   const title = `${reading.title} Open for what spent it.`;
   return (
-    <button
-      type="button"
+    <BareButton
+      usage={{ counted: 'insights.view' }}
       className={`cn-sub cn-act ${tone} ${stale}`}
       onClick={() => actions.openInsights({ insightsView: 'economics', insightsWindow: 'session' })}
       title={title}
@@ -287,7 +290,7 @@ function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }
           first. `11m ago` beside `62% / 30%` is three numbers where the chip has two
           measurements, and the one an operator does not want is the one that changes
           every minute. The sentence is still in the `title`. */}
-    </button>
+    </BareButton>
   );
 }
 
@@ -313,8 +316,8 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
         if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
       }}
     >
-      <button
-        type="button"
+      <BareButton
+        usage="menu.expand"
         className={`cn-read cn-act cn-icon ${flagged ? 'cn-menu-flag' : ''} ${open ? 'cn-on' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -323,13 +326,13 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
         aria-label={title}
       >
         <Icon name="menu" size={15} />
-      </button>
+      </BareButton>
       {open && (
         <div className="cn-menu" role="menu">
           {entries.map((entry) => (
-            <button
+            <BareButton
               key={entry.key}
-              type="button"
+              usage={entry.usage}
               role="menuitem"
               className={`cn-menu-row ${entry.quiet ? 'cn-quiet' : ''} ${entry.pending === true ? 'cn-pending' : ''} ${
                 entry.tone === null ? '' : `cn-tone-${entry.tone}`
@@ -344,7 +347,7 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
               <span>{entry.label}</span>
               {entry.value !== null && <b>{entry.value}</b>}
               <i className="cn-chev">›</i>
-            </button>
+            </BareButton>
           ))}
         </div>
       )}

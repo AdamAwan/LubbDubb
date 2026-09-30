@@ -28,7 +28,7 @@ import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
 import { PredictionTab } from './PredictionTab.js';
 import { Label } from './label.js';
-import { logUsage } from '../cockpit/usage.js';
+import { BareButton } from './button.js';
 import { POOL_VIEWS } from '../cockpit/place.js';
 import { PoolBar, SessionNote } from './insightsBars.js';
 import { useInsightsData, type Fetched } from './useInsightsData.js';
@@ -183,20 +183,19 @@ function InsightsTabs({
   return (
     <div className="insights-tabs" role="tablist" aria-label="Insights">
       {tabs.map((t) => (
-        <button
+        <BareButton
+          usage="insights.filter"
           key={t.id}
-          type="button"
           role="tab"
           aria-selected={t.id === view}
           tabIndex={t.id === view ? 0 : -1}
           className={t.id === view ? 'on' : ''}
           onClick={() => {
-            logUsage('insights.filter');
             actions.openInsights({ insightsView: t.id });
           }}
         >
           {t.label}
-        </button>
+        </BareButton>
       ))}
     </div>
   );
@@ -222,19 +221,18 @@ function InsightsBar({
       <Label dense>Whose</Label>
       <div className="insights-win" role="group" aria-label="Whose numbers">
         {SCOPES.map((s) => (
-          <button
+          <BareButton
+            usage="insights.filter"
             key={s.key}
-            type="button"
             aria-pressed={s.key === scope}
             className={s.key === scope ? 'on' : ''}
             title={s.note}
             onClick={() => {
-              logUsage('insights.filter');
               actions.openInsights({ insightsScope: s.key });
             }}
           >
             {s.label}
-          </button>
+          </BareButton>
         ))}
       </div>
       {scope === 'pool' ? (
@@ -260,18 +258,17 @@ function WindowBar({
       <Label dense>Window</Label>
       <div className="insights-win" role="group" aria-label="Window">
         {WINDOWS.map((w) => (
-          <button
+          <BareButton
+            usage="insights.filter"
             key={w.key}
-            type="button"
             aria-pressed={w.key === chosen}
             className={w.key === chosen ? 'on' : ''}
             onClick={() => {
-              logUsage('insights.filter');
               actions.openInsights({ insightsWindow: w.key });
             }}
           >
             {windowButtonLabel(w, chosen, resolved)}
-          </button>
+          </BareButton>
         ))}
       </div>
       {/* The resolution, said out loud. A reader counting bars to work out what

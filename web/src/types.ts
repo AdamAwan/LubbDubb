@@ -238,6 +238,7 @@ export type {
   TicketWatchFilter,
   TicketsPayload,
   UiUsageEvent,
+  ControlUsage,
   UsageArrival,
   UpcomingPlan,
   UsagePayload,

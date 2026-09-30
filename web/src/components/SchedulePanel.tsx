@@ -52,7 +52,7 @@ function CronField({ cron, onCron }: { cron: string; onCron: (cron: string) => v
       <ul className="sched-examples">
         {EXAMPLES.map((example) => (
           <li key={example.cron}>
-            <Button ghost size="small" onClick={() => onCron(example.cron)}>
+            <Button ghost size="small" usage="schedule.edit" onClick={() => onCron(example.cron)}>
               <code>{example.cron}</code> {example.label}
             </Button>
           </li>
@@ -84,6 +84,7 @@ function ScheduleList({ schedules, onChanged }: { schedules: JobSchedule[]; onCh
           </span>
           <AsyncButton
             ghost
+            usage={{ counted: 'job.create' }}
             onClick={() => api.runSchedule(schedule.id).then(onChanged)}
             title="Queue this schedule's job now, without moving its next run"
           >
@@ -91,6 +92,7 @@ function ScheduleList({ schedules, onChanged }: { schedules: JobSchedule[]; onCh
           </AsyncButton>
           <AsyncButton
             ghost
+            usage={schedule.enabled ? 'schedule.stop' : 'schedule.undo'}
             onClick={() => api.updateSchedule(schedule.id, { enabled: !schedule.enabled }).then(onChanged)}
             title={schedule.enabled ? 'Stop firing, keep the recurrence' : 'Start firing again from now'}
           >
@@ -99,6 +101,7 @@ function ScheduleList({ schedules, onChanged }: { schedules: JobSchedule[]; onCh
           <ConfirmButton
             ghost
             size="small"
+            usage="schedule.abandon"
             label="delete"
             confirmLabel="delete?"
             title="Forget this recurrence — the jobs it already queued are untouched"
@@ -135,7 +138,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
   return (
     <div className="launch sched">
       <div className="launch-head">
-        <Button ghost onClick={() => setOpen((o) => !o)}>
+        <Button ghost usage={open ? 'schedule.close' : 'schedule.expand'} onClick={() => setOpen((o) => !o)}>
           <ClockMark />
           {open ? '× New schedule' : '+ New schedule'}
         </Button>
@@ -180,7 +183,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
                 <option value="desk">desk agent</option>
               </select>
             </label>
-            <SubmitButton phase={submit.phase} tone="primary">
+            <SubmitButton phase={submit.phase} tone="primary" usage="schedule.create">
               Save schedule
             </SubmitButton>
           </div>

@@ -5,6 +5,7 @@ import type { PrPageView } from '../view/prPage.js';
 import type { OpenPullRequest, PrReviewThread, PrThreadMessage, PrThreadState, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { CONTROL_CLASS } from '../components/controls.js';
+import { BareButton } from '../components/button.js';
 import { CiMark } from '../components/CiMark.js';
 import { ReviewDetail, ReviewMark } from '../components/ReviewMark.js';
 import { PrDescription } from '../components/PrDescription.js';
@@ -206,6 +207,7 @@ function Thread({
         {canReopen && (
           <AsyncButton
             className={CONTROL_CLASS}
+            usage={reopened ? 'review-thread.undo' : 'review-thread.reject'}
             onClick={() => actions.reopenThread(page.pr.number, thread.id, !reopened)}
             title={
               reopened
@@ -339,9 +341,13 @@ function Work({ page, view, actions }: { page: PrPageView; view: CockpitView; ac
                 </span>
               </span>
               {task.agentId !== null && (
-                <button type="button" className={CONTROL_CLASS} onClick={() => actions.select(task.agentId)}>
+                <BareButton
+                  usage={{ counted: 'agent.view' }}
+                  className={CONTROL_CLASS}
+                  onClick={() => actions.select(task.agentId)}
+                >
                   Read
-                </button>
+                </BareButton>
               )}
             </div>
           ))}

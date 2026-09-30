@@ -3,7 +3,6 @@ import type { BuildReading, UpgradeAction } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
 import { HeadRow } from './panel.js';
-import { logUsage } from '../cockpit/usage.js';
 import { upgradeHeadline } from '../view/updateAsks.js';
 
 // → docs/spec/17-cockpit.md
@@ -39,7 +38,7 @@ export function BuildPanel({
             checked {relTime(standing.checkedAt, now)}
           </p>
         </div>
-        <AsyncButton ghost onClick={() => onCheck()}>
+        <AsyncButton ghost usage="upgrade.refresh" onClick={() => onCheck()}>
           Check now
         </AsyncButton>
       </header>
@@ -96,7 +95,7 @@ function Project({
           </p>
         </div>
         {canPull && (
-          <AsyncButton tone="primary" onClick={() => onPull()}>
+          <AsyncButton tone="primary" usage="project.accept" onClick={() => onPull()}>
             Pull
           </AsyncButton>
         )}
@@ -168,21 +167,15 @@ function Controls({
     return (
       <HeadRow className="build-controls">
         {intent.state === 'ready' ? (
-          <AsyncButton tone="primary" onClick={() => onUpgrade('apply')}>
+          <AsyncButton tone="primary" usage={{ counted: 'upgrade.accept' }} onClick={() => onUpgrade('apply')}>
             Upgrade now
           </AsyncButton>
         ) : (
-          <AsyncButton onClick={() => onUpgrade('apply', { interrupt: true })}>
+          <AsyncButton usage={{ counted: 'upgrade.accept' }} onClick={() => onUpgrade('apply', { interrupt: true })}>
             Don&apos;t wait — interrupt {live} and upgrade
           </AsyncButton>
         )}
-        <AsyncButton
-          ghost
-          onClick={() => {
-            logUsage('upgrade.reject');
-            return onUpgrade('cancel');
-          }}
-        >
+        <AsyncButton ghost usage="upgrade.reject" onClick={() => onUpgrade('cancel')}>
           Cancel
         </AsyncButton>
         <p className="build-note">
@@ -196,10 +189,14 @@ function Controls({
 
   return (
     <HeadRow className="build-controls">
-      <AsyncButton tone="primary" onClick={() => onUpgrade('drain')}>
+      <AsyncButton tone="primary" usage={{ counted: 'upgrade.accept' }} onClick={() => onUpgrade('drain')}>
         {live > 0 ? `Drain and upgrade (${live} running)` : 'Upgrade'}
       </AsyncButton>
-      {live > 0 && <AsyncButton onClick={() => onUpgrade('apply', { interrupt: true })}>Upgrade now</AsyncButton>}
+      {live > 0 && (
+        <AsyncButton usage={{ counted: 'upgrade.accept' }} onClick={() => onUpgrade('apply', { interrupt: true })}>
+          Upgrade now
+        </AsyncButton>
+      )}
       <p className="build-note">
         {live > 0
           ? 'Draining pauses dispatch and waits for the fleet to finish; nothing is interrupted. Upgrading now stops ' +

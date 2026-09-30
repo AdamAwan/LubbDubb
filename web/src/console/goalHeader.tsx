@@ -186,6 +186,7 @@ function RunStateGroup({
       <ControlSegments label="Run state">
         <ControlSegment
           icon="play"
+          usage="goal.undo"
           pressed={!finished && !ended}
           onClick={() => {
             if (finished) void actions.setIssueConclusion(issue.number, null);
@@ -201,6 +202,7 @@ function RunStateGroup({
         <ControlSegment
           icon="check"
           tone="on"
+          usage={{ counted: 'goal.accept' }}
           pressed={finished}
           onClick={() => {
             if (!finished) void actions.setIssueConclusion(issue.number, 'done');
@@ -218,6 +220,7 @@ function RunStateGroup({
           <ControlSegment
             icon="stop"
             tone="danger"
+            usage="goal.expand"
             onClick={onEnd}
             title="Abandon the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
           >
@@ -228,6 +231,7 @@ function RunStateGroup({
           <ControlSegment
             icon="stop"
             tone="danger"
+            usage={{ counted: 'goal.abandon' }}
             inert
             title="This run was abandoned. Nothing more is scheduled for it."
           >
@@ -264,6 +268,7 @@ function SteerGroup({
           icon="pen"
           tone={moreWork ? 'on' : 'primary'}
           count={standing}
+          usage="goal.expand"
           onClick={onInstruct}
           title={
             standing === 0
@@ -280,6 +285,7 @@ function SteerGroup({
       <ControlButton
         icon="eye"
         tone={watched === 'watched' ? 'on' : undefined}
+        usage={watched === 'watched' ? 'ticket.reject' : 'ticket.accept'}
         onClick={() => void actions.setIssueWatched(issue.number, watched !== 'watched')}
         title={
           watched === 'watched'
@@ -298,6 +304,7 @@ function SteerGroup({
       <ControlButton
         icon="bolt"
         tone={issue.priority !== null ? 'on' : undefined}
+        usage={issue.priority === null ? 'priority.create' : 'priority.undo'}
         onClick={() => void actions.setGoalPriority(issue.number, issue.priority === null)}
         title={
           issue.priority === null
@@ -364,6 +371,7 @@ function LeaveGroup({
       {config.canFileTickets && (
         <ControlButton
           icon="bug"
+          usage="ticket.expand"
           onClick={onRaiseBug}
           title="Report that this does not work as you expect — an agent files it as a separate bug against this goal. It changes nothing about this goal's own verdict."
         >

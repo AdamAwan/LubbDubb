@@ -414,7 +414,7 @@ function QueueHead({
           default: it is the shape this surface used to have, and it is the wrong default for the
           job the surface is for. */}
       {live.length > 1 && (
-        <Button ghost size="small" className="vq-all" onClick={onAll}>
+        <Button ghost size="small" usage="validation.filter" className="vq-all" onClick={onAll}>
           {all ? 'One at a time' : 'Show all'}
         </Button>
       )}
@@ -540,7 +540,7 @@ export function ValidationDigest({
       <div className="pm-vout">
         This plan proposes the checks. What anyone saw when they ran one is recorded on the goal.
         {onOpenGoal !== null && (
-          <Button ghost size="small" onClick={onOpenGoal}>
+          <Button ghost size="small" usage={{ counted: 'goal.view' }} onClick={onOpenGoal}>
             Open the goal →
           </Button>
         )}

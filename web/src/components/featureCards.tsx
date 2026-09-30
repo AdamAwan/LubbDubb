@@ -13,6 +13,7 @@ import type {
   FeatureRollup,
 } from '../types.js';
 import { Panel } from './panel.js';
+import { BareButton } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
 import { featurePrompt } from '../cockpit/desktopLink.js';
 import { relAge } from './util.js';
@@ -155,8 +156,8 @@ function FeatureRow({
       }`}
     >
       <i className={`cn-fb-hue f${feature.slot}`} aria-hidden="true" />
-      <button
-        type="button"
+      <BareButton
+        usage="feature.filter"
         className="cn-fb-row-open"
         onClick={() => actions.setFeatureQuery({ featureCard: feature.number })}
       >
@@ -164,7 +165,7 @@ function FeatureRow({
         {feature.summary?.headline !== null && feature.summary !== null && (
           <span className="cn-fb-row-said">{feature.summary.headline}</span>
         )}
-      </button>
+      </BareButton>
       <Bar counts={feature.counts} />
       <Courts holds={holds} yoursOnly />
       <FeatureMarks feature={feature} onChanged={onAnswered} />
@@ -304,8 +305,8 @@ function GoalRow({
   return (
     <Panel density="flush" className={`cn-fb-row cn-fb-promoted${holds.you.length > 0 ? ' cn-fb-wants' : ''}`}>
       <i className="cn-fb-hue cn-fb-hue-none" aria-hidden="true" />
-      <button
-        type="button"
+      <BareButton
+        usage="feature.filter"
         className="cn-fb-row-open"
         onClick={() => actions.setFeatureQuery({ featureCard: row.number })}
       >
@@ -315,7 +316,7 @@ function GoalRow({
         ) : (
           <span className="cn-fb-row-said">“{said}”</span>
         )}
-      </button>
+      </BareButton>
       <Bar counts={countOne(row.standing)} />
       <Courts holds={holds} yoursOnly />
     </Panel>

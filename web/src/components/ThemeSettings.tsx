@@ -13,7 +13,7 @@ import {
 } from '../cockpit/theme.js';
 import { THEME_TOKENS, TOKEN_GROUPS, type ThemeToken, type TokenGroup } from '../cockpit/tokens.js';
 import { ColourField } from './ColourField.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -35,8 +35,9 @@ function PresetPicker({ preset, onChoose }: { preset: PresetId; onChoose: (id: P
             <span className="th-preset-groupn">{g.label}</span>
             <div className="th-preset-tiles">
               {PRESETS.filter((p) => p.ground === g.ground).map((p) => (
-                <button
+                <BareButton
                   key={p.id}
+                  usage="theme.edit"
                   role="radio"
                   aria-checked={preset === p.id}
                   className={`th-preset${preset === p.id ? ' on' : ''}`}
@@ -54,7 +55,7 @@ function PresetPicker({ preset, onChoose }: { preset: PresetId; onChoose: (id: P
                     <i className="th-sw" style={{ background: 'var(--accent)' }} />
                   </span>
                   <b className="th-presetn">{p.label}</b>
-                </button>
+                </BareButton>
               ))}
             </div>
           </div>
@@ -107,14 +108,15 @@ function TokenRow({
       {/* Drawn only when the row is overridden: a hundred disabled
           buttons is furniture, not an affordance. */}
       {set ? (
-        <button
+        <BareButton
+          usage="theme.undo"
           className="th-reset"
           title={`Back to ${presetLabel}`}
           aria-label={`Reset ${token.label} to ${presetLabel}`}
           onClick={onReset}
         >
           ↺
-        </button>
+        </BareButton>
       ) : (
         <span className="th-reset" />
       )}
@@ -165,10 +167,10 @@ function SaveBar({
         )}
       </span>
       <span className="th-baracts">
-        <Button ghost size="small" onClick={onRevert} disabled={!dirty}>
+        <Button ghost size="small" usage="theme.undo" onClick={onRevert} disabled={!dirty}>
           Revert unsaved
         </Button>
-        <Button size="small" onClick={onSave} disabled={!dirty}>
+        <Button size="small" usage="theme.accept" onClick={onSave} disabled={!dirty}>
           Save
         </Button>
       </span>
@@ -326,7 +328,7 @@ export function ThemeSettings() {
           Show every token
         </label>
         {changed > 0 && (
-          <Button ghost size="small" onClick={resetAll}>
+          <Button ghost size="small" usage="theme.undo" onClick={resetAll}>
             Reset to {presetLabel}
           </Button>
         )}

@@ -12,7 +12,7 @@ import type {
   OpenPullRequest,
 } from '../types.js';
 import { AgentOnIt } from './AgentOnIt.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 import { CiMark } from './CiMark.js';
 import { CommentsMark } from './CommentsMark.js';
 import { ReviewMark } from './ReviewMark.js';
@@ -58,9 +58,13 @@ function GoalLink({ number, title, actions }: { number: number; title: string; a
       <span className="cn-refs">
         <Ref to={`issue:${number}`} />
       </span>{' '}
-      <button type="button" className="cn-fb-goal" onClick={() => actions.selectGoal(`issue:${number}`)}>
+      <BareButton
+        usage={{ counted: 'goal.view' }}
+        className="cn-fb-goal"
+        onClick={() => actions.selectGoal(`issue:${number}`)}
+      >
         {title}
-      </button>
+      </BareButton>
     </>
   );
 }
@@ -114,6 +118,7 @@ export function Children({
       size="small"
       ghost={f !== filter}
       aria-pressed={f === filter}
+      usage="feature.filter"
       onClick={() => actions.setFeatureQuery({ featurePrs: f })}
     >
       {label} {n}

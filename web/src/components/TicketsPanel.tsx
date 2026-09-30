@@ -4,6 +4,7 @@ import { LIVE_WORK, widenedFor } from '../cockpit/place.js';
 import type { TicketStateFacet } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { UnrecordedWork } from './UnrecordedWork.js';
+import { BareButton } from './button.js';
 import { TicketsBoard } from './TicketsBoard.js';
 import { absDate } from './util.js';
 import { useTicketFeed } from './ticketsFeed.js';
@@ -121,13 +122,13 @@ function NarrowingNotes({
             Showing the whole history, live and frozen: nothing under <b>{widened.state}</b> is still in the tracker’s
             open set, so picking it widened <b>Tracking</b> to <b>Any</b>.
           </span>
-          <button
-            type="button"
+          <BareButton
+            usage="ticket.filter"
             onClick={() => onQuery(LIVE_WORK)}
             title="Back to what the tab opens on: every state, and only the items still in the tracker’s open set"
           >
             Back to live work
-          </button>
+          </BareButton>
         </div>
       )}
 
@@ -138,8 +139,8 @@ function NarrowingNotes({
           <span>
             Cards draw every state as a column, so the <b>State</b> narrowing to <b>{clearedState}</b> was cleared.
           </span>
-          <button
-            type="button"
+          <BareButton
+            usage="ticket.filter"
             onClick={() => {
               onQuery({ view: 'table', state: clearedState });
               onRestored();
@@ -147,7 +148,7 @@ function NarrowingNotes({
             title="Back to the table, narrowed to that state again"
           >
             Back to the table
-          </button>
+          </BareButton>
         </div>
       )}
     </>

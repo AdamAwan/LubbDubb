@@ -5,6 +5,7 @@ import type { Issue, OpenPullRequest, QueueItem, SupplyState } from '../types.js
 import { buildGoalPage, furthestEnvironment, type GoalTrack } from '../view/goalPage.js';
 import { buildGoalTrack } from '../view/goalStages.js';
 import { Ref } from '../components/refs.js';
+import { BareButton } from '../components/button.js';
 import { StaleChip } from './goalChips.js';
 import { OverviewSwitch } from './overviews/OverviewSwitch.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -33,6 +34,20 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
 
 const FLEET_ROWS = 7;
 
+function EndedToggle({ total, open, onToggle }: { total: number; open: boolean; onToggle: () => void }): JSX.Element {
+  return (
+    <BareButton
+      usage={open ? 'agent.close' : 'agent.expand'}
+      className={`cn-more ${total === 0 ? 'cn-quiet' : ''}`}
+      onClick={onToggle}
+      title="Shifts that have ended — the agents no longer running"
+      aria-expanded={open}
+    >
+      {total} shift{total === 1 ? '' : 's'} ended {open ? '⌄' : '›'}
+    </BareButton>
+  );
+}
+
 function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showEnded, setShowEnded] = useState(false);
   const ended = view.past;
@@ -57,15 +72,7 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
     <section className="cn-card cn-span2 cn-fleet">
       <h3>
         Fleet <FleetCount view={view} />
-        <button
-          type="button"
-          className={`cn-more ${endedTotal === 0 ? 'cn-quiet' : ''}`}
-          onClick={() => setShowEnded(!showEnded)}
-          title="Shifts that have ended — the agents no longer running"
-          aria-expanded={showEnded}
-        >
-          {endedTotal} shift{endedTotal === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
-        </button>
+        <EndedToggle total={endedTotal} open={showEnded} onToggle={() => setShowEnded(!showEnded)} />
       </h3>
       {view.live.length === 0 && desk.length === 0 && readying.length === 0 && ejected.length === 0 && (
         <p className="cn-empty">Nobody is out.</p>
@@ -129,23 +136,27 @@ function UpNextHead({
         control: (
           <>
             {queued.length > shown && (
-              <button type="button" className="cn-group-more" onClick={() => actions.openPanel('upnext')}>
+              <BareButton
+                usage={{ counted: 'queue.view' }}
+                className="cn-group-more"
+                onClick={() => actions.openPanel('upnext')}
+              >
                 All {queued.length} →
-              </button>
+              </BareButton>
             )}
             {/* The queue's *cause*: what the harness does next is decided off
                 what the world just did, so this links to the signal feed
                 rather than repeating the queue. No count — the sentence is
                 the point, not a figure. Always drawn, even on an empty queue.
                 → `WorldSignals` */}
-            <button
-              type="button"
+            <BareButton
+              usage={{ counted: 'signal.view' }}
               className="cn-group-more"
               onClick={() => actions.openPanel('signals')}
               title="What the world did — the feed these dispatch decisions are taken off"
             >
               Up next is determined by world signals →
-            </button>
+            </BareButton>
           </>
         ),
       }}
@@ -237,14 +248,14 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
             {orphans} with no Feature
           </i>
         )}
-        <button
-          type="button"
+        <BareButton
+          usage={showKept ? 'goal.close' : 'goal.expand'}
           className={`cn-more ${kept.length === 0 ? 'cn-quiet' : ''}`}
           onClick={() => setShowKept(!showKept)}
           title="Runs the harness still holds on closed tickets, with nothing left in flight — open one to dismiss it"
         >
           {kept.length} kept {showKept ? '⌄' : '›'}
-        </button>
+        </BareButton>
       </h3>
       {goals.length === 0 && !showKept && <p className="cn-empty">No goal is in flight.</p>}
       {showKept && kept.length === 0 && <p className="cn-empty">No run is being kept.</p>}
@@ -281,7 +292,7 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
     key: String(issue.number),
     title: `#${issue.number} ${issue.title}`,
     className: `cn-goal-row ${orphan === null ? '' : 'cn-row-orphan'}`,
-    open: () => actions.selectGoal(ref),
+    open: { usage: { counted: 'goal.view' }, go: () => actions.selectGoal(ref) },
     openTitle: `Open goal #${issue.number} — its plan, its pull requests and anything it is asking you`,
     refs: null,
     facts: [

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { USAGE_COPY } from '../src/usage/eventCopy.js';
 import {
-  USAGE_COPY,
   USAGE_SUBJECTS,
   VERBS_BY_SUBJECT,
   usageEventSource,

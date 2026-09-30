@@ -86,6 +86,7 @@ function AreaPathAsk({
       </p>
       <ButtonRow bar>
         <AsyncButton
+          usage="placement.accept"
           tone="primary"
           onClick={() => actions.setIssueAreaPath(issue.number, proposed)}
           title={`File this goal under “${proposed}”`}
@@ -108,6 +109,7 @@ function AreaPathAsk({
               ))}
             </select>
             <AsyncButton
+              usage="placement.edit"
               disabled={chosen === ''}
               onClick={() => actions.setIssueAreaPath(issue.number, chosen)}
               title="File this goal under the area you picked"
@@ -117,6 +119,7 @@ function AreaPathAsk({
           </>
         )}
         <AsyncButton
+          usage="placement.reject"
           onClick={() => actions.setIssueAreaPath(issue.number, null)}
           title="This goal wants no area path — stop asking"
         >

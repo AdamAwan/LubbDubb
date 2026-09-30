@@ -81,7 +81,7 @@ export function NotificationSettings() {
       {permission === 'granted' ? (
         <GrantedControls prefs={prefs} write={write} onTest={runTest} />
       ) : (
-        <Button size="small" disabled={permission === 'denied'} onClick={() => void turnOn()}>
+        <Button size="small" usage="notification.edit" disabled={permission === 'denied'} onClick={() => void turnOn()}>
           Enable notifications
         </Button>
       )}
@@ -123,7 +123,7 @@ function GrantedControls({
             </span>
           </label>
         ))}
-      <Button size="small" className="settings-test" onClick={onTest}>
+      <Button size="small" usage="notification.send" className="settings-test" onClick={onTest}>
         Send a test notification
       </Button>
     </>

@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import type { JSX, ReactNode } from 'react';
+import type { ControlUsage } from '../types.js';
 import { HeadRow } from './panel.js';
 import { Button } from './button.js';
+import { logControl } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -10,6 +12,7 @@ export function Modal({
   className,
   label,
   title,
+  closeUsage,
   lead,
   chips,
   foot,
@@ -19,16 +22,21 @@ export function Modal({
   face: ModalFace;
   className?: string;
   label?: string;
-  title?: ReactNode;
   lead?: ReactNode;
   chips?: ReactNode;
   foot?: ReactNode;
+  title?: ReactNode;
+  closeUsage: ControlUsage;
   onClose: () => void;
   children?: ReactNode;
 }): JSX.Element {
-  const latest = useRef(onClose);
+  const dismiss = (): void => {
+    logControl(closeUsage);
+    onClose();
+  };
+  const latest = useRef(dismiss);
   useEffect(() => {
-    latest.current = onClose;
+    latest.current = dismiss;
   });
   useEffect(() => armDismiss(() => latest.current()), []);
 
@@ -36,7 +44,7 @@ export function Modal({
   const Surface = element;
   const name = label ?? (typeof title === 'string' ? title : undefined);
   return (
-    <div className={backdrop} role="presentation" onClick={onClose}>
+    <div className={backdrop} role="presentation" onClick={dismiss}>
       <Surface
         className={className === undefined ? surface : `${surface} ${className}`}
         role="dialog"
@@ -49,7 +57,7 @@ export function Modal({
             {lead}
             <span className="pm-title">{title}</span>
             {chips}
-            <Button ghost size="small" className="pm-close" onClick={onClose}>
+            <Button ghost size="small" usage={closeUsage} className="pm-close" onClick={onClose}>
               close
             </Button>
           </HeadRow>

@@ -1,7 +1,8 @@
 import type { CockpitView } from '../view/viewModel.js';
-import type { EnvironmentHealthReading } from '../types.js';
+import type { ControlUsage, EnvironmentHealthReading } from '../types.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { fmtUsd, relTime } from '../components/util.js';
+import { panelUsage } from '../cockpit/usage.js';
 import { signalRows } from './WorldSignals.js';
 
 // → docs/spec/17-cockpit.md
@@ -152,6 +153,7 @@ interface MenuEntry extends MenuReading {
   icon: 'alert' | 'rocket' | 'download' | 'globe' | 'bolt' | 'book' | 'gear';
   label: string;
   pending?: boolean;
+  usage: ControlUsage;
   onPick: () => void;
 }
 
@@ -168,6 +170,7 @@ function envEntries(view: CockpitView, actions: CockpitActions): MenuEntry[] {
       tone: env.tone,
       quiet: env.quiet,
       title: env.title,
+      usage: panelUsage('environments'),
       onPick: () => actions.openPanel('environments'),
     },
   ];
@@ -187,6 +190,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       tone: faults === 0 ? null : 'ill',
       quiet: faults === 0,
       title: 'Recorded faults — open the fault log',
+      usage: panelUsage('faults'),
       onPick: () => actions.openPanel('faults'),
     },
     {
@@ -197,6 +201,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       tone: null,
       quiet: queued === 0,
       title: 'Briefs waiting for a free slot — open the launch desk',
+      usage: panelUsage('launch'),
       onPick: () => actions.openPanel('launch'),
     },
     {
@@ -207,6 +212,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       tone: build.tone,
       quiet: build.quiet,
       title: build.title,
+      usage: panelUsage('build'),
       onPick: () => actions.openPanel('build'),
     },
     ...envEntries(view, actions),
@@ -218,6 +224,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       tone: null,
       quiet: signals === 0,
       title: 'What the world did — the feed the queue is decided off',
+      usage: panelUsage('signals'),
       onPick: () => actions.openPanel('signals'),
     },
     {
@@ -228,6 +235,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       tone: null,
       quiet: false,
       title: 'What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked',
+      usage: panelUsage('record'),
       onPick: () => actions.openPanel('record'),
     },
     {
@@ -241,6 +249,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       title: themeUnsaved
         ? 'Config — an unsaved theme edit is pending; a reload drops it'
         : 'Config — how this harness is configured',
+      usage: { counted: 'config.view' },
       onPick: () => actions.openConfig({}),
     },
   ];

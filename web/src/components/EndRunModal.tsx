@@ -42,15 +42,17 @@ export function EndRunModal({
       face="modal"
       title="Abandon the run"
       lead={<Tag>#{issueNumber}</Tag>}
+      closeUsage="goal.close"
       onClose={onClose}
       foot={
         <>
           <span className="spacer" />
-          <Button ghost onClick={onClose}>
+          <Button ghost usage="goal.close" onClick={onClose}>
             cancel
           </Button>
           <AsyncButton
             tone="danger"
+            usage={{ counted: 'goal.abandon' }}
             disabled={required && trimmed.length === 0}
             onRefused={setRefusal}
             onClick={submit}

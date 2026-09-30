@@ -4,7 +4,8 @@ import type { PoolDigestMirrorRow } from '../store/pool.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { choiceLabel } from '../insights/choiceInsights.js';
-import { USAGE_COPY, type UsageEvent } from '../usage/events.js';
+import type { UsageEvent } from '../usage/events.js';
+import { USAGE_COPY } from '../usage/eventCopy.js';
 
 // → docs/spec/28-cross-fleet-pool.md
 

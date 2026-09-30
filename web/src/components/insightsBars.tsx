@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import type { InsightsWindowView, PoolInsightsPayload } from '../types.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { Label } from './label.js';
-import { logUsage } from '../cockpit/usage.js';
+import { BareButton } from './button.js';
 
 export function PoolBar({
   payload,
@@ -18,30 +18,24 @@ export function PoolBar({
     <>
       <Label dense>Project</Label>
       <div className="insights-win" role="group" aria-label="Project">
-        <button
-          type="button"
+        <BareButton
+          usage="pool.filter"
           aria-pressed={project === null}
           className={project === null ? 'on' : ''}
-          onClick={() => {
-            logUsage('pool.filter');
-            actions.openInsights({ poolProject: null });
-          }}
+          onClick={() => actions.openInsights({ poolProject: null })}
         >
           All
-        </button>
+        </BareButton>
         {(payload?.projects ?? []).map((name) => (
-          <button
+          <BareButton
             key={name}
-            type="button"
+            usage="pool.filter"
             aria-pressed={name === project}
             className={name === project ? 'on' : ''}
-            onClick={() => {
-              logUsage('pool.filter');
-              actions.openInsights({ poolProject: name });
-            }}
+            onClick={() => actions.openInsights({ poolProject: name })}
           >
             {name}
-          </button>
+          </BareButton>
         ))}
       </div>
       {/* The pool ignores the window bar: the digest's bucket is a UTC day and its

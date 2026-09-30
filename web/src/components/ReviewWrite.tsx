@@ -4,7 +4,6 @@ import type { ConfigChange, RunningConfigPayload } from '../types.js';
 import type { Staged } from './ConfigValues.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
-import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -34,7 +33,6 @@ export function ReviewWrite({
     setBusy(true);
     setRefusal(null);
     try {
-      logUsage('config.edit');
       const result = await api.saveConfig({ set: staged.set, clear: staged.clear, baseline: payload.revision });
       onWrote(result.changes);
     } catch (err) {
@@ -54,7 +52,7 @@ export function ReviewWrite({
           </span>
         </div>
         <div className="cfg-headacts">
-          <Button ghost size="small" onClick={onCancel}>
+          <Button ghost size="small" usage="config.filter" onClick={onCancel}>
             Back to values
           </Button>
         </div>
@@ -143,10 +141,10 @@ function EffectsCard({
         <span className="cfg-src ok">kept</span>
       </div>
       <div className="cfg-foot cfg-footacts">
-        <Button ghost size="small" onClick={onCancel}>
+        <Button ghost size="small" usage="config.filter" onClick={onCancel}>
           Cancel
         </Button>
-        <Button tone="primary" size="small" disabled={busy} onClick={onWrite}>
+        <Button tone="primary" size="small" usage="config.edit" disabled={busy} onClick={onWrite}>
           {busy ? 'Writing…' : 'Write'}
         </Button>
       </div>

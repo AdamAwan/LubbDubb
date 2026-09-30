@@ -12,7 +12,7 @@ import { PromptsTab } from './PromptsTab.js';
 import { RawConfigTab } from './RawConfigTab.js';
 import { ReviewWrite } from './ReviewWrite.js';
 import { ThemeSettings } from './ThemeSettings.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -127,7 +127,7 @@ function ConfigHead({ payload, onReload }: { payload: RunningConfigPayload; onRe
         </span>
       </div>
       <div className="cfg-headacts">
-        <Button ghost size="small" onClick={onReload}>
+        <Button ghost size="small" usage="config.refresh" onClick={onReload}>
           Reload from disk
         </Button>
       </div>
@@ -149,8 +149,9 @@ function ConfigTabs({
   return (
     <div className="cfg-tabs" role="tablist">
       {TABS.map((entry) => (
-        <button
+        <BareButton
           key={entry.id}
+          usage="config.filter"
           role="tab"
           aria-selected={tab === entry.id}
           className={`cfg-tab${tab === entry.id ? ' on' : ''}`}
@@ -166,7 +167,7 @@ function ConfigTabs({
               &#9679;
             </i>
           )}
-        </button>
+        </BareButton>
       ))}
     </div>
   );

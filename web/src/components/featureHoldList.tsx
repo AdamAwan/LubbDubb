@@ -4,6 +4,7 @@ import type { FeatureHold, FeatureHolds } from '../view/featureHolds.js';
 import { Ref } from './refs.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import type { Destination } from './button.js';
 import { relAge } from './util.js';
 
 export function Courts({ holds, yoursOnly }: { holds: FeatureHolds; yoursOnly?: boolean }): JSX.Element | null {
@@ -111,7 +112,7 @@ function HoldRow({
         )}
       </div>
       {open !== null && (
-        <Button size="small" onClick={open}>
+        <Button size="small" usage={open.usage} onClick={open.go}>
           {hold.needId !== null ? 'Answer' : 'Open'}
         </Button>
       )}
@@ -138,19 +139,19 @@ function HoldAbout({
   );
 }
 
-function openHold(hold: FeatureHold, actions: CockpitActions): (() => void) | null {
+function openHold(hold: FeatureHold, actions: CockpitActions): Destination | null {
   if (hold.needId !== null) {
     const id = hold.needId;
-    return () => actions.openPanel({ ask: id });
+    return { go: () => actions.openPanel({ ask: id }), usage: { counted: 'escalation.view' } };
   }
   const pr = /^pr:(\d+)$/.exec(hold.ref ?? '');
   if (pr) {
     const n = Number(pr[1]);
-    return () => actions.selectPr(n);
+    return { go: () => actions.selectPr(n), usage: { counted: 'pr.view' } };
   }
   if (hold.ref !== null && /^issue:\d+$/.test(hold.ref)) {
     const ref = hold.ref;
-    return () => actions.selectGoal(ref);
+    return { go: () => actions.selectGoal(ref), usage: { counted: 'goal.view' } };
   }
   return null;
 }

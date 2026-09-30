@@ -9,7 +9,7 @@ import type {
   TenantPreparation,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { ExtLink } from './util.js';
 import { HeadRow } from './panel.js';
@@ -94,6 +94,7 @@ export function RemoteValidationSection({
           {sheets.map((sheet) => (
             <Button
               key={sheet.environment}
+              usage="validation.filter"
               onClick={() => onShow(sheet.environment)}
               title={`The sheet assembled against ${sheet.environment}`}
             >
@@ -179,10 +180,13 @@ function Gate({
       </HeadRow>
       <div className="cn-sig-ctrls">
         {live ? (
-          <AsyncButton onClick={() => controls.onCancel(sheet.environment)}>Call this run off</AsyncButton>
+          <AsyncButton usage="validation.stop" onClick={() => controls.onCancel(sheet.environment)}>
+            Call this run off
+          </AsyncButton>
         ) : (
           press && (
             <AsyncButton
+              usage="validation.create"
               onClick={() => controls.onPress(sheet.environment)}
               title={`Re-read every selected row against the commit ${sheet.environment} stands at right now`}
             >
@@ -216,6 +220,7 @@ export function ReseedControl({
   if (!tenant.destructive)
     return (
       <AsyncButton
+        usage="environment.edit"
         onClick={onReseed}
         title="Provision this environment’s tenant with its own command — the harness never invents a tenant name"
       >
@@ -224,6 +229,7 @@ export function ReseedControl({
     );
   return (
     <ConfirmButton
+      usage="environment.edit"
       label="Reseed the tenant"
       confirmLabel={
         tenant.tenant === null ? 'Confirm — this destroys its data' : `Confirm — this destroys ${tenant.tenant}’s data`
@@ -376,13 +382,16 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
       <div className="cn-sig-ctrls">
         {row.awaitingApproval && (
           <>
-            <AsyncButton onClick={() => controls.onRule(row.environment, row.rowId, true)}>
+            <AsyncButton usage="validation.create" onClick={() => controls.onRule(row.environment, row.rowId, true)}>
               Accept &amp; run
             </AsyncButton>
-            <AsyncButton onClick={() => controls.onRule(row.environment, row.rowId, false)}>Decline</AsyncButton>
+            <AsyncButton usage="validation.edit" onClick={() => controls.onRule(row.environment, row.rowId, false)}>
+              Decline
+            </AsyncButton>
           </>
         )}
         <AsyncButton
+          usage="validation.edit"
           onClick={() => controls.onSelect(row.environment, row.rowId, !row.selected)}
           title={
             row.selected
@@ -428,14 +437,14 @@ function Measured({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
             </ExtLink>
           )}
           {agentId !== null && (
-            <button
-              type="button"
+            <BareButton
+              usage={{ counted: 'agent.view' }}
               className="cn-openagent"
               title="Open the agent that ran this row — everything it did, and what it cost"
               onClick={() => controls.onOpenAgent(agentId)}
             >
               the agent that ran it ↗
-            </button>
+            </BareButton>
           )}
         </span>
       )}

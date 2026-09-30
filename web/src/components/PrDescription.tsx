@@ -7,9 +7,8 @@ import type {
   PrDescriptionVersion,
 } from '../types.js';
 import { descriptionPrompt } from '../cockpit/desktopLink.js';
-import { logUsage } from '../cockpit/usage.js';
 import { AsyncButton } from './AsyncButton.js';
-import { buttonClass } from './button.js';
+import { Button } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
 import { relTime } from './util.js';
 import { Tag } from './tag.js';
@@ -103,7 +102,7 @@ function Checked({
       {/* → docs/spec/07-pull-requests.md#leaving-it-as-is */}
       {version.findings.length > 0 && version.dismissedAt === null && (
         <div className="cn-desc-presses">
-          <AsyncButton ghost onClick={onDismiss}>
+          <AsyncButton usage="pr-description.waive" ghost onClick={onDismiss}>
             Leave it as is
           </AsyncButton>
         </div>
@@ -295,10 +294,10 @@ function DescriptionForm({
       </div>
       {refusal !== null && <p className="cn-desc-refusal">{refusal}</p>}
       <div className="cn-desc-presses">
-        <button type="button" className={buttonClass({ ghost: true })} onClick={onCancel}>
+        <Button usage="pr-description.close" ghost onClick={onCancel}>
           Cancel
-        </button>
-        <AsyncButton tone="primary" onClick={onSubmit}>
+        </Button>
+        <AsyncButton usage={{ counted: 'pr-description.create' }} tone="primary" onClick={onSubmit}>
           Save it
         </AsyncButton>
       </div>
@@ -337,23 +336,33 @@ function DescriptionPresses({
       {/* Primary only where nobody has written one. A rewrite is one way on from
           a page that already carries a description, and drawn as the act the
           page is asking for it reads as work owed on every pull request. */}
-      <button
-        type="button"
-        className={buttonClass(current === null && handedOver === null ? { tone: 'primary' } : {})}
+      <Button
+        usage="pr-description.expand"
+        tone={current === null && handedOver === null ? 'primary' : undefined}
         onClick={onWrite}
       >
         {writeLabel(current, handedOver)}
-      </button>
+      </Button>
       {/* The agent's body, on this one pull request and only on a press. */}
       {hiddenDraft !== null && (
-        <button type="button" className={buttonClass({ ghost: true })} onClick={() => setRevealed(!revealed)}>
+        <Button
+          usage={revealed ? 'pr-description.close' : 'pr-description.expand'}
+          ghost
+          onClick={() => setRevealed(!revealed)}
+        >
           {revealed ? 'Hide the agent’s draft' : 'Reveal the agent’s draft'}
-        </button>
+        </Button>
       )}
-      {hiddenDraft !== null && <AsyncButton onClick={handOff}>Use the agent&rsquo;s</AsyncButton>}
+      {hiddenDraft !== null && (
+        <AsyncButton usage="pr-description.accept" onClick={handOff}>
+          Use the agent&rsquo;s
+        </AsyncButton>
+      )}
       {/* No draft to use: the agent sent no body, so one is dispatched to write it. */}
       {current === null && handedOver === null && hiddenDraft === null && (
-        <AsyncButton onClick={handOff}>Hand it to the agent</AsyncButton>
+        <AsyncButton usage="pr-description.accept" onClick={handOff}>
+          Hand it to the agent
+        </AsyncButton>
       )}
       {/* The check is the operator's own Claude Code rather than a dispatched
           agent, because what follows the report is an argument and an argument on
@@ -423,7 +432,6 @@ export function PrDescription({
 
   const handOff = async (): Promise<void> => {
     await api.handOffPrDescription(prNumber);
-    logUsage('pr-description.accept');
     await held.reload();
   };
 

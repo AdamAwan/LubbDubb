@@ -21,7 +21,7 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
     <div className="inject">
       <Label>Inject event:</Label>
       <DemoEventButtons world={world} inject={inject} />
-      <Button ghost onClick={() => setOpen((o) => !o)}>
+      <Button ghost usage={open ? 'demo.close' : 'demo.expand'} onClick={() => setOpen((o) => !o)}>
         {open ? 'Hide raw' : 'Raw JSON'}
       </Button>
       {open && (
@@ -44,7 +44,7 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
           />
-          <SubmitButton phase={rawSubmit.phase} tone="primary">
+          <SubmitButton phase={rawSubmit.phase} tone="primary" usage="demo.create">
             Inject
           </SubmitButton>
         </form>
@@ -61,16 +61,18 @@ function DemoEventButtons({ world, inject }: { world: WorldSnapshot; inject: (ev
   return (
     <>
       <AsyncButton
+        usage="demo.create"
         onClick={() =>
           inject({ kind: 'new_pr', number: nextPr, title: `Feature PR #${nextPr}`, branch: `feature/pr-${nextPr}` })
         }
       >
         + PR #{nextPr}
       </AsyncButton>
-      <AsyncButton onClick={() => inject({ kind: 'ci_failed', prNumber: firstPr })}>
+      <AsyncButton usage="demo.create" onClick={() => inject({ kind: 'ci_failed', prNumber: firstPr })}>
         CI failed on #{firstPr}
       </AsyncButton>
       <AsyncButton
+        usage="demo.create"
         onClick={() =>
           inject({
             kind: 'pr_comment',
@@ -83,17 +85,21 @@ function DemoEventButtons({ world, inject }: { world: WorldSnapshot; inject: (ev
         Comment on #{firstPr}
       </AsyncButton>
       <AsyncButton
+        usage="demo.create"
         onClick={() =>
           inject({ kind: 'new_issue', number: nextIssue, title: `Bug report #${nextIssue}`, labels: ['bug'] })
         }
       >
         + Issue #{nextIssue}
       </AsyncButton>
-      <AsyncButton onClick={() => inject({ kind: 'pr_approved', prNumber: firstPr })}>Approve #{firstPr}</AsyncButton>
-      <AsyncButton onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr })}>
+      <AsyncButton usage="demo.create" onClick={() => inject({ kind: 'pr_approved', prNumber: firstPr })}>
+        Approve #{firstPr}
+      </AsyncButton>
+      <AsyncButton usage="demo.create" onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr })}>
         Mergeable #{firstPr}
       </AsyncButton>
       <AsyncButton
+        usage="demo.create"
         onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr, mergeable: false, mergeableState: 'dirty' })}
       >
         Conflict #{firstPr}

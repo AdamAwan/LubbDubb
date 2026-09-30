@@ -2,6 +2,7 @@ import type { PetState } from '../types.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { PetSprite } from '../components/PetSprite.js';
 import { absDate } from '../components/util.js';
+import { BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -37,8 +38,8 @@ export function Vivarium({
   return (
     <div className="cn-viv">
       <PetFloor pets={pets} runningAgents={runningAgents} paused={paused} onOpen={onOpen} onHatch={onHatch} />
-      <button
-        type="button"
+      <BareButton
+        usage={{ counted: 'pet.view' }}
         className="cn-viv-bar"
         onClick={onOpen}
         title="Pets — your collection, and what the vivarium is and how it fills"
@@ -62,7 +63,7 @@ export function Vivarium({
         ) : null}
         <span className="cn-viv-beats">{pets.wallet.balance.toLocaleString()} beats</span>
         <i className="cn-viv-chev">›</i>
-      </button>
+      </BareButton>
       {/* Under the bar rather than in it, and not a control: the bar is a button,
           and this is a fact about the deployment with nowhere of its own to go.
           It is here at all because this corner is where "nothing has hatched" is
@@ -106,25 +107,31 @@ export function PetFloor({
   return (
     <div className="cn-viv-floor">
       {placed.length === 0 ? (
-        <button type="button" className="cn-viv-empty" onClick={onOpen}>
+        <BareButton usage={{ counted: 'pet.view' }} className="cn-viv-empty" onClick={onOpen}>
           Nothing has hatched yet
-        </button>
+        </BareButton>
       ) : (
         placed.map((pet) =>
           pet.openedAt === null ? (
-            <button
+            <BareButton
               key={pet.id}
-              type="button"
+              usage={{ counted: 'pet.view' }}
               className="cn-viv-egg"
               title="An egg. Click to open it."
               onClick={() => onHatch(pet.id)}
             >
               <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
-            </button>
+            </BareButton>
           ) : (
-            <button key={pet.id} type="button" className="cn-viv-pet" title="Open the Pets page" onClick={onOpen}>
+            <BareButton
+              key={pet.id}
+              usage={{ counted: 'pet.view' }}
+              className="cn-viv-pet"
+              title="Open the Pets page"
+              onClick={onOpen}
+            >
               <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
-            </button>
+            </BareButton>
           ),
         )
       )}

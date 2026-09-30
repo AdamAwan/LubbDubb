@@ -13,7 +13,6 @@ import { TranscriptPane } from './TranscriptPane.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 import { ProfilePicker } from './ProfilePicker.js';
-import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -68,7 +67,7 @@ export function AgentDrawer({
   const canRespond = !limitParked && (agent.status === 'waiting' || agent.status === 'running');
 
   return (
-    <Modal face="drawer" label={task ? task.title : agent.id} onClose={onClose}>
+    <Modal face="drawer" label={task ? task.title : agent.id} closeUsage="agent.close" onClose={onClose}>
       <DrawerHead
         agent={agent}
         task={task}
@@ -92,7 +91,7 @@ export function AgentDrawer({
       {flags && flags.length > 0 && <DrawerFlags flags={flags} artifactUrls={artifactUrls} />}
       {limitParked && <ParkNotice reason={agent.waitingReason} onResume={onResume} />}
       <FilesList files={files} />
-      <TranscriptPane text={output} streamId={agent.id} label="Agent transcript" />
+      <TranscriptPane text={output} streamId={agent.id} label="Agent transcript" usage="agent.expand" />
       {canRespond && <ReplyForm text={text} setText={setText} send={send} onRespond={onRespond} />}
       {ejecting && onEject !== undefined && (
         <EjectModal
@@ -203,6 +202,7 @@ function DrawerHead({
       <div>
         {isLive && (
           <AsyncButton
+            usage="agent.send"
             onClick={onInterrupt}
             title="Send Ctrl-C"
             pendingLabel={<span className="spinner" aria-hidden />}
@@ -213,6 +213,7 @@ function DrawerHead({
         {isLive && (
           <ConfirmButton
             label="Mark done"
+            usage="agent.accept"
             confirmLabel="Confirm done"
             pendingLabel="Finishing…"
             onConfirm={onComplete}
@@ -221,14 +222,22 @@ function DrawerHead({
         {/* Drawn between the two that cost nothing and the one that throws the
             conversation away, in the order of what each costs. */}
         {isLive && onEjectOpen !== undefined && (
-          <Button onClick={onEjectOpen} title="Stop this agent and hold its work for you">
+          <Button usage="agent.expand" onClick={onEjectOpen} title="Stop this agent and hold its work for you">
             Eject…
           </Button>
         )}
         {agent.status !== 'done' && (
-          <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
+          <ConfirmButton
+            label="Kill"
+            usage={{ counted: 'agent.stop' }}
+            confirmLabel="Confirm kill"
+            pendingLabel="Killing…"
+            onConfirm={onKill}
+          />
         )}
-        <Button onClick={onClose}>Close</Button>
+        <Button usage="agent.close" onClick={onClose}>
+          Close
+        </Button>
       </div>
     </div>
   );
@@ -371,7 +380,7 @@ function ParkNotice({
   return (
     <div className="park-notice">
       <b>Parked on a usage limit.</b> {reason ?? 'This account has no usage allowance left right now.'}
-      <AsyncButton tone="primary" onClick={onResume} pendingLabel="Resuming…">
+      <AsyncButton tone="primary" usage="agent.send" onClick={onResume} pendingLabel="Resuming…">
         Resume
       </AsyncButton>
     </div>
@@ -396,7 +405,6 @@ function ReplyForm({
         e.preventDefault();
         const value = text.trim();
         if (!value) return;
-        logUsage('agent.send');
         void send.run(async () => {
           await onRespond(value);
           setText('');
@@ -404,7 +412,7 @@ function ReplyForm({
       }}
     >
       <input placeholder="Type into this agent…" value={text} onChange={(e) => setText(e.target.value)} />
-      <SubmitButton phase={send.phase} tone="primary">
+      <SubmitButton phase={send.phase} tone="primary" usage="agent.send">
         Send
       </SubmitButton>
     </form>

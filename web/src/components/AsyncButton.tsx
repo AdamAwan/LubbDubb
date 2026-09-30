@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { buttonClass } from './button.js';
-import type { ButtonLook } from './button.js';
+import { BareButton, buttonClass } from './button.js';
+import type { ButtonLook, Usage } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -89,12 +89,12 @@ export function AsyncButton({
   disabled?: boolean;
   pendingLabel?: ReactNode;
 } & ButtonLook &
-  Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'disabled' | 'children'>) {
+  Usage &
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'disabled' | 'children' | 'type'>) {
   const { phase, refusal, run } = useAsyncAction();
   const cls = buttonClass({ tone, ghost, size, className }, flashClass(phase));
   return (
-    <button
-      type="button"
+    <BareButton
       {...rest}
       className={cls}
       title={refusal ?? rest.title}
@@ -121,11 +121,12 @@ export function AsyncButton({
       ) : (
         <>{children}</>
       )}
-    </button>
+    </BareButton>
   );
 }
 
 export function SubmitButton({
+  usage,
   phase,
   children,
   tone,
@@ -135,12 +136,19 @@ export function SubmitButton({
 }: {
   phase: AsyncPhase;
   children: ReactNode;
-} & ButtonLook) {
+} & ButtonLook &
+  Usage) {
   const cls = buttonClass({ tone, ghost, size, className }, flashClass(phase));
   return (
-    <button type="submit" className={cls} disabled={phase === 'pending'} aria-busy={phase === 'pending'}>
+    <BareButton
+      usage={usage}
+      type="submit"
+      className={cls}
+      disabled={phase === 'pending'}
+      aria-busy={phase === 'pending'}
+    >
       {phase === 'pending' && <span className="spinner" aria-hidden />}
       {children}
-    </button>
+    </BareButton>
   );
 }

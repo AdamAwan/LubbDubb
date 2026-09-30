@@ -1,4 +1,6 @@
 import type { JSX, ReactNode } from 'react';
+import type { ControlUsage } from '../types.js';
+import { BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md#the-panes
 
@@ -30,12 +32,14 @@ export interface PanelTab {
 export function TabbedPanel({
   tabs,
   selected,
+  usage,
   onSelect,
   label,
   children,
 }: {
   tabs: readonly PanelTab[];
   selected: string;
+  usage: ControlUsage;
   onSelect: (id: string) => void;
   /** Names the row for a screen reader — what this set of tabs is about. */
   label: string;
@@ -45,9 +49,10 @@ export function TabbedPanel({
     <div className="cn-tabp">
       <div className="cn-tabp-bar" role="tablist" aria-label={label}>
         {tabs.map((t) => (
-          <button
+          <BareButton
             key={t.id}
-            type="button"
+            usage={usage}
+            logs={t.id !== selected}
             role="tab"
             id={`cn-tab-${t.id}`}
             aria-selected={t.id === selected}
@@ -66,7 +71,7 @@ export function TabbedPanel({
                 {t.meter !== null && <i style={{ width: `${t.meter}%` }} />}
               </span>
             )}
-          </button>
+          </BareButton>
         ))}
       </div>
       <div

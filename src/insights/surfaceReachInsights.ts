@@ -46,6 +46,8 @@ export function buildSurfaceReach({ rows, everLinked, window }: SurfaceReachRead
   };
 }
 
+const PASSING: ReadonlySet<UsageVerb> = new Set(['view', 'close']);
+
 function row(
   subject: UsageSubject,
   inside: readonly SurfaceReach[],
@@ -54,7 +56,7 @@ function row(
 ): SurfaceRow {
   const mine = inside.filter((r) => r.subject === subject);
   const views = mine.filter((r) => r.verb === 'view');
-  const operations = mine.length - views.length;
+  const operations = mine.filter((r) => !PASSING.has(r.verb)).length;
   const linkedViews = views.filter((r) => r.arrival === 'linked').length;
   const counts = new Map<UsageVerb, number>();
   for (const r of mine) if (r.verb !== 'view') counts.set(r.verb, (counts.get(r.verb) ?? 0) + 1);

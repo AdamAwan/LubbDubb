@@ -135,6 +135,7 @@ function OutputFold({
           streamId={`${environment} ${launchedAt}`}
           label={`Tenant command output on ${environment}`}
           className="compact"
+          usage="environment.expand"
         />
       ) : (
         <p className="lrun-note">Nothing printed yet.</p>

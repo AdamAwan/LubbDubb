@@ -5,6 +5,7 @@ import { petLabel, speciesKnown } from '../pets/reveal.js';
 import { PetSprite } from './PetSprite.js';
 import { relTime } from './util.js';
 import { Panel } from './panel.js';
+import { BareButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -52,14 +53,7 @@ export function PetsCollection({
         </p>
       </div>
 
-      {gone === 0 ? null : (
-        <div className="pets-gone">
-          <button type="button" className="ghost small" aria-pressed={blended} onClick={() => onShowBlended(!blended)}>
-            {blended ? 'Hide' : 'Show'} blended
-          </button>
-          <span className="muted small">{gone} blended back into beats. Their record stays either way.</span>
-        </div>
-      )}
+      {gone === 0 ? null : <BlendedToggle gone={gone} blended={blended} onShowBlended={onShowBlended} />}
 
       {pets.pets.length === 0 ? (
         <p className="muted">
@@ -90,6 +84,30 @@ export function PetsCollection({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function BlendedToggle({
+  gone,
+  blended,
+  onShowBlended,
+}: {
+  gone: number;
+  blended: boolean;
+  onShowBlended: (show: boolean) => void;
+}) {
+  return (
+    <div className="pets-gone">
+      <BareButton
+        usage="pet.filter"
+        className="ghost small"
+        aria-pressed={blended}
+        onClick={() => onShowBlended(!blended)}
+      >
+        {blended ? 'Hide' : 'Show'} blended
+      </BareButton>
+      <span className="muted small">{gone} blended back into beats. Their record stays either way.</span>
     </div>
   );
 }
@@ -165,9 +183,9 @@ function PetCard(props: PetCardProps) {
             in the corner of the rail is the whole point of one. */}
         {egg ? (
           <>
-            <button type="button" className="ghost small" onClick={() => props.onHatch(pet.id)}>
+            <BareButton usage="pet.expand" className="ghost small" onClick={() => props.onHatch(pet.id)}>
               Open it
-            </button>
+            </BareButton>
             <PlaceButton {...props} />
           </>
         ) : dissolved || flawed ? null : (
@@ -224,6 +242,7 @@ function PetGrowth({ pet }: { pet: PetView }) {
 function PlaceButton({ pet, full, slots, onPlace }: PetCardProps) {
   return (
     <AsyncButton
+      usage="pet.filter"
       ghost
       size="small"
       disabled={full}
@@ -247,14 +266,15 @@ function LiveActs(props: PetCardProps) {
   const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
   return (
     <>
-      <AsyncButton ghost size="small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
+      <AsyncButton usage="pet.spend" ghost size="small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
         Feed 100
       </AsyncButton>
-      <AsyncButton ghost size="small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
+      <AsyncButton usage="pet.spend" ghost size="small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
         {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
       </AsyncButton>
       <PlaceButton {...props} />
       <AsyncButton
+        usage="pet.abandon"
         ghost
         size="small"
         disabled={!duplicate}

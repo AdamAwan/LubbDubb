@@ -63,33 +63,64 @@ makes the first question above answerable.
 | `stop`    | A running thing was halted by a person                          |
 | `undo`    | A previous settle was taken back                                |
 | `send`    | Something left the harness towards a person or a tracker        |
+| `copy`    | Something was copied out of the cockpit to the clipboard        |
+| `refresh` | A fresh reading was asked for, with nothing changed             |
+| `spend`   | Beats or budget were spent on it                                |
+| `close`   | A panel, dialog or form was shut without settling anything      |
 
 Not every verb applies to every subject, and which do is declared — `VERBS_BY_SUBJECT`, exactly the
 shape and exactly the purpose of `CAUSES_BY_KIND`. An empty cell is a statement that the product
 offers no such control, and the day it does, the cell is where it is added.
 
-| Subject          | Verbs it offers                                          |
-| ---------------- | -------------------------------------------------------- |
-| `plan`           | `view` `expand` `edit` `accept` `reject` `abandon`       |
-| `goal`           | `view` `expand` `edit` `accept` `abandon`                |
-| `pr`             | `view` `accept` `send`                                   |
-| `pr-description` | `create` `accept`                                        |
-| `validation`     | `view` `expand` `accept` `reject` `defer` `waive` `undo` |
-| `escalation`     | `view` `accept` `reject` `send`                          |
-| `human-task`     | `view` `accept` `reject`                                 |
-| `ticket`         | `view` `filter` `create`                                 |
-| `feature`        | `view` `expand`                                          |
-| `agent`          | `view` `expand` `send` `stop`                            |
-| `obstacle`       | `view` `expand` `accept` `waive`                         |
-| `local-run`      | `view` `create` `stop`                                   |
-| `job`            | `view` `create` `stop`                                   |
-| `retro`          | `view`                                                   |
-| `scratchpad`     | `view` `edit`                                            |
-| `insights`       | `view` `filter`                                          |
-| `pool`           | `view` `filter`                                          |
-| `config`         | `view` `edit`                                            |
-| `upgrade`        | `view` `accept` `reject`                                 |
-| `pet`            | `view` `edit`                                            |
+| Subject          | Verbs it offers                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| `plan`           | `view` `expand` `filter` `edit` `accept` `reject` `abandon` `undo` `close`                       |
+| `goal`           | `view` `expand` `edit` `accept` `waive` `abandon` `undo` `close`                                 |
+| `pr`             | `view` `edit` `accept` `send`                                                                    |
+| `pr-description` | `expand` `create` `accept` `waive` `close`                                                       |
+| `validation`     | `view` `expand` `filter` `create` `edit` `accept` `reject` `defer` `waive` `stop` `undo` `close` |
+| `escalation`     | `view` `expand` `accept` `reject` `defer` `send` `close`                                         |
+| `human-task`     | `view` `expand` `accept` `reject`                                                                |
+| `ticket`         | `view` `expand` `filter` `create` `accept` `reject` `waive` `undo` `close`                       |
+| `feature`        | `view` `expand` `filter` `defer` `stop` `undo` `close`                                           |
+| `agent`          | `view` `expand` `edit` `accept` `reject` `abandon` `stop` `send` `close`                         |
+| `obstacle`       | `view` `expand` `accept` `reject` `waive` `stop` `undo` `close`                                  |
+| `local-run`      | `view` `expand` `filter` `create` `edit` `reject` `stop` `close`                                 |
+| `job`            | `view` `expand` `create` `edit` `stop` `close`                                                   |
+| `retro`          | `view` `close`                                                                                   |
+| `scratchpad`     | `view` `edit` `close`                                                                            |
+| `insights`       | `view` `filter` `send`                                                                           |
+| `pool`           | `view` `filter`                                                                                  |
+| `config`         | `view` `expand` `filter` `edit` `accept` `reject` `abandon` `undo` `copy` `refresh` `close`      |
+| `upgrade`        | `view` `accept` `reject` `defer` `refresh` `close`                                               |
+| `pet`            | `view` `expand` `filter` `edit` `abandon` `spend` `close`                                        |
+| `fleet`          | `view` `filter` `edit` `stop` `undo`                                                             |
+| `queue`          | `view` `close`                                                                                   |
+| `fault`          | `view` `waive` `close`                                                                           |
+| `signal`         | `view` `close`                                                                                   |
+| `environment`    | `view` `expand` `edit` `close`                                                                   |
+| `record`         | `view` `expand` `close`                                                                          |
+| `placement`      | `edit` `accept` `reject`                                                                         |
+| `profile`        | `accept` `reject`                                                                                |
+| `priority`       | `create` `undo`                                                                                  |
+| `intake`         | `expand` `edit` `accept` `waive` `abandon`                                                       |
+| `criteria`       | `expand` `edit` `abandon` `close`                                                                |
+| `prediction`     | `expand` `create` `accept` `reject` `waive` `undo` `close`                                       |
+| `sequence`       | `accept` `reject`                                                                                |
+| `watch`          | `expand` `create` `edit` `accept` `reject` `defer` `waive` `abandon` `close`                     |
+| `schedule`       | `expand` `create` `edit` `abandon` `stop` `undo` `close`                                         |
+| `review-thread`  | `reject` `undo`                                                                                  |
+| `pr-assignee`    | `accept` `reject`                                                                                |
+| `bot-pr`         | `view` `create`                                                                                  |
+| `ejection`       | `expand` `accept` `close`                                                                        |
+| `theme`          | `edit` `accept` `undo`                                                                           |
+| `notification`   | `edit` `send`                                                                                    |
+| `project`        | `accept`                                                                                         |
+| `scan`           | `create`                                                                                         |
+| `demo`           | `expand` `create` `close`                                                                        |
+| `code`           | `copy`                                                                                           |
+| `menu`           | `expand`                                                                                         |
+| `reason`         | `expand`                                                                                         |
 
 **A subject is a thing, never a screen.** `pr` is the pull request wherever it is worked, so a
 control that moves to another surface keeps its row and the history stays one series. Keying on the
@@ -162,10 +193,60 @@ Four properties, none optional:
    telemetry write must never turn a working control into a broken one.
 4. **It is called for its effect and batched**, never once per event over the wire.
 
+### Every button names its event
+
+**A call site that has to remember to log is a call site that forgets.** With the helper as the only
+way in, each new control shipped untracked by default: the vocabulary was sound and almost nothing
+reached it, so "is that tracked?" was answered _no_ one control at a time — the reveal of the agent's
+pull request description was drawn, pressed and counted nowhere.
+
+So the record is taken where the press is, and naming it is not optional. `BareButton`
+(`web/src/components/button.tsx`) is the only element that draws a `<button>` —
+`react/forbid-elements` refuses one anywhere else in `web/` — and `Button`, `AsyncButton`,
+`SubmitButton`, `ConfirmButton`, `ControlButton` and `ControlSegment` render through it. Every one
+takes a **required** `usage: ControlUsage`, so a button with no event does not compile. **There is no
+opt-out**: a Cancel is usage too, and an escape hatch is how the default drifts back to _not tracked_.
+
+`ControlUsage` is one of two shapes, and the type keeps both of the helper's rules:
+
+- **A `ui` event, as a string** — `usage="pr-description.expand"`. The press calls `logUsage` before the
+  caller's own handler. A `.view` is excluded, because [every `view` is emitted from the
+  place](#the-helper) and a nav button logging one would double it.
+- **`{ counted: event }`** — for a `record` event (`{ counted: 'plan.accept' }`), which its table
+  already holds, and for a `.view` (`{ counted: 'goal.view' }`), which the place already emits. The
+  press logs nothing; the button still _names_ what it does, so the reader of the source and the
+  reader of the ledger are looking at the same vocabulary. **It is only for a press that reaches what
+  it names** — a handler that writes the record, or a move to the place. A draft step before a
+  recorded save is a `ui` event of its own: a `counted` naming a write nobody makes is an opt-out
+  spelled as a count.
+
+**A press that changes nothing logs nothing.** A two-step `ConfirmButton` logs on the confirming
+press, never the arming one — an arm that times out is not the act, and logging both counts one act
+twice — and a segment or tab already selected logs nothing when pressed again. `BareButton`'s `logs`
+is that seam, and it is set from state, never to silence a control that acts.
+
+**Every way out of a `Modal` is its `closeUsage`** — the close button, Escape and a backdrop click —
+and the panel and tab tables name each surface's subject once (`panelUsage`, `panelClose`, `tabUsage`
+in `web/src/cockpit/usage.ts`), so a nav control's `view` and a panel's `close` cannot drift apart.
+
+A handler that also called `logUsage` for its own button's event is a double count, and was removed
+when the prop arrived. `logUsage` stays for what is not a button press — a `<details>` opening, a
+`<select>` changing.
+
+**A close is its own verb, never the other half of `expand`.** Shutting a panel or dismissing a
+dialog is `<subject>.close`, so "how often is this opened and left without acting" is one `group by`
+rather than a count folded into the opens — and a disclosure logs `expand` as it opens and `close` as it
+folds, never `expand` both ways. **A pause is `stop` and its resume is `undo`**, on every
+subject that has one — the fleet, a schedule, a Feature, an obstacle's mute.
+
+**A button that fits no cell grows the matrix** — a `ui` cell, by [Adding one is one
+line](#adding-one-is-one-line). That is the cost of a typed vocabulary over a free-form name, taken
+deliberately: every press lands in a `subject × verb` the readings can already group by.
+
 ### Adding one is one line
 
 A new subject is a row in `VERBS_BY_SUBJECT` plus its label; a new verb on an existing subject is one
-entry in that row. The copy registry is a `Record` over the union, so a value with no label does not
+entry in that row. The copy registry (`src/usage/eventCopy.ts`) is a `Record` over the union, so a value with no label does not
 compile — the `CAUSE_COPY` discipline, and the reason the panel never restates a name the server
 owns. The digest section and the folds are keyed off the registry, so neither is edited: a `ui` event
 added on Monday appears in the aggregate on Tuesday, with its label, once a call site logs it. A
@@ -422,7 +503,8 @@ without amendment. "Nobody opened the feature board this week" wants four differ
 - **nobody could have reached it** — no link to it was drawn on any surface an operator visited;
 - **it was reachable and nobody went** — the entry point is not landing, or the job never came up;
 - **they went and it did nothing** — reached, never operated, which is the one case where the
-  silence is the surface's own fault;
+  silence is the surface's own fault. A `close` is not an operation: it is the way out, so a panel
+  opened and shut reads here, not as used;
 - **the console was dark** — nobody used the cockpit at all that week, and then no per-surface
   reading in that window means anything.
 

@@ -72,6 +72,7 @@ export function Sequence({
         <AsyncButton
           tone="primary"
           size="small"
+          usage="sequence.accept"
           onClick={async () => {
             await api.answerFeatureSequence(feature.number, 'accepted', view.state.config.desktopFolder || 'you');
             onAnswered();
@@ -82,6 +83,7 @@ export function Sequence({
         <AsyncButton
           ghost
           size="small"
+          usage="sequence.reject"
           onClick={async () => {
             await api.answerFeatureSequence(feature.number, 'declined', view.state.config.desktopFolder || 'you');
             onAnswered();

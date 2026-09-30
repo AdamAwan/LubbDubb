@@ -57,7 +57,7 @@ function PromptList({
     <ul className="prompt-list">
       {book.templates.map((t) => (
         <li key={t.id}>
-          <Button ghost className="prompt-row" onClick={() => onShow(t)}>
+          <Button usage="config.expand" ghost className="prompt-row" onClick={() => onShow(t)}>
             <code className="prompt-id">{t.id}</code>
             {t.overridden && <Tag tone="amber">overridden</Tag>}
             {/* A retired id is still loadable — removing it would stop a customised
@@ -82,12 +82,12 @@ function PromptModal({
   onClose: () => void;
 }) {
   return (
-    <Modal face="prompt" label={prompt.id} onClose={onClose}>
+    <Modal face="prompt" label={prompt.id} closeUsage="config.close" onClose={onClose}>
       <header>
         <code className="prompt-id">{prompt.id}</code>
         {prompt.overridden && <Tag tone="amber">overridden</Tag>}
         {prompt.retired && <Tag>retired</Tag>}
-        <Button ghost className="prompt-close" onClick={onClose} aria-label="Close">
+        <Button usage="config.close" ghost className="prompt-close" onClick={onClose} aria-label="Close">
           ✕
         </Button>
       </header>

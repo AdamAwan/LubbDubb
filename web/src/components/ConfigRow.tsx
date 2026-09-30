@@ -55,13 +55,13 @@ export function Row({
 
       <div className="cfg-act">
         {staged ? (
-          <Button ghost size="small" onClick={onUndo}>
+          <Button ghost size="small" usage="config.undo" onClick={onUndo}>
             Undo
           </Button>
         ) : (
           !entry.isDefault &&
           !locked && (
-            <Button ghost size="small" onClick={onReset}>
+            <Button ghost size="small" usage="config.undo" onClick={onReset}>
               Reset
             </Button>
           )
@@ -104,7 +104,13 @@ function RowInput({
           typed it. Offered while the field is empty, whether or not anything
           requires it yet. */}
       {entry.suggestion !== undefined && raw === '' && !locked && staged !== 'cleared' && (
-        <Button ghost size="small" className="cfg-suggest" onClick={() => onEdit(entry.suggestion ?? '')}>
+        <Button
+          ghost
+          size="small"
+          usage="config.accept"
+          className="cfg-suggest"
+          onClick={() => onEdit(entry.suggestion ?? '')}
+        >
           Use <code>{entry.suggestion}</code>
         </Button>
       )}
@@ -261,6 +267,7 @@ function ColourMap({
           <Button
             ghost
             size="small"
+            usage="config.edit"
             title={`Stop colouring "${state}" — it goes back to the reading it had before`}
             onClick={() => {
               const { [state]: _dropped, ...rest } = map;
@@ -288,7 +295,7 @@ function ColourMap({
             <option key={state} value={state} />
           ))}
         </datalist>
-        <Button size="small" disabled={adding.trim() === ''} onClick={add}>
+        <Button size="small" usage="config.edit" disabled={adding.trim() === ''} onClick={add}>
           Add
         </Button>
         {Object.keys(map).length === 0 && (

@@ -92,23 +92,25 @@ export function ValidateLocallyModal({
       face="modal"
       title={mode === 'swap' ? 'Something else is running' : 'The environment is behind'}
       lead={<span className="chip small">#{issueNumber}</span>}
+      closeUsage="local-run.close"
       onClose={onClose}
       foot={
         <>
           <span className="spacer" />
-          <Button ghost onClick={onClose}>
+          <Button ghost usage="local-run.reject" onClick={onClose}>
             cancel
           </Button>
           {/* The refresh arm's middle answer is a real choice rather than a soft
               cancel — validating what is up now is often what somebody means — so
               it is a button of its own rather than a second meaning on Cancel. */}
           {mode === 'refresh' && (
-            <AsyncButton onRefused={setRefusal} onClick={() => submit({})}>
+            <AsyncButton usage="validation.create" onRefused={setRefusal} onClick={() => submit({})}>
               validate what is running
             </AsyncButton>
           )}
           <AsyncButton
             tone="primary"
+            usage={{ counted: 'local-run.create' }}
             onRefused={setRefusal}
             onClick={() => submit(mode === 'swap' ? { swap: true } : { refresh: true })}
           >

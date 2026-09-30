@@ -6,6 +6,7 @@ import { Ref } from '../../components/refs.js';
 import { standsFor } from '../../view/goalRefs.js';
 import { elapsed } from '../../components/util.js';
 import { agentLamp } from '../fleetRows.js';
+import { BareButton } from '../../components/button.js';
 
 // → docs/spec/17-cockpit.md#what-the-fleet-is-doing-above-the-ask
 
@@ -51,14 +52,14 @@ export function FleetSlots({ view, actions }: { view: CockpitView; actions: Cock
       <header className="cn-ov-slots-head">
         <h3>Out on the fleet</h3>
         <span className="cn-ov-slots-read">{reading(view)}</span>
-        <button
-          type="button"
+        <BareButton
+          usage="fleet.filter"
           className="cn-ov-slots-all"
           onClick={() => actions.setOverviewShape('cards')}
           title="The Cards shape — the whole fleet, the queue behind it and the runway"
         >
           {untiled > 0 ? `${untiled} more →` : 'Fleet →'}
-        </button>
+        </BareButton>
       </header>
 
       <div className="cn-ov-slot-grid">
@@ -133,14 +134,14 @@ function SlotTile({ agent, view, actions }: { agent: Agent; view: CockpitView; a
     <article className={`cn-ov-slot ${slotTone(lamp)}`}>
       <div className="cn-ov-slot-top">
         <i className={`cn-lamp ${lamp}`} />
-        <button
-          type="button"
+        <BareButton
+          usage={{ counted: 'agent.view' }}
           className="cn-ov-slot-name"
           onClick={() => actions.select(agent.id)}
           title={`${title} — open this agent's drawer`}
         >
           {title}
-        </button>
+        </BareButton>
         <span className="cn-ov-slot-for">{elapsed(agent.startedAt, agent.endedAt, view.now)}</span>
       </div>
       <div className="cn-ov-slot-foot">
@@ -174,8 +175,8 @@ function FreeTile({ free, view, actions }: { free: number; view: CockpitView; ac
     <article className="cn-ov-slot cn-ov-slot-free">
       <div className="cn-ov-slot-top">
         <i className="cn-lamp cn-off" />
-        <button
-          type="button"
+        <BareButton
+          usage={{ counted: queued === 0 ? 'job.view' : 'queue.view' }}
           className="cn-ov-slot-name"
           onClick={() => (queued === 0 ? actions.openPanel('launch') : actions.openPanel('upnext'))}
           title={
@@ -183,7 +184,7 @@ function FreeTile({ free, view, actions }: { free: number; view: CockpitView; ac
           }
         >
           {free === 1 ? '1 slot free' : `${free} slots free`}
-        </button>
+        </BareButton>
       </div>
       <div className="cn-ov-slot-foot">
         <span className="cn-ov-slot-note">{say}</span>

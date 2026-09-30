@@ -35,40 +35,7 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
         {item.prCount === 1 ? '1 pull request' : `${item.prCount} pull requests`} · started{' '}
         {relTime(item.firstSeenAt, now)}
       </span>
-      <span className="work-unrecorded-actions">
-        {item.ignored ? (
-          <AsyncButton
-            ghost
-            onClick={() => api.setWorkItemIgnored(item.ref, false).then(() => load())}
-            title="Put this back in the list"
-          >
-            Un-ignore
-          </AsyncButton>
-        ) : (
-          <>
-            {item.filing !== null ? (
-              <Tag>filing…</Tag>
-            ) : (
-              canFileTickets && (
-                <AsyncButton
-                  ghost
-                  onClick={() => api.fileWorkItem(item.ref).then(() => load())}
-                  title="Ask an agent to create a tracker item recording this work"
-                >
-                  File a work item
-                </AsyncButton>
-              )
-            )}
-            <AsyncButton
-              ghost
-              onClick={() => api.setWorkItemIgnored(item.ref, true).then(() => load())}
-              title="No tracker item is wanted for this — clear it from the list"
-            >
-              Ignore
-            </AsyncButton>
-          </>
-        )}
-      </span>
+      <RowActions item={item} canFileTickets={canFileTickets} load={load} />
     </div>
   );
 
@@ -82,7 +49,12 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
       {live.length === 0 && <p className="muted">Nothing outstanding — every item here has been dealt with.</p>}
       {ignored.length > 0 && (
         <div className="work-ignored">
-          <Button ghost className="work-ignored-head" onClick={() => setShowIgnored(!showIgnored)}>
+          <Button
+            ghost
+            usage={showIgnored ? 'ticket.close' : 'ticket.expand'}
+            className="work-ignored-head"
+            onClick={() => setShowIgnored(!showIgnored)}
+          >
             <span className="work-caret">{showIgnored ? '▾' : '▸'}</span>
             {ignored.length} ignored
           </Button>
@@ -90,5 +62,55 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
         </div>
       )}
     </section>
+  );
+}
+
+function RowActions({
+  item,
+  canFileTickets,
+  load,
+}: {
+  item: UnrecordedWorkView;
+  canFileTickets: boolean;
+  load: () => Promise<void>;
+}) {
+  return (
+    <span className="work-unrecorded-actions">
+      {item.ignored ? (
+        <AsyncButton
+          ghost
+          usage="ticket.undo"
+          onClick={() => api.setWorkItemIgnored(item.ref, false).then(() => load())}
+          title="Put this back in the list"
+        >
+          Un-ignore
+        </AsyncButton>
+      ) : (
+        <>
+          {item.filing !== null ? (
+            <Tag>filing…</Tag>
+          ) : (
+            canFileTickets && (
+              <AsyncButton
+                ghost
+                usage={{ counted: 'ticket.create' }}
+                onClick={() => api.fileWorkItem(item.ref).then(() => load())}
+                title="Ask an agent to create a tracker item recording this work"
+              >
+                File a work item
+              </AsyncButton>
+            )
+          )}
+          <AsyncButton
+            ghost
+            usage="ticket.waive"
+            onClick={() => api.setWorkItemIgnored(item.ref, true).then(() => load())}
+            title="No tracker item is wanted for this — clear it from the list"
+          >
+            Ignore
+          </AsyncButton>
+        </>
+      )}
+    </span>
   );
 }

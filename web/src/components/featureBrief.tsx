@@ -11,6 +11,7 @@ import type {
   GoalReachStatus,
 } from '../types.js';
 import { AgentOnIt } from './AgentOnIt.js';
+import { BareButton } from './button.js';
 import { HeadRow } from './panel.js';
 import { Ref } from './refs.js';
 import { Tag } from './tag.js';
@@ -64,9 +65,9 @@ export function Brief({
           {onOpen === null ? (
             <h3>{title}</h3>
           ) : (
-            <button type="button" className="cn-fb-toggle" onClick={onOpen}>
+            <BareButton usage="feature.filter" className="cn-fb-toggle" onClick={onOpen}>
               <h3>{title}</h3>
-            </button>
+            </BareButton>
           )}
           <span className="cn-refs">
             <Ref to={`issue:${number}`} />

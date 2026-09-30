@@ -1,8 +1,8 @@
 import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { AppliedFix } from '../view/needsYou.js';
-import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
-import { Button } from '../components/button.js';
+import type { BuildReading, ControlUsage, SetupCheck, SetupFix } from '../types.js';
+import { Button, BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -26,6 +26,8 @@ export function CardFoot({
   );
 }
 
+const TAKE_UPDATE: ControlUsage = { counted: 'upgrade.accept' };
+
 export function UpdateActs({
   kind,
   build,
@@ -37,6 +39,7 @@ export function UpdateActs({
 }): JSX.Element | null {
   const snooze = (
     <Button
+      usage="upgrade.defer"
       ghost
       size="small"
       onClick={() => void actions.snoozeUpdate(kind === 'upgrade' ? 'upgrade' : 'projectPull')}
@@ -61,15 +64,15 @@ export function UpdateActs({
   if (intent.state === 'draining' || intent.state === 'ready')
     return (
       <CardFoot why={intent.state === 'ready' ? 'The fleet is clear.' : `Waiting for ${live} to finish.`}>
-        <Button ghost size="small" onClick={() => void actions.upgrade('cancel')}>
+        <Button usage="upgrade.reject" ghost size="small" onClick={() => void actions.upgrade('cancel')}>
           Cancel
         </Button>
         {intent.state === 'ready' ? (
-          <Button tone="primary" size="small" onClick={() => void actions.upgrade('apply')}>
+          <Button usage={TAKE_UPDATE} tone="primary" size="small" onClick={() => void actions.upgrade('apply')}>
             Apply now
           </Button>
         ) : (
-          <Button size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
+          <Button usage={TAKE_UPDATE} size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
             Don&apos;t wait — interrupt {live}
           </Button>
         )}
@@ -80,7 +83,7 @@ export function UpdateActs({
     return (
       <CardFoot why="Exits, takes the update and comes back. Nothing is interrupted.">
         {snooze}
-        <Button tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
+        <Button usage={TAKE_UPDATE} tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
           Upgrade
         </Button>
       </CardFoot>
@@ -96,10 +99,10 @@ export function UpdateActs({
       }
     >
       {snooze}
-      <Button size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
+      <Button usage={TAKE_UPDATE} size="small" onClick={() => void actions.upgrade('apply', { interrupt: true })}>
         Now
       </Button>
-      <Button tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
+      <Button usage={TAKE_UPDATE} tone="primary" size="small" onClick={() => void actions.upgrade('drain')}>
         Queue
       </Button>
     </CardFoot>
@@ -119,8 +122,8 @@ export function ConfigFix({ check, actions }: { check: SetupCheck; actions: Cock
         <div className="cn-shell">
           <span aria-hidden="true">$</span>
           <code>{fix.command}</code>
-          <button
-            type="button"
+          <BareButton
+            usage="config.copy"
             className={copied ? 'cn-copy cn-copied' : 'cn-copy'}
             onClick={() => {
               void navigator.clipboard?.writeText(fix.command).catch(() => undefined);
@@ -128,7 +131,7 @@ export function ConfigFix({ check, actions }: { check: SetupCheck; actions: Cock
             }}
           >
             {copied ? 'Copied' : fix.label}
-          </button>
+          </BareButton>
         </div>
       </CardFoot>
     );
@@ -154,12 +157,12 @@ export function ConfigFix({ check, actions }: { check: SetupCheck; actions: Cock
             Set <code>{only}</code> to
             <input className="cn-inline" value={typed} onChange={(e) => setValue(e.target.value)} aria-label={only} />
           </label>
-          <Button size="small" disabled={busy} onClick={write}>
+          <Button usage="config.edit" size="small" disabled={busy} onClick={write}>
             Write it
           </Button>
         </div>
       ) : (
-        <Button tone="primary" size="small" disabled={busy} onClick={write}>
+        <Button usage="config.edit" tone="primary" size="small" disabled={busy} onClick={write}>
           {fix.label}
         </Button>
       )}
@@ -179,7 +182,12 @@ function NavFix({
   if (fix.kind === 'sheet') {
     return (
       <CardFoot why={check.remedy ?? null}>
-        <Button tone="primary" size="small" onClick={() => actions.openPanel('setup')}>
+        <Button
+          usage={{ counted: 'config.view' }}
+          tone="primary"
+          size="small"
+          onClick={() => actions.openPanel('setup')}
+        >
           {fix.label}
         </Button>
       </CardFoot>
@@ -189,6 +197,7 @@ function NavFix({
   return (
     <CardFoot why={check.remedy ?? null}>
       <Button
+        usage={{ counted: fix.to === 'tickets' ? 'ticket.view' : 'config.view' }}
         tone="primary"
         size="small"
         onClick={() =>
@@ -223,10 +232,10 @@ export function SettledFix({ applied, actions }: { applied: AppliedFix; actions:
         </span>
       }
     >
-      <Button size="small" onClick={() => void actions.undoConfigFix(applied.checkId)}>
+      <Button usage="config.undo" size="small" onClick={() => void actions.undoConfigFix(applied.checkId)}>
         Undo
       </Button>
-      <Button size="small" onClick={() => actions.dismissConfigFix(applied.checkId)}>
+      <Button usage="config.accept" size="small" onClick={() => actions.dismissConfigFix(applied.checkId)}>
         Dismiss
       </Button>
     </CardFoot>

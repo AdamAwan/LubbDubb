@@ -75,6 +75,7 @@ export function FeatureSummariesAd({
         <AsyncButton
           tone="primary"
           size="small"
+          usage="config.edit"
           pendingLabel="Turning on…"
           disabled={waitingOnRestart}
           onRefused={setRefusal}
@@ -94,6 +95,7 @@ export function FeatureSummariesAd({
         <Button
           ghost
           size="small"
+          usage="config.reject"
           onClick={() => {
             writeDismissed();
             setDismissed(true);

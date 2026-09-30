@@ -9,7 +9,7 @@ import { repoPath } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { Button, buttonClass, expected, refusing } = await import('../web/src/components/button.js');
+const { BareButton, Button, buttonClass, expected, refusing } = await import('../web/src/components/button.js');
 
 test('the base is written twice, so one rule dresses a button anywhere', () => {
   assert.equal(buttonClass({}), 'btn btn');
@@ -55,9 +55,47 @@ test('the station composes on the caller, keeping the caller’s weight', () => 
 });
 
 test('a button is a button, never a form submit', () => {
-  const html = renderToStaticMarkup(createElement(Button, { tone: 'primary', children: 'Write' }));
+  const html = renderToStaticMarkup(
+    createElement(Button, { tone: 'primary', usage: 'plan.expand', children: 'Write' }),
+  );
   assert.match(html, /type="button"/, 'a <button> in a <form> submits it unless it says otherwise');
   assert.match(html, /class="btn btn primary"/);
+});
+
+test('a button cannot be drawn without naming its usage event', () => {
+  // @ts-expect-error every button names the event a press of it is
+  createElement(Button, { children: 'Write' });
+  // @ts-expect-error a `record` event is swept from its table, so the button only names it
+  createElement(Button, { usage: 'plan.accept', children: 'Approve' });
+  // @ts-expect-error a `view` is emitted from the place, never from the control that got there
+  createElement(Button, { usage: 'plan.view', children: 'Open' });
+  createElement(Button, { usage: { counted: 'plan.accept' }, children: 'Approve' });
+  createElement(Button, { usage: { counted: 'plan.view' }, children: 'Open' });
+});
+
+test('a press logs a ui event, and only a ui event', () => {
+  const posted: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    posted.push(String(init?.body));
+    return new Response('{}');
+  }) as typeof fetch;
+  try {
+    let handled = 0;
+    const press = (usage: Parameters<typeof BareButton>[0]['usage']) => {
+      const element = BareButton({ usage, onClick: () => void handled++ });
+      (element.props as { onClick: (event: unknown) => void }).onClick({});
+    };
+    // The batcher flushes at 500 queued events, so a full batch is what reaches the wire.
+    for (let i = 0; i < 500; i++) press({ counted: 'plan.accept' });
+    assert.equal(posted.length, 0, 'an event counted elsewhere is never logged from the press');
+    for (let i = 0; i < 500; i++) press('pr-description.accept');
+    assert.equal(posted.length, 1);
+    assert.match(posted[0] ?? '', /"subject":"pr-description","verb":"accept"/);
+    assert.equal(handled, 1000, 'the caller’s own handler still runs on every press');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test('no surface writes a button family of its own', () => {

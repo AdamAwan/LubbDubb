@@ -159,6 +159,7 @@ function RowDecline({
         <Button
           size="small"
           ghost
+          usage="validation.edit"
           title="Drop this one check — the rest go ahead, and no planner is asked again"
           onClick={() => declines.decline(letter)}
         >
@@ -173,7 +174,13 @@ function RowDecline({
             value={struck}
             onChange={(e) => declines.say(letter, e.target.value)}
           />
-          <Button size="small" ghost title="Put this check back" onClick={() => declines.keep(letter)}>
+          <Button
+            size="small"
+            ghost
+            usage="validation.edit"
+            title="Put this check back"
+            onClick={() => declines.keep(letter)}
+          >
             Keep it
           </Button>
         </>

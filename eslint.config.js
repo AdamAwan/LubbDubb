@@ -59,7 +59,23 @@ export default tseslint.config(
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'react/forbid-elements': [
+        'error',
+        {
+          forbid: [
+            {
+              element: 'button',
+              message:
+                'Draw it with Button, AsyncButton or BareButton (web/src/components/button.tsx), which require a `usage` event. → docs/spec/34-usage-metrics.md#every-button-names-its-event',
+            },
+          ],
+        },
+      ],
     },
+  },
+  {
+    files: ['web/src/components/button.tsx'],
+    rules: { 'react/forbid-elements': 'off' },
   },
 
   // Complexity limits. Existing breaches are frozen in eslint-suppressions.json;

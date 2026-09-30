@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { CockpitActions } from '../../cockpit/actions.js';
 import type { OverviewShape } from '../../cockpit/place.js';
 import { OVERVIEW_SHAPES } from '../../cockpit/place.js';
+import { BareButton } from '../../components/button.js';
 
 // → docs/spec/17-cockpit.md#the-overview
 
@@ -24,9 +25,9 @@ export function OverviewSwitch({ shape, actions }: { shape: OverviewShape; actio
     <div className="cn-ov-switch" role="tablist" aria-label="Overview shape">
       <span className="cn-ov-switch-label">Overview</span>
       {OVERVIEW_SHAPES.map((s) => (
-        <button
+        <BareButton
+          usage="fleet.filter"
           key={s}
-          type="button"
           role="tab"
           aria-selected={s === shape}
           className={s === shape ? 'cn-ov-switch-on' : ''}
@@ -34,7 +35,7 @@ export function OverviewSwitch({ shape, actions }: { shape: OverviewShape; actio
           onClick={() => actions.setOverviewShape(s)}
         >
           {SHAPE_LABEL[s]}
-        </button>
+        </BareButton>
       ))}
     </div>
   );

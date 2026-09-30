@@ -3,10 +3,10 @@ import type { JSX, RefObject } from 'react';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { AsyncButton } from './AsyncButton.js';
 import { DesktopLink } from './DesktopLink.js';
-import { buttonClass } from './button.js';
+import { Button } from './button.js';
 import { heldTitle } from './CaveatChecklist.js';
 import { HeadRow } from './panel.js';
-import type { CaveatAnswerInput, PlanCaveat } from '../types.js';
+import type { CaveatAnswerInput, ControlUsage, PlanCaveat } from '../types.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -123,6 +123,7 @@ function AnswerRow({
   return (
     <HeadRow className="pa-row">
       <AsyncButton
+        usage={{ counted: 'plan.accept' }}
         tone="primary"
         disabled={held}
         title={
@@ -132,27 +133,28 @@ function AnswerRow({
       >
         {approveLabel}
       </AsyncButton>
-      <button
-        type="button"
-        className={buttonClass({ ghost: true }, changing ? 'pa-on' : '')}
+      <Button
+        usage={changing ? 'plan.close' : 'plan.expand'}
+        ghost
+        className={changing ? 'pa-on' : ''}
         title="Say what should be different — the planner amends this plan with your words rather than starting over"
         onClick={onToggleChange}
       >
         Change something first
-      </button>
+      </Button>
       {/* The way into the plan, drawn as a peer of the answers rather than as a
           banner above them: it is one of the things you can do here, and a card
           that asks for a verdict should put reading the plan on the same row as
           giving one. */}
       {onReadPlan && (
-        <button
-          type="button"
-          className={buttonClass({ ghost: true })}
+        <Button
+          usage={{ counted: 'plan.view' }}
+          ghost
           title="The split, the evidence, what it rules out"
           onClick={onReadPlan}
         >
           Read the full plan →
-        </button>
+        </Button>
       )}
       {issueNumber !== null && (
         <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discussExplain} />
@@ -173,15 +175,18 @@ function BackOutRow({
   return (
     <div className="pa-backout">
       <span className="muted small">Not the work you want?</span>
-      <button
-        type="button"
-        className={buttonClass({ ghost: true, size: 'small' }, closing ? 'pa-on' : '')}
+      <Button
+        usage={closing ? 'plan.close' : 'plan.expand'}
+        ghost
+        size="small"
+        className={closing ? 'pa-on' : ''}
         title="Comment on the ticket, close it, stop watching it and abandon this plan"
         onClick={onToggleClose}
       >
         Close the ticket
-      </button>
+      </Button>
       <AsyncButton
+        usage={{ counted: 'plan.abandon' }}
         ghost
         size="small"
         title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."
@@ -226,15 +231,16 @@ function PlanDrawer({
           onChange={(e) => onText(e.target.value)}
         />
         <AsyncButton
+          usage={drawer.usage}
           disabled={words.length === 0}
           title={words.length === 0 ? drawer.held : drawer.ready}
           onClick={() => onSubmit(words)}
         >
           {drawer.submit}
         </AsyncButton>
-        <button type="button" className={buttonClass({ ghost: true, size: 'small' })} onClick={onClose}>
+        <Button usage="plan.close" ghost size="small" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </HeadRow>
       <span className="pa-drawer-hint">{drawer.hint}</span>
     </div>
@@ -245,9 +251,12 @@ type DrawerId = 'change' | 'close';
 
 const DRAWERS: Record<
   DrawerId,
-  Record<'kind' | 'question' | 'placeholder' | 'submit' | 'held' | 'ready' | 'hint', string>
+  Record<'kind' | 'question' | 'placeholder' | 'submit' | 'held' | 'ready' | 'hint', string> & {
+    usage: ControlUsage;
+  }
 > = {
   change: {
+    usage: 'plan.reject',
     kind: 'pa-change',
     question: 'What should be different?',
     placeholder: 'The planner gets these words and amends the plan',
@@ -257,6 +266,7 @@ const DRAWERS: Record<
     hint: 'Parts you keep, keep their branches and pull requests. Parts nothing has started for are retired; anything already in flight keeps running.',
   },
   close: {
+    usage: { counted: 'plan.abandon' },
     kind: 'pa-close',
     question: 'Why are you closing this ticket?',
     placeholder: 'Posted on the ticket as the closing comment',

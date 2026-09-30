@@ -56,6 +56,22 @@ function verdictOf(rows: SurfaceReach[], everLinked: string[], subject: string):
   return row.verdict;
 }
 
+test('shutting a panel is the way out of it, not a use of it', () => {
+  const opened = [reachRow('goal', 'view', 2 * HOUR), reachRow('fault', 'view', HOUR)];
+  assert.equal(
+    verdictOf([...opened, reachRow('fault', 'close', HOUR)], ['goal', 'fault'], 'fault'),
+    'visited-never-operated',
+  );
+  assert.equal(
+    verdictOf(
+      [...opened, reachRow('fault', 'close', HOUR), reachRow('fault', 'waive', HOUR)],
+      ['goal', 'fault'],
+      'fault',
+    ),
+    'operated',
+  );
+});
+
 test('a quiet surface is four different facts, and the fold tells them apart', () => {
   const busy = [reachRow('goal', 'view', 2 * HOUR)];
 
