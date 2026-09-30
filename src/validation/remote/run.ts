@@ -80,13 +80,7 @@ export class RemoteRunDesk extends EventEmitter {
     const { environment, rows } = pressable;
     const { store } = this.deps;
 
-    const tenant = resolveTenant({
-      environment,
-      stamped: store.remoteValidation.listRemoteTenants(),
-      now: this.now(),
-      env: this.deps.env,
-      operatorTenants: this.deps.operatorTenants,
-    });
+    const tenant = this.resolve(environment);
     if (tenant.standing.blockedReason !== null) {
       for (const row of rows)
         store.remoteValidation.blockRemoteSheetRow(goalRef, environmentName, row.rowId, tenant.standing.blockedReason);
@@ -164,16 +158,7 @@ export class RemoteRunDesk extends EventEmitter {
   cancel(environmentName: string, tenantKey: string | null): RemoteRun | null {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     if (environment === undefined) return null;
-    const key =
-      tenantKey ??
-      resolveTenant({
-        environment,
-        stamped: this.deps.store.remoteValidation.listRemoteTenants(),
-        now: this.now(),
-        env: this.deps.env,
-        operatorTenants: this.deps.operatorTenants,
-      }).standing.tenant ??
-      '';
+    const key = tenantKey ?? this.resolve(environment).standing.tenant ?? '';
     const live = this.deps.store.remoteValidation.liveRemoteRun(environmentName, key);
     if (live === null) return null;
     return this.deps.store.remoteValidation.endRemoteRun(live.id, {
@@ -235,17 +220,19 @@ export class RemoteRunDesk extends EventEmitter {
     return this.deps.tenants.tail(environmentName, launched.launch);
   }
 
+  private resolve(environment: EnvironmentConfig): ReturnType<typeof resolveTenant> {
+    return resolveTenant({
+      environment,
+      stamped: this.deps.store.remoteValidation.listRemoteTenants(),
+      now: this.now(),
+      env: this.deps.env,
+      operatorTenants: this.deps.operatorTenants,
+    });
+  }
+
   private standing(environmentName: string): TenantStanding {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
-    return environment === undefined
-      ? absent()
-      : resolveTenant({
-          environment,
-          stamped: this.deps.store.remoteValidation.listRemoteTenants(),
-          now: this.now(),
-          env: this.deps.env,
-          operatorTenants: this.deps.operatorTenants,
-        }).standing;
+    return environment === undefined ? absent() : this.resolve(environment).standing;
   }
 
   private settle(
@@ -310,13 +297,7 @@ export class RemoteRunDesk extends EventEmitter {
       if (refused !== null) return refused;
     }
 
-    const resolved = resolveTenant({
-      environment,
-      stamped: this.deps.store.remoteValidation.listRemoteTenants(),
-      now: this.now(),
-      env: this.deps.env,
-      operatorTenants: this.deps.operatorTenants,
-    });
+    const resolved = this.resolve(environment);
     if (validate.reseed !== undefined) {
       const refused = await this.reseedStep(environmentName, validate.reseed, resolved, resumed, said);
       if (refused !== null) return refused;

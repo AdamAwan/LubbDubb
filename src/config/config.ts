@@ -456,7 +456,7 @@ export function projectConfigLayer(filePath: string): Partial<Config> {
   const layer = readFileLayer(readFileSync(filePath, 'utf8'), filePath);
   if (Object.hasOwn(layer, 'repoRoot')) {
     throw new Error(
-      `Refusing to start: ${filePath} sets "repoRoot", which is the one key a project config cannot set — ` +
+      `Refusing to start: ${filePath} sets "repoRoot", which a project config cannot set — ` +
         `this file was read because repoRoot had already resolved, so a value here could only describe the ` +
         `search that found it. Point the harness with lubbdubb.config.json or LUBBDUBB_REPO_ROOT instead, and delete the key.`,
     );

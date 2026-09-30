@@ -64,7 +64,7 @@ export function validateOperatorTenants(tenants: unknown, environments: readonly
     );
   for (const [name, tenant] of Object.entries(tenants)) {
     const where = `remoteValidation.tenants["${name}"]`;
-    if (typeof tenant !== 'string' || tenant.trim() === '')
+    if (isBlank(tenant))
       throw new Error(
         `${where}: must be a non-empty tenant name. The harness never generates or infers a tenant, so an ` +
           'empty one names nothing it could fall back to.',

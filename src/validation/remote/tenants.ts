@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { Config } from '../../config/config.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { RemoteTenant, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
 import { firstLine } from '../../primitives.js';
@@ -158,7 +159,7 @@ export type TenantEnvironment = Record<string, string | undefined>;
  * layer. It answers only where the environment declares `tenantEnv`.
  * → docs/spec/36-remote-validation.md#an-operators-own-tenant
  */
-export type OperatorTenants = Readonly<Record<string, string>>;
+export type OperatorTenants = NonNullable<Config['remoteValidation']['tenants']>;
 
 interface ResolvedTenant {
   standing: TenantStanding;
@@ -238,8 +239,7 @@ function fromTenantEnv(input: {
   const value = (input.env ?? process.env)[variable] ?? null;
   if (value !== null && value.trim() !== '') return dated({ tenant: `$${variable}`, value, stamps, freshnessMs, now });
   const named = input.operatorTenants?.[input.environment.name];
-  if (named !== undefined && named.trim() !== '')
-    return dated({ tenant: named, value: named, stamps, freshnessMs, now });
+  if (named !== undefined) return dated({ tenant: named, value: named, stamps, freshnessMs, now });
   return {
     value: null,
     standing: {

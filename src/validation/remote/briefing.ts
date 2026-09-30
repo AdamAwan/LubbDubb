@@ -32,16 +32,6 @@ interface BriefInput {
   operatorTenants?: OperatorTenants;
 }
 
-/**
- * Every live run, with everything the dispatcher needs already rendered. It is computed here rather
- * than in the rule for the reason [29](docs/spec/29-post-deploy-watch.md) computes its notes here:
- * `src/validation/remote/` is a lens as far as the dispatcher is concerned, and the rule imports
- * nothing from it — what reaches it is a run row and a string.
- *
- * A run with no confirmed `check` row carries `confirmed: 0`, and the rule dispatches for none: the
- * press already read that sheet's deterministic rows synchronously, and there is no browser half to
- * put an agent on.
- */
 export function configuredRemoteRunBriefs(
   config: Pick<Config, 'environments' | 'validationRoot' | 'localValidation' | 'remoteValidation'>,
   store: Store,
@@ -57,6 +47,16 @@ export function configuredRemoteRunBriefs(
   });
 }
 
+/**
+ * Every live run, with everything the dispatcher needs already rendered. It is computed here rather
+ * than in the rule for the reason [29](docs/spec/29-post-deploy-watch.md) computes its notes here:
+ * `src/validation/remote/` is a lens as far as the dispatcher is concerned, and the rule imports
+ * nothing from it — what reaches it is a run row and a string.
+ *
+ * A run with no confirmed `check` row carries `confirmed: 0`, and the rule dispatches for none: the
+ * press already read that sheet's deterministic rows synchronously, and there is no browser half to
+ * put an agent on.
+ */
 export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
   const { store } = input;
   const runs = store.remoteValidation
