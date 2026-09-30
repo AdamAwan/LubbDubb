@@ -1,4 +1,6 @@
 import { Fragment, useRef, useState, type CSSProperties, type JSX, type ReactNode } from 'react';
+import type { Destination } from '../components/button.js';
+import { BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -18,7 +20,7 @@ export interface PanelRowModel {
   lamp?: ReactNode;
   toggle?: ReactNode;
   title: ReactNode;
-  open?: () => void;
+  open?: Destination;
   openTitle?: string;
   refs: ReactNode;
   facts?: readonly RowFact[];
@@ -302,9 +304,9 @@ function Subject({ row, facts = true }: { row: PanelRowModel; facts?: boolean })
   return row.open === undefined ? (
     <span className="cn-grow">{inner}</span>
   ) : (
-    <button type="button" className="cn-grow" onClick={row.open} title={row.openTitle}>
+    <BareButton usage={row.open.usage} className="cn-grow" onClick={row.open.go} title={row.openTitle}>
       {inner}
-    </button>
+    </BareButton>
   );
 }
 
@@ -334,14 +336,14 @@ function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
   const place = (): void => setAbove(noRoomBelow(at.current));
   return (
     <span className={above ? 'cn-why cn-why-above' : 'cn-why'} ref={at} onMouseEnter={place} onFocus={place}>
-      <button
-        type="button"
+      <BareButton
+        usage="reason.expand"
         className={`cn-why-mark${tone}`}
         aria-label={label === undefined ? 'Why this row is here' : `${label} — what this means`}
         aria-disabled={why === null ? true : undefined}
       >
         {label ?? '?'}
-      </button>
+      </BareButton>
       {why !== null && (
         <span className="cn-why-tip" role="tooltip">
           {why}

@@ -70,6 +70,7 @@ export function RaiseIssueModal({
       face="modal"
       title="Raise an issue"
       chips={<FilingChips gate={gate} target={target} />}
+      closeUsage="ticket.close"
       onClose={onClose}
       foot={<FilingFoot filed={filed} canSubmit={canSubmit} onClose={onClose} onSubmit={submit} />}
     >
@@ -198,11 +199,11 @@ function FilingFoot({
   return (
     <>
       <span className="spacer" />
-      <Button ghost onClick={onClose}>
+      <Button usage="ticket.close" ghost onClick={onClose}>
         {filed === null ? 'cancel' : 'close'}
       </Button>
       {filed === null && (
-        <AsyncButton tone="primary" disabled={!canSubmit} onClick={onSubmit}>
+        <AsyncButton usage={{ counted: 'ticket.create' }} tone="primary" disabled={!canSubmit} onClick={onSubmit}>
           raise issue
         </AsyncButton>
       )}

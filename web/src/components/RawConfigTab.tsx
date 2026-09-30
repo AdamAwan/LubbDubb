@@ -4,7 +4,6 @@ import type { RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
-import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -40,7 +39,6 @@ export function RawConfigTab({
   const write = async (): Promise<void> => {
     setBusy(true);
     try {
-      logUsage('config.edit');
       await api.saveRawConfig({ text, baseline });
       onWrote();
     } catch (err) {
@@ -86,10 +84,10 @@ function MovedBanner({ onKeep, onReload }: { onKeep: () => void; onReload: () =>
       <b>The file changed on disk</b>
       <span>by something other than this page. Your edits here are unsaved.</span>
       <div className="cfg-bacts">
-        <Button ghost size="small" onClick={onKeep}>
+        <Button usage="config.reject" ghost size="small" onClick={onKeep}>
           Keep mine
         </Button>
-        <Button size="small" onClick={onReload}>
+        <Button usage="config.accept" size="small" onClick={onReload}>
           Reload
         </Button>
       </div>
@@ -126,10 +124,16 @@ function RawEditor({
               {verdict.ok ? 'valid' : 'refused'}
             </Tag>
           )}
-          <Button ghost size="small" disabled={!dirty} onClick={onDiscard}>
+          <Button usage="config.abandon" ghost size="small" disabled={!dirty} onClick={onDiscard}>
             Discard edits
           </Button>
-          <Button tone="primary" size="small" disabled={!dirty || busy || verdict?.ok === false} onClick={onWrite}>
+          <Button
+            usage="config.edit"
+            tone="primary"
+            size="small"
+            disabled={!dirty || busy || verdict?.ok === false}
+            onClick={onWrite}
+          >
             {busy ? 'Writing…' : 'Write'}
           </Button>
         </span>

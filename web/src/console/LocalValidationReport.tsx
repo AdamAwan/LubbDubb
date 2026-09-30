@@ -1,5 +1,6 @@
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { BareButton } from '../components/button.js';
 import { CONTROL_CLASS } from '../components/controls.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { Tag, type TagTone } from '../components/tag.js';
@@ -122,9 +123,14 @@ function AgentDoor({
   return liveAgents.has(id) ? (
     <AgentOnIt agentId={id} actions={actions} note={`${label} — open its transcript`} />
   ) : (
-    <button type="button" className="cn-openagent" title={`Open ${label}`} onClick={() => actions.select(id)}>
+    <BareButton
+      usage={{ counted: 'agent.view' }}
+      className="cn-openagent"
+      title={`Open ${label}`}
+      onClick={() => actions.select(id)}
+    >
       {label} ↗
-    </button>
+    </BareButton>
   );
 }
 
@@ -170,6 +176,7 @@ function ReportHeader({
         <ConfirmButton
           className={CONTROL_CLASS}
           label="Call it off"
+          usage="validation.stop"
           confirmLabel="Call it off — really"
           title="Settle this validation without a reading. The environment is left exactly as it is."
           onConfirm={() => actions.cancelLocalValidation(issueNumber)}

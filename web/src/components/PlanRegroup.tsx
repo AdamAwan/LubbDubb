@@ -11,7 +11,7 @@ import {
 } from '../cockpit/regroup.js';
 import type { RegroupPart } from '../cockpit/regroup.js';
 import { AsyncButton } from './AsyncButton.js';
-import { buttonClass } from './button.js';
+import { Button } from './button.js';
 import { Tag } from './tag.js';
 
 // → docs/spec/17-cockpit.md#regrouping-the-atoms
@@ -78,29 +78,30 @@ export function PlanRegroup({
 
       <div className="pr-bar">
         <AsyncButton
+          usage={{ counted: 'plan.edit' }}
           tone="primary"
           disabled={settled || cycle !== null}
           title={saveTitle(cycle !== null, settled)}
           onRefused={setRefused}
           onClick={async () => {
             setRefused(null);
-            await onRegroup(
-              groups.map((g) =>
-                g.added
-                  ? { slug: g.slug, atoms: g.atoms, title: g.title, scope: g.scope }
-                  : { slug: g.slug, atoms: g.atoms },
-              ),
-            );
+            await onRegroup(regroupPayload(groups));
             onClose();
           }}
         >
           Save this grouping
         </AsyncButton>
-        <button type="button" className={buttonClass({ ghost: true })} onClick={() => setGroups(start)}>
+        <Button usage="plan.undo" ghost onClick={() => setGroups(start)}>
           Put it back
-        </button>
+        </Button>
       </div>
     </div>
+  );
+}
+
+function regroupPayload(groups: RegroupPart[]): { slug: string; atoms: string[]; title?: string; scope?: string }[] {
+  return groups.map((g) =>
+    g.added ? { slug: g.slug, atoms: g.atoms, title: g.title, scope: g.scope } : { slug: g.slug, atoms: g.atoms },
   );
 }
 
@@ -128,9 +129,10 @@ function GroupCard({
         <Tag lower>{group.slug}</Tag>
         <span className="spacer" />
         {group.added && (
-          <button
-            type="button"
-            className={buttonClass({ ghost: true, size: 'small' })}
+          <Button
+            usage={{ counted: 'plan.edit' }}
+            ghost
+            size="small"
             disabled={group.atoms.length > 0}
             title={
               group.atoms.length > 0
@@ -140,7 +142,7 @@ function GroupCard({
             onClick={() => setGroups(dropPart(groups, group.slug))}
           >
             Drop
-          </button>
+          </Button>
         )}
       </div>
       {group.atoms.length === 0 ? (
@@ -192,13 +194,9 @@ function AddPart({ groups, setGroups }: { groups: RegroupPart[]; setGroups: (gro
 
   if (adding === null) {
     return (
-      <button
-        type="button"
-        className={buttonClass({ ghost: true, size: 'small' })}
-        onClick={() => setAdding({ slug: '', title: '', scope: '' })}
-      >
+      <Button usage="plan.expand" ghost size="small" onClick={() => setAdding({ slug: '', title: '', scope: '' })}>
         Add a part
-      </button>
+      </Button>
     );
   }
   return (
@@ -221,9 +219,9 @@ function AddPart({ groups, setGroups }: { groups: RegroupPart[]; setGroups: (gro
         aria-label="What the new part achieves"
         onChange={(e) => setAdding({ ...adding, scope: e.target.value })}
       />
-      <button
-        type="button"
-        className={buttonClass({ size: 'small' })}
+      <Button
+        usage={{ counted: 'plan.edit' }}
+        size="small"
         disabled={!canAdd}
         onClick={() => {
           setGroups(addPart(groups, { slug: newSlug, title: adding.title.trim(), scope: adding.scope.trim() }));
@@ -231,10 +229,10 @@ function AddPart({ groups, setGroups }: { groups: RegroupPart[]; setGroups: (gro
         }}
       >
         Add
-      </button>
-      <button type="button" className={buttonClass({ ghost: true, size: 'small' })} onClick={() => setAdding(null)}>
+      </Button>
+      <Button usage="plan.close" ghost size="small" onClick={() => setAdding(null)}>
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }

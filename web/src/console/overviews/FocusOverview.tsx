@@ -7,7 +7,8 @@ import { Ref } from '../../components/refs.js';
 import { buildGoalPage, type GoalPartView, type PartGroup } from '../../view/goalPage.js';
 import { goalIssue } from '../../view/goalRefs.js';
 import { relTime } from '../../components/util.js';
-import { Button, ButtonRow } from '../../components/button.js';
+import { Button, ButtonRow, BareButton } from '../../components/button.js';
+import type { ControlUsage } from '../../types.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel, subjectLabel } from '../QueueRail.js';
 import { needBody } from '../NeedsBand.js';
 import { openGoalForAsk } from '../jump.js';
@@ -17,6 +18,7 @@ import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';
 import { byWeight, partsHeld } from './asks.js';
+import { panelUsage } from '../../cockpit/usage.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
 // → docs/spec/17-cockpit.md#the-overview
@@ -119,9 +121,9 @@ function FocusProgress({
     <div className="cn-ov-focus-progress">
       <span className="cn-ov-pips">
         {stops.map((r, i) => (
-          <button
+          <BareButton
+            usage="fleet.filter"
             key={r?.id ?? LOOK_ID}
-            type="button"
             className={`cn-ov-pip ${r === null ? 'cn-ov-pip-look' : `cn-t-${KIND_TONE[r.kind]}`} ${i === at ? 'cn-ov-pip-here' : ''}`}
             aria-label={
               r === null
@@ -148,6 +150,7 @@ function FocusProgress({
           tone="secondary"
           ghost
           size="small"
+          usage="fleet.filter"
           disabled={at === 0}
           onClick={() => go(at - 1)}
           title="The ask before this one (←)"
@@ -158,6 +161,7 @@ function FocusProgress({
           tone="secondary"
           ghost
           size="small"
+          usage="fleet.filter"
           disabled={at >= stops.length - 1}
           onClick={() => go(at + 1)}
           title="The ask after this one (→)"
@@ -293,13 +297,13 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
       <h3 className="cn-ov-ctx-label">The goal this is about</h3>
 
       <div className="hdr hdr-base">
-        <button
-          type="button"
+        <BareButton
+          usage={{ counted: 'goal.view' }}
           className="cn-ov-ctx-name"
           onClick={() => openGoalForAsk(actions, row.goalRef ?? '', row.kind)}
         >
           {issue?.title ?? row.goalRef}
-        </button>
+        </BareButton>
         <Ref to={row.goalRef} />
         {issue !== undefined && (
           <span className="cn-ov-ctx-state">{PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status}</span>
@@ -453,7 +457,12 @@ function Leads({ view, actions }: { view: CockpitView; actions: CockpitActions }
           sitting unattended, nothing waiting on your approval. The fleet is out of work rather than between it.
         </p>
         <ButtonRow>
-          <Button tone="primary" size="small" onClick={() => actions.openPanel('launch')}>
+          <Button
+            usage={{ counted: 'job.view' }}
+            tone="primary"
+            size="small"
+            onClick={() => actions.openPanel('launch')}
+          >
             Write a brief
           </Button>
         </ButtonRow>
@@ -493,9 +502,13 @@ function LeadTile({ lead, now, actions }: { lead: Lead; now: number; actions: Co
         <ul className="cn-ov-lead-items">
           {lead.items.map((item) => (
             <li key={item.key}>
-              <button type="button" className="cn-ov-lead-name" onClick={() => goLead(item.where, actions)}>
+              <BareButton
+                usage={LEAD_USAGE[item.where.kind]}
+                className="cn-ov-lead-name"
+                onClick={() => goLead(item.where, actions)}
+              >
                 {item.label}
-              </button>
+              </BareButton>
               <span className="cn-refs">
                 <Ref to={item.ref} />
               </span>
@@ -514,6 +527,7 @@ function LeadTile({ lead, now, actions }: { lead: Lead; now: number; actions: Co
           ghost
           size="small"
           className="cn-ov-lead-go"
+          usage={LEAD_USAGE[lead.where.kind]}
           onClick={() => goLead(lead.where, actions)}
         >
           {lead.go} →
@@ -522,6 +536,15 @@ function LeadTile({ lead, now, actions }: { lead: Lead; now: number; actions: Co
     </li>
   );
 }
+
+const LEAD_USAGE: Record<LeadWhere['kind'], ControlUsage> = {
+  upnext: panelUsage('upnext'),
+  faults: panelUsage('faults'),
+  reservoir: { counted: 'ticket.view' },
+  cards: 'fleet.filter',
+  goal: { counted: 'goal.view' },
+  pr: { counted: 'pr.view' },
+};
 
 /**
  * The one place a lead becomes navigation. Total over `LeadWhere`, so a lead

@@ -57,6 +57,7 @@ function ShortlistButtons({
         <AsyncButton
           key={person.id}
           size="small"
+          usage="pr-assignee.accept"
           disabled={disabled}
           onClick={() => onPick(person.id)}
           title={`Assign ${person.name} in the tracker`}
@@ -64,7 +65,13 @@ function ShortlistButtons({
           {person.name}
         </AsyncButton>
       ))}
-      <AsyncButton size="small" disabled={disabled} onClick={onDecline} title="Leave it unassigned">
+      <AsyncButton
+        size="small"
+        usage="pr-assignee.reject"
+        disabled={disabled}
+        onClick={onDecline}
+        title="Leave it unassigned"
+      >
         Nah
       </AsyncButton>
     </>

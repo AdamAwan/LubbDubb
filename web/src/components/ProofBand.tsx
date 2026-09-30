@@ -1,4 +1,5 @@
 import type { GoalWatch, PlanPartView, StateQuery, ValidationCheck } from '../types.js';
+import { BareButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -134,14 +135,14 @@ export function ProofBand({
       </span>
       <div className="pm-proof">
         {counts.map((c) => (
-          <button key={c.cell} className={`pm-pcell ${c.cell}`} onClick={() => onJump(c.cell)}>
+          <BareButton key={c.cell} usage="plan.filter" className={`pm-pcell ${c.cell}`} onClick={() => onJump(c.cell)}>
             <span className="pm-section-label">{c.label}</span>
             <span className="pm-pcount">
               {c.count} <i>{c.unit}</i>
             </span>
             {c.waiting > 0 && <span className="pm-pwait">{waiting(c)}</span>}
             <p className={c.count === '0' ? 'pm-pnone' : 'pm-pnote'}>{c.note}</p>
-          </button>
+          </BareButton>
         ))}
       </div>
     </>

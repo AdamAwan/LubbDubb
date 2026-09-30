@@ -80,6 +80,7 @@ export function Downloads({
           key={f.format}
           ghost
           size="small"
+          usage="insights.send"
           title={f.title}
           onClick={() => save(`${name}-${stamp(new Date())}.${f.format}`, f.format, f.build())}
         >
@@ -90,6 +91,7 @@ export function Downloads({
         <Button
           ghost
           size="small"
+          usage="insights.send"
           title={sheet.title}
           onClick={() => {
             const node = sheet.node();

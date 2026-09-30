@@ -182,7 +182,13 @@ export function AgentActions({
   return (
     <div className="esc-agent-actions">
       {onOpenAgent ? (
-        <Button ghost size="small" className="esc-open" onClick={() => onOpenAgent(agentId)}>
+        <Button
+          ghost
+          size="small"
+          usage={{ counted: 'agent.view' }}
+          className="esc-open"
+          onClick={() => onOpenAgent(agentId)}
+        >
           Open agent transcript →
         </Button>
       ) : null}
@@ -190,6 +196,7 @@ export function AgentActions({
         <AsyncButton
           ghost
           size="small"
+          usage="agent.accept"
           title="The agent is finished: record it done, reclaim its worktree, and close this out"
           onClick={() => onComplete(agentId)}
         >
@@ -202,6 +209,7 @@ export function AgentActions({
         <AsyncButton
           ghost
           size="small"
+          usage="escalation.defer"
           title="Hold the countdown for another fifteen minutes while you read the transcript. Nothing is decided by this."
           onClick={() => onExtend(agentId)}
         >
@@ -222,7 +230,7 @@ export function PlanOpen({
   const { planId, planDecidable, gated } = card;
   if (!planId || planDecidable || gated) return null;
   return (
-    <Button className="esc-plan-open" onClick={() => onViewPlan!(planId)}>
+    <Button className="esc-plan-open" usage={{ counted: 'plan.view' }} onClick={() => onViewPlan!(planId)}>
       <span className="esc-plan-open-label">Read the full plan</span>
       <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
     </Button>
@@ -235,7 +243,7 @@ export function QuickAnswers({ card, onAnswer }: { card: Card; onAnswer: CardPro
   return (
     <div className="esc-quick">
       {quick.map((q) => (
-        <AsyncButton key={q} size="small" onClick={() => onAnswer(q)}>
+        <AsyncButton key={q} size="small" usage={{ counted: 'escalation.send' }} onClick={() => onAnswer(q)}>
           {q}
         </AsyncButton>
       ))}
@@ -265,6 +273,7 @@ export function DismissRow({
       <AsyncButton
         ghost
         size="small"
+        usage={{ counted: 'escalation.reject' }}
         title={DISMISS_HINT[permission ? 'permission' : 'question']}
         onClick={() => onDismiss(escalationId, text.trim() || undefined)}
       >

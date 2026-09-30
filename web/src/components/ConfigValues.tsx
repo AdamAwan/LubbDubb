@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 import { Tag } from './tag.js';
 import { Row, type Draft } from './ConfigRow.js';
 import { chosenIn, configured, parseValue, render, stagedFor, unmetRequirements, type Unmet } from './configEntries.js';
@@ -213,8 +213,9 @@ function GroupRail({
     <aside className="cfg-rail">
       <div className="cfg-railhead">Groups</div>
       {groups.map((entry) => (
-        <button
+        <BareButton
           key={entry.title}
+          usage="config.filter"
           className={`cfg-railrow${entry.title === shown?.title ? ' on' : ''}`}
           onClick={() => onGroup(entry.title)}
         >
@@ -222,7 +223,7 @@ function GroupRail({
           <span className={`cfg-count${chosenIn(entry) > 0 ? ' set' : ''}`}>
             {chosenIn(entry)}/{entry.entries.length}
           </span>
-        </button>
+        </BareButton>
       ))}
       <div className="cfg-railnote">
         Precedence, later winning: defaults → <code>lubbdubb.config.json</code> → environment → live controls.
@@ -292,10 +293,15 @@ function AdvancedCard({
 }): React.JSX.Element {
   return (
     <Panel density="flush" className="cfg-card">
-      <button className="cfg-advhead" onClick={onToggle} aria-expanded={open}>
+      <BareButton
+        usage={open ? 'config.close' : 'config.expand'}
+        className="cfg-advhead"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
         <span className="muted">{open ? '▾' : '▸'}</span> Advanced
         <Tag tone="amber">{count} keys that can lock you out</Tag>
-      </button>
+      </BareButton>
       {open && (
         <>
           <p className="cfg-advwarn">
@@ -376,14 +382,20 @@ function DirtyBar({
       </span>
       <div className="cfg-dirtyacts">
         {unmet.length > 0 && unmet[0] && unmet[0].group !== shownTitle && (
-          <Button ghost size="small" onClick={() => onGroup(unmet[0]?.group ?? null)}>
+          <Button ghost size="small" usage="config.filter" onClick={() => onGroup(unmet[0]?.group ?? null)}>
             Show it
           </Button>
         )}
-        <Button ghost size="small" onClick={onDiscard}>
+        <Button ghost size="small" usage="config.abandon" onClick={onDiscard}>
           Discard all
         </Button>
-        <Button tone="primary" size="small" disabled={broken || unmet.length > 0} onClick={onReview}>
+        <Button
+          tone="primary"
+          size="small"
+          usage="config.expand"
+          disabled={broken || unmet.length > 0}
+          onClick={onReview}
+        >
           Review &amp; write
         </Button>
       </div>
@@ -413,7 +425,7 @@ function PendingCard({
               <input type="checkbox" checked={interrupt} onChange={(e) => setInterrupt(e.target.checked)} />
               stop running agents
             </label>
-            <Button size="small" disabled={busy} onClick={() => onRestart(interrupt)}>
+            <Button size="small" usage="config.accept" disabled={busy} onClick={() => onRestart(interrupt)}>
               Apply and restart
             </Button>
           </span>

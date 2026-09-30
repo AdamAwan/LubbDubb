@@ -44,7 +44,9 @@ export function EjectionControls({ held, actions }: { held: EjectionView; action
           explain="in the worktree this work is held in, so the branch and its uncommitted changes are in front of you"
         />
       )}
-      <Button onClick={() => setSettling(true)}>Hand back…</Button>
+      <Button usage="ejection.expand" onClick={() => setSettling(true)}>
+        Hand back…
+      </Button>
       {settling && <SettleModal held={held} actions={actions} onClose={() => setSettling(false)} />}
     </>
   );
@@ -65,11 +67,12 @@ function SettleModal({
       face="modal"
       title="Give this work back"
       lead={<Tag>{held.originRef}</Tag>}
+      closeUsage="ejection.close"
       onClose={onClose}
       foot={
         <>
           <span className="spacer" />
-          <Button ghost onClick={onClose}>
+          <Button ghost usage="ejection.close" onClick={onClose}>
             not yet
           </Button>
         </>
@@ -96,6 +99,7 @@ function SettleModal({
         {ARMS.map((arm) => (
           <div key={arm.outcome} className="eject-arm">
             <AsyncButton
+              usage="ejection.accept"
               disabled={arm.outcome === 'requeued' && note.trim() === ''}
               onClick={() =>
                 actions.settleEjection(held.id, arm.outcome, note.trim() === '' ? undefined : note.trim()).then(onClose)
@@ -131,15 +135,17 @@ export function EjectModal({
       face="modal"
       title="Take this off the fleet"
       lead={<Tag>{agentId}</Tag>}
+      closeUsage="agent.close"
       onClose={onClose}
       foot={
         <>
           <span className="spacer" />
-          <Button ghost onClick={onClose}>
+          <Button ghost usage="agent.close" onClick={onClose}>
             cancel
           </Button>
           <AsyncButton
             tone="danger"
+            usage={{ counted: 'agent.stop' }}
             disabled={reason.trim() === ''}
             pendingLabel="Ejecting…"
             onClick={() => onEject(reason.trim()).then(onClose)}

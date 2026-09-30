@@ -130,7 +130,9 @@ export function MessageForm({ onMessage }: { onMessage: (text: string) => Promis
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <SubmitButton phase={send.phase}>Send</SubmitButton>
+        <SubmitButton phase={send.phase} usage="agent.send">
+          Send
+        </SubmitButton>
       </div>
       {send.refusal !== null && <p className="lrun-note lrun-warn">{send.refusal}</p>}
     </form>

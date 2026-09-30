@@ -47,7 +47,7 @@ export function prRow(
         )}
       </>
     ),
-    open: () => actions.selectPr(pr.number),
+    open: { usage: { counted: 'pr.view' }, go: () => actions.selectPr(pr.number) },
     openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
     facts: unwatched ? undefined : prFacts(pr, view.now),
     why: unwatched ? null : pr.attention.reasons.join(' '),
@@ -65,6 +65,7 @@ export function prRow(
     ),
     toggle: (
       <AsyncButton
+        usage="pr.edit"
         className="cn-eye"
         disabled={watchLabel === ''}
         onClick={() => actions.setPrWatched(pr.number, unwatched)}
@@ -95,7 +96,7 @@ export function closedPrRow(pr: PullRequest, view: CockpitView, actions: Cockpit
     key: String(pr.number),
     title: pr.title,
     refs: <Ref to={`pr:${pr.number}`} />,
-    open: () => actions.selectPr(pr.number),
+    open: { usage: { counted: 'pr.view' }, go: () => actions.selectPr(pr.number) },
     openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
     reading: <ReviewMark review={pr.review} now={view.now} reserve onOpen={() => actions.selectPr(pr.number)} />,
     chips: (

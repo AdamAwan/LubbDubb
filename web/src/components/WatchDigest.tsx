@@ -140,10 +140,10 @@ function Pending({ check, onRule }: { check: GoalWatch; onRule: ((id: string, ac
       </p>
       {onRule !== null && (
         <div className="pm-wrule">
-          <Button size="small" onClick={() => onRule(check.id, true)}>
+          <Button size="small" usage="watch.accept" onClick={() => onRule(check.id, true)}>
             Accept
           </Button>
-          <Button ghost size="small" onClick={() => onRule(check.id, false)}>
+          <Button ghost size="small" usage="watch.reject" onClick={() => onRule(check.id, false)}>
             Decline
           </Button>
         </div>

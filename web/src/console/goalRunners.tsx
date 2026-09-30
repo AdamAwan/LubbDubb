@@ -26,6 +26,7 @@ import {
   validateLocallyQuestion,
 } from '../view/localValidation.js';
 import { Disclosure, type Fold } from './goalFold.js';
+import { BareButton } from '../components/button.js';
 
 export const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
@@ -51,7 +52,7 @@ export function LocalValidation({
   return (
     <section className="cn-card" id={LOCAL_VALIDATION_ANCHOR}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Runs on your machine" />
+        <Disclosure subject="local-run" open={fold.open} onToggle={fold.onToggle} label="Runs on your machine" />
         <i className="cn-n">
           {validation === null
             ? 'never run'
@@ -191,6 +192,7 @@ function LocalRunRow({
       ) : offer.offered ? (
         <>
           <AsyncButton
+            usage="validation.create"
             className={`${CONTROL_CLASS} primary`}
             onClick={onValidate}
             onRefused={onRefused}
@@ -229,6 +231,7 @@ function GapRow({
       <span className="cn-runstrip-who">{environment ?? 'remote'}</span>
       {gap.setUp === true && environment !== null && (
         <AsyncButton
+          usage="validation.create"
           className={CONTROL_CLASS}
           onClick={() => onSetUp(environment)}
           onRefused={onRefused}
@@ -264,6 +267,7 @@ function SheetRunRow({
       ) : (
         <>
           <AsyncButton
+            usage="validation.create"
             className={`${CONTROL_CLASS} primary`}
             onClick={() => actions.pressRemoteSheet(issueNumber, sheet.environment)}
             onRefused={onRefused}
@@ -356,7 +360,7 @@ export function Signals({
   return (
     <section className="cn-card" id="cn-signals">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Signals" />
+        <Disclosure subject="watch" open={fold.open} onToggle={fold.onToggle} label="Signals" />
         <i className="cn-n">
           {signals.length === 1 ? '1 reading' : `${signals.length} readings`}
           {pending > 0 && ` · ${pending} awaiting you`}
@@ -364,9 +368,13 @@ export function Signals({
         <span className="cn-more">
           asked of a live environment after this ships
           {plan !== null && (
-            <button type="button" className="cn-linkish" onClick={() => actions.viewPlan(plan.id)}>
+            <BareButton
+              usage={{ counted: 'plan.view' }}
+              className="cn-linkish"
+              onClick={() => actions.viewPlan(plan.id)}
+            >
               see the plan ↗
-            </button>
+            </BareButton>
           )}
         </span>
       </h3>
@@ -424,7 +432,12 @@ export function RemoteValidation({
   return (
     <section className="cn-card" id="cn-remote-validation">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label={`Runs on ${open.environment}`} />
+        <Disclosure
+          subject="validation"
+          open={fold.open}
+          onToggle={fold.onToggle}
+          label={`Runs on ${open.environment}`}
+        />
         <i className="cn-n">
           {pressable === 1 ? '1 row a press would read' : `${pressable} rows a press would read`}
           {waiting > 0 && ` · ${waiting} waiting on an approval`}

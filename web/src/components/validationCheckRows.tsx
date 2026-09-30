@@ -12,10 +12,9 @@ import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
-import type { ButtonLook } from './button.js';
+import { BareButton, type ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
-import { logUsage } from '../cockpit/usage.js';
 import { OUTCOME_TONE, rowSaid } from './RemoteValidationSection.js';
 
 export function isMissingFile(resource: ValidationResourceView): boolean {
@@ -96,22 +95,22 @@ export function CheckLine({
         ) : (
           <span className="vq-box-none" aria-hidden />
         )}
-        <button className="vq-line-open" onClick={onOpen}>
+        <BareButton usage="validation.expand" className="vq-line-open" onClick={onOpen}>
           <span className="pm-vletter">{check.letter}</span>
           <span className="vq-line-title">{check.title}</span>
           {aside !== null && <span className="vq-said">{aside}</span>}
           {odd !== null && <span className={`vq-said ${check.state}`}>{odd}</span>}
-        </button>
+        </BareButton>
       </div>
     );
   }
   return (
-    <button className={`vq-line ${check.state}`} onClick={onOpen}>
+    <BareButton usage="validation.expand" className={`vq-line ${check.state}`} onClick={onOpen}>
       <span className="pm-vletter">{check.letter}</span>
       <span className="vq-line-title">{check.title}</span>
       {aside !== null && <Tag tone="amber">{aside}</Tag>}
       <Tag tone={stateTone(check.state)}>{CHECK_STATE_WORDS[check.state]}</Tag>
-    </button>
+    </BareButton>
   );
 }
 
@@ -153,14 +152,14 @@ export function CheckRuns({
               </a>
             )}
             {agentId !== null && onOpenAgent !== undefined && (
-              <button
-                type="button"
+              <BareButton
+                usage={{ counted: 'agent.view' }}
                 className="cn-openagent"
                 title="Open the agent that ran this — everything it did, and what it cost"
                 onClick={() => onOpenAgent(agentId)}
               >
                 agent ↗
-              </button>
+              </BareButton>
             )}
           </div>
         );
@@ -367,11 +366,17 @@ function CheckActions({
               and `Undo` puts it back. A pass is the expected answer and goes on one click; the
               two that are awkward to undo arm first, through the same double-press every
               destructive control in the cockpit uses. → docs/spec/17-cockpit.md#the-button */}
-          <AsyncButton {...look} tone="primary" onClick={() => onResult('passed', '')}>
+          <AsyncButton
+            {...look}
+            tone="primary"
+            usage={{ counted: 'validation.accept' }}
+            onClick={() => onResult('passed', '')}
+          >
             Passed
           </AsyncButton>
           <ConfirmButton
             label="Failed"
+            usage={{ counted: 'validation.reject' }}
             confirmLabel="Confirm failed"
             ghost
             size="small"
@@ -390,10 +395,8 @@ function CheckActions({
         <AsyncButton
           {...look}
           title="Withdraw what was recorded and put this check back to not run"
-          onClick={() => {
-            logUsage('validation.undo');
-            return onReset();
-          }}
+          usage="validation.undo"
+          onClick={() => onReset()}
         >
           Undo
         </AsyncButton>
@@ -421,6 +424,7 @@ function CantRunNow({
             field and a row in the queue that read as answered when nothing had been. */}
         <ConfirmButton
           label="Skip it"
+          usage={{ counted: 'validation.waive' }}
           confirmLabel="Confirm skip"
           ghost
           size="small"
@@ -436,6 +440,7 @@ function CantRunNow({
             ghost
             size="small"
             title="Stop waiting for an agent and take this check back"
+            usage="validation.edit"
             onClick={() => onHandover('human')}
           >
             Take it back
@@ -445,6 +450,7 @@ function CantRunNow({
             ghost
             size="small"
             title="Let the harness put an agent on this check once the goal is delivered"
+            usage="validation.edit"
             onClick={() => onHandover('fleet')}
           >
             Hand to the fleet

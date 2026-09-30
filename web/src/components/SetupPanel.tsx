@@ -159,18 +159,20 @@ function SetupFoot(props: {
   const { previewed, busy, canReview, onClose, onReview, onWrite } = props;
   return (
     <div className="cn-setup-foot">
-      <Button onClick={onClose}>Cancel</Button>
+      <Button usage="config.abandon" onClick={onClose}>
+        Cancel
+      </Button>
       <span className="cn-setup-hint">
         {!previewed
           ? 'Nothing is written until you have seen the file.'
           : 'Keys your team’s project file already sets are absent on purpose.'}
       </span>
       {!previewed ? (
-        <Button tone="primary" disabled={busy || !canReview} onClick={onReview}>
+        <Button tone="primary" usage="config.expand" disabled={busy || !canReview} onClick={onReview}>
           {busy ? 'Preparing…' : 'Show me the file'}
         </Button>
       ) : (
-        <Button tone="primary" disabled={busy} onClick={onWrite}>
+        <Button tone="primary" usage="config.edit" disabled={busy} onClick={onWrite}>
           {busy ? 'Writing…' : 'Write the file'}
         </Button>
       )}
@@ -304,7 +306,7 @@ function Done(props: { changes: readonly ConfigChange[]; onClose: () => void }):
       </p>
       <div className="cn-setup-foot">
         <span className="cn-setup-hint">Restart the harness to bring the rest in.</span>
-        <Button tone="primary" onClick={props.onClose}>
+        <Button tone="primary" usage="config.accept" onClick={props.onClose}>
           Done
         </Button>
       </div>

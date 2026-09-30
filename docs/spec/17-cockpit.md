@@ -1854,6 +1854,11 @@ of `ConfirmButton`'s call sites are. Spelled as a tone those two readings could 
 would have had to give up their red to keep their transparency. `size="small"` is the second weight,
 and it is the one the codebase reaches for most.
 
+**Every button names a usage event, and a raw `<button>` is a lint error.** `BareButton` is the one
+element in the cockpit that draws `<button>`, and it wears no look; `Button`, the async family and the
+control kit all render through it and all require `usage`. Why, and what the prop may hold, is
+[34](34-usage-metrics.md#every-button-names-its-event).
+
 **`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a
 toggle, a drop target, a close cross — passes that class beside the props, which is the bargain
 [the review mark](#the-fleet-reviews-mark) already makes with `t-green`.

@@ -1,5 +1,7 @@
 import { createContext, useContext, useMemo, type JSX, type ReactNode } from 'react';
 import { ExtLink, linkify, refLink } from './util.js';
+import { BareButton } from './button.js';
+import type { ControlUsage } from '../types.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -79,6 +81,7 @@ export function Ref({
           label={token}
           title={title ?? `Open goal #${number} — its plan, its pull requests and anything it is asking you`}
           onOpen={() => world.openGoal(ref)}
+          usage={{ counted: 'goal.view' }}
           out={issueUrl(world.refUrls, number)}
           outTitle={`Open #${number} on the tracker — the story as it was written, and its comments`}
         />
@@ -97,6 +100,7 @@ export function Ref({
           label={token}
           title={title ?? `Open pull request #${prNumber} — its review threads, its checks and the work on its branch`}
           onOpen={() => world.openPr(number)}
+          usage={{ counted: 'pr.view' }}
           out={prUrl(world.refUrls, number)}
           outTitle={`Open pull request #${prNumber} on the provider — the diff, the review, the checks`}
         />
@@ -112,19 +116,21 @@ function RefDoors({
   label,
   title,
   onOpen,
+  usage,
   out,
   outTitle,
 }: {
   label: string;
   title: string;
   onOpen: () => void;
+  usage: ControlUsage;
   out: string | undefined;
   outTitle: string;
 }): JSX.Element {
   const token = (
-    <button type="button" className="ref-goal" title={title} onClick={onOpen}>
+    <BareButton usage={usage} className="ref-goal" title={title} onClick={onOpen}>
       {label}
-    </button>
+    </BareButton>
   );
   if (out === undefined) return token;
   return (

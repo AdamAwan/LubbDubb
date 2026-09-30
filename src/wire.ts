@@ -1081,7 +1081,7 @@ export type {
 } from './types.js';
 export type { OperatorInsights, OperatorRow, OperatorRowKind } from './insights/operatorInsights.js';
 export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
-export type { PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
+export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
 export type { BuildReading, SnoozeStamps, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
 export type { BuildStanding } from './selfUpdate/buildStanding.js';

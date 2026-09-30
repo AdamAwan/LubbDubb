@@ -279,6 +279,7 @@ function RunActions({
       {canRefresh && (
         <AsyncButton
           tone="primary"
+          usage="local-run.edit"
           onClick={() => onRefresh()}
           title={
             refreshConfigured
@@ -292,6 +293,7 @@ function RunActions({
       {canValidate && runNumber !== null && (
         <AsyncButton
           className="primary"
+          usage="validation.create"
           onClick={() => onValidate(runNumber)}
           title="Send one agent to write a test plan against what is running, drive it in a browser, and report on the goal's page"
         >
@@ -301,6 +303,7 @@ function RunActions({
       {canStop && (
         <ConfirmButton
           label="Stop"
+          usage={{ counted: 'local-run.stop' }}
           confirmLabel="Stop it — really"
           pendingLabel="Stopping…"
           onConfirm={() => onStop()}
@@ -423,7 +426,13 @@ function OutputFold({
         {lines.length > 0 && <span className="lrun-fold-hint">{lines[lines.length - 1]}</span>}
       </summary>
       {lines.length > 0 ? (
-        <TranscriptPane text={lines.join('\n')} streamId={run.id} label="Local run output" className="compact" />
+        <TranscriptPane
+          text={lines.join('\n')}
+          streamId={run.id}
+          label="Local run output"
+          className="compact"
+          usage="local-run.expand"
+        />
       ) : (
         <p className="lrun-note">Nothing printed yet.</p>
       )}

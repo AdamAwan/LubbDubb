@@ -12,11 +12,11 @@ import type { Issue, TicketOrder, TicketRow } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
 import { AsyncButton } from './AsyncButton.js';
+import { BareButton } from './button.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { absDate, fmtUsd, relAge } from './util.js';
 import { Panel } from './panel.js';
 import { Tag } from './tag.js';
-import { logUsage } from '../cockpit/usage.js';
 import type { TicketFeed } from './ticketsFeed.js';
 import type { TicketQueryPlace } from './ticketsFilters.js';
 
@@ -159,31 +159,28 @@ function FeatureHead({
 }): JSX.Element {
   return (
     <div className="tickets-fhead">
-      <button
-        type="button"
+      <BareButton
+        usage={collapsed ? 'feature.expand' : 'feature.close'}
         className="tickets-fold"
         aria-expanded={!collapsed}
-        onClick={() => {
-          if (collapsed) logUsage('feature.expand');
-          actions.collapseFeature(feature.number, !collapsed);
-        }}
+        onClick={() => actions.collapseFeature(feature.number, !collapsed)}
         title={collapsed ? 'Show the work under this feature' : 'Fold this feature away'}
       >
         {collapsed ? '▸' : '▾'}
-      </button>
+      </BareButton>
       <i className={`tickets-stripe f${feature.slot ?? 0}`} />
       <span className="tickets-fname">
         {featureIssue === null ? (
           <b>{feature.title}</b>
         ) : (
-          <button
-            type="button"
+          <BareButton
+            usage={{ counted: 'goal.view' }}
             className="tickets-fopen"
             onClick={() => actions.selectGoal(`issue:${feature.number}`)}
             title="Open this feature's page — its children, its plan and anything it is asking you"
           >
             <b>{feature.title}</b>
-          </button>
+          </BareButton>
         )}
         <i className="tickets-fnum">#{feature.number}</i>
         <i className="tickets-fcount">
@@ -302,8 +299,8 @@ function TicketWhat({
   return (
     <span className="tickets-what">
       {intake && <i className="tickets-lamp" />}
-      <button
-        type="button"
+      <BareButton
+        usage={{ counted: 'goal.view' }}
         className="tickets-name-btn"
         onClick={() => actions.selectGoal(`issue:${row.number}`)}
         title="Open this goal — its plan, its ticket, its pull requests and anything it is asking you"
@@ -319,17 +316,17 @@ function TicketWhat({
           {frozen && <span>frozen{row.changedAt ? ` · last change ${relAge(row.changedAt, now)}` : ''}</span>}
           {reasons[0] !== undefined && <span className="tickets-reason">{reasons[0]}</span>}
         </span>
-      </button>
+      </BareButton>
       {reasons.length > 0 && (
-        <button
-          type="button"
+        <BareButton
+          usage={why ? 'ticket.close' : 'ticket.expand'}
           className={`tickets-why-b ${issue?.pickup.eligible === false && !intake ? '' : 'quiet'}`}
           aria-expanded={why}
           onClick={onWhy}
           title="Why is nothing on this?"
         >
           ?
-        </button>
+        </BareButton>
       )}
     </span>
   );
@@ -393,6 +390,7 @@ function WatchSwitch({
   return (
     <span className={`tickets-switch ${off !== null ? 'off' : ''}`}>
       <AsyncButton
+        usage="ticket.accept"
         className={bucket === 'watched' ? 'on w' : ''}
         disabled={off !== null || bucket === 'watched'}
         onClick={() => actions.setIssueWatched(number ?? 0, true)}
@@ -401,6 +399,7 @@ function WatchSwitch({
         Watch
       </AsyncButton>
       <AsyncButton
+        usage="ticket.reject"
         className={bucket === 'unwatched' ? 'on u' : ''}
         disabled={off !== null || bucket === 'unwatched'}
         onClick={() => actions.setIssueWatched(number ?? 0, false)}
@@ -441,8 +440,8 @@ function SortHead({
 }): JSX.Element {
   return (
     <span className="tickets-num">
-      <button
-        type="button"
+      <BareButton
+        usage="ticket.filter"
         className={order === active ? 'on' : ''}
         title={
           order === 'cost'
@@ -454,7 +453,7 @@ function SortHead({
       >
         {label}
         {order === active && <i className="tickets-arrow">▼</i>}
-      </button>
+      </BareButton>
     </span>
   );
 }

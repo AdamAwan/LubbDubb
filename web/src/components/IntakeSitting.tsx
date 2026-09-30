@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { api, type GoalCriteriaReading } from '../api.js';
 import type { CriteriaAlignmentPoint } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { buttonClass } from './button.js';
+import { Button } from './button.js';
 import { CONTAINMENT, EMPTY, REACHES_THE_FLEET, SLOTS, filled, type Draft } from './PlanRevealGate.js';
 
 // → docs/spec/17-cockpit.md#the-reveal-gate
@@ -59,15 +59,11 @@ export function IntakeSitting({
         {!composing && !recorded && (
           <div className="cn-gate-presses">
             {(sitting.asksPrediction || sitting.asksCriteria) && (
-              <button
-                type="button"
-                className={buttonClass({ tone: 'primary' })}
-                onClick={() => sitting.setComposing(true)}
-              >
+              <Button usage="intake.expand" tone="primary" onClick={() => sitting.setComposing(true)}>
                 Write these down
-              </button>
+              </Button>
             )}
-            <AsyncButton tone="primary" onClick={sitting.close}>
+            <AsyncButton tone="primary" usage="intake.waive" onClick={sitting.close}>
               Skip, just plan it
             </AsyncButton>
           </div>
@@ -201,12 +197,12 @@ function IntakeCompose({ sitting }: { sitting: Sitting }): JSX.Element {
       )}
       {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
       <div className="cn-gate-presses">
-        <AsyncButton tone="primary" onClick={sitting.record} onRefused={sitting.setRefusal}>
+        <AsyncButton tone="primary" usage="intake.edit" onClick={sitting.record} onRefused={sitting.setRefusal}>
           Record these
         </AsyncButton>
-        <button type="button" className={buttonClass({})} onClick={() => sitting.setComposing(false)}>
+        <Button usage="intake.abandon" onClick={() => sitting.setComposing(false)}>
           Back
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -271,12 +267,12 @@ function AlignmentReading({ alignment }: { alignment: NonNullable<GoalCriteriaRe
 function RevisingPresses({ sitting }: { sitting: Sitting }): JSX.Element {
   return (
     <>
-      <AsyncButton tone="primary" onClick={sitting.revise} onRefused={sitting.setRefusal}>
+      <AsyncButton tone="primary" usage="criteria.edit" onClick={sitting.revise} onRefused={sitting.setRefusal}>
         Record this version
       </AsyncButton>
-      <button type="button" className={buttonClass({})} onClick={() => sitting.setRevising(false)}>
+      <Button usage="criteria.abandon" onClick={() => sitting.setRevising(false)}>
         Back
-      </button>
+      </Button>
     </>
   );
 }
@@ -285,20 +281,19 @@ function RecordedPresses({ sitting }: { sitting: Sitting }): JSX.Element {
   const { current } = sitting;
   return (
     <>
-      <AsyncButton tone="primary" onClick={sitting.close}>
+      <AsyncButton tone="primary" usage="intake.accept" onClick={sitting.close}>
         {sitting.alignment?.verdict === 'conflicting' ? 'Plan it anyway' : 'Start planning'}
       </AsyncButton>
       {current !== null && (
-        <button
-          type="button"
-          className={buttonClass({})}
+        <Button
+          usage="criteria.expand"
           onClick={() => {
             sitting.setCriteria(current.text);
             sitting.setRevising(true);
           }}
         >
           Revise criteria
-        </button>
+        </Button>
       )}
     </>
   );

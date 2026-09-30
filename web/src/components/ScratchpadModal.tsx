@@ -98,6 +98,7 @@ export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClo
           </Tag>
         )
       }
+      closeUsage="scratchpad.close"
       onClose={onClose}
     >
       <div className="pm-note-line">

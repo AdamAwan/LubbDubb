@@ -39,14 +39,15 @@ export function GateReleaseModal({
       face="modal"
       title="Not waiting on an environment"
       lead={<Tag>#{issueNumber}</Tag>}
+      closeUsage="goal.close"
       onClose={onClose}
       foot={
         <>
           <span className="spacer" />
-          <Button ghost onClick={onClose}>
+          <Button ghost usage="goal.close" onClick={onClose}>
             cancel
           </Button>
-          <AsyncButton tone="primary" disabled={note.trim().length === 0} onClick={submit}>
+          <AsyncButton tone="primary" usage="goal.waive" disabled={note.trim().length === 0} onClick={submit}>
             stop waiting
           </AsyncButton>
         </>

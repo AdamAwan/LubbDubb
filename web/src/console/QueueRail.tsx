@@ -2,11 +2,12 @@ import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
-import { openGoalForAsk } from './jump.js';
-import type { BuildReading, SetupCheck } from '../types.js';
+import { openRow, rowDestination } from './queueRailOpens.js';
+import type { Destination } from '../components/button.js';
+import type { BuildReading, ControlUsage, SetupCheck } from '../types.js';
 import { relTime } from '../components/util.js';
 import { PrLink, Ref, refLabel } from '../components/refs.js';
-import { Button } from '../components/button.js';
+import { BareButton, Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
 import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
@@ -303,21 +304,23 @@ function Card({
   cls,
   current,
   onClick,
+  usage,
   foot,
   children,
 }: {
   cls: string;
   current: boolean;
   onClick: () => void;
+  usage: ControlUsage;
   foot: ReactNode;
   children: ReactNode;
 }): JSX.Element {
   return (
     <div className={cls}>
       <i className="cn-stripe" />
-      <button type="button" className="cn-qbody" onClick={onClick} aria-current={current ? 'true' : undefined}>
+      <BareButton usage={usage} className="cn-qbody" onClick={onClick} aria-current={current ? 'true' : undefined}>
         <div className="cn-qin">{children}</div>
-      </button>
+      </BareButton>
       {foot !== null && (
         <>
           <i className="cn-stripe" />
@@ -348,6 +351,7 @@ function ConfigRow({
       cls={cls}
       current={current}
       onClick={() => actions.openConfig({ configTab: 'values', configGroup: group ?? null })}
+      usage={{ counted: 'config.view' }}
       foot={
         row.applied === undefined ? (
           <ConfigFix check={check} actions={actions} />
@@ -363,23 +367,6 @@ function ConfigRow({
       {check.remedy !== undefined && <div className="cn-qmeta">{check.remedy}</div>}
     </Card>
   );
-}
-
-/* Narrowed at the one place that needs it, so `selectPr` is never handed the
-   number of an ask whose destination is not a pull request. */
-function rowDestination(row: NeedRow, dest: NeedRow['opens'], actions: CockpitActions): (() => void) | null {
-  const ref = row.goalRef;
-  const prOf = (r: NeedRow): number => r.prNumber ?? 0;
-  if (dest === 'build') return () => actions.openPanel('build');
-  if (dest === 'goal') return ref === null ? null : () => openGoalForAsk(actions, ref, row.kind);
-  if (dest === 'pr') return row.prNumber === undefined ? null : () => actions.selectPr(prOf(row));
-  if (dest === 'prediction') return ref === null ? null : () => actions.openGoalPrediction(ref);
-  if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
-  return null;
-}
-
-function openRow(row: NeedRow, actions: CockpitActions): () => void {
-  return rowDestination(row, row.opens, actions) ?? (() => actions.openPanel({ ask: row.id }));
 }
 
 function rowClass(row: NeedRow, focus: string | null, current: boolean): string {
@@ -400,7 +387,7 @@ function ProviderRow({
   cls: string;
   prNumber: number;
   originRef: string;
-  details: (() => void) | null;
+  details: Destination | null;
   children: ReactNode;
 }): JSX.Element {
   return (
@@ -412,7 +399,7 @@ function ProviderRow({
       <i className="cn-stripe" />
       <CardFoot>
         {details !== null && (
-          <Button size="small" onClick={details}>
+          <Button size="small" usage={details.usage} onClick={details.go}>
             Details
           </Button>
         )}
@@ -457,7 +444,7 @@ function Row({
 
   const open = openRow(row, actions);
   const card = (foot: ReactNode): JSX.Element => (
-    <Card cls={cls} current={current} onClick={open} foot={foot}>
+    <Card cls={cls} current={current} onClick={open.go} usage={open.usage} foot={foot}>
       {body}
     </Card>
   );
@@ -478,7 +465,7 @@ function Row({
   if (details !== null) {
     return card(
       <CardFoot>
-        <Button size="small" onClick={details}>
+        <Button size="small" usage={details.usage} onClick={details.go}>
           Details
         </Button>
       </CardFoot>,
@@ -486,9 +473,9 @@ function Row({
   }
 
   return (
-    <button type="button" className={cls} onClick={open} aria-current={current ? 'true' : undefined}>
+    <BareButton usage={open.usage} className={cls} onClick={open.go} aria-current={current ? 'true' : undefined}>
       {inner}
-    </button>
+    </BareButton>
   );
 }
 
@@ -508,12 +495,14 @@ function AssignGroupRow({
   actions: CockpitActions;
 }): JSX.Element {
   const row: NeedRow = { ...first, title: askLine(assignGroupLine(asks.length), first.goalRef, view.state) };
+  const open = openRow(row, actions);
   const current = focus !== null && row.goalRef === focus;
   return (
     <Card
       cls={rowClass(row, focus, current)}
       current={current}
-      onClick={openRow(row, actions)}
+      onClick={open.go}
+      usage={open.usage}
       foot={
         <CardFoot>
           <span className="cn-refs">
@@ -569,14 +558,14 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
                    row each on them is the reason the pressing ones get skimmed.
                    The fold is per-visit state, not a `Place` field — it says
                    nothing about where the operator is. */
-                <button
-                  type="button"
+                <BareButton
+                  usage={openLater ? 'escalation.close' : 'escalation.expand'}
                   className="cn-railmore"
                   aria-expanded={openLater}
                   onClick={() => setShowLater((open) => !open)}
                 >
                   {openLater ? 'Hide' : 'Show'} {section.rows.length} holding nothing
-                </button>
+                </BareButton>
               ) : (
                 <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
               )}

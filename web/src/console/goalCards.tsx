@@ -5,6 +5,7 @@ import type { GoalPageView } from '../view/goalPage.js';
 import { GOAL_ANCHOR } from '../view/goalPage.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { BareButton } from '../components/button.js';
 import { renderRichText } from '../components/richText.js';
 import { fmtUsd } from '../components/util.js';
 import { Ref } from '../components/refs.js';
@@ -31,6 +32,7 @@ export function Instructions({ issue, actions }: { issue: Issue; actions: Cockpi
             </span>
             <AsyncButton
               className={CONTROL_CLASS}
+              usage="goal.undo"
               onClick={() => actions.withdrawInstruction(issue.number, instruction.id)}
               title="Take this back — it stops being sent to the next agent"
             >
@@ -70,7 +72,7 @@ export function Sequence({ page, fold }: { page: GoalPageView; fold: Fold }): JS
   return (
     <section className="cn-card">
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Sequence" />
+        <Disclosure subject="goal" open={fold.open} onToggle={fold.onToggle} label="Sequence" />
         <i className="cn-n">
           wave {mine + 1} of {waves.length}
           {ahead.length === 0 ? '' : ` · ${ahead.length} waiting on this`}
@@ -178,7 +180,7 @@ export function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitA
   return (
     <section className="cn-card" id={GOAL_ANCHOR.tail}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="The tail" />
+        <Disclosure subject="goal" open={fold.open} onToggle={fold.onToggle} label="The tail" />
         <i className="cn-n">{issue.state === 'open' ? 'ticket open' : issue.state}</i>
       </h3>
       {fold.open && <TailRows issue={issue} check={check} actions={actions} />}
@@ -212,9 +214,13 @@ function TailRows({
           <span className="cn-sub">{issue.retrospective?.summary ?? 'not written'}</span>
         </span>
         {issue.retrospective !== null && (
-          <button type="button" className={CONTROL_CLASS} onClick={() => actions.viewRetro(ref)}>
+          <BareButton
+            usage={{ counted: 'retro.view' }}
+            className={CONTROL_CLASS}
+            onClick={() => actions.viewRetro(ref)}
+          >
             Read
-          </button>
+          </BareButton>
         )}
       </div>
       <div className="cn-row">
@@ -233,9 +239,13 @@ function TailRows({
           </span>
         </span>
         {issue.scratchpad !== null && (
-          <button type="button" className={CONTROL_CLASS} onClick={() => actions.viewScratchpad(ref)}>
+          <BareButton
+            usage={{ counted: 'scratchpad.view' }}
+            className={CONTROL_CLASS}
+            onClick={() => actions.viewScratchpad(ref)}
+          >
             Open
-          </button>
+          </BareButton>
         )}
       </div>
     </div>

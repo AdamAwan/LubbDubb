@@ -16,7 +16,6 @@ import { Ref } from './refs.js';
 import { PartBlock } from './PlanPart.js';
 import { HistoryView } from './PlanHistoryView.js';
 import { Tag } from './tag.js';
-import { logUsage } from '../cockpit/usage.js';
 import { JumpSection, type Derived, type PlanModalProps, type Sections, type SheetView } from './planModalShared.js';
 import { CaveatsSection } from './PlanCaveatsSection.js';
 import { PlanRail } from './PlanRail.js';
@@ -82,6 +81,7 @@ export function PlanModal(props: PlanModalProps) {
           {plan.statusCommentRef !== null && <Tag>{refLink(plan.statusCommentRef, refUrls)}</Tag>}
         </>
       }
+      closeUsage="plan.close"
       onClose={onClose}
     >
       <PlanRail
@@ -410,12 +410,10 @@ function PlanFoot({
               being refused. Here, where there is no verdict on offer, it is the
               only way to ask a planner again. */}
           <AsyncButton
+            usage="plan.reject"
             ghost
             title="Ask the planner again from the plan's current state. Nothing is torn down."
-            onClick={() => {
-              logUsage('plan.reject');
-              return onReplan(plan.id);
-            }}
+            onClick={() => onReplan(plan.id)}
           >
             Replan
           </AsyncButton>

@@ -5,7 +5,7 @@ import { foldPoolDigest, poolUsageLabel } from '../src/pool/aggregate.js';
 import { buildDigestDocument } from '../src/pool/digestArm.js';
 import { POOL_SCHEMA_VERSION, parsePoolDocument, serialisePoolDocument } from '../src/pool/document.js';
 import { renderPoolMarkdown } from '../src/pool/markdown.js';
-import { USAGE_COPY } from '../src/usage/events.js';
+import { USAGE_COPY } from '../src/usage/eventCopy.js';
 import type { PoolDigestDocument } from '../src/types.js';
 
 const SCOPED = { pullRequests: true, issues: true };

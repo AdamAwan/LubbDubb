@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
+import { BareButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -17,8 +18,8 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }): JSX.E
   const [copied, setCopied] = useState(false);
   return (
     <pre className={`md-code md-code-${lang}`}>
-      <button
-        type="button"
+      <BareButton
+        usage="code.copy"
         className="md-copy"
         title="Copy this exactly as the harness put it, however it is drawn here"
         onClick={() => {
@@ -29,7 +30,7 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }): JSX.E
         }}
       >
         {copied ? 'Copied' : 'Copy'}
-      </button>
+      </BareButton>
       <code>{lang === 'kql' ? kqlLines(code) : code}</code>
     </pre>
   );

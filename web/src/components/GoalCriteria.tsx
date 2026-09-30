@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { api, type CriteriaVersionReading, type GoalCriteriaReading } from '../api.js';
 import type { CriteriaStanding } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { buttonClass } from './button.js';
+import { BareButton, Button } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { relTime } from './util.js';
 
@@ -169,9 +169,9 @@ function CriteriaPresses({
       {/* Primary only where there is nothing on record. A revision is one way
         on from a card that already says what it says, and drawn as the act
         the page is asking for it reads as work owed on every goal. */}
-      <button type="button" className={buttonClass(first ? { tone: 'primary' } : {})} onClick={onWrite}>
+      <Button usage="criteria.expand" tone={first ? 'primary' : undefined} onClick={onWrite}>
         {first ? 'Write the criteria' : 'Revise the criteria'}
-      </button>
+      </Button>
       {nextIsDrift && <span className="cn-crit-warn">A revision now is drift, and will want a reason.</span>}
     </div>
   );
@@ -263,10 +263,15 @@ function CriteriaHeading({
       {/* The disclosure is the card's own, as the prediction panel's is: only this
           card knows whether anybody has written criteria, so only it can say
           whether there is a record here to fold. */}
-      <button type="button" className="cn-disc" aria-expanded={showing} onClick={() => onToggle(!showing)}>
+      <BareButton
+        usage={showing ? 'criteria.close' : 'criteria.expand'}
+        className="cn-disc"
+        aria-expanded={showing}
+        onClick={() => onToggle(!showing)}
+      >
         <i className="cn-caret">{showing ? '▾' : '▸'}</i>
         What “done” means
-      </button>
+      </BareButton>
       {versionCount > 0 && <i className="cn-n">v{versionCount}</i>}
       {drifted > 0 && (
         <Tag tone="amber" title={STANDING['post-work'].why}>
@@ -359,12 +364,17 @@ function CriteriaForm({
       </p>
       {draft.refusal !== null && <p className="cn-crit-refusal">{draft.refusal}</p>}
       <div className="cn-crit-presses">
-        <AsyncButton tone="primary" onClick={() => draft.submit(nextIsDrift)} onRefused={draft.setRefusal}>
+        <AsyncButton
+          tone="primary"
+          usage="criteria.edit"
+          onClick={() => draft.submit(nextIsDrift)}
+          onRefused={draft.setRefusal}
+        >
           Append this version
         </AsyncButton>
-        <button type="button" className={buttonClass({})} onClick={draft.cancel}>
+        <Button usage="criteria.abandon" onClick={draft.cancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );

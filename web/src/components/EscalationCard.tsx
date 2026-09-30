@@ -116,6 +116,7 @@ function CardAnswer(answer: AnswerProps): JSX.Element {
         />
         <AsyncButton
           tone="primary"
+          usage={{ counted: 'escalation.accept' }}
           title="Run this command; the same agent continues"
           onClick={() => onPermission!(escalation.id, true, text.trim() || undefined)}
         >
@@ -123,6 +124,7 @@ function CardAnswer(answer: AnswerProps): JSX.Element {
         </AsyncButton>
         <AsyncButton
           ghost
+          usage={{ counted: 'escalation.reject' }}
           title="Refuse this command; the agent is told and carries on"
           onClick={() => onPermission!(escalation.id, false, text.trim() || undefined)}
         >
@@ -132,7 +134,7 @@ function CardAnswer(answer: AnswerProps): JSX.Element {
     );
   if (card.gated)
     return (
-      <Button className="esc-plan-open" onClick={onReveal}>
+      <Button className="esc-plan-open" usage="plan.expand" onClick={onReveal}>
         <span className="esc-plan-open-label">Reveal the plan</span>
         <span className="esc-plan-open-hint">
           the prediction and what “done” means are asked first, on the goal — then it is yours to read →
@@ -143,7 +145,7 @@ function CardAnswer(answer: AnswerProps): JSX.Element {
   if (card.questions)
     return (
       <div className="esc-quick">
-        <AsyncButton tone="primary" onClick={onAsk}>
+        <AsyncButton tone="primary" usage="escalation.expand" onClick={onAsk}>
           Answer {card.questions.length} questions →
         </AsyncButton>
       </div>
@@ -162,7 +164,7 @@ function CardAnswer(answer: AnswerProps): JSX.Element {
       }}
     >
       <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
-      <SubmitButton phase={send.phase} tone="primary">
+      <SubmitButton phase={send.phase} tone="primary" usage={{ counted: 'escalation.send' }}>
         Send
       </SubmitButton>
     </form>
@@ -228,6 +230,7 @@ function VerdictRow({
       />
       <AsyncButton
         tone="primary"
+        usage={{ counted: 'escalation.accept' }}
         disabled={held || declines.unsaid.length > 0}
         title={acceptTitle(decidable, held, ack, declines)}
         onClick={() =>
@@ -238,6 +241,7 @@ function VerdictRow({
       </AsyncButton>
       <AsyncButton
         ghost
+        usage={{ counted: 'escalation.reject' }}
         title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
         onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
       >
@@ -246,6 +250,7 @@ function VerdictRow({
       {overrulable && (
         <AsyncButton
           ghost
+          usage={{ counted: 'goal.accept' }}
           disabled={text.trim().length === 0}
           title={
             text.trim().length === 0

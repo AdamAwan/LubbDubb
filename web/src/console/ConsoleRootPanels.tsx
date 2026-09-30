@@ -20,7 +20,9 @@ import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Modal } from '../components/Modal.js';
-import { Button, ButtonRow } from '../components/button.js';
+import { BareButton, Button, ButtonRow } from '../components/button.js';
+import type { ControlUsage } from '../types.js';
+import { panelClose } from '../cockpit/usage.js';
 import { relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
 
@@ -41,18 +43,22 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
 
 function PanelShell({
   title,
+  closeUsage,
   onClose,
   children,
 }: {
   title: string;
+  closeUsage: ControlUsage;
   onClose: () => void;
   children: ReactNode;
 }): JSX.Element {
   return (
-    <Modal face="panel" label={title} onClose={onClose}>
+    <Modal face="panel" label={title} closeUsage={closeUsage} onClose={onClose}>
       <header className="cn-panel-head">
         <h2>{title}</h2>
-        <Button onClick={onClose}>Close</Button>
+        <Button usage={closeUsage} onClick={onClose}>
+          Close
+        </Button>
       </header>
       {children}
     </Modal>
@@ -73,7 +79,7 @@ export function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Ele
   }
 
   return (
-    <PanelShell title={PANEL_TITLE[panel]} onClose={close}>
+    <PanelShell title={PANEL_TITLE[panel]} closeUsage={panelClose(panel)} onClose={close}>
       <div className="cn-pbody">{panelBody(panel, view, actions)}</div>
     </PanelShell>
   );
@@ -115,6 +121,7 @@ function AskShell({
       face="panel"
       className={`cn-ask cn-t-${KIND_TONE[row.kind]}`}
       label={`Needs you · ${KIND_LABEL[row.kind]}`}
+      closeUsage="escalation.close"
       onClose={onClose}
     >
       <header className="cn-panel-head cn-askhead">
@@ -126,7 +133,7 @@ function AskShell({
         </h2>
         <AskSubject row={row} actions={actions} />
         {age !== '' && <span className="cn-askage">{age}</span>}
-        <Button ghost size="small" onClick={onClose}>
+        <Button ghost size="small" usage="escalation.close" onClick={onClose}>
           Close
         </Button>
       </header>
@@ -146,9 +153,9 @@ function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions })
     return (
       <span className="cn-psub">
         on{' '}
-        <button type="button" className="cn-goto" onClick={read}>
+        <BareButton usage={{ counted: 'goal.view' }} className="cn-goto" onClick={read}>
           {subject} — read it in context →
-        </button>
+        </BareButton>
       </span>
     );
   }
@@ -225,6 +232,7 @@ function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitAction
         <ConfirmButton
           ghost
           label="Clear"
+          usage="fault.waive"
           confirmLabel="Delete every recorded fault?"
           title={`Delete all ${errors.length} recorded faults — this cannot be undone, for any cockpit`}
           onConfirm={() => actions.clearErrors()}

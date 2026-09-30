@@ -12,6 +12,7 @@ import { closedPrRow, prRow } from './prRow.js';
 import { NeedsBand } from './NeedsBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import type { Fold } from './goalFold.js';
+import { BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -149,14 +150,14 @@ function PlanHeading({
             from here only through the validation card's aside about amending the
             checks — a door nobody looking for the plan would think to try. */}
         {plan !== null && !gated && (
-          <button
-            type="button"
+          <BareButton
+            usage={{ counted: 'plan.view' }}
             className="cn-linkish"
             title="The plan sheet — the write-up, the shape, each part in full, and the decision that was made on it"
             onClick={() => actions.viewPlan(plan.id)}
           >
             open the full plan ↗
-          </button>
+          </BareButton>
         )}
       </span>
     </h3>
@@ -316,8 +317,8 @@ function Part({
       }
     >
       {pickable ? (
-        <button
-          type="button"
+        <BareButton
+          usage={{ counted: 'pr.view' }}
           className="cn-partpick"
           title="Open this part’s pull request — its threads, its checks, and what it says it does"
           onClick={pick}
@@ -325,7 +326,7 @@ function Part({
           <b>
             {part.seq} · {part.title}
           </b>
-        </button>
+        </BareButton>
       ) : (
         <b>
           {part.seq} · {part.title}
@@ -350,14 +351,14 @@ function Part({
             {agentLive ? (
               <AgentOnIt agentId={agentId} actions={actions} />
             ) : (
-              <button
-                type="button"
+              <BareButton
+                usage={{ counted: 'agent.view' }}
                 className="cn-openagent"
                 title="Open the agent that worked this part — its transcript, what it cost, and its controls"
                 onClick={() => actions.select(agentId)}
               >
                 open the agent ↗
-              </button>
+              </BareButton>
             )}
           </>
         )}

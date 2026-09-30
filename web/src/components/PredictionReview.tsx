@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { api, type GoalPredictionReading } from '../api.js';
-import type { GoalPrediction, PlanPart, PlanView, PredictionMark, PredictionSlot } from '../types.js';
+import type { ControlUsage, GoalPrediction, PlanPart, PlanView, PredictionMark, PredictionSlot } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { BareButton } from './button.js';
 import { renderMarkdown } from './markdown.js';
 import { relTime } from './util.js';
 
@@ -14,6 +15,12 @@ const SLOTS: readonly { key: PredictionSlot; question: string }[] = [
   { key: 'split', question: 'How did you think this should be split up?' },
   { key: 'avoid', question: 'What did you say should not happen?' },
 ];
+
+const MARK_USAGE: Record<PredictionMark, ControlUsage> = {
+  matched: 'prediction.accept',
+  missed: 'prediction.reject',
+  'not-applicable': 'prediction.waive',
+};
 
 /**
  * The three marks, each labelled as the judgement it is. `not-applicable` is worded
@@ -400,10 +407,15 @@ function FoldHeader({
 }): JSX.Element {
   return (
     <h4 className="cn-pmark-hdr">
-      <button type="button" className="cn-disc" aria-expanded={showing} onClick={() => onToggle(!showing)}>
+      <BareButton
+        usage={showing ? 'prediction.close' : 'prediction.expand'}
+        className="cn-disc"
+        aria-expanded={showing}
+        onClick={() => onToggle(!showing)}
+      >
         <i className="cn-caret">{showing ? '\u25be' : '\u25b8'}</i>
         What you predicted
-      </button>
+      </BareButton>
       {askedOf > 0 && (
         <i className="cn-n">
           {marked}/{askedOf} marked
@@ -535,6 +547,7 @@ function Moment({
         {options.map((option) => (
           <AsyncButton
             key={option.mark}
+            usage={mark === option.mark ? 'prediction.undo' : MARK_USAGE[option.mark]}
             size="small"
             ghost
             className={`cn-pmark-mark ${mark === option.mark ? 'is-on' : ''}`}

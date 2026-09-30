@@ -98,7 +98,7 @@ export function HumanTaskActions({
           onAct={act(onDone)}
           onAsk={() => open('done')}
         />
-        <Button {...look} onClick={() => open('declined')} title="You will not be doing this">
+        <Button {...look} usage="human-task.expand" onClick={() => open('declined')} title="You will not be doing this">
           Decline
         </Button>
         {extra}
@@ -171,6 +171,7 @@ function NoteBox({
       />
       <AsyncButton
         {...(saying === 'declined' ? refusing(look) : expected(look))}
+        usage={{ counted: saying === 'declined' ? 'human-task.reject' : 'human-task.accept' }}
         disabled={note.trim().length === 0}
         onRefused={onRefused}
         onClick={onConfirm}
@@ -193,11 +194,17 @@ type PressProps = {
 
 function Press({ look, asks, words, onRefused, onAct, onAsk }: PressProps) {
   return !asks ? (
-    <AsyncButton {...look} onClick={onAct} onRefused={onRefused} title={words.actTitle}>
+    <AsyncButton
+      {...look}
+      usage={{ counted: 'human-task.accept' }}
+      onClick={onAct}
+      onRefused={onRefused}
+      title={words.actTitle}
+    >
       {words.label}
     </AsyncButton>
   ) : (
-    <Button {...look} onClick={onAsk} title={words.askTitle}>
+    <Button {...look} usage="human-task.expand" onClick={onAsk} title={words.askTitle}>
       {`${words.label}…`}
     </Button>
   );

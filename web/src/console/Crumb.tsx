@@ -1,7 +1,10 @@
 import type { JSX } from 'react';
+import type { ControlUsage } from '../types.js';
+import { BareButton } from '../components/button.js';
 
 export interface CrumbStep {
   label: string;
+  usage: ControlUsage;
   go: () => void;
 }
 
@@ -16,9 +19,9 @@ export function Crumb({ trail, here }: { trail: readonly CrumbStep[]; here: stri
       </span>
       {trail.map((step) => (
         <span key={step.label} className="cn-crumbstep">
-          <button type="button" onClick={step.go}>
+          <BareButton usage={step.usage} onClick={step.go}>
             {step.label}
-          </button>
+          </BareButton>
           <span className="cn-crumbsep">/</span>
         </span>
       ))}

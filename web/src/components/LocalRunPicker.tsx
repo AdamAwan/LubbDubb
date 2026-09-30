@@ -1,6 +1,7 @@
 import { useState, type JSX } from 'react';
 import type { Issue, LocalRunRefFacts, LocalRunTargetView, LocalRunView } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { BareButton } from './button.js';
 import { Ref } from './refs.js';
 import { Tag } from './tag.js';
 import { RefSummary, summaryClick } from './LocalRunReadings.js';
@@ -83,7 +84,11 @@ export function GoalPicker({
             should be. The rows are the instruction. */}
         {picked !== null && chosenFacts !== null && (
           <div className="lrun-go">
-            <AsyncButton tone="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
+            <AsyncButton
+              tone="primary"
+              usage={{ counted: 'local-run.create' }}
+              onClick={() => onStart(picked.issueNumber, picked.ref)}
+            >
               {`${live ? 'Swap to' : 'Start'} #${String(picked.issueNumber)}`}
             </AsyncButton>
             {/* The ref, on the button's own line: this is the last chance to see what
@@ -135,8 +140,8 @@ function GoalRow({
       <div className="lrun-row-top">
         {/* The row's name is the control; its refs sit beside it. One click
             cannot have two destinations. */}
-        <button
-          type="button"
+        <BareButton
+          usage="local-run.filter"
           className="lrun-row-pick"
           onClick={() => onPick()}
           aria-pressed={picked !== null && picked.ref === undefined}
@@ -145,7 +150,7 @@ function GoalRow({
             #{goal.number} {goal.title}
           </span>
           <RefSummary facts={target.target} now={now} />
-        </button>
+        </BareButton>
         <span className="lrun-refs">
           {running && <Tag tone="green">running</Tag>}
           <Ref to={target.originRef} />
@@ -154,15 +159,15 @@ function GoalRow({
       </div>
 
       {others.length > 0 && (
-        <button type="button" className="lrun-more" onClick={onExpand}>
+        <BareButton usage={expanded ? 'local-run.close' : 'local-run.expand'} className="lrun-more" onClick={onExpand}>
           {expanded ? '▾' : '▸'} run an earlier part ({others.length})
-        </button>
+        </BareButton>
       )}
       {expanded &&
         others.map(({ option, facts }) => (
           <div className="lrun-row-top lrun-sub" key={option.ref}>
-            <button
-              type="button"
+            <BareButton
+              usage="local-run.filter"
               className="lrun-row-pick"
               onClick={() => onPick(option.ref)}
               aria-pressed={picked !== null && picked.ref === option.ref}
@@ -173,7 +178,7 @@ function GoalRow({
                   : `part ${String(option.part.seq)} · ${option.part.title}`}
               </span>
               <RefSummary facts={facts} now={now} />
-            </button>
+            </BareButton>
             <span className="lrun-refs">{facts.pr !== null && <Ref to={`pr:${String(facts.pr.number)}`} />}</span>
           </div>
         ))}

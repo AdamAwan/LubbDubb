@@ -2,6 +2,7 @@ import { Fragment, type JSX } from 'react';
 import type { AllowanceInsights, AllowanceLane, AllowanceReading } from '../types.js';
 import { relAge, relTime } from './util.js';
 import { Ref } from './refs.js';
+import { BareButton } from './button.js';
 import { TipLayer, fmtPoints, showOn, useTip, type ShowTip } from './allowanceChart.js';
 
 const T = { left: 210, right: 962, top: 26, bottom: 196 };
@@ -263,9 +264,9 @@ function LaneBand({
               const to = Math.min(1, frac(lane.endedAt ?? new Date(now).toISOString()));
               const lines = laneTip(lane, now);
               return (
-                <button
+                <BareButton
                   key={lane.agentId}
-                  type="button"
+                  usage="agent.expand"
                   className={lane.measured ? 'al-lane' : 'al-lane al-lane-unmeasured'}
                   style={{
                     left: `${from * 100}%`,

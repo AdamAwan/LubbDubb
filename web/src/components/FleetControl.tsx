@@ -15,6 +15,7 @@ export function FleetControl({ live, cap, paused }: { live: number; cap: number;
       <AsyncButton
         ghost
         className="fc-step"
+        usage="fleet.edit"
         onClick={() => setCap(cap - 1)}
         disabled={cap <= 0}
         title="Lower the cap"
@@ -28,6 +29,7 @@ export function FleetControl({ live, cap, paused }: { live: number; cap: number;
       <AsyncButton
         ghost
         className="fc-step"
+        usage="fleet.edit"
         onClick={() => setCap(cap + 1)}
         title="Raise the cap"
         pendingLabel={spinner}
@@ -36,6 +38,7 @@ export function FleetControl({ live, cap, paused }: { live: number; cap: number;
       </AsyncButton>
       <AsyncButton
         className={paused ? 'primary' : 'ghost'}
+        usage={paused ? 'fleet.undo' : 'fleet.stop'}
         onClick={() => api.setControl({ paused: !paused })}
         title={paused ? 'Resume dispatch' : 'Pause new dispatch (live agents keep running)'}
       >

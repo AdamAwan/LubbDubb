@@ -14,7 +14,7 @@ import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
 import { planIssueOf } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
-import { Button, ButtonRow } from '../components/button.js';
+import { Button, ButtonRow, BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -125,6 +125,7 @@ function BenchAsk({
       {liftTo !== null && liftAgentId !== null && (
         <ButtonRow>
           <AsyncButton
+            usage="agent.edit"
             tone="primary"
             onClick={() => actions.liftAgentProfile(liftAgentId, liftTo)}
             title={`Stop this run where it stands and hand the same task to “${liftTo}”`}
@@ -223,8 +224,8 @@ function GoalChecks({
     );
     if (live.length === 0) return null;
     return (
-      <button
-        type="button"
+      <BareButton
+        usage="validation.expand"
         className="cn-ask-checks-to"
         onClick={() => {
           /* All three, in the order `buildJump` does them: the pane, then the card's
@@ -238,7 +239,7 @@ function GoalChecks({
       >
         {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
         Checks, below — go to them
-      </button>
+      </BareButton>
     );
   }
   const page = buildGoalPage(view.state, originRef, view.needsYou, null);
@@ -303,6 +304,7 @@ function SupplyAsk({
                 <Ref to={`issue:${issue.number}`} title="Open the item on the tracker" />
               </span>
               <AsyncButton
+                usage="ticket.accept"
                 tone="secondary"
                 onClick={() => actions.setIssueWatched(issue.number, true)}
                 title="Put this in play — the harness picks it up on the next pulse"
@@ -349,6 +351,7 @@ function WatchFinding({
         extra={
           canRaise ? (
             <Button
+              usage="ticket.expand"
               tone="secondary"
               onClick={() => setRaising(true)}
               title="Raise a bug from this reading — the numbers ride as your own report, and the bug is related back to this goal"
@@ -402,10 +405,16 @@ function UnwatchedAsk({
       <ButtonRow bar>
         {number !== null && (
           <>
-            <Button tone="secondary" onClick={() => actions.openFeature(number)} title="Open this Feature's card">
+            <Button
+              usage={{ counted: 'feature.view' }}
+              tone="secondary"
+              onClick={() => actions.openFeature(number)}
+              title="Open this Feature's card"
+            >
               Open feature
             </Button>
             <AsyncButton
+              usage="ticket.accept"
               tone="primary"
               onClick={() => actions.setIssueWatched(number, true)}
               title="Put the watch tag on the Feature and every story under it"
@@ -415,6 +424,7 @@ function UnwatchedAsk({
           </>
         )}
         <AsyncButton
+          usage={{ counted: 'human-task.accept' }}
           tone="secondary"
           onClick={() => actions.completeHumanTask(task.id, 'Dismissed — the unwatched stories are out of scope.')}
           title="Hide this until another story under the Feature has no watch tag"

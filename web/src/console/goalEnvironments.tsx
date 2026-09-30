@@ -44,7 +44,7 @@ export function Environments({
   return (
     <section className="cn-card" id={GOAL_ANCHOR.environments}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Environments" />
+        <Disclosure subject="environment" open={fold.open} onToggle={fold.onToggle} label="Environments" />
         {/* The count folded away is the whole reading: a card shut on "0/3
             reached" says what the rows would have, and one shut on "2/3" is the
             reason to open it. */}
@@ -62,7 +62,7 @@ export function Environments({
       {page.gateHold !== null && (
         <div className="cn-criteria">
           <p>{page.gateHold}</p>
-          <Button ghost onClick={() => setReleasing(true)}>
+          <Button ghost usage="goal.expand" onClick={() => setReleasing(true)}>
             not waiting on an environment
           </Button>
         </div>
@@ -73,7 +73,7 @@ export function Environments({
             Not waiting on an environment — “{page.gateRelease.note}”
             <span className="cn-sub"> · {relTime(page.gateRelease.releasedAt, now)}</span>
           </p>
-          <Button ghost onClick={() => void actions.releaseEnvironmentGate(number, false)}>
+          <Button ghost usage="goal.undo" onClick={() => void actions.releaseEnvironmentGate(number, false)}>
             wait for one after all
           </Button>
         </div>
@@ -220,6 +220,7 @@ function Watch({
             a settled verdict back in play is not a thing the harness decides. */}
         <AsyncButton
           className="cn-watch-more"
+          usage="watch.defer"
           onClick={() => actions.extendWatch(issueNumber, watch.environment)}
           title={
             watch.settledAt === null

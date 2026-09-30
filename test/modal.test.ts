@@ -56,6 +56,7 @@ test('the head, the foot and the guard are drawn once, for every caller', () => 
       {
         face: 'modal',
         title: 'Raise a bug',
+        closeUsage: 'ticket.close',
         lead: createElement('span', { className: 'chip small' }, '#41'),
         chips: createElement('span', { className: 'chip small' }, 'checking'),
         foot: createElement('button', null, 'raise bug'),
@@ -87,11 +88,14 @@ test('each face draws its own pair of classes', () => {
     ['prompt', 'prompt-backdrop', 'prompt-modal'],
   ] as const;
   for (const [face, backdrop, surface] of faces) {
-    const html = renderToStaticMarkup(createElement(Modal, { face, onClose: () => {} }));
+    const html = renderToStaticMarkup(createElement(Modal, { face, closeUsage: 'plan.close', onClose: () => {} }));
     assert.match(html, new RegExp(`class="${backdrop}"`), `${face} lost its backdrop`);
     assert.match(html, new RegExp(`class="${surface}"`), `${face} lost its surface`);
   }
-  assert.match(renderToStaticMarkup(createElement(Modal, { face: 'panel', onClose: () => {} })), /<section/);
+  assert.match(
+    renderToStaticMarkup(createElement(Modal, { face: 'panel', closeUsage: 'plan.close', onClose: () => {} })),
+    /<section/,
+  );
 });
 
 test('no surface writes a backdrop of its own', () => {

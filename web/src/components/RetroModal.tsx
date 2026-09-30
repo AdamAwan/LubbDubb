@@ -32,7 +32,13 @@ export function RetroModal({ issueRef, onClose }: { issueRef: string; onClose: (
   const issueNumber = /^issue:(\d+)$/.exec(issueRef)?.[1] ?? null;
 
   return (
-    <Modal face="modal" title="Retrospective" lead={issueNumber && <Tag>#{issueNumber}</Tag>} onClose={onClose}>
+    <Modal
+      face="modal"
+      title="Retrospective"
+      lead={issueNumber && <Tag>#{issueNumber}</Tag>}
+      closeUsage="retro.close"
+      onClose={onClose}
+    >
       {state === 'loading' && <p className="empty">Loading…</p>}
       {state === 'failed' && <p className="empty">Could not load the retrospective.</p>}
       {state === 'ready' && !retro && <p className="empty">Nothing was written up for this goal.</p>}

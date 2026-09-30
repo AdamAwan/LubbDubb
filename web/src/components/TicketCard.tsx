@@ -5,6 +5,7 @@ import { cascadeNote, issueTypeTone, watchOff, watchReading } from '../issueGrou
 import type { Issue, TicketRow } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { AsyncButton } from './AsyncButton.js';
+import { BareButton } from './button.js';
 import { Ref } from './refs.js';
 import { fmtUsd, relAge } from './util.js';
 import { Tag } from './tag.js';
@@ -70,14 +71,14 @@ export function TicketCard({
           <Ref to={`issue:${row.number}`} />
         </span>
       </div>
-      <button
-        type="button"
+      <BareButton
+        usage={{ counted: 'goal.view' }}
         className="tb-name"
         onClick={() => actions.selectGoal(`issue:${row.number}`)}
         title="Open this goal — its plan, its ticket, its pull requests and anything it is asking you"
       >
         {row.title}
-      </button>
+      </BareButton>
       <TicketMeta row={row} age={age} />
       <p className={`tb-why ${reason.tone}`}>{reason.words}</p>
       {writing !== null && (
@@ -114,6 +115,7 @@ function WatchDot({
 }): JSX.Element {
   return (
     <AsyncButton
+      usage={watched ? 'ticket.reject' : 'ticket.accept'}
       className={`tb-dot${watched ? ' on' : ''}`}
       disabled={off !== null}
       onClick={onToggle}

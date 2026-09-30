@@ -72,12 +72,14 @@ export function SignalsSection({
       )}
       <div className="cn-sig-add">
         <Button
+          usage="watch.expand"
           onClick={() => setOpen('signal')}
           title="Something that should not be happening: an exception, a failure, a retry. Needs a second query proving the code path runs."
         >
           Add a signal
         </Button>
         <Button
+          usage="watch.expand"
           onClick={() => setOpen('measure')}
           title="One number: a percentile, a rate, a duration. Needs a threshold, or the baseline it is compared against."
         >
@@ -143,19 +145,26 @@ function SignalRow({
       </div>
       <div className="cn-sig-ctrls">
         {check.live ? (
-          <Button onClick={onEdit}>Edit</Button>
+          <Button usage="watch.expand" onClick={onEdit}>
+            Edit
+          </Button>
         ) : (
-          <AsyncButton onClick={() => onRule(check.id, true)}>Accept &amp; run</AsyncButton>
+          <AsyncButton usage="watch.accept" onClick={() => onRule(check.id, true)}>
+            Accept &amp; run
+          </AsyncButton>
         )}
         {check.live ? (
           <ConfirmButton
+            usage="watch.waive"
             label="Delete"
             confirmLabel="Delete it"
             title="Drop this check and the readings taken against it. A check the plan declares comes back on the next replan."
             onConfirm={onDelete}
           />
         ) : (
-          <AsyncButton onClick={() => onRule(check.id, false)}>Decline</AsyncButton>
+          <AsyncButton usage="watch.reject" onClick={() => onRule(check.id, false)}>
+            Decline
+          </AsyncButton>
         )}
       </div>
     </div>
@@ -396,12 +405,25 @@ function CheckFormFooter({
         </p>
       ))}
       <div className="cn-sig-ctrls">
-        <AsyncButton tone="primary" disabled={refusal !== null} onClick={onSave}>
+        <AsyncButton
+          tone="primary"
+          usage={initial === undefined ? 'watch.create' : 'watch.edit'}
+          disabled={refusal !== null}
+          onClick={onSave}
+        >
           Save &amp; run
         </AsyncButton>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button usage="watch.abandon" onClick={onClose}>
+          Cancel
+        </Button>
         {onDelete !== null && (
-          <ConfirmButton className="cn-sig-spacer" label="Delete" confirmLabel="Delete it" onConfirm={onDelete} />
+          <ConfirmButton
+            className="cn-sig-spacer"
+            usage="watch.waive"
+            label="Delete"
+            confirmLabel="Delete it"
+            onConfirm={onDelete}
+          />
         )}
       </div>
     </>

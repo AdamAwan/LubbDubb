@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { parseAnsi, ansiClass, type AnsiStyle } from './ansi.js';
 import { feedBlocks, emptyBlockState, type BlockState } from './transcriptBlocks.js';
+import type { ControlUsage } from '../types.js';
+import { BareButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -82,11 +84,13 @@ export function TranscriptPane({
   streamId,
   label,
   className,
+  usage,
 }: {
   text: string;
   streamId: string;
   label: string;
   className?: string;
+  usage: ControlUsage;
 }): JSX.Element {
   const [behind, setBehind] = useState(false);
   const paneRef = useRef<HTMLDivElement>(null);
@@ -139,9 +143,9 @@ export function TranscriptPane({
     <div className={className === undefined ? 'terminal-wrap' : `terminal-wrap ${className}`}>
       <div className="terminal" ref={paneRef} onScroll={onScroll} aria-label={label} />
       {behind && (
-        <button type="button" className="term-jump" onClick={jumpToLatest}>
+        <BareButton usage={usage} className="term-jump" onClick={jumpToLatest}>
           ↓ New output
-        </button>
+        </BareButton>
       )}
     </div>
   );

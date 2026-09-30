@@ -30,7 +30,7 @@ export function agentRow(agent: Agent, view: CockpitView, actions: CockpitAction
     key: agent.id,
     lamp: <i className={`cn-lamp ${agentLamp(agent, view)}`} />,
     title: task?.title ?? agent.id,
-    open: () => actions.select(agent.id),
+    open: { usage: { counted: 'agent.view' }, go: () => actions.select(agent.id) },
     openTitle: "Open this agent's drawer",
     refs: <OnWhat origin={origin} view={view} />,
     facts: [
@@ -41,6 +41,7 @@ export function agentRow(agent: Agent, view: CockpitView, actions: CockpitAction
     ...agentState(agent, view),
     action: limited ? (
       <AsyncButton
+        usage="agent.send"
         onClick={() => actions.resumeAgent(agent.id)}
         title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
         pendingLabel="Resuming…"

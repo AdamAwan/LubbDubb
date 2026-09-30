@@ -66,6 +66,7 @@ export function FeatureMarks({ feature, onChanged }: { feature: FeatureRollup; o
       <AsyncButton
         size="small"
         ghost={!flagged}
+        usage={flagged ? 'priority.undo' : 'priority.create'}
         className="cn-fb-priority"
         aria-pressed={flagged}
         title={
@@ -83,6 +84,7 @@ export function FeatureMarks({ feature, onChanged }: { feature: FeatureRollup; o
       <AsyncButton
         size="small"
         ghost
+        usage={paused ? 'feature.undo' : 'feature.stop'}
         className="cn-fb-pause"
         aria-pressed={paused}
         title={

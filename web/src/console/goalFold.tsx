@@ -3,7 +3,8 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, GoalSection } from '../view/goalPage.js';
 import { goalSectionsOpen, GOAL_SECTIONS } from '../view/goalPage.js';
-import { logUsage } from '../cockpit/usage.js';
+import { BareButton } from '../components/button.js';
+import type { ControlUsage, UsageSubject } from '../types.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -30,10 +31,7 @@ export function buildFolds(page: GoalPageView, view: CockpitView, actions: Cockp
       {
         open,
         settled,
-        onToggle: (next) => {
-          if (next) logUsage('goal.expand');
-          actions.openGoalSection(section, next);
-        },
+        onToggle: (next) => actions.openGoalSection(section, next),
         reveal: () => {
           if (!open) actions.openGoalSection(section, true);
         },
@@ -43,19 +41,26 @@ export function buildFolds(page: GoalPageView, view: CockpitView, actions: Cockp
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
+type FoldSubject = {
+  [S in UsageSubject]: `${S}.expand` | `${S}.close` extends ControlUsage ? S : never;
+}[UsageSubject];
+
 export function Disclosure({
+  subject,
   open,
   onToggle,
   label,
 }: {
+  subject: FoldSubject;
   open: boolean;
   onToggle: (open: boolean) => void;
   label: string;
 }): JSX.Element {
+  const usage: ControlUsage = open ? `${subject}.close` : `${subject}.expand`;
   return (
-    <button type="button" className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
+    <BareButton usage={usage} className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
       <i className="cn-caret">{open ? '▾' : '▸'}</i>
       {label}
-    </button>
+    </BareButton>
   );
 }

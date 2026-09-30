@@ -1,4 +1,6 @@
-import type { ButtonHTMLAttributes, JSX, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, JSX, MouseEvent, ReactNode } from 'react';
+import type { ControlUsage } from '../types.js';
+import { logControl } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -70,6 +72,37 @@ export function refusing(look: ButtonLook): ButtonLook {
   return { ...look, tone: 'danger' };
 }
 
+export type Usage = { usage: ControlUsage };
+
+export type Destination = Usage & { go: () => void };
+
+/**
+ * The one element in the cockpit that draws a `<button>`, and it wears no look.
+ * Every other button renders through it, so a control nobody named a usage event
+ * for does not compile. → docs/spec/34-usage-metrics.md#every-button-names-its-event
+ */
+export function BareButton({
+  usage,
+  logs = true,
+  type = 'button',
+  onClick,
+  ...rest
+}: Usage & { logs?: boolean; type?: 'button' | 'submit' } & Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    'type'
+  >): JSX.Element {
+  return (
+    <button
+      type={type}
+      {...rest}
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        if (logs) logControl(usage);
+        onClick?.(event);
+      }}
+    />
+  );
+}
+
 export function Button({
   tone,
   ghost,
@@ -77,14 +110,15 @@ export function Button({
   className,
   children,
   ...rest
-}: ButtonLook & { children: ReactNode } & Omit<
+}: ButtonLook &
+  Usage & { children: ReactNode } & Omit<
     ButtonHTMLAttributes<HTMLButtonElement>,
-    'className' | 'children'
+    'className' | 'children' | 'type'
   >): JSX.Element {
   return (
-    <button type="button" {...rest} className={buttonClass({ tone, ghost, size, className })}>
+    <BareButton {...rest} className={buttonClass({ tone, ghost, size, className })}>
       {children}
-    </button>
+    </BareButton>
   );
 }
 

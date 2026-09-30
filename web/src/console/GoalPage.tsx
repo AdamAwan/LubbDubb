@@ -35,8 +35,7 @@ import { NeedsBand } from './NeedsBand.js';
 import { AssignGroup } from './assignAsks.js';
 import { groupAsks } from '../view/askGroups.js';
 import { OrphanBand } from './OrphanBand.js';
-import { Button } from '../components/button.js';
-import { logUsage } from '../cockpit/usage.js';
+import { BareButton, Button } from '../components/button.js';
 import { TabbedPanel, type PanelTab } from './TabbedPanel.js';
 import { buildFolds, Disclosure, type Fold } from './goalFold.js';
 import { Header } from './goalHeader.js';
@@ -86,10 +85,8 @@ export function GoalPage({
       <TabbedPanel
         tabs={goalTabs(page, tab, picked, opening)}
         selected={tab}
-        onSelect={(id) => {
-          if (id !== tab) logUsage('goal.expand');
-          actions.openGoalTab(id as GoalTab);
-        }}
+        usage="goal.expand"
+        onSelect={(id) => actions.openGoalTab(id as GoalTab)}
         label="This goal"
       >
         {/* The pane's own asks, in full and first: this is the pane the ask is
@@ -490,7 +487,12 @@ function ObligationPicker({
       {names.map((name) => {
         const env = page.environments.find((e) => e.environment === name);
         return (
-          <Button key={name} onClick={() => actions.openRemoteSheet(name)} title={`What this goal reads in ${name}`}>
+          <Button
+            key={name}
+            usage="validation.filter"
+            onClick={() => actions.openRemoteSheet(name)}
+            title={`What this goal reads in ${name}`}
+          >
             {name}
             {env !== undefined && (
               <Tag tone={REACH_TONE[env.status]} fill={name === showing}>
@@ -526,7 +528,7 @@ function Validation({
   return (
     <section className="cn-card" id={GOAL_ANCHOR.validation}>
       <h3>
-        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Checks" />
+        <Disclosure subject="validation" open={fold.open} onToggle={fold.onToggle} label="Checks" />
         {live.length > 0 && (
           <i className="cn-n">
             {settled} of {live.length} done
@@ -539,9 +541,13 @@ function Validation({
         <span className="cn-more">
           written by the plan
           {plan !== null && (
-            <button type="button" className="cn-linkish" onClick={() => actions.viewPlan(plan.id)}>
+            <BareButton
+              usage={{ counted: 'plan.view' }}
+              className="cn-linkish"
+              onClick={() => actions.viewPlan(plan.id)}
+            >
               amend it there ↗
-            </button>
+            </BareButton>
           )}
         </span>
         {/* The one control on this card that is not about a particular check, and

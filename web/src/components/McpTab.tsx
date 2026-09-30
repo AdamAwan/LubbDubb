@@ -114,6 +114,7 @@ function Command({ text }: { text: string }) {
       <Button
         ghost
         size="small"
+        usage="config.copy"
         onClick={() => {
           void navigator.clipboard.writeText(text).then(
             () => setCopied(true),

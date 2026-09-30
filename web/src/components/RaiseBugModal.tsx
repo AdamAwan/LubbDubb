@@ -40,18 +40,9 @@ export function RaiseBugModal({
       face="modal"
       title="Raise a bug"
       lead={<Tag>#{issueNumber}</Tag>}
+      closeUsage="ticket.close"
       onClose={onClose}
-      foot={
-        <>
-          <span className="spacer" />
-          <Button ghost onClick={onClose}>
-            cancel
-          </Button>
-          <AsyncButton tone="primary" disabled={summary.trim().length === 0} onClick={submit}>
-            raise bug
-          </AsyncButton>
-        </>
-      }
+      foot={<BugFoot disabled={summary.trim().length === 0} onClose={onClose} onSubmit={submit} />}
     >
       <p className="rb-intro">
         Against “{issueTitle}”. Say what you did and what happened instead. An agent writes it up as a bug in the
@@ -86,5 +77,27 @@ export function RaiseBugModal({
         </p>
       )}
     </Modal>
+  );
+}
+
+function BugFoot({
+  disabled,
+  onClose,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onClose: () => void;
+  onSubmit: () => Promise<void>;
+}) {
+  return (
+    <>
+      <span className="spacer" />
+      <Button usage="ticket.close" ghost onClick={onClose}>
+        cancel
+      </Button>
+      <AsyncButton usage={{ counted: 'ticket.create' }} tone="primary" disabled={disabled} onClick={onSubmit}>
+        raise bug
+      </AsyncButton>
+    </>
   );
 }

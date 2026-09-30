@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import { api, type PredictionDraft } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
-import { buttonClass } from './button.js';
+import { Button } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -215,10 +215,10 @@ function GateOffer({
 }): JSX.Element {
   return (
     <div className="cn-gate-presses">
-      <button type="button" className={buttonClass({ tone: 'primary' })} onClick={onCompose}>
+      <Button usage="prediction.expand" tone="primary" onClick={onCompose}>
         {asksCriteria ? 'Write these down' : 'Predict'}
-      </button>
-      <AsyncButton tone="primary" onClick={onReveal}>
+      </Button>
+      <AsyncButton usage="plan.expand" tone="primary" onClick={onReveal}>
         Show me the plan
       </AsyncButton>
     </div>
@@ -292,12 +292,12 @@ function GateCompose({
       )}
       {refusal !== null && <p className="cn-gate-refusal">{refusal}</p>}
       <div className="cn-gate-presses">
-        <AsyncButton tone="primary" onClick={onRecord} onRefused={onRefused}>
+        <AsyncButton usage="prediction.create" tone="primary" onClick={onRecord} onRefused={onRefused}>
           {asksCriteria ? 'Record these and show me the plan' : 'Predict and show me the plan'}
         </AsyncButton>
-        <button type="button" className={buttonClass({})} onClick={onBack}>
+        <Button usage="prediction.expand" onClick={onBack}>
           Back
-        </button>
+        </Button>
       </div>
     </div>
   );

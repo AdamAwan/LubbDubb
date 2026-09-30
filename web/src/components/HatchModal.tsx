@@ -56,7 +56,12 @@ export function HatchModal({
   const shown: PetView = { ...pet, openedAt: out ? (pet.openedAt ?? new Date().toISOString()) : null };
 
   return (
-    <Modal face="hatch" label={out ? `a ${pet.rarity} hatchling` : 'an egg, hatching'} onClose={onClose}>
+    <Modal
+      face="hatch"
+      label={out ? `a ${pet.rarity} hatchling` : 'an egg, hatching'}
+      closeUsage="pet.close"
+      onClose={onClose}
+    >
       <div className={`cn-hatch-floor${phase === 'flash' ? ' is-flash' : ''}`}>
         {/* Keyed on the rock count so each one restarts the animation: a class
               re-applied to the same element does not replay it, which is the bug
@@ -85,7 +90,9 @@ export function HatchModal({
           </>
         )}
       </div>
-      <Button onClick={onClose}>{out ? 'Done' : 'Skip'}</Button>
+      <Button usage="pet.close" onClick={onClose}>
+        {out ? 'Done' : 'Skip'}
+      </Button>
     </Modal>
   );
 }

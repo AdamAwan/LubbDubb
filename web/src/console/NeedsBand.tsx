@@ -2,28 +2,24 @@ import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
-import type { Issue } from '../types.js';
 import { AsyncButton, useAsyncAction } from '../components/AsyncButton.js';
-import { DesktopLink } from '../components/DesktopLink.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { PrDescription } from '../components/PrDescription.js';
 import { GOAL_ANCHOR } from '../view/goalPage.js';
 import { scrollToAnchor } from './jump.js';
 import { Ref } from '../components/refs.js';
-import { goalIssue } from '../view/goalRefs.js';
 import { buildPrPage } from '../view/prPage.js';
 import { oneLine } from '../view/needLines.js';
 import { refusedDispatchFor } from '../view/refusedDispatches.js';
 import { relTime } from '../components/util.js';
-import { discussPrompt } from '../cockpit/desktopLink.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './QueueRail.js';
-import { Button, ButtonRow } from '../components/button.js';
+import { BareButton, Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
 import { AssignButtons, assignBody } from './assignAsks.js';
+import { intakeBody, Lines, profileBody } from './appraisalAsks.js';
 import { assignAskOf } from '../view/askGroups.js';
 import { quickAnswer } from '../view/quickAnswer.js';
-import { awaitedProfile } from '../view/issueAsks.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
 
 // → docs/spec/17-cockpit.md
@@ -77,9 +73,13 @@ export function NeedsBand({
             with no goal page, drawn from the same `needBody`, so there is one
             implementation of the ask and two ways to reach it rather than two
             asks. */}
-        <button type="button" className="cn-open" onClick={() => actions.openPanel({ ask: row.id })}>
+        <BareButton
+          usage={{ counted: 'escalation.view' }}
+          className="cn-open"
+          onClick={() => actions.openPanel({ ask: row.id })}
+        >
           Open
-        </button>
+        </BareButton>
       </header>
       <div className="cn-in">{body}</div>
     </div>
@@ -95,8 +95,8 @@ function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; act
   const [open, setOpen] = useState(false);
   return (
     <div className="cn-needs-fold">
-      <button
-        type="button"
+      <BareButton
+        usage={open ? 'escalation.close' : 'escalation.expand'}
         className={`cn-needs-line cn-t-${KIND_TONE[row.kind]}`}
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
@@ -109,7 +109,7 @@ function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; act
         <span className="cn-needs-do">
           {row.verb ?? KIND_VERB[row.kind]} {open ? '\u25be' : '\u25b8'}
         </span>
-      </button>
+      </BareButton>
       {open && <NeedsBand row={row} view={view} actions={actions} checksBelow={row.kind === 'validate'} />}
     </div>
   );
@@ -151,6 +151,7 @@ function QuickLine({
       <AsyncButton
         size="small"
         tone="primary"
+        usage={quick.field === 'profile' ? 'profile.accept' : 'placement.accept'}
         onClick={() => applyQuick(quick, quick.proposed, actions)}
         title={`Use the proposed answer, “${quick.proposed}”`}
       >
@@ -194,14 +195,14 @@ function AnswerLine({
 }): JSX.Element {
   return (
     <div className={`cn-needs-line cn-needs-quick cn-t-${KIND_TONE[row.kind]}`}>
-      <button
-        type="button"
+      <BareButton
+        usage={{ counted: 'escalation.view' }}
         className="cn-needs-open"
         onClick={() => actions.openPanel({ ask: row.id })}
         title="Open this ask"
       >
         <LineFace row={row} now={view.now} />
-      </button>
+      </BareButton>
       {children}
     </div>
   );
@@ -252,87 +253,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   return (BODY_OF[row.kind] ?? (isTask ? taskBody : escalationBody))(row, view, actions, checksBelow);
 }
 
-function rowIssue(row: NeedRow, view: CockpitView): Issue | undefined {
-  return row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-}
-
-function intakeBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  const issue = rowIssue(row, view);
-  const appraisal = issue?.appraisal;
-  if (!issue || appraisal?.verdict !== 'unclear') return null;
-  return (
-    <>
-      <p>
-        <strong>The goal appraisal could not say this is workable</strong> — nothing is dispatched for it until the
-        verdict moves.
-      </p>
-      <p className="cn-tick">“{appraisal.summary}”</p>
-      <Lines items={appraisal.missing} className="cn-tick" />
-      <p className="cn-tick">
-        The hold clears by itself when the goal&rsquo;s own text changes, so answering those on the ticket is the other
-        way out and costs no click here. Overriding says the brief is good enough as it stands.
-      </p>
-      <ButtonRow bar>
-        <AsyncButton
-          tone="primary"
-          onClick={() => actions.setIssueAppraisal(issue.number, 'workable')}
-          title="Work it anyway — the harness stops holding pickup and runs a cycle now"
-        >
-          Override → workable
-        </AsyncButton>
-        <DesktopLink
-          folder={view.state.config.desktopFolder}
-          prompt={discussPrompt(issue.number)}
-          explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."
-        />
-      </ButtonRow>
-    </>
-  );
-}
-
-function profileBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  const issue = rowIssue(row, view);
-  const appraisal = issue?.appraisal;
-  const proposed = issue === undefined ? null : awaitedProfile(issue);
-  if (!issue || !appraisal || proposed === null) return null;
-  const { config } = view.state;
-  const pinned = issue.modelPin.profile;
-  const standing = pinned ?? config.defaultProfile;
-  const described = config.profiles.find((p) => p.name === proposed)?.description;
-  return (
-    <>
-      <p>
-        <strong>The goal appraisal wants this run on “{proposed}”</strong>
-        {standing !== null && ` — ${pinned === null ? 'it would otherwise run on' : 'you pinned it to'} “${standing}”`}
-        {standing === null && ' — nothing is pinned to it yet'}
-      </p>
-      <p className="cn-tick">
-        {described ?? appraisal.summary} Nothing is dispatched for this goal until you say which to use — that is one
-        click either way, and it is not a rejection.
-      </p>
-      <ButtonRow bar>
-        <AsyncButton
-          tone="primary"
-          onClick={() => actions.setIssueProfile(issue.number, proposed)}
-          title={`Pin this goal to “${proposed}” and let the funnel move`}
-        >
-          Use “{proposed}”
-        </AsyncButton>
-        <AsyncButton
-          onClick={() => actions.setIssueProfile(issue.number, pinned)}
-          title={
-            pinned === null
-              ? 'Leave this goal unpinned, so each rule runs on its own profile'
-              : `Keep “${pinned}” and let the funnel move`
-          }
-        >
-          {pinned === null ? 'Leave it unpinned' : `Keep “${pinned}”`}
-        </AsyncButton>
-      </ButtonRow>
-    </>
-  );
-}
-
 function limitBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
   const agent = row.agentId ? view.agentById.get(row.agentId) : undefined;
   if (!agent || !view.limitParked.has(agent.id)) return null;
@@ -344,10 +264,17 @@ function limitBody(row: NeedRow, view: CockpitView, actions: CockpitActions): Re
         Resuming re-opens that conversation where it stopped.
       </p>
       <ButtonRow bar>
-        <AsyncButton tone="primary" onClick={() => actions.resumeAgent(agent.id)} pendingLabel="Resuming…">
+        <AsyncButton
+          tone="primary"
+          usage="agent.send"
+          onClick={() => actions.resumeAgent(agent.id)}
+          pendingLabel="Resuming…"
+        >
           Resume
         </AsyncButton>
-        <Button onClick={() => actions.select(agent.id)}>Open transcript</Button>
+        <Button usage={{ counted: 'agent.view' }} onClick={() => actions.select(agent.id)}>
+          Open transcript
+        </Button>
       </ButtonRow>
     </>
   );
@@ -516,17 +443,6 @@ function escalationBody(row: NeedRow, view: CockpitView, actions: CockpitActions
   );
 }
 
-function Lines({ items, className }: { items: readonly string[]; className: string }): JSX.Element | null {
-  if (items.length === 0) return null;
-  return (
-    <ul className={className}>
-      {items.map((item) => (
-        <li key={item}>{item}</li>
-      ))}
-    </ul>
-  );
-}
-
 function RefLine({ to, title }: { to: string; title: string }): JSX.Element {
   return (
     <div className="cn-refs">
@@ -551,6 +467,7 @@ function PrPress({
       <ButtonRow>
         <Button
           tone="primary"
+          usage={{ counted: 'pr.view' }}
           onClick={() => {
             actions.openPanel(null);
             actions.selectPr(prNumber);

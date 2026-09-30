@@ -157,7 +157,7 @@ export function LaunchPanel({
 function LaunchHead({ open, onToggle, queued }: { open: boolean; onToggle: () => void; queued: number }) {
   return (
     <div className="launch-head">
-      <Button ghost onClick={onToggle}>
+      <Button ghost usage={open ? 'job.close' : 'job.expand'} onClick={onToggle}>
         <BriefMark />
         {open ? '× New brief' : '+ New brief'}
       </Button>
@@ -212,6 +212,7 @@ function AttachedList({ attached, onRemove }: { attached: Attached[]; onRemove: 
           </span>
           <Button
             ghost
+            usage="job.edit"
             className="launch-attachment-drop"
             title="Remove this attachment"
             aria-label={`Remove ${image.name}`}
@@ -261,12 +262,13 @@ function LaunchControls({
       />
       <Button
         ghost
+        usage="job.edit"
         title="Attach an image — or paste or drop one into the prompt"
         onClick={() => picker.current?.click()}
       >
         Attach image
       </Button>
-      <SubmitButton phase={phase} tone="primary">
+      <SubmitButton phase={phase} tone="primary" usage={{ counted: 'job.create' }}>
         Launch
       </SubmitButton>
     </div>
@@ -299,6 +301,7 @@ function LaunchQueue({
           <span className="muted launch-age">{relTime(job.createdAt)}</span>
           <AsyncButton
             ghost
+            usage={{ counted: 'job.stop' }}
             onClick={() => api.cancelJob(job.id).then(onChanged)}
             title="Remove this brief from the queue"
           >

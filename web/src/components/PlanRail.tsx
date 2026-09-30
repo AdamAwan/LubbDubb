@@ -1,6 +1,6 @@
 import type { PlanHistory } from '../types.js';
 import { proofCounts } from './ProofBand.js';
-import { logUsage } from '../cockpit/usage.js';
+import { BareButton } from './button.js';
 import type { Derived, PlanModalProps, SheetView } from './planModalShared.js';
 
 export function PlanRail({
@@ -32,45 +32,45 @@ export function PlanRail({
   const held = ack.outstanding.length > 0;
   return (
     <div className="pm-rail">
-      <button className="pm-jump" onClick={() => jump('verdict')}>
+      <BareButton usage="plan.filter" className="pm-jump" onClick={() => jump('verdict')}>
         Verdict
-      </button>
-      <button className="pm-jump" onClick={() => jump('proof')}>
+      </BareButton>
+      <BareButton usage="plan.filter" className="pm-jump" onClick={() => jump('proof')}>
         Proof{' '}
         <i className="k">
           {proofCounts(checks, live, watches, queries)
             .map((c) => c.count)
             .join(' · ')}
         </i>
-      </button>
+      </BareButton>
       {live.length > 0 && (
-        <button className="pm-jump" onClick={() => jump('shape')}>
+        <BareButton usage="plan.filter" className="pm-jump" onClick={() => jump('shape')}>
           The shape
-        </button>
+        </BareButton>
       )}
-      <button className="pm-jump" onClick={() => jump('parts')}>
+      <BareButton usage="plan.filter" className="pm-jump" onClick={() => jump('parts')}>
         Parts <i className="k">{live.length > 0 ? live.length : 'one PR'}</i>
-      </button>
-      <button className="pm-jump" onClick={() => jump('validation')}>
+      </BareButton>
+      <BareButton usage="plan.filter" className="pm-jump" onClick={() => jump('validation')}>
         Validation <i className="k">{liveChecks.length > 0 ? `${settledChecks}/${liveChecks.length}` : 'none'}</i>
-      </button>
+      </BareButton>
       {/* The one tab that can be asking for something. The checklist lives in the
           section below now, so an operator who reaches for a held Approve without
           having scrolled that far has nothing on the sheet telling them where the
           boxes are — the rail is where they are already looking, and the count is
           the way back. Amber while any box is outstanding, plain the moment the
           last one is ticked. */}
-      <button className={`pm-jump${held ? ' waiting' : ''}`} onClick={() => jump('caveats')}>
+      <BareButton usage="plan.filter" className={`pm-jump${held ? ' waiting' : ''}`} onClick={() => jump('caveats')}>
         Caveats
         {decidable && caveats.length > 0 && (
           <i className="k">
             {caveats.length - ack.outstanding.length}/{caveats.length}
           </i>
         )}
-      </button>
-      <button className="pm-jump" onClick={() => jump('writeup')}>
+      </BareButton>
+      <BareButton usage="plan.filter" className="pm-jump" onClick={() => jump('writeup')}>
         Write-up
-      </button>
+      </BareButton>
       <span className="spacer" />
       <ViewToggles
         onRegroupView={onRegroupView}
@@ -105,21 +105,20 @@ function ViewToggles({
             control. Absent until there is a second revision to be a change from,
             or a change waiting on the operator to be asked about. */}
       {regroupable && (
-        <button
+        <BareButton
+          usage="plan.filter"
           className={`pm-jump history${regroup ? ' on' : ''}`}
           title="Move an atom from one part to another — the work is the same, the merge boundaries are not"
           onClick={() => onRegroupView?.(!regroup)}
         >
           {regroup ? 'Back to the plan' : 'Regroup'}
-        </button>
+        </BareButton>
       )}
       {history !== null && (history.revisions.length > 1 || history.pending !== null) && (
-        <button
+        <BareButton
+          usage={view === 'history' ? 'plan.close' : 'plan.expand'}
           className={`pm-jump history${view === 'history' ? ' on' : ''}${history.pending ? ' waiting' : ''}`}
-          onClick={() => {
-            if (view !== 'history') logUsage('plan.expand');
-            setView(view === 'history' ? 'plan' : 'history');
-          }}
+          onClick={() => setView(view === 'history' ? 'plan' : 'history')}
         >
           {/* A change waiting on the operator outranks the history it would
                 become: it is the one thing on this sheet that is asking them
@@ -127,7 +126,7 @@ function ViewToggles({
                 with a single revision. */}
           {history.pending ? 'Change waiting' : history.diff === null ? 'History' : 'What changed'}{' '}
           <i className="k">v{history.revisions.length}</i>
-        </button>
+        </BareButton>
       )}
     </>
   );

@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { Icon } from './icons.js';
+import { BareButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -21,8 +22,8 @@ export function AgentOnIt({
       ? 'An agent is holding for an answer — open its transcript'
       : 'An agent is working this — open its transcript');
   return (
-    <button
-      type="button"
+    <BareButton
+      usage={{ counted: 'agent.view' }}
       className={holding ? 'cn-onit cn-onit-hold' : 'cn-onit'}
       onClick={() => actions.select(agentId)}
       title={said}
@@ -31,6 +32,6 @@ export function AgentOnIt({
       <i className="cn-onit-dot">
         <Icon name={holding ? 'pause' : 'play'} size={11} />
       </i>
-    </button>
+    </BareButton>
   );
 }

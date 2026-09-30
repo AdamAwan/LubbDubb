@@ -3,6 +3,7 @@ import type { AgentAskQuestion } from '../types.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
+import { BareButton } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -24,7 +25,7 @@ export function QuestionnaireModal({
     setAnswers((prev) => prev.map((a, i) => (i === index ? value : a)));
 
   return (
-    <Modal face="modal" className="qn-modal" title={prompt} onClose={onClose}>
+    <Modal face="modal" className="qn-modal" title={prompt} closeUsage="escalation.close" onClose={onClose}>
       <div className="qn-list">
         {questions.map((q, i) => (
           <div key={i} className={`qn-q${answers[i]?.trim() ? ' answered' : ''}`}>
@@ -38,14 +39,15 @@ export function QuestionnaireModal({
             {q.options && q.options.length > 0 ? (
               <div className="qn-opts">
                 {q.options.map((o) => (
-                  <button
+                  <BareButton
                     key={o}
+                    usage={{ counted: 'escalation.accept' }}
                     className={`qn-opt${answers[i]?.trim() === o ? ' picked' : ''}`}
                     title="Fills the box below — edit it if you want to qualify the answer"
                     onClick={() => setAnswer(i, o)}
                   >
                     {o}
-                  </button>
+                  </BareButton>
                 ))}
               </div>
             ) : null}
@@ -64,6 +66,7 @@ export function QuestionnaireModal({
           {answered} of {questions.length} answered
         </span>
         <AsyncButton
+          usage={{ counted: 'escalation.accept' }}
           tone="primary"
           disabled={answered === 0}
           title={answered === questions.length ? 'Send all answers' : 'Unanswered questions are sent as "no answer"'}

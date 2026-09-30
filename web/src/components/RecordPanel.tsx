@@ -28,6 +28,7 @@ function RecordGoals({
           rows stay, drawn as references, and the component picks the
           destination. */}
       <Button
+        usage={showGoals ? 'record.close' : 'record.expand'}
         ghost
         className="work-goals-head"
         onClick={onToggle}
@@ -96,7 +97,12 @@ export function RecordPanel({ now }: { now: number }) {
       )}
       {loose.map((root) => (
         <div className="work-root" key={root.ref}>
-          <Button ghost className="work-root-head" onClick={() => setOpen(open === root.ref ? null : root.ref)}>
+          <Button
+            usage={open === root.ref ? 'record.close' : 'record.expand'}
+            ghost
+            className="work-root-head"
+            onClick={() => setOpen(open === root.ref ? null : root.ref)}
+          >
             <span className="work-caret">{open === root.ref ? '▾' : '▸'}</span>
             <span className="work-title">{root.title}</span>
             <Tag tone={root.terminal ? 'green' : undefined}>{root.status}</Tag>

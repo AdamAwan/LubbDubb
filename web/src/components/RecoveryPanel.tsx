@@ -109,23 +109,7 @@ function CrashedCard({
         </p>
       )}
 
-      <div className="crashed-actions">
-        {crashed.restorable ? (
-          <AsyncButton tone="primary" title={VERDICT_HELP.restore} onClick={() => onDecide(crashed.taskId, 'restore')}>
-            Restore
-          </AsyncButton>
-        ) : (
-          <span className="muted restore-blocked" title={crashed.restoreBlocked ?? undefined}>
-            Can’t restore — {crashed.restoreBlocked}
-          </span>
-        )}
-        <AsyncButton title={VERDICT_HELP.requeue} onClick={() => onDecide(crashed.taskId, 'requeue')}>
-          Requeue
-        </AsyncButton>
-        <AsyncButton tone="danger" title={VERDICT_HELP.remove} onClick={() => onDecide(crashed.taskId, 'remove')}>
-          Remove
-        </AsyncButton>
-      </div>
+      <CrashedActions crashed={crashed} onDecide={onDecide} />
     </Panel>
   );
 }
@@ -136,3 +120,45 @@ const VERDICT_CAUSE: Record<OrphanedWork['died'], string> = {
   never_started:
     'The harness recorded this task and restarted before it could start an agent for it, so nothing ever ran',
 };
+
+function CrashedActions({
+  crashed,
+  onDecide,
+}: {
+  crashed: OrphanedWork;
+  onDecide: (taskId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
+}) {
+  return (
+    <div className="crashed-actions">
+      {crashed.restorable ? (
+        <AsyncButton
+          usage="agent.accept"
+          tone="primary"
+          title={VERDICT_HELP.restore}
+          onClick={() => onDecide(crashed.taskId, 'restore')}
+        >
+          Restore
+        </AsyncButton>
+      ) : (
+        <span className="muted restore-blocked" title={crashed.restoreBlocked ?? undefined}>
+          Can’t restore — {crashed.restoreBlocked}
+        </span>
+      )}
+      <AsyncButton
+        usage="agent.reject"
+        title={VERDICT_HELP.requeue}
+        onClick={() => onDecide(crashed.taskId, 'requeue')}
+      >
+        Requeue
+      </AsyncButton>
+      <AsyncButton
+        usage="agent.abandon"
+        tone="danger"
+        title={VERDICT_HELP.remove}
+        onClick={() => onDecide(crashed.taskId, 'remove')}
+      >
+        Remove
+      </AsyncButton>
+    </div>
+  );
+}

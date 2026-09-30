@@ -8,6 +8,7 @@ import type {
 } from '../types.js';
 import { statePick } from '../cockpit/place.js';
 import { fmtUsd } from './util.js';
+import { BareButton } from './button.js';
 
 export interface TicketQueryPlace {
   watch: TicketWatchFilter;
@@ -142,9 +143,9 @@ function ViewSwitch({
       </span>
       <div className="tickets-seg">
         {VIEW_OPTIONS.map((option) => (
-          <button
+          <BareButton
             key={option.value}
-            type="button"
+            usage="ticket.filter"
             className={option.value === query.view ? 'on' : ''}
             disabled={states.length === 0 && option.value === 'card'}
             aria-pressed={option.value === query.view}
@@ -165,7 +166,7 @@ function ViewSwitch({
             }}
           >
             {option.label}
-          </button>
+          </BareButton>
         ))}
       </div>
     </div>
@@ -237,21 +238,21 @@ function StateTier(
         {columns ? 'Columns' : 'State'}
       </span>
       {!columns && (
-        <button
-          type="button"
+        <BareButton
+          usage="ticket.filter"
           className={props.value === 'any' ? 'on' : ''}
           onClick={() => props.onPick(null)}
           aria-pressed={props.value === 'any'}
         >
           Any
-        </button>
+        </BareButton>
       )}
       {props.states.map((facet) => {
         const on = columns ? !props.hidden.includes(facet.state) : props.value === facet.state;
         return (
-          <button
+          <BareButton
             key={facet.state}
-            type="button"
+            usage="ticket.filter"
             className={`${on ? 'on' : ''} ${facet.pickup ? 'gate' : ''}`}
             aria-pressed={on}
             onClick={() => (columns ? props.onToggle(facet.state) : props.onPick(facet))}
@@ -264,7 +265,7 @@ function StateTier(
             {facet.state}
             {facet.pickup && <i className="tickets-gate">▲</i>}
             <i className="tickets-k">{facet.count.toLocaleString()}</i>
-          </button>
+          </BareButton>
         );
       })}
       <span className="tickets-why">
@@ -298,9 +299,9 @@ function FeatureLegend({
     <div className="tickets-legend">
       <span className="tickets-flabel">Feature</span>
       {features.map((f) => (
-        <button
+        <BareButton
           key={f.number}
-          type="button"
+          usage="ticket.filter"
           className={`tickets-fchip ${value === f.number ? 'on' : ''}`}
           aria-pressed={value === f.number}
           onClick={() => onPick(value === f.number ? null : f.number)}
@@ -309,11 +310,11 @@ function FeatureLegend({
           <i className={`tickets-sw f${f.slot}`} />
           {f.title}
           <i className="tickets-k">{f.count.toLocaleString()}</i>
-        </button>
+        </BareButton>
       ))}
       {orphanCount > 0 && (
-        <button
-          type="button"
+        <BareButton
+          usage="ticket.filter"
           className={`tickets-fchip orphan ${value === 'none' ? 'on' : ''}`}
           aria-pressed={value === 'none'}
           onClick={() => onPick(value === 'none' ? null : 'none')}
@@ -322,7 +323,7 @@ function FeatureLegend({
           <i className="tickets-sw" />
           No feature
           <i className="tickets-k">{orphanCount.toLocaleString()}</i>
-        </button>
+        </BareButton>
       )}
     </div>
   );
@@ -348,16 +349,16 @@ function Segment<T extends string>({
       </span>
       <div className="tickets-seg">
         {options.map((option) => (
-          <button
+          <BareButton
             key={option.value}
-            type="button"
+            usage="ticket.filter"
             className={option.value === value ? 'on' : ''}
             title={option.title}
             aria-pressed={option.value === value}
             onClick={() => onPick(option.value)}
           >
             {option.label}
-          </button>
+          </BareButton>
         ))}
       </div>
     </div>

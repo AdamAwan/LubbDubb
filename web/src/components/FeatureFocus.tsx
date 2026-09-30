@@ -9,7 +9,7 @@ import { featureHolds } from '../view/featureHolds.js';
 import { needBody } from '../console/NeedsBand.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from '../console/QueueRail.js';
 import { Ref } from './refs.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 import { relTime } from './util.js';
 import { FeatureAccount, FeatureMarks } from './featureAccount.js';
 
@@ -63,16 +63,16 @@ export function FeatureFocus({
           to the board. */}
       <nav className="cn-ff-pick" aria-label="Features">
         {ordered.map(({ rollup, holds }) => (
-          <button
+          <BareButton
             key={rollup.number}
-            type="button"
+            usage="feature.filter"
             aria-current={rollup.number === picked.rollup.number}
             className={rollup.number === picked.rollup.number ? 'cn-ff-on' : ''}
             onClick={() => actions.setFeatureQuery({ featureCard: rollup.number })}
           >
             {rollup.title}
             {holds.you.length > 0 && <i className="cn-ff-n">{holds.you.length}</i>}
-          </button>
+          </BareButton>
         ))}
       </nav>
 
@@ -188,7 +188,7 @@ function YourMove({
       <section className="cn-ff-move cn-ff-move-clear">
         <h3>That is all of them, for now</h3>
         <p className="cn-psub">{skipped.length} set aside in this sitting.</p>
-        <Button tone="secondary" onClick={() => setSkipped([])}>
+        <Button tone="secondary" usage="feature.undo" onClick={() => setSkipped([])}>
           Bring them back
         </Button>
       </section>
@@ -226,7 +226,7 @@ function YourMove({
         </div>
 
         <footer className="cn-ff-ask-foot">
-          <Button tone="secondary" ghost onClick={() => setSkipped([...skipped, here.row.id])}>
+          <Button tone="secondary" ghost usage="feature.defer" onClick={() => setSkipped([...skipped, here.row.id])}>
             Skip for now
           </Button>
           {live.length > 1 && <span className="cn-psub">{live.length - 1} more here</span>}
@@ -277,9 +277,13 @@ function GoalLane({
   return (
     <article className={`cn-ff-lane ${yours.length > 0 ? 'cn-ff-lane-mine' : ''}`}>
       <span className={`cn-ff-standing cn-fb-${child.standing}`} />
-      <button type="button" className="cn-ff-lane-name" onClick={() => actions.selectGoal(`issue:${child.number}`)}>
+      <BareButton
+        usage={{ counted: 'goal.view' }}
+        className="cn-ff-lane-name"
+        onClick={() => actions.selectGoal(`issue:${child.number}`)}
+      >
         {child.title}
-      </button>
+      </BareButton>
       <Ref to={`issue:${child.number}`} />
       <span className="cn-ff-lane-move">
         {top !== undefined ? (

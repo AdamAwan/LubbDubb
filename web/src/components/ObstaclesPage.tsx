@@ -11,11 +11,11 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import { api } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
+import { BareButton } from './button.js';
 import { Ref } from './refs.js';
 import { absDate, relTime, untilTime } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
-import { logUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -166,9 +166,14 @@ function EndedFold({
 }): JSX.Element {
   return (
     <section className="ob-section">
-      <button type="button" className="ob-fold" aria-expanded={ended} onClick={onToggle}>
+      <BareButton
+        usage={ended ? 'obstacle.close' : 'obstacle.expand'}
+        className="ob-fold"
+        aria-expanded={ended}
+        onClick={onToggle}
+      >
         {ended ? '▾' : '▸'} Over and silenced <span className="ob-n">{count}</span>
-      </button>
+      </BareButton>
       {ended && (
         <>
           <p className="ob-note">
@@ -266,17 +271,14 @@ function Row({
   return (
     <div className={`ob-row${dim ? ' dim' : ''}${open ? ' open' : ''}`}>
       <HeadRow align="baseline" className="ob-row-top">
-        <button
-          type="button"
+        <BareButton
+          usage={open ? 'obstacle.close' : 'obstacle.expand'}
           className="ob-claim"
           aria-expanded={open}
-          onClick={() => {
-            if (!open) logUsage('obstacle.expand');
-            actions.setObstacleQuery({ obstacle: open ? null : obstacle.id });
-          }}
+          onClick={() => actions.setObstacleQuery({ obstacle: open ? null : obstacle.id })}
         >
           {obstacle.what}
-        </button>
+        </BareButton>
         {/* Beside the control, never inside it. */}
         <span className="cn-refs">{obstacle.ownerRef !== null && <Ref to={obstacle.ownerRef} />}</span>
         <Tag tone={OBSTACLE_TONE[obstacle.state]} fill={OBSTACLE_TONE[obstacle.state] !== undefined}>
@@ -430,6 +432,7 @@ function Controls({
             onChange={(e) => setOwnerRef(e.target.value)}
           />
           <AsyncButton
+            usage={{ counted: 'obstacle.accept' }}
             disabled={ownerRef.trim() === ''}
             onClick={() => act(actions.ownObstacle(obstacle.id, ownerRef.trim()))}
             onRefused={onRefused}
@@ -442,6 +445,7 @@ function Controls({
 
       {obstacle.state === 'standing' && obstacle.kind === 'note' && (
         <AsyncButton
+          usage={{ counted: 'obstacle.accept' }}
           onClick={() => act(actions.writeDownObstacle(obstacle.id))}
           onRefused={onRefused}
           title="Queue the documentation change now. One note is written up at a time, across the whole fleet."
@@ -453,6 +457,7 @@ function Controls({
       {live && (
         <ConfirmButton
           label="Retire"
+          usage={{ counted: 'obstacle.waive' }}
           confirmLabel="Retire it"
           title="This is over and no reading is going to say so. It is not rejecting — the row keeps what it said, and a matching report reopens it."
           onConfirm={() => act(actions.retireObstacle(obstacle.id))}
@@ -478,7 +483,11 @@ function MuteControl({
 }: ControlProps & { live: boolean }): JSX.Element | null {
   if (obstacle.state === 'muted') {
     return (
-      <AsyncButton onClick={() => act(actions.muteObstacle(obstacle.id, false))} onRefused={onRefused}>
+      <AsyncButton
+        usage="obstacle.undo"
+        onClick={() => act(actions.muteObstacle(obstacle.id, false))}
+        onRefused={onRefused}
+      >
         Tell the fleet again
       </AsyncButton>
     );
@@ -486,6 +495,7 @@ function MuteControl({
   if (!live) return null;
   return (
     <AsyncButton
+      usage="obstacle.stop"
       onClick={() => act(actions.muteObstacle(obstacle.id, true))}
       onRefused={onRefused}
       title="Never tell the fleet this. The one state whose exit is a person."
@@ -500,6 +510,7 @@ function TicketDecision({ obstacle, actions, act, onRefused }: ControlProps): JS
     <>
       {obstacle.ticketDecision !== 'approved' && (
         <AsyncButton
+          usage={{ counted: 'obstacle.accept' }}
           onClick={() => act(actions.decideObstacleTicket(obstacle.id, true))}
           onRefused={onRefused}
           title="File the bug. The pulse files it on the next cycle, with the sightings behind it, and the row takes the ticket as its owner."
@@ -510,6 +521,7 @@ function TicketDecision({ obstacle, actions, act, onRefused }: ControlProps): JS
 
       {obstacle.ticketDecision === null && (
         <AsyncButton
+          usage="obstacle.reject"
           onClick={() => act(actions.decideObstacleTicket(obstacle.id, false))}
           onRefused={onRefused}
           title="No bug for this. The fleet is still told about it and told not to go fixing it; nothing is filed, and the row decays as it would have."

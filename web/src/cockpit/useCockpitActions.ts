@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import type { AppliedFix } from '../view/needsYou.js';
 import { goalMove, homeTab, POOL_VIEWS } from './place.js';
-import { logUsage } from './usage.js';
 import type { CockpitActions } from './actions.js';
 import type { useNavigation } from './useNavigation.js';
 import { PREDICTION_PANE } from '../view/goalPage.js';
@@ -246,14 +245,8 @@ function placeActions(go: Go) {
     openPanel: (panel) => go({ panel }),
     openTab: (next) => go(next === 'features' ? { tab: next, featureCard: null } : { tab: next }),
     openFeature: (featureCard) => go({ tab: 'features', featureCard, panel: null }),
-    setTicketQuery: (next) => {
-      logUsage('ticket.filter');
-      go(next);
-    },
-    setFeatureQuery: (next) => {
-      logUsage('feature.filter');
-      go(next);
-    },
+    setTicketQuery: (next) => go(next),
+    setFeatureQuery: (next) => go(next),
     showBlendedPets: (petsBlended) => go({ petsBlended }),
     setOverviewShape: (overview) => go({ overview }),
     setFeatureMode: (featureMode) => go({ featureMode }),

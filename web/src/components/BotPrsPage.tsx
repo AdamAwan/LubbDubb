@@ -116,6 +116,7 @@ function Summarise({
     <div className="bp-summarise">
       <AsyncButton
         size="small"
+        usage="bot-pr.create"
         disabled={out}
         title="Send one agent to read every classified pull request it has not read on its current head, up to 20, majors first"
         pendingLabel="Gathering…"
@@ -200,6 +201,7 @@ function Row({ pr, now, reload }: { pr: AssessedBotPr; now: number; reload: () =
             <AsyncButton
               size="small"
               ghost
+              usage="pr.edit"
               title="Add yourself as an optional reviewer, so the others can see it is taken"
               pendingLabel="Adding…"
               onRefused={setRefusal}

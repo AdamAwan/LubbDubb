@@ -105,6 +105,7 @@ function PartHead({
           open pull request is not undoable from here. */}
       {onRestart && part.status === 'in_review' && part.prNumber !== null && (
         <ConfirmButton
+          usage={{ counted: 'plan.edit' }}
           size="small"
           label="↺ restart"
           confirmLabel="close the PR and restart"

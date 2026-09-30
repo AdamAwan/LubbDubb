@@ -1,4 +1,4 @@
-import type { PlaceKey, UiUsageEvent } from '../types.js';
+import type { ControlUsage, PlaceKey, UiUsageEvent } from '../types.js';
 import type { ConsolePanel, ConsoleTab } from './actions.js';
 import type { Place } from './place.js';
 import { api } from '../api.js';
@@ -16,6 +16,10 @@ export function logUsage(event: UiUsageEvent, at?: PlaceKey): void {
     // swallowed anyway, because the caller is a click handler on a control that
     // has to keep working whatever happens here.
   }
+}
+
+export function logControl(usage: ControlUsage): void {
+  if (typeof usage === 'string') logUsage(usage);
 }
 
 let place: PlaceKey = 'overview';
@@ -41,7 +45,13 @@ const FLUSH_MS = 10_000;
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
+let flushOnHide = false;
+
 function schedule(): void {
+  if (!flushOnHide && typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flush);
+    flushOnHide = true;
+  }
   if (timer !== null) return;
   timer = setTimeout(() => {
     timer = null;
@@ -64,8 +74,6 @@ function flush(): void {
   }
 }
 
-if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
-
 export function placeReach(place: Place): { key: PlaceKey; view: UiUsageEvent | null } {
   if (place.hatch !== null) return { key: 'hatch', view: 'pet.view' };
   if (place.scratchpad !== null) return { key: 'scratchpad', view: 'scratchpad.view' };
@@ -77,36 +85,60 @@ export function placeReach(place: Place): { key: PlaceKey; view: UiUsageEvent | 
   if (panel !== null && typeof panel === 'object') return { key: 'ask', view: 'escalation.view' };
   if (panel !== null) {
     const reach = PANEL_REACH[panel];
-    if (reach !== undefined) return reach;
+    if (reach !== undefined) return { key: reach.key, view: `${reach.subject}.view` };
   }
   if (place.pr !== null) return { key: 'pr', view: 'pr.view' };
   if (place.goal !== null) return { key: 'goal', view: 'goal.view' };
   return TAB_REACH[place.tab];
 }
 
-const PANEL_REACH: Record<
-  Exclude<ConsolePanel, null | { ask: string }>,
-  { key: PlaceKey; view: UiUsageEvent | null }
-> = {
-  faults: { key: 'faults', view: null },
-  launch: { key: 'launch', view: 'job.view' },
-  build: { key: 'build', view: 'upgrade.view' },
-  localRun: { key: 'local-run', view: 'local-run.view' },
-  setup: { key: 'setup', view: 'config.view' },
-  record: { key: 'record', view: null },
-  upnext: { key: 'upnext', view: null },
-  signals: { key: 'signals', view: null },
-  environments: { key: 'environments', view: null },
-  tenants: { key: 'environments', view: null },
+type Panel = Exclude<ConsolePanel, null | { ask: string }>;
+
+type PanelSubject =
+  | 'fault'
+  | 'job'
+  | 'upgrade'
+  | 'local-run'
+  | 'config'
+  | 'record'
+  | 'queue'
+  | 'signal'
+  | 'environment';
+
+type TabView = Extract<UiUsageEvent, `${string}.view`>;
+
+const PANEL_REACH: Record<Panel, { key: PlaceKey; subject: PanelSubject }> = {
+  faults: { key: 'faults', subject: 'fault' },
+  launch: { key: 'launch', subject: 'job' },
+  build: { key: 'build', subject: 'upgrade' },
+  localRun: { key: 'local-run', subject: 'local-run' },
+  setup: { key: 'setup', subject: 'config' },
+  record: { key: 'record', subject: 'record' },
+  upnext: { key: 'upnext', subject: 'queue' },
+  signals: { key: 'signals', subject: 'signal' },
+  environments: { key: 'environments', subject: 'environment' },
+  tenants: { key: 'environments', subject: 'environment' },
 };
 
-const TAB_REACH: Record<ConsoleTab, { key: PlaceKey; view: UiUsageEvent | null }> = {
-  overview: { key: 'overview', view: null },
+export function panelUsage(panel: Panel): ControlUsage {
+  return { counted: `${PANEL_REACH[panel].subject}.view` };
+}
+
+export function panelClose(panel: Panel): ControlUsage {
+  return `${PANEL_REACH[panel].subject}.close`;
+}
+
+const TAB_REACH: Record<ConsoleTab, { key: PlaceKey; view: TabView }> = {
+  overview: { key: 'overview', view: 'fleet.view' },
   tickets: { key: 'tickets', view: 'ticket.view' },
   obstacles: { key: 'obstacles', view: 'obstacle.view' },
   features: { key: 'features', view: 'feature.view' },
-  bots: { key: 'bots', view: null },
+  bots: { key: 'bots', view: 'bot-pr.view' },
   insights: { key: 'insights', view: 'insights.view' },
   pets: { key: 'pets', view: 'pet.view' },
   config: { key: 'config', view: 'config.view' },
 };
+
+export function tabUsage(tab: ConsoleTab): ControlUsage {
+  return { counted: TAB_REACH[tab].view };
+}

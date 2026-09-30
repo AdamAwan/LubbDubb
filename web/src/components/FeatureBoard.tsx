@@ -13,7 +13,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import { FeatureFocus } from './FeatureFocus.js';
 import { FeatureSummariesAd } from './FeatureSummariesAd.js';
 import { RefLinksExtended } from './refs.js';
-import { Button } from './button.js';
+import { BareButton, Button } from './button.js';
 import { fmtUsd } from './util.js';
 import type { FeatureBoardPayload } from '../types.js';
 import { Crumb, type CrumbStep } from '../console/Crumb.js';
@@ -53,7 +53,11 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
       <FeatureDetail
         number={view.featureCard}
         board={board}
-        back={{ label: 'Features', go: () => actions.setFeatureQuery({ featureCard: null }) }}
+        back={{
+          label: 'Features',
+          usage: { counted: 'feature.view' },
+          go: () => actions.setFeatureQuery({ featureCard: null }),
+        }}
         view={view}
         actions={actions}
         onAnswered={() => void read()}
@@ -220,9 +224,9 @@ function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitAct
   return (
     <span className="cn-fb-mode">
       {FEATURE_MODES.map((m) => (
-        <button
+        <BareButton
           key={m}
-          type="button"
+          usage="feature.filter"
           aria-pressed={m === mode}
           className={m === mode ? 'cn-fb-mode-on' : ''}
           title={
@@ -233,7 +237,7 @@ function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitAct
           onClick={() => actions.setFeatureMode(m)}
         >
           {m === 'board' ? 'Board' : 'Focus'}
-        </button>
+        </BareButton>
       ))}
     </span>
   );
@@ -269,6 +273,7 @@ function DensityControl({
     <span className="cn-fb-density" role="group" aria-label="How much of each Feature">
       <Button
         size="small"
+        usage="feature.filter"
         ghost={rows}
         aria-pressed={!rows}
         title="Every Feature in full — its account, its progress and where it has reached"
@@ -278,6 +283,7 @@ function DensityControl({
       </Button>
       <Button
         size="small"
+        usage="feature.filter"
         ghost={!rows}
         aria-pressed={rows}
         title="One line each — the name and how far along it is, with the card you open still drawn in full"
@@ -304,6 +310,7 @@ function SortControl({ sort, actions }: { sort: FeatureSort; actions: CockpitAct
         <Button
           key={s}
           size="small"
+          usage="feature.filter"
           ghost={s !== sort}
           aria-pressed={s === sort}
           onClick={() => actions.setFeatureQuery({ featureSort: s })}
