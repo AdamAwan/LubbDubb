@@ -6,9 +6,16 @@ import type { Agent, Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { CONTROL_CLASS } from '../components/controls.js';
-import { pressBreakdown, pressableRows, remoteRunGaps, type RemoteRunGap } from '../view/validatePane.js';
+import {
+  pressBreakdown,
+  pressableRows,
+  remoteRunGaps,
+  tenantAlerts,
+  type RemoteRunGap,
+  type TenantAlert,
+} from '../view/validatePane.js';
 import { SignalsSection } from '../components/SignalsSection.js';
-import { RemoteValidationSection } from '../components/RemoteValidationSection.js';
+import { RemoteValidationSection, ReseedControl } from '../components/RemoteValidationSection.js';
 import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
 import { LocalValidationReport } from './LocalValidationReport.js';
 import {
@@ -272,20 +279,64 @@ function SheetRunRow({
             {made.own > 0 &&
               ` · ${String(made.own)} ${made.own === 1 ? 'query or measure' : 'queries and measures'} of its own`}
           </span>
-          {/* What staleness means, where it can be acted on. A tenant accumulates the residue
-              of every run that used it, so past the window the environment declares a red row
-              may be that residue rather than the code — which is why the answer is to reseed
-              first and press after. → docs/spec/36-remote-validation.md#tenants */}
-          {sheet.tenant.stale && (
-            <span className="cn-sub cn-runstrip-stale">
-              Its test data is older than {sheet.environment} allows — reseed it below first, or a failure here may be
-              leftovers from earlier runs rather than this goal&rsquo;s work.
-            </span>
-          )}
         </>
       )}
     </div>
   );
+}
+
+/**
+ * An environment whose tenant would make any reading on it untrustworthy, said once at the top of the
+ * pane with the control that fixes it. It used to be a line in the run strip and a red outcome at the
+ * foot of the page, below the checks it was quietly undermining — read last, when it should decide
+ * whether anything below is worth reading. → docs/spec/17-cockpit.md#the-validate-pane
+ */
+export function TenantBanner({
+  page,
+  showing,
+  actions,
+}: {
+  page: GoalPageView;
+  showing: string | null;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const alerts = tenantAlerts(page.remoteSheets, showing);
+  if (alerts.length === 0) return null;
+  return (
+    <>
+      {alerts.map((alert) => {
+        const sheet = page.remoteSheets.find((s) => s.environment === alert.environment);
+        return (
+          <section key={alert.environment} className="cn-tenant-alert" role="alert">
+            <Icon name="alert" />
+            <div className="cn-tenant-alert-body">
+              <b>{alertHeadline(alert)}</b>
+              <span className="cn-sub">{alertConsequence(alert)}</span>
+            </div>
+            {sheet !== undefined && (
+              <ReseedControl
+                tenant={sheet.tenant}
+                onReseed={() => actions.reseedRemoteTenant(page.issue.number, alert.environment)}
+              />
+            )}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+function alertHeadline(alert: TenantAlert): string {
+  const who = alert.tenant === null ? `${alert.environment}'s tenant` : `${alert.environment} · ${alert.tenant}`;
+  if (alert.why === 'blocked') return `${who} can't be used`;
+  if (alert.why === 'failed') return `${who} — its last reseed failed`;
+  return `${who} — its test data is past ${alert.environment}'s freshness window`;
+}
+
+function alertConsequence(alert: TenantAlert): string {
+  if (alert.why === 'blocked') return alert.detail ?? 'Nothing on this environment can be put to it.';
+  const tail = `A failure on ${alert.environment} may be leftovers from earlier runs rather than this goal's work — reseed first, then run.`;
+  return alert.why === 'failed' && alert.detail !== null ? `${alert.detail} ${tail}` : tail;
 }
 
 export function Signals({
@@ -387,6 +438,7 @@ export function RemoteValidation({
           switcher={false}
           foldRows
           press={false}
+          alertAbove
           onShow={(environment) => actions.openRemoteSheet(environment)}
           controls={{
             onRule: (environment, rowId, accept) =>

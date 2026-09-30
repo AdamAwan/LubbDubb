@@ -14,10 +14,11 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { ExtLink } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
+import { panelRows, tenantAlerts } from '../view/validatePane.js';
 
 // → docs/spec/36-remote-validation.md#the-cockpit
 
-const OUTCOME_TONE: Record<RemoteRowOutcome, TagTone> = {
+export const OUTCOME_TONE: Record<RemoteRowOutcome, TagTone> = {
   passed: 'green',
   failed: 'red',
   blocked: 'grey',
@@ -54,6 +55,7 @@ export function RemoteValidationSection({
   switcher = true,
   foldRows = false,
   press = true,
+  alertAbove = false,
 }: {
   sheets: RemoteSheetView[];
   showing: string | null;
@@ -77,8 +79,14 @@ export function RemoteValidationSection({
    * → docs/spec/17-cockpit.md#the-validate-pane
    */
   press?: boolean;
+  /**
+   * The pane draws an unhealthy tenant as a banner above everything, with its reseed control. The gate
+   * then leaves both out, so the one control is in one place. → docs/spec/17-cockpit.md#the-validate-pane
+   */
+  alertAbove?: boolean;
 }): JSX.Element {
   const open = sheets.find((s) => s.environment === showing) ?? sheets[0]!;
+  const tenantAbove = alertAbove && tenantAlerts([open]).length > 0;
   return (
     <div className="cn-sig">
       {switcher && sheets.length > 1 && (
@@ -95,18 +103,9 @@ export function RemoteValidationSection({
           ))}
         </HeadRow>
       )}
-      <Gate sheet={open} controls={controls} press={press} />
+      <Gate sheet={open} controls={controls} press={press} tenantAbove={tenantAbove} />
       {foldRows ? (
-        <details className="cn-sheet-fold">
-          <summary>
-            {open.rows.length === 1
-              ? 'the 1 row this press carries'
-              : `the ${String(open.rows.length)} rows this press carries`}
-          </summary>
-          {open.rows.map((row) => (
-            <SheetRow key={row.rowId} row={row} controls={controls} />
-          ))}
-        </details>
+        <OwnRows sheet={open} controls={controls} />
       ) : (
         open.rows.map((row) => <SheetRow key={row.rowId} row={row} controls={controls} />)
       )}
@@ -115,11 +114,38 @@ export function RemoteValidationSection({
           Assembled when this goal&rsquo;s work arrived in {open.environment}. No row here deploys, promotes or writes:
           every query is read-only and runs with your own credential.
           {open.tenant.reseedable && open.tenant.destructive
-            ? ' The reseed control above is the one thing on this card that changes the environment.'
+            ? tenantAbove
+              ? ' The reseed control at the top of the pane is the one thing here that changes the environment.'
+              : ' The reseed control above is the one thing on this card that changes the environment.'
             : ''}
         </span>
       </div>
     </div>
+  );
+}
+
+/** The rows that are not a check's own, and a line saying where the check rows went. */
+function OwnRows({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetControls }): JSX.Element {
+  const own = panelRows(sheet);
+  const checkRows = sheet.rows.length - own.length;
+  return (
+    <>
+      {own.length > 0 && (
+        <details className="cn-sheet-fold" open>
+          <summary>{own.length === 1 ? 'the 1 row of its own' : `the ${String(own.length)} rows of its own`}</summary>
+          {own.map((row) => (
+            <SheetRow key={row.rowId} row={row} controls={controls} />
+          ))}
+        </details>
+      )}
+      {checkRows > 0 && (
+        <p className="cn-sub cn-sheet-checks">
+          {checkRows === 1
+            ? 'What this run made of its 1 check is drawn on that check, above.'
+            : `What this run made of its ${String(checkRows)} checks is drawn on each check, above.`}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -131,10 +157,12 @@ function Gate({
   sheet,
   controls,
   press,
+  tenantAbove,
 }: {
   sheet: RemoteSheetView;
   controls: SheetControls;
   press: boolean;
+  tenantAbove: boolean;
 }): JSX.Element {
   const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
   // What a press will actually read or dispatch for, which is not the same as what is selected: a
@@ -162,34 +190,48 @@ function Gate({
             </AsyncButton>
           )
         )}
-        {sheet.tenant.reseedable &&
-          preparing(sheet.tenant) === null &&
-          (sheet.tenant.destructive ? (
-            <ConfirmButton
-              label="Reseed the tenant"
-              confirmLabel={
-                sheet.tenant.tenant === null
-                  ? 'Confirm — this destroys its data'
-                  : `Confirm — this destroys ${sheet.tenant.tenant}’s data`
-              }
-              pendingLabel="Reseeding…"
-              title={reseedWarning(sheet.tenant)}
-              onConfirm={() => controls.onReseed(sheet.environment)}
-            />
-          ) : (
-            <AsyncButton
-              onClick={() => controls.onReseed(sheet.environment)}
-              title="Provision this environment’s tenant with its own command — the harness never invents a tenant name"
-            >
-              Provision the tenant
-            </AsyncButton>
-          ))}
+        {!tenantAbove && <ReseedControl tenant={sheet.tenant} onReseed={() => controls.onReseed(sheet.environment)} />}
       </div>
-      <PrepareLine tenant={sheet.tenant} />
-      {sheet.tenant.reseedable && sheet.tenant.destructive && preparing(sheet.tenant) === null && (
+      {!tenantAbove && <PrepareLine tenant={sheet.tenant} />}
+      {!tenantAbove && sheet.tenant.reseedable && sheet.tenant.destructive && preparing(sheet.tenant) === null && (
         <span className="cn-sub cn-sheet-warn">{reseedWarning(sheet.tenant)}</span>
       )}
     </div>
+  );
+}
+
+/**
+ * The tenant's own control: reseed where the environment declares a destructive `reseed`, armed first
+ * because nothing undoes it, and provision where it declares only `ensureTenant`. Nothing while a
+ * preparation runs. Drawn on the gate, or on the pane's banner when the tenant is unhealthy — never both.
+ */
+export function ReseedControl({
+  tenant,
+  onReseed,
+}: {
+  tenant: RemoteTenantView;
+  onReseed: () => Promise<void>;
+}): JSX.Element | null {
+  if (!tenant.reseedable || preparing(tenant) !== null) return null;
+  if (!tenant.destructive)
+    return (
+      <AsyncButton
+        onClick={onReseed}
+        title="Provision this environment’s tenant with its own command — the harness never invents a tenant name"
+      >
+        Provision the tenant
+      </AsyncButton>
+    );
+  return (
+    <ConfirmButton
+      label="Reseed the tenant"
+      confirmLabel={
+        tenant.tenant === null ? 'Confirm — this destroys its data' : `Confirm — this destroys ${tenant.tenant}’s data`
+      }
+      pendingLabel="Reseeding…"
+      title={reseedWarning(tenant)}
+      onConfirm={onReseed}
+    />
   );
 }
 
@@ -316,7 +358,7 @@ function SheetRow({ row, controls }: { row: RemoteSheetRowView; controls: SheetC
           )}
           {!row.selected && <Tag title="Taken out of the next press">not selected</Tag>}
         </HeadRow>
-        <p className="cn-sig-read">{said(row)}</p>
+        <p className="cn-sig-read">{rowSaid(row)}</p>
         {/* The screen itself, on the row that actually holds it. A run that declined to overwrite a
             check somebody else settled keeps its reading here — and the screen with it — so drawing
             it only on the check row left the image reachable nowhere but the harness's own disk,
@@ -423,7 +465,7 @@ function clock(ms: number): string {
   return `${String(Math.round(seconds / 60))}m`;
 }
 
-function said(row: RemoteSheetRowView): string {
+export function rowSaid(row: RemoteSheetRowView): string {
   if (row.blockedReason !== null) return `Nothing was learned here — ${row.blockedReason}`;
   const reading: RemoteReadingView | null = row.reading;
   if (reading === null) {

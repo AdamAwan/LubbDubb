@@ -40,7 +40,7 @@ import { logUsage } from '../cockpit/usage.js';
 import { TabbedPanel, type PanelTab } from './TabbedPanel.js';
 import { buildFolds, Disclosure, type Fold } from './goalFold.js';
 import { Header } from './goalHeader.js';
-import { LocalValidation, RemoteValidation, RunStrip, Signals } from './goalRunners.js';
+import { LocalValidation, RemoteValidation, RunStrip, Signals, TenantBanner } from './goalRunners.js';
 import { PlanWaves } from './goalPlan.js';
 import { Environments, REACH_TONE, WatchWindow } from './goalEnvironments.js';
 import { Instructions, Reference, Sequence, Spend, Tail, Ticket } from './goalCards.js';
@@ -354,6 +354,8 @@ function ValidatePane({
   return (
     <>
       <ObligationPicker page={page} tab="validate" showing={showing} actions={actions} />
+      {/* First, because an unhealthy tenant decides whether anything below it is worth reading. */}
+      <TenantBanner page={page} showing={showing} actions={actions} />
       {/* Before the list, because the question an operator arrives with is whether a run would
           answer some of it. The standings are computed once, here, and handed to both halves: the
           bands and the strip's count of what is still unanswered are one reading, and two of them
@@ -569,6 +571,7 @@ function Validation({
             onSelect={(environment, rowId, selected) =>
               actions.selectRemoteRow(issue.number, environment, rowId, selected)
             }
+            onOpenAgent={(agentId) => actions.select(agentId)}
             look={{ tone: 'secondary' }}
             onResult={(checkId, result, note) =>
               actions.setValidation(issue.number, checkId, { kind: 'result', result, note })

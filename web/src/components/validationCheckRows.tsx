@@ -1,5 +1,11 @@
 import type { JSX } from 'react';
-import type { ValidationCheck, ValidationCheckState, ValidationCheckView, ValidationResourceView } from '../types.js';
+import type {
+  RemoteSheetRowView,
+  ValidationCheck,
+  ValidationCheckState,
+  ValidationCheckView,
+  ValidationResourceView,
+} from '../types.js';
 import type { CheckBand, CheckStanding } from '../view/validatePane.js';
 import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -10,6 +16,7 @@ import type { ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
 import { logUsage } from '../cockpit/usage.js';
+import { OUTCOME_TONE, rowSaid } from './RemoteValidationSection.js';
 
 export function isMissingFile(resource: ValidationResourceView): boolean {
   return !resource.present && resource.kind !== 'access';
@@ -105,6 +112,60 @@ export function CheckLine({
       {aside !== null && <Tag tone="amber">{aside}</Tag>}
       <Tag tone={stateTone(check.state)}>{CHECK_STATE_WORDS[check.state]}</Tag>
     </button>
+  );
+}
+
+/**
+ * What each environment's run made of one check, under the check: the environment, the outcome in the
+ * row's own vocabulary, the sentence the run left, and the way to its screen and its agent. The same
+ * facts the environment panel used to list as a second copy of the set, now read where the check is.
+ * → docs/spec/17-cockpit.md#a-check-carries-its-runs
+ */
+export function CheckRuns({
+  runs,
+  onOpenAgent,
+}: {
+  runs: readonly RemoteSheetRowView[];
+  onOpenAgent: ((agentId: string) => void) | undefined;
+}): JSX.Element | null {
+  if (runs.length === 0) return null;
+  return (
+    <div className="vq-runs">
+      {runs.map((row) => {
+        const outcome = row.blockedReason !== null ? 'blocked' : (row.reading?.outcome ?? null);
+        const agentId = row.reading?.agentId ?? null;
+        const captureUrl = row.reading?.captureUrl ?? null;
+        const said = rowSaid(row);
+        return (
+          <div key={`${row.environment}:${row.rowId}`} className="vq-run">
+            <span className="vq-run-env">{row.environment}</span>
+            {outcome !== null && (
+              <Tag tone={OUTCOME_TONE[outcome]} fill>
+                {outcome}
+              </Tag>
+            )}
+            <span className="vq-run-said" title={said}>
+              {said}
+            </span>
+            {captureUrl !== null && (
+              <a className="cn-openagent" href={captureUrl} target="_blank" rel="noreferrer" title="Open the screen">
+                screen ↗
+              </a>
+            )}
+            {agentId !== null && onOpenAgent !== undefined && (
+              <button
+                type="button"
+                className="cn-openagent"
+                title="Open the agent that ran this — everything it did, and what it cost"
+                onClick={() => onOpenAgent(agentId)}
+              >
+                agent ↗
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -2559,12 +2559,15 @@ environment the goal has a sheet for. **The remote panel is never absent**: wher
 pane is showing holds no sheet, or no environment declares a `validate` block, it is drawn with the
 reason in place of its rows ([36](36-remote-validation.md#when-there-is-no-sheet)). A panel that
 vanished read as there being no remote run at all, and left the hand-over looking like the way to have
-the fleet run a browser check. A check appears once, in `Checks`; a run appears once, in its
-runner's panel; each names the other. A runner panel never re-lists the checks, which is what three
-cards of the same shape were doing to a reader.
+the fleet run a browser check. A check appears once, in `Checks`, **with what each run made of it drawn under it**
+([A check carries its runs](#a-check-carries-its-runs)); a runner panel draws the run itself — its
+gate, and the rows that are not any check's. A runner panel never re-lists the checks, which is what
+three cards of the same shape were doing to a reader.
 
-**The list bands on where an answer is coming from**, and on nothing else: _a run is on them_, _no run
-yet_, _only you can answer_, and what is answered. `checkStandings` (`web/src/view/validatePane.ts`)
+**The list bands on where an answer is coming from**, and on nothing else: _a run is on them_, _a run
+can take them_, _only you can answer_, and what is answered. The second band was _no run yet_, which
+was false the moment a run came back blocked: the check sat under a heading saying nothing had run,
+over a line saying what the run did. `checkStandings` (`web/src/view/validatePane.ts`)
 is the one place that decides, and it reads the sheet's own folds — a row's `blockedReason` and
 `idleReason` — rather than working out for itself which rows a press would touch, the same refusal
 those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)). _Only you can answer_
@@ -2576,7 +2579,7 @@ is exactly what this pane had too much of.
 **A banded row says as little as the band leaves unsaid.** The runner rides the _heading_ — once,
 and only where every check under it names the same one — because five rows reading "staging can take
 it" is the same fact five times. The state is drawn only where it is **not** what the band implies:
-nothing on an `unrun` check under _no run yet_, nothing on a `passed` one under _answered_, and the
+nothing on an `unrun` check under _a run can take them_, nothing on a `passed` one under _answered_, and the
 odd ones — failed, later, dropped, needs a look — in the state's own hue. What is left is quiet text
 rather than a chip: a chip is a box, a border and a shout, and twelve rows carrying two each is the
 noise the banding was for. All of it is on the row at full weight the moment it is opened.
@@ -2626,16 +2629,36 @@ carries `pressBreakdown`: _3 checks ticked below · 2 queries and measures of it
 is said because an operator who ticked three boxes and read _Run 5 rows_ would otherwise be reading a
 number nothing on the page explains.
 
-**Where a tenant is stale, the strip says what that costs.** A tenant accumulates the residue of
-every run that used it, so past the window the environment declares, a red row may be that residue
-rather than the code ([36](36-remote-validation.md#tenants)) — which is why the answer is reseed
-first, press after. The strip says exactly that, in the line where the press is; the reseed control
-itself stays on the panel, where the tenant's name and age are.
+**An unhealthy tenant is a banner, first on the pane.** A tenant accumulates the residue of every run
+that used it, so past the window the environment declares, a red row may be that residue rather than
+the code ([36](36-remote-validation.md#tenants)) — which is why the answer is reseed first, press after.
+`tenantAlerts` (`web/src/view/validatePane.ts`) names each sheet whose tenant would make a reading on it
+untrustworthy — blocked, then a preparation that finished and failed, then stale — narrowed to the
+environment the pane shows. A preparation still running is not an alert (the gate follows it), and
+neither is one whose outcome is unknown. The banner sits above the run strip and carries the reseed
+control; while it is up, the environment panel's gate draws neither that control nor the preparation
+line, so the one control is in one place. It used to be a line in the strip and a red outcome at the
+foot of the page — read last, beneath the checks it was quietly undermining.
 
 The environment panel draws its **gate** — the tenant, the commit the last run pinned, the cancel and
-the reseed — and folds its rows behind one summary line. The rows keep every control they have: approving a query and
-leaving a row out are per-row decisions and are still taken there. What they stop doing is standing in
-for the check list above them.
+the reseed — and, under one summary line, **only the rows that are not a check's own** (`panelRows`):
+the `state`, `signal` and `measure` rows, plus a check row still waiting on an approval, since the
+approval is taken there. A check row's reading is drawn on its check, and a line under the rows says
+so. Approving a query and leaving a row out are per-row decisions and are still taken on the panel,
+or — for a check — through its box.
+
+#### A check carries its runs
+
+**Under each check, one line per environment whose run touched it**: the environment, the outcome in
+the sheet row's own vocabulary, the sentence the run left, and links to its screen and its agent.
+`checkStandings` carries these as `runs` — the check's `check`-kind rows that hold a reading or a
+`blockedReason`; an unread row is not a run, and the band already says whether one could take it.
+The sentence is `rowSaid`, the same one the panel draws for its own rows, so the two surfaces cannot
+describe one row two ways.
+
+This is what the pane was hardest to follow for: the check list said _not run_ at the top, and the
+environment panel said _blocked_ about the same check at the foot, with nothing to connect the two but
+a matching title. Reading a check and what the runs made of it now takes one look.
 
 **The local run still answers no check**, and the panel says so beside its press rather than on any
 check ([32](32-local-validation.md)). It is an exploratory run against work in flight, and an operator

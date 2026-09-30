@@ -7,7 +7,7 @@ import { Tag } from './tag.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
 import { BAND_HEADING, type CheckBand, type CheckStanding } from '../view/validatePane.js';
 import { logUsage } from '../cockpit/usage.js';
-import { CheckBlock, CheckLine, isMissingFile, stateTone } from './validationCheckRows.js';
+import { CheckBlock, CheckLine, CheckRuns, isMissingFile, stateTone } from './validationCheckRows.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -65,6 +65,8 @@ interface ValidationSectionProps {
    * route; the surfaces that draw the set without the runners hand nothing, and draw no boxes.
    */
   onSelect?: (environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown;
+  /** Open the agent a run's reading came from. Drawn only beside the standings' runs. */
+  onOpenAgent?: (agentId: string) => void;
   look?: ButtonLook;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -101,6 +103,7 @@ export function ValidationSection({
   desktopFolder,
   standings,
   onSelect,
+  onOpenAgent,
   look = { ghost: true, size: 'small' },
   onResult,
   onWaive,
@@ -166,6 +169,7 @@ export function ValidationSection({
         opened={live.find((c) => c.id === focus) ?? null}
         onOpen={setFocus}
         onSelect={onSelect}
+        onOpenAgent={onOpenAgent}
         block={block}
       />
     );
@@ -195,6 +199,7 @@ function BandedChecks({
   opened,
   onOpen,
   onSelect,
+  onOpenAgent,
   block,
 }: {
   live: ValidationCheckView[];
@@ -205,6 +210,7 @@ function BandedChecks({
   opened: ValidationCheckView | null;
   onOpen: (checkId: string) => void;
   onSelect: ((environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown) | undefined;
+  onOpenAgent: ((agentId: string) => void) | undefined;
   block: (check: ValidationCheckView) => JSX.Element;
 }) {
   return (
@@ -232,19 +238,21 @@ function BandedChecks({
                 <i className="vq-band-n"> · {runners(inBand, standings)}</i>
               )}
             </span>
-            {inBand.map((check) =>
-              opened?.id === check.id ? (
-                block(check)
-              ) : (
-                <CheckLine
-                  key={check.id}
-                  check={check}
-                  standing={standings.get(check.id)}
-                  onOpen={() => onOpen(check.id)}
-                  onSelect={onSelect}
-                />
-              ),
-            )}
+            {inBand.map((check) => (
+              <div className="vq-check" key={check.id}>
+                {opened?.id === check.id ? (
+                  block(check)
+                ) : (
+                  <CheckLine
+                    check={check}
+                    standing={standings.get(check.id)}
+                    onOpen={() => onOpen(check.id)}
+                    onSelect={onSelect}
+                  />
+                )}
+                <CheckRuns runs={standings.get(check.id)?.runs ?? []} onOpenAgent={onOpenAgent} />
+              </div>
+            ))}
           </div>
         );
       })}
