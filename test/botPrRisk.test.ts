@@ -137,12 +137,24 @@ test('azure diffs each changed manifest between the merge base and the head, and
   const files: Record<string, string> = {
     'base:package.json': '{\n  "dotenv": "16.4.5"\n}\n',
     'head:package.json': '{\n  "dotenv": "17.0.1"\n}\n',
+    'base:app.csproj': '<a v="1"/>\n',
+    'head:src/app.csproj': '<a v="2"/>\n',
   };
   const api = {
     getPullBody: async () => 'body',
-    listPullChanges: async () => ({ base: 'base', head: 'head', paths: ['package.json', 'package-lock.json'] }),
+    listPullChanges: async () => ({
+      base: 'base',
+      head: 'head',
+      files: [
+        { path: 'package.json', from: null },
+        { path: 'package-lock.json', from: null },
+        { path: 'src/app.csproj', from: 'app.csproj' },
+        { path: 'broken.json', from: null },
+      ],
+    }),
     getFileAtCommit: async (path: string, commit: string) => {
       reads.push(`${commit}:${path}`);
+      if (path === 'broken.json') throw new Error('-> 403 Forbidden');
       return files[`${commit}:${path}`] ?? null;
     },
   } as unknown as AzureDevOpsApi;
@@ -156,8 +168,16 @@ test('azure diffs each changed manifest between the merge base and the head, and
       patch: '@@ -1,3 +1,3 @@\n {\n-  "dotenv": "16.4.5"\n+  "dotenv": "17.0.1"\n }',
     },
     { path: 'package-lock.json', additions: null, deletions: null, patch: null },
+    {
+      path: 'src/app.csproj',
+      additions: 1,
+      deletions: 1,
+      patch: '@@ -1,1 +1,1 @@\n-<a v="1"/>\n+<a v="2"/>',
+    },
+    { path: 'broken.json', additions: null, deletions: null, patch: null },
   ]);
-  assert.deepEqual(reads.sort(), ['base:package.json', 'head:package.json']);
+  assert.ok(!reads.some((r) => r.includes('package-lock')), 'a lockfile is never read');
+  assert.ok(reads.includes('base:app.csproj'), 'a moved file is read at its old path on the base');
 });
 
 test('a batch takes at most twenty, majors first, and leaves out unclassified updates and read heads', async () => {

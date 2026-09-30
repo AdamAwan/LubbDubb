@@ -142,7 +142,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     async setPullBase() {},
     async addPullReviewer() {},
     async listPullChanges() {
-      return { base: null, head: null, paths: [] };
+      return { base: null, head: null, files: [] };
     },
     async getFileAtCommit() {
       return null;

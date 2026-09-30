@@ -34,7 +34,11 @@ interface AzIteration {
 }
 
 interface AzIterationChanges {
-  changeEntries?: Array<{ item?: { path?: string; isFolder?: boolean } }>;
+  changeEntries?: Array<{
+    item?: { path?: string; isFolder?: boolean };
+    originalPath?: string;
+    sourceServerItem?: string;
+  }>;
 }
 
 /**
@@ -44,15 +48,21 @@ interface AzIterationChanges {
 export async function readPullChanges(http: AzureTransport, iterations: string): Promise<AzPullChanges> {
   const listed = await http.request<{ value: AzIteration[] }>(withApiVersion(iterations));
   const latest = listed.value.reduce<AzIteration | null>((a, b) => ((b.id ?? 0) > (a?.id ?? 0) ? b : a), null);
-  if (latest?.id === undefined) return { base: null, head: null, paths: [] };
+  if (latest?.id === undefined) return { base: null, head: null, files: [] };
   const changes = await http.request<AzIterationChanges>(withApiVersion(`${iterations}/${latest.id}/changes`));
   return {
     base: latest.commonRefCommit?.commitId ?? null,
     head: latest.sourceRefCommit?.commitId ?? null,
-    paths: (changes.changeEntries ?? []).flatMap((c) =>
-      c.item?.path === undefined || c.item.isFolder === true ? [] : [c.item.path.replace(/^\//, '')],
-    ),
+    files: (changes.changeEntries ?? []).flatMap((c) => {
+      if (c.item?.path === undefined || c.item.isFolder === true) return [];
+      const from = c.originalPath ?? c.sourceServerItem;
+      return [{ path: repoPath(c.item.path), from: from === undefined ? null : repoPath(from) }];
+    }),
   };
+}
+
+function repoPath(path: string): string {
+  return path.replace(/^\//, '');
 }
 
 /** A file's text at one commit; null where the file does not exist there. */

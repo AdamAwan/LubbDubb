@@ -172,7 +172,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.reviewersAdded.push({ id, reviewerId });
     },
     async listPullChanges() {
-      return { base: null, head: null, paths: [] };
+      return { base: null, head: null, files: [] };
     },
     async getFileAtCommit() {
       return null;

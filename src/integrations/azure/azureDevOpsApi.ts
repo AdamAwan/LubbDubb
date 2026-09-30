@@ -90,10 +90,11 @@ export interface AzAttachmentRef {
   url: string;
 }
 
+/** `from` is the path at the base where the change is a rename or a move. */
 export interface AzPullChanges {
   base: string | null;
   head: string | null;
-  paths: string[];
+  files: { path: string; from: string | null }[];
 }
 
 export interface AzPull {

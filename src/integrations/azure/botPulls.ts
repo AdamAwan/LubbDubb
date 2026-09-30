@@ -1,6 +1,7 @@
 import type { SendResult } from '../../sink/actionSink.js';
 import type { BotPrDetail, BotPrFile, BotPullRequest, CiStatus } from '../../types.js';
 import { lineDiff } from '../../botPrs/lineDiff.js';
+import type { ErrorRecorder } from '../../errorLog.js';
 import { isLockfile } from '../../botPrs/riskBrief.js';
 import { authoredBy } from '../integration.js';
 import type { AzPolicyEvaluation, AzureDevOpsApi } from './azureDevOpsApi.js';
@@ -50,20 +51,35 @@ export async function claimAzureBotPr(api: AzureDevOpsApi, prNumber: number): Pr
   return { ok: true, ref: id };
 }
 
-export async function readAzureBotPrDetail(api: AzureDevOpsApi, prNumber: number): Promise<BotPrDetail> {
+export async function readAzureBotPrDetail(
+  api: AzureDevOpsApi,
+  prNumber: number,
+  errors?: ErrorRecorder,
+): Promise<BotPrDetail> {
   const [body, changes] = await Promise.all([api.getPullBody(prNumber), api.listPullChanges(prNumber)]);
+  const { base, head } = changes;
+  const files: BotPrFile[] = [];
   let diffed = 0;
-  const files = await Promise.all(
-    changes.paths.map(async (path): Promise<BotPrFile> => {
-      if (isLockfile(path) || changes.base === null || changes.head === null || diffed >= MAX_DIFFED_FILES)
-        return { path, additions: null, deletions: null, patch: null };
-      diffed += 1;
+  for (const { path, from } of changes.files) {
+    const bare: BotPrFile = { path, additions: null, deletions: null, patch: null };
+    if (isLockfile(path) || base === null || head === null || diffed >= MAX_DIFFED_FILES) {
+      files.push(bare);
+      continue;
+    }
+    diffed += 1;
+    try {
       const [before, after] = await Promise.all([
-        api.getFileAtCommit(path, changes.base),
-        api.getFileAtCommit(path, changes.head),
+        api.getFileAtCommit(from ?? path, base),
+        api.getFileAtCommit(path, head),
       ]);
-      return { path, ...lineDiff(before ?? '', after ?? '') };
-    }),
-  );
+      files.push({ path, ...lineDiff(before ?? '', after ?? '') });
+    } catch (err) {
+      errors?.record({
+        source: 'provider',
+        message: `Reading ${path} on bot PR ${String(prNumber)} failed; it goes out without its diff: ${(err as Error).message}`,
+      });
+      files.push(bare);
+    }
+  }
   return { body, files };
 }

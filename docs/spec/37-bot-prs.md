@@ -174,7 +174,7 @@ fetched by the agent, which has no checkout and needs none. Per pull request:
   the items API and diffed locally (`lineDiff`, `src/botPrs/lineDiff.ts`: a unified diff with three
   lines of context). That is two reads per file, so it is bounded at **ten files per pull request**
   and never spent on a lockfile; a file past that, or past two thousand lines a side, keeps its path
-  and loses its patch. The body is read whole there too, since the listing's is truncated. **A
+  and loses its patch — as does one whose read fails, which is recorded rather than sinking the batch. A renamed or moved file is read at its old path on the base. Each pull request's files are read one after another, so a batch of twenty is twenty readers and not four hundred requests at once. The body is read whole there too, since the listing's is truncated. **A
   lockfile's contents are always left out**, with its path and
   line counts kept: it is most of a bot's diff and none of its meaning. Patches share a budget per pull
   request, and release notes are capped, so one enormous changelog cannot crowd out the rest of the
