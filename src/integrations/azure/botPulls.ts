@@ -1,10 +1,15 @@
 import type { SendResult } from '../../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, CiStatus } from '../../types.js';
+import type { BotPrDetail, BotPrFile, BotPullRequest, CiStatus } from '../../types.js';
+import { lineDiff } from '../../botPrs/lineDiff.js';
+import { isLockfile } from '../../botPrs/riskBrief.js';
 import { authoredBy } from '../integration.js';
 import type { AzPolicyEvaluation, AzureDevOpsApi } from './azureDevOpsApi.js';
 import { namedReviewers, viewerAssignment } from './reviewers.js';
 
 // → docs/spec/37-bot-prs.md#the-read
+
+/** Azure serves contents and no patch, so each diffed file is two reads: bounded per pull request. */
+const MAX_DIFFED_FILES = 10;
 
 export function azAuthorName(p: { authorDisplayName?: string; authorUniqueName: string }): string {
   return p.authorDisplayName || p.authorUniqueName;
@@ -46,6 +51,19 @@ export async function claimAzureBotPr(api: AzureDevOpsApi, prNumber: number): Pr
 }
 
 export async function readAzureBotPrDetail(api: AzureDevOpsApi, prNumber: number): Promise<BotPrDetail> {
-  const [body, paths] = await Promise.all([api.getPullBody(prNumber), api.listPullChangedPaths(prNumber)]);
-  return { body, files: paths.map((path) => ({ path, additions: null, deletions: null, patch: null })) };
+  const [body, changes] = await Promise.all([api.getPullBody(prNumber), api.listPullChanges(prNumber)]);
+  let diffed = 0;
+  const files = await Promise.all(
+    changes.paths.map(async (path): Promise<BotPrFile> => {
+      if (isLockfile(path) || changes.base === null || changes.head === null || diffed >= MAX_DIFFED_FILES)
+        return { path, additions: null, deletions: null, patch: null };
+      diffed += 1;
+      const [before, after] = await Promise.all([
+        api.getFileAtCommit(path, changes.base),
+        api.getFileAtCommit(path, changes.head),
+      ]);
+      return { path, ...lineDiff(before ?? '', after ?? '') };
+    }),
+  );
+  return { body, files };
 }

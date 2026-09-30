@@ -33,7 +33,7 @@ export function riskOrder(a: BotPr, b: BotPr): number {
   return KIND_ORDER[a.update.kind] - KIND_ORDER[b.update.kind] || a.number - b.number;
 }
 
-function isLockfile(path: string): boolean {
+export function isLockfile(path: string): boolean {
   return LOCKFILES.has(path.slice(path.lastIndexOf('/') + 1));
 }
 

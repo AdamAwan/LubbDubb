@@ -13,6 +13,9 @@ import { Store } from '../src/store/store.js';
 import { BotPrRiskDesk, RISK_BATCH_LIMIT } from '../src/botPrs/riskDesk.js';
 import { releaseNotesInBody, releaseTags, riskBriefing, sourceRepoInBody } from '../src/botPrs/riskBrief.js';
 import type { ErrorRecorder } from '../src/errorLog.js';
+import { lineDiff } from '../src/botPrs/lineDiff.js';
+import { readAzureBotPrDetail } from '../src/integrations/azure/botPulls.js';
+import type { AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { BotPr, BotPullRequest, UpdateKind } from '../src/types.js';
 import type { BotPrsPayload } from '../src/wire.js';
 
@@ -95,6 +98,66 @@ test('the briefing keeps a manifest’s diff and leaves a lockfile’s contents 
   assert.ok(brief.includes('web/package-lock.json (+400 −380): a lockfile, contents left out'));
   assert.ok(!brief.includes('SECRET-LOCK-CONTENT'));
   assert.ok(brief.includes('None found.'), 'missing notes are said, not skipped');
+});
+
+test('a line diff is a unified patch with context, and nothing where nothing changed', () => {
+  const before = [
+    '{',
+    '  "name": "app",',
+    '  "deps": {',
+    '    "dotenv": "16.4.5",',
+    '    "zod": "3.0.0"',
+    '  }',
+    '}',
+  ].join('\n');
+  const after = before.replace('16.4.5', '17.0.1');
+  const diff = lineDiff(before, after);
+  assert.equal(diff.additions, 1);
+  assert.equal(diff.deletions, 1);
+  assert.equal(
+    diff.patch,
+    [
+      '@@ -1,7 +1,7 @@',
+      ' {',
+      '   "name": "app",',
+      '   "deps": {',
+      '-    "dotenv": "16.4.5",',
+      '+    "dotenv": "17.0.1",',
+      '     "zod": "3.0.0"',
+      '   }',
+      ' }',
+    ].join('\n'),
+  );
+  assert.equal(lineDiff(before, before).patch, null);
+  assert.deepEqual(lineDiff('', 'a\nb\n'), { patch: '@@ -1,0 +1,2 @@\n+a\n+b', additions: 2, deletions: 0 });
+});
+
+test('azure diffs each changed manifest between the merge base and the head, and never reads a lockfile', async () => {
+  const reads: string[] = [];
+  const files: Record<string, string> = {
+    'base:package.json': '{\n  "dotenv": "16.4.5"\n}\n',
+    'head:package.json': '{\n  "dotenv": "17.0.1"\n}\n',
+  };
+  const api = {
+    getPullBody: async () => 'body',
+    listPullChanges: async () => ({ base: 'base', head: 'head', paths: ['package.json', 'package-lock.json'] }),
+    getFileAtCommit: async (path: string, commit: string) => {
+      reads.push(`${commit}:${path}`);
+      return files[`${commit}:${path}`] ?? null;
+    },
+  } as unknown as AzureDevOpsApi;
+  const detail = await readAzureBotPrDetail(api, 5);
+  assert.equal(detail.body, 'body');
+  assert.deepEqual(detail.files, [
+    {
+      path: 'package.json',
+      additions: 1,
+      deletions: 1,
+      patch: '@@ -1,3 +1,3 @@\n {\n-  "dotenv": "16.4.5"\n+  "dotenv": "17.0.1"\n }',
+    },
+    { path: 'package-lock.json', additions: null, deletions: null, patch: null },
+  ]);
+  assert.deepEqual(reads.sort(), ['base:package.json', 'head:package.json']);
 });
 
 test('a batch takes at most twenty, majors first, and leaves out unclassified updates and read heads', async () => {

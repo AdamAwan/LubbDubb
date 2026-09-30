@@ -167,9 +167,15 @@ fetched by the agent, which has no checkout and needs none. Per pull request:
   in the body that is no bot's), tried at `v<to>`, `<to>` and `<package>@<to>`. Neither found reads
   _None found_, and the prompt tells the agent to say so rather than guess. A release read that fails is
   recorded and reads as none, rather than sinking the batch;
-- **the changed files** (`BotPrDetailReadable.readBotPrDetail`). On GitHub, with patches. On Azure
-  DevOps, paths only — its pull-request API serves no patch text — and the body is read whole there,
-  since the listing's is truncated. **A lockfile's contents are always left out**, with its path and
+- **the changed files** (`BotPrDetailReadable.readBotPrDetail`). On GitHub, with the provider's
+  patches. Azure DevOps serves no patch text, so the harness takes the diff itself: the latest
+  iteration names the changed paths and the two commits it sits between — the merge base
+  (`commonRefCommit`) and the head (`sourceRefCommit`) — and each changed file is read at both through
+  the items API and diffed locally (`lineDiff`, `src/botPrs/lineDiff.ts`: a unified diff with three
+  lines of context). That is two reads per file, so it is bounded at **ten files per pull request**
+  and never spent on a lockfile; a file past that, or past two thousand lines a side, keeps its path
+  and loses its patch. The body is read whole there too, since the listing's is truncated. **A
+  lockfile's contents are always left out**, with its path and
   line counts kept: it is most of a bot's diff and none of its meaning. Patches share a budget per pull
   request, and release notes are capped, so one enormous changelog cannot crowd out the rest of the
   batch.

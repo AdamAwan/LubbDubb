@@ -8,6 +8,7 @@ import type {
   AzPolicyEvaluation,
   AzPolicyRequeue,
   AzPull,
+  AzPullChanges,
   AzThread,
   AzTimelineRecord,
   AzWorkItem,
@@ -35,7 +36,7 @@ import {
   type RawWorkItem,
   type RawWorkItemUpdate,
 } from './restShapes.js';
-import { chunkIds, headsRef, readPullChangedPaths, sameTag, tagWriteOp } from './restHelpers.js';
+import { chunkIds, headsRef, readFileAtCommit, readPullChanges, sameTag, tagWriteOp } from './restHelpers.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
@@ -517,9 +518,9 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.description ?? '';
   }
 
-  listPullChangedPaths(pullRequestId: number): Promise<string[]> {
-    return readPullChangedPaths(this.http, `${this.repoUrl}/pullRequests/${pullRequestId}/iterations`);
-  }
+  listPullChanges = (id: number): Promise<AzPullChanges> =>
+    readPullChanges(this.http, `${this.repoUrl}/pullRequests/${id}/iterations`);
+  getFileAtCommit = (path: string, commit: string) => readFileAtCommit(this.http, this.repoUrl, path, commit);
 
   async setPullBody(pullRequestId: number, body: string): Promise<void> {
     await this.http.request(withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {

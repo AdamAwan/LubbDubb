@@ -205,7 +205,8 @@ function azApi(script: AzScript): AzureDevOpsApi {
     setPullBody: unused('setPullBody'),
     setPullBase: unused('setPullBase'),
     addPullReviewer: unused('addPullReviewer'),
-    listPullChangedPaths: unused('listPullChangedPaths'),
+    listPullChanges: unused('listPullChanges'),
+    getFileAtCommit: unused('getFileAtCommit'),
     abandonPullRequest: unused('abandonPullRequest'),
     deleteBranch: unused('deleteBranch'),
   };
