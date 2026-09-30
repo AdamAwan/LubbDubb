@@ -28,7 +28,7 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPrDetail, BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff, type SignOffKind } from '../sink/signOff.js';
 import { markdownToHtml } from '../sink/markdownToHtml.js';
@@ -58,6 +58,8 @@ import {
   isRefResolvable,
   isBotPrReadable,
   isBotPrClaimable,
+  isBotPrDetailReadable,
+  isReleaseNotesReadable,
   isTicketHistoryCapable,
   isWorkItemLinkCapable,
   isAreaPathCapable,
@@ -65,13 +67,24 @@ import {
   isWorkItemStateCapable,
   type Integration,
   type BotPrClaimable,
+  type BotPrDetailReadable,
   type BotPrReadable,
+  type ReleaseNotesReadable,
 } from './integration.js';
 
 // → docs/spec/15-integrations.md
 
 export class CompositeConnector
-  implements Connector, ActionSink, CiEvidenceReader, IssueImageSink, PrAssignSink, BotPrReadable, BotPrClaimable
+  implements
+    Connector,
+    ActionSink,
+    CiEvidenceReader,
+    IssueImageSink,
+    PrAssignSink,
+    BotPrReadable,
+    BotPrClaimable,
+    BotPrDetailReadable,
+    ReleaseNotesReadable
 {
   constructor(
     private readonly integrations: Integration[],
@@ -331,6 +344,16 @@ export class CompositeConnector
     const handler = this.integrations.find(isBotPrClaimable);
     if (!handler) return { ok: false };
     return handler.claimBotPr(prNumber);
+  }
+
+  async readBotPrDetail(prNumber: number): Promise<BotPrDetail> {
+    const handler = this.integrations.find(isBotPrDetailReadable);
+    return handler ? handler.readBotPrDetail(prNumber) : { body: null, files: null };
+  }
+
+  async readReleaseNotes(source: { owner: string; repo: string }, tags: readonly string[]): Promise<string | null> {
+    const handler = this.integrations.find(isReleaseNotesReadable);
+    return handler ? handler.readReleaseNotes(source, tags) : null;
   }
 
   resolveRefUrl(ref: string): string | null {

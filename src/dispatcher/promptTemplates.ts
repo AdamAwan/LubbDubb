@@ -58,6 +58,7 @@ type PromptId =
   | 'work-item-ticket-body'
   | 'blueprint-ticket-body'
   | 'brief-ticket-body'
+  | 'bot-pr-risk'
   | 'pr-title';
 
 export interface TemplateDef {

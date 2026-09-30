@@ -113,6 +113,7 @@ export interface System {
   remoteListings: RemoteListingDesk;
   prAssign: PrAssignDesk;
   botPrs: BenchDesks['botPrs'];
+  botPrRisks: BenchDesks['botPrRisks'];
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -196,6 +197,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
     }),
     botPrs: bench.botPrs,
+    botPrRisks: bench.botPrRisks,
     updates: bench.updates,
     runtimeControl: base.runtimeControl,
     pets: pulse.pets,
@@ -369,6 +371,7 @@ function buildHarness(
         ? undefined
         : (opts.reviewProber ?? new CommandReviewProber(config.repoRoot)),
     schedules: bench.schedules,
+    botPrRisks: bench.botPrRisks,
     updates: config.selfUpdate.enabled ? bench.updates : undefined,
     graph: bench.graph,
     tickets: bench.tickets,

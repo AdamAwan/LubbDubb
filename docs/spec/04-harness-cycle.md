@@ -346,7 +346,8 @@ flowchart TD
         VASK --> VREADY["file and settle the validate rows — a delivered goal's checks<br/>are now somebody's to run, and the bench is where they say so"]
         VREADY --> CLOSE["file and settle close-outs — the step after the validation:<br/>the ticket is still open, and only a person can close it"]
         CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
-        SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
+        SCHED --> BPR["open a bot PR risk run when its schedule comes round,<br/>and settle the one whose agent has ended"]
+        BPR --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> LIMIT["end the usage-limit parks whose window has turned over,<br/>above the read below so a woken agent reads as running this pulse"]
         LIMIT --> STALL["settle the stall parks whose countdown has run out —<br/>an unanswered stop is recorded done, and its slot goes back to the fleet"]
         STALL --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
@@ -419,6 +420,15 @@ flowchart TD
    writes is an ordinary job that rule `manual-job` drains under the same cap and pause flag as one the
    operator launched by hand. A schedule that throws is recorded through `errors.record` and the rest
    still fire.
+
+   `botPrRisks.run()` sits immediately below it, for the same reason and in the same spirit: it settles
+   a bot PR risk run whose agent has ended and, when `botPrs.riskSchedule` has come round, opens the
+   next one. Opening one is a provider sweep — the bot listing, each pull request's files, release
+   notes — so the pass **starts it and does not wait**: the pulse carries on, and the run it opens is
+   dispatched on the next pulse after it lands. A pulse held on a changelog fetch is a fleet held on
+   one.
+   → [37](37-bot-prs.md#the-risk-summary)
+
 8. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
    node observations and upserts them (see [14](14-persistence.md#work-graph)). Positioned here for
    both neighbours: **after** the reconciler, so the part→PR observations it just made are the ones

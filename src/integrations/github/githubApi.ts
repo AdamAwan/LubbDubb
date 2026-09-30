@@ -37,8 +37,18 @@ export interface GitHubApi {
   setPullBody(number: number, body: string): Promise<void>;
   setPullBase(number: number, base: string): Promise<void>;
   addPullAssignee(number: number, login: string): Promise<void>;
+  listPullFiles(number: number): Promise<GhPullFile[]>;
+  /** Another repository's release, by tag: a dependency's own notes. Null when there is none. */
+  getReleaseBody(owner: string, repo: string, tag: string): Promise<string | null>;
   updatePullBranch(number: number): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;
+}
+
+export interface GhPullFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  patch: string | null;
 }
 
 export interface GhPullSummary {

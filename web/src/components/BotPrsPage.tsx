@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import type { BotPr, BotPrsPayload, UpdateKind } from '../types.js';
+import type { AssessedBotPr, BotPrRiskLevel, BotPrRiskStanding, BotPrsPayload, UpdateKind } from '../types.js';
 import { api } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
-import { ExtLink, relTime } from './util.js';
+import { ExtLink, relTime, timeLeft } from './util.js';
 import { Tag, type TagTone } from './tag.js';
 
 // → docs/spec/37-bot-prs.md#the-tab
@@ -18,7 +18,9 @@ const GROUPS: readonly { kind: UpdateKind; label: string; note: string }[] = [
 
 const KIND_TONE: Record<UpdateKind, TagTone> = { major: 'red', minor: 'amber', patch: 'green', unknown: 'grey' };
 
-const CI_TONE: Record<BotPr['ciStatus'], TagTone> = {
+const RISK_TONE: Record<BotPrRiskLevel, TagTone> = { low: 'green', medium: 'amber', high: 'red' };
+
+const CI_TONE: Record<AssessedBotPr['ciStatus'], TagTone> = {
   passing: 'green',
   failing: 'red',
   pending: 'amber',
@@ -49,6 +51,7 @@ export function BotPrsPage({ now }: { now: number }): JSX.Element {
   return (
     <div className="bp">
       <Head />
+      <Summarise standing={reading.risk} now={now} reload={reload} />
       {reading.error !== null && (
         <p className="bp-error">
           The last read failed: {reading.error}.{' '}
@@ -90,14 +93,60 @@ function Head(): JSX.Element {
       <h2>Bot PRs</h2>
       <p className="bp-blurb">
         Open pull requests raised by the bots <code>botPrs.authors</code> names, grouped by how big a jump each one is.
-        Add yourself as an optional reviewer to take one on, so nobody else picks it up. The harness does not act on any
-        of them yet.
+        Add yourself as an optional reviewer to take one on, so nobody else picks it up. An agent can read them for risk
+        — advice only: the harness never approves or merges one.
       </p>
     </header>
   );
 }
 
-function Strip({ prs, now }: { prs: BotPr[]; now: number }): JSX.Element {
+function Summarise({
+  standing,
+  now,
+  reload,
+}: {
+  standing: BotPrRiskStanding;
+  now: number;
+  reload: () => void;
+}): JSX.Element {
+  const [said, setSaid] = useState<string | null>(null);
+  const { run } = standing;
+  const out = run !== null && run.status !== 'done';
+  return (
+    <div className="bp-summarise">
+      <AsyncButton
+        size="small"
+        disabled={out}
+        title="Send one agent to read every classified pull request it has not read on its current head, up to 20, majors first"
+        pendingLabel="Gathering…"
+        onRefused={setSaid}
+        onClick={async () => {
+          setSaid(null);
+          const { prs } = await api.summariseBotPrs();
+          setSaid(`${prs} sent to be read. The verdicts appear here as the agent writes them.`);
+          reload();
+        }}
+      >
+        Summarise risk
+      </AsyncButton>
+      {out ? (
+        <span>
+          Reading {run.prs} now, {run.trigger === 'operator' ? 'as asked' : 'on schedule'} {relTime(run.createdAt, now)}
+          .
+        </span>
+      ) : standing.nextRunAt !== null ? (
+        <span>Next scheduled read {timeLeft(standing.nextRunAt, now)}.</span>
+      ) : (
+        <span>
+          No schedule is set: <code>botPrs.riskSchedule</code> takes a cron expression.
+        </span>
+      )}
+      {said !== null && <span>{said}</span>}
+    </div>
+  );
+}
+
+function Strip({ prs, now }: { prs: AssessedBotPr[]; now: number }): JSX.Element {
   const failing = prs.filter((pr) => pr.ciStatus === 'failing').length;
   const majors = prs.filter((pr) => pr.update.kind === 'major').length;
   const unclaimed = prs.filter((pr) => pr.reviewers.length === 0).length;
@@ -121,7 +170,7 @@ function Strip({ prs, now }: { prs: BotPr[]; now: number }): JSX.Element {
   );
 }
 
-function Row({ pr, now, reload }: { pr: BotPr; now: number; reload: () => void }): JSX.Element {
+function Row({ pr, now, reload }: { pr: AssessedBotPr; now: number; reload: () => void }): JSX.Element {
   const { from, to } = pr.update;
   const [refusal, setRefusal] = useState<string | null>(null);
   return (
@@ -165,6 +214,14 @@ function Row({ pr, now, reload }: { pr: BotPr; now: number; reload: () => void }
           )}
           {refusal !== null && <span className="bp-refusal">{refusal}</span>}
         </div>
+        {pr.risk !== null && (
+          <div className="bp-risk">
+            <Tag tone={RISK_TONE[pr.risk.risk]} lower title="An agent's reading of this head: advice, not approval">
+              {pr.risk.risk} risk
+            </Tag>
+            <span className="bp-risk-why">{pr.risk.summary}</span>
+          </div>
+        )}
       </div>
       <Tag tone={CI_TONE[pr.ciStatus]} lower title="CI on the pull request's head">
         CI {pr.ciStatus}

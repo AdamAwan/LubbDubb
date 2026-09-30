@@ -197,6 +197,7 @@ export function cycleLookups(
   | 'prReviewedElsewhere'
   | 'liveLocalRun'
   | 'remoteRuns'
+  | 'botPrRiskRun'
   | 'localValidations'
 > {
   return {
@@ -214,6 +215,7 @@ export function cycleLookups(
     prReviewedElsewhere: ctx.prReviewedElsewhere ?? new Set<number>(),
     liveLocalRun: ctx.localRun ?? null,
     remoteRuns: ctx.remoteRuns ?? [],
+    botPrRiskRun: ctx.botPrRiskRun ?? null,
     localValidations: ctx.localValidations ?? [],
   };
 }

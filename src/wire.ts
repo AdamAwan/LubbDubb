@@ -134,6 +134,8 @@ import type {
   WorldEvent,
   WorldSnapshot,
   BotPrsReading,
+  AssessedBotPr,
+  BotPrRiskStanding,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -910,7 +912,10 @@ export interface ThroughputPayload {
   insights: ThroughputInsights;
 }
 
-export type BotPrsPayload = BotPrsReading;
+export interface BotPrsPayload extends BotPrsReading {
+  pullRequests: AssessedBotPr[];
+  risk: BotPrRiskStanding;
+}
 
 export interface PromptsPayload {
   dir: string | null;
@@ -1111,7 +1116,15 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
-export type { BotPr, DependencyUpdate, UpdateKind } from './types.js';
+export type {
+  AssessedBotPr,
+  BotPr,
+  BotPrRisk,
+  BotPrRiskLevel,
+  BotPrRiskStanding,
+  DependencyUpdate,
+  UpdateKind,
+} from './types.js';
 export type { McpChannel } from './types.js';
 export type { CiCheck } from './types.js';
 export type { PrComment } from './types.js';

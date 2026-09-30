@@ -94,6 +94,12 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     why: 'Authors whose open pull requests the Bot PRs tab lists, as regular expressions over the author the provider reports — the login on GitHub, the unique or display name on Azure DevOps. Read past ownWorkOnly, which would otherwise hide a bot’s pull requests from you. Empty, and the tab reads nothing. Belongs in lubbdubb.project.json: which bots raise pull requests is a fact about the repository.',
   },
   {
+    path: 'botPrs.riskSchedule',
+    type: 'string',
+    access: 'plain',
+    why: 'When one desk agent reads every bot pull request it has not yet read on its current head — up to 20, majors first — and gives each a low, medium or high risk and a line on why. A five-field cron expression in the harness’s local time, such as "0 8 * * 1-5". Empty, and it runs only when somebody presses Summarise on the Bot PRs tab. Advice only: nothing is approved or merged from it.',
+  },
+  {
     path: 'review.publishedThreadRole',
     type: 'string',
     access: 'plain',

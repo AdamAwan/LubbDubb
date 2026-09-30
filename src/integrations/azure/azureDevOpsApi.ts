@@ -71,6 +71,10 @@ export interface AzureDevOpsApi {
   setPullTitle(pullRequestId: number, title: string): Promise<void>;
   /** One pull request's own read: the list truncates `description`, so it cannot answer this. */
   getPullBody(pullRequestId: number): Promise<string>;
+  /** The paths the pull request's latest iteration changes, and the merge base and head it sits between. */
+  listPullChanges(pullRequestId: number): Promise<AzPullChanges>;
+  /** A file's text at one commit; empty where it does not exist there. Azure serves no patch, so a diff is ours to take. */
+  getFileAtCommit(path: string, commit: string): Promise<string>;
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
@@ -84,6 +88,13 @@ export interface AzWorkItemCommentRef {
 export interface AzAttachmentRef {
   id: string;
   url: string;
+}
+
+/** `from` is the path at the base where the change is a rename or a move. */
+export interface AzPullChanges {
+  base: string | null;
+  head: string | null;
+  files: { path: string; from: string | null }[];
 }
 
 export interface AzPull {

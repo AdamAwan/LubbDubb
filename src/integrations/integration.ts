@@ -31,7 +31,7 @@ import type {
 import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
-import type { BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPrDetail, BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
 import type { ReadPlan } from '../world/readPlan.js';
 
 // → docs/spec/15-integrations.md
@@ -98,6 +98,24 @@ export interface BotPrReadable {
 
 export function isBotPrReadable(x: Integration): x is Integration & BotPrReadable {
   return typeof (x as Partial<BotPrReadable>).listBotPullRequests === 'function';
+}
+
+/** What a risk summary reads beyond the listing: the changed files, and the body where the list truncates it. */
+export interface BotPrDetailReadable {
+  readBotPrDetail(prNumber: number): Promise<BotPrDetail>;
+}
+
+export function isBotPrDetailReadable(x: Integration): x is Integration & BotPrDetailReadable {
+  return typeof (x as Partial<BotPrDetailReadable>).readBotPrDetail === 'function';
+}
+
+/** A dependency's release notes from its own repository, the first of `tags` that has a release. */
+export interface ReleaseNotesReadable {
+  readReleaseNotes(source: { owner: string; repo: string }, tags: readonly string[]): Promise<string | null>;
+}
+
+export function isReleaseNotesReadable(x: Integration): x is Integration & ReleaseNotesReadable {
+  return typeof (x as Partial<ReleaseNotesReadable>).readReleaseNotes === 'function';
 }
 
 /** Puts the credential's own identity on a bot's pull request: an optional reviewer, a GitHub assignee. */

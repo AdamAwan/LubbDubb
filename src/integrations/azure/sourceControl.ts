@@ -20,10 +20,11 @@ import type {
 import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
-import { azAuthorName, claimAzureBotPr, listAzureBotPulls } from './botPulls.js';
+import { azAuthorName, claimAzureBotPr, listAzureBotPulls, readAzureBotPrDetail } from './botPulls.js';
 import { stripLogTimestamp, taskIssueLine } from '../ciLogLines.js';
 import type {
   BotPrClaimable,
+  BotPrDetailReadable,
   BotPrReadable,
   BranchDeleteCapable,
   WorldCapability,
@@ -85,7 +86,8 @@ export class AzureDevOpsSourceControlIntegration
     CiCheckRequeueCapable,
     RefResolvable,
     BotPrReadable,
-    BotPrClaimable
+    BotPrClaimable,
+    BotPrDetailReadable
 {
   readonly id = 'sourceControl:azure';
   readonly capability: WorldCapability = 'sourceControl';
@@ -183,6 +185,7 @@ export class AzureDevOpsSourceControlIntegration
   listBotPullRequests = (authors: readonly RegExp[]) =>
     listAzureBotPulls(this.opts.api, authors, aggregatePolicyCiStatus);
   claimBotPr = (prNumber: number) => claimAzureBotPr(this.opts.api, prNumber);
+  readBotPrDetail = (prNumber: number) => readAzureBotPrDetail(this.opts.api, prNumber, this.opts.errors);
 
   private async pullBody(p: AzPull, maxAgeMs: number): Promise<string | undefined> {
     if (p.description === undefined) return undefined;

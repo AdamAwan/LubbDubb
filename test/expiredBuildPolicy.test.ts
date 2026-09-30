@@ -129,6 +129,8 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     setPullBody: unused('setPullBody'),
     setPullBase: unused('setPullBase'),
     addPullReviewer: unused('addPullReviewer'),
+    listPullChanges: unused('listPullChanges'),
+    getFileAtCommit: unused('getFileAtCommit'),
     abandonPullRequest: unused('abandonPullRequest'),
     deleteBranch: unused('deleteBranch'),
     getBuildTimeline: unused('getBuildTimeline'),

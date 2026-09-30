@@ -301,6 +301,14 @@ const RULES = [
   },
 
   {
+    id: 'bot-pr-risk',
+    kind: 'rule',
+    name: 'Bot pull requests nobody has read for risk',
+    description:
+      "BotPrRiskDesk opened a risk run — on `botPrs.riskSchedule` or because somebody pressed Summarise on the Bot PRs tab — over up to twenty dependency-bot pull requests whose current head has no verdict, majors first; this puts **one** desk agent on the whole batch rather than one per pull request, because what each needs is a paragraph and not a review. The agent is handed each update's package, versions, CI state, release notes and changed files, already fetched and appended to its prompt, and answers `bot_pr_risk` once per pull request with low, medium or high and a line on why. It is advice and nothing else: no rule reads a verdict, nothing is approved, merged or posted, and a pull request the agent never answers for is simply unread and goes in the next batch. It sits at the bottom with the Feature desks because it produces no work — a slot is better spent on a red build than on a paragraph about a green one. A run row is one assembly rather than a standing signal, so there is no cooldown budget and no escalation: it is re-proposed each pulse until it dispatches, and it settles when its agent's task ends, however that happens.",
+  },
+
+  {
     id: 'feature-summary',
     kind: 'rule',
     name: 'Feature has moved since anybody said where it was',

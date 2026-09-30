@@ -1,5 +1,5 @@
 import type { SendResult } from '../../sink/actionSink.js';
-import type { BotPullRequest, CiStatus } from '../../types.js';
+import type { BotPrDetail, BotPullRequest, CiStatus } from '../../types.js';
 import { authoredBy } from '../integration.js';
 import type { GhPullSummary, GitHubApi } from './githubApi.js';
 
@@ -22,6 +22,7 @@ export async function listGitHubBotPulls(
         reviewers: p.assigneeLogins.map((login) => ({ id: login, name: login })),
         viewerReviewing: viewer !== '' && p.assigneeLogins.includes(viewer),
         url: p.url,
+        headSha: p.headSha,
       };
       if (p.createdAt !== undefined) pr.createdAt = p.createdAt;
       if (p.body !== undefined) pr.body = p.body;
@@ -35,4 +36,20 @@ export async function claimGitHubBotPr(api: GitHubApi, prNumber: number): Promis
   if (login === '') return { ok: false };
   await api.addPullAssignee(prNumber, login);
   return { ok: true, ref: login };
+}
+
+export async function readGitHubBotPrDetail(api: GitHubApi, prNumber: number): Promise<BotPrDetail> {
+  return { body: null, files: await api.listPullFiles(prNumber) };
+}
+
+export async function readGitHubReleaseNotes(
+  api: GitHubApi,
+  source: { owner: string; repo: string },
+  tags: readonly string[],
+): Promise<string | null> {
+  for (const tag of tags) {
+    const body = await api.getReleaseBody(source.owner, source.repo, tag);
+    if (body !== null && body.trim() !== '') return body;
+  }
+  return null;
 }

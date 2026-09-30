@@ -60,6 +60,7 @@ import type {
   PetCatalogue,
   CiPolicyDescription,
   BotPrsPayload,
+  BotPrRisk,
   CiSubject,
   PromptTemplateView,
   ReliabilityInsights,
@@ -4896,6 +4897,7 @@ export const demoApi = {
   getCiPolicy: () =>
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
   getBotPrs: () => Promise.resolve(demoBotPrs(Date.now())),
+  summariseBotPrs: () => Promise.resolve({ ok: true as const, prs: 2 }),
   claimBotPr: (number: number) => {
     demoClaimed.add(number);
     return Promise.resolve({ ok: true as const });
@@ -5654,12 +5656,26 @@ function demoBotPrs(now: number): BotPrsPayload {
     viewerReviewing: demoClaimed.has(number) || reviewers.includes('You'),
     url: null,
     createdAt: ago(hours),
+    headSha: `demo${number}`,
     update: { kind, packageName, from, to },
+    risk: demoRisk(number, now),
   });
   return {
     configured: true,
     readAt: new Date(now).toISOString(),
     error: null,
+    risk: {
+      schedule: '0 8 * * 1-5',
+      nextRunAt: new Date(now + 14 * 3_600_000).toISOString(),
+      run: {
+        id: 'bpr_demo',
+        status: 'done',
+        trigger: 'schedule',
+        createdAt: new Date(now - 3.2 * 3_600_000).toISOString(),
+        settledAt: new Date(now - 3 * 3_600_000).toISOString(),
+        prs: 3,
+      },
+    },
     pullRequests: [
       pr(33473, 'dotenv', 'major', '16.4.5', '17.0.1', 'failing', 72, ['Sam Okafor']),
       pr(33480, 'Serilog.AspNetCore', 'major', '8.0.3', '9.0.0', 'passing', 26, claimedBy(33480)),
@@ -5670,6 +5686,30 @@ function demoBotPrs(now: number): BotPrsPayload {
         ...claimedBy(33502),
       ]),
     ],
+  };
+}
+
+const DEMO_RISKS: Partial<Record<number, Pick<BotPrRisk, 'risk' | 'summary'>>> = {
+  33473: {
+    risk: 'high',
+    summary: 'v17 turns on quiet mode off by default and drops Node 16; the build is already failing on the change.',
+  },
+  33488: { risk: 'low', summary: 'Type definitions only: new Node 22.9 APIs added, nothing removed.' },
+  33502: {
+    risk: 'medium',
+    summary: 'Fixes a connection-pool leak, but changes the default Encrypt setting to strict.',
+  },
+};
+
+function demoRisk(number: number, now: number): BotPrRisk | null {
+  const risk = DEMO_RISKS[number];
+  if (risk === undefined) return null;
+  return {
+    prNumber: number,
+    headSha: `demo${number}`,
+    ...risk,
+    runId: 'bpr_demo',
+    assessedAt: new Date(now - 3 * 3_600_000).toISOString(),
   };
 }
 
