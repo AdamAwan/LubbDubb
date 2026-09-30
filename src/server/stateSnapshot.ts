@@ -195,6 +195,7 @@ function harnessSection(
       canPlaceWorkItem: connector.canPlaceWorkItem(),
       featureBoard: featureBoardOn(connector),
       featureSummaries: featureSummariesOn(config, connector),
+      botPrs: config.botPrs.authors.length > 0,
       areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,
       stateRules: workItemStateRules(config),
     },

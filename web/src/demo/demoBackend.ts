@@ -59,6 +59,7 @@ import type {
   OpenPullRequest,
   PetCatalogue,
   CiPolicyDescription,
+  BotPrsPayload,
   CiSubject,
   PromptTemplateView,
   ReliabilityInsights,
@@ -4894,6 +4895,11 @@ export const demoApi = {
   saveRawConfig: () => Promise.reject(new Error('the demo has no config file to write')),
   getCiPolicy: () =>
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
+  getBotPrs: () => Promise.resolve(demoBotPrs(Date.now())),
+  claimBotPr: (number: number) => {
+    demoClaimed.add(number);
+    return Promise.resolve({ ok: true as const });
+  },
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
   raiseBug: (_issueNumber: number, _summary: string, _title?: string) => Promise.resolve({ ok: false }),
   probeFilingTarget: (): Promise<FilingTargetProbe> =>
@@ -5627,3 +5633,48 @@ const DEMO_UNTRIAGED: {
     issueType: 'Task',
   },
 ];
+
+function demoBotPrs(now: number): BotPrsPayload {
+  const ago = (hours: number): string => new Date(now - hours * 3_600_000).toISOString();
+  const pr = (
+    number: number,
+    packageName: string,
+    kind: 'major' | 'minor' | 'patch',
+    from: string,
+    to: string,
+    ciStatus: 'passing' | 'failing' | 'pending',
+    hours: number,
+    reviewers: string[] = [],
+  ) => ({
+    number,
+    title: `Update dependency ${packageName} to v${kind === 'major' ? to.split('.')[0] : to}`,
+    author: 'Renovate Bot',
+    ciStatus,
+    reviewers: reviewers.map((name) => ({ id: name, name })),
+    viewerReviewing: demoClaimed.has(number) || reviewers.includes('You'),
+    url: null,
+    createdAt: ago(hours),
+    update: { kind, packageName, from, to },
+  });
+  return {
+    configured: true,
+    readAt: new Date(now).toISOString(),
+    error: null,
+    pullRequests: [
+      pr(33473, 'dotenv', 'major', '16.4.5', '17.0.1', 'failing', 72, ['Sam Okafor']),
+      pr(33480, 'Serilog.AspNetCore', 'major', '8.0.3', '9.0.0', 'passing', 26, claimedBy(33480)),
+      pr(33488, '@types/node', 'minor', '22.7.4', '22.9.0', 'passing', 50, claimedBy(33488)),
+      pr(33501, 'axios', 'patch', '1.7.3', '1.7.4', 'pending', 5, claimedBy(33501)),
+      pr(33502, 'Microsoft.Data.SqlClient', 'patch', '5.2.1', '5.2.2', 'passing', 6, [
+        'Priya Shah',
+        ...claimedBy(33502),
+      ]),
+    ],
+  };
+}
+
+const demoClaimed = new Set<number>();
+
+function claimedBy(number: number): string[] {
+  return demoClaimed.has(number) ? ['You'] : [];
+}

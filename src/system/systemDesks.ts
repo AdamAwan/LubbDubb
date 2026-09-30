@@ -40,6 +40,7 @@ import { ScheduleDesk } from '../schedules/scheduleDesk.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
 import type { BuildOptions, Foundation } from './systemFoundation.js';
+import { BotPrReader } from '../botPrs/reader.js';
 import type { Fleet } from './systemFleet.js';
 import type { Channels } from './system.js';
 
@@ -256,6 +257,7 @@ export function buildBenchDesks(
     upstream,
     tickets,
     obstacles,
+    botPrs: new BotPrReader({ source: connector, authors: () => config.botPrs.authors, errors }),
     pool: buildPool(config, opts, base),
   };
 }

@@ -28,7 +28,7 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff, type SignOffKind } from '../sink/signOff.js';
 import { markdownToHtml } from '../sink/markdownToHtml.js';
@@ -56,17 +56,23 @@ import {
   isPrTitleCapable,
   isPrBodyCapable,
   isRefResolvable,
+  isBotPrReadable,
+  isBotPrClaimable,
   isTicketHistoryCapable,
   isWorkItemLinkCapable,
   isAreaPathCapable,
   isWorkItemPlacementCapable,
   isWorkItemStateCapable,
   type Integration,
+  type BotPrClaimable,
+  type BotPrReadable,
 } from './integration.js';
 
 // → docs/spec/15-integrations.md
 
-export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader, IssueImageSink, PrAssignSink {
+export class CompositeConnector
+  implements Connector, ActionSink, CiEvidenceReader, IssueImageSink, PrAssignSink, BotPrReadable, BotPrClaimable
+{
   constructor(
     private readonly integrations: Integration[],
     private readonly now: () => string = () => new Date().toISOString(),
@@ -312,6 +318,19 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isIssueCommentCapable);
     if (!handler) throw new Error('no integration can comment on issues (no issues provider is IssueCommentCapable)');
     return handler.upsertIssueComment({ ...input, body: this.signed(handler, input.body) });
+  }
+
+  async listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]> {
+    const lists = await Promise.all(
+      this.integrations.filter(isBotPrReadable).map((i) => i.listBotPullRequests(authors)),
+    );
+    return lists.flat();
+  }
+
+  async claimBotPr(prNumber: number): Promise<SendResult> {
+    const handler = this.integrations.find(isBotPrClaimable);
+    if (!handler) return { ok: false };
+    return handler.claimBotPr(prNumber);
   }
 
   resolveRefUrl(ref: string): string | null {

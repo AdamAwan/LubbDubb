@@ -58,6 +58,11 @@ asserts every provider the registry can build has an entry, because a new provid
 without one defaults to _unfiltered_: safe, but it drops that fleet's output from the
 pool with nothing red.
 
+**One read goes past the filter on purpose.** `BotPrReadable.listBotPullRequests` re-lists open pull
+requests without `prAuthor` and keeps only the authors `botPrs.authors` names, for the Bot PRs tab. Its
+rows never enter the world snapshot, so nothing the fleet reasons over widens. →
+[37](37-bot-prs.md#the-read)
+
 ## The closed pull request read
 
 Both real providers fetch, beside the open pull requests, the ones that have recently **left** the open

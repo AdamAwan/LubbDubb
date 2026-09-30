@@ -17,7 +17,11 @@ import type {
 import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
+import { claimGitHubBotPr, listGitHubBotPulls } from './botPulls.js';
+import { stripLogTimestamp } from '../ciLogLines.js';
 import type {
+  BotPrClaimable,
+  BotPrReadable,
   BranchDeleteCapable,
   WorldCapability,
   CiEvidenceCapable,
@@ -104,7 +108,9 @@ export class GitHubSourceControlIntegration
     PrBaseUpdateCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
-    RefResolvable
+    RefResolvable,
+    BotPrReadable,
+    BotPrClaimable
 {
   readonly id = 'sourceControl:github';
   readonly capability: WorldCapability = 'sourceControl';
@@ -203,6 +209,10 @@ export class GitHubSourceControlIntegration
     if (p.updatedAt !== undefined && threads !== null) this.detailCache.set(p.number, fresh);
     return fresh;
   }
+
+  listBotPullRequests = (authors: readonly RegExp[]) =>
+    listGitHubBotPulls(this.opts.api, authors, async (p) => (await this.pullCi(p, 0)).ciStatus);
+  claimBotPr = (prNumber: number) => claimGitHubBotPr(this.opts.api, prNumber);
 
   private async pullCi(p: GhPullSummary, maxAgeMs: number): Promise<CachedPullCi> {
     const { api } = this.opts;
@@ -380,10 +390,6 @@ function annotationLine(a: GhAnnotation): string {
   const where = a.startLine > 0 ? `${a.path}:${a.startLine}` : a.path;
   const title = a.title && !a.message.startsWith(a.title) ? `${a.title}: ` : '';
   return `${where}: ${title}${a.message.replace(/\s*\n\s*/g, ' ').trim()}`;
-}
-
-function stripLogTimestamp(line: string): string {
-  return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, '');
 }
 
 export function mapClosedPull(p: GhClosedPull): PullRequest {

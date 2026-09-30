@@ -1597,6 +1597,20 @@ they come back on the next boot). The second is the honest degradation: a deploy
 not start has nothing to come back from an exit, so the restart is refused by name rather than stopping
 a harness nothing will relaunch.
 
+### `GET /api/bot-prs`
+
+The open pull requests `botPrs.authors` names, as a `BotPrsReading`:
+`{ configured, readAt, pullRequests, error }`, each row a `BotPr` carrying its `DependencyUpdate`. From
+`System.botPrs.read()`, which reuses a reading for a minute and keeps the last good rows beside `error`
+when a read fails. `configured: false` reads nothing from the provider. → [37](37-bot-prs.md)
+
+### `POST /api/bot-prs/:number/claim`
+
+Puts the credential's own identity on that bot pull request — an optional reviewer on Azure, an
+assignee on GitHub — and drops the cached reading. 404 for a number not in the current bot reading, 409
+when you are already on it or the provider cannot name you, 502 when the provider refuses. →
+[37](37-bot-prs.md#taking-one-on)
+
 ### `GET /api/ci-policy`
 
 The **effective** per-check CI policy, for the settings modal's CI tab ([17](17-cockpit.md)):

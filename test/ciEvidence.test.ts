@@ -151,6 +151,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     buildId: 7788,
   };
   return {
+    viewerId: async () => '',
     async viewerUniqueName() {
       return 'bot@acme.com';
     },

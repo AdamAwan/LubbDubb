@@ -16,6 +16,7 @@ import { environmentsReading, menuEntries, usageReading } from './topBarReadings
 // → docs/spec/17-cockpit.md
 
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'insights'];
+const FEATURE_TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features', 'obstacles', 'insights'];
 
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
@@ -24,6 +25,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   tickets: 'Tickets',
   obstacles: 'Obstacles',
   features: 'Features',
+  bots: 'Bot PRs',
   insights: 'Insights',
   pets: 'Pets',
   config: 'Config',
@@ -36,9 +38,10 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
     actions.openTab(tab);
   };
 
-  const tabs: readonly ConsoleTab[] = view.state.config.featureBoard
-    ? ['overview', 'tickets', 'features', 'obstacles', 'insights']
-    : TABS;
+  const { featureBoard, botPrs } = view.state.config;
+  const tabs = (featureBoard ? FEATURE_TABS : TABS).flatMap((tab): ConsoleTab[] =>
+    tab === 'insights' && botPrs ? ['bots', tab] : [tab],
+  );
 
   return (
     <nav className="cn-nav">

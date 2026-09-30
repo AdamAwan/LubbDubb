@@ -34,6 +34,7 @@ import type {
   GoalAgentsPayload,
   AgentTranscript,
   CiPolicyPayload,
+  BotPrsPayload,
   FilingTargetProbe,
   IssueFiled,
   PetCatalogue,
@@ -267,6 +268,8 @@ const realApi = {
     post<ConfigPreviewPayload>('/api/config/preview', edits),
   saveRawConfig: (edits: { text: string; baseline: string }) => post<ConfigSavePayload>('/api/config/raw', edits),
   getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
+  getBotPrs: () => authFetch('/api/bot-prs').then((r) => json<BotPrsPayload>(r)),
+  claimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/claim`, {}),
   getMcp: () => authFetch('/api/mcp').then((r) => json<McpChannelPayload>(r)),
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),
   setWorkItemIgnored: (ref: string, ignored: boolean) =>

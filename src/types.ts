@@ -54,6 +54,49 @@ export interface PullRequest {
   body?: string;
 }
 
+/** An open pull request raised by an author `botPrs.authors` names. → docs/spec/37-bot-prs.md */
+export interface BotPullRequest {
+  number: number;
+  title: string;
+  author: string;
+  ciStatus: CiStatus;
+  /** Azure's optional, individually named reviewers; GitHub's assignees. Who has taken it on. */
+  reviewers: PrPerson[];
+  viewerReviewing: boolean;
+  url?: string;
+  createdAt?: string;
+  body?: string;
+}
+
+export type UpdateKind = 'major' | 'minor' | 'patch' | 'unknown';
+
+export interface DependencyUpdate {
+  kind: UpdateKind;
+  packageName: string | null;
+  from: string | null;
+  to: string | null;
+}
+
+export interface BotPr {
+  number: number;
+  title: string;
+  author: string;
+  ciStatus: CiStatus;
+  reviewers: PrPerson[];
+  viewerReviewing: boolean;
+  url: string | null;
+  createdAt: string | null;
+  update: DependencyUpdate;
+}
+
+/** `configured` false is `botPrs.authors` naming no usable pattern; `error` keeps the last good rows. */
+export interface BotPrsReading {
+  configured: boolean;
+  readAt: string | null;
+  pullRequests: BotPr[];
+  error: string | null;
+}
+
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
 
 /** A person as a tracker names them: `id` is what an assignment is written with, `name` what is drawn. */

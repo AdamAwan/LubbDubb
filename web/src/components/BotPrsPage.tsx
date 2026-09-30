@@ -1,0 +1,205 @@
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import type { BotPr, BotPrsPayload, UpdateKind } from '../types.js';
+import { api } from '../api.js';
+import { AsyncButton } from './AsyncButton.js';
+import { ExtLink, relTime } from './util.js';
+import { Tag, type TagTone } from './tag.js';
+
+// → docs/spec/37-bot-prs.md#the-tab
+
+const REFRESH_MS = 60_000;
+
+const GROUPS: readonly { kind: UpdateKind; label: string; note: string }[] = [
+  { kind: 'major', label: 'Major', note: 'Breaking by definition — read the changelog before these go in.' },
+  { kind: 'minor', label: 'Minor', note: 'New features, nothing removed, if the package keeps to semver.' },
+  { kind: 'patch', label: 'Patch', note: 'Fixes only. The ones a green build should be enough for.' },
+  { kind: 'unknown', label: 'Unclassified', note: 'Neither the title nor the body named a version to compare.' },
+];
+
+const KIND_TONE: Record<UpdateKind, TagTone> = { major: 'red', minor: 'amber', patch: 'green', unknown: 'grey' };
+
+const CI_TONE: Record<BotPr['ciStatus'], TagTone> = {
+  passing: 'green',
+  failing: 'red',
+  pending: 'amber',
+  unknown: 'grey',
+};
+
+export function BotPrsPage({ now }: { now: number }): JSX.Element {
+  const { reading, failed, reload } = useBotPrs();
+
+  if (failed && reading === null) {
+    return <p className="empty">The bot pull requests could not be read. The rest of the cockpit is unaffected.</p>;
+  }
+  if (reading === null) return <p className="empty">Reading bot pull requests…</p>;
+
+  if (!reading.configured) {
+    return (
+      <div className="bp">
+        <Head />
+        <p className="empty">
+          No bot is named. Set <code>botPrs.authors</code> — regular expressions over the author, such as{' '}
+          <code>^Renovate Bot$</code> — in <code>lubbdubb.project.json</code> and restart.
+        </p>
+      </div>
+    );
+  }
+
+  const prs = reading.pullRequests;
+  return (
+    <div className="bp">
+      <Head />
+      {reading.error !== null && (
+        <p className="bp-error">
+          The last read failed: {reading.error}.{' '}
+          {reading.readAt === null
+            ? 'Nothing has been read yet.'
+            : `Showing what was read ${relTime(reading.readAt, now)}.`}
+        </p>
+      )}
+      <Strip prs={prs} now={now} />
+      {prs.length === 0 ? (
+        <p className="empty">No open pull request is by a named bot.</p>
+      ) : (
+        GROUPS.map((group) => {
+          const rows = prs.filter((pr) => pr.update.kind === group.kind);
+          if (rows.length === 0) return null;
+          return (
+            <section key={group.kind} className="bp-group">
+              <h3>
+                <Tag tone={KIND_TONE[group.kind]} lower>
+                  {group.label}
+                </Tag>{' '}
+                <span className="bp-n">{rows.length}</span>
+              </h3>
+              <p className="bp-note">{group.note}</p>
+              {rows.map((pr) => (
+                <Row key={pr.number} pr={pr} now={now} reload={reload} />
+              ))}
+            </section>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function Head(): JSX.Element {
+  return (
+    <header className="bp-head">
+      <h2>Bot PRs</h2>
+      <p className="bp-blurb">
+        Open pull requests raised by the bots <code>botPrs.authors</code> names, grouped by how big a jump each one is.
+        Add yourself as an optional reviewer to take one on, so nobody else picks it up. The harness does not act on any
+        of them yet.
+      </p>
+    </header>
+  );
+}
+
+function Strip({ prs, now }: { prs: BotPr[]; now: number }): JSX.Element {
+  const failing = prs.filter((pr) => pr.ciStatus === 'failing').length;
+  const majors = prs.filter((pr) => pr.update.kind === 'major').length;
+  const unclaimed = prs.filter((pr) => pr.reviewers.length === 0).length;
+  const mine = prs.filter((pr) => pr.viewerReviewing).length;
+  const oldest = prs
+    .map((pr) => pr.createdAt)
+    .filter((at): at is string => at !== null)
+    .sort()[0];
+  return (
+    <div className="bp-strip">
+      <span>
+        <b>{prs.length}</b> open
+      </span>
+      {failing > 0 && <Tag tone="red">{failing} failing CI</Tag>}
+      {majors > 0 && <Tag tone="amber">{majors} major</Tag>}
+      {unclaimed > 0 && <Tag tone="grey">{unclaimed} nobody has taken</Tag>}
+      {mine > 0 && <Tag tone="accent">{mine} yours</Tag>}
+      {failing === 0 && majors === 0 && prs.length > 0 && <Tag tone="green">nothing needs you</Tag>}
+      {oldest !== undefined && <span className="bp-oldest">oldest opened {relTime(oldest, now)}</span>}
+    </div>
+  );
+}
+
+function Row({ pr, now, reload }: { pr: BotPr; now: number; reload: () => void }): JSX.Element {
+  const { from, to } = pr.update;
+  const [refusal, setRefusal] = useState<string | null>(null);
+  return (
+    <div className="bp-row">
+      <div className="bp-main">
+        <div className="bp-title">{pr.url === null ? pr.title : <ExtLink href={pr.url}>{pr.title}</ExtLink>}</div>
+        <div className="bp-meta">
+          <span>PR {pr.number}</span>
+          <span>{pr.author}</span>
+          {to !== null && <span className="bp-ver">{from === null ? `→ ${to}` : `${from} → ${to}`}</span>}
+          {pr.createdAt !== null && <span>opened {relTime(pr.createdAt, now)}</span>}
+        </div>
+        <div className="bp-who">
+          <span className="bp-who-l">Optional reviewers</span>
+          {pr.reviewers.length === 0 ? (
+            <span className="bp-nobody">nobody yet</span>
+          ) : (
+            pr.reviewers.map((person) => (
+              <Tag key={person.id} tone="grey">
+                {person.name}
+              </Tag>
+            ))
+          )}
+          {pr.viewerReviewing ? (
+            <Tag tone="accent">you’re on it</Tag>
+          ) : (
+            <AsyncButton
+              size="small"
+              ghost
+              title="Add yourself as an optional reviewer, so the others can see it is taken"
+              pendingLabel="Adding…"
+              onRefused={setRefusal}
+              onClick={async () => {
+                setRefusal(null);
+                await api.claimBotPr(pr.number);
+                reload();
+              }}
+            >
+              Add me
+            </AsyncButton>
+          )}
+          {refusal !== null && <span className="bp-refusal">{refusal}</span>}
+        </div>
+      </div>
+      <Tag tone={CI_TONE[pr.ciStatus]} lower title="CI on the pull request's head">
+        CI {pr.ciStatus}
+      </Tag>
+    </div>
+  );
+}
+
+function useBotPrs(): { reading: BotPrsPayload | null; failed: boolean; reload: () => void } {
+  const [reading, setReading] = useState<BotPrsPayload | null>(null);
+  const [failed, setFailed] = useState(false);
+  const live = useRef(true);
+
+  const reload = useCallback((): void => {
+    api.getBotPrs().then(
+      (payload) => {
+        if (!live.current) return;
+        setReading(payload);
+        setFailed(false);
+      },
+      () => {
+        if (live.current) setFailed(true);
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    live.current = true;
+    reload();
+    const timer = setInterval(reload, REFRESH_MS);
+    return () => {
+      live.current = false;
+      clearInterval(timer);
+    };
+  }, [reload]);
+
+  return { reading, failed, reload };
+}

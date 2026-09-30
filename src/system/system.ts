@@ -112,6 +112,7 @@ export interface System {
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
   prAssign: PrAssignDesk;
+  botPrs: BenchDesks['botPrs'];
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
@@ -194,6 +195,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       operator: config.userId,
       prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
     }),
+    botPrs: bench.botPrs,
     updates: bench.updates,
     runtimeControl: base.runtimeControl,
     pets: pulse.pets,

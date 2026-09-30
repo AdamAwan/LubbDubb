@@ -301,6 +301,7 @@ function relationApi(
       return ids.map((id) => all.find((w) => w.id === id)).filter((w): w is AzWorkItem => w !== undefined);
     },
     viewerUniqueName: unused,
+    viewerId: unused,
     listActivePullRequests: unused,
     listRecentlyClosedPullRequests: unused,
     listPullThreads: unused,

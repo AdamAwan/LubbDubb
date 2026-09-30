@@ -35,6 +35,7 @@ import {
   type RawWorkItem,
   type RawWorkItemUpdate,
 } from './restShapes.js';
+import { chunkIds, headsRef, sameTag, tagWriteOp } from './restHelpers.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
@@ -58,6 +59,7 @@ export function isRelationAlreadyExists(message: string): boolean {
 
 export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
+  private viewerIdentity: string | null = null;
   private readonly http: AzureTransport;
   private projectId: string | null = null;
   private repositoryId: string | null = null;
@@ -93,14 +95,26 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async viewerUniqueName(): Promise<string> {
-    if (this.viewer === null) {
-      const data = await this.http.request<{
-        authenticatedUser?: { properties?: { Account?: { $value?: string } }; providerDisplayName?: string };
-      }>(withApiVersion(`${this.orgUrl}/_apis/connectionData`, {}, CONNECTION_DATA_API_VERSION));
-      const user = data.authenticatedUser;
-      this.viewer = user?.properties?.Account?.$value ?? user?.providerDisplayName ?? '';
-    }
-    return this.viewer;
+    if (this.viewer === null) await this.readViewer();
+    return this.viewer ?? '';
+  }
+
+  async viewerId(): Promise<string> {
+    if (this.viewerIdentity === null) await this.readViewer();
+    return this.viewerIdentity ?? '';
+  }
+
+  private async readViewer(): Promise<void> {
+    const data = await this.http.request<{
+      authenticatedUser?: {
+        id?: string;
+        properties?: { Account?: { $value?: string } };
+        providerDisplayName?: string;
+      };
+    }>(withApiVersion(`${this.orgUrl}/_apis/connectionData`, {}, CONNECTION_DATA_API_VERSION));
+    const user = data.authenticatedUser;
+    this.viewer = user?.properties?.Account?.$value ?? user?.providerDisplayName ?? '';
+    this.viewerIdentity = user?.id ?? '';
   }
 
   async listActivePullRequests(): Promise<AzPull[]> {
@@ -550,25 +564,4 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       }
     }
   }
-}
-
-function headsRef(branch: string): string {
-  return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
-}
-
-function chunkIds(ids: number[], size: number): number[][] {
-  const chunks: number[][] = [];
-  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
-  return chunks;
-}
-
-function tagWriteOp(current: readonly string[], tags: readonly string[]): { op: string; path: string; value?: string } {
-  const path = '/fields/System.Tags';
-  if (tags.length === 0) return { op: 'remove', path };
-  if (current.length === 0) return { op: 'add', path, value: tags.join('; ') };
-  return { op: 'replace', path, value: tags.join('; ') };
-}
-
-function sameTag(a: string, b: string): boolean {
-  return a.localeCompare(b, undefined, { sensitivity: 'accent' }) === 0;
 }

@@ -83,6 +83,7 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
       if (requeue.answer === 'refuse') return { status: 'queued', isExpired: true };
       return { status: 'queued', isExpired: false };
     },
+    viewerId: async () => '',
     async viewerUniqueName() {
       return 'bot@example.com';
     },

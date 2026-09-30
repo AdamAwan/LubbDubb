@@ -201,6 +201,7 @@ export const PLACE_KEYS = [
   'tickets',
   'obstacles',
   'features',
+  'bots',
   'insights',
   'pets',
   'config',
