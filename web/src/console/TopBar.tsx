@@ -318,7 +318,7 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
       }}
     >
       <BareButton
-        usage="menu.expand"
+        usage={open ? 'menu.close' : 'menu.expand'}
         className={`cn-read cn-act cn-icon ${flagged ? 'cn-menu-flag' : ''} ${open ? 'cn-on' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}

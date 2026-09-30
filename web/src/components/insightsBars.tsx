@@ -20,6 +20,7 @@ export function PoolBar({
       <div className="insights-win" role="group" aria-label="Project">
         <BareButton
           usage="pool.filter"
+          logs={project !== null}
           aria-pressed={project === null}
           className={project === null ? 'on' : ''}
           onClick={() => actions.openInsights({ poolProject: null })}
@@ -30,6 +31,7 @@ export function PoolBar({
           <BareButton
             key={name}
             usage="pool.filter"
+            logs={name !== project}
             aria-pressed={name === project}
             className={name === project ? 'on' : ''}
             onClick={() => actions.openInsights({ poolProject: name })}

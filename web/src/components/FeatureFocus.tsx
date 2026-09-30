@@ -66,6 +66,7 @@ export function FeatureFocus({
           <BareButton
             key={rollup.number}
             usage="feature.filter"
+            logs={rollup.number !== picked.rollup.number}
             aria-current={rollup.number === picked.rollup.number}
             className={rollup.number === picked.rollup.number ? 'cn-ff-on' : ''}
             onClick={() => actions.setFeatureQuery({ featureCard: rollup.number })}

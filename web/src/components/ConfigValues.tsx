@@ -216,6 +216,7 @@ function GroupRail({
         <BareButton
           key={entry.title}
           usage="config.filter"
+          logs={entry.title !== shown?.title}
           className={`cfg-railrow${entry.title === shown?.title ? ' on' : ''}`}
           onClick={() => onGroup(entry.title)}
         >

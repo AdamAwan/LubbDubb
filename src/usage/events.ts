@@ -22,7 +22,7 @@ export type UsageVerb =
 
 export const VERBS_BY_SUBJECT = {
   plan: ['view', 'expand', 'filter', 'edit', 'accept', 'reject', 'abandon', 'undo', 'close', 'open'],
-  goal: ['view', 'expand', 'edit', 'accept', 'waive', 'abandon', 'undo', 'close', 'open'],
+  goal: ['view', 'expand', 'edit', 'accept', 'reject', 'waive', 'abandon', 'undo', 'close', 'open'],
   pr: ['view', 'edit', 'accept', 'send'],
   'pr-description': ['expand', 'create', 'accept', 'waive', 'close', 'open'],
   validation: [
@@ -40,12 +40,12 @@ export const VERBS_BY_SUBJECT = {
     'close',
     'open',
   ],
-  escalation: ['view', 'expand', 'accept', 'reject', 'defer', 'send', 'close'],
+  escalation: ['view', 'expand', 'edit', 'accept', 'reject', 'defer', 'send', 'close'],
   'human-task': ['view', 'expand', 'accept', 'reject'],
   ticket: ['view', 'expand', 'filter', 'create', 'accept', 'reject', 'waive', 'undo', 'close', 'open'],
   feature: ['view', 'expand', 'filter', 'defer', 'stop', 'undo', 'close', 'open'],
   agent: ['view', 'expand', 'edit', 'accept', 'reject', 'abandon', 'stop', 'send', 'close'],
-  obstacle: ['view', 'expand', 'accept', 'reject', 'waive', 'stop', 'undo', 'close'],
+  obstacle: ['view', 'expand', 'create', 'accept', 'reject', 'waive', 'stop', 'undo', 'close'],
   'local-run': ['view', 'expand', 'filter', 'create', 'edit', 'reject', 'stop', 'close', 'open'],
   job: ['view', 'expand', 'create', 'edit', 'stop', 'close'],
   retro: ['view', 'close'],
@@ -80,7 +80,7 @@ export const VERBS_BY_SUBJECT = {
   scan: ['create'],
   demo: ['expand', 'create', 'close'],
   code: ['copy'],
-  menu: ['expand'],
+  menu: ['expand', 'close'],
   reason: ['expand'],
 } as const satisfies Record<string, readonly UsageVerb[]>;
 
@@ -109,6 +109,7 @@ const EVENT_SOURCE = {
   'goal.expand': 'ui',
   'goal.edit': 'record',
   'goal.accept': 'record',
+  'goal.reject': 'ui',
   'goal.waive': 'ui',
   'goal.abandon': 'record',
   'goal.undo': 'ui',
@@ -139,6 +140,7 @@ const EVENT_SOURCE = {
   'validation.open': 'ui',
   'escalation.view': 'ui',
   'escalation.expand': 'ui',
+  'escalation.edit': 'ui',
   'escalation.accept': 'record',
   'escalation.reject': 'record',
   'escalation.defer': 'ui',
@@ -177,6 +179,7 @@ const EVENT_SOURCE = {
   'agent.close': 'ui',
   'obstacle.view': 'ui',
   'obstacle.expand': 'ui',
+  'obstacle.create': 'ui',
   'obstacle.accept': 'record',
   'obstacle.reject': 'ui',
   'obstacle.waive': 'record',
@@ -317,6 +320,7 @@ const EVENT_SOURCE = {
   'demo.close': 'ui',
   'code.copy': 'ui',
   'menu.expand': 'ui',
+  'menu.close': 'ui',
   'reason.expand': 'ui',
 } as const satisfies Record<UsageEvent, UsageEventSource>;
 

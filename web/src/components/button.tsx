@@ -180,7 +180,7 @@ export function Button({
   children,
   ...rest
 }: ButtonLook &
-  Usage & { children: ReactNode } & Omit<
+  Usage & { logs?: boolean; children: ReactNode } & Omit<
     ButtonHTMLAttributes<HTMLButtonElement>,
     'className' | 'children' | 'type'
   >): JSX.Element {

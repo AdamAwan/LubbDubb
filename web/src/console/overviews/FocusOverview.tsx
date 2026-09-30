@@ -123,6 +123,7 @@ function FocusProgress({
         {stops.map((r, i) => (
           <BareButton
             usage="fleet.filter"
+            logs={i !== at}
             key={r?.id ?? LOOK_ID}
             className={`cn-ov-pip ${r === null ? 'cn-ov-pip-look' : `cn-t-${KIND_TONE[r.kind]}`} ${i === at ? 'cn-ov-pip-here' : ''}`}
             aria-label={

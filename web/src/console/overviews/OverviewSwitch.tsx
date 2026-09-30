@@ -27,6 +27,7 @@ export function OverviewSwitch({ shape, actions }: { shape: OverviewShape; actio
       {OVERVIEW_SHAPES.map((s) => (
         <BareButton
           usage="fleet.filter"
+          logs={s !== shape}
           key={s}
           role="tab"
           aria-selected={s === shape}

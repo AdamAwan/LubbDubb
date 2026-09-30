@@ -412,7 +412,7 @@ function ReplyForm({
       }}
     >
       <input placeholder="Type into this agent…" value={text} onChange={(e) => setText(e.target.value)} />
-      <SubmitButton phase={send.phase} tone="primary" usage="agent.send">
+      <SubmitButton phase={send.phase} tone="primary" usage="agent.send" logs={text.trim() !== ''}>
         Send
       </SubmitButton>
     </form>

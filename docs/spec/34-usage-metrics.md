@@ -76,16 +76,16 @@ offers no such control, and the day it does, the cell is where it is added.
 | Subject          | Verbs it offers                                                                                         |
 | ---------------- | ------------------------------------------------------------------------------------------------------- |
 | `plan`           | `view` `expand` `filter` `edit` `accept` `reject` `abandon` `undo` `close` `open`                       |
-| `goal`           | `view` `expand` `edit` `accept` `waive` `abandon` `undo` `close` `open`                                 |
+| `goal`           | `view` `expand` `edit` `accept` `reject` `waive` `abandon` `undo` `close` `open`                        |
 | `pr`             | `view` `edit` `accept` `send`                                                                           |
 | `pr-description` | `expand` `create` `accept` `waive` `close` `open`                                                       |
 | `validation`     | `view` `expand` `filter` `create` `edit` `accept` `reject` `defer` `waive` `stop` `undo` `close` `open` |
-| `escalation`     | `view` `expand` `accept` `reject` `defer` `send` `close`                                                |
+| `escalation`     | `view` `expand` `edit` `accept` `reject` `defer` `send` `close`                                         |
 | `human-task`     | `view` `expand` `accept` `reject`                                                                       |
 | `ticket`         | `view` `expand` `filter` `create` `accept` `reject` `waive` `undo` `close` `open`                       |
 | `feature`        | `view` `expand` `filter` `defer` `stop` `undo` `close` `open`                                           |
 | `agent`          | `view` `expand` `edit` `accept` `reject` `abandon` `stop` `send` `close`                                |
-| `obstacle`       | `view` `expand` `accept` `reject` `waive` `stop` `undo` `close`                                         |
+| `obstacle`       | `view` `expand` `create` `accept` `reject` `waive` `stop` `undo` `close`                                |
 | `local-run`      | `view` `expand` `filter` `create` `edit` `reject` `stop` `close` `open`                                 |
 | `job`            | `view` `expand` `create` `edit` `stop` `close`                                                          |
 | `retro`          | `view` `close`                                                                                          |
@@ -120,7 +120,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `scan`           | `create`                                                                                                |
 | `demo`           | `expand` `create` `close`                                                                               |
 | `code`           | `copy`                                                                                                  |
-| `menu`           | `expand`                                                                                                |
+| `menu`           | `expand` `close`                                                                                        |
 | `reason`         | `expand`                                                                                                |
 
 **A subject is a thing, never a screen.** `pr` is the pull request wherever it is worked, so a
@@ -211,7 +211,10 @@ opt-out**: a Cancel is usage too, and an escape hatch is how the default drifts 
 `ControlUsage` is one of two shapes, and the type keeps both of the helper's rules:
 
 - **A `ui` event, as a string** — `usage="pr-description.expand"`. The press calls `logUsage` before the
-  caller's own handler. A `.view` is excluded, because [every `view` is emitted from the
+  caller's own handler — except on an **`AsyncButton`**, which logs only once its act has resolved: a
+  refused hand-off or a failed write changed nothing, and counting it would say the act happened. It
+  logs at the place the press was made, taken before the act, so a person who moves on while the
+  request is out does not file the act under the page they moved to. A `.view` is excluded, because [every `view` is emitted from the
   place](#the-helper) and a nav button logging one would double it.
 - **`{ counted: event }`** — for a `record` event (`{ counted: 'plan.accept' }`), which its table
   already holds, and for a `.view` (`{ counted: 'goal.view' }`), which the place already emits. The
@@ -224,7 +227,10 @@ opt-out**: a Cancel is usage too, and an escape hatch is how the default drifts 
 **A press that changes nothing logs nothing.** A two-step `ConfirmButton` logs on the confirming
 press, never the arming one — an arm that times out is not the act, and logging both counts one act
 twice — and a segment or tab already selected logs nothing when pressed again. `BareButton`'s `logs`
-is that seam, and it is set from state, never to silence a control that acts.
+is that seam, and it is set from state, never to silence a control that acts — a Send with nothing
+typed, a filter or answer option already chosen, a why-mark with no reason behind it. A focus target
+that only carries a tooltip is not a control at all, and is not drawn as one: the allowance timeline's lanes
+are a focusable `<span role="img">`, not a button.
 
 **Every way out of a `Modal` is its `closeUsage`** — the close button, Escape and a backdrop click —
 and the panel and tab tables name each surface's subject once (`panelUsage`, `panelClose`, `tabUsage`

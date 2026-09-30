@@ -445,7 +445,7 @@ function Controls({
 
       {obstacle.state === 'standing' && obstacle.kind === 'note' && (
         <AsyncButton
-          usage={{ counted: 'obstacle.accept' }}
+          usage="obstacle.create"
           onClick={() => act(actions.writeDownObstacle(obstacle.id))}
           onRefused={onRefused}
           title="Queue the documentation change now. One note is written up at a time, across the whole fleet."
