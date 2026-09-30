@@ -3,10 +3,17 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 
 /**
- * The directories the bundle is cut along, on top of `node_modules`. Named rather
- * than globbed: a group rolldown decides to fold back in is a silent no-op, so
- * the list says which cuts are actually load-bearing and `web:build`'s own
- * per-chunk sizes are what settles whether a new one is.
+ * The cuts the bundle is made along, on top of `node_modules`: a chunk name and
+ * the path under `web/src/` it takes. Named rather than globbed: a group rolldown
+ * decides to fold back in is a silent no-op, so the list says which cuts are
+ * actually load-bearing and `web:build`'s own per-chunk sizes are what settles
+ * whether a new one is.
+ *
+ * Order is load-bearing: a group also takes whatever its modules import that no
+ * earlier group claimed. `insights` — the `components/` tabs and pages, which
+ * `components` excludes — sits after `components` so it does not pull shared
+ * components in, and before `console`, or `console` takes the tabs it imports
+ * and `insights` folds away.
  *
  * Only `.ts`/`.tsx` are matched. `main.tsx` imports `styles.css`, `console.css`
  * and `theme.css` in that order and the last is written to override the first
@@ -14,7 +21,13 @@ import { resolve } from 'node:path';
  * emitted sheet rather than its import position, which reorders the cascade with
  * nothing red and a symptom only on whichever surface the two sheets tie on.
  */
-const CHUNK_DIRS = ['cockpit', 'components', 'console', 'view'];
+const CHUNKS: [name: string, path: string][] = [
+  ['cockpit', 'cockpit[\\\\/][^?]*'],
+  ['components', 'components[\\\\/](?![^\\\\/?]*(?:Tab|Page)\\.tsx$)[^?]*'],
+  ['insights', 'components[\\\\/][^\\\\/?]*(?:Tab|Page)'],
+  ['console', 'console[\\\\/][^?]*'],
+  ['view', 'view[\\\\/][^?]*'],
+];
 
 // The SPA lives in web/ and builds to web/dist, which the Fastify server serves
 // in production. In dev, `npm run web:dev` proxies /api and /ws to the server.
@@ -52,9 +65,9 @@ export default defineConfig({
             // Both separators: module ids are native paths, so a Windows build
             // sees backslashes and a rule anchored on `/` matches nothing there —
             // quietly, since the only symptom is a chunk that is never emitted.
-            ...CHUNK_DIRS.map((dir) => ({
-              name: dir,
-              test: new RegExp(`[\\\\/]web[\\\\/]src[\\\\/]${dir}[\\\\/][^?]*\\.tsx?$`),
+            ...CHUNKS.map(([name, path]) => ({
+              name,
+              test: new RegExp(`[\\\\/]web[\\\\/]src[\\\\/]${path}\\.tsx?$`),
             })),
           ],
         },
