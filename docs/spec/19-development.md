@@ -354,8 +354,9 @@ the escape hatch for the case where the build must not run — a checkout instal
 ### The chunks
 
 `web/vite.config.ts` cuts the bundle along `node_modules` and four directories under `web/src/` —
-`cockpit`, `components`, `console`, `view` — so `web:build` emits a handful of chunks rather than one
-635 kB file. Two things about that cut are load-bearing:
+`cockpit`, `components`, `console`, `view` — with `components/`'s `*Tab` and `*Page` modules split off
+into their own `insights` chunk, so `web:build` emits a handful of chunks rather than one file.
+Three things about that cut are load-bearing:
 
 - **Every chunk is eager.** They are static imports of the entry, so the browser fetches the whole
   graph on load exactly as it did when the bundle was one file. A _lazy_ chunk — one fetched when a
@@ -366,6 +367,9 @@ the escape hatch for the case where the build must not run — a checkout instal
   in that order, and the last overrides the first two. A CSS module grouped into a chunk takes that
   chunk's position in the emitted sheet instead of its import position, so grouping one silently
   reorders the cascade — visible only on whichever surface the two sheets tie on.
+- **Group order decides what a chunk holds.** A group also takes every module its own modules import
+  that no earlier group claimed. Put `insights` first and it swallows most of `cockpit`; put it after
+  `console` and `console` takes the tabs and `insights` is never emitted.
 
 The cut is for caching and for keeping each chunk under Vite's 500 kB warning **honestly**: the
 warning is left at its default so it still means something when a directory really does outgrow it.

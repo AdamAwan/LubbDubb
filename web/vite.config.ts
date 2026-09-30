@@ -3,10 +3,13 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 
 /**
- * The directories the bundle is cut along, on top of `node_modules`. Named rather
- * than globbed: a group rolldown decides to fold back in is a silent no-op, so
- * the list says which cuts are actually load-bearing and `web:build`'s own
- * per-chunk sizes are what settles whether a new one is.
+ * The cuts the bundle is made along, on top of `node_modules`: a chunk name and
+ * the path under `web/src/` it takes. Named rather than globbed: a group rolldown
+ * decides to fold back in is a silent no-op, so the list says which cuts are
+ * actually load-bearing and `web:build`'s own per-chunk sizes are what settles
+ * whether a new one is.
+ *
+ * Order is load-bearing: see docs/spec/19-development.md#the-chunks.
  *
  * Only `.ts`/`.tsx` are matched. `main.tsx` imports `styles.css`, `console.css`
  * and `theme.css` in that order and the last is written to override the first
@@ -14,7 +17,15 @@ import { resolve } from 'node:path';
  * emitted sheet rather than its import position, which reorders the cascade with
  * nothing red and a symptom only on whichever surface the two sheets tie on.
  */
-const CHUNK_DIRS = ['cockpit', 'components', 'console', 'view'];
+const SEP = '[\\\\/]';
+const INSIGHT = `components${SEP}[^\\\\/?]*(?:Tab|Page)`;
+const CHUNKS: [name: string, path: string][] = [
+  ['cockpit', `cockpit${SEP}[^?]*`],
+  ['components', `(?!${INSIGHT}\\.tsx?$)components${SEP}[^?]*`],
+  ['insights', INSIGHT],
+  ['console', `console${SEP}[^?]*`],
+  ['view', `view${SEP}[^?]*`],
+];
 
 // The SPA lives in web/ and builds to web/dist, which the Fastify server serves
 // in production. In dev, `npm run web:dev` proxies /api and /ws to the server.
@@ -52,9 +63,9 @@ export default defineConfig({
             // Both separators: module ids are native paths, so a Windows build
             // sees backslashes and a rule anchored on `/` matches nothing there —
             // quietly, since the only symptom is a chunk that is never emitted.
-            ...CHUNK_DIRS.map((dir) => ({
-              name: dir,
-              test: new RegExp(`[\\\\/]web[\\\\/]src[\\\\/]${dir}[\\\\/][^?]*\\.tsx?$`),
+            ...CHUNKS.map(([name, path]) => ({
+              name,
+              test: new RegExp(`${SEP}web${SEP}src${SEP}${path}\\.tsx?$`),
             })),
           ],
         },
