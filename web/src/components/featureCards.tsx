@@ -260,6 +260,7 @@ function TalkAbout({ feature, folder }: { feature: number; folder: string }): JS
   if (!folder) return null;
   return (
     <DesktopLink
+      usage="feature.open"
       folder={folder}
       prompt={featurePrompt(feature)}
       ready="ready for your question"

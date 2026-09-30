@@ -101,7 +101,7 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
           Issue!
         </ControlButton>
       ) : (
-        <ExtLink href={NEW_ISSUE_URL} control title="Raise an issue on the LubbDubb repo">
+        <ExtLink href={NEW_ISSUE_URL} control usage="ticket.open" title="Raise an issue on the LubbDubb repo">
           <Icon name="bug" />
           Issue! ↗
         </ExtLink>
@@ -126,6 +126,7 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
           the browser is on, and `DesktopLink` puts the command in the title for
           exactly the operator it cannot reach. */}
       <DesktopLink
+        usage="fleet.open"
         control
         folder={view.state.config.desktopFolder}
         prompt={questionPrompt()}

@@ -307,7 +307,9 @@ function Part({
       className={`cn-part cn-${group} ${pickable ? 'is-pickable' : ''}`}
       /* The whole card is the way in, and the title carries the same press for a
          keyboard — a control inside it (the PR reference, the agent) is its own
-         press and must not also open the page. */
+         press and must not also open the page. A move to the place, which logs
+         the view. */
+      // eslint-disable-next-line no-restricted-syntax
       onClick={
         pickable
           ? (event) => {

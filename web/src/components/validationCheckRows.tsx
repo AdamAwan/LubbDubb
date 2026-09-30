@@ -461,6 +461,7 @@ function CantRunNow({
             that client on this repository with the command already typed, which is a
             destination and therefore an anchor. */}
         <DesktopLink
+          usage="validation.open"
           folder={desktopFolder}
           prompt={promptText}
           explain="so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here."

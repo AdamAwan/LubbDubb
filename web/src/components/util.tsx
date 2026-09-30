@@ -1,8 +1,14 @@
 import type { JSX, ReactNode } from 'react';
-import { buttonClass, type ButtonLook } from './button.js';
+import { BareLink, LinkButton, type ButtonLook, type OpenUsage } from './button.js';
 import { CONTROL_CLASS } from './controls.js';
 
 // → docs/spec/17-cockpit.md
+
+type ExtLinkProps = { href: string; title?: string; children: ReactNode } & (
+  | { boxed?: boolean; look?: undefined; control?: undefined; usage?: undefined }
+  | { look: ButtonLook; control?: undefined; usage: OpenUsage }
+  | { control: true; look?: undefined; usage: OpenUsage }
+);
 
 /**
  * An external link that opens safely in a new tab.
@@ -11,46 +17,24 @@ import { CONTROL_CLASS } from './controls.js';
  * standing on its own gets the box (`.ref-out`), a reference inside a sentence
  * gets the arrow alone. It defaults to unboxed because every caller here is prose
  * or a chip that already has a box of its own — only `<Ref>` draws the standalone
- * token, and it says so.
+ * token, and it says so. Worn as a control (`look` or `control`) it is a press
+ * and names its `usage` event.
  *
  * @public shared with `refs.tsx`, which resolves a ref against several keys
  * before it has a URL to hand over — one definition of `target`/`rel`, because a
  * second one is how a link ends up handing the opener away.
  */
-export function ExtLink({
-  href,
-  title,
-  boxed,
-  look,
-  control,
-  children,
-}: {
-  href: string;
-  title?: string;
-  boxed?: boolean;
-  look?: ButtonLook;
-  control?: boolean;
-  children: ReactNode;
-}): JSX.Element {
-  return (
-    <a
-      className={
-        control === true
-          ? CONTROL_CLASS
-          : look === undefined
-            ? boxed === true
-              ? 'ext-ref ref-out'
-              : 'ext-ref'
-            : buttonClass(look)
-      }
-      href={href}
-      title={title}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {children}
-    </a>
-  );
+export function ExtLink(props: ExtLinkProps): JSX.Element {
+  const out = {
+    href: props.href,
+    title: props.title,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    children: props.children,
+  };
+  if (props.usage === undefined) return <a className={props.boxed === true ? 'ext-ref ref-out' : 'ext-ref'} {...out} />;
+  if (props.control === true) return <BareLink className={CONTROL_CLASS} {...out} usage={props.usage} />;
+  return <LinkButton {...out} {...props.look} usage={props.usage} />;
 }
 
 export function refLink(token: string, refUrls: Record<string, string>): ReactNode {

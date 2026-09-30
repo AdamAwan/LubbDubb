@@ -178,6 +178,7 @@ function Discuss({ feature, folder }: { feature: number; folder: string }): JSX.
   if (!folder) return null;
   return (
     <DesktopLink
+      usage="sequence.open"
       folder={folder}
       prompt={`Read the story order for feature #${feature} with sequence_read, then talk me through changing it.`}
       explain="so you can argue with the order and write it back with sequence_amend"

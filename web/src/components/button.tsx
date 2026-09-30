@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, JSX, MouseEvent, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, JSX, KeyboardEvent, MouseEvent, ReactNode, Ref } from 'react';
 import type { ControlUsage } from '../types.js';
 import { logControl } from '../cockpit/usage.js';
 
@@ -86,20 +86,91 @@ export function BareButton({
   logs = true,
   type = 'button',
   onClick,
+  buttonRef,
   ...rest
-}: Usage & { logs?: boolean; type?: 'button' | 'submit' } & Omit<
+}: Usage & { logs?: boolean; type?: 'button' | 'submit'; buttonRef?: Ref<HTMLButtonElement> } & Omit<
     ButtonHTMLAttributes<HTMLButtonElement>,
     'type'
   >): JSX.Element {
   return (
     <button
       type={type}
+      ref={buttonRef}
       {...rest}
       onClick={(event: MouseEvent<HTMLButtonElement>) => {
         if (logs) logControl(usage);
         onClick?.(event);
       }}
     />
+  );
+}
+
+/**
+ * What a press of a control that leaves the cockpit is: always a `ui` event, and
+ * always `open` — nothing in the harness records a page opened elsewhere.
+ * → docs/spec/34-usage-metrics.md#a-control-that-is-not-a-button
+ */
+export type OpenUsage = Extract<ControlUsage, `${string}.open`>;
+
+/**
+ * The one element that draws an `<a>` a person presses as a control — a deep link
+ * into the operator's Claude Code, an external page worn as a button.
+ */
+export function BareLink({
+  usage,
+  onClick,
+  ...rest
+}: { usage: OpenUsage } & AnchorHTMLAttributes<HTMLAnchorElement>): JSX.Element {
+  return (
+    <a
+      {...rest}
+      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+        logControl(usage);
+        onClick?.(event);
+      }}
+    />
+  );
+}
+
+export function LinkButton({
+  tone,
+  ghost,
+  size,
+  className,
+  ...rest
+}: ButtonLook & { usage: OpenUsage } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'className'>): JSX.Element {
+  return <BareLink className={buttonClass({ tone, ghost, size, className })} {...rest} />;
+}
+
+/**
+ * A button inside an `<svg>`, where a `<button>` cannot be drawn: a `<g>` that
+ * takes the press from the mouse and the keyboard alike, and logs it.
+ */
+export function SvgButton({
+  usage,
+  onPress,
+  className,
+  children,
+}: Usage & { onPress: () => void; className?: string; children: ReactNode }): JSX.Element {
+  const press = (): void => {
+    logControl(usage);
+    onPress();
+  };
+  return (
+    <g
+      className={className}
+      role="button"
+      tabIndex={0}
+      onClick={press}
+      onKeyDown={(event: KeyboardEvent<SVGGElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          press();
+        }
+      }}
+    >
+      {children}
+    </g>
   );
 }
 

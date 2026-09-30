@@ -337,6 +337,13 @@ function PartsSection({
   );
 }
 
+const DISCUSS = {
+  active:
+    'so the plan is talked through with a session that can propose a change to it — the plan keeps running while you decide, and nothing changes until you accept.',
+  awaiting:
+    'so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does.',
+};
+
 function PlanFoot({
   plan,
   planning,
@@ -353,10 +360,7 @@ function PlanFoot({
   decidable,
   ack,
 }: PlanModalProps & Derived) {
-  const discuss =
-    plan.status === 'active'
-      ? 'so the plan is talked through with a session that can propose a change to it — the plan keeps running while you decide, and nothing changes until you accept.'
-      : 'so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does.';
+  const discuss = DISCUSS[plan.status === 'active' ? 'active' : 'awaiting'];
   return (
     <div className="pm-foot">
       {decidable && (
@@ -401,7 +405,12 @@ function PlanFoot({
               one. A control that offered what the tool refuses is a session sent
               to argue about a plan it cannot then change. */}
           {(plan.status === 'awaiting_approval' || plan.status === 'active') && issueNumber !== null && (
-            <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discuss} />
+            <DesktopLink
+              usage="plan.open"
+              folder={desktopFolder}
+              prompt={discussPrompt(issueNumber)}
+              explain={discuss}
+            />
           )}
           {/* Never beside a verdict. On a decidable plan this is "Change something
               first" with an empty note — the same route, the same outcome, and the

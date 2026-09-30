@@ -26,7 +26,7 @@ const GOAL_PAGE = repoText('web/src/console/GoalPage.tsx');
 const TOP_BAR = repoText('web/src/console/TopBar.tsx');
 
 const desktop = (props: { folder: string; prompt: string; explain: string; ready?: string }): string =>
-  renderToStaticMarkup(createElement(DesktopLink, props));
+  renderToStaticMarkup(createElement(DesktopLink, { ...props, usage: 'validation.open' }));
 
 test('the prompt addresses a check by its goal and its stored letter', () => {
   assert.equal(checkPrompt(249, 'A'), '/lubbdubb 249:A');
@@ -148,7 +148,7 @@ test('a hand-off inside a control row wears the control kit, not the button', ()
       createElement(ControlGroup, {
         caption: 'Leave this page',
         icon: 'ticket',
-        children: createElement(DesktopLink, props),
+        children: createElement(DesktopLink, { ...props, usage: 'fleet.open' }),
       }),
     ),
   );

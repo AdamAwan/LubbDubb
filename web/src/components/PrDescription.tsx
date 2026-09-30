@@ -370,6 +370,7 @@ function DescriptionPresses({
           → docs/spec/07-pull-requests.md#it-contradicts-it-never-drafts */}
       {current !== null && desktopFolder !== null && checkPrompt !== null && (
         <DesktopLink
+          usage="pr-description.open"
           folder={desktopFolder}
           prompt={checkPrompt}
           label="Check my description"

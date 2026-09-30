@@ -559,6 +559,7 @@ function Validation({
             `local-run` prompt always has a body, so there is nothing to check
             first and no configuration state to fall out of step with. */}
         <DesktopLink
+          usage="local-run.open"
           folder={desktopFolder}
           prompt={localRunPrompt(issue.number)}
           explain="so this goal’s work is running on the machine in front of you — then it offers you the checks."

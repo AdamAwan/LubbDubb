@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { PrReviewState, PrReviewStatus } from '../types.js';
+import { BareButton } from './button.js';
 import { Icon } from './icons.js';
 import { Tip, useTip } from './tip.js';
 import { relTime } from './util.js';
@@ -90,39 +91,42 @@ export function ReviewMark({
   const more = reviewSaidMore(review);
   const shown = review.findings.slice(0, TIP_FINDINGS);
   const rest = review.findings.length - shown.length;
-  const Tag = onOpen === undefined ? 'span' : 'button';
-  return (
-    <Tag
-      ref={tip.anchor as never}
-      className={`rv ${tone(review)}${onOpen === undefined ? '' : ' rv-open'}`}
-      {...(onOpen === undefined ? { tabIndex: 0, role: 'img' as const } : { type: 'button' as const, onClick: onOpen })}
-      aria-label={`Fleet review: ${reviewSaid(review)}${onOpen === undefined ? '' : ' — open the pull request'}`}
-      onMouseEnter={tip.open}
-      onFocus={tip.open}
-      onMouseLeave={tip.close}
-      onBlur={tip.close}
-    >
-      <Icon name="review" size={15} />
-      {mark !== null && <span className="rv-badge">{mark}</span>}
-      {tip.at !== null && (
-        <Tip at={tip.at}>
-          <b>{reviewSaid(review)}</b>
-          {more !== null && <span className="rv-said">{more}</span>}
-          {shown.length > 0 && (
-            <ul className="rv-list">
-              {shown.map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-          )}
-          {rest > 0 && <span className="rv-more">{`and ${rest} more`}</span>}
-          <span className="rv-foot">
-            {reviewFoot(review, now)}
-            {onOpen !== undefined && ' · click for the whole reading'}
-          </span>
-        </Tip>
-      )}
-    </Tag>
+  const drawn = {
+    className: `rv ${tone(review)}${onOpen === undefined ? '' : ' rv-open'}`,
+    'aria-label': `Fleet review: ${reviewSaid(review)}${onOpen === undefined ? '' : ' — open the pull request'}`,
+    onMouseEnter: tip.open,
+    onFocus: tip.open,
+    onMouseLeave: tip.close,
+    onBlur: tip.close,
+    children: (
+      <>
+        <Icon name="review" size={15} />
+        {mark !== null && <span className="rv-badge">{mark}</span>}
+        {tip.at !== null && (
+          <Tip at={tip.at}>
+            <b>{reviewSaid(review)}</b>
+            {more !== null && <span className="rv-said">{more}</span>}
+            {shown.length > 0 && (
+              <ul className="rv-list">
+                {shown.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            )}
+            {rest > 0 && <span className="rv-more">{`and ${rest} more`}</span>}
+            <span className="rv-foot">
+              {reviewFoot(review, now)}
+              {onOpen !== undefined && ' · click for the whole reading'}
+            </span>
+          </Tip>
+        )}
+      </>
+    ),
+  };
+  return onOpen === undefined ? (
+    <span ref={tip.anchor as never} tabIndex={0} role="img" {...drawn} />
+  ) : (
+    <BareButton buttonRef={tip.anchor as never} usage={{ counted: 'pr.view' }} onClick={onOpen} {...drawn} />
   );
 }
 

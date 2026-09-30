@@ -42,6 +42,7 @@ export function intakeBody(row: NeedRow, view: CockpitView, actions: CockpitActi
           Override → workable
         </AsyncButton>
         <DesktopLink
+          usage="intake.open"
           folder={view.state.config.desktopFolder}
           prompt={discussPrompt(issue.number)}
           explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."

@@ -44,6 +44,7 @@ export function Modal({
   const Surface = element;
   const name = label ?? (typeof title === 'string' ? title : undefined);
   return (
+    // eslint-disable-next-line no-restricted-syntax -- the backdrop's press is `dismiss`, which logs `closeUsage`
     <div className={backdrop} role="presentation" onClick={dismiss}>
       <Surface
         className={className === undefined ? surface : `${surface} ${className}`}

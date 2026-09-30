@@ -22,6 +22,7 @@ export function FlagChips({
           target="_blank"
           rel="noopener noreferrer"
           title={`${f.kind}: ${f.ref}`}
+          // eslint-disable-next-line no-restricted-syntax -- a plain link; this only keeps the press off the row under it
           onClick={(e) => e.stopPropagation()}
         >
           <span className="flag-chip-kind">{f.kind}</span>
