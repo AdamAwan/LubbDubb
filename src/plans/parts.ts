@@ -80,6 +80,10 @@ export function partIsHuman(part: PlanPart): boolean {
   return part.expectedKind === 'human';
 }
 
+export function partOpensPr(part: PlanPart): boolean {
+  return part.expectedKind === null || part.expectedKind === 'code';
+}
+
 export function partOutcomeKind(part: PlanPart): PartOutcomeKind | null {
   if (part.status === 'merged') return 'code';
   if (part.status === 'concluded') return part.outcomeKind;

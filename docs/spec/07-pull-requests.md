@@ -673,7 +673,9 @@ is worth a reviewer's time.
 **The issue reference is never a closing keyword.** Whether a pull request closes its issue is the
 agent's judgement, and a harness-written `closes #12` would shut a ticket whose remaining parts are
 still open. A part reads `Part <n>/<m> of #<issue> — <title>`; a whole-issue pickup reads
-`Relates to #<issue> — <title>`. The title rides along because the number alone is a coordinate a
+`Relates to #<issue> — <title>`. `<n>` and `<m>` (and the title's `{position}`) count only the parts
+that open a pull request (`partOpensPr`). A step for a person, a report or a determination opens
+none, and counted in, it leaves a series reading 1/4, 2/4, 4/4 with no 3/4 ever arriving. The title rides along because the number alone is a coordinate a
 reviewer has to leave the page to resolve — **unless the provider resolves it on the page**.
 `expandsIssueRefs` drops the title on a provider that draws the reference as a card carrying the
 work item's own title and state, which Azure does: written there too, the line says the same title
