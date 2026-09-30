@@ -8,7 +8,7 @@ import type {
   PlanPart,
   WorkNode,
 } from '../types.js';
-import { partSettled } from '../plans/parts.js';
+import { partOpensPr, partSettled } from '../plans/parts.js';
 import { environmentGroups } from './groups.js';
 import { unattributedMerges } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
@@ -164,7 +164,7 @@ function partsOwed(goalRef: string, plans: Plan[], parts: PlanPart[]): number {
   for (const part of parts) {
     if (!owning.has(part.planId)) continue;
     if (part.status === 'retired' || partSettled(part)) continue;
-    if (part.expectedKind !== null && part.expectedKind !== 'code') continue;
+    if (!partOpensPr(part)) continue;
     owed += 1;
   }
   return owed;

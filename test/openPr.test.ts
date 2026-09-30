@@ -95,6 +95,18 @@ test('a part origin stacks on the dependency it declares', () => {
   });
 });
 
+test('a step for a person takes no PR number, so the series has no gap', () => {
+  const parts = [
+    part({ slug: 'migrations', seq: 1 }),
+    part({ slug: 'approve', seq: 2, expectedKind: 'human' }),
+    part({ slug: 'cursor', seq: 3 }),
+  ];
+  const target = resolveOpenPr('issue:182:part:cursor', ctx({ plan, parts }));
+  assert.ok(!('error' in target));
+  assert.equal(target.position, 2);
+  assert.equal(target.total, 2);
+});
+
 test('a part depending on nothing is the bottom rung and targets the default branch', () => {
   const parts = [part({ slug: 'migrations', seq: 1 }), part({ slug: 'cursor', seq: 2, dependsOn: ['migrations'] })];
   const target = resolveOpenPr('issue:182:part:migrations', ctx({ plan, parts }));

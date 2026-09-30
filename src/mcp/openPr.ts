@@ -1,5 +1,5 @@
 import { issueOriginId, issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
-import { bySlug, liveParts, partBase, partBranch } from '../plans/parts.js';
+import { bySlug, liveParts, partBase, partBranch, partOpensPr } from '../plans/parts.js';
 import type { Issue, Plan, PlanPart } from '../types.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -65,7 +65,7 @@ function partTarget(issueNumber: number, slug: string, ctx: OpenPrContext): Open
   const part = live.find((p) => p.slug === slug);
   if (!part) return { error: `Part "${slug}" is not a live part of the plan for issue #${issueNumber}.` };
 
-  const ordered = [...live].sort((a, b) => a.seq - b.seq);
+  const ordered = live.filter((p) => p.slug === slug || partOpensPr(p)).sort((a, b) => a.seq - b.seq);
   return {
     issueNumber,
     issueTitle: issue?.title ?? ctx.plan.title,
