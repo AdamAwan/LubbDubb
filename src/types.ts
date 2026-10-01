@@ -30,6 +30,8 @@ export interface PullRequest {
   unresolvedComments: PrComment[];
   reviewThreads?: PrReviewThread[];
   approved?: boolean;
+  /** Who stands approving it now, and when. Absent where the provider did not read it. */
+  approvals?: PrApproval[];
   mergeable?: boolean;
   baseBranch?: string;
   mergeableState?: MergeableState;
@@ -163,6 +165,12 @@ export interface AssessedBotPr extends BotPr {
 }
 
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
+
+export interface PrApproval {
+  by: string;
+  /** Absent where the provider records no time for the vote — Azure's reviewer votes. */
+  at?: string;
+}
 
 /** A person as a tracker names them: `id` is what an assignment is written with, `name` what is drawn. */
 export interface PrPerson {
@@ -1336,6 +1344,8 @@ export interface EscalationContext {
   commentId?: string | null;
   draft?: string;
   method?: string;
+  prTitle?: string;
+  approvals?: PrApproval[];
   autoMergeFailed?: boolean;
   planId?: string;
   issueNumber?: number;

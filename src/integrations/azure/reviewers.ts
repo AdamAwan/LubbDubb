@@ -1,4 +1,4 @@
-import type { PrPerson, ViewerAssignment } from '../../types.js';
+import type { PrApproval, PrPerson, ViewerAssignment } from '../../types.js';
 import { sameIdentity } from '../../pr/prOwnership.js';
 import type { AzReviewer } from './azureDevOpsApi.js';
 
@@ -26,4 +26,8 @@ export function viewerApproved(reviewers: readonly AzReviewer[], viewer: string)
 export function computeApproved(votes: number[]): boolean {
   if (votes.some((v) => v < 0)) return false;
   return votes.some((v) => v >= 5);
+}
+
+export function standingApprovals(reviewers: readonly AzReviewer[]): PrApproval[] {
+  return reviewers.flatMap((r) => (r.isContainer || r.vote < 5 ? [] : [{ by: r.displayName ?? r.uniqueName }]));
 }

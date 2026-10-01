@@ -114,16 +114,31 @@ export function CardDetail({
   card,
   refUrls,
   declines,
+  now,
 }: {
   escalation: Escalation;
   card: Card;
   refUrls: Record<string, string>;
   declines: Declines;
+  now: number | undefined;
 }): JSX.Element {
   const { context } = escalation;
   const { checkSet, gated, decidable } = card;
   return (
     <>
+      {context.approvals?.length ? (
+        <div className="esc-context">
+          <div className="lb lb-sm">Approved by</div>
+          <ul className="esc-approvals">
+            {context.approvals.map((a, i) => (
+              <li key={i}>
+                {a.by}
+                {a.at ? <span className="muted"> · {relTime(a.at, now)}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {/* Markdown, unlike `recentOutput` above it: that is terminal output and
           preformatted is what it *is*, while this is someone writing to a human
           and a `<pre>` flattens its structure into one grey block.

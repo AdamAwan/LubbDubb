@@ -143,6 +143,8 @@ export function prConcerns(s: StageContext): void {
         type: 'merge_pr',
         prNumber: pr.number,
         method: 'squash',
+        title: pr.title,
+        approvals: pr.approvals,
         rule: 'pr-merge-ready',
         reason: `PR #${pr.number} is green, approved and mergeable; merge it in.`,
       } satisfies RawAction);

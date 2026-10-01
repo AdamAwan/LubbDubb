@@ -28,6 +28,7 @@ import type { Action, CheckDecline, DecisionOutcome, Proposal, ProposalKind, Tas
 import type { FeatureBoardFacts } from '../featureSummaries/featureRecord.js';
 import { ciEvidenceFor, dispatchPrompt, type DispatchAction } from './dispatchBriefing.js';
 import {
+  mergeEscalation,
   proposePlan,
   proposePlanAmendment,
   proposeShortfall,
@@ -347,11 +348,7 @@ export class ActionExecutor {
   ): { outcome: DecisionOutcome; detail: string } {
     const esc = this.deps.escalations.create(
       action.type === 'merge_pr'
-        ? {
-            type: 'approve_change',
-            prompt: `${preamble}PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
-            context: { prNumber: action.prNumber, method: action.method },
-          }
+        ? mergeEscalation(action, preamble)
         : {
             type: 'review_reply',
             prompt: `${preamble}Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
