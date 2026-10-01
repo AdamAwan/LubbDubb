@@ -94,7 +94,7 @@ export function NeedsBand({
 function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [open, setOpen] = useState(false);
   return (
-    <div className="cn-needs-fold">
+    <div className={open ? 'cn-needs-fold cn-needs-fold-open' : 'cn-needs-fold'}>
       <BareButton
         usage={open ? 'escalation.close' : 'escalation.expand'}
         className={`cn-needs-line cn-t-${KIND_TONE[row.kind]}`}
@@ -122,8 +122,8 @@ function LineFace({ row, now }: { row: NeedRow; now: number }): JSX.Element {
         {KIND_SYMBOL[row.kind]}
       </span>
       <span className="cn-needs-kind">{KIND_LABEL[row.kind]}</span>
-      <span className="cn-needs-what">{oneLine(row.title)}</span>
       <NeedAge row={row} now={now} />
+      <span className="cn-needs-what">{oneLine(row.title)}</span>
     </>
   );
 }

@@ -958,6 +958,25 @@ test('the ask row on the goal page wears the tone and glyph its rail row does', 
   assert.ok(html.includes(KIND_SYMBOL[row.kind]), 'the glyph is drawn on both');
 });
 
+test('the ask rows are tiles, so the answer sits under the question on any width of screen', () => {
+  const ref = goalRef();
+  const html = render(goalView(() => {}, ref, [], [], 'ask'));
+  const lines = html.split('class="cn-asklines"')[1] ?? '';
+  assert.ok(lines.includes('cn-needs-line'), 'the rows are drawn inside the tiled list');
+  assert.ok(!html.includes('cn-needs-fold-open'), 'a row starts folded, a tile like the rest');
+
+  /* → docs/spec/17-cockpit.md#the-ask-rows-are-tiles */
+  const css = repoText('web/src/console/console.css');
+  const rule = (selector: string): string => {
+    const at = css.indexOf(`\n${selector} {`);
+    assert.ok(at >= 0, `console.css has a ${selector} rule`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+  assert.match(rule('.cn-asklines'), /display:\s*grid/, 'the list is a grid of tiles');
+  assert.match(rule('.cn-asklines > .cn-needs-fold-open'), /grid-column:\s*1 \/ -1/, 'an opened row spans the line');
+  assert.doesNotMatch(rule('.cn-needs-what'), /nowrap/, 'the question wraps inside its tile');
+});
+
 test('the plan’s verdict is asked on the plan card, and not as a line as well', () => {
   const ref = goalRef();
   const plan = goalView(() => {}, ref, [], [], 'plan');
