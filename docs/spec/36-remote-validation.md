@@ -836,15 +836,18 @@ exactly the behaviour the deterministic half had before the agent existed. The t
 four predicates the brief does — `runnableSelectors`, `runnableScripts`, `runnableScreens` and
 `runnableDrives` — for the reason [the dispatch](#the-dispatch--rule-remote-validation) states.
 
-**A press re-folds its rows' causes first.** Before it reads anything, the press runs `sheetRows` again
-— through `RemoteValidationDesk.fold`, the one the assembly uses — and writes each row's
-`blocked_reason`, `awaiting_approval` and `idle_reason` back from it. `selected` is the operator's and `matched` the listing's, so neither
-is touched, and no row is added or removed. Without it a cause the sheet was assembled with outlives
-the cause: a query approved here after the sheet was assembled writes only `remote_query_approvals`,
-and the press skips every row carrying a reason, so the approval would never be read; and a press
-refused for want of a tenant writes that reason onto every row, so the press after a tenant is
-supplied would read none of them. A reason a reading wrote — a store nothing could reach — is cleared
-by the same fold, which is right: a press is a re-run, and the read it is about to take answers it again.
+**A row's causes are re-folded, not only assembled.** `RemoteValidationDesk.refresh` runs `sheetRows`
+again — through `fold`, the one the assembly uses — and writes each row's `blocked_reason`,
+`awaiting_approval` and `idle_reason` back where they moved. `selected` is the operator's and `matched`
+the listing's, so neither is touched, and no row is added or removed. It runs when a `state` or watch
+query is approved or declined here, so the sheet stops asking for what was just given; and it runs at
+the press once the run is open and the pin has passed, before anything is read, because a tenant
+supplied through the environment raises no event. Without it a cause the sheet was assembled with
+outlives the cause: the press skips every row carrying a reason, so an approval given after assembly
+would never be read, and a press refused for want of a tenant — which writes that reason onto every
+selected row — would leave the press after a tenant is supplied reading none of them. A reason a
+reading wrote — a store nothing could reach — is cleared by the press's re-fold, which is right: a press
+is a re-run, and the read it is about to take answers it again.
 
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
 heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.

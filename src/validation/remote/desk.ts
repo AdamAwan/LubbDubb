@@ -13,7 +13,7 @@ import { isActiveTask } from '../../tasks.js';
 import { checkSetStanding, type CheckSetStanding } from '../planApproval.js';
 import { sweptScripts } from '../steps.js';
 import { queryDigest } from '../../store/remoteValidation.js';
-import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../../types.js';
+import type { GoalArrival, GoalWatch, RemoteRowOutcome, RemoteSheetRow, StateQuery } from '../../types.js';
 import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
 import { noSheetReason, sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
@@ -350,6 +350,7 @@ export class RemoteValidationDesk {
     const digest = queryDigest(check.query, check.presence ?? '');
     if (!accept) {
       this.deps.store.remoteValidation.declineStateQuery(digest, environment.name);
+      this.refresh(originRef, environment);
       return { check, reading: null, approved: false };
     }
     const reading = await this.readWatch(environment, originRef, checkId);
@@ -362,6 +363,7 @@ export class RemoteValidationDesk {
       rows: reading.rows,
       detail: reading.detail,
     });
+    this.refresh(originRef, environment);
     return { check, reading, approved: true };
   }
 
@@ -381,12 +383,37 @@ export class RemoteValidationDesk {
   }
 
   /**
-   * The sheet's rows as they stand now. The assembly writes them once; the press folds them again,
-   * because a cause a row was assembled with — a query not yet approved here, no tenant — can be
-   * gone by the time anyone presses. → docs/spec/36-remote-validation.md#the-press
+   * A fresh fold's causes onto the rows already on the sheet, written only where they moved, and the
+   * sheet's rows returned. `selected` is the operator's and `matched` the listing's, so neither is
+   * touched, and no row is added or removed. → docs/spec/36-remote-validation.md#the-press
    *
-   * @public the seam the press re-derives a row's causes through
+   * @public the seam the press and a query's approval re-derive a row's causes through
    */
+  refresh(goalRef: string, environment: EnvironmentConfig): RemoteSheetRow[] {
+    const { remoteValidation } = this.deps.store;
+    const fresh = new Map(this.fold(environment, goalRef).map((r) => [r.rowId, r]));
+    const stored = remoteValidation
+      .listRemoteSheetRows()
+      .filter((r) => r.goalRef === goalRef && r.environment === environment.name);
+    const rows = stored.map((row) => {
+      const plan = fresh.get(row.rowId);
+      if (plan === undefined) return row;
+      const { blockedReason, awaitingApproval, idleReason } = plan;
+      return { ...row, blockedReason, awaitingApproval, idleReason };
+    });
+    const moved = rows.filter((row, i) => {
+      const before = stored[i]!;
+      return (
+        row.blockedReason !== before.blockedReason ||
+        row.awaitingApproval !== before.awaitingApproval ||
+        row.idleReason !== before.idleReason
+      );
+    });
+    if (moved.length > 0) remoteValidation.saveRemoteSheetRows(goalRef, environment.name, moved);
+    return rows;
+  }
+
+  /** @public the seam a test seeds a sheet as the assembly would through */
   fold(environment: EnvironmentConfig, goalRef: string): SheetRowPlan[] {
     const { store } = this.deps;
     return sheetRows({

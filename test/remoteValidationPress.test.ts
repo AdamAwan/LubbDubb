@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/validation/remote/desk.js';
 import { RemoteRunDesk } from '../src/validation/remote/run.js';
-import { sheetRows } from '../src/validation/remote/sheet.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
 import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
@@ -79,6 +78,7 @@ const CHECK: ValidationCheckInput = {
 
 interface Bench {
   store: Store;
+  desk: RemoteValidationDesk;
   runs: RemoteRunDesk;
   prober: FakeEnvironmentProber;
   git: FakeGitObserver;
@@ -127,11 +127,15 @@ function bench(
     now: opts.now ?? (() => NOW),
     env: opts.env ?? {},
   });
-  return { store, runs, prober, git, reader, tenants, close: () => store.close() };
+  return { store, desk, runs, prober, git, reader, tenants, close: () => store.close() };
 }
 
 /** A goal delivered, landed, arrived and sheeted — the state a press is made from. */
-function seed(store: Store, environment = 'acceptance', opts: { approve?: boolean } = {}): void {
+function seed(
+  { store, desk }: { store: Store; desk: Pick<RemoteValidationDesk, 'fold'> },
+  opts: { approve?: boolean; environment?: EnvironmentConfig } = {},
+): void {
+  const environment = opts.environment ?? ACCEPTANCE;
   store.validation.ingestValidation('issue:12', {
     checks: [CHECK],
     resources: [],
@@ -144,32 +148,25 @@ function seed(store: Store, environment = 'acceptance', opts: { approve?: boolea
   if (opts.approve !== false)
     store.remoteValidation.approveStateQuery({
       digest: queryDigest(QUERY.query, QUERY.presence),
-      environment,
+      environment: environment.name,
       originRef: 'issue:12',
       queryId: QUERY.id,
       rows: 0,
       detail: null,
     });
-  store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment });
+  store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: environment.name });
   // As the assembly folds it, so the press's own re-fold finds every row as it was left.
   store.remoteValidation.saveRemoteSheetRows(
     'issue:12',
-    environment,
-    sheetRows({
-      environment: ACCEPTANCE,
-      checks: store.validation.listValidationChecks('issue:12'),
-      watches: [],
-      queries: store.remoteValidation.listStateQueries(),
-      approvals: new Set(store.remoteValidation.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
-      tenant: { tenant: 'validation-customer-1', blockedReason: null },
-    }).map(({ run: _run, ...row }) => row),
+    environment.name,
+    desk.fold(environment, 'issue:12').map(({ run: _run, ...row }) => row),
   );
 }
 
 test('a press opens one run, reads the confirmed rows and attributes them to the commits it straddled', async () => {
   const b = bench();
   try {
-    seed(b.store);
+    seed(b);
     const pressed = await b.runs.press('issue:12', 'acceptance');
 
     assert.equal(pressed.ok, true);
@@ -196,7 +193,7 @@ test('a press opens one run, reads the confirmed rows and attributes them to the
 test('two concurrent presses on one (environment, tenant) yield one run; two tenants yield two', async () => {
   const b = bench();
   try {
-    seed(b.store);
+    seed(b);
     // The lock is a conditional insert *inside* the transaction, never a check the caller makes
     // first — so both presses reaching `beginRemoteRun` still produce one run.
     const one = b.store.remoteValidation.beginRemoteRun({
@@ -231,7 +228,7 @@ test('two concurrent presses on one (environment, tenant) yield one run; two ten
 test('a press while a run is live is refused, naming the tenant', async () => {
   const b = bench();
   try {
-    seed(b.store);
+    seed(b);
     b.store.remoteValidation.beginRemoteRun({
       goalRef: 'issue:12',
       environment: 'acceptance',
@@ -252,7 +249,7 @@ test('a press while a run is live is refused, naming the tenant', async () => {
 test('a press with nothing selected is refused 400 and opens no run', async () => {
   const b = bench();
   try {
-    seed(b.store);
+    seed(b);
     for (const rowId of [`check:${CHECK.id}`, `state:${QUERY.id}`])
       b.store.remoteValidation.setRemoteSheetRowSelected('issue:12', 'acceptance', rowId, false);
     const pressed = await b.runs.press('issue:12', 'acceptance');
@@ -268,7 +265,7 @@ test('a press with nothing selected is refused 400 and opens no run', async () =
 test('the pin: every landing reached opens the run', async () => {
   const b = bench({ contains: [[DEPLOYED, LANDED, true]] });
   try {
-    seed(b.store);
+    seed(b);
     const pressed = await b.runs.press('issue:12', 'acceptance');
     assert.equal(pressed.ok && pressed.abandoned, null);
     assert.equal(b.store.remoteValidation.listRemoteRuns()[0]?.status, 'ended');
@@ -280,7 +277,7 @@ test('the pin: every landing reached opens the run', async () => {
 test('the pin: a landing the environment no longer holds abandons, and writes no reading at all', async () => {
   const b = bench({ contains: [[DEPLOYED, LANDED, false]] });
   try {
-    seed(b.store);
+    seed(b);
     const before = b.store.remoteValidation.listRemoteSheetRows();
     const pressed = await b.runs.press('issue:12', 'acceptance');
 
@@ -303,7 +300,7 @@ test('the pin: an unknown is abandoned rather than assumed present, and says whi
   // shipped. Folding it into either arm is the quiet failure the three-valued verdict exists for.
   const b = bench({ contains: [] });
   try {
-    seed(b.store);
+    seed(b);
     const pressed = await b.runs.press('issue:12', 'acceptance');
 
     assert.equal(pressed.ok, true);
@@ -325,7 +322,7 @@ test('an environment that has moved forward still runs, where a rollback abandon
 
   const forward = bench({ heads: { acceptance: [AHEAD] }, contains: [[AHEAD, LANDED, true]] });
   try {
-    seed(forward.store);
+    seed(forward);
     const pressed = await forward.runs.press('issue:12', 'acceptance');
     assert.equal(pressed.ok && pressed.abandoned, null, 'a forward move is not a rollback');
     assert.equal(
@@ -340,7 +337,7 @@ test('an environment that has moved forward still runs, where a rollback abandon
 
   const back = bench({ heads: { acceptance: [AHEAD] }, contains: [[AHEAD, LANDED, false]] });
   try {
-    seed(back.store);
+    seed(back);
     const pressed = await back.runs.press('issue:12', 'acceptance');
     assert.match(pressed.ok ? (pressed.abandoned ?? '') : '', /gone back past/);
     assert.deepEqual(back.store.remoteValidation.listRemoteReadings(), []);
@@ -352,7 +349,7 @@ test('an environment that has moved forward still runs, where a rollback abandon
 test('an ended run is kept, and an abandoned one’s reason is readable afterwards', async () => {
   const b = bench({ contains: [[DEPLOYED, LANDED, false]] });
   try {
-    seed(b.store);
+    seed(b);
     await b.runs.press('issue:12', 'acceptance');
 
     const kept = b.store.remoteValidation.listRemoteRuns();
@@ -367,7 +364,7 @@ test('an ended run is kept, and an abandoned one’s reason is readable afterwar
 test('a later run supersedes a reading rather than deleting it', async () => {
   const b = bench();
   try {
-    seed(b.store);
+    seed(b);
     await b.runs.press('issue:12', 'acceptance');
     await b.runs.press('issue:12', 'acceptance');
 
@@ -382,7 +379,7 @@ test('a later run supersedes a reading rather than deleting it', async () => {
 test('a query approved after the sheet was assembled is read at the next press', async () => {
   const b = bench();
   try {
-    seed(b.store, 'acceptance', { approve: false });
+    seed(b, { approve: false });
     const row = () => b.store.remoteValidation.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
     assert.notEqual(row()?.blockedReason, null, 'assembled before anyone approved it here');
 
@@ -412,7 +409,7 @@ test('a press refused for want of a tenant is not refused for ever once one is s
   };
   const b = bench({ environments: [FROM_ENV], env });
   try {
-    seed(b.store);
+    seed(b, { environment: FROM_ENV });
     const refused = await b.runs.press('issue:12', 'acceptance');
     assert.equal(!refused.ok && refused.code, 400);
     assert.match(!refused.ok ? refused.error : '', /VALIDATION_TENANT/);
@@ -434,7 +431,7 @@ test('a press refused for want of a tenant is not refused for ever once one is s
 test('cancel settles an open run abandoned, so the press is never absent for good', async () => {
   const b = bench();
   try {
-    seed(b.store);
+    seed(b);
     b.store.remoteValidation.beginRemoteRun({
       goalRef: 'issue:12',
       environment: 'acceptance',
@@ -455,7 +452,7 @@ test('cancel settles an open run abandoned, so the press is never absent for goo
 test('a press writes no shortfall, no issue verdict, no WorldEvent and nothing into watch_readings', async () => {
   const answering = bench();
   try {
-    seed(answering.store);
+    seed(answering);
     const before = answering.store.world.listWorldEvents(50).length;
     await answering.runs.press('issue:12', 'acceptance');
 
@@ -472,7 +469,7 @@ test('the outcome vocabulary stays passed | failed | blocked, whatever a tenant�
   const STALE = { ...ACCEPTANCE, validate: { ...ACCEPTANCE.validate!, tenantFreshnessMs: 1 } };
   const b = bench({ environments: [STALE] });
   try {
-    seed(b.store);
+    seed(b);
     await b.runs.press('issue:12', 'acceptance');
 
     const vocabulary: RemoteRowOutcome[] = ['passed', 'failed', 'blocked'];
@@ -531,7 +528,7 @@ test('the run route is the only one here that runs a cycle, and refuses 409 and 
   const system = server();
   const { app } = await buildApp(system);
   try {
-    seed(system.store);
+    seed({ store: system.store, desk: system.remoteValidation });
     let cycles = 0;
     const ran = system.harness.runCycle.bind(system.harness);
     system.harness.runCycle = async (why: Parameters<typeof ran>[0]) => {
@@ -582,11 +579,34 @@ test('the run route is the only one here that runs a cycle, and refuses 409 and 
   }
 });
 
+test('approving a query on the sheet clears its row there and then, with no press', async () => {
+  const system = server();
+  const { app } = await buildApp(system);
+  try {
+    seed({ store: system.store, desk: system.remoteValidation }, { approve: false });
+    const row = () => system.store.remoteValidation.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
+    assert.equal(row()?.awaitingApproval, true);
+
+    const ruled = await app.inject({
+      method: 'POST',
+      url: `/api/issues/12/remote-validation/acceptance/queries/${QUERY.id}`,
+      payload: { accept: true },
+    });
+
+    assert.equal(ruled.statusCode, 200, ruled.body);
+    assert.equal(row()?.awaitingApproval, false, 'the sheet stops asking for what was just given');
+    assert.equal(row()?.blockedReason, null);
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
 test('waiving is not a route here: the sheet’s retire path is validation’s own, and a deferral is not clear', async () => {
   const system = server();
   const { app } = await buildApp(system);
   try {
-    seed(system.store);
+    seed({ store: system.store, desk: system.remoteValidation });
     const url = `/api/issues/12/validation/${CHECK.id}`;
 
     /* Retiring a check is validation's own route and settles on one press — the reason it used to

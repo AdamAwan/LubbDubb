@@ -103,7 +103,8 @@ export class RemoteRunDesk extends EventEmitter {
       return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
     }
 
-    const read = await this.readAll(environment, goalRef, run, rows, tenant.standing);
+    const confirmed = this.deps.desk.refresh(goalRef, environment).filter((r) => r.selected);
+    const read = await this.readAll(environment, goalRef, run, confirmed, tenant.standing);
 
     // The deterministic rows are read here, synchronously and under the pin: they are read-only,
     // consented and cheap, and the agent is for the browser half. The run the rule dispatches for is
@@ -114,7 +115,7 @@ export class RemoteRunDesk extends EventEmitter {
     // names neither, and one the agent drives itself at the browser names none of the three — a press
     // counting selectors alone would settle that run on the spot with its whole browser half still
     // owed, which is a press that quietly did less than it said.
-    const owed = owedToAgent(store, environment, goalRef, rows);
+    const owed = owedToAgent(store, environment, goalRef, confirmed);
     if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
 
     const endedSha = await this.deployedSha(environment);
@@ -139,7 +140,6 @@ export class RemoteRunDesk extends EventEmitter {
       !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
     )
       return { ok: false, code: 404, error: `no validation sheet is assembled for this goal on "${environmentName}".` };
-    this.refold(goalRef, environment);
 
     const rows = store.remoteValidation
       .listRemoteSheetRows()
@@ -153,20 +153,6 @@ export class RemoteRunDesk extends EventEmitter {
           'nothing — take a row back first.',
       };
     return { ok: true, environment, rows };
-  }
-
-  /** A fresh fold's causes onto the rows already on the sheet; `selected` and `matched` are kept. */
-  private refold(goalRef: string, environment: EnvironmentConfig): void {
-    const { remoteValidation } = this.deps.store;
-    const fresh = new Map(this.deps.desk.fold(environment, goalRef).map((r) => [r.rowId, r]));
-    const rows = remoteValidation
-      .listRemoteSheetRows()
-      .filter((r) => r.goalRef === goalRef && r.environment === environment.name && fresh.has(r.rowId))
-      .map(({ goalRef: _goal, environment: _env, ...row }) => {
-        const { blockedReason, awaitingApproval, idleReason } = fresh.get(row.rowId)!;
-        return { ...row, blockedReason, awaitingApproval, idleReason };
-      });
-    remoteValidation.saveRemoteSheetRows(goalRef, environment.name, rows);
   }
 
   /** @public the seam the cancel route settles a run an operator abandoned by hand through */
