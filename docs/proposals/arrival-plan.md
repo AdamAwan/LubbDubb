@@ -196,6 +196,36 @@ Close it by making instrumentation part of the plan, not a hope:
 Steps 1 and 2 use mechanisms that exist: part acceptance, `watch_declare`, and the plan's refusals.
 Step 4 is `presence` read per environment, as today.
 
+### When a signal turns out wrong
+
+Signals are first written at planning, amended by the working agent at conclude time, and editable by
+the operator at any point ([29](../spec/29-post-deploy-watch.md#who-writes-it-and-when)). The hard case
+is finding out after arrival that one is wrong. There are two kinds:
+
+- **The query is wrong, the data is there.** It filters on the wrong event, or reads the wrong
+  field. Today an edit clears the check's readings, and a check declared after an arrival is not
+  watched in that environment at all
+  ([29](../spec/29-post-deploy-watch.md#only-for-an-arrival-the-harness-watched)), so the fix waits
+  for the next environment.
+- **The code does not log what is needed.** That is a defect in the work. It is filed as a bug from
+  the plan's exception row, and the new telemetry arrives with the next deploy.
+
+Three changes make the first case cheap:
+
+1. **An edit re-reads from arrival.** Every watch query already carries `{since}`, so a corrected
+   query in an environment the goal has reached restarts that check's readings from the arrival
+   time, inside the same window, rather than waiting for another environment. Only the edited check
+   is re-read; the edit is an approval change for this environment, so it comes back to the page as
+   the one new row to OK.
+2. **A measure whose query changed after arrival says what it lost.** Its baseline was read before
+   the work arrived and cannot be retaken. It falls back to its absolute threshold if it has one, or
+   to the reading the same query took in the previous environment the goal passed through, and the
+   row says which. With neither, it reads `unknown`, as a measure with no baseline does today.
+3. **The first environment is the rehearsal.** A signal whose presence never answers there, or that
+   answers but never once matches anything, is raised as an exception in that environment: _"this
+   signal has seen 4,000 runs and matched nothing. Is it asking the right question?"_ The fix is made
+   before the work reaches the environment that matters.
+
 ### A `why` on every check
 
 Validation checks gain a `why`, written by the check-set author beside `satisfies`. The author is
@@ -241,5 +271,7 @@ Each of these is a current invariant the design has to carry through unchanged:
 4. **`why` on checks.** Column with an `ensureColumns` entry, the authoring note, the page.
 5. **Watch until evidence.** `until.runs` and `until.within` on the plan's watch block, the count read
    from presence, and settling on whichever comes first.
-6. **Owed telemetry.** The part link on watch checks, the plan refusal, the conclude requirement and
+6. **Fixing a signal after arrival.** Re-read from arrival on an edit, the baseline fallback, and the
+   first-environment rehearsal exception.
+7. **Owed telemetry.** The part link on watch checks, the plan refusal, the conclude requirement and
    the review note.
