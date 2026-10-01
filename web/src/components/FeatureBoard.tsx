@@ -227,6 +227,7 @@ function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitAct
         <BareButton
           key={m}
           usage="feature.filter"
+          logs={m !== mode}
           aria-pressed={m === mode}
           className={m === mode ? 'cn-fb-mode-on' : ''}
           title={
@@ -274,6 +275,7 @@ function DensityControl({
       <Button
         size="small"
         usage="feature.filter"
+        logs={rows}
         ghost={rows}
         aria-pressed={!rows}
         title="Every Feature in full — its account, its progress and where it has reached"
@@ -284,6 +286,7 @@ function DensityControl({
       <Button
         size="small"
         usage="feature.filter"
+        logs={!rows}
         ghost={!rows}
         aria-pressed={rows}
         title="One line each — the name and how far along it is, with the card you open still drawn in full"
@@ -311,6 +314,7 @@ function SortControl({ sort, actions }: { sort: FeatureSort; actions: CockpitAct
           key={s}
           size="small"
           usage="feature.filter"
+          logs={s !== sort}
           ghost={s !== sort}
           aria-pressed={s === sort}
           onClick={() => actions.setFeatureQuery({ featureSort: s })}

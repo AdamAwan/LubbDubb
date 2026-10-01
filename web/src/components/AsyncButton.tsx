@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { BareButton, buttonClass } from './button.js';
 import type { ButtonLook, Usage } from './button.js';
+import type { ControlUsage } from '../types.js';
+import { logControl, placeNow } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -71,7 +73,15 @@ export function useAsyncAction(): {
   return { phase, refusal, run };
 }
 
+/** → docs/spec/34-usage-metrics.md#every-button-names-its-event */
+export async function actThenLog(usage: ControlUsage, act: () => Promise<unknown> | unknown): Promise<void> {
+  const at = placeNow();
+  await act();
+  logControl(usage, at);
+}
+
 export function AsyncButton({
+  usage,
   onClick,
   onRefused,
   children,
@@ -96,6 +106,8 @@ export function AsyncButton({
   return (
     <BareButton
       {...rest}
+      usage={usage}
+      logs={false}
       className={cls}
       title={refusal ?? rest.title}
       disabled={disabled || phase === 'pending'}
@@ -103,7 +115,7 @@ export function AsyncButton({
       onClick={() =>
         void run(async () => {
           try {
-            return await onClick();
+            await actThenLog(usage, onClick);
           } catch (err) {
             onRefused?.(refusalText(err));
             throw err;
@@ -127,6 +139,7 @@ export function AsyncButton({
 
 export function SubmitButton({
   usage,
+  logs,
   phase,
   children,
   tone,
@@ -135,6 +148,7 @@ export function SubmitButton({
   className,
 }: {
   phase: AsyncPhase;
+  logs?: boolean;
   children: ReactNode;
 } & ButtonLook &
   Usage) {
@@ -142,6 +156,7 @@ export function SubmitButton({
   return (
     <BareButton
       usage={usage}
+      logs={logs}
       type="submit"
       className={cls}
       disabled={phase === 'pending'}

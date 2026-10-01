@@ -73,7 +73,7 @@ test('a button cannot be drawn without naming its usage event', () => {
   createElement(Button, { usage: { counted: 'plan.view' }, children: 'Open' });
 });
 
-test('a press logs a ui event, and only a ui event', () => {
+async function withPosted(fn: (posted: string[]) => Promise<void> | void): Promise<void> {
   const posted: string[] = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (_url: string, init?: RequestInit) => {
@@ -81,6 +81,14 @@ test('a press logs a ui event, and only a ui event', () => {
     return new Response('{}');
   }) as typeof fetch;
   try {
+    await fn(posted);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+test('a press logs a ui event, and only a ui event', () =>
+  withPosted((posted) => {
     let handled = 0;
     const press = (usage: Parameters<typeof BareButton>[0]['usage']) => {
       const element = BareButton({ usage, onClick: () => void handled++ });
@@ -93,9 +101,22 @@ test('a press logs a ui event, and only a ui event', () => {
     assert.equal(posted.length, 1);
     assert.match(posted[0] ?? '', /"subject":"pr-description","verb":"accept"/);
     assert.equal(handled, 1000, 'the caller’s own handler still runs on every press');
-  } finally {
-    globalThis.fetch = realFetch;
-  }
+  }));
+
+test('an async press logs only once its act has resolved', async () => {
+  const { actThenLog } = await import('../web/src/components/AsyncButton.js');
+  await withPosted(async (posted) => {
+    for (let i = 0; i < 500; i++) {
+      await assert.rejects(
+        actThenLog('pr-description.accept', () => Promise.reject(new Error('refused'))),
+        /refused/,
+      );
+    }
+    for (let i = 0; i < 499; i++) await actThenLog('pr-description.accept', () => undefined);
+    assert.equal(posted.length, 0, 'a refused act is not the act, so 500 refusals and 499 successes fill no batch');
+    await actThenLog('pr-description.accept', () => undefined);
+    assert.equal(posted.length, 1);
+  });
 });
 
 test('no surface writes a button family of its own', () => {

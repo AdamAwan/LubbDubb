@@ -338,6 +338,7 @@ function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
     <span className={above ? 'cn-why cn-why-above' : 'cn-why'} ref={at} onMouseEnter={place} onFocus={place}>
       <BareButton
         usage="reason.expand"
+        logs={why !== null}
         className={`cn-why-mark${tone}`}
         aria-label={label === undefined ? 'Why this row is here' : `${label} — what this means`}
         aria-disabled={why === null ? true : undefined}

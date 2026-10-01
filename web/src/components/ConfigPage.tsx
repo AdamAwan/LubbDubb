@@ -152,6 +152,7 @@ function ConfigTabs({
         <BareButton
           key={entry.id}
           usage="config.filter"
+          logs={tab !== entry.id}
           role="tab"
           aria-selected={tab === entry.id}
           className={`cfg-tab${tab === entry.id ? ' on' : ''}`}

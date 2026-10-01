@@ -185,6 +185,7 @@ function InsightsTabs({
       {tabs.map((t) => (
         <BareButton
           usage="insights.filter"
+          logs={t.id !== view}
           key={t.id}
           role="tab"
           aria-selected={t.id === view}
@@ -223,6 +224,7 @@ function InsightsBar({
         {SCOPES.map((s) => (
           <BareButton
             usage="insights.filter"
+            logs={s.key !== scope}
             key={s.key}
             aria-pressed={s.key === scope}
             className={s.key === scope ? 'on' : ''}
@@ -260,6 +262,7 @@ function WindowBar({
         {WINDOWS.map((w) => (
           <BareButton
             usage="insights.filter"
+            logs={w.key !== chosen}
             key={w.key}
             aria-pressed={w.key === chosen}
             className={w.key === chosen ? 'on' : ''}

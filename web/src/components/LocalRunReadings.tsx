@@ -130,7 +130,7 @@ export function MessageForm({ onMessage }: { onMessage: (text: string) => Promis
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <SubmitButton phase={send.phase} usage="agent.send">
+        <SubmitButton phase={send.phase} usage="agent.send" logs={text.trim() !== ''}>
           Send
         </SubmitButton>
       </div>

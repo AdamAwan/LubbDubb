@@ -41,7 +41,8 @@ export function QuestionnaireModal({
                 {q.options.map((o) => (
                   <BareButton
                     key={o}
-                    usage={{ counted: 'escalation.accept' }}
+                    usage="escalation.edit"
+                    logs={answers[i]?.trim() !== o}
                     className={`qn-opt${answers[i]?.trim() === o ? ' picked' : ''}`}
                     title="Fills the box below — edit it if you want to qualify the answer"
                     onClick={() => setAnswer(i, o)}

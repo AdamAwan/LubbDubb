@@ -146,6 +146,7 @@ function ViewSwitch({
           <BareButton
             key={option.value}
             usage="ticket.filter"
+            logs={option.value !== query.view}
             className={option.value === query.view ? 'on' : ''}
             disabled={states.length === 0 && option.value === 'card'}
             aria-pressed={option.value === query.view}
@@ -240,6 +241,7 @@ function StateTier(
       {!columns && (
         <BareButton
           usage="ticket.filter"
+          logs={props.value !== 'any'}
           className={props.value === 'any' ? 'on' : ''}
           onClick={() => props.onPick(null)}
           aria-pressed={props.value === 'any'}
@@ -352,6 +354,7 @@ function Segment<T extends string>({
           <BareButton
             key={option.value}
             usage="ticket.filter"
+            logs={option.value !== value}
             className={option.value === value ? 'on' : ''}
             title={option.title}
             aria-pressed={option.value === value}

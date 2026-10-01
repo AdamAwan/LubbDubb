@@ -250,7 +250,7 @@ function VerdictRow({
       {overrulable && (
         <AsyncButton
           ghost
-          usage={{ counted: 'goal.accept' }}
+          usage="goal.reject"
           disabled={text.trim().length === 0}
           title={
             text.trim().length === 0

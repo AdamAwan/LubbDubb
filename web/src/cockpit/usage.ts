@@ -18,8 +18,12 @@ export function logUsage(event: UiUsageEvent, at?: PlaceKey): void {
   }
 }
 
-export function logControl(usage: ControlUsage): void {
-  if (typeof usage === 'string') logUsage(usage);
+export function logControl(usage: ControlUsage, at?: PlaceKey): void {
+  if (typeof usage === 'string') logUsage(usage, at);
+}
+
+export function placeNow(): PlaceKey {
+  return place;
 }
 
 let place: PlaceKey = 'overview';
