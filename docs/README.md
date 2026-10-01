@@ -46,7 +46,10 @@ discussed**. It is not a description of the application and must not be read as 
 work it argues for lands, the reasoning that is still load-bearing moves into the spec document that
 owns the behaviour and the proposal is **deleted by that change**, for the reason build plans are —
 two documents describing the application, and a reader cannot tell by looking which is true. A
-proposal that is declined is deleted too; the rest is in the git history. One is open: [`proposals/arrival-plan.md`](proposals/arrival-plan.md), widening the validation sheet into one page per environment, covering checks, queries and the post-deploy watch, that an operator answers once.
+proposal that is declined is deleted too; the rest is in the git history. Three are open: [`proposals/arrival-plan.md`](proposals/arrival-plan.md), one validation page per
+environment that an operator answers once, and two follow-ups to it,
+[`proposals/watch-length.md`](proposals/watch-length.md) and
+[`proposals/owed-telemetry.md`](proposals/owed-telemetry.md).
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same
