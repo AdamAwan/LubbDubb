@@ -202,3 +202,13 @@ function describeAmendmentFor(store: Store, amendment: PlanAmendment): string {
     warnings: amendmentWarnings(store.plans.listPlanParts(amendment.planId), declared),
   });
 }
+
+export function mergeEscalation(action: ValidatedAction & { type: 'merge_pr' }, preamble: string) {
+  const named = action.title ? `PR #${action.prNumber} "${action.title}"` : `PR #${action.prNumber}`;
+  const by = action.approvals?.length ? `approved by ${action.approvals.map((a) => a.by).join(', ')}` : 'approved';
+  return {
+    type: 'approve_change' as const,
+    prompt: `${preamble}${named} is green, ${by} and mergeable. Approve merging it (method: ${action.method})?`,
+    context: { prNumber: action.prNumber, method: action.method, prTitle: action.title, approvals: action.approvals },
+  };
+}

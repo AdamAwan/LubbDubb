@@ -10,7 +10,6 @@ import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js'
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
-import { mergeEscalation } from './mergeAsk.js';
 import { readyingBreakdown, type ReadyingBoard, type ReadyingHold } from './readying.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
@@ -29,6 +28,7 @@ import type { Action, CheckDecline, DecisionOutcome, Proposal, ProposalKind, Tas
 import type { FeatureBoardFacts } from '../featureSummaries/featureRecord.js';
 import { ciEvidenceFor, dispatchPrompt, type DispatchAction } from './dispatchBriefing.js';
 import {
+  mergeEscalation,
   proposePlan,
   proposePlanAmendment,
   proposeShortfall,

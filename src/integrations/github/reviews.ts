@@ -1,10 +1,10 @@
 import type { PrApproval } from '../../types.js';
 import type { GhReview } from './githubApi.js';
 
-// → docs/spec/07-pull-requests.md#what-a-merge-ask-shows
+// → docs/spec/15-integrations.md, docs/spec/07-pull-requests.md#what-a-merge-ask-shows
 
 export function viewerApproved(reviews: GhReview[], viewer: string): boolean {
-  return viewer !== '' && latestVerdicts(reviews).find((r) => r.reviewerLogin === viewer)?.state === 'APPROVED';
+  return viewer !== '' && standingApprovals(reviews).some((a) => a.by === viewer);
 }
 
 function latestVerdicts(reviews: GhReview[]): GhReview[] {
