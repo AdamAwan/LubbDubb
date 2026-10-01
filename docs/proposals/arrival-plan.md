@@ -39,7 +39,8 @@ When a goal's work arrives in an environment, the operator should be shown one t
 
 The operator presses **OK** once. The harness then runs everything on that sheet and says nothing more
 unless something needs a person. The goal page shows one status per environment: _Preparing_,
-_Needs you_, _Queued_, _Running_, _Watching, 212 of 500 runs_, _Clear_ or _Nothing to check_.
+_Needs you_, _Queued_, _Running_, _Watching, 212 of 500 runs_, _Regressed_, _Couldn't read_,
+_Clear_, _Not validating here_ or _Nothing to check_.
 
 That is the whole proposal. The rest of this document is what has to change for that sheet to be
 true, and what must not break on the way.
@@ -83,6 +84,13 @@ The object is today's **sheet** ([36](../spec/36-remote-validation.md#the-sheet)
 that declares `validate` **or** `observe`. Query rows are labelled `q1…` and watch rows `r1…`, so no
 letter is shared with a check's.
 
+Only the validate half is stored. The **watch section**, and the whole page on an environment with
+`observe` and no `validate`, are a read-time projection of the goal's watch checks and its
+`watch_windows` row: no `remote_sheets` row, no `goal_arrivals.sheeted_at` stamp, and nothing
+`RemoteValidationDesk` assembles. That keeps the desk's early return and its stamping rules exactly
+as they are ([36](../spec/36-remote-validation.md#the-desk)). _Preparing_ applies to the validate
+sections only.
+
 | Section                | Rows from                                                    | Run by                           | Needs the OK |
 | ---------------------- | ------------------------------------------------------------ | -------------------------------- | ------------ |
 | Prove it works         | checks whose first step a carrier here can run               | the environment's browser runner | yes          |
@@ -100,7 +108,9 @@ letter is shared with a check's.
   Every sheet lists it in the same _Also yours on this goal_ section, marked done once it is; it is
   never repeated as work per environment, and it does not depend on which environment arrives first.
   A check whose fleet steps are cut by an inline person step stays in _Prove it works_ with a
-  _then you:_ line at the boundary, exactly as `segmentBoundary` already splits it.
+  _then you:_ line at the boundary, exactly as `segmentBoundary` already splits it. Today `sheetRows`
+  puts every non-declined check on every sheet as a `check` row; it now leaves person-first checks
+  out, so the press and `idle_reason` stop counting rows nobody can run there.
 - **A check whose steps no environment can carry** is still handed to the fleet from the Validate
   pane, as today. Nothing here narrows hand-over.
 
@@ -123,10 +133,11 @@ The OK happens in two steps, because the dry runs it needs are spawns of up to t
 and cannot sit inside a database transaction:
 
 1. **The dry runs.** Every `state` query on the sheet not yet approved here is dry-run against this
-   environment, as today's approve call does. Each result is returned and drawn on its row.
+   environment, as today's approve call does, and every pending agent watch proposal on the sheet
+   is dry-run as its accept does today, taking its baseline. Each result is drawn on its row.
 2. **The write**, in one transaction: the set's release if still open; approval, keyed
-   `(query digest, environment)`, of every query whose dry run answered properly; acceptance of any
-   pending agent watch proposals on the sheet; and an **intent** to run the browser rows.
+   `(query digest, environment)`, of every query whose dry run answered properly; acceptance of the
+   watch proposals that dry-ran properly; and an **intent** to run the browser rows.
 
 A query whose dry run fails, or answers the wrong shape, is not approved. It is a `blocked` row with
 **Retry dry run** beside it, and nothing else on the sheet waits for it.
@@ -137,15 +148,25 @@ names the place and shows the text:
 - _Consent to a place is not transferable._ The OK is per environment. Approving testUk approves
   nothing on liveUk.
 - _Nothing runs an unapproved query, ever_ ([36](../spec/36-remote-validation.md#what-it-is-not)). No
-  query runs on this environment before the OK. Before it, the sheet shows the query text and, where
+  query that is not already approved here runs on this environment before the OK. A query approved
+  here for an earlier goal still runs at assembly, as today. Before the OK, the sheet shows the query text and, where
   one exists, the plan-submission dry run — taken on the first environment with a `state.run` (for
   `state`) or an `observe` (for the watch), usually before the work deployed — labelled with where and
   when it ran.
 - _Starting browser runs automatically spends on arrivals nobody reads._ The OK is the press.
 
 **An OK covers the sheet as it was shown**: the set revision, the query digests and the rows on it.
-Anything new — a re-authored set, an edited query, an amended check, a new agent proposal — returns
-the sheet to _Needs you_ with only the new rows marked. Nothing is pressed twice without a press.
+Anything new — a re-authored set, an edited query, an amended check — returns the sheet to _Needs
+you_ with only the new rows marked; nothing runs on a stale OK. A sheet is never reassembled today
+([36](../spec/36-remote-validation.md#the-desk)), so this needs a **row re-sync**: when the set's
+revision moves, the desk adds rows for new checks and marks dropped ones, keeping the readings of
+rows that did not change.
+
+**Agent watch proposals are goal-wide and never hold anything.** Accepting one on testUk changes what
+liveUk's window reads too, so the row says so. A new proposal is drawn on the sheet but does not
+return it to _Needs you_ and does not count toward the `validate` row's holds — that would hold the
+close-out on the watch. A proposal accepted after the work has deployed takes its baseline from
+post-change data, so it is drawn with the baseline-lost line (_below_).
 
 **Change something** opens the rows for the verbs that exist today: **send the checks back** (the
 whole-set reject, [20](../spec/20-validation.md#when-an-operator-sends-a-check-set-back)), decline a
@@ -153,6 +174,12 @@ check, waive with a reason, deselect for this environment, edit a query, reseed.
 on the check, so it is goal-wide, and the sheet says so. Declining every remaining check is refused
 here and offered as _send the checks back_ instead, so a released set of nothing never reads like a
 set declared empty on purpose ([20](../spec/20-validation.md#declining-a-single-row)).
+
+**Not validating here** is a sheet-level verb, with a required note: this environment will not be
+validated for this goal. It clears both of the `validate` row's new holds for that environment, the
+way the gate's _not waiting on an environment_ release clears a gate. Without it, a sheet on an
+environment the operator never means to use, or an intent waiting on a tenant nobody will configure,
+would hold the close-out for good.
 
 **A group** is a page per member, as today. _OK for all of `liveGroup`_ is offered only when every
 member has arrived and their rows, queries and tenants are identical; it still dry-runs on each.
@@ -174,6 +201,9 @@ Its life:
   writes one abandoned row, not one per pulse.
 - **Withdraw OK** removes it while it is still queued.
 
+The intent's columns sit in the new table's `CREATE`; later columns need `ensureColumns` entries like
+any other table.
+
 ### After the OK
 
 `RemoteValidationDesk` gains the arm that carries the intent out. It stays where it is, in
@@ -181,22 +211,25 @@ Its life:
 writes the `pending` row a rule reads — which is why it is not in `src/environments/`
 ([24](../spec/24-environments.md#the-desk)).
 
-| What         | Happens                                                                                                    |
-| ------------ | ---------------------------------------------------------------------------------------------------------- |
-| The pin      | Taken first, as today's press takes it. If the work is not in the deployed commit, nothing below runs.     |
-| `state` rows | Run under the pin.                                                                                         |
-| Browser rows | A `pending` run is opened when the `(environment, tenant)` lock is free. Until then: _Queued behind #398_. |
-| No tenant    | The intent waits; the row is `blocked` naming the variable or command that would supply one.               |
-| Watch        | Unchanged: the window opened on arrival and reads on its own clock.                                        |
+The arm does **one** thing: when the `(environment, tenant)` lock is free, it calls today's press
+**unchanged** — lock, pin, open the run, run the `state` rows, count what the run owes its agent
+([36](../spec/36-remote-validation.md#the-press)). While the lock is held it does nothing and the
+sheet reads _Queued behind #398_. It never takes the pin itself, so a run queued for hours opens on a
+fresh pin, and the press stays the only writer of a run row. With no tenant the intent waits, and the
+row is `blocked` naming the variable or command that would supply one. The watch is untouched: its
+window opened on arrival and reads on its own clock.
 
 ### Where the operator hears about it
 
 **Validation** stays on the goal's existing **`validate` bench row**, so `arrival.opens` and
-`watch.holds`, which name it, keep working. It keeps **today's settle rule** — it settles when nothing
-is left for a person ([20](../spec/20-validation.md#saying-so-on-the-bench)) — with two additions that
-keep it open: a sheet still awaiting its OK, and a run queued or running. That is what keeps the
-close-out behind the checks, as [24](../spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time)
-requires. Its detail lists, per environment:
+`watch.holds`, which name it, keep working. Today it is filed, kept and settled on one count: what is
+owed to a person (`owedToAPerson`, `src/validation/ready.ts`). That count gains three things, in the
+file, settle and reopen arms alike: a sheet awaiting its OK, an intent queued or a run running, and
+an unresolved failure on an environment. Holds added only to a row that already exists would hold
+nothing on the environment where every check had already passed elsewhere — liveUk's sheet would wait
+for an OK nobody was asked for. That is what keeps the close-out behind the checks, as
+[24](../spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time) requires. Its detail lists,
+per environment:
 
 - a check `failed` (rule `validation-failed` still runs), with **Raise a bug**;
 - a `blocked` row: no tenant, no runner, a dry run that failed, an edit not yet OK'd;
@@ -207,21 +240,28 @@ requires. Its detail lists, per environment:
 - person checks still owed.
 
 **A failure after the row was settled** — liveUk failing a week after the operator marked the row
-done — must not fold silently onto a settled row ([13](../spec/13-jobs-and-tickets.md)). It files a
-new `validate` row for that environment.
+done — must not fold silently onto a settled row ([13](../spec/13-jobs-and-tickets.md)). Today rows
+are keyed by title, one per goal. They become keyed `(goal, environment | null)`: the goal-wide row
+keeps a null environment and today's title, and a late failure files a **separate** row titled for
+that environment.
+If the close-out is already filed or done, it is not retracted, and nothing filed after it re-holds
+it: the late row stands alone.
 
-**The watch** stays on the **`watch` row**, for every environment, unchanged, and is mirrored on the
-sheet. It is deliberately not on the `validate` row: there it would hold the close-out on the watch,
+**The watch** stays on the **`watch` row**, for every environment, and is mirrored on the sheet. It is deliberately not on the `validate` row: there it would hold the close-out on the watch,
 which [29](../spec/29-post-deploy-watch.md#it-holds-nothing-unless-asked) forbids. `watch.holds` keeps
 today's rule, including that a settled `unknown` clears it.
 
-**An `unknown` files in two cases only**, both on the `watch` row:
+**The `watch` row gains two `unknown` arms.** Today an `unknown` files nothing
+([29](../spec/29-post-deploy-watch.md#the-bench-row), [13](../spec/13-jobs-and-tickets.md)), and a
+settled window is never read again, so the filing happens in a new step **at settle**, after the
+window is settled and before the pass files anything else. It files in two cases only:
 
 - the observation itself failed for the whole window — the command, the credential, the store;
 - a check with `emittedBy` settled with its presence never having answered: _part 2 was meant to log
   this, and testUk never saw it_.
 
-A presence of zero on an environment where the path never runs, or an evidence target not met, files
+Its wording is its own: _the watch could not answer_, with **Raise a bug** for an `emittedBy` check,
+never _Done means not a regression_. A presence of zero on an environment where the path never runs, or an evidence target not met, files
 nothing, as `unknown` files nothing today ([29](../spec/29-post-deploy-watch.md#the-bench-row)). Those
 are the normal state of an acceptance environment, and filing them would put every goal on the rail.
 
@@ -232,17 +272,26 @@ detail ([29](../spec/29-post-deploy-watch.md#it-holds-nothing-unless-asked)).
 
 ### What it replaces
 
-| Today                                        | In this design                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------ |
-| Sheet                                        | **Kept**, widened: reasons, the watch section, person checks, the OK.    |
-| Sheet `signal` / `measure` rows and readings | **Removed.** The sheet draws the watch window's own readings.            |
-| Per-environment approval of watch queries    | **Removed** with them. It gated only those rows.                         |
-| Per-environment approval of `state` queries  | Folded into OK. The `(digest, environment)` table stays.                 |
-| Accepting an agent's watch declaration       | Drawn on the sheet and accepted by its OK, as well as where it is today. |
-| Press                                        | Folded into OK, carried out by the desk when the lock is free.           |
-| Check-set accept card                        | **Kept.** The OK also accepts it when still open.                        |
-| `validate` bench row                         | **Kept**, today's settle rule plus two holds; per-environment detail.    |
-| `watch` bench row                            | **Kept**, unchanged, for every environment.                              |
+| Today                                        | In this design                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| Sheet                                        | **Kept**, widened: reasons, the watch section, person checks, the OK.     |
+| Sheet `signal` / `measure` rows and readings | **Removed.** The sheet draws the window's readings; see _Retiring them_.  |
+| Per-environment approval of watch queries    | **Removed** with them. It gated only those rows.                          |
+| Per-environment approval of `state` queries  | Folded into OK. The `(digest, environment)` table stays.                  |
+| Accepting an agent's watch declaration       | Also drawn on the sheet and accepted by its OK; goal-wide; holds nothing. |
+| Press                                        | Folded into OK, carried out by the desk when the lock is free.            |
+| Check-set accept card                        | **Kept.** The OK also accepts it when still open.                         |
+| `validate` bench row                         | **Kept**; its owed count gains three things; a late row per environment.  |
+| `watch` bench row                            | **Kept**, for every environment; gains two `unknown` arms at settle.      |
+
+**Retiring them.** Environments already declare `permits: ["signal", "measure"]`, and
+`validatePermits` refuses an unknown kind at boot (`src/environments/policy.ts`), so deleting the
+names would stop those deployments starting. Both stay accepted and are ignored with a warning, the
+way a retired tool name answers rather than vanishing
+([11](../spec/11-mcp-tools.md#retired-tools)); a `permits` that held only those two is read as
+permitting no validate rows — the environment's page is its watch alone — rather than refused as
+empty. The watch section depends on `observe`, never on `permits`. A one-off
+migration deletes existing `signal` and `measure` sheet rows and their readings.
 
 Untouched: local validation ([32](../spec/32-local-validation.md)), environment gates, `arrival.opens`,
 `watch.holds`, fleet hand-over.
@@ -268,20 +317,32 @@ endpoint has plenty after one. What the operator wants to know is whether the ch
   code_ runs, which the ticket knows and the deployment does not.
 - **`count` is a third kind in `WatchSchema`**, beside `signal` and `measure`. It returns one row and
   one number, is exempt from the tail refusal that stops a signal aggregating, carries `{since}`, is
-  dry-run with the others and approved with the plan like them. A reading that fails is `unknown`
+  dry-run with the others — exempt from the dry run's one-row-one-number refusal (`scalarShaped`),
+  which is exactly its shape — and approved with the plan like them. A reading that fails is `unknown`
   with that reason; the sheet shows the count with the time it was read, never a stale number as if
   current. A window that never got a count reading settles at `forMs` as `unknown`.
 - **Settling on evidence checks after the read.** The pass is open → settle → read today
   ([29](../spec/29-post-deploy-watch.md#the-window)); a window whose target is met by this pass's
-  reading is settled at the end of the same pass, so evidence costs no extra interval.
+  reading is settled at the end of the same pass, before anything is filed, so evidence costs no
+  extra interval and the row describes the settled window.
 - **Extend** is offered only on a window that ran out of time. One that met its target is done.
 
 **Long windows need bounded reads**, for every kind, not just `count`. A signal or presence query
 returns a row per occurrence since `{since}`; read from arrival over three weeks, that is thousands of
 rows on every reading and a thirty-second kill that turns it `unknown`. So on a window longer than 48
-hours, signal and presence readings take `{since}` as the previous reading's time and the window keeps
-their running total, and the window is read every `watchIntervalMs` for its first 48 hours and every
-six hours after — about 170 readings per check over three weeks.
+hours, signal and presence readings take `{since}` as the previous reading's time, and the window is
+read every `watchIntervalMs` for its first 48 hours and every six hours after — about 170 readings per
+check over three weeks.
+
+The **verdict must then fold running totals**, not the newest reading. Today it reads only the newest
+reading per check and compares its row count against `tolerate`, with presence at zero rows meaning
+`unknown` (`src/environments/watchVerdict.ts`). On six-hour slices a weekly job's presence is zero in
+most of them, and a regression in one slice clears in the next. So each check carries
+`total_matched` and `total_presence` on its window (columns with `ensureColumns` entries): a signal is
+judged on its total against `tolerate`, and presence counts as answered once its total since arrival
+is above zero. An edit to the query resets both; an extend that takes a window past 48 hours seeds
+them from the last cumulative reading. The **baseline** reads at most 48 hours back, whatever
+`forMs` is, so a three-week window does not make its baseline a three-week read.
 
 ### Making sure the telemetry exists
 
@@ -319,7 +380,8 @@ that one is wrong is two different problems:
   ([29](../spec/29-post-deploy-watch.md#closing)). So add **Re-read** on a settled window: an
   operator's click, as extend is, that re-opens the **whole window** — it is still read whole, one row
   per `(goal, environment)` — with the edited checks read back from arrival and the verdict it fixed
-  still drawn beside the new readings.
+  still drawn beside the new readings. On a long window the edited checks walk forward from arrival
+  in 48-hour slices over successive passes, so the re-read is never one read over weeks.
 - **The code does not log what is needed.** That is a defect in the work: **Raise a bug** from the
   `watch` row, and the telemetry arrives with the next deploy.
 
@@ -378,14 +440,17 @@ appended to the authoring prompt. A check written before the field shows its `sa
 
 1. **The widened sheet and the OK**, together with **dropping the sheet's watch rows** and their
    per-environment approvals, so nothing on the sheet is left needing an approval it no longer has a
-   button for. `remote_run_intents` (new table), the desk arm, Withdraw OK, Retry dry run, the
-   `validate` row's two new holds and its per-environment detail.
+   button for: the retired `permits` names and the row-deleting migration; `remote_run_intents` (new
+   table); the desk arm calling the press; Withdraw OK, Retry dry run, Not validating here; the row
+   re-sync; `sheetRows` leaving person-first checks out; the `validate` row's owed count, keying and
+   late row.
 2. **Agent watch proposals on the sheet**, accepted by the OK.
 3. **`rationale` on checks.** Column with an `ensureColumns` entry, the plan-document field, the
    tools, the appended note.
 4. **Owed telemetry.** `emittedBy` (column, `ensureColumns` entry), the presence-zero exemption, the
-   appended notes, the _not seen yet_ line, the `emittedBy` arm of `unknown` filing.
-5. **Bounded long windows.** Incremental signal and presence reads with running totals; the backed-off
-   cadence.
+   appended notes, the _not seen yet_ line, the filing step at settle with both `unknown` arms.
+5. **Bounded long windows.** Incremental signal and presence reads; `total_matched` and
+   `total_presence` with `ensureColumns` entries and the verdict folding them; the backed-off cadence;
+   the 48-hour baseline cap.
 6. **Watch until evidence.** The `count` kind, `watch.untilEvidence`, settling after the read.
 7. **Re-read a settled window**, and the baseline-lost line.
