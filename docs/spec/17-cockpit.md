@@ -1309,7 +1309,8 @@ Order on the page, top to bottom:
 
 1. **The goal header**, in two rows with fixed roles — what the goal _is_ and what anybody has decided
    about it on one line, then what you can do to it ([The header](#the-header)).
-2. **The ask rows** — every open ask on this goal, one row each. A row is all one press and opens the
+2. **The ask rows** — every open ask on this goal, one tile each, laid out as a grid
+   ([the ask rows are tiles](#the-ask-rows-are-tiles)). A row is all one press and opens the
    ask panel, which is where the whole of an ask already lives. Red for asks blocking an agent, amber
    for the operator's own, the rail's own split carried over so a row and the ask it opens read the
    same. **A goal with no ask draws no row at all** — a strip that is sometimes furniture stops being
@@ -2401,6 +2402,20 @@ and pressing the row draws the same full `NeedsBand` card directly under it, wit
 did, because the row and the card read the same `needBody`. The card's own **Open** still takes the
 ask to the panel. The open state is the row's own and not on `Place`: it is a disclosure, like a
 `<details>`, not where the operator is.
+
+#### The ask rows are tiles
+
+A row drawn the full width of the page put its answer — `✓ <proposed>`, **Change…**, the verb — at
+the far edge from the text that asks the question; on a wide monitor that is well over a thousand
+pixels between reading an ask and answering it. So `.cn-asklines` is a grid of tiles, each at least
+340px and as many to a line as fit, and inside a tile the row wraps: symbol, kind and age on the
+first line, the ask's one-line summary wrapped over as many lines as it needs rather than cut at
+the tile's edge, and the answer or verb under it. The answer is always within a tile's width of the
+question, at any screen width; on a narrow one the grid is one column.
+
+A row opened in place ([a row opens in place](#a-row-opens-in-place)) **spans the whole line**
+(`cn-needs-fold-open`): the full card under it is the pane-width `NeedsBand`, and squeezed into a
+tile it would be the one ask drawn narrower than everywhere else.
 
 #### The same ask twice is one ask
 

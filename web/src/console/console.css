@@ -1652,10 +1652,14 @@ a.cn-qbody {
 }
 
 .cn-asklines {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 8px;
   min-width: 0;
+}
+/* → docs/spec/17-cockpit.md#the-ask-rows-are-tiles */
+.cn-asklines > .cn-needs-fold-open {
+  grid-column: 1 / -1;
 }
 
 /* The orphan warning — a goal hanging off no Feature, said above every card on
@@ -7069,8 +7073,10 @@ button.cn-grow {
    → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */
 .cn .cn-needs-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  align-content: flex-start;
+  gap: 8px 10px;
   width: 100%;
   min-width: 0;
   padding: 10px 13px;
@@ -7117,9 +7123,10 @@ button.cn-grow {
 .cn-needs-what {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+.cn-needs-line .cn-needs-what {
+  flex-basis: 100%;
 }
 /* An ask with a proposal is answered on the row: the text still opens it, the
    buttons beside it answer it.
@@ -7129,9 +7136,10 @@ button.cn-grow {
 }
 .cn-needs-open {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  flex: 1 1 auto;
+  gap: 8px 10px;
+  flex: 1 1 100%;
   min-width: 0;
   padding: 4px 0;
   font: inherit;
@@ -7160,6 +7168,9 @@ button.cn-grow {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+.cn-needs-fold > .cn-needs-line {
+  flex: 1 1 auto;
 }
 /* The same ask on several pull requests, answered once.
    → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask */
@@ -7216,9 +7227,9 @@ button.cn-grow {
   font-size: 12px;
   color: var(--cn-fg-dim);
 }
-.cn-needs-line .cn-age,
-.cn-needs-line .cn-open {
+.cn-needs-line .cn-age {
   flex: none;
+  margin-left: auto;
   font-size: 11px;
   color: var(--cn-fg-faint);
 }
