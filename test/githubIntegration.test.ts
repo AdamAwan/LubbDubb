@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { threadComments } from '../src/pr/prThreads.js';
 import type { PrComment } from '../src/types.js';
 import { Store } from '../src/store/store.js';
+import { computeApproved, standingApprovals } from '../src/integrations/github/reviews.js';
 import {
   GitHubSourceControlIntegration,
   aggregateCiStatus,
-  computeApproved,
   buildReviewThreads,
 } from '../src/integrations/github/sourceControl.js';
 import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
@@ -307,6 +307,17 @@ test('computeApproved: uses the latest review per reviewer', () => {
     { reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T02:00:00Z' },
   ];
   assert.equal(computeApproved(reviews), true);
+});
+
+test('standingApprovals: each reviewer whose latest verdict approves, with its time', () => {
+  const reviews: GhReview[] = [
+    { reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' },
+    { reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T03:00:00Z' },
+    { reviewerLogin: 'carol', state: 'APPROVED', submittedAt: '2026-01-01T01:00:00Z' },
+    { reviewerLogin: 'carol', state: 'DISMISSED', submittedAt: '2026-01-01T02:00:00Z' },
+    { reviewerLogin: 'dan', state: 'COMMENTED', submittedAt: '2026-01-01T04:00:00Z' },
+  ];
+  assert.deepEqual(standingApprovals(reviews), [{ by: 'bob', at: '2026-01-01T03:00:00Z' }]);
 });
 
 test('buildUnresolvedComments: one entry per thread, keyed on the root comment', () => {

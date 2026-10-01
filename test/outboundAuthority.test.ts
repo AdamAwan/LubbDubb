@@ -159,6 +159,23 @@ test('a merge-ready PR is never merged on the harness’s own say-so', async () 
   system.store.close();
 });
 
+test('a merge ask names the pull request and who approved it, and when', async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  const approvals = [{ by: 'carol', at: '2026-09-30T10:00:00Z' }, { by: 'dave' }];
+  await system.executor.execute('cyc', {
+    rationale: 'test',
+    rejected: [],
+    actions: [{ type: 'merge_pr', prNumber: 42, method: 'squash', title: 'Fix login', approvals, reason: 'ready' }],
+  } as unknown as DispatchResult);
+
+  const esc = system.store.escalations.listOpenEscalations()[0]!;
+  assert.match(esc.prompt, /PR #42 "Fix login" is green, approved by carol, dave and mergeable/);
+  assert.equal(esc.context.prTitle, 'Fix login');
+  assert.deepEqual(esc.context.approvals, approvals);
+  system.store.close();
+});
+
 test('a pending ask is not re-asked, and a world signal is no back door to answering it', async () => {
   const sink = countingSink();
   const system = build(sink);

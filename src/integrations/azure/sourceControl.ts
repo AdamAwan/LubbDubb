@@ -1,4 +1,4 @@
-import { computeApproved, namedReviewers, viewerApproved, viewerAssignment } from './reviewers.js';
+import { computeApproved, namedReviewers, standingApprovals, viewerApproved, viewerAssignment } from './reviewers.js';
 import { sameIdentity } from '../../pr/prOwnership.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
@@ -147,6 +147,7 @@ export class AzureDevOpsSourceControlIntegration
             unresolvedComments: threadComments(reviewThreads),
             reviewThreads,
             approved: computeApproved(p.reviewers.map((r) => r.vote)),
+            approvals: standingApprovals(p.reviewers),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
             merged: false,
             state: 'open',

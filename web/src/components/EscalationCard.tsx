@@ -41,7 +41,7 @@ export function EscalationCard(props: CardProps) {
     <Panel density="padded" className="card escalation">
       <CardHead escalation={escalation} card={card} resumedAt={props.resumedAt} now={now} refUrls={refUrls} />
       <CardProse escalation={escalation} card={card} refUrls={refUrls} />
-      <CardDetail escalation={escalation} card={card} refUrls={refUrls} declines={declines} />
+      <CardDetail escalation={escalation} card={card} refUrls={refUrls} declines={declines} now={now} />
 
       {/*
         Both act on the *agent*, not on the question — which is why "Mark work

@@ -1553,6 +1553,11 @@ select:disabled {
 .esc-context {
   margin: 8px 0;
 }
+.esc-approvals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .esc-context > summary {
   cursor: pointer;
   list-style: none;

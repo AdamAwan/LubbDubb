@@ -481,6 +481,18 @@ operator on it, that assignment turns it straight back into `you`
 ([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)) — a review a colleague
 asked for is the operator's to answer, and never the fleet's.
 
+## What a merge ask shows
+
+The `approve_change` for a merge is a decision, so it carries what the decision turns on: the pull
+request's **title**, and **who approved it and when**. Rule `pr-merge-ready` copies both off the
+snapshot onto the `merge_pr` action (`title`, `approvals`); the executor puts the title and the
+approvers' names into the prompt and both into the context (`prTitle`, `approvals`), and the cockpit
+card draws an "Approved by" list with each vote's age. `PullRequest.approvals` is each reviewer whose
+**standing** verdict is an approval — GitHub's latest `APPROVED` / `CHANGES_REQUESTED` / `DISMISSED`
+review per reviewer, the same fold `computeApproved` reads, with its `submittedAt`; Azure's reviewers
+voting 10 or 5, with no time, because Azure records none for a vote. Absent means the provider did not
+read it, and the ask falls back to the bare "approved".
+
 ## A merge ask outlives its pull request
 
 A merge is asked twice over: an `approve_change` escalation, and a pending `merge` proposal filed

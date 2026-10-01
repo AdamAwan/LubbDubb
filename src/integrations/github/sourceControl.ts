@@ -14,7 +14,15 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullRequest } from '../../types.js';
+import type {
+  CiCheck,
+  CiStatus,
+  MergeableState,
+  PrApproval,
+  PrPerson,
+  PrReviewThread,
+  PullRequest,
+} from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import { claimGitHubBotPr, listGitHubBotPulls, readGitHubBotPrDetail, readGitHubReleaseNotes } from './botPulls.js';
@@ -49,7 +57,6 @@ import type {
   GhClosedPull,
   GhCombinedStatus,
   GhPullSummary,
-  GhReview,
   GhReviewComment,
   GhReviewThread,
   GitHubApi,
@@ -57,12 +64,14 @@ import type {
 import { HydrationCache } from '../hydrationCache.js';
 import { hydrationMaxAgeMs, prReadRef, type ReadPlan } from '../../world/readPlan.js';
 import { githubRefUrl } from './refUrl.js';
+import { computeApproved, standingApprovals, viewerApproved } from './reviews.js';
 
 // → docs/spec/15-integrations.md
 
 interface CachedPullDetail {
   updatedAt: string;
   approved: boolean;
+  approvals: PrApproval[];
   viewerApproved: boolean;
   reviewThreads: PrReviewThread[];
   mergeable: boolean | null;
@@ -154,6 +163,7 @@ export class GitHubSourceControlIntegration
             unresolvedComments: threadComments(detail.reviewThreads),
             reviewThreads: detail.reviewThreads,
             approved: detail.approved,
+            approvals: detail.approvals,
             mergeableState: detail.mergeableState,
             merged: detail.merged,
             state: detail.merged ? 'merged' : 'open',
@@ -203,6 +213,7 @@ export class GitHubSourceControlIntegration
     const fresh: CachedPullDetail = {
       updatedAt: p.updatedAt ?? '',
       approved: computeApproved(reviews),
+      approvals: standingApprovals(reviews),
       viewerApproved: viewerApproved(reviews, viewer),
       reviewThreads: buildReviewThreads(comments, threads ?? [], ourReplyRefs(this.opts.sentReplies, p.number)),
       mergeable: detail.mergeable,
@@ -483,29 +494,6 @@ export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus):
     else checks.push({ name: s.context, status: 'passing' });
   }
   return checks;
-}
-
-function viewerApproved(reviews: GhReview[], viewer: string): boolean {
-  if (viewer === '') return false;
-  let latest: GhReview | undefined;
-  for (const review of reviews) {
-    if (review.reviewerLogin !== viewer) continue;
-    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED' && review.state !== 'DISMISSED') continue;
-    if (!latest || (review.submittedAt ?? '') >= (latest.submittedAt ?? '')) latest = review;
-  }
-  return latest?.state === 'APPROVED';
-}
-
-export function computeApproved(reviews: GhReview[]): boolean {
-  const latest = new Map<string, GhReview>();
-  for (const review of reviews) {
-    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED' && review.state !== 'DISMISSED') continue;
-    const prev = latest.get(review.reviewerLogin);
-    if (!prev || (review.submittedAt ?? '') >= (prev.submittedAt ?? '')) latest.set(review.reviewerLogin, review);
-  }
-  const states = [...latest.values()].map((r) => r.state);
-  if (states.includes('CHANGES_REQUESTED')) return false;
-  return states.includes('APPROVED');
 }
 
 export function buildReviewThreads(

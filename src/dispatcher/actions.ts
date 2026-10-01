@@ -112,6 +112,8 @@ const ActionSchema = z.discriminatedUnion('type', [
     type: z.literal('merge_pr'),
     prNumber: z.number().int(),
     method: z.enum(['merge', 'squash', 'rebase']).default('squash'),
+    title: z.string().optional(),
+    approvals: z.array(z.object({ by: z.string(), at: z.string().optional() })).optional(),
     ...base,
   }),
   z.object({

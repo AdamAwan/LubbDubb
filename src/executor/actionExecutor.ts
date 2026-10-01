@@ -10,6 +10,7 @@ import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js'
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
+import { mergeEscalation } from './mergeAsk.js';
 import { readyingBreakdown, type ReadyingBoard, type ReadyingHold } from './readying.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
@@ -347,11 +348,7 @@ export class ActionExecutor {
   ): { outcome: DecisionOutcome; detail: string } {
     const esc = this.deps.escalations.create(
       action.type === 'merge_pr'
-        ? {
-            type: 'approve_change',
-            prompt: `${preamble}PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
-            context: { prNumber: action.prNumber, method: action.method },
-          }
+        ? mergeEscalation(action, preamble)
         : {
             type: 'review_reply',
             prompt: `${preamble}Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,

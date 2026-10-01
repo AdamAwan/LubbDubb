@@ -654,7 +654,8 @@ Behaviour worth knowing:
   ([07](07-pull-requests.md#whose-pull-request-is-it)).
 - **Who opened it, and whether you have answered.** `createdBy.displayName` (the UPN behind it, and
   nothing where Azure reports neither) becomes `PullRequest.author`; the viewer's own vote of 10 or 5
-  in the same reviewer list becomes `viewerApproved`. **Their vote, never `computeApproved`'s fold** —
+  in the same reviewer list becomes `viewerApproved`, and every non-group reviewer's vote of 10 or 5
+  becomes `approvals` (name only — Azure keeps no time for a vote; [07](07-pull-requests.md#what-a-merge-ask-shows)). **Their vote, never `computeApproved`'s fold** —
   a pull request a colleague approved is still waiting on the review this operator was asked for, and
   reading the aggregate would clear their row on somebody else's answer. Both are read for the
   assignment row alone ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)), off the payload
