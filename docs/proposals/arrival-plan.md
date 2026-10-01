@@ -139,10 +139,8 @@ approvals and tenant, then calls today's press **unchanged** — lock, pin, open
 While the lock is held it does nothing and the page reads _Queued behind #398_. With no tenant the
 intent waits and the row says which variable or command would supply one.
 
-The rebuild is not optional. Rows store `blocked_reason` when the sheet is assembled, approving a
-query later writes only `remote_query_approvals`, and the press skips any row with a reason — so
-without it the OK's approvals would never be read. The same fault exists in today's code for an
-approval given after assembly, and for a tenant that appears after a refused press.
+The rebuild is not optional, and is already built: the press re-folds its rows' causes before it reads
+([36](../spec/36-remote-validation.md#the-press)). The arm reuses it.
 
 ### Where the operator hears about it
 
@@ -200,7 +198,7 @@ At the `buildSystem` seam, with `FakeStateReader`, `FakeTenantKeeper` and `FakeW
 
 ## Order of work
 
-1. The rebuild-before-press fix on its own, with its test, since today's code has the same fault.
+1. ~~The rebuild-before-press fix on its own, with its test.~~ Built.
 2. The widened sheet, the OK, `remote_run_intents` with its ship-day backfill, the desk arm, the
    `validate` row's hold, Not validating here, Run again.
 3. Removing the sheet's watch rows and approvals, the retired `permits` names and the migration.

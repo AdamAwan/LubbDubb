@@ -139,6 +139,7 @@ export class RemoteRunDesk extends EventEmitter {
       !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
     )
       return { ok: false, code: 404, error: `no validation sheet is assembled for this goal on "${environmentName}".` };
+    this.refold(goalRef, environment);
 
     const rows = store.remoteValidation
       .listRemoteSheetRows()
@@ -152,6 +153,20 @@ export class RemoteRunDesk extends EventEmitter {
           'nothing — take a row back first.',
       };
     return { ok: true, environment, rows };
+  }
+
+  /** A fresh fold's causes onto the rows already on the sheet; `selected` and `matched` are kept. */
+  private refold(goalRef: string, environment: EnvironmentConfig): void {
+    const { remoteValidation } = this.deps.store;
+    const fresh = new Map(this.deps.desk.fold(environment, goalRef).map((r) => [r.rowId, r]));
+    const rows = remoteValidation
+      .listRemoteSheetRows()
+      .filter((r) => r.goalRef === goalRef && r.environment === environment.name && fresh.has(r.rowId))
+      .map(({ goalRef: _goal, environment: _env, ...row }) => {
+        const { blockedReason, awaitingApproval, idleReason } = fresh.get(row.rowId)!;
+        return { ...row, blockedReason, awaitingApproval, idleReason };
+      });
+    remoteValidation.saveRemoteSheetRows(goalRef, environment.name, rows);
   }
 
   /** @public the seam the cancel route settles a run an operator abandoned by hand through */

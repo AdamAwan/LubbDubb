@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/validation/remote/desk.js';
 import { RemoteRunDesk } from '../src/validation/remote/run.js';
+import { sheetRows } from '../src/validation/remote/sheet.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
 import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
@@ -150,32 +151,19 @@ function seed(store: Store, environment = 'acceptance', opts: { approve?: boolea
       detail: null,
     });
   store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment });
-  store.remoteValidation.saveRemoteSheetRows('issue:12', environment, [
-    {
-      rowId: `check:${CHECK.id}`,
-      kind: 'check',
-      seq: 1,
-      title: CHECK.title,
-      sourceId: CHECK.id,
-      selected: true,
-      blockedReason: null,
-      awaitingApproval: false,
-      matched: null,
-      idleReason: null,
-    },
-    {
-      rowId: `state:${QUERY.id}`,
-      kind: 'state',
-      seq: 2,
-      title: QUERY.title,
-      sourceId: QUERY.id,
-      selected: true,
-      blockedReason: null,
-      awaitingApproval: false,
-      matched: null,
-      idleReason: null,
-    },
-  ]);
+  // As the assembly folds it, so the press's own re-fold finds every row as it was left.
+  store.remoteValidation.saveRemoteSheetRows(
+    'issue:12',
+    environment,
+    sheetRows({
+      environment: ACCEPTANCE,
+      checks: store.validation.listValidationChecks('issue:12'),
+      watches: [],
+      queries: store.remoteValidation.listStateQueries(),
+      approvals: new Set(store.remoteValidation.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
+      tenant: { tenant: 'validation-customer-1', blockedReason: null },
+    }).map(({ run: _run, ...row }) => row),
+  );
 }
 
 test('a press opens one run, reads the confirmed rows and attributes them to the commits it straddled', async () => {
@@ -386,6 +374,58 @@ test('a later run supersedes a reading rather than deleting it', async () => {
     const readings = b.store.remoteValidation.listRemoteReadings().filter((r) => r.rowId === `state:${QUERY.id}`);
     assert.equal(readings.length, 2, 'remote_readings is append-only');
     assert.notEqual(readings[0]?.runId, readings[1]?.runId, 'and each is attributed to its own run');
+  } finally {
+    b.close();
+  }
+});
+
+test('a query approved after the sheet was assembled is read at the next press', async () => {
+  const b = bench();
+  try {
+    seed(b.store, 'acceptance', { approve: false });
+    const row = () => b.store.remoteValidation.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
+    assert.notEqual(row()?.blockedReason, null, 'assembled before anyone approved it here');
+
+    b.store.remoteValidation.approveStateQuery({
+      digest: queryDigest(QUERY.query, QUERY.presence),
+      environment: 'acceptance',
+      originRef: 'issue:12',
+      queryId: QUERY.id,
+      rows: 0,
+      detail: null,
+    });
+    const pressed = await b.runs.press('issue:12', 'acceptance');
+
+    assert.equal(pressed.ok && pressed.read, 1, 'the approval reached the press');
+    assert.equal(row()?.blockedReason, null);
+    assert.equal(row()?.awaitingApproval, false);
+  } finally {
+    b.close();
+  }
+});
+
+test('a press refused for want of a tenant is not refused for ever once one is supplied', async () => {
+  const env: Record<string, string | undefined> = {};
+  const FROM_ENV: EnvironmentConfig = {
+    ...ACCEPTANCE,
+    validate: { ...ACCEPTANCE.validate!, tenant: undefined, tenantEnv: 'VALIDATION_TENANT' },
+  };
+  const b = bench({ environments: [FROM_ENV], env });
+  try {
+    seed(b.store);
+    const refused = await b.runs.press('issue:12', 'acceptance');
+    assert.equal(!refused.ok && refused.code, 400);
+    assert.match(!refused.ok ? refused.error : '', /VALIDATION_TENANT/);
+
+    env['VALIDATION_TENANT'] = 'validation-customer-1';
+    const pressed = await b.runs.press('issue:12', 'acceptance');
+
+    assert.equal(pressed.ok && pressed.read, 1, 'the tenant’s absence was a cause, not a verdict on the row');
+    assert.equal(
+      b.store.remoteValidation.listRemoteRuns()[0]?.tenant,
+      '$VALIDATION_TENANT',
+      'the lock carries the variable’s name, never its value',
+    );
   } finally {
     b.close();
   }

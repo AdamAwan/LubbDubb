@@ -836,6 +836,16 @@ exactly the behaviour the deterministic half had before the agent existed. The t
 four predicates the brief does — `runnableSelectors`, `runnableScripts`, `runnableScreens` and
 `runnableDrives` — for the reason [the dispatch](#the-dispatch--rule-remote-validation) states.
 
+**A press re-folds its rows' causes first.** Before it reads anything, the press runs `sheetRows` again
+— through `RemoteValidationDesk.fold`, the one the assembly uses — and writes each row's
+`blocked_reason`, `awaiting_approval` and `idle_reason` back from it. `selected` is the operator's and `matched` the listing's, so neither
+is touched, and no row is added or removed. Without it a cause the sheet was assembled with outlives
+the cause: a query approved here after the sheet was assembled writes only `remote_query_approvals`,
+and the press skips every row carrying a reason, so the approval would never be read; and a press
+refused for want of a tenant writes that reason onto every row, so the press after a tenant is
+supplied would read none of them. A reason a reading wrote — a store nothing could reach — is cleared
+by the same fold, which is right: a press is a re-run, and the read it is about to take answers it again.
+
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
 heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.
 

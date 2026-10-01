@@ -370,7 +370,26 @@ export class RemoteValidationDesk {
     const environment = this.deps.environments.find((e) => e.name === arrival.environment);
     if (environment === undefined) return;
     const goalRef = arrival.goalRef;
-    const rows = sheetRows({
+    const rows = this.fold(environment, goalRef);
+    store.remoteValidation.openRemoteSheet({ goalRef, environment: environment.name });
+    store.remoteValidation.saveRemoteSheetRows(
+      goalRef,
+      environment.name,
+      rows.map(({ run: _run, ...row }) => row),
+    );
+    for (const row of rows) await this.read(environment, goalRef, row);
+  }
+
+  /**
+   * The sheet's rows as they stand now. The assembly writes them once; the press folds them again,
+   * because a cause a row was assembled with — a query not yet approved here, no tenant — can be
+   * gone by the time anyone presses. → docs/spec/36-remote-validation.md#the-press
+   *
+   * @public the seam the press re-derives a row's causes through
+   */
+  fold(environment: EnvironmentConfig, goalRef: string): SheetRowPlan[] {
+    const { store } = this.deps;
+    return sheetRows({
       environment,
       checks: store.validation.listValidationChecks(goalRef),
       watches: store.watches.listGoalWatches().filter((w) => w.originRef === goalRef),
@@ -386,13 +405,6 @@ export class RemoteValidationDesk {
         operatorTenants: this.deps.operatorTenants,
       }).standing,
     });
-    store.remoteValidation.openRemoteSheet({ goalRef, environment: environment.name });
-    store.remoteValidation.saveRemoteSheetRows(
-      goalRef,
-      environment.name,
-      rows.map(({ run: _run, ...row }) => row),
-    );
-    for (const row of rows) await this.read(environment, goalRef, row);
   }
 
   /**
