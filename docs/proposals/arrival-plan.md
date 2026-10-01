@@ -24,8 +24,9 @@ When a goal's work arrives in an environment, the operator should be shown one t
     D  intake_jobs.retry_count exists and is backfilled   why: migration 0042 adds it
        ▸ query · dry run returned 0 rows missing
 
-  Watch it for 48 hours                                  observe · from arrival
+  Watch until intake has run 500 times (at most 3 weeks)       observe · from arrival
     E  signal  "IntakeFetch gave up" no more than 5      why: proves 2 holds under real load
+       ▸ log added by part 2 · seen in testUk: 37 times since arrival
     F  measure intake p95 no worse than baseline (812ms) why: retries must not slow the happy path
 
                                          [ OK, run all of it ]   [ Change something ]
@@ -33,7 +34,7 @@ When a goal's work arrives in an environment, the operator should be shown one t
 
 The operator presses **OK** once. The harness then runs everything on that page and says nothing
 more unless something needs a person. The goal page shows one status for that environment:
-_Running_, _Needs you_, _Watching, 31h left_ or _Clear_.
+_Running_, _Needs you_, _Watching, 212 of 500 runs_ or _Clear_.
 
 That is the whole proposal. The rest of this document is what has to change for that page to be
 true, and what must not break on the way.
@@ -146,6 +147,55 @@ Untouched: local validation ([32](../spec/32-local-validation.md)), which is a d
 this machine and answers no check; environment gates; `watch.holds`; the close-out, which reads the
 plan's status instead of the `validate` row.
 
+### How long to watch
+
+Today a window is a fixed time per environment (`watch.forMs`, 48 hours by default). Time is the
+wrong measure: a fix to a weekly job has no evidence after 48 hours, and a fix on a busy endpoint has
+plenty after one. What the operator wants to know is whether the changed code has run **enough times**
+to say.
+
+So a watch ends on **evidence, with a time limit**:
+
+- The planner declares, per goal, how many times the changed path has to run before the watch can
+  settle (`until.runs`) and the longest it may take (`until.within`), with a one-line reason. "Intake
+  runs about 300 times a day; 500 runs is two days of real traffic. At most three weeks."
+- The count is the `presence` query, which every signal already has. Presence already proves the code
+  path is running; counting its rows says how much.
+- The window settles when the count is reached. If the time limit passes first, it settles as
+  `unknown`, never `clean`, and says _the code path ran 40 of 500 times_. That is an exception on the
+  rail, because the watch could not answer.
+- The environment's `forMs` becomes the default time limit where a goal says nothing, and an upper
+  bound the plan may not exceed.
+
+Both numbers are on the page before the OK, and either can be changed there.
+
+### Making sure the telemetry exists
+
+A signal is declared at plan time, but the log line or metric it reads is often added by the work
+itself. Today nothing makes sure it is. The planner can name a log line that no part was told to
+write. The dry run cannot catch that, because the line does not exist until the change deploys, and
+it says so ([29](../spec/29-post-deploy-watch.md#the-dry-run)). The gap shows up only after arrival,
+as a presence query that never answers.
+
+Close it by making instrumentation part of the plan, not a hope:
+
+1. **The plan says what must be emitted.** Each signal or measure that reads telemetry the work adds
+   names the part that adds it, and that part's acceptance carries it: _"Log `IntakeFetch gave up`
+   with the job id when the fourth attempt fails."_ A watch check reading telemetry no part adds, and
+   that the dry run cannot find, is refused at plan submission.
+2. **The working agent confirms it.** Concluding a part that owes telemetry requires a
+   `watch_declare` naming the exact line or metric the diff emits, which may correct the planner's
+   wording. A part that owes telemetry and declares none does not conclude.
+3. **Review reads for it.** The review agent is handed the owed telemetry and checks that the diff
+   emits it, as it checks anything else on the part's acceptance.
+4. **The first environment proves it.** On the arrival plan, a signal whose presence has never
+   answered is drawn as _not seen yet_ next to the part that owed it. If it is still silent after the
+   environment's first interval with real traffic, it is an exception: _part 2 was meant to log this,
+   and testUk has not seen it_.
+
+Steps 1 and 2 use mechanisms that exist: part acceptance, `watch_declare`, and the plan's refusals.
+Step 4 is `presence` read per environment, as today.
+
 ### A `why` on every check
 
 Validation checks gain a `why`, written by the check-set author beside `satisfies`. The author is
@@ -173,14 +223,12 @@ Each of these is a current invariant the design has to carry through unchanged:
 
 ## Open questions
 
-1. **Standing OK.** Should an environment be able to say "run without asking when every row is
-   already approved here and the tenant is set"? That is the fully hands-off version of the page
-   above. It is safe for read-only rows; browser rows spend, so it would need its own switch.
-2. **Plan approval as a preview.** The plan document already carries the hint, the watch and the
+1. **Plan approval as a preview.** The plan document already carries the hint, the watch and the
    `state` block. Should plan approval show a draft of the arrival plan, so the OK on arrival is
    usually a formality?
-3. **Watch length per goal.** Today `forMs` is per environment. "Watch for a couple of weeks" on one
-   goal argues for a per-plan override, bounded by the environment's own.
+2. **A count for measures.** A signal has a presence query to count runs with. A measure (a p95, a
+   rate) does not. It could borrow the presence query of a signal on the same path, or declare its
+   own.
 
 ## Order of work
 
@@ -191,3 +239,7 @@ Each of these is a current invariant the design has to carry through unchanged:
 3. **One exception row.** Replace the `validate` and watch bench rows with the plan's row; point the
    close-out at the plan's status.
 4. **`why` on checks.** Column with an `ensureColumns` entry, the authoring note, the page.
+5. **Watch until evidence.** `until.runs` and `until.within` on the plan's watch block, the count read
+   from presence, and settling on whichever comes first.
+6. **Owed telemetry.** The part link on watch checks, the plan refusal, the conclude requirement and
+   the review note.
