@@ -1476,11 +1476,11 @@ the URL the harness serves on, shared with `buildApp`. It carries **no token**: 
 chat is a link anybody reading the transcript holds, and the cockpit already has its token in the
 browser that opened it.
 
-##### The operator decides, and the recommendation is labelled
+##### The operator decides, and Claude's view is labelled
 
-The skill puts each ask to the operator — what is asked, who is waiting, what it holds up, where it
-is in the queue — and may then give a recommendation. **It is set apart and labelled as Claude's own
-view, never LubbDubb's**, and nothing is sent until the operator answers in their own words.
+The skill puts each ask to the operator as a short card and may then give its own view. **It is set
+apart and labelled as Claude's own view, never LubbDubb's**, and nothing is sent until the operator
+answers — in their own words, or by explicitly picking an option.
 
 Both halves are the failure this loop would otherwise be built to produce. An operator clearing ten
 asks in a row is exactly the operator who stops reading and says "ok"; an assistant that treats that
@@ -1491,6 +1491,13 @@ question and proposed no answer, and an operator deciding on the belief that it 
 the wrong evidence. So the skill keeps the facts and the opinion in two blocks, asks for a reason on
 every rejection (it is what the next planner reads), never takes a secret through chat, and confirms a
 validation reading with the operator before reporting it.
+
+**The answers are choices, and Claude's pick is tagged as Claude's.** Where Claude Code offers
+`AskUserQuestion`, the skill offers what `answerWith.choose` allows as options, and tags its own pick
+**"(Claude's pick)"**, never the tool's "(Recommended)" — that convention reads as the harness's,
+which is the false premise above. A pick is an explicit answer, so an option may carry the words of a
+decline reason and picking it adopts them. An answer that is the operator's own words — a description,
+a reply typed into an agent — is never an option, because an option's label would be a draft of it.
 
 ##### A skip belongs to the connection
 
