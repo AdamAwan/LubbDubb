@@ -71,7 +71,6 @@ import {
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
-import { PrAssignDesk } from '../pr/prAssignAsk.js';
 import {
   type IntakeDesks,
   buildIntakeDesks,
@@ -113,7 +112,7 @@ export interface System {
   remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
-  prAssign: PrAssignDesk;
+  prAssign: IntakeDesks['prAssign'];
   botPrs: BenchDesks['botPrs'];
   botPrRisks: BenchDesks['botPrRisks'];
   filing: TicketFiler;
@@ -193,13 +192,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
-    prAssign: new PrAssignDesk({
-      store: base.store,
-      sink: base.sink,
-      errors: base.errors,
-      operator: config.userId,
-      prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
-    }),
+    prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,
     updates: bench.updates,

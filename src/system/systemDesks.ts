@@ -38,6 +38,7 @@ import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants
 import { WatchDesk } from '../environments/watchDesk.js';
 import { PrWatchDesk } from '../pr/prWatchDesk.js';
 import { PrWorkItemDesk } from '../pr/prWorkItemDesk.js';
+import { PrAssignDesk } from '../pr/prAssignAsk.js';
 import { ScheduleDesk } from '../schedules/scheduleDesk.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
@@ -99,7 +100,8 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     prAuthorConfigured,
     errors,
   });
-  return { plans, appraisals, naming, prDescriptions, prBodyEdits, prWatch, prWorkItems, branchReaps };
+  const prAssign = new PrAssignDesk({ store, sink, errors, operator: config.userId, prAuthorConfigured });
+  return { plans, appraisals, naming, prDescriptions, prBodyEdits, prWatch, prWorkItems, branchReaps, prAssign };
 }
 
 export type EnvironmentDesks = ReturnType<typeof buildEnvironmentDesks>;
