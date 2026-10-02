@@ -253,8 +253,9 @@ SQLite database, worktrees, desk scratch dirs and attachments all live under it)
 
 The harness ships a Claude Code plugin for **your own** Claude Code: the `/lubbdubb:…` skills every
 _Open in Claude Code_ link in the cockpit calls (`/lubbdubb:check 284:C`, `/lubbdubb:plan 284`,
-`/lubbdubb:ask 284`, …), the desktop tool channel those skills talk to, and a notice board above your
-prompt that says what the harness is waiting on you for. Boot writes it to `~/.lubbdubb/plugin`:
+`/lubbdubb:ask 284`, …), the desktop tool channel those skills talk to, and a notice board: a status
+line above your prompt and a panel beside the transcript with what the harness is waiting on you for,
+feature progress, pull request states, the fleet and what is up next. Boot writes it to `~/.lubbdubb/plugin`:
 
 ```
 [lubbdubb] Claude Code plugin 1.0.0-… written to ~/.lubbdubb/plugin — install or update it from the cockpit's MCP tab
