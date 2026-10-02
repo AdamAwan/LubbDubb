@@ -115,7 +115,7 @@ test('reads the state and the feature board, with the token from the environment
     { url: 'http://127.0.0.1:4300/api/state?sections=asks,control,fleet,queue,goals', auth: 'Bearer secret' },
     { url: 'http://127.0.0.1:4300/api/features', auth: 'Bearer secret' },
   ])
-  expect(out.text).toContain('fleet paused · 1/4 agents · 3 asks (1 blocking) · next: Merge #412')
+  expect(out.text).toContain('fleet paused · 1/4 agents · 3 asks (1 blocking)')
   expect(out.text).toContain('1. merge: Merge #412')
   expect(out.text).toContain('2. escalation: Which branch should 284 go on?')
   expect(out.text).toContain('3. bench: Log in to staging')
@@ -145,10 +145,10 @@ test('draws the boxed band, and nothing once hidden', async ($, on) => {
     const ui = await $.ui.mount({ plugin: 'lubbdubb', surface, component: 'AbovePrompt', props: BAND })
     expect((await ui.find({ key: 'band' }))?.props).toMatchObject({ borderStyle: 'round' })
     expect(await ui.find({ type: 'Text', text: /3 asks \(1 blocking\)/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /next: Merge #412/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1 feature$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /next: Merge #412/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /1 feature$/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /1 PR needs attention/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1 ready to merge/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /1 ready to merge/ })).toBeUndefined()
     await ui.press({ key: 'hide' })
     expect(await ui.find({ type: 'Text', text: /LubbDubb/ })).toBeUndefined()
     await ui.unmount()
@@ -167,7 +167,7 @@ test('leaves room for a band drawn beneath it, outside its box, and hides only i
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'lubbdubb', surface, component: 'AbovePrompt', props: BAND })
-    expect(await ui.find({ type: 'Text', text: /next: Merge #412/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /3 asks/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /pr-watch/ })).toBeDefined()
     await ui.press({ key: 'hide' })
     expect(await ui.find({ type: 'Text', text: /LubbDubb/ })).toBeUndefined()
