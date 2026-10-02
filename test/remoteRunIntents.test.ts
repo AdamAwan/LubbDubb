@@ -17,7 +17,7 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { RemoteRun, RemoteRunIntent, RemoteSheetRow, StateQueryInput } from '../src/types.js';
-import { okable, okStanding, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
+import { okable, okStanding, pageRows, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
 import { validationReadyPass } from '../src/validation/ready.js';
 import { arrivalSheetStep } from '../src/environments/watchWindow.js';
 
@@ -263,11 +263,35 @@ test('the OK accepts an authored set nobody has answered: through the card where
       action: { type: 'noop' } as never,
       escalationId: null,
     });
-    await b.intents.give('issue:12', 'acceptance');
+    const given = await b.intents.give('issue:12', 'acceptance');
     assert.deepEqual(accepted, [card.id], 'the card’s own accept, so its proposal and escalation close');
+    assert.equal(!given.ok && given.code, 409, 'a card that would not accept leaves no OK behind');
+    assert.equal(intentOf(b.store), null);
   } finally {
     b.close();
   }
+});
+
+test('the OK approves only the queries on rows the page still selects', async () => {
+  const b = bench();
+  try {
+    b.store.remoteValidation.setRemoteSheetRowSelected('issue:12', 'acceptance', `state:${QUERY.id}`, false);
+    await b.intents.give('issue:12', 'acceptance');
+    assert.deepEqual(b.store.remoteValidation.listStateQueryApprovals(), [], 'a row left out is not consented to');
+  } finally {
+    b.close();
+  }
+});
+
+test('a check declined after the sheet was assembled is off the page, and asks nothing', () => {
+  const row = sheetRow({ rowId: 'check:b', kind: 'check', sourceId: 'b' });
+  const gone = new Set(['issue:12 b']);
+  assert.deepEqual(pageRows([row], gone), []);
+  assert.equal(
+    sheetsAwaitingOk({ sheets: [SHEET], rows: [row], intents: [], runs: [], gone }).size,
+    0,
+    'a declined row does not hold the bench',
+  );
 });
 
 test('the OK releases an authored set directly where no card was ever filed', async () => {
@@ -360,7 +384,7 @@ test('a page reads where it stands off its intent, its run and its rows to OK, o
   assert.equal(okable(sheetRow({ idleReason: 'a person carries it' })), false);
 
   const awaiting = (intents: RemoteRunIntent[], runs: RemoteRun[] = []) =>
-    sheetsAwaitingOk({ sheets: [SHEET], rows: [sheetRow()], intents, runs });
+    sheetsAwaitingOk({ sheets: [SHEET], rows: [sheetRow()], intents, runs, gone: new Set() });
   assert.deepEqual([...awaiting([])], [['issue:12', ['acceptance']]]);
   assert.equal(awaiting([intent('given')]).size, 0);
   assert.equal(
@@ -398,6 +422,29 @@ test('the validate row is held open while a page awaits its OK, though no check 
   const held = validationReadyPass({ ...input, awaitingOk: new Map([['issue:12', ['acceptance']]]) });
   assert.equal(held[0]?.kind, 'file');
   assert.match(held[0]?.kind === 'file' ? held[0].detail : '', /on acceptance is waiting for your OK/);
+  assert.doesNotMatch(
+    held[0]?.kind === 'file' ? held[0].detail : '',
+    /Run them/,
+    'nothing to run by hand is asked for',
+  );
+
+  const settled = (status: 'done' | 'declined') =>
+    ({ id: 't1', originRef: 'issue:12', kind: 'validate', status, resolution: 'marked by you' }) as never;
+  const back = validationReadyPass({
+    ...input,
+    existing: [settled('done')],
+    awaitingOk: new Map([['issue:12', ['acceptance']]]),
+  });
+  assert.equal(back[0]?.kind, 'reopen', 'a page that needs the OK again brings a done row back');
+  assert.deepEqual(
+    validationReadyPass({
+      ...input,
+      existing: [settled('declined')],
+      awaitingOk: new Map([['issue:12', ['acceptance']]]),
+    }),
+    [],
+    'a row the operator declined stays declined',
+  );
 });
 
 test('a sheet is drawn once its checks are written, before anyone has accepted them', () => {

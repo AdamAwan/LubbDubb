@@ -78,7 +78,10 @@ export function SheetOkRow({
           <AsyncButton
             usage="validation.edit"
             disabled={declining.trim() === ''}
-            onClick={() => actions.markRemoteNotHere(issueNumber, env, declining.trim())}
+            onClick={async () => {
+              await actions.markRemoteNotHere(issueNumber, env, declining.trim());
+              setDeclining(null);
+            }}
             onRefused={onRefused}
           >
             Say so

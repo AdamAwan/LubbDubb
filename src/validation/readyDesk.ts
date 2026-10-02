@@ -5,7 +5,7 @@ import type { Store } from '../store/store.js';
 import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { checkSetReleased } from './planApproval.js';
 import { validationReadyPass } from './ready.js';
-import { sheetsAwaitingOk } from './remote/intent.js';
+import { goneCheckRows, sheetsAwaitingOk } from './remote/intent.js';
 
 // → docs/spec/20-validation.md
 
@@ -112,10 +112,16 @@ export class ValidationReadyDesk {
       return { sheetRows: new Map(), awaitingOk: new Map() };
     const rows = this.store.remoteValidation.listRemoteSheetRows();
     const sheetRows = new Map<string, RemoteSheetRow[]>();
-    for (const row of rows) sheetRows.set(row.goalRef, [...(sheetRows.get(row.goalRef) ?? []), row]);
+    for (const row of rows) {
+      const held = sheetRows.get(row.goalRef);
+      if (held === undefined) sheetRows.set(row.goalRef, [row]);
+      else held.push(row);
+    }
+    const validates = new Set(this.environments.filter((e) => e.validate !== undefined).map((e) => e.name));
     const awaitingOk = sheetsAwaitingOk({
-      sheets: this.store.remoteValidation.listRemoteSheets(),
+      sheets: this.store.remoteValidation.listRemoteSheets().filter((s) => validates.has(s.environment)),
       rows,
+      gone: goneCheckRows(this.store.validation.listAllValidationChecks()),
       intents: this.store.remoteIntents.listIntents(),
       runs: this.store.remoteValidation.listRemoteRuns(),
     });

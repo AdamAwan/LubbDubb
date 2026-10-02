@@ -1,7 +1,7 @@
 import type { System } from '../system/system.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
-import { okable, okStanding } from '../validation/remote/intent.js';
+import { goneCheckRows, okable, okStanding, pageRows } from '../validation/remote/intent.js';
 import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -16,6 +16,7 @@ import type {
   RemoteRun,
   RemoteRunIntent,
   RemoteSheetRow,
+  ValidationCheck,
   TaskSummary,
   WatchReading,
   WorkNode,
@@ -184,12 +185,14 @@ export function buildRemoteSheets(
   tasks: readonly TaskSummary[],
   captureSigner?: (runId: string, rowId: string) => string,
   operatorTenants?: OperatorTenants,
+  checks: readonly ValidationCheck[] = [],
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
   if (sheets.length === 0) return [];
   const runs = store.remoteValidation.listRemoteRuns();
   const intents = new Map(store.remoteIntents.listIntents().map((i) => [`${i.goalRef} ${i.environment}`, i]));
+  const gone = goneCheckRows(checks);
   // The way from a reading to the transcript of the agent that produced it, walked here: a reading
   // carries the run it came through, a run carries the task it was dispatched as, and a task carries
   // the agent. The tasks are the caller's own list rather than a lookup per reading — one statement a
@@ -226,11 +229,15 @@ export function buildRemoteSheets(
         : resolveTenant({ environment, stamped: tenants, now, operatorTenants }).standing;
     return {
       ...sheet,
-      rows: (rowsByGoalEnvironment.get(key) ?? []).map((row) => ({
+      rows: pageRows(rowsByGoalEnvironment.get(key) ?? [], gone).map((row) => ({
         ...row,
         reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null,
       })),
-      ...pageStanding(rowsByGoalEnvironment.get(key), intents.get(key), runsByGoalEnvironment.get(key)?.at(-1)),
+      ...pageStanding(
+        pageRows(rowsByGoalEnvironment.get(key) ?? [], gone),
+        intents.get(key),
+        runsByGoalEnvironment.get(key)?.at(-1),
+      ),
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,

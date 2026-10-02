@@ -2,7 +2,14 @@ import { createHash } from 'node:crypto';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { Store } from '../../store/store.js';
-import type { OkStanding, RemoteRun, RemoteRunIntent, RemoteSheet, RemoteSheetRow } from '../../types.js';
+import type {
+  OkStanding,
+  RemoteRun,
+  RemoteRunIntent,
+  RemoteSheet,
+  RemoteSheetRow,
+  ValidationCheck,
+} from '../../types.js';
 import type { RemoteValidationDesk } from './desk.js';
 import type { RemoteRunDesk } from './run.js';
 import type { ProposalDesk } from '../../proposals/proposalDesk.js';
@@ -44,6 +51,7 @@ export class RemoteIntentDesk {
     if (!this.deps.desk.hasSheet(goalRef, environmentName))
       return { ok: false, code: 404, error: noSheetAssembled(environmentName) };
 
+    this.deps.desk.adoptNewRows(goalRef, environment);
     const refused: { queryId: string; detail: string }[] = [];
     for (const query of this.unapproved(goalRef, environmentName)) {
       const ruled = await this.deps.desk.ruleStateQuery(goalRef, query, environment, true);
@@ -51,8 +59,12 @@ export class RemoteIntentDesk {
         refused.push({ queryId: query, detail: ruled.reading?.blocked ?? 'the dry run did not answer' });
     }
 
-    await this.acceptCheckSet(goalRef, environmentName);
-    this.deps.desk.adoptNewRows(goalRef, environment);
+    if (!(await this.acceptCheckSet(goalRef, environmentName)))
+      return {
+        ok: false,
+        code: 409,
+        error: "this goal's checks could not be accepted from here — answer their card, then give the OK.",
+      };
     const intent = store.remoteIntents.giveIntent(goalRef, environmentName, this.fingerprint(goalRef, environment));
     return { ok: true, intent, refused };
   }
@@ -66,14 +78,16 @@ export class RemoteIntentDesk {
   /**
    * The OK accepts the set the page shows if nobody has yet. Through the card's own accept where one is
    * pending, so its proposal and escalation close the ordinary way; released directly where none was
-   * ever filed, because then there is nothing to close.
+   * ever filed, because then there is nothing to close. False where it is still not accepted — a card
+   * whose caveats want answering on the card itself — and then no OK is written.
    */
-  private async acceptCheckSet(goalRef: string, environmentName: string): Promise<void> {
+  private async acceptCheckSet(goalRef: string, environmentName: string): Promise<boolean> {
     const { store } = this.deps;
-    const standing = checkSetStanding(store.validation.getValidationPlanRecord(goalRef), () =>
-      store.validation.listValidationChecks(goalRef),
-    );
-    if (standing.accepted || standing.authoredAt === null) return;
+    const standing = () =>
+      checkSetStanding(store.validation.getValidationPlanRecord(goalRef), () =>
+        store.validation.listValidationChecks(goalRef),
+      );
+    if (standing().accepted || standing().authoredAt === null) return true;
     const number = issueOriginNumber('root', goalRef);
     const pending =
       number === null
@@ -81,6 +95,7 @@ export class RemoteIntentDesk {
         : pendingValidationPlanProposal(validationPlanProposalRef(number), store.escalations.listProposals());
     if (pending === null) store.validation.releaseValidationPlan(goalRef);
     else await this.deps.proposals.accept(pending.id, `Accepted with the OK on ${environmentName}.`);
+    return standing().accepted;
   }
 
   /** @public the seam the withdraw route takes an OK back through */
@@ -128,6 +143,7 @@ export class RemoteIntentDesk {
     else store.remoteIntents.noteIntent(goalRef, environment, pressed.error);
   }
 
+  /** The page's selected `state` rows whose query is not approved here — what the OK consents to. */
   private unapproved(goalRef: string, environmentName: string): string[] {
     const { remoteValidation } = this.deps.store;
     const approved = new Set(
@@ -136,10 +152,17 @@ export class RemoteIntentDesk {
         .filter((a) => a.environment === environmentName)
         .map((a) => a.digest),
     );
+    const digests = new Map(
+      remoteValidation
+        .listStateQueries()
+        .filter((q) => q.originRef === goalRef)
+        .map((q) => [q.id, q.digest]),
+    );
     return remoteValidation
-      .listStateQueries()
-      .filter((q) => q.originRef === goalRef && !approved.has(q.digest))
-      .map((q) => q.id);
+      .listRemoteSheetRows()
+      .filter((r) => r.goalRef === goalRef && r.environment === environmentName && r.kind === 'state' && r.selected)
+      .map((r) => r.sourceId)
+      .filter((id) => digests.has(id) && !approved.has(digests.get(id)!));
   }
 
   /**
@@ -161,13 +184,28 @@ export class RemoteIntentDesk {
       .map((r) => {
         if (r.kind === 'check') {
           const c = checks.get(r.sourceId);
-          return `${r.rowId}\x00${JSON.stringify(c === undefined ? null : [...checkTerms(c), c.steps])}`;
+          return `${r.rowId}\x00${JSON.stringify(c === undefined ? null : [...checkTerms(c), c.steps.map(({ script: _script, scriptSweptAt: _swept, ...step }) => step)])}`;
         }
         return `${r.rowId}\x00${queries.get(r.sourceId) ?? ''}`;
       })
       .sort();
     return createHash('sha256').update(parts.join('\x01')).digest('hex').slice(0, 32);
   }
+}
+
+/**
+ * The check rows still on a sheet whose check has left it — declined at the card or superseded since
+ * the sheet was assembled — keyed `${goalRef} ${checkId}`. The press skips them, so the page does too.
+ */
+export function goneCheckRows(checks: readonly ValidationCheck[]): Set<string> {
+  return new Set(
+    checks.filter((c) => c.state === 'declined' || c.supersededReason !== null).map((c) => `${c.originRef} ${c.id}`),
+  );
+}
+
+/** The rows a page draws and asks about: every stored row but a check row whose check has gone. */
+export function pageRows<T extends RemoteSheetRow>(rows: readonly T[], gone: ReadonlySet<string>): T[] {
+  return rows.filter((r) => r.kind !== 'check' || !gone.has(`${r.goalRef} ${r.sourceId}`));
 }
 
 /**
@@ -219,12 +257,17 @@ export function sheetsAwaitingOk(input: {
   rows: readonly RemoteSheetRow[];
   intents: readonly RemoteRunIntent[];
   runs: readonly RemoteRun[];
+  gone: ReadonlySet<string>;
 }): Map<string, string[]> {
   const key = (x: { goalRef: string; environment: string }) => `${x.goalRef} ${x.environment}`;
   const intents = new Map(input.intents.map((i) => [key(i), i]));
   const latest = new Map(input.runs.map((r) => [key(r), r]));
   const rows = new Map<string, RemoteSheetRow[]>();
-  for (const row of input.rows) rows.set(key(row), [...(rows.get(key(row)) ?? []), row]);
+  for (const row of pageRows(input.rows, input.gone)) {
+    const held = rows.get(key(row));
+    if (held === undefined) rows.set(key(row), [row]);
+    else held.push(row);
+  }
   const out = new Map<string, string[]>();
   for (const sheet of input.sheets) {
     const k = key(sheet);
@@ -234,7 +277,9 @@ export function sheetsAwaitingOk(input: {
       run: latest.get(k) ?? null,
     });
     if (standing.status !== 'needs-you') continue;
-    out.set(sheet.goalRef, [...(out.get(sheet.goalRef) ?? []), sheet.environment]);
+    const held = out.get(sheet.goalRef);
+    if (held === undefined) out.set(sheet.goalRef, [sheet.environment]);
+    else held.push(sheet.environment);
   }
   return out;
 }

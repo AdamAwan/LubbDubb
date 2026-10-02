@@ -78,7 +78,7 @@ function deliveryStep(
     };
   }
   if (existing && existing.status !== 'open') {
-    if (!deskSettled(existing)) return null;
+    if (!reopens(existing, awaiting)) return null;
     return {
       kind: 'reopen',
       taskId: existing.id,
@@ -93,6 +93,15 @@ function deliveryStep(
     title: validateTitle(originRef),
     detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
   };
+}
+
+/**
+ * A settled row comes back where the desk settled it, or where it was marked done and a page has since
+ * come back to needing an OK — a run the pin abandoned, an OK the page outgrew. A row the operator
+ * declined stays declined. → docs/spec/20-validation.md#saying-so-on-the-bench
+ */
+function reopens(existing: HumanTask, awaiting: readonly string[]): boolean {
+  return deskSettled(existing) || (existing.status === 'done' && awaiting.length > 0);
 }
 
 function awaitingOkOf(input: ValidationReadyInput, originRef: string): readonly string[] {
@@ -133,11 +142,15 @@ function validateDetail(
           `Its validation page on ${awaitingOk.join(', ')} is waiting for your OK — nothing there runs until you give it.`,
           '',
         ]),
-    `${name} is delivered, and its validation plan has ${count(owed, 'check')} for you to run — of ${count(live.length, 'check')} in all.`,
-    '',
-    ...outstandingChecks(live),
-    '',
-    'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+    ...(owed === 0 && awaitingOk.length > 0
+      ? [`${name} is delivered, and none of its ${count(live.length, 'check')} is yours to run by hand.`]
+      : [
+          `${name} is delivered, and its validation plan has ${count(owed, 'check')} for you to run — of ${count(live.length, 'check')} in all.`,
+          '',
+          ...outstandingChecks(live),
+          '',
+          'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+        ]),
   ];
   for (const line of sheetLines(sheetRows ?? [])) lines.push('', line);
   if (issue?.url) lines.push('', issue.url);

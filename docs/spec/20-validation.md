@@ -1063,7 +1063,9 @@ page reads _needs you_ — at least one row to OK (one a press would read or han
 still waiting for its approval there) and no OK standing: none given, one withdrawn or lapsed, or a run
 it started that was abandoned — counts in the file, settle and reopen arms alike, and the detail says
 which environments are waiting. It is the same `okStanding` the cockpit draws, so the bench and the
-page never disagree about whether you are owed. That is what keeps the close-out from
+page never disagree about whether you are owed. A row marked **done** comes back when a page needs the OK again — a run
+the pin abandoned, an OK the page outgrew — and a row the operator **declined** stays declined. Only
+environments that still declare a `validate` block are asked about. That is what keeps the close-out from
 being asked for before anybody has seen the page. A sheet with nothing to OK holds nothing, and
 _Not validating here_ answers it. → [36](36-remote-validation.md#the-ok)
 
