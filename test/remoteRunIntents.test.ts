@@ -465,7 +465,16 @@ test('the validate row is held open while a page awaits its OK, though no check 
     'and so does one the desk settled before it marked its settles',
   );
   assert.deepEqual(
-    validationReadyPass({ ...input, existing: [settled('done', `${DESK_SETTLED}every check is recorded`)] }),
+    validationReadyPass({
+      ...input,
+      existing: [settled('done', `${DESK_SETTLED}every check is recorded`)],
+      checks: new Map([
+        [
+          'issue:12',
+          [{ id: 'c', originRef: 'issue:12', actor: 'human', state: 'unrun', supersededReason: null } as never],
+        ],
+      ]),
+    }),
     [],
     'a desk-settled done row does not come back for anything but a page needing its OK',
   );
