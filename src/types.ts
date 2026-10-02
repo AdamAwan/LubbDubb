@@ -1860,6 +1860,25 @@ export type RemoteRunStatus = 'pending' | 'dispatched' | 'ended' | 'abandoned';
  * `tenant` is the *key* the lock is enforced on and never a `tenantEnv`'s value — see
  * 36-remote-validation.md#tenants.
  */
+export type RemoteRunIntentState = 'given' | 'withdrawn' | 'consumed';
+
+/**
+ * An operator's OK to run one goal's sheet on one environment. → docs/spec/36-remote-validation.md#the-ok
+ */
+export interface RemoteRunIntent {
+  goalRef: string;
+  environment: string;
+  state: RemoteRunIntentState;
+  /** What the OK was given over. Empty on a row written for a sheet from before the OK existed. */
+  fingerprint: string;
+  givenAt: string;
+  /** The run a consumed intent opened. */
+  runId: string | null;
+  /** Why a given intent has not been pressed yet. */
+  note: string | null;
+  updatedAt: string;
+}
+
 export interface RemoteRun {
   id: string;
   goalRef: string;

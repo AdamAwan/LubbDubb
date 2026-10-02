@@ -27,6 +27,7 @@ import type { BotPrRiskDesk } from '../botPrs/riskDesk.js';
 import type { WorkGraphRecorder } from '../graph/workGraphRecorder.js';
 import type { EnvironmentDesk } from '../environments/environmentDesk.js';
 import type { RemoteValidationDesk } from '../validation/remote/desk.js';
+import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { ObstacleDesk } from '../obstacles/desk.js';
 import type { PoolDesk } from '../pool/poolDesk.js';
 
@@ -52,6 +53,7 @@ export interface PulseDeps {
   graph?: WorkGraphRecorder;
   environments?: EnvironmentDesk;
   remoteValidation?: RemoteValidationDesk;
+  remoteIntents?: RemoteIntentDesk;
   validationReady?: ValidationReadyDesk;
   closeOuts?: DeliveryCloseOutDesk;
   unwatchedChildren?: UnwatchedChildDesk;
@@ -125,6 +127,7 @@ const ENTRIES = [
     { id: 'graph', readWorld: false, run: (d, at) => d.graph?.record(at.world) },
     { id: 'environments', readWorld: true, run: (d, at) => d.environments?.run(at.world) },
     { id: 'remoteValidation', readWorld: true, run: (d) => d.remoteValidation?.run() },
+    { id: 'remoteIntents', readWorld: true, run: (d) => d.remoteIntents?.run() },
     { id: 'validationReady', readWorld: false, run: (d, at) => d.validationReady?.run(at.world) },
     { id: 'closeOuts', readWorld: false, run: (d, at) => d.closeOuts?.run(at.world) },
     { id: 'unwatchedChildren', readWorld: false, run: (d, at) => d.unwatchedChildren?.run(at.world) },

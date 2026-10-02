@@ -20,7 +20,7 @@ export function dropRetiredTables(db: Database.Database, tables: readonly string
   }
 }
 
-function tableExists(db: Database.Database, table: string): boolean {
+export function tableExists(db: Database.Database, table: string): boolean {
   return db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table) !== undefined;
 }
 

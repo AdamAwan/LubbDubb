@@ -109,6 +109,7 @@ export interface System {
   remoteValidation: RemoteValidationDesk;
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
+  remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
   prAssign: PrAssignDesk;
@@ -187,6 +188,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteValidation: envs.remoteValidation,
     validationReady: bench.validationReady,
     remoteRuns: envs.remoteRuns,
+    remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
     prAssign: new PrAssignDesk({
@@ -363,6 +365,7 @@ function buildHarness(
     branchReaps: intake.branchReaps,
     environments: envs.environments,
     remoteValidation: envs.remoteValidation,
+    remoteIntents: envs.remoteIntents,
     prWatch: intake.prWatch,
     prWorkItems: intake.prWorkItems,
     review: config.review,

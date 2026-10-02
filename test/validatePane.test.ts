@@ -75,6 +75,7 @@ function sheet(over: Partial<RemoteSheetView> = {}): RemoteSheetView {
     assembledAt: NOW,
     rows: [row()],
     run: null,
+    intent: null,
     tenant: {
       tenant: 'validation-1',
       reseededAt: null,

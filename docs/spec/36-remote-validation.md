@@ -859,7 +859,43 @@ after assembly would never be read, and a press refused for want of a tenant wou
 one is supplied reading nothing.
 
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
-heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.
+heartbeat spends those minutes on nothing. The OK's route does too, for the same reason; no other route
+here does — nothing else schedules anything.
+
+### The OK
+
+**Built.** `POST /api/issues/:number/remote-validation/:environment/ok`, over `RemoteIntentDesk`
+(`src/validation/remote/intent.ts`). An operator answers a sheet once, and the harness does the rest.
+
+The OK runs in two steps, because a dry run is a spawn of up to a minute and cannot sit inside a
+transaction. First every `state` query of the goal not yet approved **here** is dry-run and approved
+where it answered, through `ruleStateQuery` — the same consent the row's own button gives, given on a
+page that names the place and shows the text. A query whose dry run did not answer is not approved; the
+route returns it in `refused`, and the rest of the page does not wait for it. Then an **intent** is
+written: one `remote_run_intents` row per `(goal, environment)`, `given`, with a fingerprint of what the
+page held.
+
+**The fingerprint is the page as the operator read it**: every row on the sheet, a check by its title,
+`do`, `expect`, `proof` and steps, a query by its digest. A re-authored set, an amended check or an
+edited query moves it; a reading, a selection or an approval does not. An intent whose fingerprint has
+moved is **not pressed** — it says so, and waits for the OK to be given again. Consent to a page is
+not consent to the page it became.
+
+**The pulse presses it.** `RemoteIntentDesk.run` sits immediately below `RemoteValidationDesk` in the
+reconcile pass, so a sheet assembled this pulse can be pressed in the same one. For each `given`
+intent it checks the fingerprint, then the tenant, then the lock, and calls today's press unchanged
+only when all three allow it — so a queued OK spawns no `at` probe while it waits. An intent that cannot
+be pressed carries a `note` saying why, in the sheet's words: the tenant variable or command that would
+supply one, or _queued behind the run for issue:398_. A press that opens a run marks the intent
+`consumed` with the run's id. Nothing re-opens a run on its own: an OK is consumed once.
+
+**Withdraw** (`…/ok/withdraw`) takes back a `given` OK; it is a conditional flip, so there is nothing to
+take back twice. **An OK given after a run is a run again** — `giveIntent` replaces whatever the last
+one was. The sheet's view carries the intent (`RemoteSheetView.intent`), and the cockpit draws from it.
+
+**Ship day.** A sheet with no intent reads as one awaiting its OK. The boot that creates the table writes
+a `consumed` one for every sheet already there, and never again
+([14](14-persistence.md#when-a-null-means-something)).
 
 ### The pin asks whether the work is still there
 
@@ -2352,6 +2388,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                                                                                                                               |
 | `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned and last reseeded                                                                                                                                                                                                                                    |
+| `remote_run_intents`     | `(goal_ref, environment)`     | **built.** `OR REPLACE` on each OK; `withdrawn` and `consumed` are conditional flips from `given`; a ship-day `consumed` row per existing sheet                                                                                                                                                             |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the
 environment went back past the goal's work is the case an operator actually hits, and its reason has

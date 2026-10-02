@@ -233,7 +233,8 @@ export class RemoteRunDesk extends EventEmitter {
     });
   }
 
-  private standing(environmentName: string): TenantStanding {
+  /** @public the seam the intent desk reads a tenant's standing and lock key through before it presses */
+  standing(environmentName: string): TenantStanding {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     return environment === undefined ? absent() : this.resolve(environment).standing;
   }

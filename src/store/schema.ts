@@ -20,6 +20,7 @@ import { BRANCH_REAPS_SCHEMA } from './schema/branchReaps.js';
 import { ENVIRONMENTS_SCHEMA } from './schema/environments.js';
 import { WATCHES_SCHEMA } from './schema/watches.js';
 import { REMOTE_VALIDATION_SCHEMA } from './schema/remoteValidation.js';
+import { REMOTE_INTENTS_SCHEMA } from './schema/remoteIntents.js';
 import { PR_WATCH_SEEDS_SCHEMA } from './schema/prWatchSeeds.js';
 import { WORK_ITEM_LINKS_SCHEMA } from './schema/workItemLinks.js';
 import { REVIEW_WAITS_SCHEMA } from './schema/reviewWaits.js';
@@ -78,6 +79,7 @@ export const SCHEMA =
   ENVIRONMENTS_SCHEMA +
   WATCHES_SCHEMA +
   REMOTE_VALIDATION_SCHEMA +
+  REMOTE_INTENTS_SCHEMA +
   PR_WATCH_SEEDS_SCHEMA +
   WORK_ITEM_LINKS_SCHEMA +
   REVIEW_WAITS_SCHEMA +

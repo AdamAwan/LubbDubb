@@ -1415,6 +1415,7 @@ export function buildDemoState(): DemoSeed {
         goalRef: 'issue:395',
         environment: 'staging',
         assembledAt: ago(6),
+        intent: null,
         run: {
           id: 'run-395-staging-2',
           goalRef: 'issue:395',
@@ -1678,6 +1679,7 @@ export function buildDemoState(): DemoSeed {
         goalRef: 'issue:395',
         environment: 'prod',
         assembledAt: ago(2),
+        intent: null,
         run: {
           id: 'run-395-prod-1',
           goalRef: 'issue:395',
@@ -1778,6 +1780,7 @@ export function buildDemoState(): DemoSeed {
         goalRef: 'issue:398',
         environment: 'staging',
         assembledAt: ago(66),
+        intent: null,
         run: {
           id: 'run-398-staging-1',
           goalRef: 'issue:398',

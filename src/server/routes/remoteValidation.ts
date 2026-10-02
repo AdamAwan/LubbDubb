@@ -33,6 +33,7 @@ const SelectionBody = z.object({
 export function register(app: FastifyInstance, ctx: RouteContext): void {
   registerQueryRoutes(app, ctx);
   registerSheetRoutes(app, ctx);
+  registerOkRoutes(app, ctx);
 }
 
 function registerQueryRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
@@ -209,5 +210,36 @@ function registerSheetRoutes(app: FastifyInstance, { system, hub }: RouteContext
       { params: TenantCommandParams },
       ({ params }) => system.remoteRuns.tenantOutput(params.environment) satisfies TenantCommandOutput,
     ),
+  );
+}
+
+function registerOkRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
+  /*
+   * The OK: one answer for the whole sheet. It runs a cycle for the press route's reason — the run it
+   * starts is work. → docs/spec/36-remote-validation.md#the-ok
+   */
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/ok',
+    checked({ params: EnvironmentParams }, async ({ params, reply }) => {
+      const given = await system.remoteIntents.give(issueOrigin(params.number), params.environment);
+      if (!given.ok) return reply.code(given.code).send({ error: given.error });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      await system.harness.runCycle('manual');
+      return {
+        ok: true,
+        intent: system.store.remoteIntents.getIntent(given.intent.goalRef, given.intent.environment),
+        refused: given.refused,
+      };
+    }),
+  );
+
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/ok/withdraw',
+    checked({ params: EnvironmentParams }, ({ params, reply }) => {
+      const withdrawn = system.remoteIntents.withdraw(issueOrigin(params.number), params.environment);
+      if (withdrawn === null) return reply.code(404).send({ error: 'there is no OK waiting here to take back.' });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      return { ok: true, intent: withdrawn };
+    }),
   );
 }
