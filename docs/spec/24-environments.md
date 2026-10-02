@@ -733,8 +733,9 @@ A validation page waiting for its OK holds the `validate` row open the same way,
 it too ([20](20-validation.md#saying-so-on-the-bench), [36](36-remote-validation.md#the-ok)).
 
 It is read off the **bench**, not off the verdict. A `flagged` verdict would hold the close for good
-on a goal with one failing check, and the operator's way of saying "I am done with this" is the row —
-marked done, or declined — not the checks. The close-out's detail still carries what validation is
+on a goal with one failing check, and the operator's way of saying "I am done with this" is the row,
+not the checks: skipping what they will not run, which settles it, or settling it from a conversation
+([17](17-cockpit.md#an-ask-that-settles-itself-offers-a-conversation-not-a-dismissal)). The close-out's detail still carries what validation is
 outstanding ([20](20-validation.md)), so a row settled early is closed in front of the count rather
 than past it.
 
