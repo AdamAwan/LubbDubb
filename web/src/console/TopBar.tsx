@@ -365,6 +365,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
   if (!view.connected) {
     return (
       <div className="cn-bar">
+        <Ident view={view} />
         <div className="cn-read">
           <span>Link</span>
           <b>offline</b>
@@ -375,13 +376,15 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
         <div className="cn-reads">
           <Asks view={view} actions={actions} />
         </div>
-        <Ident view={view} />
       </div>
     );
   }
 
   return (
     <div className="cn-bar">
+      <Ident view={view} />
+      <div className="cn-sep" />
+
       <Nav view={view} actions={actions} />
 
       <div className="cn-sep" />
@@ -421,8 +424,6 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
             a laptop. See {@link menuEntries}. */}
         <BarMenu view={view} actions={actions} />
       </div>
-      <div className="cn-sep" />
-      <Ident view={view} />
     </div>
   );
 }

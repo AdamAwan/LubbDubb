@@ -5404,7 +5404,7 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
+The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
 chip where there is an outage to report, **two
 gauges** — [Usage](#the-usage-chip) and **Local**, in one pill, with a third **tenant** half where an
 environment declares a tenant command ([36](36-remote-validation.md#where-an-operator-sees-it)) — and a **menu** holding the seven
@@ -5448,9 +5448,8 @@ because `.cn button` resets `font` to `inherit` at (0,1,1) and would otherwise h
 
 ### The ident
 
-**The ident closes the bar on the right** — the robot logo and the `LubbDubb` wordmark, after the menu
-and a `.cn-sep`. The bar opens on the nav, which is what an operator reaches for; the ident is read
-once, so it takes the corner that holds nothing else.
+**The ident opens the bar on the left** — the robot logo and the `LubbDubb` wordmark, then a `.cn-sep`
+before the nav.
 
 The logo is `Logo` (`web/src/components/Logo.tsx`), drawn inline rather than loaded as an image so that
 every colour is a token: the head and antenna stalk are `--cn-fg`, the eyes `--cn-panel`, and the bolts,

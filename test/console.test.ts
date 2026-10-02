@@ -252,11 +252,14 @@ test('a dropped socket draws no gauge, no rail and no situation area', () => {
   assert.ok(!html.includes('cn-sit'), 'the situation area must not render while offline');
 });
 
-test('the ident closes the bar, and its logo flat-lines when the link drops', () => {
+test('the ident opens the bar, and its logo flat-lines when the link drops', () => {
   for (const connected of [true, false]) {
     const html = render(view({ connected }));
     const ident = html.indexOf('cn-ident');
-    assert.ok(ident > html.indexOf('cn-reads'), `the ident is not after the readings with connected=${connected}`);
+    assert.ok(
+      ident > 0 && ident < html.indexOf('cn-read'),
+      `the ident does not open the bar with connected=${connected}`,
+    );
     assert.ok(html.includes('Lubb<b>Dubb</b>'), `no wordmark with connected=${connected}`);
     assert.equal(
       html.includes('cn-logo-alive'),

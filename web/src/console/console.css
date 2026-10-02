@@ -207,6 +207,7 @@
 }
 .cn-logo {
   flex: none;
+  contain: paint;
 }
 .cn-logo-mark {
   fill: var(--cn-red);
@@ -229,10 +230,8 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.cn-logo .cn-logo-pulse {
+.cn-logo-pulse {
   stroke: var(--cn-red);
-}
-.cn-logo-alive .cn-logo-pulse {
   stroke-dasharray: 30 120;
   animation: cn-logo-beat 1.2s linear infinite;
 }
@@ -258,7 +257,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cn-logo-alive .cn-logo-pulse,
+  .cn-logo-pulse,
   .cn-logo-alive .cn-logo-lamp {
     animation: none;
     stroke-dasharray: none;

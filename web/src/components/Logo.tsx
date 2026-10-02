@@ -5,14 +5,13 @@ import type { JSX } from 'react';
 const BEAT = '34,80 46,80 51,71 57,89 62,80 70,80 73,76 76,84 79,80 86,80';
 const FLAT = '34,80 86,80';
 
-export function Logo({ alive, size = 26 }: { alive: boolean; size?: number }): JSX.Element {
-  const mouth = alive ? BEAT : FLAT;
+export function Logo({ alive }: { alive: boolean }): JSX.Element {
   return (
     <svg
-      className={`cn-logo ${alive ? 'cn-logo-alive' : ''}`}
+      className={alive ? 'cn-logo cn-logo-alive' : 'cn-logo'}
       viewBox="0 0 120 120"
-      width={size}
-      height={size}
+      width={26}
+      height={26}
       aria-hidden="true"
     >
       <rect className="cn-logo-mark" x="12" y="56" width="10" height="20" rx="4" />
@@ -22,8 +21,8 @@ export function Logo({ alive, size = 26 }: { alive: boolean; size?: number }): J
       <rect className="cn-logo-head" x="20" y="34" width="80" height="64" rx="18" />
       <circle className="cn-logo-eye" cx="44" cy="58" r="7" />
       <circle className="cn-logo-eye" cx="76" cy="58" r="7" />
-      <polyline className="cn-logo-trace" points={mouth} />
-      <polyline className="cn-logo-trace cn-logo-pulse" points={mouth} />
+      <polyline className="cn-logo-trace" points={alive ? BEAT : FLAT} />
+      {alive && <polyline className="cn-logo-trace cn-logo-pulse" points={BEAT} />}
     </svg>
   );
 }
