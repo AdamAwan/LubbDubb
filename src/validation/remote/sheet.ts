@@ -5,6 +5,7 @@ import type {
   NoSheet,
   RemoteRowKind,
   RemoteRowOutcome,
+  RemoteRun,
   RemoteSheetRow,
   StateQuery,
   ValidationCheck,
@@ -57,17 +58,27 @@ interface SheetInput {
  * a reading can produce, which is why a state row on a store nothing can reach is blocked while
  * every other row on the same sheet still reports.
  */
+/**
+ * Whether a check is a row on a sheet: live, and not declined. A row the operator declined at the accept
+ * gate is settled, and a sheet is a list of what is still to run — assembled, it would be pressed,
+ * dispatched for and reported on, the decline undone by the one surface that never saw it. The page and
+ * the bench read the same rule. → docs/spec/36-remote-validation.md#a-declined-row-is-not-on-the-sheet
+ */
+export function onSheet(check: ValidationCheck): boolean {
+  return liveChecks([check]).length === 1 && check.state !== 'declined';
+}
+
+/** A run still going: `pending` is dispatched-for, not idle. */
+export function remoteRunIsLive(run: RemoteRun | null): boolean {
+  return run?.status === 'pending' || run?.status === 'dispatched';
+}
+
 export function sheetRows(input: SheetInput): SheetRowPlan[] {
   const permits = input.environment.validate?.permits ?? [];
   const out: SheetRowPlan[] = [];
   let seq = 0;
 
-  for (const check of liveChecks(input.checks)) {
-    // A row the operator declined at the accept gate is settled, and a sheet is a list of what is
-    // still to run. Assembled, it would be pressed, dispatched for and reported on — the decline
-    // undone by the one surface that never saw it.
-    // → docs/spec/36-remote-validation.md#a-declined-row-is-not-on-the-sheet
-    if (check.state === 'declined') continue;
+  for (const check of input.checks.filter(onSheet)) {
     seq += 1;
     out.push(checkRow(check, seq, input, permits));
   }

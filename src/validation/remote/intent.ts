@@ -15,7 +15,8 @@ import type { RemoteRunDesk } from './run.js';
 import type { ProposalDesk } from '../../proposals/proposalDesk.js';
 import { checkSetStanding, pendingValidationPlanProposal, validationPlanProposalRef } from '../planApproval.js';
 import { checkTerms } from '../checkMerge.js';
-import { noSheetAssembled } from './sheet.js';
+import { noSheetAssembled, onSheet, remoteRunIsLive } from './sheet.js';
+import { groupBy } from '../../primitives.js';
 import { issueOriginNumber } from '../../issueOrigins.js';
 
 // → docs/spec/36-remote-validation.md#the-ok
@@ -87,7 +88,8 @@ export class RemoteIntentDesk {
       checkSetStanding(store.validation.getValidationPlanRecord(goalRef), () =>
         store.validation.listValidationChecks(goalRef),
       );
-    if (standing().accepted || standing().authoredAt === null) return true;
+    const before = standing();
+    if (before.accepted || before.authoredAt === null) return true;
     const number = issueOriginNumber('root', goalRef);
     const pending =
       number === null
@@ -162,7 +164,10 @@ export class RemoteIntentDesk {
       .listRemoteSheetRows()
       .filter((r) => r.goalRef === goalRef && r.environment === environmentName && r.kind === 'state' && r.selected)
       .map((r) => r.sourceId)
-      .filter((id) => digests.has(id) && !approved.has(digests.get(id)!));
+      .filter((id) => {
+        const digest = digests.get(id);
+        return digest !== undefined && !approved.has(digest);
+      });
   }
 
   /**
@@ -198,9 +203,7 @@ export class RemoteIntentDesk {
  * the sheet was assembled — keyed `${goalRef} ${checkId}`. The press skips them, so the page does too.
  */
 export function goneCheckRows(checks: readonly ValidationCheck[]): Set<string> {
-  return new Set(
-    checks.filter((c) => c.state === 'declined' || c.supersededReason !== null).map((c) => `${c.originRef} ${c.id}`),
-  );
+  return new Set(checks.filter((c) => !onSheet(c)).map((c) => `${c.originRef} ${c.id}`));
 }
 
 /** The rows a page draws and asks about: every stored row but a check row whose check has gone. */
@@ -227,7 +230,7 @@ export function okStanding(input: {
   run: RemoteRun | null;
 }): OkStanding {
   const { rows, intent, run } = input;
-  if (run?.status === 'pending' || run?.status === 'dispatched') return { status: 'running', why: null };
+  if (remoteRunIsLive(run)) return { status: 'running', why: null };
   const answered = intent === null ? null : intentStanding(intent, run);
   if (answered !== null) return answered;
   if (!rows.some(okable)) return { status: 'nothing', why: null };
@@ -262,12 +265,7 @@ export function sheetsAwaitingOk(input: {
   const key = (x: { goalRef: string; environment: string }) => `${x.goalRef} ${x.environment}`;
   const intents = new Map(input.intents.map((i) => [key(i), i]));
   const latest = new Map(input.runs.map((r) => [key(r), r]));
-  const rows = new Map<string, RemoteSheetRow[]>();
-  for (const row of pageRows(input.rows, input.gone)) {
-    const held = rows.get(key(row));
-    if (held === undefined) rows.set(key(row), [row]);
-    else held.push(row);
-  }
+  const rows = groupBy(pageRows(input.rows, input.gone), key);
   const out = new Map<string, string[]>();
   for (const sheet of input.sheets) {
     const k = key(sheet);
@@ -277,9 +275,7 @@ export function sheetsAwaitingOk(input: {
       run: latest.get(k) ?? null,
     });
     if (standing.status !== 'needs-you') continue;
-    const held = out.get(sheet.goalRef);
-    if (held === undefined) out.set(sheet.goalRef, [sheet.environment]);
-    else held.push(sheet.environment);
+    out.set(sheet.goalRef, [...(out.get(sheet.goalRef) ?? []), sheet.environment]);
   }
   return out;
 }

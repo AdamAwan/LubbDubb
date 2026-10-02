@@ -1,4 +1,5 @@
 import type { System } from '../system/system.js';
+import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okable, okStanding, pageRows } from '../validation/remote/intent.js';
@@ -13,9 +14,6 @@ import type {
   IssueShortfall,
   Plan,
   PlanPart,
-  RemoteRun,
-  RemoteRunIntent,
-  RemoteSheetRow,
   ValidationCheck,
   TaskSummary,
   WatchReading,
@@ -135,16 +133,6 @@ function sheetFold(sheet: RemoteSheetView | undefined): string | null {
   );
 }
 
-function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
-  const grouped = new Map<K, T[]>();
-  for (const row of rows) {
-    const held = grouped.get(key(row));
-    if (held) held.push(row);
-    else grouped.set(key(row), [row]);
-  }
-  return grouped;
-}
-
 export function buildGoalWatchWindows(
   store: System['store'],
   environments: EnvironmentConfig[],
@@ -227,17 +215,20 @@ export function buildRemoteSheets(
       environment === undefined
         ? { tenant: null, reseededAt: null, ageMs: null, freshnessMs: null, stale: false, blockedReason: null }
         : resolveTenant({ environment, stamped: tenants, now, operatorTenants }).standing;
+    const rows = pageRows(rowsByGoalEnvironment.get(key) ?? [], gone);
+    const intent = intents.get(key) ?? null;
+    const run = runsByGoalEnvironment.get(key)?.at(-1) ?? null;
     return {
       ...sheet,
-      rows: pageRows(rowsByGoalEnvironment.get(key) ?? [], gone).map((row) => ({
+      rows: rows.map((row) => ({
         ...row,
         reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null,
       })),
-      ...pageStanding(
-        pageRows(rowsByGoalEnvironment.get(key) ?? [], gone),
-        intents.get(key),
-        runsByGoalEnvironment.get(key)?.at(-1),
-      ),
+      run,
+      intent,
+      okable: rows.filter(okable).length,
+      // An environment that no longer validates asks for nothing, as the `validate` row's hold reads it.
+      ok: okStanding({ rows: validate === undefined ? [] : rows, intent, run }),
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
@@ -246,15 +237,6 @@ export function buildRemoteSheets(
       },
     };
   });
-}
-
-/** The page's run, its OK and where it stands, off the rows, the intent and the latest run. */
-function pageStanding(
-  rows: readonly RemoteSheetRow[] = [],
-  intent: RemoteRunIntent | null = null,
-  run: RemoteRun | null = null,
-): Pick<RemoteSheetView, 'run' | 'intent' | 'okable' | 'ok'> {
-  return { run, intent, okable: rows.filter(okable).length, ok: okStanding({ rows, intent, run }) };
 }
 
 export function tenantCommandViews(

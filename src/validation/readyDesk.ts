@@ -5,6 +5,7 @@ import type { Store } from '../store/store.js';
 import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { checkSetReleased } from './planApproval.js';
 import { validationReadyPass } from './ready.js';
+import { groupBy } from '../primitives.js';
 import { goneCheckRows, sheetsAwaitingOk } from './remote/intent.js';
 
 // → docs/spec/20-validation.md
@@ -32,7 +33,7 @@ export class ValidationReadyDesk {
       existing,
       checks,
       released: this.releasedOf(checks),
-      ...this.sheetsOf(),
+      ...this.sheetsOf(checks),
       watchCleared: watchClearedGoals(
         'validate',
         this.environments,
@@ -83,8 +84,7 @@ export class ValidationReadyDesk {
       deliveries: [delivery],
       shortfalls: this.store.verdicts.listShortfalls(),
       existing: open,
-      checks: this.checksByOrigin([originRef]),
-      ...this.sheetsOf(),
+      ...this.answeredOf(originRef),
       opened: null,
       released: null,
       watchCleared: null,
@@ -98,6 +98,11 @@ export class ValidationReadyDesk {
     return settled;
   }
 
+  private answeredOf(originRef: string) {
+    const checks = this.checksByOrigin([originRef]);
+    return { checks, ...this.sheetsOf(checks) };
+  }
+
   private releasedOf(checks: ReadonlyMap<string, readonly ValidationCheck[]>): Set<string> {
     const out = new Set<string>();
     for (const [originRef, its] of checks)
@@ -106,26 +111,25 @@ export class ValidationReadyDesk {
     return out;
   }
 
-  /** The sheet rows by goal, and each goal's environments awaiting an OK — off one read of the rows. */
-  private sheetsOf(): { sheetRows: Map<string, RemoteSheetRow[]>; awaitingOk: Map<string, string[]> } {
-    if (!this.environments.some((e) => e.validate !== undefined))
-      return { sheetRows: new Map(), awaitingOk: new Map() };
-    const rows = this.store.remoteValidation.listRemoteSheetRows();
-    const sheetRows = new Map<string, RemoteSheetRow[]>();
-    for (const row of rows) {
-      const held = sheetRows.get(row.goalRef);
-      if (held === undefined) sheetRows.set(row.goalRef, [row]);
-      else held.push(row);
-    }
+  /**
+   * The sheet rows by goal, and each goal's environments awaiting an OK — off one read of the rows, and
+   * with the checks the pass already read standing in for which rows have left the page.
+   */
+  private sheetsOf(checks: ReadonlyMap<string, readonly ValidationCheck[]>): {
+    sheetRows: Map<string, RemoteSheetRow[]>;
+    awaitingOk: Map<string, string[]>;
+  } {
     const validates = new Set(this.environments.filter((e) => e.validate !== undefined).map((e) => e.name));
+    if (validates.size === 0) return { sheetRows: new Map(), awaitingOk: new Map() };
+    const rows = this.store.remoteValidation.listRemoteSheetRows();
     const awaitingOk = sheetsAwaitingOk({
       sheets: this.store.remoteValidation.listRemoteSheets().filter((s) => validates.has(s.environment)),
       rows,
-      gone: goneCheckRows(this.store.validation.listAllValidationChecks()),
+      gone: goneCheckRows([...checks.values()].flat()),
       intents: this.store.remoteIntents.listIntents(),
       runs: this.store.remoteValidation.listRemoteRuns(),
     });
-    return { sheetRows, awaitingOk };
+    return { sheetRows: groupBy(rows, (row) => row.goalRef), awaitingOk };
   }
 
   private checksByOrigin(origins: readonly string[]): Map<string, ValidationCheck[]> {
