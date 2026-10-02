@@ -150,6 +150,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   a temp directory.** `lubbdubb.project.json` is read from `repoRoot`, and this repo is itself a
   LubbDubb target — the day one is committed here every test on the default starts merging it.
   → [02](docs/spec/02-configuration.md#the-project-layer)
+- **A test touching `/api/plugin` injects `pluginCli` and a temp `desktopCredentialPath`**, or it installs into your own Claude Code. → [11](docs/spec/11-mcp-tools.md#the-plugin)
 - **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter
   reads `lubbdubb.config.json` and the env, so a test on it passes or fails by machine.
   → [02](docs/spec/02-configuration.md#two-loaders)

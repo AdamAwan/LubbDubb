@@ -8,3 +8,7 @@
 # shebang unparseable on any non-Windows checkout.
 .githooks/* text eol=lf
 .claude/hooks/* text eol=lf
+
+# The plugin is hashed into its version and read by Claude Code on every OS; keep it LF
+# so one build of it carries one version everywhere.
+plugin/** text eol=lf

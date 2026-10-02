@@ -47,7 +47,7 @@ async function posting(run: () => void): Promise<string[]> {
   return posted;
 }
 
-const desktop = { folder: '/work', prompt: '/lubbdubb discuss #12', explain: 'so it is talked through' };
+const desktop = { folder: '/work', prompt: '/lubbdubb:plan #12', explain: 'so it is talked through' };
 
 test('a styled link cannot be drawn without naming its usage event', () => {
   // @ts-expect-error a deep link into Claude Code is a press, and names its event

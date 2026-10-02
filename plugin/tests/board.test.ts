@@ -55,7 +55,7 @@ test('draws the band, and nothing once hidden', async ($, on) => {
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({
-      plugin: 'lubbdubb-board',
+      plugin: 'lubbdubb',
       surface,
       component: 'AbovePrompt',
       props: {

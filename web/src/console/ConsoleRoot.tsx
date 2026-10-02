@@ -24,6 +24,7 @@ import { InsightsPage } from '../components/InsightsPage.js';
 import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
 import { Ref } from '../components/refs.js';
+import { PluginBand } from './PluginBand.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -48,6 +49,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
   return (
     <div className="cn">
       <TopBar view={view} actions={actions} />
+      <PluginBand actions={actions} />
       {recoveryBand(view, actions)}
       {/* The next shape *is* the rail's top ask, at full width and carrying its own
           controls, so drawing the rail beside it is the same queue twice — and the

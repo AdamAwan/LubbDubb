@@ -19,7 +19,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'validation.enabled': 'validation plans are always on',
   'validation.desktop':
     'the desktop channel is always on — the cockpit offers a desktop prompt on every unrun check, so a harness that was not listening was a dead end with nothing to say so',
-  'validation.desktopSkill': 'the /lubbdubb skill is always installed and refreshed when the desktop channel starts',
+  'validation.desktopSkill':
+    'the LubbDubb skills ship in the Claude Code plugin, which is rewritten at every start and installed from the cockpit',
   assessment: 'the assessor is always on — a goal with work behind it and nothing in flight is always assessed',
   'assessment.enabled': 'the assessor is always on',
   appraisal: 'the goal appraisal is always on — every fresh goal is appraised before anything is dispatched against it',

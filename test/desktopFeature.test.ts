@@ -4,7 +4,7 @@ import { Store } from '../src/store/store.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildDesktopTools } from '../src/mcp/desktopTools.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import { DESKTOP_SKILL } from '../src/validation/desktopSkill.js';
+import { pluginSkills } from '../src/plugin/bundle.js';
 import { featurePrompt } from '../web/src/cockpit/desktopLink.js';
 import { repoText } from './support/paths.js';
 import type { Issue, IssueRelative } from '../src/types.js';
@@ -106,8 +106,9 @@ test('a number with no stories under it is refused', async () => {
 });
 
 test('the skill and the cockpit name the same command', () => {
-  assert.equal(featurePrompt(500), '/lubbdubb feature 500 ');
-  assert.match(DESKTOP_SKILL, /## Talk about a feature/);
-  assert.match(DESKTOP_SKILL, /feature_read/);
+  assert.equal(featurePrompt(500), '/lubbdubb:feature 500 ');
+  const skill = pluginSkills().find((s) => s.name === 'feature')?.text ?? '';
+  assert.match(skill, /## Talk about a feature/);
+  assert.match(skill, /feature_read/);
   assert.match(repoText('web/src/components/featureCards.tsx'), /prompt=\{featurePrompt\(feature\)\}/);
 });

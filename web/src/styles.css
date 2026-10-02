@@ -7249,6 +7249,18 @@ select:disabled {
 .mcp-down {
   border-color: var(--cn-amber);
 }
+.plugin-band {
+  margin: 8px 16px 0;
+}
+.plugin-steps {
+  margin: 6px 0 2px;
+  padding-left: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.plugin-step-failed {
+  color: var(--cn-red);
+}
 .mcp-step > h3 {
   gap: 10px;
 }

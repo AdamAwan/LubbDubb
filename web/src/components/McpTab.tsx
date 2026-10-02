@@ -3,11 +3,13 @@ import { api } from '../api.js';
 import type { McpChannelPayload } from '../types.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
+import { PluginStep, usePluginStatus } from './PluginStep.js';
 
 // → docs/spec/17-cockpit.md
 
 export function McpTab() {
   const [mcp, setMcp] = useState<McpChannelPayload | null>(null);
+  const skills = usePluginStatus()?.skills ?? [];
 
   useEffect(() => {
     let live = true;
@@ -21,57 +23,42 @@ export function McpTab() {
 
   if (!mcp) return <div className="muted">Loading…</div>;
 
-  const register = `claude mcp add --scope user ${mcp.serverId} -- ${shellArgv([
-    mcp.registration.command,
-    ...mcp.registration.args,
-  ])}`;
-
   return (
     <div className="mcp">
       <p className="muted settings-hint">
-        The harness runs a second MCP channel for the Claude Code <em>you</em> drive, so a validation check that needs a
-        browser, a login or a VPN the fleet does not have can be run at your keyboard and land on the same row. It is
-        three tools and nothing else — read a plan, take one check, report what you saw.
+        The harness ships a Claude Code plugin for the Claude Code <em>you</em> drive. It carries the{' '}
+        <code>/lubbdubb:…</code> skills every <b>Open in Claude Code</b> link calls, the desktop tool channel those
+        skills talk to, and a notice board above your prompt that says what the harness is waiting on you for.
       </p>
 
       {!mcp.running && (
         <p className="empty mcp-down">
-          The channel is not listening, so the command below would reach nothing. The commonest cause is another
-          LubbDubb already holding the socket — the boot log and the Faults panel name which. Everything here is what it
-          would be once it starts.
+          The desktop channel is not listening, so the plugin&apos;s tools would reach nothing. The commonest cause is
+          another LubbDubb already holding the socket — the boot log and the Faults panel name which.
         </p>
       )}
 
-      <Panel density="flush" className="cfg-card mcp-step">
-        <h3>
-          <span className="mcp-n">1</span> Register it, once
-        </h3>
-        <p className="cfg-hint">
-          Run this in any terminal. <code>--scope user</code> puts it in your own Claude Code config rather than in a
-          checkout, which is what makes it available in every repo you work in.
-        </p>
-        <Command text={register} />
-        <p className="cfg-hint mcp-foot">
-          The command carries no secret and never changes. The credential is a file at{' '}
-          <code>{mcp.credentialPath || '(nowhere yet)'}</code> (mode <code>0600</code>) that the bridge reads when
-          Claude Code spawns it, and it is minted fresh at every start — so a restarted harness needs no
-          re-registration. Check it took with <code>claude mcp list</code>.
-        </p>
-      </Panel>
+      <PluginStep />
 
       <Panel density="flush" className="cfg-card mcp-step">
         <h3>
-          <span className="mcp-n">2</span> Ask for a check
+          <span className="mcp-n">2</span> Ask for something
         </h3>
-        <p className="cfg-hint">
-          The harness installs a <code>/lubbdubb</code> skill at <code>{mcp.skillPath || '(not installed)'}</code> and
-          rewrites it at every start, so you do not have to explain the job each time:
-        </p>
-        <Command text="/lubbdubb 284:C" />
+        <p className="cfg-hint">One skill per job, each namespaced under the plugin:</p>
+        <Command text="/lubbdubb:check 284:C" />
         <p className="cfg-hint mcp-foot">
-          <code>284:C</code> is goal 284, check C. <code>284</code> on its own asks what that goal needs. A goal&apos;s
-          validation section also has a <b>Copy desktop prompt</b> button, which is the same request in words for a
-          session that has no skills.
+          <code>284:C</code> is goal 284, check C. The others are{' '}
+          {skills
+            .filter((s) => s !== 'check')
+            .map((s, i, all) => (
+              <span key={s}>
+                <code>{s}</code>
+                {i === all.length - 1 ? '' : i === all.length - 2 ? ' and ' : ', '}
+              </span>
+            ))}{' '}
+          — and a question asked in plain words finds the right one by itself. The tool channel reads its credential
+          from <code>{mcp.credentialPath || '(nowhere yet)'}</code> (mode <code>0600</code>), reminted at every start,
+          so a restarted harness needs no reinstall.
         </p>
       </Panel>
 
@@ -126,8 +113,4 @@ function Command({ text }: { text: string }) {
       </Button>
     </div>
   );
-}
-
-export function shellArgv(argv: readonly string[]): string {
-  return argv.map((arg) => (/[\s"]/.test(arg) ? `"${arg.replaceAll('"', '\\"')}"` : arg)).join(' ');
 }

@@ -1223,11 +1223,25 @@ export interface PetState {
 
 export interface McpChannelPayload {
   running: boolean;
-  serverId: string;
-  registration: { command: string; args: string[] };
   credentialPath: string;
-  skillPath: string;
   tools: { name: string; description: string }[];
+}
+
+/** → docs/spec/11-mcp-tools.md#the-plugin */
+export type PluginStatusPayload = {
+  bundle: { marketplaceDir: string; version: string } | null;
+  skills: string[];
+  legacySkill: boolean;
+} & (
+  | { state: 'unknown'; reason: string }
+  | { state: 'missing'; installed: null }
+  | { state: 'stale' | 'current'; installed: string }
+);
+
+export interface PluginInstallPayload {
+  ok: boolean;
+  steps: { label: string; ok: boolean; detail: string | null }[];
+  status: PluginStatusPayload;
 }
 
 export interface PoolStatePayload {

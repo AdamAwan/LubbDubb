@@ -40,6 +40,7 @@ is about.
 | `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                       |
 | `routes/apiErrors.ts`       | `/api/api-errors` — how often the model API refused an agent's turn                                                                                                        |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                           |
+| `routes/plugin.ts`          | `/api/plugin` and `POST /api/plugin/install` — the operator's Claude Code plugin ([11](11-mcp-tools.md#the-plugin))                                                        |
 | `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))               |
 | `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                           |
 | `routes/work.ts`            | The work graph and its ignore / file verdicts                                                                                                                              |
@@ -1654,27 +1655,53 @@ the semantics, so editing it rule-by-rule is its own shape and its own decision.
 ### `GET /api/mcp`
 
 How the operator points their **own** Claude Code at this harness, for the config page's MCP tab
-([17](17-cockpit.md#the-mcp-tab)): `{ running, serverId, registration: {command, args}, credentialPath,
-skillPath, tools }`, read off the live desktop channel ([11](11-mcp-tools.md#the-desktop-channel)).
+([17](17-cockpit.md#the-mcp-tab)): `{ running, credentialPath, tools }`, read off the live desktop
+channel ([11](11-mcp-tools.md#the-desktop-channel)). It carried
+`skillPath` too, until the skills moved into [the plugin](11-mcp-tools.md#the-plugin); where the old
+skill was is the plugin desk's business now, answered as `legacySkill` on
+[`GET /api/plugin`](#get-apiplugin).
 
-Fetched on open and read-only, both for `GET /api/prompts`' reasons — the bridge path, the two file
-paths and the tool descriptions are all fixed for the life of the process.
+Fetched on open and read-only, both for `GET /api/prompts`' reasons — the bridge path, the credential
+path and the tool descriptions are all fixed for the life of the process.
 
 **Every field is asked of the channel rather than composed here**, and that is the whole of the route.
-`registration` is `McpDesktopServer.registration()`, whose bridge path is resolved from the server
-module's own URL, so it is right in a checkout and in a `dist` install without either being a case
-anybody has to think about; `tools` is `advertised()`, which is what `tools/list` would answer. A
-cockpit that wrote either down would be a second copy of the install instructions, correct on the day
-it was written and silently wrong after the next rename — and the failure is a _connected_ server whose
-every call is refused, or a command that registers a server pointing at nothing.
+`tools` is `advertised()`, which is what `tools/list` would answer; a cockpit that wrote it down would be
+correct on the day it was written and silently wrong after the next rename. It carried `serverId` and a
+`registration` command too, while the tab printed a `claude mcp add` to paste; the plugin's own
+`.mcp.json` is the registration now, so nothing reads them and they went.
 
 `running` is the channel's own `token !== null`. It is a real state and not an error: the stable socket
 is refused when another harness holds it, and the tab says so rather than handing over a command that
 would reach the other one.
 
 The payload **carries no secret**. The credential is a file the bridge reads at spawn, and this route
-names its path only — which is the same property that lets the registration be pasted into a chat, a
-runbook or a ticket.
+names its path only.
+
+### `GET /api/plugin`
+
+Whether the operator's Claude Code has [the LubbDubb plugin](11-mcp-tools.md#the-plugin), for the MCP
+tab's first step and the band under the top bar ([17](17-cockpit.md#the-plugin)):
+`PluginStatusPayload` — `{ state, bundle: {marketplaceDir, version} | null, skills, legacySkill }` with
+`reason` on `unknown` and `installed` on the rest, a union rather than nullable fields. `state` is
+`missing`, `stale`, `current` or `unknown`, and `unknown` is never folded into `missing` — it means the bundle was not written at boot or
+`claude plugin list` could not answer, and a cockpit told _not installed_ on that would ask every
+operator to reinstall a plugin that is fine. `installed` is the version Claude Code holds, `bundle`
+the one this harness wrote; `stale` is the two differing.
+
+`skills` is the plugin's skill names, which the tab lists rather than a copy of its own. Held for a
+minute by `PluginDesk.status()`: each fresh read spawns `claude plugin list --json`, and the minute is
+how long an install from a terminal goes unseen.
+
+### `POST /api/plugin/install`
+
+Installs or updates the plugin at user scope, then removes the old `/lubbdubb` skill (only a file
+carrying the _Managed by LubbDubb_ marker) and the hand-registered `lubbdubb` MCP server
+([11](11-mcp-tools.md#installing-it)). Returns `PluginInstallPayload` — `{ ok, steps: [{label, ok,
+detail}], status }`, `status` read afresh so the cockpit needs no second round trip — with `200` whether
+it worked or not: a failed step is a reading for the operator, with
+the CLI's own line in `detail`, not an unanticipated error. It stops at the first placing step that
+fails, so `steps` ends at the one to look at. **Rate-limited to 6/minute**: each press spawns up to
+four `claude` processes, and a double-click should not queue eight.
 
 ### Launching a brief
 

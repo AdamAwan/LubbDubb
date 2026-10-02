@@ -417,6 +417,7 @@ Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
 | `gitObserver`   | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off.                                                                                                                           |
 | `worktrees`     | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove`, leases slots from a pool as the real one does, and hands back a real empty directory; touches no repository. |
 | `errorMirror`   | The stderr echo (tests silence it).                                                                                                                                                                                        |
+| `pluginCli`     | `ClaudePluginCli` → `FakePluginCli` (`src/plugin/fakePluginCli.ts`). A test reaching `/api/plugin` without it runs the real `claude plugin` against the developer's own plugin store.                                      |
 
 Plus `dbPath: ':memory:'` for an in-memory database.
 

@@ -2,7 +2,6 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   handleRequest,
   toolError,
@@ -16,8 +15,6 @@ import type { DesktopSession, DesktopToolDeps } from './desktopContext.js';
 import { buildDesktopTools } from './desktopTools.js';
 
 // → docs/spec/11-mcp-tools.md
-
-const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
 
 interface McpDesktopServerOptions extends DesktopToolDeps {
   socketPath: string;
@@ -92,10 +89,6 @@ export class McpDesktopServer {
       },
       end: () => this.release(connectionId),
     };
-  }
-
-  registration(): { command: string; args: string[] } {
-    return { command: process.execPath, args: [BRIDGE_PATH, '--desktop'] };
   }
 
   /**

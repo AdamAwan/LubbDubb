@@ -1008,10 +1008,9 @@ than instructs ([23](23-local-runs.md#two-triggers-one-owner));
 settles nothing; and the order the stories under a Feature are worked in, which has no
 drag-to-reorder anywhere and is amended by talking about it
 ([33](33-story-sequencing.md#amending-it)); and [a conversation about a Feature as a whole](#talking-about-a-feature). **Unconditional** — every start binds the stable socket, mints the
-credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
-`validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
-of what the channel costs a deployment that never uses it, and it is the price of the cockpit's four
-deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
+credential at `validation.desktopCredentialPath` (`0600`) and rewrites [the plugin](#the-plugin) beside
+it, on a deployment that configured none of it. That footprint is the whole of what the channel costs
+a deployment that never uses it, and it is the price of the cockpit's deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
 and [the run](20-validation.md#getting-the-application-up);
 [08](08-planning.md#discussing-a-plan) owns the plan one;
 [Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth;
@@ -1061,7 +1060,7 @@ hand.
 and that is what being a read buys: it settles nothing, schedules nothing and claims nothing, so the
 argument that fences every other tool on this socket — which check is this report about — has nothing
 to fence. It carries the goal's standing `appraisal` verbatim — verdict, summary, `missing`, who cast
-it — because the skill's `clarify` job ([20](20-validation.md#the-skill)) is that list worked through
+it — because the `clarify` skill ([20](20-validation.md#the-skill)) is that list worked through
 with the author, and it has to read the list from somewhere.
 
 **The history is the dossier the retrospective agent gets, through the same read and the same
@@ -1082,7 +1081,7 @@ row that the next change to either is free to separate.
 **An environment verdict is passed through three-valued.** The fold is `allGoalReach`
 ([24](24-environments.md#the-lens)) — the cockpit's own, so an operator asking their Claude and an
 operator reading the panel get one answer — and `unknown` is never folded into `absent` on the way
-out. Both the tool's hand-back note and the skill's own section say what the distinction means,
+out. Both the tool's hand-back note and the `ask` skill say what the distinction means,
 because the failure is a sentence: a session told `absent` reports in the operator's words that the
 work has not shipped, when what happened is that a probe could not answer.
 → [24](24-environments.md#the-three-verdicts)
@@ -1104,7 +1103,7 @@ retiring every unstarted part) and runs a cycle to put a fresh one up.
 
 ### Talking about a feature
 
-`/lubbdubb feature 500` is a conversation about a **Feature** rather than one goal — how it is going,
+`/lubbdubb:feature 500` is a conversation about a **Feature** rather than one goal — how it is going,
 what is left, whether the split into stories is right. The cockpit's feature page carries a deep link
 to it ([17](17-cockpit.md#the-feature-page)). `feature_read` (`src/mcp/desktopFeature.ts`) is its one
 read: the Feature's ticket, the summariser's `FeatureSummary` passed through as written, the stored
@@ -1113,7 +1112,7 @@ holding it. It resolves a story to its parent through the same `featureFor` as `
 two tools can never disagree about which Feature a number means.
 
 **It changes nothing, and the skill hands off rather than acting.** Reordering is `order`, a missing
-story is `file`, one story's plan is `discuss` — each of which already owns its write and its
+story is `file`, one story's plan is `plan` — each of which already owns its write and its
 caveats. A second door to any of them here would be a second copy of the rules that fence it.
 **A null summary is passed through as null**, and the skill says so rather than composing one: an
 account the session wrote itself, presented beside the harness's record, reads as the summariser's.
@@ -1365,37 +1364,120 @@ agent's:
   is a separate factory rather than `plan_submit` reached with a different fence.
 - **The credential is a file, and the registration carries no secret.** The token is minted at every
   `listen()` and written to `validation.desktopCredentialPath` at `0600`; `bridge.mjs --desktop`
-  reads it at spawn. So `claude mcp add --scope user lubbdubb -- node …/bridge.mjs --desktop` is a
-  fixed command line, added once, that survives every restart and every reminted token.
+  reads it at spawn, from the path in `LUBBDUBB_DESKTOP_CREDENTIAL`. So the plugin's `.mcp.json` is
+  a fixed command line, installed once, that survives every restart and every reminted token.
 - **No `ALLOWED_MCP_TOOLS` equivalent.** The fleet's grants exist because nobody is at the prompt to
   approve a call ([Launch flags](#launch-flags)). Here somebody is, on their own machine.
 
-The registration is the operator's **only** manual step, and the cockpit's **MCP tab** is where it is
-read: `GET /api/mcp` ([16](16-http-api.md#get-apimcp)) answers the argv, the two paths and the tool
-list off the running channel, and `web/src/components/McpTab.tsx` draws them as three steps with the
-command quoted for a shell ([17](17-cockpit.md#the-mcp-tab)). It is still printed at boot as well —
-the two are one call to `registration()`, so neither can describe a bridge the other does not.
+Installing [the plugin](#the-plugin) is the operator's **only** manual step, and it is one click on
+the cockpit's **MCP tab** ([17](17-cockpit.md#the-mcp-tab)). `GET /api/mcp`
+([16](16-http-api.md#get-apimcp)) still answers the argv, the credential path and the tool list off
+the running channel, for the tab's other two steps. Nothing prints a `claude mcp add` any more, at
+boot or on the tab: a hand registration beside the plugin's is a second server named `lubbdubb`.
 
 Per-connection state is the reason `SocketChannel` mints a connection id: a claim belongs to one
 connection, so closing that terminal releases it and a second terminal sharing the same token cannot
 release the first one's check.
 
-### The notice board
+### The plugin
 
-`mods/lubbdubb-board/` is a Claude Code **mod** (a plugin of function hooks) for the same operator's
-own Claude Code. The `/lubbdubb` skill answers only when asked; the board answers without being
-asked. It draws one line above the prompt — `LubbDubb · 1 question · 2 to approve · 1 task for you ·
-fleet paused` — raises a toast for each item that is new since its last look, and adds `/board`,
-which lists the items.
+Everything the operator's own Claude Code needs from the harness arrives as **one Claude Code plugin**,
+`lubbdubb`: the skills, the tool channel's registration, and [the notice board](#the-notice-board).
+`plugin/` is its source — `.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`, `hooks/`, `types/`,
+and `tests/`, which is not shipped.
+
+**Eleven skills, one per job:** `fleet`, `ask`, `feature`, `file`, `clarify`, `plan`, `order`, `run`,
+`eject`, `check`, `describe` ([20](20-validation.md#the-skill) owns what they say). They were one
+`/lubbdubb` skill told apart by its argument, held as a string in a `.ts` module; as static files each
+job is one document, read on its own and loaded only when it is the job.
+
+- **A plugin skill is reachable only namespaced.** `/lubbdubb:check 284:C` reaches it;
+  `/lubbdubb check` and a bare `/check` reach nothing — verified against the CLI. So every deep link
+  the cockpit builds (`web/src/cockpit/desktopLink.ts`) and every comment that names a command
+  (`/lubbdubb:clarify 12`, [06](06-issue-pickup.md)) carries the `lubbdubb:` prefix, and a new one
+  must too: an unqualified command fills the composer with something that does nothing, with nothing
+  red.
+- **`clarify` carries its own copy of the `file` skill's _What a ticket has to say_.** A skill cannot
+  include another's text, and clarify is that bar worked through with the author. Edit one and edit
+  the other, or the two hold a ticket to different bars.
+
+#### The bundle
+
+`writePluginBundle` (`src/plugin/bundle.ts`), called at **every** boot by `publishPlugin` in
+`src/server/main.ts`, writes a one-plugin local marketplace to
+`<dirname(validation.desktopCredentialPath)>/plugin` — `~/.lubbdubb/plugin` on the defaults:
+`.claude-plugin/marketplace.json` (marketplace `lubbdubb`) and a `lubbdubb/` folder beside it holding
+
+- the shipped files, and a copy of `src/mcp/bridge.mjs` at `mcp/bridge.mjs`;
+- a `.mcp.json` declaring server `lubbdubb` as `node ${CLAUDE_PLUGIN_ROOT}/mcp/bridge.mjs --desktop`,
+  with `LUBBDUBB_DESKTOP_CREDENTIAL` set to the configured credential path;
+- `plugin.json` with its `userConfig` defaults `url` and `tokenFile` filled in with this harness's API
+  URL and the absolute path of its token file;
+- each `SKILL.md` suffixed with the _Managed by LubbDubb_ marker, and with the _Where LubbDubb's own
+  source is_ section when `installRoot()` resolves one.
+
+**It is a copy, not a reference to the repository**, because `claude plugin install` copies the
+plugin into `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` — verified — so a path into
+the checkout is a path the installed plugin never reads. **The version is `1.0.0-<12 hex of a sha256
+over every file>`**, because `claude plugin update` sees a change only through a new version: a
+hand-bumped number is one forgotten bump from an operator running last month's skills against this
+month's tools, and a digest moves exactly when what the plugin carries moves — not on a restart that
+changed nothing. **A boot whose digest matches the version already on disk writes nothing**, so the
+marketplace Claude Code reads is not churned on every restart.
+
+#### Installing it
+
+`PluginDesk` (`src/plugin/desk.ts`; `system.plugin`, built by `buildPluginDesk` in
+`src/system/systemFoundation.ts`) drives the `claude` CLI through a `PluginCli` seam:
+`ClaudePluginCli` spawns `config.claudeCommand` with `windowsHide`, and `BuildOptions.pluginCli`
+injects `FakePluginCli` (`src/plugin/fakePluginCli.ts`), so no test touches the real plugin store.
+
+- **`status()` is four-valued, and `unknown` is never folded into `missing`.** It reads
+  `claude plugin list --json` and answers `missing`, `stale` (installed at another version)
+  — reading the **user-scope** row only, because the links open sessions in any folder and a project or
+  local install would answer `stale` and then send `update --scope user` at a plugin that is not there —
+  `current`, or `unknown` — the bundle was not written, or the CLI could not answer — with a `reason`.
+  The answer is held for a minute, and dropped on a publish or an install: each read spawns a `claude`,
+  and the band and the tab are drawn far more often than anybody installs anything.
+  Folded into `missing`, a CLI that is briefly unreachable draws an install band over every page of a
+  deployment that is fine. It also answers `legacySkill`: the old file at
+  `validation.desktopSkillPath` still exists **and** carries the marker.
+- **`install()` places, then tidies, and stops at the first failed placing step.**
+  `claude plugin marketplace add <dir> --scope user` (idempotent), then `plugin install
+lubbdubb@lubbdubb --scope user --json --config url=… --config tokenFile=…` — or `plugin update`
+  if it is already installed. **A `plugin list` that cannot answer stops it there** rather than
+  guessing `install` over a plugin that may already be in place. Then the old skill is deleted, with its
+  folder if that leaves it empty, and the hand registration is removed — `claude mcp remove --scope user
+  lubbdubb` — **only when `claude mcp get lubbdubb` shows it is the old bridge** (`bridge.mjs
+  --desktop`). Every step is reported as `{label, ok, detail}`, the payload carries the status read
+  afresh afterwards, and any failure goes through `errors.record`.
+- **A second press while one is running is handed the first one's answer**, so two tabs cannot run
+  two `marketplace add`/`install` pairs into one plugin store.
+- **Only what the harness wrote is removed.** `validation.desktopSkillPath` points into the
+  operator's own skills directory, and a `SKILL.md` there without the marker is theirs; a user-scope
+  server named `lubbdubb` that is not the old bridge is theirs too.
+- **The old registration has to go.** Beside the plugin's, two servers named `lubbdubb` both connect
+  on one credential, and which one a session is talking through is not something anybody can see.
+
+`GET /api/plugin` and `POST /api/plugin/install` ([16](16-http-api.md#get-apiplugin)) are the
+routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their callers.
+
+#### The notice board
+
+`plugin/hooks/` is a Claude Code **mod** (function hooks) inside the same plugin. The skills answer
+only when asked; the board answers without being asked. It draws one line above the prompt —
+`LubbDubb · 1 question · 2 to approve · 1 task for you · fleet paused` — raises a toast for each item
+that is new since its last look, and adds `/board`, which lists the items.
 
 - **It is a reader of the HTTP API, not of this channel.** It polls `GET
 /api/state?sections=inbox,control` ([16](16-http-api.md)) every 30 seconds with the cockpit's
-  bearer token: `LUBBDUBB_TOKEN` if set, else the file its `tokenFile` option names. The MCP socket
-  is for a model making calls; nothing here is a model, and the board costs no tokens.
+  bearer token: `LUBBDUBB_TOKEN` if set, else the file its `tokenFile` option names, which the bundle
+  defaults to this harness's own. The MCP socket is for a model making calls; nothing here is a
+  model, and the board costs no tokens.
 - **It counts what the cockpit's inbox counts:** open escalations, `pending` proposals, `open`
   human tasks, and `control.paused`. Plan text a withheld plan would show never reaches it, because
   `inboxSection` already masks it before the wire.
-- **It settles nothing.** No button on the board writes; `/board` points at `/lubbdubb fleet` and
+- **It settles nothing.** No button on the board writes; `/board` points at `/lubbdubb:fleet` and
   the cockpit, where every write goes through the object the cockpit's click goes through
   ([above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)).
 - **A harness it cannot reach draws nothing.** An unanswered or refused poll clears the board, so a
@@ -1403,10 +1485,10 @@ which lists the items.
 - **The first look toasts nothing.** Toasts are the difference between two looks, so starting a
   session with ten items waiting draws the line, not ten toasts.
 
-It is loaded with `claude --plugin-dir <repo>/mods/lubbdubb-board`, or by naming that folder in
-`CLAUDE_CODE_PLUGIN_DIRS`. The mod API is early access and changes between Claude Code releases;
-`claude plugin validate` and `claude plugin test` on the folder are its checks, and `npm run check`
-does not run them.
+The mod API is early access and changes between Claude Code releases; `claude plugin validate` and
+`claude plugin test` on `plugin/` are its checks, and `npm run check` does not run them.
+`claude --plugin-dir <repo>/plugin` loads the source directly for working on it — without the
+bundle's filled-in defaults or its copy of the bridge, so the skills load and the tools do not.
 
 ## The wire protocol
 

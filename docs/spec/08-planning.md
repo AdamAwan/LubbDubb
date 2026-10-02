@@ -1677,7 +1677,7 @@ was.
 `desktopDeepLink(folder, prompt)` (`web/src/cockpit/desktopLink.ts`) builds
 
 ```
-claude://code/new?q=/lubbdubb%20discuss%20284&folder=<config.desktopFolder>
+claude://code/new?q=%2Flubbdubb%3Aplan+284&folder=<config.desktopFolder>
 ```
 
 `q` is prefilled rather than sent, so the operator reads the command before it goes; the client caps
@@ -1686,8 +1686,8 @@ state snapshot as `config.desktopFolder` — without it the session opens wherev
 which is a Claude that cannot read the plan it was sent to argue about.
 
 **The host is `code`, not `claude.ai`.** The client routes the two differently, and only this one
-lands on its Claude Code surface, which has the repository, the `/lubbdubb` skill and the harness's
-MCP registration. A plain chat has none of the three. (`claude-cli://open` reaches the same engine and
+lands on its Claude Code surface, which has the repository and
+[the LubbDubb plugin](11-mcp-tools.md#the-plugin) — its skills and its MCP server. A plain chat has none of the three. (`claude-cli://open` reaches the same engine and
 spawns a _terminal_, which is not what a cockpit button should do to somebody.)
 
 A deep link only fires on the machine the browser is on. That is the same limit the desktop
@@ -1696,8 +1696,8 @@ command is in the `title` as well, for an operator who has to type it.
 
 ### What the session does
 
-The `/lubbdubb` skill (`src/validation/desktopSkill.ts`, rewritten into the operator's Claude Code on
-every boot) carries a `discuss <n>` arm beside its `<n>:<letter>` one. It says: read the plan, argue
+The `/lubbdubb:plan` skill (`plugin/skills/plan/SKILL.md`, one of the plugin's eleven,
+[20](20-validation.md#the-skill); it was the single skill's `discuss <n>` arm) says: read the plan, argue
 with it against the code, amend it, then stop and send them back to the cockpit. It explicitly does
 **not** do the work — a session that starts implementing has answered a question nobody asked.
 

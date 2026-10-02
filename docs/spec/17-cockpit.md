@@ -2295,7 +2295,7 @@ dead end [refs](#links) exists to prevent.
 - **Open in Claude Code** is the row's one control that writes nothing, and it is named for where it
   goes — the one label every deep link in the cockpit carries
   ([above](#opening-the-operators-own-claude-code)). An `<a>` carrying
-  `claude://code/new?q=/lubbdubb ask <n> &folder=<config.desktopFolder>`, built by the same
+  `claude://code/new?q=/lubbdubb:ask <n> &folder=<config.desktopFolder>`, built by the same
   `desktopDeepLink` the plan sheet's and the validation card's hand-offs
   use ([20](20-validation.md#starting-a-run-from-the-cockpit)), so it opens the operator's own Claude
   Code on the goal's checkout with the command already in the composer and the harness's whole record
@@ -2305,7 +2305,7 @@ dead end [refs](#links) exists to prevent.
   repository, and joining the two by hand.
   - **The question is not in the link.** The other three deep links start a job with one meaning, so
     the whole command is prefilled; this one starts a conversation whose subject the operator has not
-    said yet, and `q` fills the composer without sending. What lands is `/lubbdubb ask 284` with the
+    said yet, and `q` fills the composer without sending. What lands is `/lubbdubb:ask 284` with the
     cursor after it — the half they should not have to type — because there is no reading of a click
     that says which question it was.
   - **The command is in the title as well as the `href`**, the deep link's standing rule: the link
@@ -2824,7 +2824,7 @@ news.
 The check's hand-off is the odd one out and is the reason it exists: it writes nothing. A desktop
 session is started from the operator's own Claude Code, not from here, so the control is an `<a>`
 carrying a `claude://code/new` deep link that opens that client on the goal's checkout with
-`/lubbdubb <issue>:<letter>` prefilled — the same builder the plan sheet's hand-off uses — and the
+`/lubbdubb:check <issue>:<letter>` prefilled — the same builder the plan sheet's hand-off uses — and the
 cockpit's part in that run ends there. Without it the third runner is the only one with no trace on
 the surface managing the other two. → [20](20-validation.md#starting-a-run-from-the-cockpit)
 
@@ -5433,12 +5433,13 @@ wraps: the cheaper offer is only offered first while it is beside the other one.
 as a complaint about the fleet is not a fault in it — it is _why has this not moved_, which the
 harness's own record settles in a sentence, and which nobody asked because asking meant opening a
 client, finding the checkout and remembering the skill. The control is that, as a link: a
-`DesktopLink` (`questionPrompt`, `web/src/cockpit/desktopLink.ts`) carrying `/lubbdubb ` and the
-checkout the fleet works on, so the operator's own Claude Code opens with the skill in the composer
-and the cursor after it. It carries **no argument**, unlike the four hand-offs drawn beside the thing
-they address: this one is drawn beside the wordmark, before the operator has decided which goal the
-question is about, and the skill routes on the words they type — a goal number in them is the goal
-job, none is the fleet one ([20](20-validation.md#the-skill)). Unsent for `Ask`'s reason one step
+`DesktopLink` (`questionPrompt`, `web/src/cockpit/desktopLink.ts`) carrying `/lubbdubb:fleet ` and
+the checkout the fleet works on, so the operator's own Claude Code opens with the skill in the
+composer and the cursor after it. It carries **no argument**, unlike the four hand-offs drawn beside
+the thing they address: this one is drawn beside the wordmark, before the operator has decided which
+goal the question is about. It names `fleet`, the skill for a question with no goal in it, because
+there is no longer one skill to route on the words: a plugin skill is reachable only by its
+namespaced name, so a bare `/lubbdubb ` reaches nothing ([11](11-mcp-tools.md#the-plugin)). Unsent for `Ask`'s reason one step
 further along: there is not even a subject yet.
 
 **It is also the one deep link that does not say _Open in Claude Code_.** It says **`Question?`**. The
@@ -6018,7 +6019,7 @@ type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same pa
 `?goal=`, with its crumb back to the tab it came from. On a tracker with no hierarchy there is no page to draw,
 and the goal page stands.
 
-**The page carries one deep link: _Open in Claude Code_ with `/lubbdubb feature <n> `** (`featurePrompt`,
+**The page carries one deep link: _Open in Claude Code_ with `/lubbdubb:feature <n> `** (`featurePrompt`,
 `web/src/cockpit/desktopLink.ts`), drawn by `FeatureCard` on its page and only on a Feature — a promoted
 goal's page has the goal's own. Like the goal's `ask`, it fills the composer and waits, because it starts a
 conversation rather than a job ([11](11-mcp-tools.md#talking-about-a-feature)).
@@ -6873,27 +6874,47 @@ decision. The config tab saves the list _whole_, which is the part #401 covers.
 
 `web/src/components/McpTab.tsx`, reading `GET /api/mcp` ([16](16-http-api.md#get-apimcp)). How the
 operator points their **own** Claude Code at this harness, in the three steps it actually takes:
-register the bridge once, ask for a check with `/lubbdubb 284:C`, and what the channel can do when it
-answers.
+[install the plugin](#the-plugin), ask for something with `/lubbdubb:check 284:C` (and the other ten
+skill names beside it), and what the channel can do when it answers.
 
 **The tab exists because the one manual step in an otherwise unconditional channel had nowhere to be
-read.** Every start binds the socket, mints the credential and rewrites the skill; the operator's half
-is a single `claude mcp add`, and it was written down in two places, neither of which is where anybody
-looks: a boot line that has scrolled away, and [11](11-mcp-tools.md#the-desktop-channel). A channel
-nobody registered fails the way this repo's sharp edges do — the **Copy desktop prompt** button on a
-goal's validation section reaches nothing, and a harness that never asks for a check to be run here
-looks exactly like one that has no checks needing it.
+read.** Every start binds the socket, mints the credential and rewrites the plugin bundle; the
+operator's half used to be a `claude mcp add` written down in two places, neither of which is where
+anybody looks: a boot line that has scrolled away, and [11](11-mcp-tools.md#the-desktop-channel). A
+channel nobody registered fails the way this repo's sharp edges do — every _Open in Claude Code_ link
+reaches nothing, and a harness that never asks for a check to be run here looks exactly like one that
+has no checks needing it. The step is now a button, and the hand command is gone from the tab and the
+boot log both: a registration typed beside the plugin's is a second server of the same name.
 
-**Nothing on the tab is written down in the cockpit.** The command line comes from the channel's own
-`registration()`, the paths from `validation.*`, the tools from what `tools/list` would answer — see
-[16](16-http-api.md#get-apimcp) for why each is asked rather than composed. What the tab adds is the
-one thing a payload cannot carry: the argv **quoted as a shell needs it back**. `process.execPath` is
-routinely `C:\Program Files\nodejs\node.exe`, and unquoted that line registers a server
-called `C:\Program` — which succeeds, and fails later as a channel that will not connect.
+**Nothing on the tab is written down in the cockpit.** The credential path and the tools come from the
+channel itself — see [16](16-http-api.md#get-apimcp) for why each is asked rather than composed — and
+the plugin's state from `GET /api/plugin`.
 
-A channel that is not listening is said so, above a command that is otherwise correct: the stable
-socket is refused when another harness already holds it, and the honest answer is what the tab draws
-rather than a registration that would connect to the other one.
+A channel that is not listening is said so, above the steps: the stable socket is refused when another
+harness already holds it, and the honest answer is what the tab draws rather than a plugin whose tools
+would connect to the other one.
+
+### The plugin
+
+**Step 1 is `PluginStep`** (`web/src/components/PluginStep.tsx`), over `GET /api/plugin` and
+`POST /api/plugin/install` ([16](16-http-api.md#get-apiplugin), [11](11-mcp-tools.md#installing-it)).
+It draws a status line — installed and current, installed at an older build than this harness has,
+not installed (naming the old `/lubbdubb` skill when it is still there, which the links no longer
+call), or could not tell, with the reason — and, unless the plugin is current, an **Install** or
+**Update** button (an `AsyncButton`, so a refused press flashes and says why). The press shows each
+step the desk ran with its tick or cross and the failure's own line, and the status the install answered
+with replaces the one on screen. **The tab and the band share one reading** (`usePluginStatus`): each
+fresh read spawns a `claude` on the harness, and the band must drop the moment the tab's press lands
+rather than at the next reload. The foot names what the click runs and where the bundle is written, so
+an operator who would rather run the CLI by hand has what they need.
+
+**The band is `PluginBand`** (`web/src/console/PluginBand.tsx`), drawn under the top bar on **every**
+console page while the plugin is `missing` or `stale`, with a button to the MCP tab. Every deep link in
+the cockpit ([below](#opening-the-operators-own-claude-code)) calls one of the plugin's skills, so a
+missing plugin is not a configuration detail on one tab: it is every _Open in Claude Code_ on every
+page doing nothing, and the band is where that is said before somebody presses one. **`unknown` draws
+nothing.** It means the CLI could not answer, not that the plugin is absent, and a band that cried
+_not installed_ whenever `claude` was slow to start would be the one everybody learns to scroll past.
 
 ## Insights
 
@@ -8048,7 +8069,7 @@ different kind of plan ([08](08-planning.md#a-plan-is-a-list-of-parts)).
 
 The sheet's hand-off is an `<a>`, not a button — the only control on the sheet that is. It carries
 `desktopDeepLink(config.desktopFolder, discussPrompt(n))` (`web/src/cockpit/desktopLink.ts`), which
-opens the operator's own Claude Code on the goal's checkout with `/lubbdubb discuss <n>` prefilled.
+opens the operator's own Claude Code on the goal's checkout with `/lubbdubb:plan <n>` prefilled.
 A destination belongs on an anchor rather than behind a click handler. It is drawn only when the plan's
 origin names a goal number, which is what `plan_amend` resolves a plan by.
 
@@ -8161,7 +8182,10 @@ Six controls hand work to the operator's own Claude Code rather than to the flee
 question hand-off and its **run it locally**, the top bar's, the validation card's, the Feature
 board's story-order one, and the plan sheet's. They are all `<DesktopLink>`
 (`web/src/components/DesktopLink.tsx`), over the scheme and the prompt builders in
-`web/src/cockpit/desktopLink.ts`.
+`web/src/cockpit/desktopLink.ts`. **Every builder names a skill by its namespaced name**,
+`/lubbdubb:<skill>`: the skills are the [plugin](#the-plugin)'s, and a plugin skill is never reachable
+unqualified, so a builder that dropped the prefix would fill the composer with a command that does
+nothing ([11](11-mcp-tools.md#the-plugin)).
 
 **Five of them say "Open in Claude Code ↗".** They said six different things — `Ask Claude Code`,
 `run it locally`, `Question?`, `Run it in Claude Code` and `Discuss…` twice — and six names for one act
@@ -8207,7 +8231,7 @@ and pins that no other `.tsx` builds one of these links.
 
 **`ready` is why the clause is a prop and not a constant.** Most commands are complete and send as
 they land; the two that start a **conversation** deliberately are not — the goal's fills the composer
-with `/lubbdubb ask 284 ` so the cursor sits after the number, and the bar's with `/lubbdubb `. A title
+with `/lubbdubb:ask 284 ` so the cursor sits after the number, and the bar's with `/lubbdubb:fleet `. A title
 promising a send that never comes is worse than none. It is also the only thing left distinguishing
 those two from the rest, now that the label does not.
 
