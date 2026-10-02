@@ -1609,6 +1609,14 @@ lubbdubb@lubbdubb --scope user --json --config url=… --config tokenFile=…` �
 - **The old registration has to go.** Beside the plugin's, two servers named `lubbdubb` both connect
   on one credential, and which one a session is talking through is not something anybody can see.
 
+- **An installed plugin is updated at boot; a missing one is not installed.** `refresh()`, called by
+  `publishPlugin` straight after the bundle is written, reads the status afresh and runs `install()`
+  only on `stale` — a user-scope install at another version. Somebody installing it once is the
+  consent; a plugin nobody installed stays a button, `unknown` is never updated over, and
+  `current` spawns nothing past the one `plugin list`. It does not block boot, and a failure is
+  recorded like a pressed one, leaving the band and the tab offering Update. A Claude Code session
+  already open keeps the version it loaded until it restarts.
+
 `GET /api/plugin` and `POST /api/plugin/install` ([16](16-http-api.md#get-apiplugin)) are the
 routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their callers.
 

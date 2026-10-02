@@ -297,6 +297,30 @@ test('only a user-scope install counts, and a second press shares the first', as
   );
 });
 
+test('a boot refresh updates only a plugin somebody already installed', async () => {
+  const stale = new FakePluginCli();
+  stale.installed = [{ id: PLUGIN_ID, version: '1.0.0-old', scope: 'user' }];
+  const updated = await desk(stale).plugin.refresh();
+  assert.equal(updated?.ok, true);
+  assert.ok(stale.calls.some((c) => c[1] === 'update' && c[2] === PLUGIN_ID));
+
+  for (const installed of [[], [{ id: PLUGIN_ID, version: '1.0.0-old', scope: 'local' }]]) {
+    const cli = new FakePluginCli();
+    cli.installed = installed;
+    assert.equal(await desk(cli).plugin.refresh(), null, 'not installed at user scope, so nobody asked for it');
+    assert.ok(!cli.calls.some((c) => c[1] === 'install' || c[1] === 'update' || c[1] === 'marketplace'));
+  }
+
+  const current = new FakePluginCli();
+  const { plugin, bundle } = desk(current);
+  current.installed = [{ id: PLUGIN_ID, version: bundle.version, scope: 'user' }];
+  assert.equal(await plugin.refresh(), null);
+
+  const down = new FakePluginCli();
+  down.refuse.set('plugin list', { code: 1, stdout: '', stderr: 'claude: not logged in' });
+  assert.equal(await desk(down).plugin.refresh(), null, 'a CLI that cannot answer is not updated over');
+});
+
 test('a corrupt manifest on disk is rewritten, not refused', () => {
   const into = input();
   writePluginBundle(into);
