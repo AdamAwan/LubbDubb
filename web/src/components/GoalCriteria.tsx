@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { api, type CriteriaVersionReading, type GoalCriteriaReading } from '../api.js';
 import type { CriteriaStanding } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { BareButton, Button } from './button.js';
+import { Button } from './button.js';
+import { Collapsible, FoldToggle } from './collapsible.js';
 import { Tag, type TagTone } from './tag.js';
 import { relTime } from './util.js';
 
@@ -263,15 +264,7 @@ function CriteriaHeading({
       {/* The disclosure is the card's own, as the prediction panel's is: only this
           card knows whether anybody has written criteria, so only it can say
           whether there is a record here to fold. */}
-      <BareButton
-        usage={showing ? 'criteria.close' : 'criteria.expand'}
-        className="cn-disc"
-        aria-expanded={showing}
-        onClick={() => onToggle(!showing)}
-      >
-        <i className="cn-caret">{showing ? '▾' : '▸'}</i>
-        What “done” means
-      </BareButton>
+      <FoldToggle subject="criteria" open={showing} onToggle={onToggle} label="What “done” means" />
       {versionCount > 0 && <i className="cn-n">v{versionCount}</i>}
       {drifted > 0 && (
         <Tag tone="amber" title={STANDING['post-work'].why}>
@@ -297,8 +290,11 @@ function CoverageList({ coverage }: { coverage: GoalCriteriaReading['coverage'] 
 
 function EarlierVersions({ earlier, now }: { earlier: CriteriaVersionReading[]; now: number }): JSX.Element {
   return (
-    <details className="cn-crit-chain">
-      <summary>{earlier.length === 1 ? 'The version behind it' : `The ${earlier.length} versions behind it`}</summary>
+    <Collapsible
+      subject="criteria"
+      className="cn-crit-chain"
+      title={<>{earlier.length === 1 ? 'The version behind it' : `The ${earlier.length} versions behind it`}</>}
+    >
       <ol className="cn-crit-olds">
         {earlier.map((version) => (
           <li className="cn-crit-old" key={version.id}>
@@ -316,7 +312,7 @@ function EarlierVersions({ earlier, now }: { earlier: CriteriaVersionReading[]; 
           </li>
         ))}
       </ol>
-    </details>
+    </Collapsible>
   );
 }
 

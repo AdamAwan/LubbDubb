@@ -3,8 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, GoalSection } from '../view/goalPage.js';
 import { goalSectionsOpen, GOAL_SECTIONS } from '../view/goalPage.js';
-import { BareButton } from '../components/button.js';
-import type { ControlUsage, UsageSubject } from '../types.js';
+import { FoldToggle, type FoldSubject } from '../components/collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -41,10 +40,6 @@ export function buildFolds(page: GoalPageView, view: CockpitView, actions: Cockp
   return Object.fromEntries(entries) as Record<GoalSection, Fold>;
 }
 
-type FoldSubject = {
-  [S in UsageSubject]: `${S}.expand` | `${S}.close` extends ControlUsage ? S : never;
-}[UsageSubject];
-
 export function Disclosure({
   subject,
   open,
@@ -56,11 +51,5 @@ export function Disclosure({
   onToggle: (open: boolean) => void;
   label: string;
 }): JSX.Element {
-  const usage: ControlUsage = open ? `${subject}.close` : `${subject}.expand`;
-  return (
-    <BareButton usage={usage} className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
-      <i className="cn-caret">{open ? '▾' : '▸'}</i>
-      {label}
-    </BareButton>
-  );
+  return <FoldToggle subject={subject} open={open} onToggle={onToggle} label={label} />;
 }

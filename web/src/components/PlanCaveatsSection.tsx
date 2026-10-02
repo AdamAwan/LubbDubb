@@ -1,7 +1,7 @@
 import { CaveatChecklist } from './CaveatChecklist.js';
 import { renderMarkdown } from './markdown.js';
-import { logUsage } from '../cockpit/usage.js';
 import { JumpSection, type Derived, type PlanModalProps } from './planModalShared.js';
+import { Collapsible } from './collapsible.js';
 
 export function CaveatsSection({
   plan,
@@ -85,20 +85,16 @@ function Caveat({
   open?: boolean;
 }) {
   return (
-    <details className={`pm-flag ${kind}`} open={open}>
-      {/* On the summary rather than on the `details` toggle event, so only an
-       *opening* is a reading: a fold shut is not somebody reading a caveat. */}
-      <summary
-        className="pm-flag-head"
-        onClick={(e) => {
-          if (e.currentTarget.parentElement?.matches('[open]') !== true) logUsage('plan.expand');
-        }}
-      >
-        <span className="pm-section-label">{label}</span>
-        <span className="pm-flag-teaser">{teaser(body)}</span>
-      </summary>
+    <Collapsible
+      subject="plan"
+      className={`pm-flag ${kind}`}
+      defaultOpen={open}
+      logClose={false}
+      title={<span className="pm-section-label">{label}</span>}
+      aside={<span className="pm-flag-teaser">{teaser(body)}</span>}
+    >
       <div className="pm-prose">{renderMarkdown(body, refUrls)}</div>
-    </details>
+    </Collapsible>
   );
 }
 

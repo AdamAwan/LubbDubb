@@ -13,7 +13,7 @@ const CLICKABLE = [
     message: `A role="button" is a button nobody named a usage event for. Draw it with BareButton, or SvgButton inside an <svg> (web/src/components/button.tsx). ${SPEC}`,
   },
   {
-    selector: "JSXOpeningElement[name.name=/^(?!details$|summary$)[a-z]/] > JSXAttribute[name.name='onClick']",
+    selector: "JSXOpeningElement[name.name=/^[a-z]/] > JSXAttribute[name.name='onClick']",
     message: `An onClick on a plain element is a control nobody named a usage event for. Draw it with Button or BareButton (web/src/components/button.tsx), which require one. ${SPEC}`,
   },
   {
@@ -21,6 +21,12 @@ const CLICKABLE = [
     message: `A tag chosen at runtime draws a <button> the element rule cannot see. Render BareButton on that branch instead. ${SPEC}`,
   },
 ];
+
+const FOLD = {
+  selector: "JSXOpeningElement[name.name='details']",
+  message:
+    'A <details> is a fold drawn by hand, with its own caret, its own look and no usage event. Use Collapsible or FoldToggle (web/src/components/collapsible.tsx). → docs/spec/17-cockpit.md#the-fold',
+};
 
 const STYLED_AS_BUTTON = {
   selector: "CallExpression[callee.name='buttonClass']",
@@ -32,7 +38,15 @@ export default tseslint.config(
     // `.claude/worktrees/` holds sibling checkouts of this same repo — linting them
     // duplicates every finding under a path that is not the one to fix, and buries a
     // real error in thousands of copies.
-    ignores: ['dist/**', '.testbuild/**', 'web/dist/**', 'coverage/**', 'node_modules/**', '.lubbdubb/**', '.claude/worktrees/**'],
+    ignores: [
+      'dist/**',
+      '.testbuild/**',
+      'web/dist/**',
+      'coverage/**',
+      'node_modules/**',
+      '.lubbdubb/**',
+      '.claude/worktrees/**',
+    ],
   },
 
   // Base JS + TypeScript recommended rules for all source.
@@ -97,7 +111,7 @@ export default tseslint.config(
   },
   {
     files: ['web/**/*.{ts,tsx}'],
-    rules: { 'no-restricted-syntax': ['error', ...CLICKABLE, STYLED_AS_BUTTON] },
+    rules: { 'no-restricted-syntax': ['error', ...CLICKABLE, STYLED_AS_BUTTON, FOLD] },
   },
   {
     files: [
@@ -105,7 +119,7 @@ export default tseslint.config(
       'web/src/components/ConfirmButton.tsx',
       'web/src/components/DesktopLink.tsx',
     ],
-    rules: { 'no-restricted-syntax': ['error', ...CLICKABLE] },
+    rules: { 'no-restricted-syntax': ['error', ...CLICKABLE, FOLD] },
   },
   {
     files: ['web/src/components/button.tsx'],

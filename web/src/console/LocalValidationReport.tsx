@@ -14,6 +14,7 @@ import {
 } from '../view/localValidation.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { LocalValidationFinding, LocalValidationView } from '../types.js';
+import { Collapsible } from '../components/collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -99,10 +100,9 @@ export function LocalValidationReport({
       )}
 
       {validation.plan !== null && (
-        <details className="cn-lv-plan">
-          <summary>The test plan it wrote</summary>
+        <Collapsible subject="local-run" className="cn-lv-plan" title={<>The test plan it wrote</>}>
           <div className="cn-tick">{renderMarkdown(validation.plan, refUrls)}</div>
-        </details>
+        </Collapsible>
       )}
     </div>
   );

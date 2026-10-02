@@ -2,6 +2,7 @@ import { useEffect, useState, type JSX } from 'react';
 import type { TenantCommandOutput, TenantCommandView, TenantPreparation } from '../types.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { elapsed, relTime } from './util.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
 
@@ -124,11 +125,14 @@ function OutputFold({
   onToggle: (open: boolean) => void;
 }): JSX.Element {
   return (
-    <details className="lrun-fold lrun-out" open={open} onToggle={(e) => onToggle(e.currentTarget.open)}>
-      <summary>
-        <span>Output</span>
-        {lines.length > 0 && <span className="lrun-fold-hint">{lines[lines.length - 1]}</span>}
-      </summary>
+    <Collapsible
+      subject="environment"
+      className="lrun-fold lrun-out"
+      open={open}
+      onToggle={onToggle}
+      title="Output"
+      aside={lines.length > 0 ? <span className="lrun-fold-hint">{lines[lines.length - 1]}</span> : undefined}
+    >
       {lines.length > 0 ? (
         <TranscriptPane
           text={lines.join('\n')}
@@ -140,7 +144,7 @@ function OutputFold({
       ) : (
         <p className="lrun-note">Nothing printed yet.</p>
       )}
-    </details>
+    </Collapsible>
   );
 }
 

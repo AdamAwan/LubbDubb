@@ -15,6 +15,7 @@ import { ExtLink } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
 import { panelRows, tenantAlerts } from '../view/validatePane.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/36-remote-validation.md#the-cockpit
 
@@ -122,12 +123,16 @@ function OwnRows({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetC
   return (
     <>
       {own.length > 0 && (
-        <details className="cn-sheet-fold" open>
-          <summary>{own.length === 1 ? 'the 1 row of its own' : `the ${String(own.length)} rows of its own`}</summary>
+        <Collapsible
+          subject="validation"
+          className="cn-sheet-fold"
+          defaultOpen
+          title={<>{own.length === 1 ? 'the 1 row of its own' : `the ${String(own.length)} rows of its own`}</>}
+        >
           {own.map((row) => (
             <SheetRow key={row.rowId} row={row} controls={controls} />
           ))}
-        </details>
+        </Collapsible>
       )}
       {checkRows > 0 && (
         <p className="cn-sub cn-sheet-checks">

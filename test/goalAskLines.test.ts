@@ -120,7 +120,7 @@ test('the check set card draws the checks before the planner’s note', () => {
     }),
   );
   assert.ok(html.indexOf('The one check') < html.indexOf('The planner’s case.'));
-  assert.match(html, /<details class="vp-hint">/);
+  assert.match(html, /<section class="fold fold-inline is-shut vp-hint">/);
 });
 
 test('the Needs you rail draws the folded assign asks as one card naming each pull request', async () => {

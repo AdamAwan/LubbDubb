@@ -69,6 +69,7 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'scratchpad.edit': { label: 'Wrote in the scratchpad', blurb: 'The shared notes were changed' },
   'insights.view': { label: 'Opened Insights', blurb: 'A reading tab was reached' },
   'insights.filter': { label: 'Re-cut Insights', blurb: 'The window or a tab was changed' },
+  'insights.expand': { label: 'Read how Insights counts', blurb: 'A method note was opened' },
   'pool.view': { label: 'Opened the pool', blurb: 'The cross-fleet digest was reached' },
   'pool.filter': { label: 'Re-cut the pool', blurb: 'A fleet, a section or a day was changed' },
   'config.view': { label: 'Opened configuration', blurb: 'The settings were reached' },
@@ -151,6 +152,7 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'job.close': { label: 'Closed the launch desk', blurb: 'The panel was shut' },
   'retro.close': { label: 'Closed a retro', blurb: 'The retro was shut' },
   'scratchpad.close': { label: 'Closed the scratchpad', blurb: 'The notes were shut' },
+  'insights.close': { label: 'Folded a method note', blurb: 'A method note was shut' },
   'insights.send': { label: 'Exported Insights', blurb: 'A tab was downloaded as a file' },
   'config.expand': {
     label: 'Read into configuration',

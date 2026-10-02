@@ -53,10 +53,17 @@ interface CheckRow {
 }
 
 export const BAND_HEADING: Record<CheckBand, string> = {
-  running: 'a run is on them',
-  open: 'a run can take them',
-  yours: 'only you can answer',
-  answered: 'answered',
+  running: 'Running now',
+  open: 'Ready for a run',
+  yours: 'Yours to check',
+  answered: 'Done',
+};
+
+export const BAND_HINT: Record<CheckBand, string> = {
+  running: 'a run is reading these — what it sees lands on each row',
+  open: 'tick the ones the next run should take',
+  yours: 'no runner can answer these — open one and record what you saw',
+  answered: 'passed or waived',
 };
 
 /** A run that is still going. The sheet's own vocabulary — `pending` is dispatched-for, not idle. */

@@ -5,6 +5,7 @@ import { Button } from './button.js';
 import { Tag } from './tag.js';
 import { CheckDetail } from './checkDetail.js';
 import { renderMarkdown } from './markdown.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -67,12 +68,9 @@ export function CheckSetAsk({ set, declines }: { set: ProposedCheckSet; declines
             </div>
           )}
           {set.hint !== null && (
-            <details className="vp-hint">
-              <summary>
-                <span className="lb lb-sm">What the plan asked for</span>
-              </summary>
+            <Collapsible subject="validation" className="vp-hint" title="What the plan asked for">
               {set.hint}
-            </details>
+            </Collapsible>
           )}
         </div>
       )}
@@ -99,20 +97,25 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
             there, days apart, and the two had grown separate vocabularies for one record — which
             reads as two different things to the one person who meets both.
             → docs/spec/20-validation.md#the-check */}
-        <details className="vp-open">
-          <summary>
-            {/* What the row is judged on, in one line: how long it is, who would carry it, and
+        <Collapsible
+          subject="validation"
+          className="vp-open"
+          title={
+            <>
+              {/* What the row is judged on, in one line: how long it is, who would carry it, and
                 whether it reads live data. A set is accepted or sent back whole, so what the
                 card owes a reader first is all of it at once — and every check drawn open is four
                 lines each before the first comparison can be made.
                 → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work */}
-            <span className="vp-gist">
-              {check.steps.length === 0
-                ? 'no steps'
-                : `${check.steps.length} ${check.steps.length === 1 ? 'step' : 'steps'}`}
-              {check.steps.length > 0 && ` · ${check.fleetBlocked ? 'yours to start' : carriedBy(check)}`}
-            </span>
-          </summary>
+              <span className="vp-gist">
+                {check.steps.length === 0
+                  ? 'no steps'
+                  : `${check.steps.length} ${check.steps.length === 1 ? 'step' : 'steps'}`}
+                {check.steps.length > 0 && ` · ${check.fleetBlocked ? 'yours to start' : carriedBy(check)}`}
+              </span>
+            </>
+          }
+        >
           <CheckDetail
             rationale={check.rationale}
             doing={null}
@@ -120,7 +123,7 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
             passesWhen={check.expect === '' ? null : renderMarkdown(check.expect)}
             proof={check.proof === '' ? null : renderMarkdown(check.proof)}
           />
-        </details>
+        </Collapsible>
         {/* The planner's nomination and the fact that stops it are the two things an operator needs
             before they hand anything over, and neither is a step. */}
         {check.fleetBlocked ? (

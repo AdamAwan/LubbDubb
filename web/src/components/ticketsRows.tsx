@@ -19,6 +19,7 @@ import { Panel } from './panel.js';
 import { Tag } from './tag.js';
 import type { TicketFeed } from './ticketsFeed.js';
 import type { TicketQueryPlace } from './ticketsFilters.js';
+import { FoldToggle } from './collapsible.js';
 
 export function TicketsTable({
   query,
@@ -159,15 +160,15 @@ function FeatureHead({
 }): JSX.Element {
   return (
     <div className="tickets-fhead">
-      <BareButton
-        usage={collapsed ? 'feature.expand' : 'feature.close'}
+      <FoldToggle
+        subject="feature"
         className="tickets-fold"
-        aria-expanded={!collapsed}
-        onClick={() => actions.collapseFeature(feature.number, !collapsed)}
+        open={!collapsed}
+        onToggle={(open) => actions.collapseFeature(feature.number, !open)}
         title={collapsed ? 'Show the work under this feature' : 'Fold this feature away'}
-      >
-        {collapsed ? '▸' : '▾'}
-      </BareButton>
+        label={null}
+        hint={false}
+      />
       <i className={`tickets-stripe f${feature.slot ?? 0}`} />
       <span className="tickets-fname">
         {featureIssue === null ? (

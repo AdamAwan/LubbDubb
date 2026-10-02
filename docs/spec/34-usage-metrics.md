@@ -90,7 +90,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `job`            | `view` `expand` `create` `edit` `stop` `close`                                                          |
 | `retro`          | `view` `close`                                                                                          |
 | `scratchpad`     | `view` `edit` `close`                                                                                   |
-| `insights`       | `view` `filter` `send`                                                                                  |
+| `insights`       | `view` `expand` `filter` `send` `close`                                                                 |
 | `pool`           | `view` `filter`                                                                                         |
 | `config`         | `view` `expand` `filter` `edit` `accept` `reject` `abandon` `undo` `copy` `refresh` `close`             |
 | `upgrade`        | `view` `accept` `reject` `defer` `refresh` `close`                                                      |
@@ -236,9 +236,10 @@ are a focusable `<span role="img">`, not a button.
 and the panel and tab tables name each surface's subject once (`panelUsage`, `panelClose`, `tabUsage`
 in `web/src/cockpit/usage.ts`), so a nav control's `view` and a panel's `close` cannot drift apart.
 
-A handler that also called `logUsage` for its own button's event is a double count, and was removed
-when the prop arrived. `logUsage` stays for what is not a button press — a `<details>` opening, a
-`<select>` changing.
+A handler that also called `logUsage` for its own button's event is a double count, and was removed when
+the prop arrived. `logUsage` stays for what is not a button press — a `<select>` changing. A fold is a
+button press: `FoldToggle` names `<subject>.expand` and `<subject>.close` itself
+([17](17-cockpit.md#the-fold)).
 
 **A close is its own verb, never the other half of `expand`.** Shutting a panel or dismissing a
 dialog is `<subject>.close`, so "how often is this opened and left without acting" is one `group by`
@@ -266,10 +267,11 @@ three more primitives in `button.tsx`:
 `no-restricted-syntax` makes skipping it a lint error in `web/`, each message pointing here:
 
 - **`role="button"`** anywhere but `button.tsx`.
-- **`onClick` on a plain element** — a `div`, `span`, `li`, `g`, `a` or any other lowercase tag but
-  `details` and `summary`, whose opening is logged with `logUsage` as above. A handler that is not a
-  control — a `stopPropagation`, a backdrop whose press is the modal's `dismiss` — says so in an
-  `eslint-disable-next-line` beside it.
+- **`onClick` on a plain element** — a `div`, `span`, `li`, `g`, `a` or any other lowercase tag. A
+  handler that is not a control — a `stopPropagation`, a backdrop whose press is the modal's `dismiss` —
+  says so in an `eslint-disable-next-line` beside it.
+- **A `<details>`** — a fold drawn by hand, with no usage event at all. `Collapsible` or `FoldToggle`
+  instead ([17](17-cockpit.md#the-fold)).
 - **A tag chosen at runtime** — `const Tag = onOpen ? 'button' : 'span'` drew a `<button>` the element
   rule could not see. The pull request marks render `BareButton` on that branch instead.
 - **`buttonClass(`** outside `button.tsx`, `AsyncButton.tsx`, `ConfirmButton.tsx` and `DesktopLink.tsx`:

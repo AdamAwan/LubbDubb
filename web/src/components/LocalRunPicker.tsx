@@ -4,7 +4,8 @@ import { AsyncButton } from './AsyncButton.js';
 import { BareButton } from './button.js';
 import { Ref } from './refs.js';
 import { Tag } from './tag.js';
-import { RefSummary, summaryClick } from './LocalRunReadings.js';
+import { RefSummary } from './LocalRunReadings.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -45,14 +46,16 @@ export function GoalPicker({
   const holdingBack = candidates.length - rows.length;
   const chosenFacts = factsOf(picked, byNumber);
   const runningOrigin = live && run !== null ? run.originRef : null;
-  const open = pickerOpen ?? !live;
 
   return (
-    <details className="lrun-fold lrun-pick" open={open} onClick={(e) => summaryClick(e, () => setPickerOpen(!open))}>
-      <summary>
-        <span>{live ? 'Run a different goal' : 'Run a goal'}</span>
-        {live && <span className="lrun-fold-hint">stops what is running now</span>}
-      </summary>
+    <Collapsible
+      subject="local-run"
+      className="lrun-fold lrun-pick"
+      open={pickerOpen ?? !live}
+      onToggle={setPickerOpen}
+      title={live ? 'Run a different goal' : 'Run a goal'}
+      aside={live ? <span className="lrun-fold-hint">stops what is running now</span> : undefined}
+    >
       <div className="lrun-pick-body">
         {(holdingBack > 0 || showAll) && (
           <label className="lrun-filter">
@@ -97,7 +100,7 @@ export function GoalPicker({
           </div>
         )}
       </div>
-    </details>
+    </Collapsible>
   );
 }
 

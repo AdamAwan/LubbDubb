@@ -578,15 +578,15 @@ the status line already says so. Refresh is primary and drawn only while there i
 Start appears once a row is picked, primary, with the ref beside it. Nothing on the panel is ever
 disabled: a control that would be is absent, and the stage line says why.
 
-The output and the picker are `<details>` folds under the card. The output is open while a turn is in
-flight or the run has settled — the cases with something to read — and folded under a steady
-environment, its summary carrying the last line; the picker is open when nothing is running and folded
-under "Run a different goal", with "stops what is running now" beside it, when something is. `<details>`
-rather than conditional rendering, so the browser draws the fold and the markup carries the content
-whichever way it stands — controlled from the summary's click rather than `onToggle`, which fires for a
-programmatic open too and would read a turn opening the output as the operator asking it to stay open — which is also what keeps `test/console.test.ts`'s assertions on the
-rows true with the picker folded, since `renderToStaticMarkup` runs no effects. The output is the
-session's own words in the fleet's transcript pane, see below.
+The output and the picker are inline folds under the card ([17](17-cockpit.md#the-fold)). The output is
+open while a turn is in flight or the run has settled — the cases with something to read — and folded
+under a steady environment, its header carrying the last line; the picker is open when nothing is running
+and folded under "Run a different goal", with "stops what is running now" beside it, when something is.
+The fold keeps its body mounted while shut, so the markup carries the content whichever way it stands, and
+its `onToggle` fires for a press and never for the panel changing `open` — a turn opening the output is
+not read as the operator asking it to stay open. The mounted body is also what keeps
+`test/console.test.ts`'s assertions on the rows true with the picker folded, since `renderToStaticMarkup`
+runs no effects. The output is the session's own words in the fleet's transcript pane, see below.
 
 ### The picker
 

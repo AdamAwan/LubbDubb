@@ -1,4 +1,4 @@
-import { useState, type JSX, type MouseEvent } from 'react';
+import { useState, type JSX } from 'react';
 import type { LocalRunFreshness, LocalRunPorts, LocalRunRefFacts, LocalRunView } from '../types.js';
 import { SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from './util.js';
@@ -212,10 +212,4 @@ export function StatusLine({ run, now }: { run: LocalRunView; now: number }): JS
   if (run.status === 'stopping') return <>Stopping…</>;
   if (run.status === 'failed') return <>It did not start</>;
   return <>Stopped {run.endedAt === null ? '' : relTime(run.endedAt, now)}</>;
-}
-
-export function summaryClick(e: MouseEvent<HTMLDetailsElement>, flip: () => void): void {
-  if (!(e.target instanceof Element) || e.target.closest('summary') === null) return;
-  e.preventDefault();
-  flip();
 }
