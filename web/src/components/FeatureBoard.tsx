@@ -17,7 +17,7 @@ import { BareButton, Button } from './button.js';
 import { fmtUsd } from './util.js';
 import type { FeatureBoardPayload } from '../types.js';
 import { Crumb, type CrumbStep } from '../console/Crumb.js';
-import { BoardCard, buildCards, FeatureCard, GoalCard, orderCards } from './featureCards.js';
+import { BoardCard, buildCards, FeatureCard, orderCards } from './featureCards.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -65,8 +65,8 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
     );
   }
 
-  const { features, orphans, unresolved } = board;
-  if (features.length === 0 && orphans === null) {
+  const { features, unresolved } = board;
+  if (features.length === 0) {
     return (
       <p className="muted">
         {board.backfilling
@@ -93,10 +93,9 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
         {view.featureMode === 'board' &&
           cards.map((card) => (
             <BoardCard
-              key={card.kind === 'feature' ? `f:${card.rollup.number}` : `g:${card.row.number}`}
+              key={card.rollup.number}
               card={card}
               rows={rows}
-              environments={board.environments}
               view={view}
               actions={actions}
               onAnswered={() => void read()}
@@ -126,7 +125,6 @@ function BoardHead({
   actions: CockpitActions;
 }): JSX.Element {
   const { features, orphans } = board;
-  const promoted = orphans?.counts.total ?? 0;
   const paused = features.filter((f) => f.paused !== null).length;
   return (
     <div className="cn-fb-head">
@@ -136,7 +134,6 @@ function BoardHead({
         {/* A pause withholds work, so it is counted out loud. A rested card that
             nothing says is resting is the silent version of this button. */}
         {paused > 0 && ` · ${paused} paused`}
-        {promoted > 0 && ` · ${promoted} ${promoted === 1 ? 'story' : 'stories'} with no Feature`}
         {/* The orphan bucket's money, said once about the page: this much was spent
             under no Feature, which is also the sentence that says every roll-up
             below understates its own. */}
@@ -200,20 +197,16 @@ function FeatureDetail({
   actions: CockpitActions;
   onAnswered: () => void;
 }): JSX.Element {
-  const card = buildCards(board, view).find((c) => (c.kind === 'feature' ? c.rollup.number : c.row.number) === number);
-  const title = card === undefined ? null : card.kind === 'feature' ? card.rollup.title : card.row.title;
+  const card = buildCards(board, view).find((c) => c.rollup.number === number);
+  const title = card === undefined ? null : card.rollup.title;
   return (
     <RefLinksExtended refUrls={board.refUrls}>
       <Crumb trail={[back]} here={title === null ? `#${number}` : `#${number} ${title}`} />
       <div className="cn-fb cn-fb-page">
         {card === undefined ? (
-          <p className="muted">
-            #{number} is not on the feature board — it is neither a Feature nor a story that hangs off none.
-          </p>
-        ) : card.kind === 'feature' ? (
-          <FeatureCard card={card} view={view} actions={actions} onAnswered={onAnswered} page />
+          <p className="muted">#{number} is not on the feature board — only Features are.</p>
         ) : (
-          <GoalCard card={card} environments={board.environments} view={view} actions={actions} page />
+          <FeatureCard card={card} view={view} actions={actions} onAnswered={onAnswered} page />
         )}
       </div>
     </RefLinksExtended>
@@ -248,9 +241,7 @@ function ModeControl({ mode, actions }: { mode: FeatureMode; actions: CockpitAct
  * Full cards while the board is short enough to read down, one line each past that.
  * Eight is where a reader stops holding the list in their head: a brief runs about a
  * viewport-third, so eight is already three screens of scrolling to find a name.
- *
- * The threshold counts **every** card, promoted goals included, since what makes the
- * page long is its length and not what the rows are. → docs/spec/17-cockpit.md#the-board-at-length
+ * → docs/spec/17-cockpit.md#the-board-at-length
  */
 export const BRIEFS_AT_MOST = 8;
 
