@@ -29,16 +29,16 @@ const desktop = (props: { folder: string; prompt: string; explain: string; ready
   renderToStaticMarkup(createElement(DesktopLink, { ...props, usage: 'validation.open' }));
 
 test('the prompt addresses a check by its goal and its stored letter', () => {
-  assert.equal(checkPrompt(249, 'A'), '/lubbdubb 249:A');
-  assert.equal(checkPrompt(249, 'D'), '/lubbdubb 249:D');
+  assert.equal(checkPrompt(249, 'A'), '/lubbdubb:check 249:A');
+  assert.equal(checkPrompt(249, 'D'), '/lubbdubb:check 249:D');
 });
 
 test('a discussion addresses a plan by its goal number', () => {
-  assert.equal(discussPrompt(284), '/lubbdubb discuss 284');
+  assert.equal(discussPrompt(284), '/lubbdubb:plan 284');
 });
 
 test('running it locally addresses the goal by number, and is offered on every goal', () => {
-  assert.equal(localRunPrompt(284), '/lubbdubb run 284');
+  assert.equal(localRunPrompt(284), '/lubbdubb:run 284');
 
   assert.ok(
     /<DesktopLink[^>]*?prompt=\{localRunPrompt\(issue\.number\)\}/s.test(GOAL_PAGE),
@@ -47,29 +47,29 @@ test('running it locally addresses the goal by number, and is offered on every g
 });
 
 test('the deep link opens Claude Code on the goal’s own checkout', () => {
-  const link = desktopDeepLink('/home/you/code/shop', '/lubbdubb discuss 284');
+  const link = desktopDeepLink('/home/you/code/shop', '/lubbdubb:plan 284');
   assert.ok(link.startsWith('claude://code/new?'), link);
   const query = new URLSearchParams(link.slice(link.indexOf('?') + 1));
-  assert.equal(query.get('q'), '/lubbdubb discuss 284');
+  assert.equal(query.get('q'), '/lubbdubb:plan 284');
   assert.equal(query.get('folder'), '/home/you/code/shop');
 });
 
 test('a Windows checkout survives the encoding', () => {
-  const link = desktopDeepLink('C:\\Users\\you\\Code\\LubbDubb', '/lubbdubb 249:A');
+  const link = desktopDeepLink('C:\\Users\\you\\Code\\LubbDubb', '/lubbdubb:check 249:A');
   const query = new URLSearchParams(link.slice(link.indexOf('?') + 1));
   assert.equal(query.get('folder'), 'C:\\Users\\you\\Code\\LubbDubb');
-  assert.equal(query.get('q'), '/lubbdubb 249:A');
+  assert.equal(query.get('q'), '/lubbdubb:check 249:A');
 });
 
 test('the command is readable, not only clickable', () => {
   const html = desktop({ folder: '/home/you/shop', prompt: checkPrompt(249, 'A'), explain: 'so it runs there.' });
   assert.match(
     html,
-    /title="Opens your own Claude Code with &quot;\/lubbdubb 249:A&quot; ready to send, so it runs there\."/,
+    /title="Opens your own Claude Code with &quot;\/lubbdubb:check 249:A&quot; ready to send, so it runs there\."/,
   );
   assert.match(
     html,
-    /href="claude:\/\/code\/new\?q=%2Flubbdubb\+249%3AA&amp;folder=%2Fhome%2Fyou%2Fshop"/,
+    /href="claude:\/\/code\/new\?q=%2Flubbdubb%3Acheck\+249%3AA&amp;folder=%2Fhome%2Fyou%2Fshop"/,
     'the title names the string the link carries',
   );
 
@@ -84,8 +84,8 @@ test('a prompt the operator still has to finish says so', () => {
     explain: 'answered from the record.',
     ready: 'ready for your question',
   });
-  assert.match(html, /&quot;\/lubbdubb ask 284&quot; ready for your question, answered from the record\./);
-  assert.match(html, /q=%2Flubbdubb\+ask\+284\+&/);
+  assert.match(html, /&quot;\/lubbdubb:ask 284&quot; ready for your question, answered from the record\./);
+  assert.match(html, /q=%2Flubbdubb%3Aask\+284\+&/);
 });
 
 test('nothing outside DesktopLink builds a link into Claude Code', () => {
@@ -115,7 +115,7 @@ test('the control sits with the hand-over, on a check nobody has answered yet', 
 });
 
 test('the bar’s question control prefills the skill and nothing else', () => {
-  assert.equal(questionPrompt(), '/lubbdubb ');
+  assert.equal(questionPrompt(), '/lubbdubb:fleet ');
 
   const html = desktop({
     folder: '/home/you/shop',
@@ -123,7 +123,7 @@ test('the bar’s question control prefills the skill and nothing else', () => {
     explain: 'which answers it.',
     ready: 'waiting for your question',
   });
-  assert.match(html, /title="Opens your own Claude Code with &quot;\/lubbdubb&quot; waiting for your question, /);
+  assert.match(html, /title="Opens your own Claude Code with &quot;\/lubbdubb:fleet&quot; waiting for your question, /);
 
   assert.ok(
     /<DesktopLink[\s\S]*?prompt=\{questionPrompt\(\)\}/.test(TOP_BAR),

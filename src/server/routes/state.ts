@@ -15,7 +15,6 @@ import { loadConfigFromText, projectConfigLayer, type Config } from '../../confi
 import { diffConfig } from '../../config/configApply.js';
 import { configField, envOverride, fieldValueRefusal } from '../../config/configFields.js';
 import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../config/configFile.js';
-import { MCP_SERVER_ID } from '../../mcp/names.js';
 import { describeRunningConfig } from '../runningConfig.js';
 import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../stateSnapshot.js';
 import { checked } from '../validation.js';
@@ -151,10 +150,7 @@ function registerReadRoutes(app: FastifyInstance, { system }: RouteContext): voi
     async () =>
       ({
         running: system.desktop.running(),
-        serverId: MCP_SERVER_ID,
-        registration: system.desktop.registration(),
         credentialPath: system.desktop.credentialPath(),
-        skillPath: config.validation.desktopSkillPath,
         tools: system.desktop.advertised(),
       }) satisfies McpChannelPayload,
   );

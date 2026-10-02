@@ -1018,10 +1018,11 @@ appraiser's summary it renders `missing` as a checklist — `- [ ]` per entry, i
 markdown — then says exactly what ends the hold and what does not: _edit this item so the
 description answers the points above; that alone is enough, no button to press; replies here are not
 read by the agents._ And it offers help with the edit: _open the project in Claude Code and run
-`/lubbdubb clarify <n>`_ — the skill's seventh job ([20](20-validation.md#the-skill)), which reads
+`/lubbdubb:clarify <n>`_ — the plugin's `clarify` skill ([20](20-validation.md#the-skill)), which reads
 the verdict and the list through `goal_read`, works through them with the author against the
 repository, and drafts the rewrite. Nothing is deep-linked from a tracker comment because a
-`claude://` URL is not a link there; the command is spelled out instead. A row from before `missing`
+`claude://` URL is not a link there; the command is spelled out instead, namespaced, because a plugin
+skill is never reachable unqualified ([11](11-mcp-tools.md#the-plugin)). A row from before `missing`
 existed renders no checklist and still says the rest.
 
 Because it is the harness explaining, on somebody else's ticket, why it will not act, the operator

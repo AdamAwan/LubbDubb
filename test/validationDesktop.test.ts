@@ -8,7 +8,6 @@ import { buildSystem, type System } from '../src/system/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { buildApp } from '../src/server/app.js';
 import type { McpChannelPayload } from '../src/wire.js';
-import { shellArgv } from '../web/src/components/McpTab.js';
 import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -20,7 +19,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
-import { DESKTOP_SKILL, installDesktopSkill } from '../src/validation/desktopSkill.js';
+import { pluginSkills } from '../src/plugin/bundle.js';
 import { retroDossier } from '../src/retro/dossier.js';
 import { goalRecord } from '../src/retro/record.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
@@ -28,8 +27,6 @@ import { claimIsLive, claimStaleBefore, withLiveClaim } from '../src/validation/
 import type { Issue, IssueDelivery, Plan, ValidationCheck, WorldSnapshot } from '../src/types.js';
 
 const NOW = '2025-01-01T00:00:00.000Z';
-
-const BS = String.fromCharCode(92);
 
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
@@ -167,11 +164,6 @@ test('the credential is 0600, carries no configured secret, and dies with the ch
     assert.equal(credential.lubbdubb, 1);
     assert.equal(typeof credential.token, 'string');
     assert.equal(credential.socket, socketPath);
-
-    const registration = server.registration();
-    assert.ok(registration.args.some((a) => a.endsWith('bridge.mjs')));
-    assert.ok(registration.args.includes('--desktop'));
-    assert.ok(!registration.args.some((a) => a === credential.token));
   } finally {
     await server.close();
     system.store.close();
@@ -671,33 +663,15 @@ test('a rewording releases the claim with the hand-over and the reading', async 
   }
 });
 
-test('the skill installs, and says what it is for without restating the procedure', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-skill-'));
-  const path = join(dir, 'skills', 'lubbdubb', 'SKILL.md');
-  assert.ok(installDesktopSkill(path));
-  const written = readFileSync(path, 'utf8');
-  assert.equal(written, DESKTOP_SKILL);
-  assert.match(written, /^---\nname: lubbdubb\n/);
-  for (const tool of DESKTOP_TOOL_NAMES) assert.match(written, new RegExp(tool));
-  assert.match(written, /blocked/);
-  assert.match(written, /Do not report `passed` from evidence you did not gather/);
-  assert.match(written, /rewritten from scratch every time the harness starts/);
-  assert.doesNotMatch(written, /desktopSkill\b/);
-});
-
-test('the skill names LubbDubb\u2019s own checkout when there is one, and is unchanged when there is not', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-skill-root-'));
-  const path = join(dir, 'SKILL.md');
-  assert.ok(installDesktopSkill(path, undefined, '/srv/lubbdubb'));
-  const written = readFileSync(path, 'utf8');
-  assert.ok(written.startsWith(DESKTOP_SKILL), 'the body is untouched');
-  assert.match(written, /\/srv\/lubbdubb/);
-  assert.match(written, /The record first, the source second/);
-  assert.match(written, /Change nothing there/);
-
-  const bare = join(dir, 'BARE.md');
-  assert.ok(installDesktopSkill(bare, undefined, null));
-  assert.equal(readFileSync(bare, 'utf8'), DESKTOP_SKILL);
+test('the check skill names every desktop tool it drives and says what it is for', () => {
+  const skills = pluginSkills();
+  const all = skills.map((s) => s.text).join('\n');
+  for (const skill of skills) assert.match(skill.text, new RegExp(`^---\r?\nname: ${skill.name}\r?\n`));
+  for (const tool of DESKTOP_TOOL_NAMES) assert.match(all, new RegExp(tool));
+  const check = skills.find((s) => s.name === 'check')?.text ?? '';
+  assert.match(check, /blocked/);
+  assert.match(check, /Do not report `passed` from evidence you did not gather/);
+  assert.doesNotMatch(all, /desktopSkill\b/);
 });
 
 test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one', () => {
@@ -727,9 +701,6 @@ test('/api/mcp describes the desktop channel it is read from', async () => {
   );
   for (const tool of payload.tools) assert.ok(tool.description.length > 0, `${tool.name} says what it is for`);
 
-  assert.equal(payload.serverId, 'lubbdubb');
-  assert.equal(payload.registration.args.at(-1), '--desktop');
-  assert.match(payload.registration.args[0] ?? '', /bridge\.mjs$/);
   assert.equal(payload.credentialPath, system.desktop.credentialPath());
 
   assert.equal(payload.running, false);
@@ -746,20 +717,6 @@ test('the channel reports itself running only while it is listening', async () =
   await server.close();
   assert.equal(server.running(), false, 'a closed channel stops advertising a credential it has removed');
   system.store.close();
-});
-
-test('the registration command quotes a path with spaces', () => {
-  const windows = shellArgv([
-    'C:' + BS + 'Program Files' + BS + 'nodejs' + BS + 'node.exe',
-    'C:' + BS + 'lubbdubb' + BS + 'bridge.mjs',
-    '--desktop',
-  ]);
-  assert.ok(windows.startsWith('"C:' + BS + 'Program Files'), 'the interpreter path is quoted whole');
-  assert.ok(windows.endsWith('bridge.mjs --desktop'), 'nothing without a space is quoted');
-  assert.equal(
-    shellArgv(['/usr/bin/node', '/srv/lubbdubb/bridge.mjs', '--desktop']),
-    '/usr/bin/node /srv/lubbdubb/bridge.mjs --desktop',
-  );
 });
 
 function goalWith(system: System): string {

@@ -49,6 +49,8 @@ import type {
   LocalValidationView,
   JobSchedule,
   McpChannelPayload,
+  PluginInstallPayload,
+  PluginStatusPayload,
   McpInsights,
   McpNaming,
   McpNamingTotal,
@@ -337,6 +339,13 @@ const WITHHELD_PLAN = 'A plan is ready for this goal. It is withheld until you r
 const DEMO_PREDICTION_THRESHOLD = 10;
 
 const DEMO_OPERATOR = 'you';
+const DEMO_PLUGIN: PluginStatusPayload = {
+  state: 'current',
+  installed: '1.0.0-demo',
+  bundle: { marketplaceDir: '~/.lubbdubb/plugin', version: '1.0.0-demo' },
+  skills: ['ask', 'check', 'clarify', 'describe', 'eject', 'feature', 'file', 'fleet', 'order', 'plan', 'run'],
+  legacySkill: false,
+};
 
 /** Minutes back from load, for the seeded rows below. The demo world has no clock of its own. */
 const ago = (mins: number): string => new Date(Date.now() - mins * 60_000).toISOString();
@@ -4861,12 +4870,11 @@ export const demoApi = {
   getMcp: (): Promise<McpChannelPayload> =>
     Promise.resolve({
       running: false,
-      serverId: 'lubbdubb',
-      registration: { command: 'node', args: [] },
       credentialPath: '',
-      skillPath: '',
       tools: [],
     }),
+  getPlugin: (): Promise<PluginStatusPayload> => Promise.resolve(DEMO_PLUGIN),
+  installPlugin: (): Promise<PluginInstallPayload> => Promise.resolve({ ok: true, steps: [], status: DEMO_PLUGIN }),
   getPetCatalogue: (): Promise<PetCatalogue> =>
     Promise.resolve({
       rules: {

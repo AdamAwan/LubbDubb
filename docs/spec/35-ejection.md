@@ -155,7 +155,7 @@ land at once.
 The cockpit's control opens the operator's own Claude Code on the worktree:
 
 ```
-claude://code/new?q=/lubbdubb%20eject%20412&folder=<worktree_path>
+claude://code/new?q=%2Flubbdubb%3Aeject+412&folder=<worktree_path>
 ```
 
 Built by `desktopDeepLink(folder, prompt)` (`web/src/cockpit/desktopLink.ts`), the same builder the
@@ -165,14 +165,15 @@ checked out, with the agent's uncommitted work in front of you. A session opened
 be a Claude looking at `main` and reporting that none of the described work exists.
 
 The host stays `code` rather than `claude.ai`, for the reason [08](08-planning.md#the-link) gives: only
-that surface has the repository, the skill and the MCP registration. And the link only fires on the
+that surface has the repository and [the plugin](11-mcp-tools.md#the-plugin), its skills and its MCP
+server. And the link only fires on the
 machine the browser is on, which is the same limit every desktop control here has — so the command is
 in the `title` too, for an operator who has to type it.
 
 ### What the session gets
 
-The desktop MCP server is registered `--scope user` (`src/mcp/desktop.ts`), so its tools are live in
-that session wherever it opens — including a worktree the operator has never opened before. Three tools
+The plugin is installed `--scope user`, and with it the desktop MCP server (`src/mcp/desktop.ts`), so
+its tools are live in that session wherever it opens — including a worktree the operator has never opened before. Three tools
 join `DESKTOP_TOOL_NAMES` (`src/mcp/names.ts`) and `src/mcp/desktopTools.ts`:
 
 | Tool              | What it does                                                                                                                                                                              |
@@ -181,8 +182,8 @@ join `DESKTOP_TOOL_NAMES` (`src/mcp/names.ts`) and `src/mcp/desktopTools.ts`:
 | `ejection_note`   | One line about what the operator is doing now. Writes `last_note` and stamps `last_seen_at`. → [calling home](#calling-home)                                                              |
 | `ejection_settle` | The three arms below, with a note. → [settling](#settling-it)                                                                                                                             |
 
-The `/lubbdubb` skill (`src/validation/desktopSkill.ts`, its eject arm in `desktopSkillSections.ts`; rewritten into the operator's Claude Code on
-every boot) grows an `eject <n>` arm beside its `discuss <n>` and `<n>:<letter>` ones. It says: read
+The `/lubbdubb:eject` skill (`plugin/skills/eject/SKILL.md`, beside `plan` and `check` in the plugin,
+[20](20-validation.md#the-skill)) says: read
 the ejection, say plainly what the agent had done and where it went wrong, then **follow the
 operator's lead**. It does not resume the agent's work on its own — an ejection is a person taking
 over, and a session that carries on regardless has reproduced the thing they ejected.

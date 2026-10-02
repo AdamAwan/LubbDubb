@@ -1495,21 +1495,23 @@ A check that needs a browser, a login and a real environment is a check the flee
 can run it, on the machine that has all three, and report the reading onto the same row.
 
 So the harness listens on a second MCP socket (`src/mcp/desktop.ts`,
-[11](11-mcp-tools.md#the-desktop-channel)) that the operator registers in Claude Code **once**.
+[11](11-mcp-tools.md#the-desktop-channel)) that the operator's Claude Code reaches through
+[the LubbDubb plugin](11-mcp-tools.md#the-plugin), installed **once**.
 
 **Unconditional**, and it was not always. It used to be off by default, because unlike everything
 else in this document it has a footprint outside the harness: every start binds the stable socket,
-writes a `0600` credential at `validation.desktopCredentialPath` and rewrites the skill at
-`validation.desktopSkillPath`, all in the operator's home directory. What settled it the other way is
+writes a `0600` credential at `validation.desktopCredentialPath` and rewrites the plugin bundle
+beside it, all in the operator's home directory. What settled it the other way is
 that nothing downstream of the socket ever read the switch — the cockpit offers **Copy desktop
 prompt** on every unrun check, the dispatcher honours a desktop claim whatever the config said. So a
-deployment that took the defaults was handed a `/lubbdubb 284:C` that reached nothing, with no error,
+deployment that took the defaults was handed a `/lubbdubb:check 284:C` that reached nothing, with no error,
 no marker and no boot line to say why. A channel advertised unconditionally and delivered
 conditionally is a dead end you find by walking into it; the footprint is the price of the offer
 being real. The switch is retired, warn-and-drop, in [02](02-configuration.md#retired-keys).
 
-Two consequences worth stating plainly. A hand-edited `SKILL.md` is overwritten on the next start,
-and there is now no setting that stops that — the file says so in its own body. And the second
+Two consequences worth stating plainly. A hand-edited `SKILL.md` in the bundle is overwritten on the
+next start, and one in the installed copy on the next plugin update; there is no setting that stops
+either, and each file says so in its own body. And the second
 harness on a machine is now a case every developer with two checkouts hits: the stable socket is
 exclusive, so the one that boots second refuses it, records the conflict and prints an
 `unavailable` boot line rather than stealing a running harness's registration. Point it at a
@@ -1574,67 +1576,80 @@ watched the thing happen. → [36](36-remote-validation.md#what-a-spec-reading-i
 
 ### The skill
 
-`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …`,
-`/lubbdubb fleet`, `/lubbdubb order 500`, `/lubbdubb file`, `/lubbdubb clarify 284`,
-`/lubbdubb eject 412`, `/lubbdubb describe 390:validate`, `/lubbdubb feature 500` — eleven jobs told apart by the argument, one file. The last is
-[owned by 11](11-mcp-tools.md#talking-about-a-feature): a conversation about a Feature rather than one goal, read
-through `feature_read` and handed to `order`, `file` or `discuss` for anything it would change. The fifth is about the harness rather than about a goal and is
-[owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); its section here is only that a
-question with no goal number in it is that job. **Filing is the one job that starts from nothing**, and it is the reason a wish with no number in it
-— "we should fix the export" — is a job here at all rather than a conversation: nothing in LubbDubb
-works from a sentence said at this keyboard, and the ticket is what starts it. The section reads
-`ticket_target` before it drafts, states the rubric in the skill's own words, drafts the whole
-ticket and waits, and files through `job_create` — never a `gh` or `az` command, which is the one
-mistake a session with a shell and a repository open is most likely to make and the one that cannot
-be seen afterwards ([13](13-jobs-and-tickets.md#filing-one-from-the-desktop-channel)). The rubric
-lives there rather than in the clarify section, and clarify links to it: what a ticket has to say is
-one bar, written once, whether it is being drafted or rewritten.
+Eleven skills in [the plugin](11-mcp-tools.md#the-plugin), one per job, each a static
+`plugin/skills/<name>/SKILL.md`: `/lubbdubb:check 284:C`, `/lubbdubb:plan 284`, `/lubbdubb:run 284`,
+`/lubbdubb:ask 284 …`, `/lubbdubb:fleet`, `/lubbdubb:order 500`, `/lubbdubb:file`,
+`/lubbdubb:clarify 284`, `/lubbdubb:eject 412`, `/lubbdubb:describe 390:validate`,
+`/lubbdubb:feature 500`. They were one `/lubbdubb` skill told apart by its argument — `plan` was
+`discuss`, and `check` was the bare `/lubbdubb 284:C`. **The `lubbdubb:` prefix is not optional**: a
+plugin skill is never reachable unqualified, so a command written without it reaches nothing.
 
-The clarify job is where the ticket comment a refused
-goal carries sends its author ([06](06-issue-pickup.md#the-comment-on-the-ticket)): the skill reads
-the verdict and its `missing` list through `goal_read`, measures the ticket against that same rubric,
-works through the list with the author against the open repository, drafts the whole rewrite
-— title and body, because the hold ends on the description changing and the next agent reads the
-description — and gets it onto the ticket through the tracker's CLI where one is signed in, or hands
-it over to paste. It says plainly that a reply does not restart the goal, and it treats `goal_gate`'s
-`workable` as the override rather than the fix. The fourth settles nothing:
-[`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
-goal and the skill says what to do with it. Its longest section is about the one way a session with
-the repository open gets a question about a run wrong — reconstructing a plausible history from the
-code, which is the one answer an operator cannot tell from the real one — and about `unknown` on an
-environment not being `absent`. Installed to `validation.desktopSkillPath` when the channel starts, from
-`DESKTOP_SKILL` in `src/validation/desktopSkill.ts` — a string in a `.ts` module rather than a `.md`
-asset, the prompt templates' reason: the build emits `.ts` and nothing copies a stray `.md` into
-`dist`, so an asset works in development and is missing in a deployment. There is no second copy
-under `docs/` for the same reason: one of them would be the stale one.
+`feature` is [owned by 11](11-mcp-tools.md#talking-about-a-feature): a conversation about a Feature
+rather than one goal, read through `feature_read` and handed to `order`, `file` or `plan` for
+anything it would change. `fleet` is about the harness rather than about a goal and is
+[owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); what matters here is only that a
+question with no goal number in it is that job. **Filing is the one job that starts from nothing**,
+and it is the reason a wish with no number in it — "we should fix the export" — is a job here at all
+rather than a conversation: nothing in LubbDubb works from a sentence said at this keyboard, and the
+ticket is what starts it. The `file` skill reads `ticket_target` before it drafts, states the rubric
+in its own words, drafts the whole ticket and waits, and files through `job_create` — never a `gh` or
+`az` command, which is the one mistake a session with a shell and a repository open is most likely
+to make and the one that cannot be seen afterwards
+([13](13-jobs-and-tickets.md#filing-one-from-the-desktop-channel)). The rubric — _What a ticket has
+to say_ — is one bar whether a ticket is being drafted or rewritten, so `clarify` carries a copy of
+the `file` skill's subsection word for word: a skill cannot include another's text, and the two must
+be edited together.
 
-The skill is the interface, not a convenience. Without it the operator types the same six sentences
-at their Claude every time — which is the friction the whole channel exists to remove, and the reason
-the bench design was rejected. It says what the three answers mean, that `blocked` is a right
-answer, and the two things a session with the repository open is most able to do wrong: report
-`passed` from evidence it did not gather, and change code to make a check pass. The `ask` section
-carries the same shape of warning for the same reason — a question is answerable wrongly and
-confidently — plus the one line that keeps the read a read: change nothing, and offer `discuss` if
-the answer turns out to be that the plan is wrong. Everything about
-_how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
-any of it would be a second copy of the procedure, drifting.
+`clarify` is where the ticket comment a refused goal carries sends its author
+([06](06-issue-pickup.md#the-comment-on-the-ticket)): the skill reads the verdict and its `missing`
+list through `goal_read`, measures the ticket against that same rubric, works through the list with
+the author against the open repository, drafts the whole rewrite — title and body, because the hold
+ends on the description changing and the next agent reads the description — and gets it onto the
+ticket through the tracker's CLI where one is signed in, or hands it over to paste. It says plainly
+that a reply does not restart the goal, and it treats `goal_gate`'s `workable` as the override rather
+than the fix. `ask` settles nothing: [`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal)
+hands back the harness's record of a goal and the skill says what to do with it. Its longest section
+is about the one way a session with the repository open gets a question about a run wrong —
+reconstructing a plausible history from the code, which is the one answer an operator cannot tell
+from the real one — and about `unknown` on an environment not being `absent`.
 
-**One section is appended rather than written into the body**: where LubbDubb's _own_ checkout is,
-when `installRoot()` resolves one (`desktopSkillDocument`, handed the root by `src/server/main.ts`).
-The session this skill is written for opens on `repoRoot` — the repository the fleet **works on** —
-and the cockpit's [Claude Code hand-off](17-cockpit.md#the-top-bar-and-the-panels) collects plenty of questions
-that are about the harness instead: why nothing picked a goal up, why a rule did not fire. Answered
-from the harness's output those get the shape of confident wrong answer the `ask` section already
-warns about. The note says to read the record first and the source second, and to change nothing in
-that checkout — it is the running harness, and the fleet cuts its worktrees from it. Appended and not
-spliced in, the prompt templates' rule: a path interpolated into the body is a second thing to keep
-in step. A deployment running from a tarball resolves no root and gets the body unchanged, because a
-section naming a directory that is not there is worse than no section.
+They are static `.md` files now, where the single skill was a string in a `.ts` module for the
+prompt templates' reason — the build emits `.ts` and nothing copied a stray `.md` into `dist`. The
+plugin settles that differently: `writePluginBundle` reads `plugin/` beside `src/` at boot and copies
+it out ([11](11-mcp-tools.md#the-bundle)), and a compiled build copies the folder as written
+(`scripts/testBuild.ts`) rather than hoping an asset rule catches it. There is still no second copy under `docs/`, for the same reason as
+before: one of them would be the stale one.
 
-It is always overwritten, and says so in its own body — telling an operator's edits from a stale copy
-has no honest implementation, and a skill that silently stopped being refreshed would describe a
-channel that had since changed. There is no key to stop it: the skill is the channel's interface, so
-a channel running without it is the channel failing at the job it was turned on for.
+The skills are the interface, not a convenience. Without them the operator types the same six
+sentences at their Claude every time — which is the friction the whole channel exists to remove, and
+the reason the bench design was rejected. `check` says what the three answers mean, that `blocked` is
+a right answer, and the two things a session with the repository open is most able to do wrong:
+report `passed` from evidence it did not gather, and change code to make a check pass. `ask` carries
+the same shape of warning for the same reason — a question is answerable wrongly and confidently —
+plus the one line that keeps the read a read: change nothing, and offer `plan` if the answer turns out
+to be that the plan is wrong. Everything about _how_ to run a given check comes back from the tools,
+which read the live plan; a skill that restated any of it would be a second copy of the procedure,
+drifting.
+
+**One section is appended to every skill rather than written into its body**: where LubbDubb's
+_own_ checkout is, when `installRoot()` resolves one (`writePluginBundle`, handed the root by
+`publishPlugin` in `src/server/main.ts`). The session a skill is written for opens on `repoRoot` —
+the repository the fleet **works on** — and the cockpit's
+[Claude Code hand-off](17-cockpit.md#the-top-bar-and-the-panels) collects plenty of questions that
+are about the harness instead: why nothing picked a goal up, why a rule did not fire. Answered from
+the harness's output those get the shape of confident wrong answer `ask` already warns about. The
+note says to read the record first and the source second, and to change nothing in that checkout — it
+is the running harness, and the fleet cuts its worktrees from it. Appended and not spliced in, the
+prompt templates' rule: a path interpolated into the body is a second thing to keep in step. A
+deployment running from a tarball resolves no root and gets the bodies unchanged, because a section
+naming a directory that is not there is worse than no section.
+
+The bundle is always rewritten, and each skill says so in its own body — telling an operator's edits
+from a stale copy has no honest implementation, and a skill that silently stopped being refreshed
+would describe a channel that had since changed. Its version is a digest of what it carries, so a
+build that changed a skill reads as `stale` and the cockpit asks for the update
+([17](17-cockpit.md#the-plugin)). There is no key to stop it: the skills are the channel's interface,
+so a channel running without them is the channel failing at the job it was turned on for.
 
 ### Starting a run from the cockpit
 
@@ -1646,7 +1661,7 @@ manages the other two, and an operator reads a validation plan that offers a han
 and says nothing about the machine in front of them.
 
 So an unrun check draws **Open in Claude Code ↗** beside the fleet hand-over: an `<a>` carrying
-`claude://code/new?q=/lubbdubb <issue>:<letter>&folder=<config.desktopFolder>`, built by
+`claude://code/new?q=/lubbdubb:check <issue>:<letter>&folder=<config.desktopFolder>`, built by
 `DesktopLink` (`web/src/components/DesktopLink.tsx`) over `checkPrompt`
 (`web/src/cockpit/desktopLink.ts`). It records nothing, claims nothing and reaches no
 socket of the cockpit's own; it opens that client on the goal's checkout with the command already in

@@ -38,6 +38,9 @@ execFileSync(
   { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] },
 );
 
+// The plugin is shipped as written, mod sources and all, so it is copied rather than compiled.
+cpSync(join(ROOT, 'plugin'), join(OUT, 'plugin'), { recursive: true });
+
 for (const asset of files.filter((p) => !p.endsWith('.ts') && !p.endsWith('.tsx'))) {
   const dest = join(OUT, relative(ROOT, asset));
   mkdirSync(dirname(dest), { recursive: true });

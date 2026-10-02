@@ -69,7 +69,7 @@ export function renderAppraisalComment(appraisal: IssueAppraisal, held: boolean)
     `**What to do:** edit this item so the description answers the points above. That alone is enough — ` +
     `LubbDubb re-reads it on its next pass, with no button to press. Replies here are not read by the ` +
     `agents, so an answer left in a comment does not restart it.\n\n` +
-    `Want a hand? Open the project in Claude Code and run \`/lubbdubb clarify ${number}\`: it reads what ` +
+    `Want a hand? Open the project in Claude Code and run \`/lubbdubb:clarify ${number}\`: it reads what ` +
     `the check found, talks it through with you, and drafts the rewrite.\n\n` +
     `Nothing has been rejected and nothing is closed.`
   );

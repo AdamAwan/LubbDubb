@@ -4,7 +4,7 @@ import { loadConfig } from '../src/config/config.js';
 import { buildDesktopTools } from '../src/mcp/desktopTools.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { ticketFilingTarget } from '../src/tickets/target.js';
-import { DESKTOP_SKILL } from '../src/validation/desktopSkill.js';
+import { pluginSkills } from '../src/plugin/bundle.js';
 
 const GITHUB = {
   integrations: { issues: 'github', sourceControl: 'github', pullRequests: 'github' },
@@ -74,9 +74,9 @@ test('ticket_target is on the desktop channel, is not one the fleet can call, an
 });
 
 test('the skill sends the filing job at ticket_target first and at job_create to file', () => {
-  assert.match(DESKTOP_SKILL, /## File a ticket/);
-  assert.match(DESKTOP_SKILL, /What a ticket has to say/);
-  const filing = DESKTOP_SKILL.slice(DESKTOP_SKILL.indexOf('## File a ticket'), DESKTOP_SKILL.indexOf('## Clarify'));
+  const filing = pluginSkills().find((s) => s.name === 'file')?.text ?? '';
+  assert.match(filing, /## File a ticket/);
+  assert.match(filing, /What a ticket has to say/);
   assert.ok(filing.indexOf('ticket_target') < filing.indexOf('job_create'), 'the read comes before the write');
   assert.match(filing, /gh issue create/, 'and it names the command it must not reach for');
 });

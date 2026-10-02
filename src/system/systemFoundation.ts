@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import { Store } from '../store/store.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
@@ -34,6 +34,8 @@ import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import type { TenantKeeper } from '../validation/remote/tenants.js';
+import { ClaudePluginCli, PluginDesk, type PluginCli } from '../plugin/desk.js';
+import { installRoot } from '../selfUpdate/buildStanding.js';
 import { PERMISSION_PROMPT_TOOL } from '../mcp/names.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
@@ -71,6 +73,7 @@ export interface BuildOptions {
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
   tenants?: TenantKeeper;
+  pluginCli?: PluginCli;
   errorMirror?: (entry: ErrorLogEntry) => void;
   ingressSecrets?: IngressSecrets;
   configFile?: string;
@@ -148,6 +151,17 @@ interface LatePhases {
   bench: BenchDesks;
   harness: Harness;
   local: LocalRuns;
+}
+
+export function buildPluginDesk(config: Config, opts: BuildOptions, errors: ErrorLog): PluginDesk {
+  return new PluginDesk({
+    cli: opts.pluginCli ?? new ClaudePluginCli(config.claudeCommand),
+    legacySkillPath: config.validation.desktopSkillPath,
+    outDir: join(dirname(config.validation.desktopCredentialPath), 'plugin'),
+    credentialPath: config.validation.desktopCredentialPath,
+    harnessRoot: installRoot(),
+    errors,
+  });
 }
 
 export type Foundation = ReturnType<typeof buildFoundation>;

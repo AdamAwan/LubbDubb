@@ -407,10 +407,11 @@ and the pickup states, plus **`blockers`** (nothing can be filed from this deplo
   no tag and the gate is off, and a fixed sentence saying "carrying the watch tag" was a claim the
   call could not make good.
 
-The skill's own filing section ([20](20-validation.md#the-skill)) carries the rubric a ticket has to
-meet, which is the goal check's bar ([06](06-issue-pickup.md#the-comment-on-the-ticket)) and the same
-one `clarify` rewrites against — stated once there, in the skill, because that is where a ticket is
-drafted.
+The `file` skill ([20](20-validation.md#the-skill)) carries the rubric a ticket has to meet, which is
+the goal check's bar ([06](06-issue-pickup.md#the-comment-on-the-ticket)) and the same one `clarify`
+rewrites against — written in `file` because that is where a ticket is drafted, and copied word for
+word into `clarify`, because a plugin skill cannot include another's text. The two are edited
+together ([11](11-mcp-tools.md#the-plugin)).
 
 ### The other filing kind — a bug the operator raised
 

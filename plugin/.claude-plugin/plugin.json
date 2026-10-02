@@ -1,7 +1,7 @@
 {
-  "name": "lubbdubb-board",
-  "version": "0.1.0",
-  "description": "A notice board above the prompt: what LubbDubb is waiting on you for.",
+  "name": "lubbdubb",
+  "version": "0.0.0",
+  "description": "LubbDubb at your keyboard: its skills, its desktop tool channel, and a notice board above the prompt.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "url": {

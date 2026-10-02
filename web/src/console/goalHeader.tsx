@@ -347,7 +347,7 @@ function LeaveGroup({
   return (
     <ControlGroup caption="Leave this page" icon="ticket" divider>
       {/* The one control up here that changes nothing. It opens the operator's
-          own Claude Code on this goal with `/lubbdubb ask <n>` already in the
+          own Claude Code on this goal with `/lubbdubb:ask <n>` already in the
           box, so a question about the work — what was done, which pull request,
           is it on hallway yet — is a click from the goal rather than a cockpit
           read joined to a repository read by hand. An anchor rather than a

@@ -249,32 +249,22 @@ every route needs that token, because the cockpit can queue a job — and a job 
 write access to your repo. The token file is gitignored, along with the rest of `.lubbdubb/` (the
 SQLite database, worktrees, desk scratch dirs and attachments all live under it).
 
-### The one manual step: the desktop validation channel
+### One click: the Claude Code plugin
 
-The harness also listens on a second MCP socket so **your own** Claude Code can take a validation
-check the fleet would otherwise run unattended. It starts by itself, but Claude Code has to be told
-about it **once** — boot prints the exact command, which is the only thing here you type by hand:
-
-```
-[lubbdubb] desktop validation channel on — register it in Claude Code once with:
-[lubbdubb]   claude mcp add --scope user lubbdubb -- <node> <bridge> --desktop
-[lubbdubb] credential at ~/.lubbdubb/desktop.json (0600), reminted every start
-[lubbdubb] /lubbdubb skill installed at ~/.claude/skills/lubbdubb/SKILL.md
-```
-
-Copy the line as printed — the paths are resolved for your install. The credential is reminted every
-start, so the registration keeps working; the `/lubbdubb` skill is rewritten alongside it. Skip this
-and nothing breaks: every check simply falls to the fleet.
-→ [docs/spec/20](docs/spec/20-validation.md#the-desktop-channel)
-
-Optional: a **notice board** above your Claude Code prompt, showing what the harness is waiting on
-you for, with a toast when something new arrives. Load the mod and give it the token:
+The harness ships a Claude Code plugin for **your own** Claude Code: the `/lubbdubb:…` skills every
+_Open in Claude Code_ link in the cockpit calls (`/lubbdubb:check 284:C`, `/lubbdubb:plan 284`,
+`/lubbdubb:ask 284`, …), the desktop tool channel those skills talk to, and a notice board above your
+prompt that says what the harness is waiting on you for. Boot writes it to `~/.lubbdubb/plugin`:
 
 ```
-LUBBDUBB_TOKEN=$(cat <lubbdubb>/.lubbdubb/cockpit-token) claude --plugin-dir <lubbdubb>/mods/lubbdubb-board
+[lubbdubb] Claude Code plugin 1.0.0-… written to ~/.lubbdubb/plugin — install or update it from the cockpit's MCP tab
 ```
 
-→ [docs/spec/11](docs/spec/11-mcp-tools.md#the-notice-board)
+Until it is installed the cockpit shows a banner under the top bar; **Install it** opens the MCP tab,
+whose button runs `claude plugin marketplace add` and `claude plugin install` for you at user scope, and
+removes the hand-registered `lubbdubb` MCP server and the old `/lubbdubb` skill if you had them. Restart
+open Claude Code sessions to pick it up. Skip it and nothing breaks: every check simply falls to the fleet.
+→ [docs/spec/11](docs/spec/11-mcp-tools.md#the-plugin)
 
 Then: use **Inject event** to simulate the world moving (a CI failure, a review comment) and watch the
 harness react; click an agent to see its live transcript and type into it; answer items in **Needs

@@ -87,6 +87,8 @@ export type {
   PoolRollup,
   PoolRollupRow,
   PoolStatePayload,
+  PluginInstallPayload,
+  PluginStatusPayload,
   PoolStatus,
   PoolFleetReading,
   OpenPullRequest,

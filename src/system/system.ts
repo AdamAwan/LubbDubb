@@ -67,6 +67,7 @@ import {
   lateBinding,
   lateParts,
   buildAgentRuntime,
+  buildPluginDesk,
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
@@ -135,6 +136,7 @@ export interface System {
   attachments: AttachmentFiles;
   mcp: McpBridgeServer;
   desktop: McpDesktopServer;
+  plugin: ReturnType<typeof buildPluginDesk>;
   worktrees: Worktrees;
   errors: ErrorLog;
   configFile: string;
@@ -214,6 +216,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     attachments: runtime.attachments,
     mcp: channels.mcp,
     desktop: channels.desktop,
+    plugin: buildPluginDesk(config, opts, base.errors),
     worktrees: base.worktrees,
     errors: base.errors,
   };

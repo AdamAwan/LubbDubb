@@ -1,10 +1,9 @@
 import type { OrphanedWork } from '../agents/crashRecovery.js';
+import { resolve } from 'node:path';
 import { loadDeploymentConfig, type Config } from '../config/config.js';
 import { watchConfigFile } from '../config/configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
-import { installRoot } from '../selfUpdate/buildStanding.js';
 import { buildSystem, type System } from '../system/system.js';
-import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
 
 // → docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered
@@ -35,16 +34,21 @@ function announceCockpit(config: Config, cockpitUrl: string | null, tokenPath: s
 
 function announceDesktop(system: System, config: Config, desktopReady: boolean): void {
   if (desktopReady) {
-    const { command, args } = system.desktop.registration();
-    console.log(`[lubbdubb] desktop validation channel on — register it in Claude Code once with:`);
-    console.log(`[lubbdubb]   claude mcp add --scope user lubbdubb -- ${command} ${args.join(' ')}`);
+    console.log(`[lubbdubb] desktop validation channel on — the LubbDubb Claude Code plugin connects to it`);
     console.log(`[lubbdubb] credential at ${system.desktop.credentialPath()} (0600), reminted every start`);
-    console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
   } else {
     console.log(
       `[lubbdubb] desktop validation channel unavailable — nothing is listening on ${config.validation.desktopSocketPath}; see the error log`,
     );
   }
+}
+
+function publishPlugin(system: System, config: Config, apiUrl: string): void {
+  const bundle = system.plugin.publish({ url: apiUrl, tokenFile: resolve(process.cwd(), config.auth.tokenFile) });
+  if (bundle)
+    console.log(
+      `[lubbdubb] Claude Code plugin ${bundle.version} at ${bundle.marketplaceDir} — install or update it from the cockpit's MCP tab`,
+    );
 }
 
 function settleRecovery(system: System, crashed: OrphanedWork[]): void {
@@ -87,14 +91,14 @@ async function main(): Promise<void> {
   const mcpReady = await system.mcp.listen();
 
   const desktopReady = await system.desktop.listen();
-  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors, installRoot());
 
   const crashed = system.recovery.detect();
 
-  const { app, hub, cockpitUrl, tokenPath } = await buildApp(system);
+  const { app, hub, cockpitUrl, tokenPath, apiUrl } = await buildApp(system);
   await app.listen({ port: config.port, host: config.host });
   announceCockpit(config, cockpitUrl, tokenPath, mcpReady);
   announceDesktop(system, config, desktopReady);
+  publishPlugin(system, config, apiUrl);
 
   const stopConfigWatch = watchConfigFile({
     filePath: system.configFile,

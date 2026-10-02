@@ -3,8 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { fresh, summary, toBoard, type StateReply } from './board'
 
-const board = atom({ plugin: 'lubbdubb-board', key: 'board' } as const, null)
-const isHidden = atom({ plugin: 'lubbdubb-board', key: 'isHidden' } as const, false)
+const board = atom({ plugin: 'lubbdubb', key: 'board' } as const, null)
+const isHidden = atom({ plugin: 'lubbdubb', key: 'isHidden' } as const, false)
 
 const POLL_MS = 30_000
 
@@ -62,7 +62,7 @@ export const register: Register = (on, options) => {
       return { text: now.paused ? 'Nothing waiting on you. The fleet is paused.' : 'Nothing waiting on you.' }
     }
     const lines = now.notices.map(n => `- ${n.kind}: ${n.title}`)
-    return { text: [summary(now), ...lines, '', 'Settle them with /lubbdubb fleet or in the cockpit.'].join('\n') }
+    return { text: [summary(now), ...lines, '', 'Settle them with /lubbdubb:fleet or in the cockpit.'].join('\n') }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

@@ -595,7 +595,7 @@ test('a refused goal asks its question on the ticket, once, and edits it thereaf
   assert.match(body, /- \[ \] Which page is this about\?/);
   assert.match(body, /edit this item/i, 'the fix is named: the ticket, not a reply');
   assert.match(body, /Replies here are not read/, 'and the thing that does not work is named too');
-  assert.match(body, /\/lubbdubb clarify 12/, 'with a way to get help doing it');
+  assert.match(body, /\/lubbdubb:clarify 12/, 'with a way to get help doing it');
   assert.match(body, /Nothing has been rejected/, 'a question, not a refusal');
   assert.equal(
     system.store.verdicts.getAppraisal('issue:12')?.commentRef,

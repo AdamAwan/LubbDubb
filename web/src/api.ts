@@ -40,6 +40,8 @@ import type {
   PetCatalogue,
   PlanHistory,
   McpChannelPayload,
+  PluginInstallPayload,
+  PluginStatusPayload,
   McpUsagePayload,
   UsagePayload,
   ObstacleBoardPayload,
@@ -272,6 +274,8 @@ const realApi = {
   claimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/claim`, {}),
   summariseBotPrs: () => post<{ ok: true; prs: number }>('/api/bot-prs/risk', {}),
   getMcp: () => authFetch('/api/mcp').then((r) => json<McpChannelPayload>(r)),
+  getPlugin: () => authFetch('/api/plugin').then((r) => json<PluginStatusPayload>(r)),
+  installPlugin: () => post<PluginInstallPayload>('/api/plugin/install'),
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),
   setWorkItemIgnored: (ref: string, ignored: boolean) =>
     ignored

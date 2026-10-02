@@ -100,7 +100,7 @@ deliberately left unchecked, and why, is in
 | [08](spec/08-planning.md)            | The planning funnel        | Plans, parts, the plan document, reconciliation, replan                                                                 |
 | [09](spec/09-execution.md)           | Action execution           | The executor's gates, outbound authority, task materialisation, worktrees, git                                          |
 | [10](spec/10-agent-runtimes.md)      | Agent runtimes             | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage                                                |
-| [11](spec/11-mcp-tools.md)           | The MCP tool channel       | The tools, identity, transport, launch flags, degradation                                                               |
+| [11](spec/11-mcp-tools.md)           | The MCP tool channel       | The tools, identity, transport, launch flags, degradation, the operator's Claude Code plugin                            |
 | [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps | Flag sentinel, the file-events hook, artifact serving, file-overlap detection                                           |
 | [13](spec/13-jobs-and-tickets.md)    | Jobs, tickets, human tasks | The operator job queue, schedules, filing a tracker item, and work only a person does                                   |
 | [14](spec/14-persistence.md)         | Persistence                | The SQLite schema, migrations, the Store API surface, durability rules                                                  |

@@ -33,6 +33,7 @@ import { register as registerJobs } from './routes/jobs.js';
 import { register as registerLocalRun } from './routes/localRun.js';
 import { register as registerLocalValidation } from './routes/localValidation.js';
 import { register as registerMcpUsage } from './routes/mcpUsage.js';
+import { register as registerPlugin } from './routes/plugin.js';
 import { register as registerObstacles } from './routes/obstacles.js';
 import { register as registerPets } from './routes/pets.js';
 import { register as registerPool } from './routes/pool.js';
@@ -80,6 +81,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerLocalRun,
   registerLocalValidation,
   registerMcpUsage,
+  registerPlugin,
   registerObstacles,
   registerPets,
   registerPool,
@@ -116,6 +118,7 @@ interface BuiltApp {
   hub: Hub;
   cockpitUrl: string | null;
   tokenPath: string | null;
+  apiUrl: string;
 }
 
 function installFailureHandling(app: FastifyInstance, system: System): void {
@@ -264,6 +267,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     hub,
     cockpitUrl: auth ? `http://${urlHost}:${config.port}/#t=${auth.token}` : null,
     tokenPath: auth?.source === 'minted' ? auth.path : null,
+    apiUrl: `http://${urlHost}:${config.port}`,
   };
 }
 
