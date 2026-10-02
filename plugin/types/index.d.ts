@@ -1,9 +1,9 @@
-export type Notice = { id: string; kind: 'question' | 'approval' | 'task'; title: string }
+export type Notice = { id: string; kind: string; title: string }
 
 export type Board = { notices: Notice[]; paused: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    'lubbdubb': { board: Board | null; isHidden: boolean }
+    lubbdubb: { board: Board | null; isHidden: boolean }
   }
 }

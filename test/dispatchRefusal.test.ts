@@ -9,7 +9,7 @@ import { buildSystem, type System } from '../src/system/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
-import { buildNeedsYou, type NeedRow } from '../web/src/view/needsYou.js';
+import type { NeedRow } from '../web/src/view/needsYou.js';
 import { failPlanningOpen } from './support/plans.js';
 
 class RefusingWorktrees extends FakeWorktreeManager {
@@ -86,7 +86,7 @@ function dispatched(system: System, origin: string): boolean {
 }
 
 async function refusalRow(system: System, origin: string): Promise<NeedRow | undefined> {
-  return buildNeedsYou(await buildStateSnapshot(system)).find((r) => r.id === `dispatch:${origin}`);
+  return buildStateSnapshot(system).asks.find((r) => r.id === `dispatch:${origin}`);
 }
 
 test('a dispatch refused on every pulse reaches the operator, and one bad pulse does not', async () => {

@@ -861,7 +861,7 @@ switches to Light, and nothing in `npm run check` reads the stylesheets but
 `test/cockpitTheme.test.ts`.
 
 **The Needs-you rail** carries one row for a settled-regressed watch, with the reading in it and the
-bug-filing control beside it (`web/src/view/needsYou.ts`, `web/src/console/taskAsks.tsx`). It is a
+bug-filing control beside it (`src/asks/inboxAsks.ts`, `web/src/console/taskAsks.tsx`). It is a
 `human_tasks` row like every other on the rail, so it folds off the reading the desk already took
 rather than computing a second one — which is the disagreement the strip's fold exists to prevent,
 made once for the whole cockpit.

@@ -1,17 +1,12 @@
-import type { AppState, CockpitDecision } from '../types.js';
-import { askLine, goalOf, opensAt } from './needLines.js';
-import type { NeedDraft } from './needsYou.js';
+import type { CockpitDecision } from '../wire.js';
+import type { AskDraft, AskInputs } from './queue.js';
+import { askLine, goalOf, opensAt } from './lines.js';
 
-// → docs/spec/17-cockpit.md
+// → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
 const REFUSAL_PULSES = 3;
 
-/**
- * A dispatch the executor has refused on every recent pulse, and what the last refusal said.
- *
- * @public read back by the needs band, which draws the refusal in full under the row
- */
-export interface RefusedDispatch {
+interface RefusedDispatch {
   key: string;
   originRef: string | null;
   branch: string | null;
@@ -25,7 +20,7 @@ function str(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
-function refusedDispatches(state: AppState): RefusedDispatch[] {
+function refusedDispatches(state: AskInputs): RefusedDispatch[] {
   const runs = new Map<string, CockpitDecision[]>();
   const settled = new Set<string>();
   for (const d of state.decisions ?? []) {
@@ -60,27 +55,19 @@ function refusedDispatches(state: AppState): RefusedDispatch[] {
   return out;
 }
 
-/**
- * One refused run by its row id, through the same derivation the rail's row came from.
- *
- * @public the needs band resolves the row it was handed back to its refusal
- */
-export function refusedDispatchFor(state: AppState, id: string): RefusedDispatch | null {
-  return refusedDispatches(state).find((r) => `dispatch:${r.key}` === id) ?? null;
-}
-
 function refusalLine(detail: string): string {
   const stop = detail.indexOf('. ');
   if (stop > 0 && stop < 200) return detail.slice(0, stop + 1);
   return detail.length > 200 ? `${detail.slice(0, 199)}…` : detail;
 }
 
-export function refusedDispatchRows(state: AppState): NeedDraft[] {
+export function refusedDispatchRows(state: AskInputs): AskDraft[] {
   return refusedDispatches(state).map((r) => {
     const goalRef = goalOf(r.originRef, state);
     return {
       id: `dispatch:${r.key}`,
       kind: 'dispatch' as const,
+      subject: { type: 'refused_dispatch' as const, key: r.key },
       group: 'yours' as const,
       title: askLine(`Refused on ${r.pulses} pulses running — ${refusalLine(r.detail)}`, goalRef, state),
       goalRef,
@@ -90,6 +77,7 @@ export function refusedDispatchRows(state: AppState): NeedDraft[] {
       agentLabel: null,
       holding: 0,
       raisedAt: r.since,
+      refusal: { originRef: r.originRef, pulses: r.pulses, detail: r.detail, rule: r.rule, since: r.since },
     };
   });
 }

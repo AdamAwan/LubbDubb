@@ -1609,9 +1609,9 @@ watched the thing happen. → [36](36-remote-validation.md#what-a-spec-reading-i
 
 ### The skill
 
-Eleven skills in [the plugin](11-mcp-tools.md#the-plugin), one per job, each a static
+Twelve skills in [the plugin](11-mcp-tools.md#the-plugin), one per job, each a static
 `plugin/skills/<name>/SKILL.md`: `/lubbdubb:check 284:C`, `/lubbdubb:plan 284`, `/lubbdubb:run 284`,
-`/lubbdubb:ask 284 …`, `/lubbdubb:fleet`, `/lubbdubb:order 500`, `/lubbdubb:file`,
+`/lubbdubb:ask 284 …`, `/lubbdubb:fleet`, `/lubbdubb:next`, `/lubbdubb:order 500`, `/lubbdubb:file`,
 `/lubbdubb:clarify 284`, `/lubbdubb:eject 412`, `/lubbdubb:describe 390:validate`,
 `/lubbdubb:feature 500`. They were one `/lubbdubb` skill told apart by its argument — `plan` was
 `discuss`, and `check` was the bare `/lubbdubb 284:C`. **The `lubbdubb:` prefix is not optional**: a

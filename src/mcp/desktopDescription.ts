@@ -144,3 +144,36 @@ export const descriptionCheck: DesktopToolFactory = (deps) => ({
     });
   },
 });
+
+/**
+ * The operator's "Leave it as is" on a check's findings — the same stamp the pull request page
+ * presses, and nothing about the text. → docs/spec/07-pull-requests.md#leaving-it-as-is
+ */
+export const descriptionDismiss: DesktopToolFactory = (deps) => ({
+  description:
+    'Leave the findings a check raised on the operator’s pull-request description as they are — their ' +
+    'answer when they have read what the check said and disagree, or do not think it worth a change. It ' +
+    'takes the "Needs you" row away and keeps the findings readable on the pull request, marked as left. ' +
+    'Only on the operator’s say-so: when they agree with a finding, the answer is to rewrite the ' +
+    'description themselves, which this channel never does for them.',
+  inputSchema: toolSchema(
+    z.object({ pr: z.number().describe('The pull request whose description the check was about, e.g. 312.') }),
+  ),
+  handler: (args) => {
+    if (typeof args.pr !== 'number' || !Number.isInteger(args.pr) || args.pr <= 0)
+      return toolError('pr must be the pull request number, e.g. 312.');
+    if (!deps.store.prDescriptions.dismissFindings(args.pr))
+      return toolError(
+        `PR #${args.pr}'s description has no findings to leave as they are — it has not been checked, the ` +
+          'check found nothing, or it was rewritten since and the new version is unchecked.',
+      );
+    deps.changed({ type: 'dirty', sections: ['plans'] });
+    return toolJson({
+      pr: args.pr,
+      left: true,
+      means:
+        'the row is gone from "Needs you" and the findings stay on the pull request, marked as left as is. A ' +
+        'rewrite, or a re-check of this same version, raises them afresh.',
+    });
+  },
+});

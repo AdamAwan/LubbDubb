@@ -231,10 +231,15 @@ export const DESKTOP_TOOL_NAMES = [
   'plan_amend',
   'sequence_read',
   'sequence_amend',
+  'sequence_answer',
   'feature_read',
   'local_run',
   'description_read',
   'description_check',
+  'description_dismiss',
+  'pr_assign',
+  'ask_next',
+  'ask_skip',
 ] as const;
 
 export type DesktopToolName = (typeof DESKTOP_TOOL_NAMES)[number];

@@ -10,8 +10,12 @@ bundled. `test/wireContract.test.ts` asserts both halves — that the shared mod
 and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 
-**Nothing is passed through by value.** `src/wire.ts` re-exports no runtime today, and
-`test/wireRuntime.test.ts` pins that list — a re-export is not a declaration and would slip past
+**One thing is passed through by value: the ask queue.** `src/wire.ts` re-exports runtime from three
+pure leaf modules under `src/asks/` — `buildAskQueue`, which the demo's fake server derives its queue
+with ([demo mode](#demo-mode)), and `askLine`, `oneLine`, `upgradeHeadline` and `projectName`, which
+the cockpit words its own lines with so that a line it composes cannot word the server's row
+differently. `test/wireRuntime.test.ts` pins that list and walks each module's imports refusing a node
+builtin or a package value — a re-export is not a declaration and would slip past
 `test/wireContract.test.ts`, so adding one is a deliberate entry there.
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
@@ -608,8 +612,49 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
 permission requests, goals the appraisal refused at intake, unanswered goal-profile proposals, usage-limit
 parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing, pull requests
-somebody assigned to the operator and the recovery hold. `buildNeedsYou`
-(`web/src/view/needsYou.ts`) is the merge, and it is pure.
+somebody assigned to the operator and the recovery hold. `buildAskQueue` (`src/asks/queue.ts`) is
+the merge, it is pure, and **it runs on the server**: `/api/state` ships its output as `asks`, and the
+cockpit draws that list.
+
+### One list for the cockpit and for Claude Code
+
+**The queue is derived once, on the server, and every reader takes it from there.** It used to be
+`buildNeedsYou` in `web/src/view/needsYou.ts`, with the one-at-a-time order a second comparator beside
+it in the Focus overview — which was fine while the browser was the only reader. It is not: the
+operator works the same asks one at a time from their own Claude Code over the desktop channel
+([11](11-mcp-tools.md#the-desktop-channel)), and a queue ordered in two places is two orders that
+drift, so "the next ask" in Claude Code would stop being the ask Focus mode shows. So the merge, the
+tier, the group, `holding`, the rail's sort and the Focus order all live in `src/asks/`, and:
+
+- **The array is in the rail's order** ([the order](#the-plan-band-shows-the-plans-summary-not-the-asks-prose) below), and **each row
+  carries `focusRank`**, its place in the one-at-a-time order ([one ask at a time](#one-ask-at-a-time)).
+  Two orders rather than one because the spec gives them different jobs — the rail is cut by who is
+  stopped, Focus mode by how much work is held and how far along it is — and both are the server's.
+  The cockpit sorts by `focusRank` and decides nothing.
+- **`askQueue(system)`** (`src/server/stateSnapshot.ts`) is the queue as a one-at-a-time reader walks
+  it: standing rows only, in `focusRank` order. It is the same derivation `/api/state` ships, read off
+  the same snapshot reads. Its reader is the desktop channel's `ask_next`, which hands Claude Code its
+  head ([11](11-mcp-tools.md#the-next-ask-loop)); the plugin's notice board reads the `asks` section
+  and names the same head ([11](11-mcp-tools.md#the-notice-board)).
+- **Every row names the record it is about as `subject`** — an escalation (and its proposal), a human
+  task, the recovery hold's tasks, a parked agent, a setup check, a refused dispatch, a pull request, a
+  part, a description check, an issue, or the build. It is what answers the ask, and what a reader
+  checks to see it was answered: a settled record is simply absent from the next derivation.
+- **The browser filters and never reorders.** The one input only a browser has — a setup fix it just
+  applied, held to show its undo — is a filter: every setup check is shipped, the ones reading `ok` or
+  `unknown` with `standing: false`, and `needsYouOf` (`web/src/view/needsYou.ts`) keeps a non-standing
+  row only while this browser holds a fix for it. A filter preserves the server's order; adding the row
+  back client-side would have needed the comparator.
+- **The setup reading is the last one `/api/setup` took.** Its probes spawn processes, so it cannot be
+  taken per snapshot; the route keeps its latest reading on `System.setupReading` and broadcasts
+  `dirty` when the checks change. The state route and `askQueue` both read that one holder, so Claude
+  Code's queue carries the same config rows the rail does — and `ask_next` sends them to the cockpit's
+  config tab, where they are answered ([11](11-mcp-tools.md#the-next-ask-loop)).
+- **The clock is the server's.** A snoozed upgrade row comes back on the first snapshot after the
+  snooze expires — a pulse at most — rather than on the browser's next tick.
+- **The demo derives it with the same code.** The Pages build has no server, so its fake one calls
+  `buildAskQueue` over its own state on every `getState` — the one runtime the wire passes through
+  ([above](#17--the-cockpit)).
 
 **The snapshot carries only the escalations that are still open** — the rail's own
 `status === 'open'` filter is belt-and-braces over a list that already holds nothing else
@@ -625,7 +670,7 @@ surface ends up offering the wrong control.
 **A proposal is four kinds — `plan`, `reply`, `merge`, `shortfall` — and was one.** It was `proposal`,
 tagged `Plan`, which is the name of the one act among the four it might be: a drafted reply held for
 sign-off, a merge waiting on a verdict and an assessment's follow-up all arrived on the rail, and in
-the ask panel's own header, under the word `Plan`. `PROPOSAL_KIND` (`web/src/view/needsYou.ts`) is
+the ask panel's own header, under the word `Plan`. `PROPOSAL_KIND` (`src/asks/inboxAsks.ts`) is
 total over `ProposalKind`, so a fifth act fails the typecheck rather than inheriting whichever word the
 last one wore. A shortfall the harness only _asks_ about — the arm where the goal itself is what the
 assessor found wrong, so nothing is dispatched and no proposal is written
@@ -782,7 +827,7 @@ draws the thrower's own message instead, which already names the branch, the pat
 raised by something — an escalation, a bench task, a reading. This one is the parts whose pull request
 is open and which nobody has written a word about, so there is nothing to read it off in the cockpit:
 the described set is a per-goal route the goal page calls, and the rail is drawn over every goal at
-once. `CockpitState.undescribedParts` carries the list, and `buildNeedsYou` draws what it was given rather than subtracting one list
+once. `CockpitState.undescribedParts` carries the list, and `buildAskQueue` draws what it was given rather than subtracting one list
 from another it does not hold. It is `next` and always `yours`: the ask holds nothing up — that is the
 feature — but the pull request it is about is already open and already spending a reviewer's hour.
 → [07](07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer)
@@ -867,13 +912,13 @@ operator approves the pull request, which is the same thing said by the provider
 ### Urgency is the rail's first cut
 
 **Three urgencies, and the question they answer is _what do I answer first_.** `NeedUrgency`
-(`web/src/view/needsYou.ts`) is `now`, `next` or `later`, and the rail's headings — `Answer now`,
+(`src/asks/askRow.ts`) is `now`, `next` or `later`, and the rail's headings — `Answer now`,
 `Yours to do`, `Whenever` — are that reading rather than the group's. Twenty-four kinds down the two
 headings the rail used to carry put a build upgrade and an assigned pull request in the same list as
 an agent that cannot proceed, and the operators reading it stopped reading it: the queue was
 _complete_ and, past about a dozen rows, that was the whole of its cost.
 
-`KIND_URGENCY` is total over `NeedKind`, so a new kind is placed deliberately rather than inheriting
+`KIND_URGENCY` (`src/asks/queue.ts`) is total over `AskKind`, so a new kind is placed deliberately rather than inheriting
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
 `dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
@@ -889,7 +934,7 @@ _stopped_. Folding one into the other loses whichever reading it was folded into
 **Held parts promote any ask to `now`, whatever its kind.** A watch row with four parts waiting behind
 it stops more work than most escalations, and an urgency read off the kind alone would file it under
 "whenever". `holding` is the one number the merge already computes for every row, and it is the honest
-measure of what an ask is costing. It is applied in one pass over the finished rows — `NeedDraft` is
+measure of what an ask is costing. It is applied in one pass over the finished rows — `AskDraft` is
 the row as its fifteen sources write it — rather than restated at each push site, where `holding` is
 not always known.
 
@@ -949,7 +994,7 @@ within it.
 | `project_pull`      | Auto-pull off    | amber | `↥`   | Something is stopping a pull the harness would have done.       |
 
 **`upgrade` and `project_pull` are the two kinds derived from a _reading_ rather than from anything
-raised** — `web/src/view/updateAsks.ts`, off `state.build`. They are here for the membership test
+raised** — `src/asks/updateAsks.ts`, off `state.build`. They are here for the membership test
 itself: no rule in the harness will ever answer either. Amber on `permission`'s and `config_gap`'s
 terms respectively — one is an act waiting on a yes, the other is something of the operator's own
 stopping a thing the harness would otherwise have done — and both are always `yours`, since nothing is
@@ -1016,7 +1061,7 @@ A tone is five custom properties on the row or the band — `--cn-tone`, `--cn-t
 values that have to move together, and the alternative is the near-identical copy of each rule per tone
 this replaced.
 
-**The order is the derivation's, and the rail never re-sorts.** `buildNeedsYou` sorts:
+**The order is the derivation's, and the rail never re-sorts.** `buildAskQueue` sorts, on the server:
 
 1. **Recovery first** — while it is up no pulse runs at all, so every other row is waiting on it
    whether or not it says so.
@@ -1027,14 +1072,14 @@ this replaced.
 `QueueRail` groups the already-ordered array by `NeedGroup` for its two sub-headings and does nothing
 else, so the rail and the view-model stay one reading. `test/console.test.ts` feeds it deliberately
 out-of-order rows and asserts array order survives — a second sort in the component is the drift that
-would make the rail's own claim about urgency stop being `needsYou`'s.
+would make the rail's own claim about urgency stop being the server's.
 
 ### A row is one factual line
 
 **The row says which ask it is and which goal it is about, and nothing else.** It used to draw the
 ask's own prose — `escalation.prompt` verbatim — and a plan approval's prompt is four paragraphs, so
 the row that mattered most was the tallest thing on the rail and a queue of them could not be read at
-a glance. `askLine` (`web/src/view/needLines.ts`) words each row instead: a summary of the act, then
+a glance. `askLine` (`src/asks/lines.ts`) words each row instead: a summary of the act, then
 `for #395 · <the goal's title>`.
 
 - **The act, from the row's own source and never from the prose.** A proposal knows which act it is,
@@ -1098,11 +1143,11 @@ nothing.
 (`agent_${nanoid(10)}`, `src/store/agents.ts`) and an agent has no name of its own, so `agent_ab4sc`
 on a queue row was a label that identified nothing and read as though it ought to. The harness's own
 answer to "what is this run" is its **task's title**, which the fleet card, the drawer and the goal
-page all already use — so `buildNeedsYou` resolves it onto the row as `agentLabel`, clamped to its
+page all already use — so `buildAskQueue` resolves it onto the row as `agentLabel`, clamped to its
 first line because a title is free text and a queue row is one line. The id stays on the row as
 `agentId`: it is what a control resumes and what the drawer is keyed on, and it is simply not what
 the rail prints. A row whose agent the snapshot no longer carries draws the phrase _a run with no
-task on record_ — the fact stated, rather than an id offered as a name. `test/needsYou.test.ts`
+task on record_ — the fact stated, rather than an id offered as a name. `test/askQueue.test.ts`
 pins the resolution, the clamp and both fallbacks.
 
 **The ask panel states its subject, always as a link.** It is the one surface with no context drawn
@@ -1129,13 +1174,13 @@ the demo's rail leads to a goal page. The
 goal-less reading is still exercised — `test/console.test.ts` builds the orphan rather than fishing
 one out of the fixtures — because what the harness does is not what a demo should teach.
 
-**The destination is decided in `buildNeedsYou`, never in the rail**, and this is the load-bearing
+**The destination is decided in `buildAskQueue`, never in the rail**, and this is the load-bearing
 part: only the derivation can tell a `goalRef` that _has_ a page from one that merely looks like it
 does, which it asks through `goalIssue` — the same lookup `buildGoalPage` returns null on, so the two
 cannot drift. A rail that routed on `goalRef` alone drew every PR-origin escalation as an inert `div`
 and every ref the world had dropped as a click that landed nowhere; both read, to an operator, as a
 console that is broken. `test/console.test.ts` asserts all three shapes and that the ask panel closes
-on the row settling; `test/needsYou.test.ts` asserts the routing itself.
+on the row settling; `test/askQueue.test.ts` asserts the routing itself.
 
 **While a goal's page is open, the rail says which of its rows are the ones on screen.** A row whose
 `goalRef` names that goal is marked `aria-current` and drawn against the accent; every other row is
@@ -2505,7 +2550,7 @@ rail's count stays every row, folded ones included. `test/goalAskLines.test.ts` 
 The `validation_plan` ask's prompt opens on a count and the ticket's title ("1 check(s) written
 against the delivered code for issue #…"), so the one line a row shows of it said nothing about the
 check. Its row title is the checks instead: `OK check: <title>`, or `OK 3 checks: <first> (+2 more)`
-(`checkSetLine` in `web/src/view/needsYou.ts`, read off the proposal through `checkSetOf`).
+(`checkSetLine` in `src/asks/inboxAsks.ts`, read off the proposal's own action, as `checkSetOf` reads it for the card).
 
 The card is reordered for the same reason. `CheckSetAsk` draws **the checks first** and the
 planner's note beside them — two columns where the card is wide, stacked where it is not — with
@@ -4535,18 +4580,21 @@ operator moves along the queue rather than choosing from it.
 true continuously — six agents out, four goals in flight, three pull requests open — and none of it is
 a question addressed to anybody. The ask that _is_ a question lives on the rail beside it, in a column
 narrow enough that its reason has to be a tooltip. The rail already computes the better reading:
-`needsYou.ts` gives every ask its kind, its tier and **`holding`**, the count of plan parts stalled
+`buildAskQueue` gives every ask its kind, its tier and **`holding`**, the count of plan parts stalled
 behind it, which is the number that should decide what is opened first. This shape is that list, one
 row at a time, at full width.
 
-**The order is `byWeight` — tier first, then `holding`, then the ask's _stage_.** The first two halves
-are the rail's own; nothing here re-decides what the server decided.
+**The order is `focusOrder` — tier first, then `holding`, then the ask's _stage_ — and it is the
+server's.** `src/asks/queue.ts` sorts the queue by it and ships each row's place as `focusRank`; the
+overview sorts by that number and nothing else, and Claude Code's one-at-a-time reader walks the same
+order ([one list](#one-list-for-the-cockpit-and-for-claude-code)). The first two halves are the rail's
+own.
 
 The stage is this shape's own cut and it decides only the ties. `holding` is zero on most asks, so what
 was left to order them was `raisedAt` — oldest first — and the oldest ask on a deployment is almost
 always the one about work that never started: a page of **intake holds** in front of every review
 thread, bench row and merge on work the fleet is out on right now. That is the queue reading backwards.
-`STAGE_RANK` in `web/src/console/overviews/asks.ts` is a part's own life run backwards, lowest first: a
+`STAGE_RANK` in `src/asks/queue.ts` is a part's own life run backwards, lowest first: a
 **merge** is one press from landing; a **reply** or an assigned review is on a pull request that
 exists; a **bench row**, a validation or a close-out is checking something already delivered; an
 **escalation**, permission or park is an agent out this minute; an **intake** hold, a profile proposal
@@ -6655,7 +6703,7 @@ are broken" from the demo has learned nothing about their browser.
 
 **Decided from state, not from websocket frames.** `notifiableChanges` (`web/src/cockpit/notify.ts`)
 is a pure diff of two reduced snapshots, and the needs-you half diffs the **rendered** queue —
-`buildNeedsYou`'s own output. Watching frames instead would have covered escalations and missed human
+the server's `asks`, through the same `needsYouOf` filter. Watching frames instead would have covered escalations and missed human
 tasks, plan approvals and recovery, the three that arrive as one coarse `dirty` and never announce
 themselves; diffing the queue covers every kind by construction and stays true when a ninth is
 added. Agents notify on the **transition** into a terminal status rather than on appearing, since an
@@ -9078,7 +9126,9 @@ Eleven files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
-- `test/needsYou.test.ts` — the merged queue and, first among them, its ordering.
+- `test/askQueue.test.ts` — the merged queue and, first among them, its ordering;
+  `test/askQueueState.test.ts` — that `/api/state` ships it in that order, with every reply, and that
+  `askQueue` walks it one at a time; `test/overviewAskOrder.test.ts` — the one-at-a-time order.
 - `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
   goal, and the prefix trap `issue:14` versus `issue:1`.
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.

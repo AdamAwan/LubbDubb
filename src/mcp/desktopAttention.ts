@@ -25,8 +25,9 @@ function inboxKind(deps: DesktopToolDeps, item: Escalation): { kind: InboxKind; 
 function settledBy(kind: InboxKind, detail: string | null): string {
   if (kind === 'question') return 'escalation_answer with `response` (or `answers`, one per question)';
   if (kind === 'permission') return "escalation_answer with `permission: 'allow' | 'deny'`";
-  if (kind === 'proposal') return `the cockpit — proposal ${detail} is a decision, and this channel does not take it`;
-  return `the cockpit — the agent that asked this crashed, and its run (${detail}) needs a recovery verdict first`;
+  if (kind === 'proposal')
+    return `proposal_decide on proposal ${detail} — it is an act to accept or reject, so read it with proposal_read first`;
+  return `recovery_decide on task ${detail} — the agent that asked this crashed, and its run needs a restore / requeue / remove verdict first`;
 }
 
 function describeInboxItem(deps: DesktopToolDeps, item: Escalation): Record<string, unknown> {
@@ -69,13 +70,14 @@ function heldGoals(deps: DesktopToolDeps): Record<string, unknown>[] {
 }
 
 const ATTENTION_NEXT =
-  'Answer only the rows whose `settledBy` names this channel. A held goal is neither: it is a delivery ' +
-  'whose validation checks and close-out are withheld because the harness cannot see its work anywhere, ' +
-  'and it is here because that wait is otherwise silent. A human task is work, not a question: it ' +
-  'settles when somebody has actually done it or refused it, never as an answer typed at an agent. The ' +
-  'two kinds that name the cockpit are decisions with consequences a session cannot see — an act about ' +
-  'to be published, a run about to be restored or thrown away. Say what is waiting and let the operator ' +
-  'go there.';
+  'Each row names the tool that settles it. A held goal is the exception: it is a delivery whose ' +
+  'validation checks and close-out are withheld because the harness cannot see its work anywhere, and ' +
+  'it is here because that wait is otherwise silent — goal_gate releases it, with a note, only when the ' +
+  'work is never going to arrive. A human task is work, not a question: it settles when somebody has ' +
+  'actually done it or refused it, never as an answer typed at an agent. A proposal and an orphaned run ' +
+  'are decisions with consequences — an act about to be performed, perhaps published; a run about to be ' +
+  'restored or thrown away — so put the consequence to the operator in plain words and decide it only ' +
+  'on their say-so.';
 
 export const attentionRead: DesktopToolFactory = (deps) => ({
   description:
@@ -132,7 +134,15 @@ const ESCALATION_ANSWER_INPUT = toolSchema(
       .enum(['allow', 'deny'])
       .describe('The verdict on a blocked tool call. Only for an item of kind "permission".')
       .optional(),
-    note: z.string().describe('Optional reason, shown with a denial.').optional(),
+    dismiss: z
+      .boolean()
+      .describe(
+        "true clears the row without answering it — the cockpit's Dismiss. An agent parked on it is " +
+          'released and told nothing; a permission request is denied. Not for a proposal: that is ' +
+          "proposal_decide. Only on the operator's say-so.",
+      )
+      .optional(),
+    note: z.string().describe('Optional reason, shown with a denial or a dismissal.').optional(),
   }),
 );
 
@@ -146,20 +156,47 @@ function unknownEscalation(deps: DesktopToolDeps, id: string): string {
   return `No escalation "${id}". Call attention_read for what is actually open.`;
 }
 
+function proposalRefusal(detail: string | null): string {
+  return (
+    `This item is a proposal (${detail}) — an act waiting to be accepted or rejected, not a question. ` +
+    'Free text cannot be branched on, and answering it here would settle the row while leaving the act ' +
+    `pending for good. Read it with proposal_read and decide it with proposal_decide on id ${detail}.`
+  );
+}
+
 function kindRefusal(kind: InboxKind, detail: string | null): string | null {
-  if (kind === 'proposal')
-    return (
-      `This item is a proposal (${detail}) — an act waiting to be accepted or rejected, not a question. ` +
-      'Free text cannot be branched on, and answering it here would settle the row while leaving the act ' +
-      'pending for good. The operator takes it in the cockpit.'
-    );
+  if (kind === 'proposal') return proposalRefusal(detail);
   if (kind === 'orphaned')
     return (
-      `The agent that asked this crashed, and its run (${detail}) is waiting on a restore / requeue / remove ` +
-      'verdict in the cockpit. There is nothing to type into. Restoring keeps this question open, so it is ' +
-      'answerable afterwards.'
+      `The agent that asked this crashed, and its run is waiting on a restore / requeue / remove verdict — ` +
+      `recovery_decide on task ${detail}. There is nothing to type into. Restoring keeps this question open, ` +
+      'so it is answerable afterwards.'
     );
   return null;
+}
+
+function dismissItem(
+  deps: DesktopToolDeps,
+  id: string,
+  kind: InboxKind,
+  detail: string | null,
+  note: string | undefined,
+): ToolCallResult {
+  if (kind === 'proposal') return toolError(proposalRefusal(detail));
+  if (kind === 'permission') return decidePermission(deps, id, kind, 'deny', note);
+  try {
+    deps.escalations().dismiss(id, note);
+    return toolJson({
+      settled: id,
+      dismissed: true,
+      note: note ?? null,
+      means:
+        'the row is cleared with no answer. An agent parked on it was released and carries on without one; ' +
+        'nothing it was asking about has been decided.',
+    });
+  } catch (err) {
+    return toolError((err as Error).message);
+  }
 }
 
 function decidePermission(
@@ -230,7 +267,8 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
     'Answer something the harness is waiting on a person for. For a question an agent parked on, give ' +
     '`response` (or `answers`, one per question, when attention_read showed a questionnaire) — it is typed ' +
     'straight into the agent, which carries on from it. For a blocked tool call, give `permission` instead. ' +
-    'Proposals and crashed runs are not settled here; attention_read says so per row.',
+    '`dismiss: true` clears a row without answering it. Proposals are proposal_decide and crashed runs ' +
+    'recovery_decide; attention_read names the tool per row.',
   inputSchema: ESCALATION_ANSWER_INPUT,
   handler: (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
@@ -244,10 +282,11 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
       );
 
     const { kind, detail } = inboxKind(deps, item);
+    const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
+    if (args.dismiss === true) return dismissItem(deps, id, kind, detail, note);
     const refused = kindRefusal(kind, detail);
     if (refused !== null) return toolError(refused);
 
-    const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
     if (args.permission !== undefined) return decidePermission(deps, id, kind, args.permission, note);
     if (kind === 'permission')
       return toolError(

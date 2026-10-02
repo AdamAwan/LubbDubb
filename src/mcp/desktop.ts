@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
@@ -11,24 +12,27 @@ import {
 } from './protocol.js';
 import { SocketChannel } from './socketChannel.js';
 import { buildCallLog, type McpCallLog } from './callLog.js';
-import type { DesktopSession, DesktopToolDeps } from './desktopContext.js';
+import type { DesktopChange, DesktopSession, DesktopToolDeps } from './desktopContext.js';
 import { buildDesktopTools } from './desktopTools.js';
 
 // → docs/spec/11-mcp-tools.md
 
-interface McpDesktopServerOptions extends DesktopToolDeps {
+interface McpDesktopServerOptions extends Omit<DesktopToolDeps, 'changed'> {
   socketPath: string;
   credentialPath: string;
   argsRetentionDays?: number;
 }
 
-export class McpDesktopServer {
+export class McpDesktopServer extends EventEmitter {
   private readonly channel: SocketChannel;
+  private readonly deps: DesktopToolDeps;
   private readonly calls: McpCallLog;
   private token: string | null = null;
   private readonly sessions = new Map<string, DesktopSession>();
 
   constructor(private readonly opts: McpDesktopServerOptions) {
+    super();
+    this.deps = { ...opts, changed: (change) => this.emit('changed', change) };
     this.calls = buildCallLog(opts);
     this.channel = new SocketChannel({
       socketPath: opts.socketPath,
@@ -38,6 +42,14 @@ export class McpDesktopServer {
       closed: (_token, connectionId) => this.release(connectionId),
       errors: opts.errors,
     });
+  }
+
+  override on(event: 'changed', listener: (change: DesktopChange) => void): this {
+    return super.on(event, listener);
+  }
+
+  override emit(event: 'changed', change: DesktopChange): boolean {
+    return super.emit(event, change);
   }
 
   async listen(): Promise<boolean> {
@@ -124,7 +136,7 @@ export class McpDesktopServer {
    * @public read by the `/api/mcp` route.
    */
   advertised(): { name: string; description: string }[] {
-    return buildDesktopTools(this.opts, { label: '', held: null }).map((tool) => ({
+    return buildDesktopTools(this.deps, { label: '', held: null }).map((tool) => ({
       name: tool.name,
       description: tool.description,
     }));
@@ -196,7 +208,7 @@ export class McpDesktopServer {
       }
       return await handleRequest(frame, []);
     }
-    const response = await handleRequest(frame, buildDesktopTools(this.opts, this.sessionFor(connectionId)));
+    const response = await handleRequest(frame, buildDesktopTools(this.deps, this.sessionFor(connectionId)));
     if (call !== null) {
       const refusal = this.calls.refusalOf(response);
       this.calls.record({

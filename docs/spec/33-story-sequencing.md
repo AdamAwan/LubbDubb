@@ -359,9 +359,10 @@ and carries four things, and the last two are the ones that make it answerable:
 - **what accepting costs** — how many stories would start now and will not if this is accepted.
   Without it the operator is agreeing to a hold whose size is not on the card.
 
-Three answers, because nothing else ends it: **accept**, **discuss**, **decline**. Until the card
-exists, accept and decline arrive at `POST /api/features/:number/sequence` (`src/sequence/answer.ts`),
-which takes those two and not `proposed` — an agent writes that status and nothing else may, and a
+Three answers, because nothing else ends it: **accept**, **discuss**, **decline**. Accept and decline
+arrive at `POST /api/features/:number/sequence` (`src/sequence/answer.ts`), or from the operator's own
+session as `sequence_answer` ([below](#answering-it-from-claude-code)). Both take those two and not
+`proposed` — an agent writes that status and nothing else may, and a
 route that accepted it would let the cockpit put a Feature back to unanswered, which is not a thing
 a person means.
 
@@ -394,6 +395,20 @@ That is the right shape rather than the cheap one. Reordering is a judgement wit
 and the reason is the half worth keeping: a drag records that the order changed and loses why, which
 is exactly what the next person to read the Feature needs. It also removes a surface — no reorder
 route, no per-wave editing state on `Place`, nothing in the cockpit that writes an order.
+
+### Answering it from Claude Code
+
+A proposed order is answered on the card, and the same session can answer it as well: the
+operator says "accept that" or "they are independent", and the card's two answers are
+`sequence_answer` on the desktop channel — `accept` or `decline`, never `proposed`, through
+`store.sequences.answerFeatureSequence`, the one write `POST /api/features/:number/sequence` makes,
+with the session's label as `by`. It resolves a story to its Feature through the same `featureFor`
+as `sequence_read`, and it answers the order **as written**: changing an edge is an amendment, and an
+answer that could carry edges would be a second `sequence_amend` with a different name.
+
+It changes nothing about [failing open](#fail-open). A Feature with no order is refused rather than
+given one, `decline` releases every story exactly as the card's does, and `accept` holds only the
+edges the sequencer proposed — the same edges the operator would have accepted on the card.
 
 The fleet's own channel gets `sequence_submit` (`src/mcp/tools/sequenceSubmit.ts`), named in
 `buildTools` **and** in `MCP_TOOL_NAMES` (`src/mcp/names.ts`), authorised structurally against the

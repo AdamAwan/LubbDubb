@@ -311,12 +311,18 @@ export class PrDescriptionStore {
 
   /**
    * The operator's press to leave a check's findings as they are. Idempotent — a second
-   * press keeps the first one's stamp. → docs/spec/07-pull-requests.md#leaving-it-as-is
+   * press keeps the first one's stamp. Addressed by pull request, because that is what both
+   * surfaces that press it hold; false where its current version carries no findings to leave.
+   * → docs/spec/07-pull-requests.md#leaving-it-as-is
    */
-  dismissFindings(id: string): void {
+  dismissFindings(prNumber: number): boolean {
+    const originRef = this.partOfPullRequest(prNumber);
+    const current = originRef === null ? null : this.currentDescription(originRef);
+    if (current === null || current.findings.length === 0) return false;
     this.ctx
       .prep(`UPDATE pr_descriptions SET dismissed_at=COALESCE(dismissed_at, @at) WHERE id=@id`)
-      .run({ id, at: this.ctx.now() });
+      .run({ id: current.id, at: this.ctx.now() });
+    return true;
   }
 
   /**

@@ -1,5 +1,6 @@
 import type { FilingTarget } from './sink/actionSink.js';
 import type { SetupReading } from './setup/reading.js';
+import type { AskRow } from './asks/askRow.js';
 import type { SetupResolution } from './setup/resolve.js';
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
@@ -417,7 +418,16 @@ interface CockpitUsage {
   unattributedCostUsd: number;
 }
 
-export type StateSection = 'harness' | 'control' | 'goals' | 'plans' | 'fleet' | 'queue' | 'inbox' | 'activity';
+export type StateSection =
+  | 'harness'
+  | 'control'
+  | 'goals'
+  | 'plans'
+  | 'fleet'
+  | 'queue'
+  | 'inbox'
+  | 'activity'
+  | 'asks';
 
 export interface CockpitState {
   config: CockpitConfig;
@@ -518,6 +528,12 @@ export interface CockpitState {
   runOutcomes: RunTally;
   refUrls: Record<string, string>;
   dispatchRules: Record<string, DispatchRule>;
+  /**
+   * Every ask on the deployment, in the rail's order, derived on the server so the cockpit and
+   * Claude Code read one queue. Its own section, read off whatever else the reply built.
+   * → docs/spec/17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code
+   */
+  asks: AskRow[];
 }
 
 export interface EjectionView extends Ejection {
@@ -1099,6 +1115,10 @@ export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './insight
 export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
 export type { BuildReading, SnoozeStamps, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
+export type { AskDestination, AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
+export { buildAskQueue } from './asks/queue.js';
+export { askLine, oneLine } from './asks/lines.js';
+export { projectName, upgradeHeadline } from './asks/updateAsks.js';
 export type { BuildStanding } from './selfUpdate/buildStanding.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';

@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os';
+import type { AskRow } from '../asks/askRow.js';
 import { dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import { Store } from '../store/store.js';
@@ -38,6 +39,7 @@ import { ClaudePluginCli, PluginDesk, type PluginCli } from '../plugin/desk.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import { PERMISSION_PROMPT_TOOL } from '../mcp/names.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
+import { PrAssignDesk } from '../pr/prAssignAsk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
 import { ActionExecutor } from '../executor/actionExecutor.js';
@@ -104,6 +106,8 @@ interface Late {
   localRun: LocalRunner;
   localRunWatch: LocalRunWatch;
   localValidations: LocalValidationDesk;
+  prAssign: PrAssignDesk;
+  askQueue(): AskRow[];
 }
 
 export interface LateBinding {
@@ -124,7 +128,7 @@ export function lateBinding(): LateBinding {
   };
 }
 
-export function lateParts({ fleet, envs, bench, harness, local }: LatePhases): Late {
+export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }: LatePhases): Late {
   return {
     agents: fleet.agents,
     escalations: fleet.escalations,
@@ -142,6 +146,8 @@ export function lateParts({ fleet, envs, bench, harness, local }: LatePhases): L
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
+    prAssign,
+    askQueue: asks,
   };
 }
 
@@ -151,6 +157,18 @@ interface LatePhases {
   bench: BenchDesks;
   harness: Harness;
   local: LocalRuns;
+  prAssign: PrAssignDesk;
+  asks: () => AskRow[];
+}
+
+export function buildPrAssign(config: Config, base: Pick<Foundation, 'store' | 'sink' | 'errors'>): PrAssignDesk {
+  return new PrAssignDesk({
+    store: base.store,
+    sink: base.sink,
+    errors: base.errors,
+    operator: config.userId,
+    prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
+  });
 }
 
 export function buildPluginDesk(config: Config, opts: BuildOptions, errors: ErrorLog): PluginDesk {

@@ -23,7 +23,7 @@ import {
 import { buildGoalTrack } from '../web/src/view/goalStages.js';
 import { standsFor } from '../web/src/view/goalRefs.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
-import { buildNeedsYou } from '../web/src/view/needsYou.js';
+import { askRows } from './support/asks.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 
@@ -223,7 +223,7 @@ test('the track folds the same groups the page draws, so the two cannot disagree
 test('only this goal’s asks reach its page', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
-  const needs = buildNeedsYou(state);
+  const needs = askRows(state);
   const page = buildGoalPage(state, `issue:${issue.number}`, needs);
 
   for (const row of page?.needs ?? []) assert.equal(row.goalRef, `issue:${issue.number}`);
@@ -839,8 +839,11 @@ function planAsk(over: Partial<NeedRow>): NeedRow {
   return {
     id: 'e:1',
     kind: 'plan',
+    subject: { type: 'escalation', escalationId: 'e:1', proposalId: null },
     group: 'blocking',
     urgency: 'now',
+    focusRank: 0,
+    standing: true,
     title: 'Plan ready',
     goalRef: null,
     originRef: null,

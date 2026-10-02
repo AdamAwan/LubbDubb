@@ -84,6 +84,7 @@ function registerStateRoute(
     localValidationFileSigner,
     validationCaptureSigner,
     remoteCaptureSigner,
+    setup,
   }: RouteContext,
 ): void {
   app.get(
@@ -96,6 +97,7 @@ function registerStateRoute(
             localValidationFileSigner,
             validationCaptureSigner,
             remoteCaptureSigner,
+            setup: setup.latest,
           })
         : buildStateSections(system, query.sections, {
             artifactSigner,
@@ -103,6 +105,7 @@ function registerStateRoute(
             localValidationFileSigner,
             validationCaptureSigner,
             remoteCaptureSigner,
+            setup: setup.latest,
           }),
     ),
   );
