@@ -884,7 +884,8 @@ fingerprint of what the page held.
 **The fingerprint is the page as the operator read it**: every row the fold holds now, a check by its title,
 `do`, `expect`, `proof` and steps, a query by its digest. A re-authored set, an amended check or an
 edited query moves it; a reading, a selection or an approval does not. An intent whose fingerprint has
-moved is **not pressed** — it says so, and waits for the OK to be given again. Consent to a page is
+moved is **not pressed**: it lapses to `withdrawn` with a note saying the page changed, so the page
+asks for its OK again. Consent to a page is
 not consent to the page it became.
 
 **The pulse presses it.** `RemoteIntentDesk.run` sits immediately below `RemoteValidationDesk` in the
