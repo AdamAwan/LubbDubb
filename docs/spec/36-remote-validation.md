@@ -84,10 +84,11 @@ harness answers today:
 
 Not _did this commit behave correctly in isolation_ — the branch's own CI settled that before it
 merged. The **sheet** is asked after the work is somewhere real, about the product as it now stands:
-the journeys still work, nothing is screaming, the numbers are no worse, and the data the change
-writes is shaped correctly. It assembles the goal's existing validation checks
-([20](20-validation.md)) beside declared queries, puts them all against one environment, and settles
-them in one place.
+the journeys still work, and the data the change writes is shaped correctly. It assembles the goal's
+existing validation checks ([20](20-validation.md)) beside declared `state` queries, puts them all
+against one environment, and settles them in one place. Whether anything is screaming, or the numbers
+are worse than they were, is the watch's question, asked on the watch's clock — and it is not asked
+again here ([The watch is not on the sheet](#the-watch-is-not-on-the-sheet)).
 
 Three things the harness already has each answer a third of that question and none of them can be
 read together: a validation check is a procedure a person carries out ([20](20-validation.md)); the
@@ -152,7 +153,7 @@ re-litigated:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | A new set of checks        | The `check` rows **are** the goal's validation checks ([20](20-validation.md)), assembled against one environment. Nothing here authors a second checklist beside the one an operator already keeps.                                                         |
 | The critical-path suite    | The deployment pipeline runs that on every build, and this design assumes it. The sheet runs the areas **this goal** is about. → [Keeping the critical path lean](#keeping-the-critical-path-lean)                                                           |
-| The post-deploy watch      | A watch is **windowed** — it accumulates telemetry over hours and asks _is this behaving_. A sheet row is **point-in-time**, taken at a press. Different clocks. → [Two lifetimes](#two-lifetimes)                                                           |
+| The post-deploy watch      | A watch is **windowed** — it accumulates telemetry over hours and asks _is this behaving_. A sheet row is **point-in-time**, taken at a press. Different clocks, and none of the watch's checks is a row here. → [The watch is not on the sheet](#the-watch-is-not-on-the-sheet) |
 | Local validation           | That drives the machine's one dev environment against work **still in flight**, exploratively, and records no reading on any check ([32](32-local-validation.md)). This runs reviewed specs against a **delivered** goal in a place somebody else deployed.  |
 | A deployment tool          | Nothing here deploys, promotes, approves or rolls back, and nothing writes to the environment. Every command it runs is the project's own, and every query is read-only.                                                                                     |
 | An expiring document       | A sheet does not expire, and a second arrival re-runs the one that exists. A row records **what this goal meant to be true**, and intent does not rot. → [The sheet records intent](#the-sheet-records-intent-and-a-person-retires-it)                       |
@@ -166,19 +167,18 @@ re-litigated:
 
 **One sheet per goal per environment**, assembled when the goal's whole work arrives there
 ([24](24-environments.md#what-an-arrival-means)). It is not a document authored beside the goal's
-existing one: it is the goal's checks, with the declared query rows alongside them, so that _does it
-work_, _is anything screaming_ and _is the data right_ are read in one place and settled together.
+existing one: it is the goal's checks, with the declared `state` query rows alongside them, so that
+_does it work_ and _is the data right_ are read in one place and settled together.
 
-There are **three row kinds**. A `check` row naming an **area** is the suite's — the selector a
+There are **two row kinds**. A `check` row naming an **area** is the suite's — the selector a
 dispatched agent runs and the harness folds a reading out of — and one naming none is a person's to
 run, with its result recorded on the goal's own validation row. Where the environment does not
 `permit` `check` it is blocked saying so.
 
-| Row kind             | Answers                                          | Run by                                                         |
-| -------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
-| `check`              | Does the thing work?                             | A person, or specs already in the project's suite              |
-| `signal` / `measure` | Is anything screaming? Is it slower than it was? | Declared query, the environment's `observe` command            |
-| `state`              | Is the data the change writes shaped correctly?  | Declared query, the environment's `validate.state.run` command |
+| Row kind | Answers                                         | Run by                                                         |
+| -------- | ----------------------------------------------- | -------------------------------------------------------------- |
+| `check`  | Does the thing work?                            | A person, or specs already in the project's suite              |
+| `state`  | Is the data the change writes shaped correctly? | Declared query, the environment's `validate.state.run` command |
 
 **`blocked` is an _outcome_, not a row kind.** Every kind can be blocked, and a kind is what an
 environment `permits` — the two are orthogonal and nothing declares a permission to be blocked. It is
@@ -186,8 +186,56 @@ stated here because it has been misread twice: the outcomes below are what a row
 never what a row can _be_.
 
 Rows keep their own downstream consequences. A failed `check` still reaches `validation-failed`
-([20](20-validation.md#when-a-check-fails)); a regressed `measure` still holds nothing unless asked
-([29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)).
+([20](20-validation.md#when-a-check-fails)).
+
+### The watch is not on the sheet
+
+**Built.** The watch's `signal` and `measure` checks are not rows on a sheet. They were once:
+`sheetRows` folded every live watch check in beside the goal's checks and its `state` queries, the desk
+read each through the environment's `observe` command at assembly and again at a press, and each took
+a second key — the watch's own acceptance, and then an approval of its digest against the sheet's
+environment, written through a route of its own.
+
+That arrangement had three faults, and they were one fault seen three ways. **One question had two
+answers**: _is anything screaming since this arrived_ was asked by the window, over hours, on the
+window's clock, and asked again by the sheet, once, at a press — the same query against the same
+`{since}`, two readings, and nothing to say which an operator was meant to believe when they
+disagreed. **One read took two consents**: an operator who had accepted a watch check had to accept it
+again, per environment, before the sheet would run a query the window was already running without
+asking. And **the evidence lived in two tables**, `watch_readings` and `remote_readings`, which every
+surface wanting the answer had to know to merge — and which this document already forbids from ever
+mixing ([What a finding does](#what-a-finding-does-and-what-it-must-never-do)).
+
+So a sheet folds the goal's checks and its `state` queries and nothing else. `RemoteRowKind` is
+`'check' | 'state'`, a row id is `check:<id>` or `state:<id>`, and `rowRun` knows only `state`.
+`RemoteValidationDesk.readRow` reads `state` rows only; `ruleWatchQuery`, `readWatch`, `watchSince` and
+the desk's `observer` dependency are gone with the rows they served, and so is
+`POST .../watch-queries/:queryId`, the route that wrote the second key.
+
+What an existing deployment carries over is handled in three places, each so the upgrade is quiet in
+the right way:
+
+- **`signal` and `measure` are retired `permits` names.** `validatePermits`
+  (`src/environments/policy.ts`) drops either with a console warning naming it, rather than refusing
+  the block: a harness must not refuse to boot over a word that now means nothing. A `permits` that
+  held only those two permits nothing, which is the honest reading of it — every row on that
+  environment's sheets comes back `blocked`, saying which kind is not permitted.
+- **The rows and their readings are deleted at boot.** `migrate` (`src/store/store.ts`) deletes every
+  `remote_sheet_rows` row of kind `signal` or `measure` and every `remote_readings` row whose `row_id`
+  starts `watch:`. It runs on every boot and is a no-op after the first, because nothing writes either
+  now — so it needs no `runOnce` id. Left in place they would be rows no fold re-derives and no press
+  can read, drawn on a sheet as if they still asked something.
+- **Per-environment approvals of watch digests are left in `remote_query_approvals`, and are inert.**
+  Nothing reads them: an approval is consulted only through a `state` row's digest, and there is no
+  other row to consult it for. A pass deleting them would be a migration with no reader to protect.
+
+**The watch itself is unchanged.** Its window reads signals and measures on its own clock
+([29](29-post-deploy-watch.md#the-window)) and files what it finds on the `watch` bench row
+([29](29-post-deploy-watch.md#the-bench-row)), exactly as before; a regressed measure holds nothing
+unless the environment's `watch.holds` says so ([29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)),
+which is the watch's rule and stays the watch's. The validation page shows the watch's readings
+**read-only**, through the cockpit's existing Watch card, rather than asking them again — one question,
+one answer, one table. → [29](29-post-deploy-watch.md#a-sheet-does-not-read-these-checks)
 
 ### A declined row is not on the sheet
 
@@ -274,7 +322,7 @@ apart on purpose — deferral counts as _not clear_. Retiring a check is an act 
 
 This is the rule everything else follows from, and it cuts cleanly down the middle of the design:
 
-|                 | **Browser specs**                                | **Queries** (`state`, `signal`, `measure`)         |
+|                 | **Browser specs**                                | **`state` queries**                                |
 | --------------- | ------------------------------------------------ | -------------------------------------------------- |
 | What they are   | Code                                             | A question asked once                              |
 | Where they live | The repository                                   | The harness, on the goal                           |
@@ -569,20 +617,18 @@ principle: **the harness passes the selector it is told and never reasons about 
 
 ## Queries are per-goal, harness-held, and never committed
 
-A `state`, `signal` or `measure` query is a question about one change at one moment. It is written
-with the goal, stored on the goal, read at the sheet, and dies with it.
+A `state` query is a question about one change at one moment. It is written with the goal, stored on
+the goal, read at the sheet, and dies with it.
 
-`signal` and `measure` queries are the goal's watch checks and are already declared — the sheet reads
-them through `listGoalWatches` and declares nothing of its own. → [29](29-post-deploy-watch.md#who-writes-it-and-when)
+The goal's watch checks are queries too, but they are the watch's and never the sheet's
+([The watch is not on the sheet](#the-watch-is-not-on-the-sheet)). A watch check carries a time bound
+written against `{since}` ([29](29-post-deploy-watch.md#every-query-carries-since)) because it asks
+about a period; a `state` query carries no such token and is asked as it was written: it is one reading
+of the shape of data at a moment somebody chose, not a question about a period
+([two lifetimes](#two-lifetimes)).
 
-A watch check carries its own time bound written against `{since}`
-([29](29-post-deploy-watch.md#every-query-carries-since)), and a sheet substitutes **the goal's arrival
-on that environment** — the same instant the window's own readings are bounded to, so the sheet and the
-watch ask the same question of the same period rather than two questions that disagree by a clock. A
-`state` query carries no such token and is asked as it was written: it is one reading of the shape of
-data at a moment somebody chose, not a question about a period ([two lifetimes](#two-lifetimes)).
-
-`state` queries are new and have the same three writers, at the three moments each knows something the
+`state` queries have the same three writers the watch's checks do
+([29](29-post-deploy-watch.md#who-writes-it-and-when)), at the three moments each knows something the
 others do not:
 
 - **The planner, at plan time**, through an optional `state` block on the plan document beside
@@ -613,8 +659,7 @@ mechanism is the one the watch already has rather than a new one: the **dry run*
 _and what it actually returned_, and accepts or rejects on that evidence. A query that reads correctly
 and returns nonsense is caught here, and only here.
 
-**Built**, for `state` and — with the sheet that reads it — for a live watch check, whose second key is
-written through `.../watch-queries/:queryId` and read by the desk exactly as a `state` row's is.
+**Built**, for `state` — the only kind of query a sheet asks.
 
 - **Approval keys on `(query digest, environment)`.** Digest alone leaks: the same text accepted
   against acceptance would arrive pre-approved against production, and _I have read this and it is
@@ -635,18 +680,17 @@ written through `.../watch-queries/:queryId` and read by the desk exactly as a `
 - **`presence` gets the same treatment**, for the reason it exists: an unapproved presence query
   cannot distinguish a healthy release from a query naming a column that is not there.
 
-The `signal` and `measure` rows carry the watch's own approval unchanged — an agent's `watch_declare`
-proposal is not live until an operator accepts it, and `listGoalWatches` is live-only. What this
-document adds for them is the second key: **a live watch check is still `blocked` on a sheet until its
-digest has been accepted against _that_ environment.** The watch puts a query to one environment
-because it is asking whether the query parses; the sheet puts it to a named place, and consent to a
-place is not transferable.
+A watch check takes no approval here. It has the watch's own — an agent's `watch_declare` proposal is
+not live until an operator accepts it ([29](29-post-deploy-watch.md#the-dry-run)) — and that one
+consent is all it needs, because the window is the only thing that runs it. There used to be a second
+key, an approval of its digest against each sheet's environment; it went with the rows it gated
+([The watch is not on the sheet](#the-watch-is-not-on-the-sheet)).
 
 ## When a sheet is assembled, and what runs without asking
 
 **Assembly waits for the check set. Built.** The set is authored after the assessor writes
 `delivered` ([20](20-validation.md#when-the-check-set-is-written)), and a deployment quick enough to
-arrive first would assemble a sheet carrying only the watch-derived rows — a bench that offers
+arrive first would assemble a sheet carrying no checks at all — a bench that offers
 nothing to run, reads as a misconfiguration, and is not one. It is this document's own null-`area`
 failure in a new place, and it takes the same remedy: an explicit gate rather than a race that has
 not been lost yet.
@@ -687,12 +731,12 @@ them, and it is where amendment, selection, waiving and consent to spend all nat
 
 What runs at assembly, without asking:
 
-- **Every approved `state`, `signal` and `measure` row.** They are read-only, consented and cheap, so
+- **Every approved `state` row.** They are read-only, consented and cheap, so
   the operator arrives at a sheet with those readings already on it. That is a better-informed press
   than an empty one, and it keeps the gate from becoming the bottleneck that makes people
   rubber-stamp it.
 - **Nothing that asks a runner anything.** Assembly spawns **no browser command at all**. It reads
-  the checks, the watches and the approved queries out of the store, writes the sheet's rows, and
+  the checks and the approved `state` queries out of the store, writes the sheet's rows, and
   takes the deterministic readings above; `remote_sheet_rows.matched` and every row's
   `blockedReason` are left exactly as the fold that wrote them left them.
 
@@ -824,8 +868,8 @@ the same wrong reading one surface out.
 In order: refuse **409** if a run is already live for this `(environment, tenant)`, naming it; refuse
 **400** if nothing is selected; take the pin; open the run row `pending`; broadcast; **run a cycle**.
 
-What a press runs itself is the sheet's confirmed **deterministic** rows — the approved `state`,
-`signal` and `measure` ones — synchronously, through the **same** `RemoteValidationDesk.readRow` the
+What a press runs itself is the sheet's confirmed **deterministic** rows — the approved `state`
+ones — synchronously, through the **same** `RemoteValidationDesk.readRow` the
 assembly used. A second reader would be free to disagree with the assembly about what a row of that
 kind is. They stay the press's own rather than the agent's for their own reason and not for want of
 one: they are read-only, consented and cheap, where the agent exists for the browser half — minutes,
@@ -845,7 +889,7 @@ assembly, so `RemoteValidationDesk` runs `sheetRows` again (through `fold`, the 
 writes the causes back where they moved. `selected` is the operator's and `matched` the listing's, so
 neither is touched, and no row is added or removed. Two moments do it:
 
-- **A ruling on a query** — `ruleStateQuery` and `ruleWatchQuery`, approve or decline — re-folds every
+- **A ruling on a query** — `ruleStateQuery`, approve or decline — re-folds every
   sheet on that environment, because the approval is keyed `(digest, environment)` and not by goal,
   and on each only the rows whose `awaiting_approval` moved. Any other row keeps what it has, a reason a
   reading wrote included. The sheet stops asking for what was just given, and asks again for what was
@@ -1411,8 +1455,9 @@ a query returning zero rows rather than an error — which is why the guards tha
 
 Not all-or-nothing. Driving a browser through a live environment is a different risk conversation, not
 a config flag — but **read-only `state` rows against live are a much easier yes**. So the environment
-declares its permitted row kinds — `check`, `state`, `signal`, `measure` — and a row of a kind the
-environment does not permit is `blocked`, saying so.
+declares its permitted row kinds — `check`, `state` — and a row of a kind the environment does not
+permit is `blocked`, saying so. `signal` and `measure` are retired names, dropped with a warning rather
+than refused ([The watch is not on the sheet](#the-watch-is-not-on-the-sheet)).
 
 An acceptance environment only, at first: a deployment that declares `permits` on nothing gets no
 sheets at all, which is the off switch.
@@ -2126,8 +2171,6 @@ reading no run took — the press's deterministic rows — and on a run that nev
 - **A failed `check` row reaches `validation-failed`** ([20](20-validation.md#when-a-check-fails)) by
   writing the ordinary `failed` reading on the check. Nothing new routes it, and each reading keeps
   its own attempt budget.
-- **A regressed `signal` or `measure` row holds nothing** unless the environment's `watch.holds` says
-  so, which is off ([29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)).
 - **A failed row is never recorded as a shortfall.** A shortfall clears the goal's **delivery** row,
   and the delivery is what parks the goal: writing one un-parks it, settles the close-out obligation
   and declines the validation bench row — the reading deleting the rows it was reported into, with
@@ -2161,8 +2204,8 @@ asked each browser runner what it offers on a thirty-minute clock so a planner c
 `listSelectors`, `runner` or `publishArtefacts` now: all three are the run agent's, in its pinned
 checkout. → [The cached offering](#the-cached-offering-is-a-convenience-and-the-pre-flight-is-the-authority)
 
-**All four are built.** What runs is the assembly, the approved `state`,
-`signal` and `measure` rows on a sheet it has just assembled, and — through `RemoteRunDesk`
+**All four are built.** What runs is the assembly, the approved `state`
+rows on a sheet it has just assembled, and — through `RemoteRunDesk`
 ([The press](#the-press)) rather than the pulse — the same rows again under a press's pin. **The
 assembly pass spawns nothing**, and neither does any other pass: the listing a row is read against is the run's own, taken in its
 pinned checkout ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness)),
@@ -2275,7 +2318,7 @@ rather than `error`.
       "name": "acceptance",
       "at": "./scripts/deployed-sha.sh acceptance",
       "validate": {
-        "permits": ["check", "state", "signal", "measure"],
+        "permits": ["check", "state"],
 
         // one of: a literal name, an operator-config reference, or a command
         "tenant": "validation-customer-1",
@@ -2374,7 +2417,6 @@ throw**.
 | `POST /api/issues/:number/remote-validation/:environment/cancel`                 | **built.** Settle an open run `abandoned`.                                                                                                     |
 | `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`            | **built.** `{selected}` — deselect a row, or take it back.                                                                                     |
 | `POST /api/issues/:number/remote-validation/:environment/queries/:queryId`       | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval.                                     |
-| `POST /api/issues/:number/remote-validation/:environment/watch-queries/:queryId` | **built.** The same consent for a **live watch check**, which is how the second key on one is written.                                         |
 | `POST /api/issues/:number/remote-validation/:environment/reseed`                 | **built.** Invoke the environment's `ensureTenant` where it provisions on demand and its `reseed` where it declares one, and stamp the tenant. |
 | `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                        | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`.                                     |
 
