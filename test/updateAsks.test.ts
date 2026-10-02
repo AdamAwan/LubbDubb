@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AppState, BuildReading } from '../web/src/types.js';
-import { updateAskRows, upgradeHeadline } from '../web/src/view/updateAsks.js';
+import { updateAskRows, upgradeHeadline } from '../src/asks/updateAsks.js';
 
 const NOW = '2026-09-05T12:00:00.000Z';
 

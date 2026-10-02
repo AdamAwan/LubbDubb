@@ -1,9 +1,7 @@
 import type { System } from '../system/system.js';
 import type { Config } from '../config/config.js';
-import { withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import type { StateSection } from '../wire.js';
-import type { Store } from '../store/store.js';
-import type { CockpitState, UndescribedPart, DescriptionFeedback, OpenPullRequest, PullRequest } from '../wire.js';
+import type { CockpitState, OpenPullRequest, PullRequest } from '../wire.js';
 import { truncateAreaPaths } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -35,6 +33,10 @@ import {
   tenantCommandViews,
 } from './stateEnvironmentViews.js';
 import { localRunView, localRunRefFacts, localRunTargetViews } from './stateLocalRunViews.js';
+import { buildAskQueue } from '../asks/queue.js';
+import { askInputs, descriptionFeedback, maskedInbox, undescribedParts } from './stateAsks.js';
+import type { AskRow } from '../asks/askRow.js';
+import type { SetupReading } from '../setup/reading.js';
 
 // → docs/spec/16-http-api.md
 
@@ -47,6 +49,7 @@ export const STATE_SECTIONS: readonly StateSection[] = [
   'queue',
   'inbox',
   'activity',
+  'asks',
 ];
 
 const ALL_SECTIONS: ReadonlySet<StateSection> = new Set(STATE_SECTIONS);
@@ -72,10 +75,21 @@ export function buildStateSections(
   if (want.has('queue')) Object.assign(out, queueSection(r));
   if (want.has('inbox')) Object.assign(out, inboxSection(r));
   if (want.has('activity')) Object.assign(out, activitySection(r));
+  if (want.has('asks')) out.asks = buildAskQueue(askInputs(r, want, out), opts?.setup ?? null);
   return out;
 }
 
-type Reads = IssueReadsOn & ReturnType<typeof prReads> & { stacks: () => ReturnType<typeof buildStacks> };
+/**
+ * The operator's asks as Claude Code walks them: standing rows only, in the one-at-a-time order the
+ * Focus overview walks. The same derivation `/api/state` ships as `asks`.
+ * → docs/spec/17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code
+ */
+export function askQueue(system: System, setup: SetupReading | null = system.setupReading.latest): AskRow[] {
+  const asks = buildStateSections(system, new Set(['asks']), { setup }).asks ?? [];
+  return asks.filter((row) => row.standing).sort((a, b) => a.focusRank - b.focusRank);
+}
+
+export type Reads = IssueReadsOn & ReturnType<typeof prReads> & { stacks: () => ReturnType<typeof buildStacks> };
 
 function snapshotReads(system: System, opts: SnapshotOpts | undefined): Reads {
   const base = baseReads(system, opts);
@@ -342,29 +356,6 @@ function stackLandingViews(
   ];
 }
 
-/**
- * Parts with a pull request open and no description written, which is the rail's
- * ask. Read here rather than derived in the cockpit: the described set is not on
- * the wire.
- *
- * Open is the cut the store cannot make, so it is made here against the world's
- * own list: a pull request that merged or was closed is not one anybody is going
- * to describe, and an ask that outlived its review is an ask nobody can answer.
- * → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer
- */
-function undescribedParts(store: Store, open: Set<number>): UndescribedPart[] {
-  return store.prDescriptions.undescribedOpenParts().filter((part) => open.has(part.prNumber));
-}
-
-/**
- * Checked descriptions that found something, on pull requests still open. The rail
- * raises each one: a contradiction as an ask, gaps alone as a low-priority note.
- * → docs/spec/07-pull-requests.md#what-the-check-raises
- */
-function descriptionFeedback(store: Store, open: Set<number>): DescriptionFeedback[] {
-  return store.prDescriptions.descriptionFeedback().filter((f) => open.has(f.prNumber));
-}
-
 function plansSection(
   r: Reads,
 ): Pick<
@@ -455,22 +446,10 @@ function queueSection(r: Reads): Pick<CockpitState, 'jobs' | 'schedules' | 'upco
 }
 
 function inboxSection(r: Reads): Pick<CockpitState, 'bugFilings' | 'humanTasks' | 'escalations' | 'proposals'> {
-  const { store, withheld } = r;
   return {
     bugFilings: r.bugFilings,
     humanTasks: r.humanTasks,
-    escalations: store.escalations.listOpenEscalations().map((e) => {
-      if (!withheld(e.context.planId)) return e;
-      return {
-        ...e,
-        prompt: WITHHELD_PLAN,
-        context: { ...e.context, detail: WITHHELD_PLAN, detailFrom: 'Withheld until the plan is revealed' },
-      };
-    }),
-    proposals: r.proposals.map((p) => {
-      if (!withheld(p.action.planId)) return p;
-      return { ...p, action: withheldAction(p.action) };
-    }),
+    ...maskedInbox(r),
   };
 }
 

@@ -10,7 +10,6 @@ import { scrollToAnchor } from './jump.js';
 import { Ref } from '../components/refs.js';
 import { buildPrPage } from '../view/prPage.js';
 import { oneLine } from '../view/needLines.js';
-import { refusedDispatchFor } from '../view/refusedDispatches.js';
 import { relTime } from '../components/util.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB, holdingLabel } from './QueueRail.js';
 import { BareButton, Button, ButtonRow } from '../components/button.js';
@@ -373,7 +372,7 @@ function descriptionFeedbackBody(row: NeedRow, view: CockpitView, actions: Cockp
 }
 
 function dispatchBody(row: NeedRow, view: CockpitView): ReactNode {
-  const refusal = refusedDispatchFor(view.state, row.id);
+  const { refusal } = row;
   if (!refusal) return null;
   const rule = refusal.rule === null ? undefined : view.state.dispatchRules[refusal.rule];
   return (

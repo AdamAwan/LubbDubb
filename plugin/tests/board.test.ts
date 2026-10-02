@@ -8,13 +8,21 @@ const BOARD: CommandRunInput = {
   presentation: { isFullscreen: false, columns: 120 },
 }
 
+const ask = (id: string, kind: string, title: string, focusRank: number, standing = true) => ({
+  id,
+  kind,
+  title,
+  focusRank,
+  standing,
+})
+
 const STATE = {
-  escalations: [{ id: 'e1', prompt: 'Which branch should 284 go on?\nmore detail' }],
-  proposals: [
-    { id: 'p1', kind: 'merge', ref: 'pr:412', status: 'pending' },
-    { id: 'p2', kind: 'merge', ref: 'pr:400', status: 'accepted' },
+  asks: [
+    ask('e1', 'escalation', 'Which branch should 284 go on?\nmore detail', 1),
+    ask('e2', 'merge', 'Merge #412', 0),
+    ask('hum_1', 'bench', 'Log in to staging', 2),
+    ask('setup:node', 'config', 'Node is fine now', 3, false),
   ],
-  humanTasks: [{ id: 't1', title: 'Log in to staging', status: 'open' }],
   control: { paused: true },
 }
 
@@ -28,11 +36,13 @@ test('lists what the harness waits on, with the token from the environment', asy
 
   const out = await $.command.run(BOARD)
 
-  expect(asked).toEqual([{ url: 'http://127.0.0.1:4300/api/state?sections=inbox,control', auth: 'Bearer secret' }])
-  expect(out.text).toContain('1 question · 1 to approve · 1 task for you · fleet paused')
-  expect(out.text).toContain('- question: Which branch should 284 go on?')
-  expect(out.text).toContain('- approval: merge on pr:412')
-  expect(out.text).not.toContain('pr:400')
+  expect(asked).toEqual([{ url: 'http://127.0.0.1:4300/api/state?sections=asks,control', auth: 'Bearer secret' }])
+  expect(out.text).toContain('3 asks · next: Merge #412 · fleet paused')
+  expect(out.text).toContain('1. merge: Merge #412')
+  expect(out.text).toContain('2. escalation: Which branch should 284 go on?')
+  expect(out.text).toContain('3. bench: Log in to staging')
+  expect(out.text).toContain('/lubbdubb:next')
+  expect(out.text).not.toContain('Node is fine now')
 })
 
 test('says so when the harness does not answer', async ($, on) => {
@@ -67,7 +77,9 @@ test('draws the band, and nothing once hidden', async ($, on) => {
         view: {},
       },
     })
-    expect(await ui.find({ type: 'Text', text: /1 question · 1 to approve/ })).toBeDefined()
+    expect(
+      await ui.find({ type: 'Text', text: /3 asks · next: Merge #412 · fleet paused · \/lubbdubb:next/ }),
+    ).toBeDefined()
     await ui.press({ key: 'hide' })
     expect(await ui.find({ type: 'Text', text: /LubbDubb/ })).toBeUndefined()
     await ui.unmount()
@@ -98,7 +110,7 @@ test('leaves room for a band drawn beneath it, and hides only its own row', asyn
         view: {},
       },
     })
-    expect(await ui.find({ type: 'Text', text: /1 question · 1 to approve/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /3 asks · next: Merge #412/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /pr-watch/ })).toBeDefined()
     await ui.press({ key: 'hide' })
     expect(await ui.find({ type: 'Text', text: /LubbDubb/ })).toBeUndefined()
@@ -108,7 +120,7 @@ test('leaves room for a band drawn beneath it, and hides only its own row', asyn
   }
 })
 
-test('toasts only what is new since the last look',async ($, on) => {
+test('toasts only what is new since the last look', async ($, on) => {
   mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
   let state = STATE
   on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(state) } }))
@@ -119,7 +131,7 @@ test('toasts only what is new since the last look',async ($, on) => {
   })
 
   await $.command.run(BOARD)
-  state = { ...STATE, escalations: [...STATE.escalations, { id: 'e2', prompt: 'Approve the plan for 300?' }] }
+  state = { ...STATE, asks: [...STATE.asks, ask('e3', 'plan', 'Approve the plan for 300?', 0)] }
   await $.command.run(BOARD)
 
   expect(toasts).toEqual(['LubbDubb: Approve the plan for 300?'])

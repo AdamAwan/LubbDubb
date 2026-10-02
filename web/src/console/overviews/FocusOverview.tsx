@@ -17,7 +17,7 @@ import { waitedFor } from '../../components/util.js';
 import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';
-import { byWeight, partsHeld } from './asks.js';
+import { byFocusRank, partsHeld } from './asks.js';
 import { panelUsage } from '../../cockpit/usage.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
@@ -45,7 +45,7 @@ import { buildLeads, type Lead, type LeadWhere } from './leads.js';
  * the next ask falls into.
  */
 export function FocusOverview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const rows = [...view.needsYou].sort(byWeight);
+  const rows = [...view.needsYou].sort(byFocusRank);
   const [cursor, setCursor] = useState<{ id: string; at: number } | null>(null);
   const held = partsHeld(rows);
 

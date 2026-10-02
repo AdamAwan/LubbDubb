@@ -24,7 +24,7 @@ async function poll($: EngineInterface, where: Where): Promise<void> {
   const bearer = await token($, where)
   let reply = null
   try {
-    reply = await $.http.fetch(`${where.url}/api/state?sections=inbox,control`, {
+    reply = await $.http.fetch(`${where.url}/api/state?sections=asks,control`, {
       headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
     })
   } catch {
@@ -61,8 +61,9 @@ export const register: Register = (on, options) => {
     if (now.notices.length === 0) {
       return { text: now.paused ? 'Nothing waiting on you. The fleet is paused.' : 'Nothing waiting on you.' }
     }
-    const lines = now.notices.map(n => `- ${n.kind}: ${n.title}`)
-    return { text: [summary(now), ...lines, '', 'Settle them with /lubbdubb:fleet or in the cockpit.'].join('\n') }
+    const lines = now.notices.map((n, i) => `${i + 1}. ${n.kind}: ${n.title}`)
+    const after = 'Work through them one at a time with /lubbdubb:next, or in the cockpit.'
+    return { text: [summary(now), ...lines, '', after].join('\n') }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -75,7 +76,7 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Box>
-          <Text>LubbDubb · {line} </Text>
+          <Text>{`LubbDubb · ${line}${now.notices.length > 0 ? ' · /lubbdubb:next' : ''} `}</Text>
           <Button key="hide" label="Hide" onPress={() => update($, isHidden, () => true)} />
         </Box>
         {theirs}

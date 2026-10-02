@@ -1,7 +1,7 @@
-import type { AppState, EnvironmentHealthReading, SetupPayload } from '../types.js';
+import type { AppState, EnvironmentHealthReading } from '../types.js';
 import { refLabel } from '../components/refs.js';
 import { standsFor } from '../view/goalRefs.js';
-import { buildNeedsYou, type NeedKind } from '../view/needsYou.js';
+import { needsYouOf, type NeedKind } from '../view/needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 
@@ -129,10 +129,10 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   project_pull: 'The project checkout cannot be pulled',
 };
 
-export function notifySnapshot(state: AppState, setup: SetupPayload | null = null): NotifySnapshot {
+export function notifySnapshot(state: AppState): NotifySnapshot {
   const tasks = new Map(state.tasks.map((t) => [t.id, t]));
   return {
-    needsYou: buildNeedsYou(state, setup).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
+    needsYou: needsYouOf(state.asks ?? []).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
     errors: state.errors.map((e) => ({ id: e.id, message: e.message })),
     agents: state.agents.map((a) => {
       const task = tasks.get(a.taskId);

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AppState, Escalation, OpenPullRequest, Proposal } from '../web/src/types.js';
-import { buildNeedsYou } from '../web/src/view/needsYou.js';
+import { askRows } from './support/asks.js';
 import { featureHolds, goalPullRequests } from '../web/src/view/featureHolds.js';
 
 const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
@@ -68,7 +68,7 @@ function mergeProposal(prNumber: number, escalationId: string): Proposal {
   };
 }
 
-const holds = (state: AppState, goals: number[]) => featureHolds(state, buildNeedsYou(state), goals);
+const holds = (state: AppState, goals: number[]) => featureHolds(state, askRows(state), goals);
 
 test('a rail row on one of the goals is a `you` hold carrying the row id', () => {
   const state = stateWith({
@@ -247,7 +247,7 @@ test('rail rows lead in the rail’s order; the rest follow newest first', () =>
     412,
     { status: 'you', reasons: ['a merge is waiting on your verdict'], reviewWaitingSince: '2026-03-01T00:00:00.000Z' },
   );
-  const needs = buildNeedsYou(state);
+  const needs = askRows(state);
   const { you } = featureHolds(state, needs, [388]);
   const railOrder = needs.filter((n) => n.goalRef === 'issue:388').map((n) => n.id);
   assert.deepEqual(

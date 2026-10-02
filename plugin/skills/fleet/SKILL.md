@@ -30,7 +30,7 @@ doing, whether anything is stuck, and sometimes to change it.
 
 ### Steering it
 
-Twelve verbs. The first five do less than they sound like:
+These verbs do less than they sound like:
 
 - **`fleet_control`** — `cap`, `paused`, `pulse`. Lowering the cap or
   pausing **never stops a running agent**; it stops the next dispatch. Both are in
@@ -44,9 +44,11 @@ Twelve verbs. The first five do less than they sound like:
   when it runs.
 - **`escalation_answer`** — settles one row from `attention_read`. Free text
   (or `answers`, one per question) for a question, `permission` for a blocked
-  tool call. **Two kinds are not yours**: a proposal and a crashed agent's question
-  are decisions with consequences you cannot see, and each row says so in its
-  `settledBy`. Say what is waiting and let the operator take them in the cockpit.
+  tool call, `dismiss: true` to clear one the operator wants gone without an
+  answer. **Two kinds are not answered here**: a proposal is `proposal_decide`
+  and a crashed agent's question waits on `recovery_decide`, and each row names
+  its tool in `settledBy`. Both are decisions with consequences, so put the
+  consequence to the operator and act only on their say-so.
 - **`human_task_settle`** — the `humanTasks` rows, which are **work, not
   questions**, and are never answered with `escalation_answer` (their ids are not
   escalation ids, and it refuses them). `done` only once the thing has actually
@@ -64,7 +66,7 @@ Twelve verbs. The first five do less than they sound like:
   no such thing", which settles the question and writes nothing. Neither affects
   what the harness dispatches.
 
-The other seven actually do something:
+The rest actually do something:
 
 - **`goal_gate`** — the escape hatches, for a goal the harness is **holding**.
   `appraisal` overrides an appraiser's verdict (`workable` works an
@@ -88,22 +90,30 @@ The other seven actually do something:
 - **`recovery_decide`** — `restore` / `requeue` / `remove` a run a crash
   orphaned. These hold the harness back from queueing new work, so clearing one is
   usually the answer to "why is nothing starting".
+- **`pr_assign`** — answers "this pull request is ready — want to assign it to
+  someone?". Called with just `pr` it reads the shortlist; with `person` it
+  **assigns the pull request on the tracker**, and that person is told; with
+  `decline: true` it answers "nobody" and writes nothing.
+- **`description_dismiss`** — the operator's **Leave it as is** on the findings
+  a check raised about their pull-request description. Only when they disagree
+  with the findings; if they agree, the fix is theirs to write.
 - **`proposal_decide`** — see below. This is the one to be careful with.
 
 ### Deciding a proposed act
 
 The harness proposes acts and waits for a person. **`accept` performs the act**,
-and it is one door for five different things:
+and it is one door for six different things:
 
-| Kind             | Accepting it                                                           |
-| ---------------- | ---------------------------------------------------------------------- |
-| `plan`           | releases the decomposition — the fleet starts working it, and spending |
-| `plan_amendment` | replaces a running plan's document                                     |
-| `shortfall`      | sends the goal back to a planner, or adds a follow-up part             |
-| `reply_draft`    | **posts a comment** to the tracker or pull request                     |
-| `merge`          | **merges the pull request**                                            |
+| Kind              | Accepting it                                                           |
+| ----------------- | ---------------------------------------------------------------------- |
+| `plan`            | releases the decomposition — the fleet starts working it, and spending |
+| `plan_amendment`  | replaces a running plan's document                                     |
+| `shortfall`       | sends the goal back to a planner, or adds a follow-up part             |
+| `reply_draft`     | **posts a comment** to the tracker or pull request                     |
+| `merge`           | **merges the pull request**                                            |
+| `validation_plan` | releases a goal's validation checks to be run                          |
 
-The last two cannot be taken back.
+`reply_draft` and `merge` cannot be taken back.
 
 1. **`proposal_read` first, every time.** It says which kind this is and what
    accepting would do, in words you can read straight out. The id does not say.
@@ -118,6 +128,12 @@ The last two cannot be taken back.
    `hold_ticket` (the watch tag comes off, the ticket stays open). `reject` is
    different — it sends the goal back to a planner, which means agreeing the work
    is still worth doing.
+5. **A check set can be accepted in part.** `declined` names the rows the
+   operator said no to, each with their reason; the rest are released. Declining
+   every row is not an accept — it sends the set back to be written again.
+6. **A plan the operator has not revealed is refused**, to read or to decide.
+   They reveal it on the goal in the cockpit, where their prediction is asked
+   first — that gate is theirs, and this channel does not go round it.
 
 ### What not to do
 

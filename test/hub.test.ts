@@ -30,6 +30,7 @@ function fakeSystem(): {
     readying,
     localValidations: new EventEmitter(),
     remoteRuns: new EventEmitter(),
+    desktop: new EventEmitter(),
   } as unknown as System;
   return { system, agents, localRun, localRunWatch, errors, readying };
 }
@@ -170,11 +171,11 @@ test('a dirty is scoped only where the signal provably touches one section', () 
   );
   assert.deepEqual(
     dirtyFor(() => agents.emit('conclusion', {})),
-    [['goals']],
+    [['goals', 'asks']],
   );
   assert.deepEqual(
     dirtyFor(() => agents.emit('retrospective', {})),
-    [['goals']],
+    [['goals', 'asks']],
   );
   assert.deepEqual(
     dirtyFor(() => errors.emit('logged', { message: 'x' })),
@@ -204,4 +205,15 @@ test('malformed and unknown client frames are ignored', () => {
 
   agents.emit('output', { agentId, delta: 'data' });
   assert.equal(sent.filter((e) => e.type === 'agent:output').length, 0, 'no subscription should have been recorded');
+});
+
+test('a write on the desktop channel reaches the cockpit as the matching route’s broadcast', () => {
+  const { system } = fakeSystem();
+  const hub = new Hub(system);
+  const { socket, sent } = fakeSocket();
+  hub.add(socket);
+
+  (system.desktop as unknown as EventEmitter).emit('changed', { type: 'world:changed' });
+  (system.desktop as unknown as EventEmitter).emit('changed', { type: 'dirty', sections: ['plans'] });
+  assert.deepEqual(sent, [{ type: 'world:changed' }, { type: 'dirty', sections: ['plans', 'asks'] }]);
 });

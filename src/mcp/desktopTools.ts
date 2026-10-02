@@ -19,7 +19,9 @@ import { checkBriefing } from '../validation/fleet.js';
 import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
-import { descriptionCheck, descriptionRead } from './desktopDescription.js';
+import { descriptionCheck, descriptionDismiss, descriptionRead } from './desktopDescription.js';
+import { prAssign } from './desktopPrAssign.js';
+import { askNext, askSkip } from './desktopAskNext.js';
 import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
 import { agentRead, fleetControl, fleetStatus, queueControl } from './desktopOps.js';
 import { attentionRead, escalationAnswer, humanTaskSettle } from './desktopAttention.js';
@@ -504,6 +506,10 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   local_run: localRun,
   description_read: descriptionRead,
   description_check: descriptionCheck,
+  description_dismiss: descriptionDismiss,
+  pr_assign: prAssign,
+  ask_next: askNext,
+  ask_skip: askSkip,
 };
 
 export function buildDesktopTools(deps: DesktopToolDeps, session: DesktopSession): McpTool[] {

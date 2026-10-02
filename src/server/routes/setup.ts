@@ -9,21 +9,23 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system }: RouteContext): void {
+export function register(app: FastifyInstance, { system, hub, setup }: RouteContext): void {
   const probes = new RealSetupProbes();
 
-  app.get(
-    '/api/setup',
-    async () =>
-      (await buildSetupReading({
-        config: system.config,
-        store: system.store,
-        probes,
-        configFile: system.configFile,
-        pending: system.liveConfig.pending(),
-        prompts: system.prompts,
-      })) satisfies SetupPayload,
-  );
+  app.get('/api/setup', async () => {
+    const reading = (await buildSetupReading({
+      config: system.config,
+      store: system.store,
+      probes,
+      configFile: system.configFile,
+      pending: system.liveConfig.pending(),
+      prompts: system.prompts,
+    })) satisfies SetupPayload;
+    const changed = JSON.stringify(reading.checks) !== JSON.stringify(setup.latest?.checks ?? null);
+    setup.latest = reading;
+    if (changed) hub.broadcast({ type: 'dirty', sections: ['asks'] });
+    return reading;
+  });
 
   const ResolveBody = z.object({
     email: z.string({ required_error: 'email is required', invalid_type_error: 'email must be a string' }).trim(),

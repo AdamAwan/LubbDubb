@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AppState, Escalation, HumanTask, OrphanedWork, PlanPart, PlanPartView } from '../web/src/types.js';
-import { buildNeedsYou, partHolding } from '../web/src/view/needsYou.js';
+import { askRows } from './support/asks.js';
+import { partHolding } from '../src/asks/inboxAsks.js';
 import type { NeedGroup, NeedKind, NeedRow } from '../web/src/view/needsYou.js';
 
 const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
@@ -137,7 +138,7 @@ test('partHolding counts live direct dependents and ignores retired ones', () =>
 });
 
 test('a parked agent and a bench task land in different groups', () => {
-  const rows: NeedRow[] = buildNeedsYou(
+  const rows: NeedRow[] = askRows(
     stateWith({
       escalations: [escalation({ id: 'e1', agentId: 'a1' })],
       humanTasks: [task({ id: 't1' })],
@@ -154,7 +155,7 @@ test('a parked agent and a bench task land in different groups', () => {
 });
 
 test('recovery sorts above everything, because no pulse runs while it is up', () => {
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       escalations: [escalation({ id: 'e1', agentId: 'a1' })],
       humanTasks: [],
@@ -172,7 +173,7 @@ test('an ask opens its goal when that goal has a page, and the ask panel when it
   const known = state.world.issues[0];
   assert.ok(known, 'the demo fixtures must carry an issue');
 
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       ...state,
       escalations: [
@@ -200,7 +201,7 @@ test('an ask raised on a pull request opens the goal that pull request belongs t
   const linked = state.world.issues.find((i) => i.linkedPrNumber !== null);
   assert.ok(linked?.linkedPrNumber, 'the demo fixtures must carry an issue with a linked pull request');
 
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       ...state,
       escalations: [escalation({ id: 'on-pr', agentId: 'a1', context: { originRef: `pr:${linked.linkedPrNumber}` } })],
@@ -227,7 +228,7 @@ test('a plan ask whose plan is withheld lands on the pane the reveal gate is dra
     context: { originRef: plan.originRef, planId: plan.id },
   });
   const rowsFor = (revealed: boolean): NeedRow[] =>
-    buildNeedsYou(
+    askRows(
       stateWith({
         ...state,
         plans: state.plans.map((p) => (p.id === plan.id ? { ...p, revealed } : p)),
@@ -249,7 +250,7 @@ test('a plan ask whose plan is withheld lands on the pane the reveal gate is dra
 });
 
 test('a permission request is its own kind, not a plain escalation', () => {
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       escalations: [
         escalation({
@@ -274,7 +275,7 @@ test('within a group the row holding more work sorts first', () => {
     part({ id: 'p:c', slug: 'c', dependsOn: ['a'] }),
     part({ id: 'p:z', slug: 'z' }),
   ];
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       planParts: parts,
       escalations: [],
@@ -390,7 +391,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
       },
     });
 
-  const rows = buildNeedsYou(proposed({ awaiting: true }));
+  const rows = askRows(proposed({ awaiting: true }));
   assert.deepEqual(
     rows.map((r) => [r.kind, r.group, r.goalRef]),
     [['profile', 'yours', `issue:${goal.number}`]],
@@ -400,7 +401,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
   assert.equal(rows[0]?.agentId, null, 'the appraiser that proposed it is gone, not parked');
   assert.ok(rows[0]?.title.includes('deep'), 'the row names the profile it is asking about');
 
-  assert.deepEqual(buildNeedsYou(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
+  assert.deepEqual(askRows(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
 });
 
 test('a goal the appraisal refused is a row, and an unwatched or workable one is not', () => {
@@ -445,7 +446,7 @@ test('a goal the appraisal refused is a row, and an unwatched or workable one is
       },
     });
 
-  const rows = buildNeedsYou(held({ verdict: 'unclear', watched: true }));
+  const rows = askRows(held({ verdict: 'unclear', watched: true }));
   assert.deepEqual(
     rows.map((r) => [r.kind, r.group, r.goalRef]),
     [['intake', 'yours', `issue:${goal.number}`]],
@@ -456,9 +457,9 @@ test('a goal the appraisal refused is a row, and an unwatched or workable one is
   assert.equal(rows[0]?.agentId, null, 'the appraiser that cast the verdict is gone, not parked');
   assert.equal(rows[0]?.raisedAt, '2026-02-02T00:00:00.000Z', 'the verdict is what was raised');
 
-  assert.deepEqual(buildNeedsYou(held({ verdict: 'workable', watched: true })), [], 'a workable goal holds nothing');
+  assert.deepEqual(askRows(held({ verdict: 'workable', watched: true })), [], 'a workable goal holds nothing');
   assert.deepEqual(
-    buildNeedsYou(held({ verdict: 'unclear', watched: false })),
+    askRows(held({ verdict: 'unclear', watched: false })),
     [],
     'the drop outranks a verdict cast before it',
   );
@@ -501,7 +502,7 @@ test('each open placement question is its own row, and a settled one is gone', (
       },
     });
 
-  const rows = buildNeedsYou(
+  const rows = askRows(
     withAsks([
       { field: 'parent', proposedParent: 345, proposedAreaPath: null },
       { field: 'areaPath', proposedParent: null, proposedAreaPath: 'Contoso\\Web' },
@@ -519,7 +520,7 @@ test('each open placement question is its own row, and a settled one is gone', (
   assert.ok(rows[0]?.title.includes('#345'), 'the row names what it is proposing, so it can be judged from the rail');
   assert.ok(rows[1]?.title.includes('Contoso'));
 
-  assert.deepEqual(buildNeedsYou(withAsks([])), [], 'the server stops shipping a question the moment it is settled');
+  assert.deepEqual(askRows(withAsks([])), [], 'the server stops shipping a question the moment it is settled');
 });
 
 function agentWithTask(state: AppState) {
@@ -533,7 +534,7 @@ function agentWithTask(state: AppState) {
 test('a parked agent’s row says what that run is on, and never its id', () => {
   const demo = buildDemoState();
   const { agent, task: onIt } = agentWithTask(demo);
-  const rows = buildNeedsYou({
+  const rows = askRows({
     ...demo,
     escalations: [escalation({ id: 'e1', agentId: agent.id })],
     humanTasks: [],
@@ -550,7 +551,7 @@ test('a parked agent’s row says what that run is on, and never its id', () => 
 test('a usage-limit park is named by the work it stopped', () => {
   const demo = buildDemoState();
   const { agent, task: onIt } = agentWithTask(demo);
-  const rows = buildNeedsYou({
+  const rows = askRows({
     ...demo,
     escalations: [],
     humanTasks: [],
@@ -566,7 +567,7 @@ test('a usage-limit park is named by the work it stopped', () => {
 test('a title over more than one line is clamped to its first', () => {
   const demo = buildDemoState();
   const { agent, task: onIt } = agentWithTask(demo);
-  const rows = buildNeedsYou({
+  const rows = askRows({
     ...demo,
     tasks: demo.tasks.map((t) => (t.id === onIt.id ? { ...t, title: `${onIt.title}\nand a second paragraph` } : t)),
     escalations: [escalation({ id: 'e1', agentId: agent.id })],
@@ -581,7 +582,7 @@ test('a title over more than one line is clamped to its first', () => {
 
 test('an agent the snapshot no longer carries resolves to no label, not to its id', () => {
   const demo = buildDemoState();
-  const rows = buildNeedsYou({
+  const rows = askRows({
     ...demo,
     escalations: [escalation({ id: 'e1', agentId: 'agent_gone01234' })],
     humanTasks: [],
@@ -597,7 +598,7 @@ test('an agent the snapshot no longer carries resolves to no label, not to its i
 test('a burn notice names the spending run; every other human task carries neither id nor label', () => {
   const demo = buildDemoState();
   const { agent, task: onIt } = agentWithTask(demo);
-  const rows = buildNeedsYou({
+  const rows = askRows({
     ...demo,
     escalations: [],
     proposals: [],
@@ -624,7 +625,7 @@ test('urgency ranks the queue, and a watch holding parts is not filed under "whe
     part({ id: 'p:b', slug: 'b', dependsOn: ['a'] }),
     part({ id: 'p:c', slug: 'c', dependsOn: ['a'] }),
   ];
-  const rows = buildNeedsYou({
+  const rows = askRows({
     ...demo,
     planParts: parts,
     escalations: [escalation({ id: 'e1' })],
@@ -668,7 +669,7 @@ test('a pull request nobody described is an ask of yours, and never a blocker', 
     undescribedParts: [{ originRef: 'issue:142:part:cursor', prNumber: 41, openedAt: '2026-01-02T00:00:00.000Z' }],
   });
 
-  const rows = buildNeedsYou(state);
+  const rows = askRows(state);
   const row = rows.find((r) => r.kind === 'describe');
 
   assert.ok(row, 'the ask is drawn');
@@ -688,7 +689,7 @@ test('a pull request nobody described is an ask of yours, and never a blocker', 
 });
 
 test('the ask is the server\u2019s list, so a cockpit given none draws none', () => {
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       escalations: [],
       humanTasks: [],
@@ -715,7 +716,7 @@ test('a checked description raises an ask only when it found something, and gaps
     contradicted,
     gaps,
   });
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWith({
       escalations: [],
       humanTasks: [],
@@ -764,13 +765,13 @@ test('a goal waiting on its intake sitting is a blocking row that opens the goal
       },
     });
 
-  const rows = buildNeedsYou(sitting('sitting')).filter((r) => r.kind === 'sitting');
+  const rows = askRows(sitting('sitting')).filter((r) => r.kind === 'sitting');
   assert.deepEqual(
     rows.map((r) => [r.kind, r.group, r.goalRef, r.opens]),
     [['sitting', 'blocking', `issue:${goal.number}`, 'goal']],
   );
   assert.deepEqual(
-    buildNeedsYou(sitting('planning')).filter((r) => r.kind === 'sitting'),
+    askRows(sitting('planning')).filter((r) => r.kind === 'sitting'),
     [],
     'a closed sitting asks nothing',
   );
@@ -782,7 +783,7 @@ test('an assign ask opens where its buttons are drawn, never the pull request pa
     ...pr,
     assignAsk: [{ id: 'u1', name: 'Sam' }],
   }));
-  const rows = buildNeedsYou({ ...base, world: { ...base.world, pullRequests } }).filter((r) => r.kind === 'assign');
+  const rows = askRows({ ...base, world: { ...base.world, pullRequests } }).filter((r) => r.kind === 'assign');
   assert.ok(rows.length > 0);
   assert.ok(
     rows.some((r) => r.goalRef !== null),

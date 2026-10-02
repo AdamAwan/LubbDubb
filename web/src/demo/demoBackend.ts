@@ -104,6 +104,7 @@ import type {
 import type { PredictionDraft, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, DEMO_FEATURE_SUMMARIES, demoPlanHistory } from './fixtures.js';
+import { buildAskQueue } from './askQueue.js';
 import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 import { inFlight } from '../view/localValidation.js';
@@ -343,7 +344,7 @@ const DEMO_PLUGIN: PluginStatusPayload = {
   state: 'current',
   installed: '1.0.0-demo',
   bundle: { marketplaceDir: '~/.lubbdubb/plugin', version: '1.0.0-demo' },
-  skills: ['ask', 'check', 'clarify', 'describe', 'eject', 'feature', 'file', 'fleet', 'order', 'plan', 'run'],
+  skills: ['ask', 'check', 'clarify', 'describe', 'eject', 'feature', 'file', 'fleet', 'next', 'order', 'plan', 'run'],
   legacySkill: false,
 };
 
@@ -644,6 +645,7 @@ class DemoServer {
     return structuredClone({
       ...this.state,
       endedAgents: this.state.agents.filter((a) => a.endedAt !== null).length,
+      asks: buildAskQueue(this.state, demoSetupReading()),
     });
   }
 

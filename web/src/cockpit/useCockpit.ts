@@ -163,15 +163,15 @@ function useLiveState() {
   return { state, denied, connected, refresh, liveOutput, tails, lastPulse, wsRef };
 }
 
-function useNotifications(state: AppState | null, setup: SetupPayload | null): void {
+function useNotifications(state: AppState | null): void {
   const notified = useRef<ReturnType<typeof notifySnapshot> | null>(null);
 
   useEffect(() => {
     if (!state) return;
-    const next = notifySnapshot(state, setup);
+    const next = notifySnapshot(state);
     fireNotifications(notifiableChanges(notified.current, next), loadNotifyPrefs());
     notified.current = next;
-  }, [state, setup]);
+  }, [state]);
 }
 
 function useGoalAgents(state: AppState | null, goalRef: string | null): GoalAgentsPayload | null {
@@ -228,7 +228,7 @@ export function useCockpit(): CockpitStatus {
   const live = useLiveState();
   const setup = useSetup();
   const now = useNow(1000);
-  useNotifications(live.state, setup);
+  useNotifications(live.state);
   const goalAgents = useGoalAgents(live.state, place.goal);
   useAgentSubscription(live.wsRef, place.agent);
   const { actions, appliedFixes } = useCockpitActions(live.refresh, go);

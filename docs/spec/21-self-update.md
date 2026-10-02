@@ -478,7 +478,7 @@ Three surfaces, and the split is between an **ask**, a **standing** and the deta
 
 ### The asks are on the rail
 
-Two `Needs you` rows ([17](17-cockpit.md#needs-you)), derived in `web/src/view/updateAsks.ts`:
+Two `Needs you` rows ([17](17-cockpit.md#needs-you)), derived on the server in `src/asks/updateAsks.ts`:
 `upgrade` when there is something takeable, and `project_pull` where an auto-pull the harness would
 otherwise have done was refused. Both amber, both `yours`, neither ever `blocking` — nothing is parked
 and no slot is held.

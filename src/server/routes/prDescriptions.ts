@@ -107,13 +107,10 @@ function registerPullRequestRoutes(app: FastifyInstance, { system, hub }: RouteC
   app.post(
     '/api/prs/:number/description/dismiss',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
-      const originRef = store.prDescriptions.partOfPullRequest(params.number);
-      const current = originRef === null ? null : store.prDescriptions.currentDescription(originRef);
-      if (current === null || current.findings.length === 0)
+      if (!store.prDescriptions.dismissFindings(params.number))
         return reply
           .code(400)
           .send({ error: `PR ${params.number}'s description has no findings to leave as they are` });
-      store.prDescriptions.dismissFindings(current.id);
       hub.broadcast({ type: 'dirty', sections: ['plans'] });
       return { ok: true };
     }),

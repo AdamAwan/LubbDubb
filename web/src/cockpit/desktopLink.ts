@@ -10,6 +10,7 @@ export const SKILL_NAMES = [
   'feature',
   'file',
   'fleet',
+  'next',
   'order',
   'plan',
   'run',
