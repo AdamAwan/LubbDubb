@@ -289,7 +289,13 @@ test('a check declined after the sheet was assembled is off the page, and asks n
   const gone = new Set(['issue:12 b']);
   assert.deepEqual(pageRows([row], gone), []);
   assert.equal(
-    sheetsAwaitingOk({ sheets: [SHEET], rows: [row], intents: [], runs: [], gone }).size,
+    sheetsAwaitingOk({
+      sheets: [SHEET],
+      rows: pageRows([row], gone),
+      intents: [],
+      runs: [],
+      validates: new Set(['acceptance']),
+    }).size,
     0,
     'a declined row does not hold the bench',
   );
@@ -355,8 +361,12 @@ function intent(state: RemoteRunIntent['state']): RemoteRunIntent {
 
 test('a page reads where it stands off its intent, its run and its rows to OK, once for the cockpit and the hold', () => {
   const RUN = { id: 'run_1', goalRef: 'issue:12', environment: 'acceptance', status: 'ended', note: null } as RemoteRun;
-  const standing = (over: { rows?: RemoteSheetRow[]; intent?: RemoteRunIntent | null; run?: RemoteRun | null }) =>
-    okStanding({ rows: [sheetRow()], intent: null, run: null, ...over });
+  const standing = (over: {
+    rows?: RemoteSheetRow[];
+    intent?: RemoteRunIntent | null;
+    run?: RemoteRun | null;
+    validates?: boolean;
+  }) => okStanding({ rows: [sheetRow()], intent: null, run: null, validates: true, ...over });
   assert.equal(standing({}).status, 'needs-you', 'a row to OK and no OK');
   assert.equal(standing({ rows: [sheetRow({ selected: false })] }).status, 'nothing', 'nothing to OK asks nothing');
   assert.deepEqual(standing({ intent: { ...intent('given'), note: 'queued behind the run for issue:398.' } }), {
@@ -374,6 +384,15 @@ test('a page reads where it stands off its intent, its run and its rows to OK, o
     'an abandoned run comes back to the operator, saying why',
   );
   assert.equal(standing({ intent: intent('consumed') }).status, 'open', 'ship day: answered, still runnable');
+  assert.equal(
+    standing({
+      validates: false,
+      intent: { ...intent('consumed'), runId: 'run_1' },
+      run: { ...RUN, status: 'abandoned' },
+    }).status,
+    'nothing',
+    'an environment that no longer validates asks for nothing, whatever its last run did',
+  );
   assert.equal(standing({ intent: { ...intent('not_here'), note: 'rebuilt' } }).why, 'rebuilt');
   assert.equal(
     standing({ intent: { ...intent('withdrawn'), note: 'the page has changed' } }).why,
@@ -385,7 +404,7 @@ test('a page reads where it stands off its intent, its run and its rows to OK, o
   assert.equal(okable(sheetRow({ idleReason: 'a person carries it' })), false);
 
   const awaiting = (intents: RemoteRunIntent[], runs: RemoteRun[] = []) =>
-    sheetsAwaitingOk({ sheets: [SHEET], rows: [sheetRow()], intents, runs, gone: new Set() });
+    sheetsAwaitingOk({ sheets: [SHEET], rows: [sheetRow()], intents, runs, validates: new Set(['acceptance']) });
   assert.deepEqual([...awaiting([])], [['issue:12', ['acceptance']]]);
   assert.equal(awaiting([intent('given')]).size, 0);
   assert.equal(

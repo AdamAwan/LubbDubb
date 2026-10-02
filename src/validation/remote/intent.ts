@@ -228,8 +228,11 @@ export function okStanding(input: {
   rows: readonly RemoteSheetRow[];
   intent: RemoteRunIntent | null;
   run: RemoteRun | null;
+  /** False on an environment that no longer declares a `validate` block: it asks for nothing. */
+  validates: boolean;
 }): OkStanding {
   const { rows, intent, run } = input;
+  if (!input.validates) return { status: 'nothing', why: null };
   if (remoteRunIsLive(run)) return { status: 'running', why: null };
   const answered = intent === null ? null : intentStanding(intent, run);
   if (answered !== null) return answered;
@@ -257,15 +260,16 @@ function consumedStanding(run: RemoteRun | null, runId: string): OkStanding {
  */
 export function sheetsAwaitingOk(input: {
   sheets: readonly RemoteSheet[];
+  /** The page's rows — already through {@link pageRows}. */
   rows: readonly RemoteSheetRow[];
   intents: readonly RemoteRunIntent[];
   runs: readonly RemoteRun[];
-  gone: ReadonlySet<string>;
+  validates: ReadonlySet<string>;
 }): Map<string, string[]> {
   const key = (x: { goalRef: string; environment: string }) => `${x.goalRef} ${x.environment}`;
   const intents = new Map(input.intents.map((i) => [key(i), i]));
   const latest = new Map(input.runs.map((r) => [key(r), r]));
-  const rows = groupBy(pageRows(input.rows, input.gone), key);
+  const rows = groupBy(input.rows, key);
   const out = new Map<string, string[]>();
   for (const sheet of input.sheets) {
     const k = key(sheet);
@@ -273,6 +277,7 @@ export function sheetsAwaitingOk(input: {
       rows: rows.get(k) ?? [],
       intent: intents.get(k) ?? null,
       run: latest.get(k) ?? null,
+      validates: input.validates.has(sheet.environment),
     });
     if (standing.status !== 'needs-you') continue;
     out.set(sheet.goalRef, [...(out.get(sheet.goalRef) ?? []), sheet.environment]);

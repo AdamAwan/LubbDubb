@@ -126,11 +126,11 @@ export class ValidationReadyDesk {
       goneCheckRows([...checks.values()].flat()),
     );
     const awaitingOk = sheetsAwaitingOk({
-      sheets: this.store.remoteValidation.listRemoteSheets().filter((s) => validates.has(s.environment)),
+      sheets: this.store.remoteValidation.listRemoteSheets(),
       rows,
-      gone: new Set(),
       intents: this.store.remoteIntents.listIntents(),
       runs: this.store.remoteValidation.listRemoteRuns(),
+      validates,
     });
     return { sheetRows: groupBy(rows, (row) => row.goalRef), awaitingOk };
   }
