@@ -343,6 +343,11 @@ test('a panel draws its backdrop and its close button, both of them ways out', (
   assert.ok(html.includes('<h2>Faults</h2>'));
 });
 
+/** The rail's whenever fold as `FoldToggle` draws it: the count is the label, and the hint says which way it stands. */
+function railFold(count: number, hint: 'show' | 'hide'): string {
+  return `<span class="fold-label">${count} holding nothing</span><span class="fold-hint">${hint}</span>`;
+}
+
 test('the rail carries every ask that holds something, and folds the rest behind a count', () => {
   const html = render(view());
   const v = view();
@@ -353,7 +358,7 @@ test('the rail carries every ask that holds something, and folds the rest behind
   for (const row of pressing) assert.ok(decoded.includes(row.title), `the rail dropped ${row.kind}`);
   if (folded.length > 0) {
     assert.ok(
-      decoded.includes(`Show ${folded.length} holding nothing`),
+      decoded.includes(railFold(folded.length, 'show')),
       'an ask the fold hides is still counted on the control that opens it — a queue may drop nothing silently',
     );
   }
@@ -367,13 +372,13 @@ test('the whenever fold opens on its own once no ask is left that the fleet cann
 
   const shut = decode(render(view({ needsYou: all })));
   assert.ok(
-    shut.includes(`Show ${later.length} holding nothing`),
+    shut.includes(railFold(later.length, 'show')),
     'with a `now` ask on the rail the whenever pile stays folded',
   );
 
   const open = decode(render(view({ needsYou: [...mine, ...later] })));
   assert.ok(
-    open.includes(`Hide ${later.length} holding nothing`),
+    open.includes(railFold(later.length, 'hide')),
     'with no `now` ask left there is nothing to fold the whenever pile against',
   );
   for (const row of later) assert.ok(open.includes(decode(row.title)), `the fold kept ${row.kind} shut`);
@@ -2048,13 +2053,34 @@ test('the local validation chip words each phase of a run in flight', () => {
   }
 });
 
+test('the checks band into panels the Checks card owns, each saying what it asks', () => {
+  const html = decode(render(goalView(() => undefined, 'issue:395', [], [], 'validate')));
+  const bands = [
+    ...html.matchAll(
+      /<section class="fold fold-panel is-open vq-band">.*?<span class="fold-label">(.*?)<\/span><span class="fold-hint">/g,
+    ),
+  ].map((m) => m[1]!.replace(/<[^>]+>/g, '').trim());
+  assert.deepEqual(
+    bands,
+    ['Ready for a run', 'Yours to check', 'Done'],
+    'one panel per band, in the order they are read',
+  );
+  assert.ok(html.includes('tick the ones the next run should take'), 'a band says what it asks of the reader');
+  assert.ok(html.includes('no runner can answer these'), 'and the residue says why it is the reader’s');
+  assert.match(
+    html,
+    /<h3><button type="button" class="fold-toggle" aria-expanded="true"[^>]*>.*?<span class="fold-label">Checks<\/span><span class="fold-hint">hide<\/span>/,
+    'the card heading is the fold the bands hang from',
+  );
+});
+
 test('the local validation card draws the findings, the pages and the plan it ran', () => {
   const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'], [], 'validate')));
   assert.ok(html.includes('A declined card empties the basket and shows nothing'), 'the finding');
   assert.ok(html.includes('blocker'), 'and what it is worth');
   assert.ok(html.includes('http://localhost:5173/checkout'), 'the page it was found on');
   assert.ok(html.includes('The test plan it wrote'), 'the plan, folded');
-  assert.ok(html.includes('<details'), 'a browser-owned fold, not a Place');
+  assert.ok(html.includes('fold fold-inline'), 'a fold of its own, not a Place');
   assert.ok(html.includes('one agent, in your own dev environment'), 'the panel says what a run here is');
 });
 

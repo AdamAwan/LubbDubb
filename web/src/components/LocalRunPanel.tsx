@@ -6,9 +6,10 @@ import { Ref } from './refs.js';
 import { inFlight, localValidationSaid } from '../view/localValidation.js';
 import { ValidateLocallyModal } from './ValidateLocallyModal.js';
 import { TranscriptPane } from './TranscriptPane.js';
-import { MessageForm, Readings, RefLine, StatusLine, summaryClick } from './LocalRunReadings.js';
+import { MessageForm, Readings, RefLine, StatusLine } from './LocalRunReadings.js';
 import { GoalPicker } from './LocalRunPicker.js';
 import { planIssueOf } from './util.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -420,11 +421,14 @@ function OutputFold({
   onFlip: () => void;
 }): JSX.Element {
   return (
-    <details className="lrun-fold lrun-out" open={open} onClick={(e) => summaryClick(e, onFlip)}>
-      <summary>
-        <span>Output</span>
-        {lines.length > 0 && <span className="lrun-fold-hint">{lines[lines.length - 1]}</span>}
-      </summary>
+    <Collapsible
+      subject="local-run"
+      className="lrun-fold lrun-out"
+      open={open}
+      onToggle={onFlip}
+      title="Output"
+      aside={lines.length > 0 ? <span className="lrun-fold-hint">{lines[lines.length - 1]}</span> : undefined}
+    >
       {lines.length > 0 ? (
         <TranscriptPane
           text={lines.join('\n')}
@@ -436,7 +440,7 @@ function OutputFold({
       ) : (
         <p className="lrun-note">Nothing printed yet.</p>
       )}
-    </details>
+    </Collapsible>
   );
 }
 

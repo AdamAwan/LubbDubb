@@ -1,16 +1,18 @@
 import type { JSX } from 'react';
 import type { AgentFile } from '../types.js';
-import { logUsage } from '../cockpit/usage.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
 export function FilesList({ files }: { files: AgentFile[] | undefined }): JSX.Element | null {
   if (!files || files.length === 0) return null;
   return (
-    <details className="drawer-files" onToggle={(e) => e.currentTarget.open && logUsage('agent.expand')}>
-      <summary className="drawer-files-summary">
-        {files.length} file{files.length === 1 ? '' : 's'} changed
-      </summary>
+    <Collapsible
+      subject="agent"
+      className="drawer-files"
+      logClose={false}
+      title={`${files.length} file${files.length === 1 ? '' : 's'} changed`}
+    >
       <ul className="file-list">
         {files.map((f) => (
           <li key={f.id} className={`file-row${f.promoted ? ' promoted' : ''}`} title={f.tool ?? undefined}>
@@ -18,6 +20,6 @@ export function FilesList({ files }: { files: AgentFile[] | undefined }): JSX.El
           </li>
         ))}
       </ul>
-    </details>
+    </Collapsible>
   );
 }

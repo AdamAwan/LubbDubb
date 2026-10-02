@@ -12,6 +12,7 @@ import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
 import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
 import { askLine } from '../view/needLines.js';
+import { FoldToggle } from '../components/collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -558,14 +559,13 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
                    row each on them is the reason the pressing ones get skimmed.
                    The fold is per-visit state, not a `Place` field — it says
                    nothing about where the operator is. */
-                <BareButton
-                  usage={openLater ? 'escalation.close' : 'escalation.expand'}
+                <FoldToggle
+                  subject="escalation"
                   className="cn-railmore"
-                  aria-expanded={openLater}
-                  onClick={() => setShowLater((open) => !open)}
-                >
-                  {openLater ? 'Hide' : 'Show'} {section.rows.length} holding nothing
-                </BareButton>
+                  open={openLater}
+                  onToggle={setShowLater}
+                  label={`${section.rows.length} holding nothing`}
+                />
               ) : (
                 <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
               )}

@@ -893,8 +893,9 @@ measure of what an ask is costing. It is applied in one pass over the finished r
 the row as its fifteen sources write it — rather than restated at each push site, where `holding` is
 not always known.
 
-**The `later` section is folded behind a control that counts it**, not a heading: `Show 6 holding
-nothing`. The count is on the control precisely because a queue may drop nothing silently — an ask
+**The `later` section is folded behind a control that counts it**, not a heading: `6 holding
+nothing`, a [`FoldToggle`](#the-fold) whose own `show` / `hide` says which way it stands. The count is
+on the control precisely because a queue may drop nothing silently — an ask
 behind the fold is still an ask, and the number over the rail's own heading stays the whole queue for
 the same reason. **The fold opens on its own the moment no `now` row is left**, which is the cut it
 was folded against: it keeps asks holding nothing out of the way of what the fleet cannot get past,
@@ -1757,6 +1758,62 @@ Up next's rows — which is exactly the shape that drifts: three callers, three 
 glyph, the caret and the height. `--cn-r-sm` is 4px for the same reason it is a token at all: one
 decision, made once, taken by the console's chips, inputs and controls alike.
 
+### The fold
+
+**One fold, drawn by one component** — `web/src/components/collapsible.tsx`, dressed by the `.fold-*`
+block in `styles.css`. Anything in the cockpit that hides part of itself behind a press reaches for it;
+a `<details>` in JSX is a lint error pointing here.
+
+It exists because the folds had become a dozen dialects. The goal page's card headings were a
+triangle and an uppercase word in the heading's own grey; the validate pane's band headings were the
+same uppercase grey with no triangle at all, though they controlled nothing; the rest were `<details>`
+with whatever marker the browser or a local `::before` drew, or a hand-rolled button with `▸`, `›` or
+`⌄`. An operator on the validate pane could not tell which headings opened something, whether they were
+open, or what they would fold — and nothing the repo runs can see that.
+
+- **`FoldToggle` is the press**, wherever it sits: a chevron in a small box, pointing right shut and
+  down open, the label, and a quiet `show` / `hide` after it. The word is always there, because the
+  chevron alone answers _which way_ but not _is this a control_. It is bare, so a card heading can
+  carry its count, its links and its actions beside it — every goal-page card heading (`Disclosure` in
+  `web/src/console/goalFold.tsx` is now only `FoldToggle`), the criteria and prediction headings, the
+  rail's `6 holding nothing`, the fleet card's ended shifts, the tickets tab's feature chevron (the one
+  place `hint={false}`: it sits in a column of its own beside the feature's name).
+- **`Collapsible` is a fold that owns its body**, in one of two looks. **`panel`** is a bordered box
+  with a header strip, for a group that owns the rows under it — the validate pane's bands. **`inline`**
+  is a quiet reveal inside running content, its body hung off a rule — everything that was a
+  `<details>`. A header may carry an `aside`: a count, a hint, the last line of a run's output.
+- **Held by the caller or by itself.** Pass `open` and `onToggle` and the caller owns the state — the
+  goal page's sections, which live on `Place` ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet));
+  pass neither and it keeps its own, as a `<details>` did. `onToggle` fires only for a press, never for
+  the caller changing `open`, so a run opening its own output is not read as the operator asking it to
+  stay open ([23](23-local-runs.md#the-cockpit)).
+- **The body stays mounted while shut**, `hidden` rather than unrendered, as a `<details>` keeps it.
+  A fold holding a live transcript keeps its stream, and `renderToStaticMarkup` still sees what is
+  behind a shut fold.
+- **Every press names its usage event** — `<subject>.expand` opening, `<subject>.close` shutting — so
+  a subject a fold is for must carry both verbs ([34](34-usage-metrics.md)). `logClose={false}` is for
+  the folds where only an opening is a reading: a plan caveat, a run's files.
+
+**An open card hangs its body from the chevron.** A card whose heading is a `FoldToggle` draws, while
+open, a rail down from the chevron's centre line with everything under the heading indented off it, and
+drops the rule under the heading so the two join. Without it the validate pane's band panels sat at the
+same indent as the `Checks` heading over them, and read as its siblings rather than its contents. It is
+one `:has()` rule on `.cn-card`, so every foldable card takes it; a card with no fold draws none.
+
+**Not every press that shows more is a fold.** These stay what they are, on purpose:
+
+| control                                  | why it is not a fold                                                                                 |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| the top bar's menu                       | a popup over the page, not part of it — `aria-haspopup`, and Escape and blur close it                |
+| an ask row on the goal page (`FoldLine`) | the whole row is the press and its verb is the label ([A row opens in place](#a-row-opens-in-place)) |
+| an obstacle's claim                      | it selects the row onto `Place`, and the row draws its sightings                                     |
+| a ticket's `?`                           | a one-glyph reveal of the reasons beside the row, not a section                                      |
+| a transcript's tool block                | built imperatively by `TranscriptPane` as the stream arrives — a `<details>` the DOM writes, not JSX |
+
+The four tints are tokens — `--fold-fill`, `--fold-head`, `--fold-hover` and `--fold-rail`, each the
+foreground mixed over nothing, so they read on any ground and every theme carries them without owing a
+value ([Tokens](#tokens)).
+
 ### The modal
 
 **One overlay** — `Modal` in `web/src/components/Modal.tsx`. Every sheet that covers the cockpit is
@@ -2400,8 +2457,9 @@ and the assign row do not cover — is a disclosure (`FoldLine` in `NeedsBand`):
 and pressing the row draws the same full `NeedsBand` card directly under it, with `checksBelow` for a
 `validate` ask as the pane would. Pressed again it folds. Answering it removes the row as it always
 did, because the row and the card read the same `needBody`. The card's own **Open** still takes the
-ask to the panel. The open state is the row's own and not on `Place`: it is a disclosure, like a
-`<details>`, not where the operator is.
+ask to the panel. The open state is the row's own and not on `Place`: it is a disclosure that keeps
+its own state, not where the operator is. It is deliberately not a [`FoldToggle`](#the-fold): the
+whole row is the press, and its verb is the label.
 
 #### The ask rows are tiles
 
@@ -2591,22 +2649,27 @@ the fleet run a browser check. A check appears once, in `Checks`, **with what ea
 gate, and the rows that are not any check's. A runner panel never re-lists the checks, which is what
 three cards of the same shape were doing to a reader.
 
-**The list bands on where an answer is coming from**, and on nothing else: _a run is on them_, _a run
-can take them_, _only you can answer_, and what is answered. The second band was _no run yet_, which
+**The list bands on where an answer is coming from**, and on nothing else: _Running now_, _Ready for
+a run_, _Yours to check_, and _Done_. Each band is a `panel` [fold](#the-fold) of its own, open by
+default: a coloured dot and the name in sentence case, then its count, its runner, and one line saying
+what the band asks of the reader — _tick the ones the next run should take_, _no runner can answer these
+— open one and record what you saw_. The names were uppercase labels in the heading grey, the same face
+as the card heading over them and as every control on the page, and an operator could not tell they
+were groups rather than presses. The second band was _no run yet_, which
 was false the moment a run came back blocked: the check sat under a heading saying nothing had run,
 over a line saying what the run did. `checkStandings` (`web/src/view/validatePane.ts`)
 is the one place that decides, and it reads the sheet's own folds — a row's `blockedReason` and
 `idleReason` — rather than working out for itself which rows a press would touch, the same refusal
-those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)). _Only you can answer_
+those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)). _Yours to check_
 is therefore the **residue**: nobody offered a run. It is not the cockpit's reading of whether the
 fleet could carry the check's first step — that is `fleetCanStart`, three-valued and the server's
 ([20](20-validation.md#who-carries-a-step)) — and a second opinion on it drawn beside the sheet's own
 is exactly what this pane had too much of.
 
-**A banded row says as little as the band leaves unsaid.** The runner rides the _heading_ — once,
+**A banded row says as little as the band leaves unsaid.** The runner rides the _band's header_ — once,
 and only where every check under it names the same one — because five rows reading "staging can take
 it" is the same fact five times. The state is drawn only where it is **not** what the band implies:
-nothing on an `unrun` check under _a run can take them_, nothing on a `passed` one under _answered_, and the
+nothing on an `unrun` check under _Ready for a run_, nothing on a `passed` one under _Done_, and the
 odd ones — failed, later, dropped, needs a look — in the state's own hue. What is left is quiet text
 rather than a chip: a chip is a box, a border and a shout, and twelve rows carrying two each is the
 noise the banding was for. All of it is on the row at full weight the moment it is opened.
@@ -6925,8 +6988,8 @@ rather than per fix are both things a reader gets wrong without them — and the
 **once**. Read end to end on the first visit, a wall of method prose under the figures is never read
 again, and on every visit after it is the thing between the reader and the next table.
 
-So it is a `<details>` (`web/src/components/insightsMethod.tsx`), summarised `How this is counted`,
-folded shut. One click from the numbers it qualifies, and one line tall until then. The figure-side
+So it is an inline [fold](#the-fold) (`web/src/components/insightsMethod.tsx`), titled `How this is
+counted`, folded shut. One click from the numbers it qualifies, and one line tall until then. The figure-side
 prose above it is cut to the shortest thing that is still true — the denominators and the units — and
 everything that was a caveat about _how_ a number was arrived at moved inside the fold rather than
 being deleted, because the note is the only written account of the method a reader on the page has.
@@ -8081,7 +8144,7 @@ is in flight, the readings as tiles (the URL and whether its port answered, the 
 how far the checkout is behind its branch, the spend), and the reply box. Its controls wear what they
 are — Stop is the danger button with the two-click arm, Refresh is primary and drawn only while there is
 something to pick up, Start appears once a row is picked — and none is ever disabled: a control that
-would be is absent, and the stage line says why. The output and the picker are `<details>` folds, the
+would be is absent, and the stage line says why. The output and the picker are inline [folds](#the-fold), the
 picker folded under "Run a different goal" while something is up, saying beside it that starting stops
 what is running now. Which fold is open is local state, not `Place`
 ([23](23-local-runs.md#the-cockpit)).

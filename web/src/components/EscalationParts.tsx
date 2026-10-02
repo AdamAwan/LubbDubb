@@ -8,6 +8,7 @@ import { Button } from './button.js';
 import { Tag } from './tag.js';
 import type { Escalation } from '../types.js';
 import type { Card, CardProps } from './escalationReading.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -88,10 +89,13 @@ export function CardProse({
           paragraphs, and both arrived as one run-on sentence. */}
       {card.body ? (
         card.bodyFolded ? (
-          <details className="escalation-body esc-fold">
-            <summary className="muted small">What accepting and rejecting do</summary>
+          <Collapsible
+            subject="escalation"
+            className="escalation-body esc-fold"
+            title="What accepting and rejecting do"
+          >
             {renderMarkdown(card.body, refUrls)}
-          </details>
+          </Collapsible>
         ) : (
           <div className="escalation-body">{renderMarkdown(card.body, refUrls)}</div>
         )
@@ -100,10 +104,9 @@ export function CardProse({
       {context.taskTitle ? <div className="muted small">re: {linkify(String(context.taskTitle), refUrls)}</div> : null}
 
       {context.recentOutput ? (
-        <details className="esc-context" open>
-          <summary className="muted small">What the agent was doing</summary>
+        <Collapsible subject="escalation" className="esc-context" defaultOpen title="What the agent was doing">
           <pre className="esc-output">{context.recentOutput}</pre>
-        </details>
+        </Collapsible>
       ) : null}
     </>
   );
@@ -172,10 +175,14 @@ export function CardDetail({
       ) : null}
 
       {context.draft ? (
-        <details className="esc-context" open={decidable?.kind === 'reply_draft'}>
-          <summary className="muted small">Draft reply</summary>
+        <Collapsible
+          subject="escalation"
+          className="esc-context"
+          defaultOpen={decidable?.kind === 'reply_draft'}
+          title="Draft reply"
+        >
           <pre className="esc-output">{context.draft}</pre>
-        </details>
+        </Collapsible>
       ) : null}
     </>
   );

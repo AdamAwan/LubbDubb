@@ -4,8 +4,9 @@ import { renderMarkdown } from './markdown.js';
 import { Button } from './button.js';
 import type { ButtonLook } from './button.js';
 import { Tag } from './tag.js';
+import { Collapsible } from './collapsible.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
-import { BAND_HEADING, type CheckBand, type CheckStanding } from '../view/validatePane.js';
+import { BAND_HEADING, BAND_HINT, type CheckBand, type CheckStanding } from '../view/validatePane.js';
 import { logUsage } from '../cockpit/usage.js';
 import { CheckBlock, CheckLine, CheckRuns, isMissingFile, stateTone } from './validationCheckRows.js';
 
@@ -228,16 +229,19 @@ function BandedChecks({
         const inBand = live.filter((check) => standings.get(check.id)?.band === band);
         if (inBand.length === 0) return null;
         return (
-          <div className="vq-band" key={band}>
-            <span className="lb lb-sm">
-              {BAND_HEADING[band]} <i className="vq-band-n">{inBand.length}</i>
-              {/* Which runner, once on the heading rather than on every row under it: in a band
-                  of five, five copies of “staging can take it” is the reading nobody needed
-                  five times. → docs/spec/17-cockpit.md#the-validate-pane */}
-              {band !== 'yours' && runners(inBand, standings) !== null && (
-                <i className="vq-band-n"> · {runners(inBand, standings)}</i>
-              )}
-            </span>
+          <Collapsible
+            key={band}
+            look="panel"
+            subject="validation"
+            className="vq-band"
+            defaultOpen
+            title={
+              <>
+                <span className={`vq-band-dot ${band}`} aria-hidden="true" /> {BAND_HEADING[band]}
+              </>
+            }
+            aside={<BandAside band={band} inBand={inBand} standings={standings} />}
+          >
             {inBand.map((check) => (
               <div className="vq-check" key={check.id}>
                 {opened?.id === check.id ? (
@@ -253,7 +257,7 @@ function BandedChecks({
                 <CheckRuns runs={standings.get(check.id)?.runs ?? []} onOpenAgent={onOpenAgent} />
               </div>
             ))}
-          </div>
+          </Collapsible>
         );
       })}
       {(plan?.note != null || resources.length > 0 || withdrawn.length > 0) && (
@@ -273,8 +277,7 @@ function BandedAbout({
   withdrawn: ValidationCheckView[];
 }) {
   return (
-    <details className="vq-about">
-      <summary>About these checks</summary>
+    <Collapsible subject="validation" className="vq-about" title={<>About these checks</>}>
       {plan?.note != null && <div className="pm-vnote">{plan.note}</div>}
       {resources.length > 0 && (
         <div className="pm-vres">
@@ -290,7 +293,7 @@ function BandedAbout({
       {withdrawn.map((check) => (
         <WithdrawnRow key={check.id} check={check} />
       ))}
-    </details>
+    </Collapsible>
   );
 }
 
@@ -348,10 +351,9 @@ function CheckQueue({
         </div>
       )}
       {!all && rest.done.length > 0 && (
-        <details className="vq-rest vq-done">
-          <summary>{rest.done.length} done</summary>
+        <Collapsible subject="validation" className="vq-rest vq-done" title={<>{rest.done.length} done</>}>
           {rest.done.map(line)}
-        </details>
+        </Collapsible>
       )}
       <WithdrawnList withdrawn={withdrawn} />
     </>
@@ -424,8 +426,7 @@ function QueueHead({
 
 function QueueAbout({ plan, resources }: { plan: ValidationPlanRecord | null; resources: ValidationResourceView[] }) {
   return (
-    <details className="vq-about">
-      <summary>About these checks</summary>
+    <Collapsible subject="validation" className="vq-about" title={<>About these checks</>}>
       {plan?.note != null && <div className="pm-vnote">{plan.note}</div>}
       {resources.length > 0 && (
         <div className="pm-vres">
@@ -448,7 +449,7 @@ ${resource.note}`
           ))}
         </div>
       )}
-    </details>
+    </Collapsible>
   );
 }
 
@@ -467,14 +468,19 @@ function WithdrawnRow({ check }: { check: ValidationCheckView }) {
 function WithdrawnList({ withdrawn }: { withdrawn: ValidationCheckView[] }) {
   if (withdrawn.length === 0) return null;
   return (
-    <details className="pm-vgone">
-      <summary>
-        {withdrawn.length} check{withdrawn.length === 1 ? '' : 's'} dropped when the checks changed
-      </summary>
+    <Collapsible
+      subject="validation"
+      className="pm-vgone"
+      title={
+        <>
+          {withdrawn.length} check{withdrawn.length === 1 ? '' : 's'} dropped when the checks changed
+        </>
+      }
+    >
       {withdrawn.map((check) => (
         <WithdrawnRow key={check.id} check={check} />
       ))}
-    </details>
+    </Collapsible>
   );
 }
 
@@ -554,6 +560,26 @@ export function ValidationDigest({
  * two environments across one band is a fact about the rows and belongs on them, not on a heading
  * that would then be wrong for half of what is under it.
  */
+/** What a band's header says beside its name: how many, which runner where it is one, and what to do. */
+function BandAside({
+  band,
+  inBand,
+  standings,
+}: {
+  band: CheckBand;
+  inBand: readonly ValidationCheckView[];
+  standings: Map<string, CheckStanding>;
+}): JSX.Element {
+  const runner = band === 'yours' ? null : runners(inBand, standings);
+  return (
+    <>
+      <span className="vq-band-count">{inBand.length}</span>
+      {runner !== null && <span className="vq-band-runner">{runner}</span>}
+      <span className="vq-band-hint">{BAND_HINT[band]}</span>
+    </>
+  );
+}
+
 function runners(checks: readonly ValidationCheckView[], standings: Map<string, CheckStanding>): string | null {
   const said = new Set(checks.map((check) => standings.get(check.id)?.label ?? ''));
   return said.size === 1 ? ([...said][0] ?? null) : null;

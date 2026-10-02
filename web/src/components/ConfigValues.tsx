@@ -6,6 +6,7 @@ import { BareButton, Button } from './button.js';
 import { Tag } from './tag.js';
 import { Row, type Draft } from './ConfigRow.js';
 import { chosenIn, configured, parseValue, render, stagedFor, unmetRequirements, type Unmet } from './configEntries.js';
+import { FoldToggle } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -294,15 +295,10 @@ function AdvancedCard({
 }): React.JSX.Element {
   return (
     <Panel density="flush" className="cfg-card">
-      <BareButton
-        usage={open ? 'config.close' : 'config.expand'}
-        className="cfg-advhead"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <span className="muted">{open ? '▾' : '▸'}</span> Advanced
+      <div className="cfg-advhead">
+        <FoldToggle subject="config" open={open} onToggle={onToggle} label="Advanced" />
         <Tag tone="amber">{count} keys that can lock you out</Tag>
-      </BareButton>
+      </div>
       {open && (
         <>
           <p className="cfg-advwarn">

@@ -68,6 +68,12 @@
      neutral over the well, so every theme carries it without owing a value. */
   --withheld-fill: color-mix(in srgb, var(--grey) 9%, var(--well));
   --withheld-line: color-mix(in srgb, var(--grey) 30%, var(--border));
+  /* A fold's ground, its header strip, its toggle under the pointer, and the rail an open card's
+     body hangs from. Mixes of the foreground over nothing, so they read on any ground. */
+  --fold-fill: color-mix(in srgb, var(--cn-fg) 2%, transparent);
+  --fold-head: color-mix(in srgb, var(--cn-fg) 5%, transparent);
+  --fold-hover: color-mix(in srgb, var(--cn-fg) 6%, transparent);
+  --fold-rail: color-mix(in srgb, var(--cn-fg) 16%, transparent);
   /* The three values a reference is drawn from: the edge of its box, the fill of
      the one that stays in the cockpit, and its lettering. Their own tokens rather
      than reuses of `--blue-line-2` / `--blue-fill` — those mean "tinted border and
@@ -1289,11 +1295,6 @@ select:disabled {
 .drawer-files {
   padding: 4px 0 2px;
 }
-.drawer-files-summary {
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
 .file-list {
   margin: 6px 0 2px;
   padding-left: 16px;
@@ -1557,18 +1558,6 @@ select:disabled {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.esc-context > summary {
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-.esc-context > summary::before {
-  content: '▸ ';
-  color: var(--muted);
-}
-.esc-context[open] > summary::before {
-  content: '▾ ';
 }
 .esc-output {
   margin: 6px 0 0;
@@ -3483,29 +3472,7 @@ select:disabled {
   padding: 6px 8px;
   border-left: 3px solid var(--border);
 }
-/* The fold. `display: flex` on a `<summary>` drops the disclosure marker in
-   WebKit, so the triangle is drawn here — a fold with no affordance reads as a
-   truncated block, which is the thing this replaced. */
-.pm-flag-head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  cursor: pointer;
-  list-style: none;
-}
-.pm-flag-head::-webkit-details-marker {
-  display: none;
-}
-.pm-flag-head::before {
-  content: '▸';
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1;
-}
-.pm-flag[open] > .pm-flag-head::before {
-  content: '▾';
-}
-.pm-flag-head .pm-section-label {
+.pm-flag .fold-label .pm-section-label {
   margin-bottom: 0;
   white-space: nowrap;
 }
@@ -3517,11 +3484,8 @@ select:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pm-flag[open] > .pm-flag-head .pm-flag-teaser {
+.pm-flag.is-open .pm-flag-teaser {
   display: none;
-}
-.pm-flag[open] > .pm-prose {
-  margin-top: 6px;
 }
 .pm-flag.risk {
   border-left-color: var(--amber);
@@ -3954,10 +3918,6 @@ select:disabled {
 .pm-vamend-head i {
   font-style: normal;
 }
-.pm-vamend summary {
-  cursor: pointer;
-  margin-top: 4px;
-}
 /* The withdrawn wording, drawn quieter than the check that replaced it: it is the
    record of what was asked before, not a second thing to do. */
 .pm-vamend-prior {
@@ -3981,10 +3941,6 @@ select:disabled {
 .pm-vgone {
   margin-top: 10px;
   font-size: 12px;
-}
-.pm-vgone summary {
-  color: var(--muted);
-  cursor: pointer;
 }
 .pm-cut {
   display: flex;
@@ -5152,30 +5108,11 @@ select:disabled {
    read end to end once it is never read again — so the caveats stay one click
    from the numbers they qualify rather than three screens of them.
    → docs/spec/17-cockpit.md#the-method-note-is-folded */
-.sp-method > summary {
-  cursor: pointer;
+.sp-method > .fold-head .fold-label {
   font-family: var(--font-mono);
   font-size: var(--label-size-sm);
   letter-spacing: var(--label-track);
   text-transform: uppercase;
-  color: var(--muted);
-  list-style: none;
-}
-.sp-method > summary::-webkit-details-marker {
-  display: none;
-}
-.sp-method > summary::before {
-  content: '▸ ';
-  color: var(--grey);
-}
-.sp-method[open] > summary::before {
-  content: '▾ ';
-}
-.sp-method > summary:hover {
-  color: var(--text);
-}
-.sp-method[open] > summary {
-  margin-bottom: 7px;
 }
 .sp-method p {
   margin: 0 0 7px;
@@ -5810,13 +5747,11 @@ select:disabled {
   grid-template-columns: 22px minmax(0, 1fr);
   opacity: 0.8;
 }
-.tickets-fold {
-  color: var(--cn-fg-faint);
-  font-size: 11px;
+.fold-toggle.tickets-fold {
   justify-self: center;
-  background: none;
-  border: 0;
-  cursor: pointer;
+  margin: 0;
+  padding: 2px;
+  gap: 0;
 }
 .tickets-fname {
   display: flex;
@@ -6458,35 +6393,14 @@ select:disabled {
   border-radius: var(--r-md);
   padding: 6px 10px;
 }
-/* The two folds: the output and the picker. A `details`, so the browser owns the
-   toggle and the content is in the markup whichever way it stands. The summary is
-   the row an operator clicks, drawn as a heading with a hint beside it. */
-.lrun-fold > summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  list-style: none;
+/* The two folds: the output and the picker, each a heading with a hint beside it. */
+.lrun-fold > .fold-head .fold-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  padding: 4px 0;
 }
-.lrun-fold > summary::-webkit-details-marker {
-  display: none;
-}
-.lrun-fold > summary::before {
-  content: '▸';
-  display: inline-block;
-  width: 14px;
-  color: var(--muted);
-}
-.lrun-fold[open] > summary::before {
-  content: '▾';
-}
-.lrun-fold > summary > span:first-of-type {
-  flex: 1 1 auto;
+.lrun-fold > .fold-head .fold-aside {
+  justify-content: flex-end;
 }
 .lrun-fold-hint {
   font-weight: 400;
@@ -7079,15 +6993,8 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
   padding: 10px 13px;
-  background: none;
-  border: 0;
-  color: var(--cn-fg);
-  font: inherit;
   font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
 }
 .cfg-advhead .tag {
   margin-left: auto;
@@ -10669,10 +10576,6 @@ button.rv.rv {
 .vp-side {
   flex: 2 1 300px;
 }
-.vp-hint > summary,
-.esc-fold > summary {
-  cursor: pointer;
-}
 .vp-note,
 .vp-hint,
 .vp-expect {
@@ -11050,7 +10953,7 @@ button.rv.rv {
   background: var(--border);
 }
 .vq-pip.passed {
-  background: color-mix(in srgb, var(--green) 70%, transparent);
+  background: var(--green);
 }
 .vq-pip.waived {
   background: var(--grey);
@@ -11077,10 +10980,6 @@ button.rv.rv {
   font-size: 12px;
   margin-bottom: 8px;
 }
-.vq-about summary {
-  color: var(--muted);
-  cursor: pointer;
-}
 /* Every check the sheet is not answering: a line each. The set stays countable
    and skimmable, and none of it competes with the one check that is asking a
    question. */
@@ -11088,30 +10987,54 @@ button.rv.rv {
   margin-top: 10px;
   font-size: 12px;
 }
-.vq-rest > .lb,
-.vq-rest > summary {
+.vq-rest > .lb {
   display: block;
   margin-bottom: 3px;
   color: var(--muted);
   cursor: pointer;
 }
-/* The goal page's banded list: a label per band, then its checks as lines. No meter and nothing
+/* The goal page's banded list: a panel per band, its checks as lines inside it. No meter and nothing
    open until a row is clicked — the card header already carries the count, and a check drawn open
    is three hundred pixels of one answer above the list it belongs to.
    → docs/spec/17-cockpit.md#the-validate-pane */
-.vq-band {
-  margin-top: 10px;
-  font-size: 12px;
+.vq-band-dot {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
 }
-.vq-band > .lb {
-  display: block;
-  margin-bottom: 3px;
+.vq-band-dot.running {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-line);
+}
+.vq-band-dot.open {
+  background: var(--cn-captured);
+}
+.vq-band-dot.yours {
+  background: var(--amber);
+}
+.vq-band-dot.answered {
+  background: var(--green);
+}
+.vq-band-count {
+  font: 600 11px var(--cn-mono);
   color: var(--muted);
 }
-.vq-band-n {
-  font-style: normal;
+.vq-band-runner {
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+}
+.vq-band-runner::before {
+  content: '· ';
   color: var(--muted);
-  opacity: 0.75;
+}
+.vq-band-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
 }
 /* What a banded line says beyond its title: quiet text, never a chip. A chip is a box, a border and
    a shout, and a list of twelve rows carrying two each is what the pane was rebuilt to stop.
@@ -11220,31 +11143,12 @@ button.rv.rv {
 .pm-velse {
   margin-left: 6px;
 }
-.pm-velse summary {
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
 .pm-velse-body {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 6px;
-}
-/* The steps, folded on the sheet: they are the journey the fleet would carry,
-   and the person reading this row is the one least likely to want them. */
-.cd-fold > summary {
-  color: var(--muted);
-  cursor: pointer;
-}
-.cd-fold[open] > summary {
-  margin-bottom: 4px;
-}
-/* A proposal row, folded to its gist. */
-.vp-open > summary {
-  cursor: pointer;
-  list-style-position: outside;
 }
 .vp-gist {
   color: var(--muted);
@@ -11262,4 +11166,141 @@ button.rv.rv {
 }
 .pm-vflag.quiet b {
   color: var(--text);
+}
+
+/* The one fold. `FoldToggle` is the press, wherever it sits; `Collapsible` adds the box around a
+   body it owns — `panel` bordered with a header strip, `inline` a quiet reveal. → 17-cockpit.md */
+.fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: -3px -6px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--cn-fg);
+  text-align: left;
+  cursor: pointer;
+}
+.fold-toggle:hover {
+  background: var(--fold-hover);
+  border-color: var(--cn-line);
+}
+.fold-toggle:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 1px;
+}
+.fold-caret {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--cn-line);
+  border-radius: 4px;
+  font: normal 600 14px/1 var(--cn-mono);
+  color: var(--cn-fg-dim);
+  transition: transform 120ms ease;
+}
+.fold-caret.open {
+  transform: rotate(90deg);
+}
+.fold-toggle:hover .fold-caret {
+  color: var(--cn-fg);
+  border-color: var(--cn-fg-faint);
+}
+.fold-hint {
+  font: 500 10px var(--cn-mono);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--cn-fg-faint);
+}
+.fold-toggle:hover .fold-hint {
+  color: var(--cn-fg-dim);
+}
+.fold-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+.fold-aside {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.fold-panel {
+  margin-top: 10px;
+  border: 1px solid var(--cn-line);
+  border-radius: 6px;
+  background: var(--fold-fill);
+  overflow: hidden;
+}
+.fold-panel > .fold-head {
+  padding: 7px 10px;
+  background: var(--fold-head);
+}
+.fold-panel.is-open > .fold-head {
+  border-bottom: 1px solid var(--cn-line);
+}
+.fold-panel > .fold-head .fold-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.fold-panel > .fold-body {
+  padding: 6px 10px 8px 16px;
+}
+
+.fold-inline {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.fold-inline > .fold-head .fold-toggle {
+  color: var(--cn-fg-dim);
+}
+.fold-inline > .fold-head .fold-caret {
+  width: 15px;
+  height: 15px;
+  font-size: 12px;
+}
+.fold-inline > .fold-body {
+  margin: 6px 0 0 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--cn-line);
+}
+.pm-flag > .fold-body,
+.lrun-fold > .fold-body,
+.esc-context > .fold-body {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+/* A card whose heading is a fold: its body hangs off the chevron on a rail, so what is under it
+   reads as the heading's own. The rail sits on the caret's centre line. */
+.cn-card:has(> h3 > .fold-toggle[aria-expanded='true']) > :not(h3) {
+  margin-left: 22px;
+  border-left: 2px solid var(--fold-rail);
+  padding-left: 14px;
+}
+.cn-card:has(> h3 > .fold-toggle[aria-expanded='true']) > h3 {
+  border-bottom-color: transparent;
+  padding-bottom: 3px;
+}
+.cn-card:has(> h3 > .fold-toggle[aria-expanded='true']) > h3 + * {
+  padding-top: 8px;
+}
+.cn-card:has(> h3 > .fold-toggle[aria-expanded='true']) > :last-child {
+  margin-bottom: 12px;
 }
