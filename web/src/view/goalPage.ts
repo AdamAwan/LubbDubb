@@ -29,7 +29,7 @@ import {
   closeStage,
   flaggedLocally,
   planStage,
-  ticketReading,
+  askStage,
   validationStage,
   watchStage,
   type GoalStage,
@@ -92,6 +92,8 @@ export interface GoalPageView {
    * between two goals on it. → docs/spec/17-cockpit.md#the-panes
    */
   obligations: GoalObligations;
+  /** The tracker can give a work item a parent and an area path, which the Ask tab then checks for. */
+  placesWorkItems: boolean;
 }
 
 /** The environments carrying each obligation, in promotion order. Empty where none does. */
@@ -169,6 +171,7 @@ export function buildGoalPage(
     ...goalWatchRecords(state, ref),
     sequence: goalSequence(state, issue),
     obligations: goalObligations(state.config.environments),
+    placesWorkItems: state.config.canPlaceWorkItem,
   };
 }
 
@@ -699,7 +702,8 @@ interface GoalNavEntry {
  * at from memory. → docs/spec/17-cockpit.md#the-panes
  */
 export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
-  const stages: Record<Exclude<GoalTab, 'ask'>, GoalStage> = {
+  const stages: Record<GoalTab, GoalStage> = {
+    ask: askStage(page),
     plan: planStage(page),
     validate: validationStage(page),
     close: closeStage(page),
@@ -708,17 +712,7 @@ export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
   return goalPanes(page).map((tab) => {
     const needsYou = goalPaneAsks(page, tab).length > 0;
     const on = tab === 'ask' || tab === 'plan' ? [] : page.obligations[tab];
-    if (tab === 'ask') return { tab, label: GOAL_TAB_LABEL.ask, ...ticketReading(page), needsYou, on };
-    const stage = stages[tab];
-    return {
-      tab,
-      label: GOAL_TAB_LABEL[tab],
-      reading: stage.reading,
-      tone: stage.tone,
-      done: stage.done,
-      needsYou,
-      on,
-    };
+    return { tab, label: GOAL_TAB_LABEL[tab], ...stages[tab], needsYou, on };
   });
 }
 

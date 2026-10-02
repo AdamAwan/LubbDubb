@@ -224,6 +224,7 @@ test('a profile proposal is answered on the ask, both ways', () => {
     awaitingProfileAnswer: true,
     placement: [],
     parentSettledAt: null,
+    areaPathUnset: false,
   };
   const v = view(state);
   const html = askBody(v, rowOfKind(v, 'profile'));

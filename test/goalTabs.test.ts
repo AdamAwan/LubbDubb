@@ -201,7 +201,9 @@ test('every tab reads something, even on a goal that has nothing', () => {
      the row saying nothing about a stage the goal simply has not reached. */
   for (const entry of nav) {
     assert.ok(entry.reading.length > 0, `${entry.tab} says nothing at all`);
-    assert.equal(entry.done, null, `${entry.tab} drew a meter on a goal with nothing to measure`);
+    /* Ask is the exception: its readiness checks are owed from the moment the goal exists. */
+    if (entry.tab === 'ask') assert.equal(entry.done, 0, 'a goal never appraised has met none of its checks');
+    else assert.equal(entry.done, null, `${entry.tab} drew a meter on a goal with nothing to measure`);
     assert.equal(entry.needsYou, false, `${entry.tab} claims an ask on a goal that carries none`);
   }
 });

@@ -933,6 +933,7 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
       awaitingProfileAnswer: true,
       placement: [],
       parentSettledAt: null,
+      areaPathUnset: false,
     };
   };
 

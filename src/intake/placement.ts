@@ -17,7 +17,7 @@ export function truncateAreaPaths(tree: AreaPathTree): { paths: string[]; omitte
   return { paths, omitted: Math.max(0, tree.paths.length - paths.length) };
 }
 
-function isAreaPathMissing(issue: Issue, tree: AreaPathTree | null): boolean {
+export function isAreaPathMissing(issue: Issue, tree: AreaPathTree | null): boolean {
   if (issue.areaPath === undefined || tree === null) return false;
   return normalizeAreaPath(issue.areaPath) === normalizeAreaPath(tree.root);
 }

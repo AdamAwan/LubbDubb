@@ -1485,9 +1485,18 @@ still owed`, so it grows every time a plan decomposes further — a bar against 
   whole or not at all, so between its first part landing and its last it is not part-way checked, it
   is **not checkable**, and a bar at 57% says the first. Close therefore reads what is still owed
   (`3 landings owed`) with `done: null` until an environment holds every landing, and only then draws
-  a meter — over the **environments**, which are configuration and fixed. Criteria are append-only, so
-  Ask never draws one either; Plan and Validate may, because an approved plan's parts and a settled
-  check plan are both closed sets.
+  a meter — over the **environments**, which are configuration and fixed. Plan and Validate may draw
+  one, because an approved plan's parts and a settled check plan are both closed sets. Ask's meter is
+  over **readiness checks**, never over the criteria, which are append-only (`askStage`,
+  `web/src/view/goalStages.ts`): the appraisal found the ask `workable`, and — only where the tracker
+  places work items (`canPlaceWorkItem`) — the item has a feature (a parent) and an area path. A
+  placement the operator declined (`Not applicable`, or settled with no parent) counts as met, and so
+  does a parent the item's type never needs. The path check reads the server's `appraisal.areaPathUnset` — still on
+  the project root and not declined — not the absence of a path _question_, which is raised only when the
+  appraisal proposed one. On GitHub that is one check; on a placing tracker three.
+  Before the appraisal lands every check reads unmet: the placement facts ride on it, and the
+  appraisal runs before anything is dispatched. The denominator is the deployment's, so it cannot grow. The reading names the first unmet check —
+  `not appraised`, `unclear`, `no feature`, `no path` — and otherwise `ready` or the instruction count.
 - **Every tab the deployment draws is drawn on every goal of it**, Close included, which reads
   `not reached` where no environment is configured. The row keeps its shape between goals: a control
   that gains and loses a column cannot be aimed at from memory. Which panes exist is a question about
