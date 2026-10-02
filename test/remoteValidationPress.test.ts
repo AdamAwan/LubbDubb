@@ -428,6 +428,29 @@ test('a press refused for want of a tenant is not refused for ever once one is s
   }
 });
 
+test('a check declined after the sheet was assembled is not among the rows a press reads', async () => {
+  const CHECKS: EnvironmentConfig = {
+    ...ACCEPTANCE,
+    validate: { ...ACCEPTANCE.validate!, permits: ['check', 'state'] },
+  };
+  const b = bench({ environments: [CHECKS] });
+  try {
+    seed(b, { environment: CHECKS });
+    const pressed = () => b.desk.pressRows('issue:12', CHECKS).map((r) => r.rowId);
+    assert.ok(pressed().includes(`check:${CHECK.id}`));
+
+    b.store.validation.recordValidationResult('issue:12', CHECK.id, {
+      state: 'declined',
+      note: 'not here',
+      by: 'operator',
+    });
+
+    assert.deepEqual(pressed(), [`state:${QUERY.id}`], 'a decline is not undone by the one surface that never saw it');
+  } finally {
+    b.close();
+  }
+});
+
 test('cancel settles an open run abandoned, so the press is never absent for good', async () => {
   const b = bench();
   try {
@@ -579,7 +602,7 @@ test('the run route is the only one here that runs a cycle, and refuses 409 and 
   }
 });
 
-test('approving a query on the sheet clears its row there and then, with no press', async () => {
+test('ruling on a query re-folds its row there and then, with no press', async () => {
   const system = server();
   const { app } = await buildApp(system);
   try {
@@ -596,6 +619,15 @@ test('approving a query on the sheet clears its row there and then, with no pres
     assert.equal(ruled.statusCode, 200, ruled.body);
     assert.equal(row()?.awaitingApproval, false, 'the sheet stops asking for what was just given');
     assert.equal(row()?.blockedReason, null);
+
+    const declined = await app.inject({
+      method: 'POST',
+      url: `/api/issues/12/remote-validation/acceptance/queries/${QUERY.id}`,
+      payload: { accept: false },
+    });
+    assert.equal(declined.statusCode, 200, declined.body);
+    assert.equal(row()?.awaitingApproval, true, 'and asks again once it is withdrawn');
+    assert.notEqual(row()?.blockedReason, null);
   } finally {
     await app.close();
     system.store.close();

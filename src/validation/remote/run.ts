@@ -89,6 +89,9 @@ export class RemoteRunDesk extends EventEmitter {
     const key = tenant.standing.tenant ?? '';
 
     const pin = await this.pin(goalRef, environment);
+    const open = store.remoteValidation.liveRemoteRun(environmentName, key);
+    if (open !== null) return liveRefusal(environmentName, open, key);
+    const confirmed = pin.abandon === null ? this.deps.desk.pressRows(goalRef, environment) : [];
 
     const { run, live } = store.remoteValidation.beginRemoteRun({
       goalRef,
@@ -103,7 +106,6 @@ export class RemoteRunDesk extends EventEmitter {
       return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
     }
 
-    const confirmed = this.deps.desk.refresh(goalRef, environment).filter((r) => r.selected);
     const read = await this.readAll(environment, goalRef, run, confirmed, tenant.standing);
 
     // The deterministic rows are read here, synchronously and under the pin: they are read-only,

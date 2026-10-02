@@ -74,14 +74,13 @@ function registerQueryRoutes(app: FastifyInstance, { system, hub }: RouteContext
             `"${params.environment}" declares no "validate.state.run" command, so a query accepted against it ` +
             'could never be put to anything.',
         });
-      const ruled = await system.stateQueries.rule(
+      const ruled = await system.remoteValidation.ruleStateQuery(
         issueOrigin(params.number),
         params.queryId,
-        params.environment,
+        environment,
         body.accept,
       );
       if (ruled === null) return reply.code(404).send({ error: 'no such state query on that goal' });
-      system.remoteValidation.refresh(issueOrigin(params.number), environment);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, query: ruled.query, reading: ruled.reading, approval: ruled.approval };
     }),

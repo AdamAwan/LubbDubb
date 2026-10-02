@@ -350,7 +350,7 @@ export class RemoteValidationDesk {
     const digest = queryDigest(check.query, check.presence ?? '');
     if (!accept) {
       this.deps.store.remoteValidation.declineStateQuery(digest, environment.name);
-      this.refresh(originRef, environment);
+      this.refoldApprovals(environment);
       return { check, reading: null, approved: false };
     }
     const reading = await this.readWatch(environment, originRef, checkId);
@@ -363,7 +363,7 @@ export class RemoteValidationDesk {
       rows: reading.rows,
       detail: reading.detail,
     });
-    this.refresh(originRef, environment);
+    this.refoldApprovals(environment);
     return { check, reading, approved: true };
   }
 
@@ -383,34 +383,65 @@ export class RemoteValidationDesk {
   }
 
   /**
-   * A fresh fold's causes onto the rows already on the sheet, written only where they moved, and the
-   * sheet's rows returned. `selected` is the operator's and `matched` the listing's, so neither is
-   * touched, and no row is added or removed. → docs/spec/36-remote-validation.md#the-press
+   * The selected rows a press is about to read, their causes re-folded first. A row whose source has
+   * left the fold — a check declined or superseded since assembly — is not among them.
+   * → docs/spec/36-remote-validation.md#the-press
    *
-   * @public the seam the press and a query's approval re-derive a row's causes through
+   * @public the seam the press re-derives its rows' causes through
    */
-  refresh(goalRef: string, environment: EnvironmentConfig): RemoteSheetRow[] {
+  pressRows(goalRef: string, environment: EnvironmentConfig): RemoteSheetRow[] {
+    return this.refold(goalRef, environment, (row) => row.selected)
+      .filter(({ row, folded }) => folded && row.selected)
+      .map(({ row }) => row);
+  }
+
+  /**
+   * A `state` query ruled on here. The approval is keyed `(digest, environment)`, so every sheet on the
+   * environment is re-folded, and on each only the rows whose approval moved.
+   *
+   * @public the seam the sheet's approval route writes an operator's consent to a state query through
+   */
+  async ruleStateQuery(originRef: string, queryId: string, environment: EnvironmentConfig, accept: boolean) {
+    const ruled = await this.deps.queries.rule(originRef, queryId, environment.name, accept);
+    if (ruled !== null) this.refoldApprovals(environment);
+    return ruled;
+  }
+
+  private refoldApprovals(environment: EnvironmentConfig): void {
+    for (const sheet of this.deps.store.remoteValidation.listRemoteSheets())
+      if (sheet.environment === environment.name)
+        this.refold(sheet.goalRef, environment, (row, plan) => row.awaitingApproval !== plan.awaitingApproval);
+  }
+
+  /** A fresh fold's causes onto the rows `touches` picks; `selected` and `matched` are never touched. */
+  private refold(
+    goalRef: string,
+    environment: EnvironmentConfig,
+    touches: (row: RemoteSheetRow, plan: SheetRowPlan) => boolean,
+  ): { row: RemoteSheetRow; folded: boolean }[] {
     const { remoteValidation } = this.deps.store;
     const fresh = new Map(this.fold(environment, goalRef).map((r) => [r.rowId, r]));
-    const stored = remoteValidation
-      .listRemoteSheetRows()
-      .filter((r) => r.goalRef === goalRef && r.environment === environment.name);
-    const rows = stored.map((row) => {
-      const plan = fresh.get(row.rowId);
-      if (plan === undefined) return row;
+    const out: { row: RemoteSheetRow; folded: boolean }[] = [];
+    const moved: RemoteSheetRow[] = [];
+    for (const stored of remoteValidation.listRemoteSheetRows()) {
+      if (stored.goalRef !== goalRef || stored.environment !== environment.name) continue;
+      const plan = fresh.get(stored.rowId);
+      if (plan === undefined || !touches(stored, plan)) {
+        out.push({ row: stored, folded: plan !== undefined });
+        continue;
+      }
       const { blockedReason, awaitingApproval, idleReason } = plan;
-      return { ...row, blockedReason, awaitingApproval, idleReason };
-    });
-    const moved = rows.filter((row, i) => {
-      const before = stored[i]!;
-      return (
-        row.blockedReason !== before.blockedReason ||
-        row.awaitingApproval !== before.awaitingApproval ||
-        row.idleReason !== before.idleReason
-      );
-    });
+      const row = { ...stored, blockedReason, awaitingApproval, idleReason };
+      if (
+        blockedReason !== stored.blockedReason ||
+        awaitingApproval !== stored.awaitingApproval ||
+        idleReason !== stored.idleReason
+      )
+        moved.push(row);
+      out.push({ row, folded: true });
+    }
     if (moved.length > 0) remoteValidation.saveRemoteSheetRows(goalRef, environment.name, moved);
-    return rows;
+    return out;
   }
 
   /** @public the seam a test seeds a sheet as the assembly would through */

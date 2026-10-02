@@ -836,18 +836,27 @@ exactly the behaviour the deterministic half had before the agent existed. The t
 four predicates the brief does — `runnableSelectors`, `runnableScripts`, `runnableScreens` and
 `runnableDrives` — for the reason [the dispatch](#the-dispatch--rule-remote-validation) states.
 
-**A row's causes are re-folded, not only assembled.** `RemoteValidationDesk.refresh` runs `sheetRows`
-again — through `fold`, the one the assembly uses — and writes each row's `blocked_reason`,
-`awaiting_approval` and `idle_reason` back where they moved. `selected` is the operator's and `matched`
-the listing's, so neither is touched, and no row is added or removed. It runs when a `state` or watch
-query is approved or declined here, so the sheet stops asking for what was just given; and it runs at
-the press once the run is open and the pin has passed, before anything is read, because a tenant
-supplied through the environment raises no event. Without it a cause the sheet was assembled with
-outlives the cause: the press skips every row carrying a reason, so an approval given after assembly
-would never be read, and a press refused for want of a tenant — which writes that reason onto every
-selected row — would leave the press after a tenant is supplied reading none of them. A reason a
-reading wrote — a store nothing could reach — is cleared by the press's re-fold, which is right: a press
-is a re-run, and the read it is about to take answers it again.
+**A row's causes are re-folded, not only assembled.** A `blockedReason` and `awaiting_approval` are
+derived from the row's source — the checks, the approvals here, the tenant — and the source moves after
+assembly, so `RemoteValidationDesk` runs `sheetRows` again (through `fold`, the assembly's own) and
+writes the causes back where they moved. `selected` is the operator's and `matched` the listing's, so
+neither is touched, and no row is added or removed. Two moments do it:
+
+- **A ruling on a query** — `ruleStateQuery` and `ruleWatchQuery`, approve or decline — re-folds every
+  sheet on that environment, because the approval is keyed `(digest, environment)` and not by goal,
+  and on each only the rows whose `awaiting_approval` moved. Any other row keeps what it has, a reason a
+  reading wrote included. The sheet stops asking for what was just given, and asks again for what was
+  withdrawn.
+- **The press** — once the pin has passed and before the run row is opened, so a fold that throws holds
+  no lock — re-folds its **selected** rows and reads only those, because a tenant supplied through the
+  environment raises no event. A row whose source has left the fold — a check declined or superseded
+  since assembly — is not read or counted ([a declined row is not on the sheet](#a-declined-row-is-not-on-the-sheet)).
+  A reason a reading or a refused press wrote on a selected row is cleared by the same fold, which is
+  right: a press is a re-run, and the read it is about to take answers it again.
+
+Without it a cause outlives itself: the press skips every row carrying a reason, so an approval given
+after assembly would never be read, and a press refused for want of a tenant would leave the press after
+one is supplied reading nothing.
 
 **This route runs a cycle**, `validate-locally`'s reason: the run is work, and waiting for the next
 heartbeat spends those minutes on nothing. No other route here does — nothing else schedules anything.
@@ -976,7 +985,8 @@ comma-joined.
 **A listing arm writes a `blocked` _reading_, and never the row's `blockedReason`.** This is the
 distinction the whole step turns on. A `blockedReason` is a cause **no press can overcome** — an
 unpermitted kind, an unapproved query, an area holding the list's own delimiter — and a row carrying
-one is out of every later invocation until somebody amends it. Every reason a listing finds is
+one is out of every later invocation until somebody amends its source, which the next re-fold reads
+([the press](#the-press)). Every reason a listing finds is
 amendable by definition: a reworded area, a restored spec, a suite reorganised back. Written from
 inside a run as a `blockedReason`, a mismatch this afternoon's merge already fixed would be
 permanently unpressable, with nothing red, on exactly the deployments whose suite moves most. A run's
@@ -2336,7 +2346,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | Table                    | One row per                   | Written                                                                                                                                                                                                                                                                                                     |
 | ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one                                                                                                                                                                                                    |
-| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly; `selected` and `blocked_reason` updated in place                                                                                                                                                                                                                       |
+| `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly and where a re-fold moved a row's causes; `selected` and `blocked_reason` updated in place                                                                                                                                                                              |
 | `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it; `task_id`, `report_path`, `listing_path` and `artefacts` written by the dispatch flip, the listing and the report                                                |
 | `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, `started_sha` / `ended_sha` carry the commits the run that took it straddled, and `executed`, `retries`, `duration_ms` and `artefacts` carry what the report said about a browser row |
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
