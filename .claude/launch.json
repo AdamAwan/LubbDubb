@@ -8,6 +8,12 @@
       "port": 4300
     },
     {
+      "name": "cockpit-live",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "GITHUB_TOKEN=$(gh auth token) exec npm run serve"],
+      "port": 4300
+    },
+    {
       "name": "cockpit-demo",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--config", "web/vite.config.ts", "--mode", "demo", "--port", "4301", "--strictPort"],

@@ -4,6 +4,10 @@
 
 `node_modules` is not committed, and **`better-sqlite3` and `node-pty` are native builds**, so a clean
 checkout needs `npm ci` (or `npm install`) before anything runs — and it is not instant.
+Their build steps, and `esbuild`'s binary download, are install scripts, which npm 12 refuses to run
+unless the package is listed in `package.json`'s `allowScripts`. Those three are listed **by name, not
+by version**, so a dependency bump does not quietly bring the block back: without the entry, `npm ci`
+succeeds with a warning and the server fails at its first `require` of a binding that was never built.
 `npm run web:build` bundles the cockpit SPA into `web/dist`, which the server serves in production.
 
 Node 20 or newer (`engines.node: ">=20"`). CI runs Node 22.
