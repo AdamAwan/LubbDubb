@@ -1,7 +1,7 @@
 // → docs/spec/17-cockpit.md#the-panes
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedKind } from '../view/needsYou.js';
-import { GOAL_ASK_TAB } from '../view/goalPage.js';
+import { GOAL_ANCHOR, GOAL_ASK_TAB, GOAL_TAB_OF } from '../view/goalPage.js';
 
 /**
  * Scroll a card of the goal page into view, after the pane that holds it has had a
@@ -41,4 +41,18 @@ export function openGoalForAsk(actions: CockpitActions, ref: string, kind: NeedK
   const pane = GOAL_ASK_TAB[kind];
   if (pane === null) actions.selectGoal(ref);
   else actions.openGoalPane(ref, pane);
+}
+
+/**
+ * The goal's checks, opened from an ask that is about them.
+ *
+ * @public shared by the validate and close-out asks
+ */
+export function openGoalChecks(actions: CockpitActions): void {
+  /* All three, in the order `buildJump` does them: the pane, then the card's own fold, then the
+     scroll two frames later. A jump that skipped the fold would land on a heading and read as a
+     control that did nothing. → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet */
+  actions.openGoalTab(GOAL_TAB_OF.validation);
+  actions.openGoalSection('validation', true);
+  scrollToAnchor(GOAL_ANCHOR.validation);
 }

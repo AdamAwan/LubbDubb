@@ -424,7 +424,7 @@ function shipped(page: GoalPageView): boolean {
   return page.environments.some((e) => e.status === 'reached' || e.status === 'partial');
 }
 
-function livePageChecks(page: GoalPageView): ValidationCheckView[] {
+export function livePageChecks(page: GoalPageView): ValidationCheckView[] {
   return page.checks.filter((c) => c.supersededReason === null);
 }
 

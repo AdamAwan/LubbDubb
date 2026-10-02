@@ -89,7 +89,9 @@ export function SheetOkRow({
           </Button>
         </>
       )}
-      {status === 'running' && <span className="cn-sub">a run is going — the panel below follows it</span>}
+      {status === 'running' && (
+        <span className="cn-sub">a run is going — its panel on the Validate tab follows it</span>
+      )}
       {declining === null && (status === 'needs-you' || status === 'open') && (
         <span className="cn-sub">{scopeLine(sheet.okable)}</span>
       )}

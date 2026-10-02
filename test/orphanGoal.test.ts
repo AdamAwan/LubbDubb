@@ -10,6 +10,7 @@ import type { AppState, Issue } from '../web/src/types.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import { orphanCount, orphanGoal } from '../web/src/view/orphanGoal.js';
 import { isContainerType } from '../web/src/issueGroups.js';
+import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -71,15 +72,6 @@ const render = (v: CockpitView): string =>
       children: createElement(ConsoleRoot, { view: v, actions }),
     }),
   );
-
-function decode(html: string): string {
-  return html
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
-}
 
 test('only a tracker that reports an orphan is an orphan', () => {
   const state = stateWith();

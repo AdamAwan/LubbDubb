@@ -1251,8 +1251,11 @@ is** — every environment's reach verdict, with how long ago the goal arrived t
 `environmentArrivals` (the arrival record, never the reach row's `at`, which is the latest probe) —
 **the checks**, one line each with its state, and **the pull requests** that merged for it. The full
 check rows it used to draw were the validate ask's controls on a question that is no longer about
-recording readings, and the desk's two paragraphs said the same four things as prose. Where the
-snapshot cannot build the goal's page, the desk's prose is the body.
+recording readings, and the desk's two paragraphs said the same four things as prose. A check is
+`CheckLine`, the sheet's own line, which opens the goal's checks; a pull request is `closedPrRow`,
+the cockpit's one pull-request row. **On the goal page's Close pane it draws only its answers**: the
+pane draws the reach and the record directly below, and the summary above them would be the pane
+twice. Where the snapshot cannot build the goal's page, the desk's prose is the body.
 
 The same reading applies to two more asks, and the rule it follows in each is: **draw the thing the
 answer is about, keep the desk's prose, and never re-derive what the server already decided.**

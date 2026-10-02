@@ -20,12 +20,7 @@ export function DesktopLink({
   prompt: string;
   explain: string;
   ready?: string;
-  label?:
-    | 'Open in Claude Code'
-    | 'Question?'
-    | 'Check my description'
-    | 'Not ready? Talk it through'
-    | 'Stuck? Talk it through';
+  label?: string;
   control?: boolean;
   /** Beside a full-size press, at its size rather than the small one a link usually wears. */
   fullSize?: boolean;
@@ -47,6 +42,6 @@ export function DesktopLink({
   return asControl ? (
     <BareLink className={CONTROL_CLASS} {...link} />
   ) : (
-    <LinkButton {...link} ghost {...(fullSize ? {} : { size: 'small' as const })} />
+    <LinkButton {...link} ghost size={fullSize ? undefined : 'small'} />
   );
 }

@@ -149,22 +149,16 @@ function AskItems({
 }): JSX.Element {
   return (
     <>
-      {groupAsks(rows, view.state).map((item) =>
-        item.kind !== 'assign' && below?.has(item.row.id) ? (
-          <BelowLine key={item.row.id} row={item.row} anchor={below.get(item.row.id) ?? ''} now={view.now} />
-        ) : item.kind === 'assign' ? (
-          <AssignGroup key={`assign:${item.first.id}`} asks={item.asks} actions={actions} />
+      {groupAsks(rows, view.state).map((item) => {
+        if (item.kind === 'assign')
+          return <AssignGroup key={`assign:${item.first.id}`} asks={item.asks} actions={actions} />;
+        const anchor = below?.get(item.row.id);
+        return anchor !== undefined ? (
+          <BelowLine key={item.row.id} row={item.row} anchor={anchor} now={view.now} />
         ) : (
-          <NeedsBand
-            key={item.row.id}
-            row={item.row}
-            view={view}
-            actions={actions}
-            line={line}
-            checksBelow={!line && item.row.kind === 'validate'}
-          />
-        ),
-      )}
+          <NeedsBand key={item.row.id} row={item.row} view={view} actions={actions} line={line} checksBelow={!line} />
+        );
+      })}
     </>
   );
 }

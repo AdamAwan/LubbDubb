@@ -33,7 +33,7 @@ export function NeedsBand({
   row: NeedRow;
   view: CockpitView;
   actions: CockpitActions;
-  /** This band is drawn on the goal page, whose Checks pane holds the same rows. */
+  /** This band is drawn on the goal page, which draws what the ask is about below it — the checks, the reach. */
   checksBelow?: boolean;
   /**
    * Draw the ask as one row rather than the whole thing, answered on the row where
