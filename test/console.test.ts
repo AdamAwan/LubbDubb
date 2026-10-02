@@ -252,6 +252,20 @@ test('a dropped socket draws no gauge, no rail and no situation area', () => {
   assert.ok(!html.includes('cn-sit'), 'the situation area must not render while offline');
 });
 
+test('the ident closes the bar, and its logo flat-lines when the link drops', () => {
+  for (const connected of [true, false]) {
+    const html = render(view({ connected }));
+    const ident = html.indexOf('cn-ident');
+    assert.ok(ident > html.indexOf('cn-reads'), `the ident is not after the readings with connected=${connected}`);
+    assert.ok(html.includes('Lubb<b>Dubb</b>'), `no wordmark with connected=${connected}`);
+    assert.equal(
+      html.includes('cn-logo-alive'),
+      connected,
+      `the logo's heartbeat does not follow connected=${connected}`,
+    );
+  }
+});
+
 const COMPOSE_TITLE = 'Write an issue about LubbDubb';
 
 test('the bar offers LubbDubb’s own tracker, online and off', () => {

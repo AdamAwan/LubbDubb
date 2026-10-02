@@ -5404,7 +5404,7 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
+The strip carries the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
 chip where there is an outage to report, **two
 gauges** — [Usage](#the-usage-chip) and **Local**, in one pill, with a third **tenant** half where an
 environment declares a tenant command ([36](36-remote-validation.md#where-an-operator-sees-it)) — and a **menu** holding the seven
@@ -5445,6 +5445,28 @@ thing that could be counting down is the next scan. The word cost a third of the
 it was in. The sentence it carried is the `title`, which is where the two states that are _not_ a
 countdown explain themselves. Its `line-height` is stated with its size rather than left to the shorthand
 because `.cn button` resets `font` to `inherit` at (0,1,1) and would otherwise hand it the bar's 1.45.
+
+### The ident
+
+**The ident closes the bar on the right** — the robot logo and the `LubbDubb` wordmark, after the menu
+and a `.cn-sep`. The bar opens on the nav, which is what an operator reaches for; the ident is read
+once, so it takes the corner that holds nothing else.
+
+The logo is `Logo` (`web/src/components/Logo.tsx`), drawn inline rather than loaded as an image so that
+every colour is a token: the head and antenna stalk are `--cn-fg`, the eyes `--cn-panel`, and the bolts,
+antenna tip and heartbeat `--cn-red`. It therefore follows every preset — a dark head on Light, a light
+one on Dark — with no colour of its own. The wordmark is `Lubb` in the ink and `Dubb` in `--cn-red`, at
+16px and weight 800.
+
+**The logo is the link lamp.** While the socket is up the heartbeat runs along the mouth and the antenna
+blinks; when it drops, the mouth is a flat line and nothing moves. That replaces the green dot that used
+to sit before the name, and the name's `title` says which state it is in. Under
+`prefers-reduced-motion` the live logo is drawn still, with the heartbeat intact, so the two states stay
+apart by shape rather than motion.
+
+The browser tab icon is `web/public/favicon.svg` — the same robot, static, with its own
+`prefers-color-scheme` rule because a favicon is outside the page and no token reaches it. The source
+artwork for elsewhere (the README) is in `docs/brand/`.
 
 ### The bar's menu
 
@@ -5865,7 +5887,7 @@ and that the console returns by itself. `test/console.test.ts` asserts that no g
 situation area survive the drop.
 
 **The ident survives it whole, tracker link included.** `Ident` is one component drawn by both arms of
-`TopBar` — the lamp turning red is the only difference — because a socket that just went down is a
+`TopBar` — the logo flat-lining is the only difference — because a socket that just went down is a
 moment an operator has something to report, and a way to report it that is only there while the harness
 is healthy is missing exactly then. Both arms are asserted, since the offline one is the return a change
 to the bar forgets.
