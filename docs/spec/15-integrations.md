@@ -718,7 +718,14 @@ Behaviour worth knowing:
   writes the stale list back. The **modify matches case-insensitively**: Azure tags are matched
   case-insensitively and stored under the casing of whichever tag definition the project already
   holds, so a tag the harness wrote as `lubbdubb-watch` can come back as `LubbDubb-Watch`, and an
-  exact-match removal drops nothing while the PATCH still returns 200. The **write is a single
+  exact-match removal drops nothing while the PATCH still returns 200. The **read folds case too**:
+  the provider is handed the harness's own tags (`harnessTags`, the watch label) and rewrites any
+  tag matching one case-insensitively into the configured casing, in `snapshot` and
+  `listTicketHistory`, so the pickup gate, `isWatched` and the ownership check — all exact matches —
+  see `lubbdubb-watch` whatever the project stores; without it `labelsAddedByViewer` is never built
+  and, with `userId` set, nothing is picked up. Tags that are not the harness's keep their stored
+  casing, and the authorship walk (`viewerAddedTags`) compares tag names case-insensitively, so a
+  revision that only re-cases a tag neither adds nor removes it. The **write is a single
   operation on the field**: Azure refuses a JSON-patch that names one field twice — `VS403691: a
 field cannot be updated more than once in the same update` — so the two-op `remove`-then-`add`
   that an earlier fix used never reached the board at all, and the watch tag could neither go on nor
