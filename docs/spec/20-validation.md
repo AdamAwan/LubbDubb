@@ -1015,6 +1015,24 @@ That is the whole of the criteria's reading at delivery, and it holds nothing: a
 `validation-failed`'s, never a shortfall ([When a check fails](#when-a-check-fails)).
 → [08](08-planning.md#the-criteria-at-delivery)
 
+### Rationale
+
+A check's `satisfies` says **which** criterion it answers; its `rationale` says **why it is the right
+proof of it** — one line, in the author's words, about what in the change makes this the test that would
+catch it: _the retry is the whole change_, _the old bug was a silent hang_. Without it the operator is
+handed a list of checks and has to work out for themselves why each one is there, which is the question
+they are least placed to answer at the moment they are asked to OK the page
+([36](36-remote-validation.md#the-ok)).
+
+It is optional and, where present, non-empty — a blank one is refused rather than stored as a line that
+says nothing — and a check written before the field shows its `satisfies` alone. The plan document's `validation`
+block, `validation_plan` and `validation_amend` all carry it through `ValidationCheckSchema`; the
+authoring briefing asks for one per check in a line **appended** after the criteria
+(`authoringBriefing`). Like `satisfies`, a re-declaration that omits it keeps the line it had. It is
+commentary, not the check: it is **not** part of a rewording, so editing it never resets a passed
+check. The column is `validation_checks.rationale`, and null reads as none written, true of every row
+before it. The accept card, the goal's check rows and the check digest draw it first, as _Why_.
+
 ## Saying so on the bench
 
 A goal parked as delivered is the one moment a check becomes runnable, and that moment used to
@@ -1220,7 +1238,8 @@ Both writers merge on the check id, on the same terms `upsertPlanParts` folds th
 | **Drop**       | **Superseded, not deleted** — the row stays, greyed, outside the verdict, with the reason on it. | The same settlement an amended plan gives a part it dropped, and what keeps the letter taken. An agent that cannot pass a check must not be able to make it disappear.             |
 
 A rewording is judged on `title`, `do`, `expect` and `proof` alone. `uses`, `covers` and
-`fleetCandidate` are references and a suggestion, and a result is not about them.
+`fleetCandidate` are references and a suggestion, and `rationale` is commentary — a result is not about
+them.
 
 **`proof` is on that list rather than off it**, and it is the one entry that is not obviously wording.
 It is there because it is part of the terms the reading was taken under: a pass earned by handing back

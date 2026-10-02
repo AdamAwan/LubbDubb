@@ -74,6 +74,7 @@ export function proposedCheckSet(checks: readonly ValidationCheck[]): ProposedCh
     title: check.title,
     expect: check.expect,
     proof: check.proof ?? '',
+    rationale: check.rationale ?? '',
     steps: check.steps.map((step) => ({ kind: step.kind, do: step.do, actor: step.actor, why: step.why })),
     fleetCandidate: check.fleetCandidate,
     candidateWhy: check.candidateWhy,

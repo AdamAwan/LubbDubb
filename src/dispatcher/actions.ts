@@ -149,6 +149,7 @@ const ActionSchema = z.discriminatedUnion('type', [
           title: z.string().min(1),
           expect: z.string(),
           proof: z.string().default(''),
+          rationale: z.string().default(''),
           steps: z
             .array(
               z.object({

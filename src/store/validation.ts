@@ -56,6 +56,9 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // The goal criteria the check answers, JSON. Null reads as none, which is true of every row
     // written before the column and needs no backfill. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
     satisfies: 'TEXT',
+    // Why the check proves its criteria, one line. Null reads as none written, which is true of every
+    // row from before the column and needs no backfill. → docs/spec/20-validation.md#rationale
+    rationale: 'TEXT',
   },
   validation_resources: {},
   // Shipped as a fresh CREATE TABLE and declared here anyway: a table being new once does not keep
@@ -495,11 +498,11 @@ export class ValidationStore {
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            satisfies, fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
            result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note,
-           steps, capture, proof, created_at, updated_at)
+           steps, capture, proof, rationale, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @satisfies, @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
            @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote,
-           @steps, @capture, @proof, @createdAt, @updatedAt)
+           @steps, @capture, @proof, @rationale, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, satisfies=excluded.satisfies, fleet_candidate=excluded.fleet_candidate,
@@ -509,7 +512,7 @@ export class ValidationStore {
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note,
-           steps=excluded.steps, capture=excluded.capture, proof=excluded.proof,
+           steps=excluded.steps, capture=excluded.capture, proof=excluded.proof, rationale=excluded.rationale,
            updated_at=excluded.updated_at`,
       )
       .run({
@@ -517,6 +520,7 @@ export class ValidationStore {
         uses: JSON.stringify(check.uses),
         covers: JSON.stringify(check.covers),
         satisfies: JSON.stringify(check.satisfies ?? []),
+        rationale: check.rationale ?? null,
         fleetCandidate: check.fleetCandidate ? 1 : 0,
         revision: check.revision === null ? null : JSON.stringify(check.revision),
         steps: check.steps.length === 0 ? null : JSON.stringify(check.steps),

@@ -213,6 +213,7 @@ export function CheckBlock({
           </div>
         )}
         <CheckDetail
+          rationale={check.rationale}
           doing={renderMarkdown(check.do, refUrls)}
           steps={check.steps}
           foldSteps

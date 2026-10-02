@@ -1,6 +1,7 @@
 # Proposal — watching for long enough
 
-**Status: under discussion, after the [arrival sheet](arrival-plan.md).** Nothing here is built.
+**Status: under discussion.** Nothing here is built. It follows the validation page an operator answers
+once ([36](../spec/36-remote-validation.md#the-ok)).
 
 ## The problem
 

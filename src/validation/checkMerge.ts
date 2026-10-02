@@ -24,7 +24,7 @@ export function mergeCheck(args: {
     proof: input.proof,
     uses: input.uses,
     covers: input.covers,
-    satisfies: input.satisfies ?? prev?.satisfies ?? [],
+    ...keptWhenOmitted(input, prev),
     fleetCandidate: input.fleetCandidate,
     candidateWhy: input.candidateWhy,
     actor: reading.actor,
@@ -145,5 +145,16 @@ function priorWording(prev: ValidationCheck): ValidationRevision {
     proof: prev.proof,
     state: prev.state === 'unrun' ? null : prev.state,
     note: prev.resultNote,
+  };
+}
+
+/** What a re-declaration that says nothing about them keeps: the criteria a check answers, and why. */
+function keptWhenOmitted(
+  input: Pick<ValidationCheckInput, 'satisfies' | 'rationale'>,
+  prev: ValidationCheck | undefined,
+): Pick<ValidationCheck, 'satisfies' | 'rationale'> {
+  return {
+    satisfies: input.satisfies ?? prev?.satisfies ?? [],
+    rationale: input.rationale ?? prev?.rationale ?? null,
   };
 }

@@ -1029,6 +1029,8 @@ export interface ValidationCheck {
    * Absent is none. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
    */
   satisfies?: string[];
+  /** One line: why this check proves the criteria it satisfies. Absent or null is none written. → docs/spec/20-validation.md#rationale */
+  rationale?: string | null;
   fleetCandidate: boolean;
   candidateWhy: string | null;
   actor: ValidationCheckActor;
@@ -1088,6 +1090,7 @@ export interface ValidationCheckInput {
   uses: string[];
   covers: string[];
   satisfies?: string[];
+  rationale?: string | null;
   fleetCandidate: boolean;
   candidateWhy: string | null;
   /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
@@ -1148,6 +1151,8 @@ export interface ProposedCheck {
   expect: string;
   /** What a pass must hand back. Empty is *none demanded* — the card draws nothing. */
   proof: string;
+  /** Why this check proves its criteria. Empty or absent is none written. */
+  rationale?: string;
   steps: { kind: ValidationStepKind; do: string; actor: ValidationCheckActor; why: string | null }[];
   /** The planner's nomination, with its reason. Advice: the hand-over is still the operator's. */
   fleetCandidate: boolean;

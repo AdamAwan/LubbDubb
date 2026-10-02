@@ -157,6 +157,10 @@ export function authoringBriefing(input: {
         'answers in its `satisfies`, copying each exactly as it is listed above. A criterion no check names is ' +
         'drawn as a gap on the sheet and on the close-out. The bar for a check still holds: where a criterion ' +
         'is settled by the diff or the suite, the check that answers it can say so in its `do`.\n',
+      'Give every check a `rationale`: one line saying why it is the right proof of the criteria it ' +
+        'satisfies — what about the change makes this the test that would catch it ("the retry is the ' +
+        'whole change", "the old bug was a silent hang"). The operator reads it beside the check when ' +
+        'they decide whether to run the page.\n',
     );
   }
 

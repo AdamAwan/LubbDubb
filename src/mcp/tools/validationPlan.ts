@@ -78,6 +78,10 @@ const ValidationPlanInput = z.object({
               'criterion needs at least one check naming it.',
           )
           .optional(),
+        rationale: z
+          .string()
+          .describe('One line: why this check is the right proof of the criteria it satisfies.')
+          .optional(),
         fleetCandidate: z
           .boolean()
           .describe(
