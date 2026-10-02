@@ -1,8 +1,7 @@
 import { useState, type JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { OkStatus, RemoteSheetView } from '../types.js';
+import type { OkScope, OkStatus, RemoteSheetView } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { CONTROL_CLASS } from '../components/controls.js';
 import { Button } from '../components/button.js';
 import { Tag, type TagTone } from '../components/tag.js';
 
@@ -36,10 +35,12 @@ export function SheetOkRow({
   const { status, why } = sheet.ok;
   const [declining, setDeclining] = useState<string | null>(null);
   const env = sheet.environment;
+  const okText = declining === null ? okLabel(status, sheet.okable) : null;
   const ok = (label: string) => (
     <AsyncButton
       usage="validation.create"
-      className={`${CONTROL_CLASS} primary`}
+      tone="primary"
+      size="small"
       onClick={() => actions.giveRemoteOk(issueNumber, env)}
       onRefused={onRefused}
       title={`Approve this page's queries on ${env}, accept its checks, and run everything on it as soon as ${env} is free`}
@@ -53,9 +54,7 @@ export function SheetOkRow({
       <Tag tone={STATUS[status].tone} fill={status === 'needs-you'}>
         {STATUS[status].word}
       </Tag>
-      {status === 'needs-you' && ok('OK, run it')}
-      {(status === 'open' || status === 'not-here') && sheet.okable > 0 && ok('OK, run it')}
-      {status === 'done' && ok('Run again')}
+      {okText !== null && ok(okText)}
       {status === 'queued' && (
         <AsyncButton usage="validation.stop" onClick={() => actions.withdrawRemoteOk(issueNumber, env)}>
           Withdraw OK
@@ -92,7 +91,37 @@ export function SheetOkRow({
         </>
       )}
       {status === 'running' && <span className="cn-sub">a run is going — the panel below follows it</span>}
+      {declining === null && showsScope(status, sheet.okable) && (
+        <span className="cn-sub">{scopeLine(sheet.okable)}</span>
+      )}
       {why !== null && <span className="cn-sub">{why}</span>}
     </div>
   );
+}
+
+function asksFor(scope: OkScope): boolean {
+  return scope.checks + scope.queries > 0;
+}
+
+function okLabel(status: OkStatus, scope: OkScope): string | null {
+  if (status === 'needs-you') return 'OK, run it';
+  if (status === 'done') return 'Run again';
+  return (status === 'open' || status === 'not-here') && asksFor(scope) ? 'OK, run it' : null;
+}
+
+function showsScope(status: OkStatus, scope: OkScope): boolean {
+  return (status === 'needs-you' || status === 'open') && asksFor(scope);
+}
+
+function scopeLine({ checks, queries, approvals }: OkScope): string {
+  const parts = [
+    ...(checks > 0 ? [plural(checks, 'check')] : []),
+    ...(queries > 0 ? [plural(queries, 'state query', 'state queries')] : []),
+  ];
+  const runs = `runs ${parts.join(' and ')}`;
+  return approvals > 0 ? `${runs} · approves ${plural(approvals, 'query', 'queries')}` : runs;
+}
+
+function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
 }

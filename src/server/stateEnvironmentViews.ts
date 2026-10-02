@@ -14,6 +14,7 @@ import type {
   IssueShortfall,
   Plan,
   PlanPart,
+  RemoteSheetRow,
   ValidationCheck,
   TaskSummary,
   WatchReading,
@@ -22,6 +23,7 @@ import type {
 import type {
   GoalReachView,
   GoalWatchView,
+  OkScope,
   RemoteReadingView,
   RemoteSheetView,
   TenantCommandView,
@@ -226,7 +228,7 @@ export function buildRemoteSheets(
       })),
       run,
       intent,
-      okable: rows.filter(okable).length,
+      okable: okScope(rows.filter(okable)),
       ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,
@@ -269,4 +271,12 @@ function remoteCaptureUrl(
   if (reading.capture === null || reading.runId === null) return null;
   const base = `/validation-captures/run/${encodeURIComponent(reading.runId)}/${encodeURIComponent(reading.rowId)}`;
   return signer ? `${base}?tk=${encodeURIComponent(signer(reading.runId, reading.rowId))}` : base;
+}
+
+function okScope(rows: readonly RemoteSheetRow[]): OkScope {
+  return {
+    checks: rows.filter((r) => r.kind === 'check').length,
+    queries: rows.filter((r) => r.kind === 'state').length,
+    approvals: rows.filter((r) => r.awaitingApproval).length,
+  };
 }

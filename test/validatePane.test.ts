@@ -70,7 +70,7 @@ function sheet(over: Partial<RemoteSheetView> = {}): RemoteSheetView {
     rows: [row()],
     run: null,
     intent: null,
-    okable: 1,
+    okable: { checks: 1, queries: 0, approvals: 0 },
     ok: { status: 'needs-you', why: null },
     tenant: {
       tenant: 'validation-1',

@@ -557,14 +557,20 @@ export interface GoalEnvironmentReachView extends GoalEnvironmentReach {
  * One goal's sheet against one environment, with every row's reading folded in on the server. The
  * cockpit renders what the server read; it never re-decides an outcome.
  */
+export interface OkScope {
+  checks: number;
+  queries: number;
+  approvals: number;
+}
+
 export interface RemoteSheetView extends RemoteSheet {
   rows: RemoteSheetRowView[];
   /** The latest run against this environment, live or ended. Null before anything was ever pressed. */
   run: RemoteRunView | null;
   /** The operator's OK to run it, and what became of it. Null before one was ever given. */
   intent: RemoteRunIntent | null;
-  /** How many rows there are to OK — none, and the page asks for nothing. */
-  okable: number;
+  /** What an OK would run, by kind, and how many of its queries it approves — all zero, and the page asks for nothing. */
+  okable: OkScope;
   /** Where the page stands, worked out on the server — the same reading the `validate` row holds on. */
   ok: OkStanding;
   /** Which tenant this sheet is put to, how old it is, and why there is none. */
