@@ -6036,25 +6036,13 @@ line of its own under the board. Folding them would tell a reader the tracker sa
 parent when the truth is that nobody could read the link — the same distinction the tickets tab draws
 by leaving unresolved rows [flush with no heading](#features-are-headings-not-rows).
 
-**A goal with no parent Feature is promoted to a card in the same list**, never swept into an "other
-work" pile. It draws only the parts that apply: no standing — the harness writes accounts of
-Features, and the card says `no account — the fleet summarises Features, not stories` rather than
-substituting the appraiser's summary, which is what the goal _asks for_ and not where it is; its own
-delivery or shortfall quotation where one stands; its reach off the snapshot's per-goal fold; its
-landings out of the bucket it came with; its holds and its agents from the same view module the
-Feature cards read. The frame is dashed, as the tickets tab hatches "no feature". There is no bar
-with a denominator of one dressed as progress — the standing chip says the one thing the bar would.
-
-**A promoted card the tracker has closed is not drawn.** A card on this board is a claim on somebody's
-next twenty minutes, and a story that hangs off nothing and is closed asks for none: it is history,
-and it crowds out the cards that are not. Only the promoted cards are filtered — a **Feature** stays on
-the board whatever state the tracker has it in, because a closed container is a portfolio reading in
-its own right, and a child under a Feature stays in its parent's counts, which are the progress the
-bar is drawn from. Closed orphans are dropped from the bucket's rows, its counts and its briefing —
-**never from its money**, which keeps folding them in below. Spend that answers to no container is the
-one thing this page must not quietly lose, and a hidden card
-is exactly the shape that loses it: so where every orphan is closed the bucket still stands, with no
-rows, no count, and the full figure in the header.
+**The board draws Features and nothing else.** A story with no parent Feature is not a card of its
+own: it was, once — _promoted_ into the same list, dashed, with its delivery quotation where an
+account goes — and a board of Features with stories standing up between them answered a question
+nobody opened the page to ask. A story that hangs off nothing is reached where every story is, on the
+tickets tab under "no feature" and on its own goal page; `?card=` naming one says it is not on the
+board. The payload still carries the orphan bucket, because its **money** is a reading this page must
+not lose.
 
 **The orphan bucket's money is the most uncomfortable reading on the page, and it moves to the
 header.** Work answering to no container is invisible at portfolio level by construction, and a board
@@ -6096,8 +6084,7 @@ type (`isContainerType`), `ConsoleRoot` draws `FeaturePage` instead: the same pa
 and the goal page stands.
 
 **The page carries one deep link: _Open in Claude Code_ with `/lubbdubb:feature <n> `** (`featurePrompt`,
-`web/src/cockpit/desktopLink.ts`), drawn by `FeatureCard` on its page and only on a Feature — a promoted
-goal's page has the goal's own. Like the goal's `ask`, it fills the composer and waits, because it starts a
+`web/src/cockpit/desktopLink.ts`), drawn by `FeatureCard` on its page. Like the goal's `ask`, it fills the composer and waits, because it starts a
 conversation rather than a job ([11](11-mcp-tools.md#talking-about-a-feature)).
 
 The detail is three columns from 1200px and one below: **its order, and what landed** (the story
@@ -6113,8 +6100,8 @@ under no wave headings of its own: the first column already lists the waves, and
 carries its own _waits on_ line. The first column is **drawn only when it has
 something in it** — both halves of it render nothing of their own when they are empty, so with the
 account on the brief it would otherwise be a heading over blank space, which is the one thing the
-[account's own fields](#the-feature-summary) are careful never to be. Without it the card is the
-two-column shape a promoted goal already uses. The briefing's other two lists are gone as
+[account's own fields](#the-feature-summary) are careful never to be. Without it the card falls back to
+two columns. The briefing's other two lists are gone as
 lists: what is being worked is the presence chips on the brief, and what is blocked is the middle
 column, which knows more than the two kinds the briefing had.
 
@@ -6146,15 +6133,11 @@ names and half-sentences answers _how is it going_ for thirty Features at once. 
 dense shape was not available until the account had a line short enough to put on one.
 
 **A row opens the same page a brief does** ([the feature page](#the-feature-page)) — the
-density is a shape of the list, and the page is not part of the list. A promoted goal
-collapses to the same row, dashed, with its delivery or
-shortfall quotation where a Feature's headline goes — a board of rows with full cards
-standing up in it reads as a rendering fault rather than as a distinction.
+density is a shape of the list, and the page is not part of the list.
 
 **The default is by size, and the operator outranks it.** `?density=` takes `brief` or
 `rows`, and its absent value is `auto`: briefs at **`BRIEFS_AT_MOST`** cards or fewer
-and rows past it, counting promoted goals, since what makes a page long is its length
-and not what its rows are. Automatic because the right answer here is a property of the
+and rows past it. Automatic because the right answer here is a property of the
 board rather than a preference — an operator should not have to discover a setting to be
 shown a page they can read — and overridable in **both** directions because the
 threshold is a guess about a reader and the reader is right there.
@@ -6444,7 +6427,7 @@ key is a count of facts, and none says a Feature is in trouble. The default — 
 the most work. The alternatives are `moved` (newest landing first, `never landed` last), `done`
 (delivered over total) and `spend` (unmeasured last, because null is not a small number). "Closest to
 done" is offered and is **never the default**: it puts the Feature most blocked on the operator at the
-bottom of the page that exists to surface it. Promoted goals sort on the same keys. The server's own
+bottom of the page that exists to surface it. The server's own
 order on the payload (`byWantsYouThenSize`) is what the cockpit starts from; it re-sorts on read.
 
 The feature page's stories carry a filter — `open` / `done` / `all`, on `Place` as `?prs=` — and under

@@ -549,7 +549,11 @@ test('a row says the one thing a scan needs, and an opened card is a page of its
   const cards = repoText('web', 'src', 'components', 'featureCards.tsx');
 
   assert.match(cards, /rows \? \(\s*<FeatureRow/, 'in rows every Feature is a row');
-  assert.match(cards, /rows \? \(\s*<GoalRow/, 'promoted goals collapse too');
+  assert.doesNotMatch(
+    cards,
+    /board\.orphans/,
+    'a story with no Feature is never a card of its own — the board draws Features and nothing else',
+  );
   assert.match(
     board,
     /view\.featureMode === 'board' && view\.featureCard !== null\) \{\s*return \(\s*<FeatureDetail/,

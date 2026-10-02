@@ -8898,11 +8898,6 @@ select:disabled {
 .cn-fb-card.cn-fb-wants {
   border-color: var(--cn-amber-line);
 }
-/* A goal promoted to stand on its own: dashed, as the tickets tab hatches "no
-   feature" — the frame says it answers to no container. */
-.cn-fb-promoted {
-  border-style: dashed;
-}
 /* A paused Feature rests rather than leaves: the card keeps its place in the
    list and its whole reading, softened until the pointer or the keyboard asks
    for it. Blurred and not hidden, because a pause is a standing statement an
@@ -9006,12 +9001,6 @@ select:disabled {
 }
 /* A paused Feature rests here too, but by ink alone: the blur the card wears needs a
    height to be legible as softening rather than as a rendering fault. */
-/* A story that hangs off nothing has no account, and says so where a Feature's
-   headline goes rather than leaving the line half empty. */
-.cn-fb-row-none {
-  font-style: italic;
-  color: var(--cn-fg-faint);
-}
 .cn-fb-row-rested {
   opacity: 0.5;
 }
@@ -9037,9 +9026,6 @@ select:disabled {
   align-self: stretch;
   border-radius: 2px;
   flex: none;
-}
-.cn-fb-hue-none {
-  background: var(--cn-line-hi);
 }
 .cn-fb-top {
   display: flex;
@@ -9113,17 +9099,13 @@ select:disabled {
   overflow-wrap: anywhere;
 }
 /* A card with no account says so in the summariser's slot, quietly: a Feature
-   nobody has summarised and a story the fleet never summarises are ordinary. */
+   nobody has summarised yet is ordinary. */
 .cn-fb-noline {
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
   font-style: italic;
   color: var(--cn-fg-faint);
-}
-.cn-fb-noline .cn-fb-said {
-  display: inline;
-  font-style: normal;
 }
 .cn-fb-stamp {
   margin: 0;
