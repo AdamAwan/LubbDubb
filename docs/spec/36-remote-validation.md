@@ -930,8 +930,10 @@ page does not wait for it. Last an **intent** is written: one `remote_run_intent
 
 **The fingerprint is the page as the operator read it**: every row the fold holds now, a check by its title,
 `do`, `expect`, `proof` and steps, a query by its digest. A re-authored set, an amended check or an
-edited query moves it; a reading, a selection, an approval or the one-off-script sweep's stamp does not (a
-step's `scriptSweptAt` is left out; its `script` is in, so an edited script lapses the OK). An intent whose fingerprint has
+edited query moves it; a reading, a selection, an approval or the sweep's own stamp does not. A
+step's `script` is in, so an edited one-off script lapses the OK; the grace sweep nulling a script does
+too — rare, since it runs weeks after delivery, and the safe direction, since a lapsed OK asks again
+where a stale one would run code nobody read. An intent whose fingerprint has
 moved is **not pressed**: it lapses to `withdrawn` with a note saying the page changed, so the page
 asks for its OK again. Consent to a page is
 not consent to the page it became.
@@ -956,7 +958,8 @@ accepted, so a check declined on the card, or superseded since, can still have a
 skips it (`pressRows`), and the page does too: `pageRows` leaves it out of what is drawn, counted and
 asked about, so a declined row never holds the bench. A `state` query deleted from the goal takes its
 sheet rows with it (`deleteStateQuery`), and a page on an environment that no longer declares a
-`validate` block reads _nothing_ to OK, as the hold does.
+`validate` block reads _nothing_ to OK, as the hold does — `okStanding` owns that rule — though a run
+still going there reads _running_ and a waiting OK _queued_, with its note.
 
 **Where a page stands is worked out once, on the server.** `okStanding` reads the intent, the latest
 run and the rows to OK into _needs you_, _queued_, _running_, _done_, _not validating here_ — or

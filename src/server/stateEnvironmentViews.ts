@@ -226,7 +226,7 @@ export function buildRemoteSheets(
       })),
       run,
       intent,
-      okable: validate === undefined ? 0 : rows.filter(okable).length,
+      okable: rows.filter(okable).length,
       ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,

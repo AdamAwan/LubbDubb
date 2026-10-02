@@ -458,6 +458,17 @@ test('the validate row is held open while a page awaits its OK, though no check 
     'a row the desk settled comes back when a page needs the OK again — a run the pin abandoned',
   );
   assert.deepEqual(ask(settled('done', 'marked by you')), [], 'a row the operator closed stays closed');
+  assert.equal(
+    ask(settled('done', 'every check is recorded, waived, or with the fleet — nothing is left for you to run'))[0]
+      ?.kind,
+    'reopen',
+    'and so does one the desk settled before it marked its settles',
+  );
+  assert.deepEqual(
+    validationReadyPass({ ...input, existing: [settled('done', `${DESK_SETTLED}every check is recorded`)] }),
+    [],
+    'a desk-settled done row does not come back for anything but a page needing its OK',
+  );
   assert.deepEqual(ask(settled('declined', 'not now')), [], 'and so does one they declined');
 });
 

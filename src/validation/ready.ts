@@ -78,7 +78,7 @@ function deliveryStep(
     };
   }
   if (existing && existing.status !== 'open') {
-    if (!deskSettled(existing)) return null;
+    if (!reopens(existing, awaiting)) return null;
     return {
       kind: 'reopen',
       taskId: existing.id,
@@ -94,6 +94,23 @@ function deliveryStep(
     detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
   };
 }
+
+/**
+ * A row the desk declined comes back when the set is released, as it always did. A row the desk
+ * settled done comes back only when a page needs the OK again — a run the pin abandoned, an OK the page
+ * outgrew — and never for a check, which is how it read before. A row the operator closed or declined
+ * stays as they left it. The unmarked resolutions are the desk's own from before it marked them.
+ * → docs/spec/20-validation.md#saying-so-on-the-bench
+ */
+function reopens(existing: HumanTask, awaiting: readonly string[]): boolean {
+  if (existing.status !== 'done') return deskSettled(existing);
+  const byDesk = deskSettled(existing) || UNMARKED_SETTLES.has(existing.resolution ?? '');
+  return byDesk && awaiting.length > 0;
+}
+
+const NO_CHECKS = 'the plan no longer asks for any checks';
+const NOTHING_LEFT = 'every check is recorded, waived, or with the fleet — nothing is left for you to run';
+const UNMARKED_SETTLES: ReadonlySet<string> = new Set([NO_CHECKS, NOTHING_LEFT]);
 
 function awaitingOkOf(input: ValidationReadyInput, originRef: string): readonly string[] {
   return input.awaitingOk.get(originRef) ?? [];
@@ -159,12 +176,7 @@ function sheetLines(rows: readonly RemoteSheetRow[]): string[] {
 }
 
 function settledResolution(total: number): string {
-  return (
-    DESK_SETTLED +
-    (total === 0
-      ? 'the plan no longer asks for any checks'
-      : 'every check is recorded, waived, or with the fleet — nothing is left for you to run')
-  );
+  return DESK_SETTLED + (total === 0 ? NO_CHECKS : NOTHING_LEFT);
 }
 
 function count(n: number, noun: string): string {

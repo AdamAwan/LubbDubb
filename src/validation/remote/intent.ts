@@ -232,11 +232,11 @@ export function okStanding(input: {
   validates: boolean;
 }): OkStanding {
   const { rows, intent, run } = input;
-  if (!input.validates) return { status: 'nothing', why: null };
   if (remoteRunIsLive(run)) return { status: 'running', why: null };
+  if (!input.validates) return intent?.state === 'given' ? { status: 'queued', why: intent.note } : NOTHING;
   const answered = intent === null ? null : intentStanding(intent, run);
   if (answered !== null) return answered;
-  if (!rows.some(okable)) return { status: 'nothing', why: null };
+  if (!rows.some(okable)) return NOTHING;
   if (intent?.state === 'consumed') return { status: 'open', why: null };
   return { status: 'needs-you', why: intent?.note ?? null };
 }
@@ -248,6 +248,8 @@ function intentStanding(intent: RemoteRunIntent, run: RemoteRun | null): OkStand
   if (intent.state === 'consumed' && intent.runId !== null) return consumedStanding(run, intent.runId);
   return null;
 }
+
+const NOTHING: OkStanding = { status: 'nothing', why: null };
 
 function consumedStanding(run: RemoteRun | null, runId: string): OkStanding {
   if (run?.id !== runId || run.status !== 'abandoned') return { status: 'done', why: null };

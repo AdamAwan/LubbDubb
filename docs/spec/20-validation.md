@@ -1063,9 +1063,10 @@ page reads _needs you_ — at least one row to OK (one a press would read or han
 still waiting for its approval there) and no OK standing: none given, one withdrawn or lapsed, or a run
 it started that was abandoned — counts in the file, settle and reopen arms alike, and the detail says
 which environments are waiting. It is the same `okStanding` the cockpit draws, so the bench and the
-page never disagree about whether you are owed. A row the desk settled comes back when a page needs the OK again — a run
-the pin abandoned, an OK the page outgrew — because its settle-done resolution now carries
-`DESK_SETTLED`, as its other settles do; a row the operator closed or declined stays as they left it. Only
+page never disagree about whether you are owed. A row the desk settled **done** comes back when a page needs the OK again — a
+run the pin abandoned, an OK the page outgrew — and for nothing else, as before: its settle-done
+resolution now carries `DESK_SETTLED`, and the unmarked ones it wrote before that are read as its too. A
+row the operator closed or declined stays as they left it. Only
 environments that still declare a `validate` block are asked about. That is what keeps the close-out from
 being asked for before anybody has seen the page. A sheet with nothing to OK holds nothing, and
 _Not validating here_ answers it. → [36](36-remote-validation.md#the-ok)
