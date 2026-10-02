@@ -1624,9 +1624,11 @@ routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their call
 
 `plugin/hooks/` is a Claude Code **mod** (function hooks) inside the same plugin. The skills answer
 only when asked; the board answers without being asked. It draws one line above the prompt —
-`LubbDubb · 4 asks · next: Question on #284 · fleet paused · /lubbdubb:next` — raises a toast for
-each ask that is new since its last look, and adds `/board`, which lists the asks in order and points
-at `/lubbdubb:next`.
+`LubbDubb · 4 asks · next: Question on #284 · fleet paused`, with **Next** and **Hide** beside it —
+raises a toast for each ask that is new since its last look, and adds `/board`, which lists the asks
+in order and points at `/lubbdubb:next`. **Next** runs `/lubbdubb:next` as though it were typed
+(`$.command.run`, queued until the session is idle), and is drawn only while there is an ask; an
+engine that refuses the run gets a toast naming the command instead.
 
 - **It is a reader of the HTTP API, not of this channel.** It polls `GET
 /api/state?sections=asks,control` ([16](16-http-api.md)) every 30 seconds with the cockpit's
@@ -1642,8 +1644,8 @@ at `/lubbdubb:next`.
   masked inbox.
 - **A toast is keyed by the ask's id**, so an ask that changes its title is not news and one that
   comes back after being answered is.
-- **It settles nothing.** No button on the board writes; `/board` points at `/lubbdubb:next` and
-  the cockpit, where every write goes through the object the cockpit's click goes through
+- **It settles nothing.** No button on the board writes: **Next** only starts the skill, which puts
+  each ask to the operator and sends their answer; `/board` points at `/lubbdubb:next` and the cockpit, where every write goes through the object the cockpit's click goes through
   ([above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)).
 - **A harness it cannot reach draws nothing.** An unanswered or refused poll clears the board, so a
   stopped harness never leaves a stale count standing, and `/board` says it is not answering.
