@@ -1,3 +1,4 @@
+import { PrAssignDesk } from '../pr/prAssignAsk.js';
 import { prRefStyle } from '../pr/prRef.js';
 import type { Config } from '../config/config.js';
 import { buildPoolTransport, worldScope } from '../integrations/registry.js';
@@ -300,7 +301,18 @@ export function buildBenchDesks(
       errors,
     }),
     pool: buildPool(config, opts, base),
+    prAssign: buildPrAssign(config, base),
   };
+}
+
+function buildPrAssign(config: Config, { store, sink, errors }: Foundation): PrAssignDesk {
+  return new PrAssignDesk({
+    store,
+    sink,
+    errors,
+    operator: config.userId,
+    prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
+  });
 }
 
 function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: Foundation): PoolDesk | undefined {
