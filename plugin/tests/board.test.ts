@@ -75,7 +75,40 @@ test('draws the band, and nothing once hidden', async ($, on) => {
   }
 })
 
-test('toasts only what is new since the last look', async ($, on) => {
+test('leaves room for a band drawn beneath it, and hides only its own row', async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(STATE) } }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return h(Text, {}, 'pr-watch · 2 checks failing') as RenderElement
+  })
+  await $.command.run(BOARD)
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({
+      plugin: 'lubbdubb',
+      surface,
+      component: 'AbovePrompt',
+      props: {
+        hasSurvey: false,
+        isWorking: false,
+        maxRows: 4,
+        bodyColumns: 120,
+        scroll: { offset: 0, bodyRows: 4 },
+        view: {},
+      },
+    })
+    expect(await ui.find({ type: 'Text', text: /1 question · 1 to approve/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /pr-watch/ })).toBeDefined()
+    await ui.press({ key: 'hide' })
+    expect(await ui.find({ type: 'Text', text: /LubbDubb/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /pr-watch/ })).toBeDefined()
+    await ui.unmount()
+    await $.command.run(BOARD)
+  }
+})
+
+test('toasts only what is new since the last look',async ($, on) => {
   mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
   let state = STATE
   on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(state) } }))

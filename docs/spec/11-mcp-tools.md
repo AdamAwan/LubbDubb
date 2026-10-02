@@ -1484,6 +1484,12 @@ that is new since its last look, and adds `/board`, which lists the items.
   stopped harness never leaves a stale count standing, and `/board` says it is not answering.
 - **The first look toasts nothing.** Toasts are the difference between two looks, so starting a
   session with ten items waiting draws the line, not ten toasts.
+- **The band above the prompt is shared, so the board draws _above_ whatever the plugins beneath
+  it draw.** The engine draws one `AbovePrompt` band, and plugins share it by chaining through
+  `next(e)`; a hook that returns its own tree without calling `next` hides every plugin beneath it
+  — another plugin's PR watcher, say — for as long as the board has something to say, with nothing
+  red. So when the board draws, it awaits `next(e)` and stacks that result under its own row. Hide
+  hides the board's row only.
 
 The mod API is early access and changes between Claude Code releases; `claude plugin validate` and
 `claude plugin test` on `plugin/` are its checks, and `npm run check` does not run them.
