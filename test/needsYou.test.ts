@@ -382,6 +382,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
                   awaitingProfileAnswer: over.awaiting,
                   placement: [],
                   parentSettledAt: null,
+                  areaPathUnset: false,
                 },
               }
             : { ...i, appraisal: null },
@@ -436,6 +437,7 @@ test('a goal the appraisal refused is a row, and an unwatched or workable one is
                   awaitingProfileAnswer: false,
                   placement: [],
                   parentSettledAt: null,
+                  areaPathUnset: false,
                 },
               }
             : { ...i, appraisal: null },
@@ -491,6 +493,7 @@ test('each open placement question is its own row, and a settled one is gone', (
                   awaitingProfileAnswer: false,
                   placement,
                   parentSettledAt: null,
+                  areaPathUnset: false,
                 },
               }
             : { ...i, appraisal: null },

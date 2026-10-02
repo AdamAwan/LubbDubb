@@ -1,6 +1,6 @@
 import type { Issue, IssueAppraisal, IssueDelivery, Retrospective, ScratchPadSummary } from '../types.js';
 import { issueCommentRef } from './refUrls.js';
-import { placementAsks, type AreaPathTree, type PlacementTypePolicy } from '../intake/placement.js';
+import { isAreaPathMissing, placementAsks, type AreaPathTree, type PlacementTypePolicy } from '../intake/placement.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { rollUpIssueSpend } from '../insights/issueSpend.js';
@@ -148,6 +148,8 @@ function appraisalVerdictOf(appraisal: IssueAppraisal | undefined, issue: Issue,
       ? placementAsks(appraisal, issue, placement.areaTree, appraisal.goalRef, placement.types)
       : [],
     parentSettledAt: appraisal.parentSettledAt,
+    areaPathUnset:
+      placement.canPlace && appraisal.areaPathSettledAt === null && isAreaPathMissing(issue, placement.areaTree),
   };
 }
 

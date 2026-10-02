@@ -125,6 +125,7 @@ test('an unanswered orphan and a settled one are different readings', () => {
       awaitingProfileAnswer: false,
       placement: [{ field: 'parent', proposedParent: 1204, proposedAreaPath: null }],
       parentSettledAt: null,
+      areaPathUnset: false,
     };
   });
   assert.deepEqual(orphanGoal(open, firstGoal(open)), { proposed: 1204, settledAt: null });
@@ -141,6 +142,7 @@ test('an unanswered orphan and a settled one are different readings', () => {
       awaitingProfileAnswer: false,
       placement: [],
       parentSettledAt: '2026-01-03T00:00:00.000Z',
+      areaPathUnset: false,
     };
   });
   assert.deepEqual(orphanGoal(settled, firstGoal(settled)), {
@@ -192,6 +194,7 @@ test('an answered orphan keeps a quiet note and a way back', () => {
       awaitingProfileAnswer: false,
       placement: [],
       parentSettledAt: '2026-01-03T00:00:00.000Z',
+      areaPathUnset: false,
     };
   });
   const goal = firstGoal(state);

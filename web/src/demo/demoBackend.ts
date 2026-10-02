@@ -977,6 +977,7 @@ class DemoServer {
               awaitingProfileAnswer: false,
               placement: [],
               parentSettledAt: null,
+              areaPathUnset: false,
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
             };

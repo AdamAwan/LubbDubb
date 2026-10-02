@@ -192,6 +192,8 @@ export interface Issue extends WorldIssue {
     awaitingProfileAnswer: boolean;
     placement: PlacementAsk[];
     parentSettledAt: string | null;
+    /** Still on the project root and not declined — whether or not the appraisal proposed a path. */
+    areaPathUnset: boolean;
   } | null;
   modelPin: { profile: string | null; ignoredTags: string[] };
   priority: { since: string } | null;

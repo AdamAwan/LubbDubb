@@ -959,3 +959,53 @@ test('a withheld plan’s ask is the gate’s, never a card above it as well', (
   assert.deepEqual(split.lines, [], 'and neither is a row that leads back to the card in front of them');
   assert.equal(planVerdictAsk(gated, escalations), null, 'no verdict is asked under the gate');
 });
+
+test('the Ask tab meters readiness: workable, and on a placing tracker a feature and a path', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+  const appraisal = {
+    verdict: 'workable' as const,
+    summary: '',
+    missing: [],
+    by: 'appraiser' as const,
+    decidedAt: '2026-01-01T00:00:00Z',
+    commentRef: null,
+    proposedProfile: null,
+    awaitingProfileAnswer: false,
+    placement: [],
+    parentSettledAt: null,
+    areaPathUnset: false,
+  };
+  const ask = (over: Partial<GoalPageView['issue']>, placesWorkItems: boolean) =>
+    buildGoalNav({ ...page, placesWorkItems, issue: { ...page.issue, instructions: [], ...over } }).find(
+      (t) => t.tab === 'ask',
+    )!;
+
+  assert.deepEqual((({ reading, done }) => ({ reading, done }))(ask({ appraisal: null }, false)), {
+    reading: 'not appraised',
+    done: 0,
+  });
+  assert.equal(ask({ appraisal }, false).done, 100, 'on GitHub the ask being good enough is the whole of it');
+
+  const orphan = ask(
+    {
+      parent: null,
+      appraisal: { ...appraisal, placement: [{ field: 'parent', proposedParent: null, proposedAreaPath: null }] },
+    },
+    true,
+  );
+  assert.equal(orphan.reading, 'no feature');
+  assert.equal(Math.round(orphan.done!), 67);
+
+  const declined = ask({ parent: null, appraisal: { ...appraisal, parentSettledAt: '2026-01-02T00:00:00Z' } }, true);
+  assert.equal(declined.done, 100, 'a feature the operator said no to counts as met');
+  assert.equal(declined.tone, 'green');
+
+  const rootPath = ask({ appraisal: { ...appraisal, areaPathUnset: true } }, true);
+  assert.equal(rootPath.reading, 'no path', 'an item left on the root reads unplaced even with no path proposed');
+
+  const unclear = ask({ appraisal: { ...appraisal, verdict: 'unclear' } }, true);
+  assert.equal(unclear.reading, 'unclear');
+  assert.equal(Math.round(unclear.done!), 67);
+});

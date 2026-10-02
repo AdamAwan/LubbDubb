@@ -206,14 +206,27 @@ function watchFold(window: GoalWatchView): 'regressed' | 'not read' | 'clean' {
   return 'clean';
 }
 
-/* The ticket is the only entry with no stage behind it: nothing about it
-   progresses, so it reads what was asked for rather than how far it has got. */
-export function ticketReading(page: GoalPageView): { reading: string; tone: GoalStageTone; done: number | null } {
-  const instructions = page.issue.instructions.length;
-  if (instructions > 0) {
-    return { reading: instructions === 1 ? '1 instruction' : `${instructions} instructions`, tone: 'blue', done: null };
-  }
-  return { reading: 'as filed', tone: 'grey', done: null };
+/**
+ * The Ask tab's reading: whether the ask is ready to be worked. One check on every tracker — the
+ * appraisal found it workable — and two more where the tracker places work items: it rolls up to
+ * a feature, and it is on an area path. A placement the operator declined counts as met. The
+ * denominator is the deployment's, so the meter never runs backwards.
+ * → docs/spec/17-cockpit.md#the-panes
+ */
+export function askStage(page: GoalPageView): GoalStage {
+  const { issue } = page;
+  const appraisal = issue.appraisal;
+  const good = appraisal?.verdict === 'workable';
+  const noFeature = appraisal === null ? issue.parent === null : appraisal.placement.some((p) => p.field === 'parent');
+  const noPath = appraisal === null || appraisal.areaPathUnset;
+  const checks = page.placesWorkItems ? [good, !noFeature, !noPath] : [good];
+  const done = (checks.filter(Boolean).length / checks.length) * 100;
+  if (appraisal === null) return { reading: 'not appraised', tone: 'grey', done };
+  if (!good) return { reading: 'unclear', tone: 'amber', done };
+  if (page.placesWorkItems && noFeature) return { reading: 'no feature', tone: 'amber', done };
+  if (page.placesWorkItems && noPath) return { reading: 'no path', tone: 'amber', done };
+  const n = issue.instructions.length;
+  return { reading: n === 0 ? 'ready' : n === 1 ? '1 instruction' : `${n} instructions`, tone: 'green', done };
 }
 
 export function flaggedLocally(page: GoalPageView): boolean {
