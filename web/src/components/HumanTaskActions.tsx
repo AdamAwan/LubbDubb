@@ -43,8 +43,8 @@ type HumanTaskActionsProps = {
   task: HumanTask;
   look?: ButtonLook;
   noteOnDone?: string | null;
-  onDone: (id: string, note?: string) => Promise<unknown> | unknown;
-  onDecline: (id: string, note: string) => Promise<unknown> | unknown;
+  onDone: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
+  onDecline: ((id: string, note: string) => Promise<unknown> | unknown) | null;
   onCloseTicket?: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
   extra?: ReactNode;
 };
@@ -90,17 +90,26 @@ export function HumanTaskActions({
             onAsk={() => open('close')}
           />
         )}
-        <Press
-          look={onCloseTicket === null ? expected(look) : look}
-          asks={noteOnDone !== null}
-          words={PRESS_WORDS.done}
-          onRefused={setRefusal}
-          onAct={act(onDone)}
-          onAsk={() => open('done')}
-        />
-        <Button {...look} usage="human-task.expand" onClick={() => open('declined')} title="You will not be doing this">
-          Decline
-        </Button>
+        {onDone !== null && (
+          <Press
+            look={onCloseTicket === null ? expected(look) : look}
+            asks={noteOnDone !== null}
+            words={PRESS_WORDS.done}
+            onRefused={setRefusal}
+            onAct={act(onDone)}
+            onAsk={() => open('done')}
+          />
+        )}
+        {onDecline !== null && (
+          <Button
+            {...look}
+            usage="human-task.expand"
+            onClick={() => open('declined')}
+            title="You will not be doing this"
+          >
+            Decline
+          </Button>
+        )}
         {extra}
       </ButtonRow>
       {saying !== null && (
@@ -114,8 +123,8 @@ export function HumanTaskActions({
           onConfirm={async () => {
             setRefusal(null);
             if (saying === 'close') await onCloseTicket?.(task.id, note.trim());
-            else if (saying === 'done') await onDone(task.id, note.trim());
-            else await onDecline(task.id, note.trim());
+            else if (saying === 'done') await onDone?.(task.id, note.trim());
+            else await onDecline?.(task.id, note.trim());
             setSaying(null);
             setNote('');
           }}

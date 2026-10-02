@@ -16,6 +16,8 @@ import { planIssueOf, relTime } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { Button, ButtonRow, BareButton } from '../components/button.js';
 import { Tag } from '../components/tag.js';
+import { DesktopLink } from '../components/DesktopLink.js';
+import { askPrompt } from '../cockpit/desktopLink.js';
 import { CHECK_STATE_WORDS } from '../components/checkDetail.js';
 import { stateTone } from '../components/validationCheckRows.js';
 import { REACH_TONE } from './goalEnvironments.js';
@@ -265,7 +267,24 @@ function CloseOutAsk({
               ))}
         </dd>
       </dl>
-      <TaskAnswers task={task} view={view} actions={actions} />
+      <HumanTaskActions
+        task={task}
+        look={{ tone: 'secondary' }}
+        noteOnDone={noteOwedOnDone(task, view)}
+        onDone={null}
+        onDecline={null}
+        onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+        extra={
+          <DesktopLink
+            usage="goal.open"
+            folder={view.state.config.desktopFolder}
+            prompt={`${askPrompt(page.issue.number)}is this ready to close?`}
+            label="Not ready? Talk it through"
+            ready="ready to send"
+            explain="answered from what the harness recorded about this goal — the plan, the pull requests, the checks and where the work has reached."
+          />
+        }
+      />
     </>
   );
 }

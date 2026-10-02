@@ -19,7 +19,7 @@ export function DesktopLink({
   prompt: string;
   explain: string;
   ready?: string;
-  label?: 'Open in Claude Code' | 'Question?' | 'Check my description';
+  label?: 'Open in Claude Code' | 'Question?' | 'Check my description' | 'Not ready? Talk it through';
   control?: boolean;
   usage: OpenUsage;
 }): JSX.Element {
