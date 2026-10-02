@@ -16,6 +16,7 @@ import { Ref } from './refs.js';
 import { absDate, relTime, untilTime } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
+import { FoldToggle } from './collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -166,14 +167,10 @@ function EndedFold({
 }): JSX.Element {
   return (
     <section className="ob-section">
-      <BareButton
-        usage={ended ? 'obstacle.close' : 'obstacle.expand'}
-        className="ob-fold"
-        aria-expanded={ended}
-        onClick={onToggle}
-      >
-        {ended ? '▾' : '▸'} Over and silenced <span className="ob-n">{count}</span>
-      </BareButton>
+      <div className="ob-fold">
+        <FoldToggle subject="obstacle" open={ended} onToggle={onToggle} label="Over and silenced" />
+        <span className="ob-n">{count}</span>
+      </div>
       {ended && (
         <>
           <p className="ob-note">

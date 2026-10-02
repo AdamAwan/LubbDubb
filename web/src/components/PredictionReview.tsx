@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import { api, type GoalPredictionReading } from '../api.js';
 import type { ControlUsage, GoalPrediction, PlanPart, PlanView, PredictionMark, PredictionSlot } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { BareButton } from './button.js';
+import { FoldToggle } from './collapsible.js';
 import { renderMarkdown } from './markdown.js';
 import { relTime } from './util.js';
 
@@ -407,15 +407,7 @@ function FoldHeader({
 }): JSX.Element {
   return (
     <h4 className="cn-pmark-hdr">
-      <BareButton
-        usage={showing ? 'prediction.close' : 'prediction.expand'}
-        className="cn-disc"
-        aria-expanded={showing}
-        onClick={() => onToggle(!showing)}
-      >
-        <i className="cn-caret">{showing ? '\u25be' : '\u25b8'}</i>
-        What you predicted
-      </BareButton>
+      <FoldToggle subject="prediction" open={showing} onToggle={onToggle} label="What you predicted" />
       {askedOf > 0 && (
         <i className="cn-n">
           {marked}/{askedOf} marked

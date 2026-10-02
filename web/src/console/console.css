@@ -1070,25 +1070,12 @@ a.cn-qbody {
   padding: 10px 14px 4px;
   color: var(--cn-fg-faint);
 }
-/* The fold over the asks that hold nothing. A row-width control rather than a
-   heading with a chevron: it is the only thing standing between the operator and
-   those asks, so it has to look pressable at rail width. */
-.cn-railmore {
-  margin: 10px 6px 0;
-  padding: 7px 8px;
-  border: 1px dashed var(--cn-line);
-  border-radius: 6px;
-  background: none;
-  color: var(--cn-fg-faint);
-  font: inherit;
+/* The fold over the asks that hold nothing: the one thing between the operator and those asks, so
+   it spans the rail rather than sitting as a heading. */
+.fold-toggle.cn-railmore {
+  margin: 10px 8px 0;
   font-size: 11.5px;
-  text-align: left;
-  cursor: pointer;
-}
-.cn-railmore:hover,
-.cn-railmore:focus-visible {
-  color: var(--cn-fg);
-  border-color: var(--cn-line-hi);
+  color: var(--cn-fg-dim);
 }
 /* Zero rows still draws the rail — a note here, not an absent surface, is
    what keeps "quiet" distinguishable from "broken". */
@@ -1903,28 +1890,6 @@ a.cn-qbody {
      stopped being about what is happening, which a uniform gap cannot. */
   margin-top: 8px;
 }
-/* A card heading that opens its own card. Styled off the `h3` it sits in rather
-   than as a control of its own — it is the heading, and drawing it as a button
-   would make the two cards look unlike the nine above them. */
-.cn-card > h3 .cn-disc {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.cn-card > h3 .cn-disc:hover {
-  color: var(--cn-fg);
-}
-.cn-caret {
-  display: inline-block;
-  width: 11px;
-  font-style: normal;
-  color: var(--cn-fg-faint);
-}
 .cn-tick {
   padding: 13px;
   font-size: 13px;
@@ -2609,11 +2574,6 @@ a.cn-qbody {
    stands is what the page is about. */
 .cn-crit-chain {
   margin-bottom: 12px;
-}
-.cn-crit-chain > summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--cn-fg-dim);
 }
 .cn-crit-olds {
   list-style: none;
@@ -5683,15 +5643,10 @@ button.cn-grow {
 }
 
 .ob-fold {
-  background: none;
-  border: 0;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font: 600 13px/1.2 var(--cn-ui);
-  color: var(--cn-fg);
-  cursor: pointer;
-}
-.ob-fold:hover {
-  color: var(--cn-accent);
 }
 
 .ob-row {
@@ -5847,12 +5802,6 @@ button.cn-grow {
   border: 1px solid var(--cn-line);
   border-radius: 3px;
   display: block;
-}
-
-.cn-lv-plan > summary {
-  cursor: pointer;
-  color: var(--cn-fg-dim);
-  margin-top: 6px;
 }
 
 /* A passed run reads a step back, the settled check's treatment one card over: it
@@ -7358,13 +7307,8 @@ button.cn-grow {
 }
 /* The sheet's rows, folded behind the run they belong to on the goal page: the checks they answer
    are the panel above. → docs/spec/17-cockpit.md#the-validate-pane */
-.cn-sheet-fold > summary {
-  padding: 7px 10px;
-  color: var(--cn-fg-dim);
-  cursor: pointer;
-}
-.cn-sheet-fold[open] > summary {
-  border-bottom: 1px solid var(--cn-line-soft);
+.cn-sheet-fold > .fold-head {
+  padding: 4px 10px;
 }
 
 /* The pane's run strip: one line per runner that could take a check, above the list they answer,

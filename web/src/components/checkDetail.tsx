@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import type { ValidationCheckActor, ValidationCheckState, ValidationStep, ValidationStepKind } from '../types.js';
+import { Collapsible } from './collapsible.js';
 
 // → docs/spec/20-validation.md#the-check, docs/spec/17-cockpit.md
 
@@ -189,12 +190,17 @@ export function CheckDetail({
         <>
           <dt />
           <dd>
-            <details className="cd-fold">
-              <summary>
-                {CHECK_WORDS.steps.toLowerCase()} the fleet would carry ({steps.length})
-              </summary>
+            <Collapsible
+              subject="validation"
+              className="cd-fold"
+              title={
+                <>
+                  {CHECK_WORDS.steps.toLowerCase()} the fleet would carry ({steps.length})
+                </>
+              }
+            >
               <StepList steps={steps} />
-            </details>
+            </Collapsible>
           </dd>
         </>
       )}

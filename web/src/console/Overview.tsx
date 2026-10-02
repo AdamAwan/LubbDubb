@@ -16,6 +16,7 @@ import { AgentOnIt } from '../components/AgentOnIt.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag } from '../components/tag.js';
 import { agentRow, deskRow, ejectedRow, readyingRow } from './fleetRows.js';
+import { FoldToggle } from '../components/collapsible.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -36,15 +37,14 @@ const FLEET_ROWS = 7;
 
 function EndedToggle({ total, open, onToggle }: { total: number; open: boolean; onToggle: () => void }): JSX.Element {
   return (
-    <BareButton
-      usage={open ? 'agent.close' : 'agent.expand'}
+    <FoldToggle
+      subject="agent"
       className={`cn-more ${total === 0 ? 'cn-quiet' : ''}`}
-      onClick={onToggle}
+      open={open}
+      onToggle={onToggle}
       title="Shifts that have ended — the agents no longer running"
-      aria-expanded={open}
-    >
-      {total} shift{total === 1 ? '' : 's'} ended {open ? '⌄' : '›'}
-    </BareButton>
+      label={`${total} shift${total === 1 ? '' : 's'} ended`}
+    />
   );
 }
 

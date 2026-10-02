@@ -16,6 +16,7 @@ import { BareButton, type ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
 import { OUTCOME_TONE, rowSaid } from './RemoteValidationSection.js';
+import { Collapsible } from './collapsible.js';
 
 export function isMissingFile(resource: ValidationResourceView): boolean {
   return !resource.present && resource.kind !== 'access';
@@ -416,8 +417,7 @@ function CantRunNow({
   promptText: string;
 }) {
   return (
-    <details className="pm-velse">
-      <summary>Can’t run it now</summary>
+    <Collapsible subject="validation" className="pm-velse" title={<>Can’t run it now</>}>
       <div className="pm-velse-body">
         {/* Deferral is gone. It recorded *I will come back to this*, which is what leaving a
             check unrun already says — and it bought a second amber state, a second reason
@@ -467,7 +467,7 @@ function CantRunNow({
           explain="so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here."
         />
       </div>
-    </details>
+    </Collapsible>
   );
 }
 
@@ -488,8 +488,7 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
         {check.amendNote !== null && <span className="muted"> {check.amendNote}</span>}
       </div>
       {prior !== null && (
-        <details>
-          <summary>What it used to say</summary>
+        <Collapsible subject="validation" title={<>What it used to say</>}>
           <div className="pm-vamend-prior">
             <div className="pm-vtitle">{prior.title}</div>
             <CheckDetail
@@ -500,7 +499,7 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
             />
             {prior.note !== null && <div className="pm-vnote">{prior.note}</div>}
           </div>
-        </details>
+        </Collapsible>
       )}
     </div>
   );
