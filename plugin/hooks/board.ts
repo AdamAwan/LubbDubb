@@ -102,19 +102,14 @@ export type Part = { text: string; tone?: PrTone }
 export function bandParts(board: Board): Part[] {
   const count = board.notices.length
   const urgent = board.notices.filter(n => n.urgent).length
-  const head = board.notices[0]
   const attention = board.prs.filter(pr => pr.tone === 'bad' || pr.tone === 'warn').length
-  const ready = board.prs.filter(pr => pr.tone === 'good').length
   const parts: (Part | false)[] = [
     board.paused && { text: 'fleet paused', tone: 'warn' },
     { text: `${board.agents.length}/${board.cap} agents` },
     count > 0
       ? { text: `${count} ${count === 1 ? 'ask' : 'asks'}${urgent > 0 ? ` (${urgent} blocking)` : ''}`, tone: urgent > 0 ? 'bad' : 'warn' }
       : { text: 'no asks' },
-    head !== undefined && { text: `next: ${clip(head.title, 60)}` },
-    board.features.length > 0 && { text: `${board.features.length} ${board.features.length === 1 ? 'feature' : 'features'}` },
     attention > 0 && { text: `${attention} ${attention === 1 ? 'PR needs' : 'PRs need'} attention`, tone: 'warn' },
-    ready > 0 && { text: `${ready} ready to merge`, tone: 'good' },
   ]
   return parts.filter((p): p is Part => p !== false)
 }

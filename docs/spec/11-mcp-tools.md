@@ -1626,8 +1626,9 @@ routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their call
 only when asked; the board answers without being asked. It draws in two places:
 
 - **A status line above the prompt**, in a box of its own:
-  `● LubbDubb 2/4 agents · 3 asks (1 blocking) · next: Merge #412 · 2 features · 1 PR needs attention
-· 1 ready to merge  Work through asks  Open panel  Hide`. The dot is yellow and `fleet paused`
+  `● LubbDubb 2/4 agents · 3 asks (1 blocking) · 1 PR needs attention  Work through asks  Open panel
+Hide`. It stays short enough to sit on one line: the head ask, the feature count and the PRs ready to
+  merge are left to the panel. The dot is yellow and `fleet paused`
   leads while the fleet is paused; a count with nothing in it is left out, except the agents and the
   asks. Work through asks is drawn only while there is an ask.
 - **A panel** (`$.ui.open`, docked beside the transcript where the surface docks, inline above the
@@ -1649,8 +1650,8 @@ asks in order and points at `/lubbdubb:next`.
   feature board answers `/api/features` with a 404, and the panel simply has no Features section.
 - **It counts what "Needs you" counts, in the order `ask_next` walks it.** The `asks` section is the
   server's one queue ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)); the board
-  keeps its standing rows, sorts by `focusRank`, and names the head as `next:` — the ask
-  `/lubbdubb:next` would put first. It used to count escalations, pending proposals and open human
+  keeps its standing rows and sorts by `focusRank`, so `/board` lists them in the order
+  `/lubbdubb:next` would walk them. It used to count escalations, pending proposals and open human
   tasks itself, which was a third account of what the operator owes, missing every other kind. Plan
   text a withheld plan would show never reaches it, because the queue's titles are drawn off the
   masked inbox.
