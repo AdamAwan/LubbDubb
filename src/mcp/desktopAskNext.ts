@@ -55,9 +55,9 @@ const notStanding = (id: string) =>
   );
 
 const ASK_NEXT_NEXT =
-  'Put this to the operator: what is asked, who is waiting, what it holds up, and where it is in the queue. ' +
-  'Read more only where it helps them decide. Any recommendation is yours, labelled as yours — the operator ' +
-  'decides, and nothing is sent until they have answered in their own words. Then call `answerWith.tool` with ' +
+  'Put this to the operator as a short card: where it is, what is asked, who is waiting, what it holds up. ' +
+  'Read more only where it helps them decide. Any view is yours, labelled as yours — the operator decides, ' +
+  'and nothing is sent until they answer or explicitly pick an option. Then call `answerWith.tool` with ' +
   'their answer, or ask_skip if they want it later. An answer refused as already settled means somebody ' +
   'answered it elsewhere: move on.';
 

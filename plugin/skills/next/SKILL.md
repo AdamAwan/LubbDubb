@@ -19,36 +19,57 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    operator picked one from the panel), the first call is `ask_next` with that
    `id`; if it is refused as no longer standing, say so and carry on from the
    head. Every later call is plain `ask_next`.
-2. **Put it to them, compactly.** Four things, in a few lines:
-   - **What is asked** — the ask's `title`, and the `question` in full where one
-     came back.
-   - **Who is waiting** — the agent, the goal, or the pull request it is about.
-   - **What it holds up** — `holding` is the number of parts stuck behind it;
-     `urgency: now` means the fleet cannot get past it.
-   - **Where it is** — "ask 2 of 7".
+2. **Put it to them as a card.** Short, plain words, no field names — sent as
+   markdown, one line each, not in a code block:
+
+   ```
+   2/7 · proposal · fleet is stuck on this
+   **Merge #412?**
+   Goal 88's fix, blocking 3 parts.
+   ```
+
+   - **Header** — where it is, its kind, and its urgency said plainly: `now` is
+     "fleet is stuck on this"; `next` needs nothing.
+   - **Title** in bold, then the `question` in full where one came back.
+   - **One line of facts** — who is waiting (the agent, goal or pull request) and
+     what it holds up ("blocking 3 parts"). Leave out what is empty, rather than
+     "nobody" and "nothing".
+
 3. **Read more only where it helps them decide.** `answerWith.readFirst` names the
    read that matters for this kind — `proposal_read` before any proposal,
    `pr_assign` with just `pr` for the shortlist, `validation_read` for checks. Beyond
    that, `goal_read`, `agent_read` and the real diff or code in this checkout are
    there when the decision turns on them. Do not read everything for every ask; an
    operator clearing ten asks does not want ten essays.
-4. **Then, if you have one, your recommendation — set apart and labelled as
-   yours.** After the facts, never mixed into them, in its own block:
+4. **Then, if you have one, your view — one quoted line, labelled as yours.**
+   After the facts, never mixed into them:
 
-   > **Claude's recommendation (my view, not LubbDubb's — you decide):** Accept the
-   > merge. CI is green, the one review thread is answered, and the change is the
-   > two-line fix the goal asked for. Confidence: high.
+   > **Claude's view (not LubbDubb's):** Accept the merge — CI is green and the
+   > one review thread is answered. (high)
 
-   Say why, and how sure you are. It is your opinion, from what you just read. It
-   is **never** phrased as what LubbDubb wants, expects or recommends — the harness
-   asked a question; it did not suggest an answer, and a sentence that makes it
-   sound as though it did is the operator deciding on a false premise. If you have
-   no real basis for a view, say that instead of inventing one.
+   One sentence of why, then how sure you are. It is your opinion, from what you
+   just read. It is **never** phrased as what LubbDubb wants, expects or
+   recommends — the harness asked a question; it did not suggest an answer, and a
+   sentence that makes it sound as though it did is the operator deciding on a
+   false premise. If you have no real basis for a view, leave the line out rather
+   than invent one.
 
-5. **Wait for their answer.** Do not answer for them. Silence is not a yes, "ok"
-   to something else is not a yes, and moving on to talk about another ask is not
-   a yes. Your recommendation is sent only when they explicitly accept it — "yes,
-   do that", "go with your suggestion".
+5. **Ask for their answer — as choices where you can.** Where the
+   `AskUserQuestion` tool is available, offer the answers `answerWith.choose`
+   allows as options, plus **Skip**, each with a short description of what it does
+   ("Merges #412", "Leaves it for later"). Mark your pick **"(Claude's pick)"** —
+   never "(Recommended)", which reads as the harness's. Where your view carries
+   words (a decline reason), the option may carry them too — "Decline: idle is fine
+   for now" — so picking it adopts them, explicitly. Without the tool, end with one
+   line naming the same choices.
+
+   An answer that is the operator's own words — a description, a reply to an
+   agent — is typed, never an option: an option's label would be a draft of it.
+
+   Then wait. Do not answer for them. Silence is not a yes, "ok" to something else
+   is not a yes, and moving on to talk about another ask is not a yes. Your view
+   is sent only when they explicitly pick or accept it.
+
 6. **Send it with `answerWith`.** Call `answerWith.tool` with `answerWith.args`
    plus the fields from `choose` their answer fills. Use their words where the
    field carries words. Then say in one line what landed.
@@ -110,9 +131,9 @@ What they can say at any point:
 
 ### What not to do
 
-- **Do not decide.** Not the easy ones, not the ones where your recommendation is
+- **Do not decide.** Not the easy ones, not the ones where your view is
   obviously right, not to save them a keystroke.
-- **Do not blur your view into the facts.** The facts block says what the harness
-  holds; the recommendation block says what you think. Two blocks, every time.
+- **Do not blur your view into the facts.** The card says what the harness
+  holds; the quoted line says what you think. Two blocks, every time.
 - **Do not work around a cockpit-only ask** with a tool that happens to take the
   call. Each one is cockpit-only for a stated reason.
