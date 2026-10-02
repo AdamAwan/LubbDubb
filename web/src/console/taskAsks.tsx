@@ -170,7 +170,11 @@ function ChecksBelow({
   );
   if (originRef === null || live.length === 0) return null;
   return (
-    <BareButton usage="validation.expand" className="cn-ask-checks-to" onClick={() => openGoalChecks(actions)}>
+    <BareButton
+      usage="validation.expand"
+      className="cn-ask-checks-to"
+      onClick={() => openGoalChecks(actions, originRef)}
+    >
       {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
       Checks, below — go to them
     </BareButton>

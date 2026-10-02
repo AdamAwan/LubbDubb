@@ -598,7 +598,13 @@ a.btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  line-height: normal;
   text-decoration: none;
+}
+/* The console's buttons inherit their line height (`.cn button { font: inherit }`), so a link
+   wearing the same look there inherits it too, or it sits short of the press beside it. */
+.cn a.btn {
+  line-height: inherit;
 }
 .btn:disabled {
   opacity: 0.5;

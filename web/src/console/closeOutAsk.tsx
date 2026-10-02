@@ -86,7 +86,7 @@ function CloseOutSummary({
                 key={check.id}
                 check={check}
                 standing={undefined}
-                onOpen={() => openGoalChecks(actions)}
+                onOpen={() => openGoalChecks(actions, `issue:${page.issue.number}`)}
                 onSelect={undefined}
               />
             ))}

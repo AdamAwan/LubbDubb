@@ -1998,9 +1998,10 @@ button components alone, and `role="button"` or an `onClick` on a plain element 
 navigation link, which the place already counts.
 
 **An anchor wearing the look measures like a button.** `a.btn` is an inline flex row with a 6px gap,
-so an icon before the label has room, and it takes the line height a `<button>` takes rather than
-`normal` — at `normal` a link sat about four pixels short of the press beside it in every bar that
-mixes the two. A `DesktopLink` is small by default; `fullSize` draws it at the size of a full press,
+so an icon before the label has room, and it takes the line height a `<button>` takes beside it: inside
+the console that is inherited (`.cn button { font: inherit }`, so `.cn a.btn` inherits too), and
+outside it is `normal`, as the UA gives a button there. At `normal` inside the console a link sat about
+four pixels short of the press beside it in every bar that mixes the two. A `DesktopLink` is small by default; `fullSize` draws it at the size of a full press,
 for a bar where it is one of the row's answers rather than an aside.
 
 **`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a

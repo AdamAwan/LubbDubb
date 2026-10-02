@@ -44,15 +44,16 @@ export function openGoalForAsk(actions: CockpitActions, ref: string, kind: NeedK
 }
 
 /**
- * The goal's checks, opened from an ask that is about them.
+ * The goal's checks, opened from an ask that is about them — the goal itself first, since the ask may
+ * be read off the goal page.
  *
  * @public shared by the validate and close-out asks
  */
-export function openGoalChecks(actions: CockpitActions): void {
+export function openGoalChecks(actions: CockpitActions, ref: string): void {
   /* All three, in the order `buildJump` does them: the pane, then the card's own fold, then the
      scroll two frames later. A jump that skipped the fold would land on a heading and read as a
      control that did nothing. → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet */
-  actions.openGoalTab(GOAL_TAB_OF.validation);
+  actions.openGoalPane(ref, GOAL_TAB_OF.validation);
   actions.openGoalSection('validation', true);
   scrollToAnchor(GOAL_ANCHOR.validation);
 }
