@@ -167,6 +167,42 @@ test('a flagged validation plan opens on the checks, a clear one does not', () =
   assert.equal(goalTabOpening(clear).tab, 'plan', 'a settled plan is not a reason to be looking at it');
 });
 
+test('a merged plan with checks still owed opens on the checks, not the close-out', () => {
+  const page = bare();
+  const verdict = {
+    state: 'flagged' as const,
+    total: 2,
+    passed: 0,
+    failed: 0,
+    unrun: 1,
+    deferred: 0,
+    waived: 0,
+    captured: 0,
+    declined: 1,
+  };
+  const merged: GoalPageView = {
+    ...page,
+    issue: {
+      ...page.issue,
+      validation: verdict,
+      conclusion: { ...page.issue.conclusion, verdict: 'done', by: 'plan' },
+    },
+  };
+  assert.equal(goalTabOpening(merged).tab, 'validate', 'a plan that merged is not a goal that is finished');
+
+  const operatorSaidSo: GoalPageView = {
+    ...merged,
+    issue: { ...merged.issue, conclusion: { ...merged.issue.conclusion, by: 'operator' } },
+  };
+  assert.equal(goalTabOpening(operatorSaidSo).tab, 'close', 'an operator’s done is final');
+
+  const nothingOwed: GoalPageView = {
+    ...merged,
+    issue: { ...merged.issue, validation: { ...verdict, unrun: 0, passed: 1, state: 'flagged' } },
+  };
+  assert.equal(goalTabOpening(nothingOwed).tab, 'close', 'a declined row is owed to nobody');
+});
+
 test('reaching an environment opens on the close-out it is owed against', () => {
   const page = bare();
   const shipped: GoalPageView = {

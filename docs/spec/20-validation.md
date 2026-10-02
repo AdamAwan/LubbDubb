@@ -1106,7 +1106,13 @@ The close-out is the step **after** this one: the `close_out` row is not filed w
 → [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
 
 A check handed to the fleet is **not** on it — rule `validate-check` is about to dispatch that one —
-and a hand-back puts it straight back, carrying the agent's reason. The row settles itself the moment
+and a hand-back puts it straight back, carrying the agent's reason. **A fleet check the fleet can never
+start is on it.** Where `fleetCanStart` answers `false` — the first step is a person's — rule
+`validate-check` skips it, so leaving it off the row would mean nobody owns it: no row, no hold on
+the close-out, and the bench asking to close a goal whose check nobody can run. Only `false` puts it
+on; `null` stays with the fleet ([who carries a step](#who-carries-a-step)). It files a row and never
+reopens one: a row the desk already settled as "with the fleet" stays settled, so goals from before
+this rule are not handed back to the bench. The row settles itself the moment
 nothing is left for a person, on the close-out's asymmetry: these are rows the harness reads every
 pulse, so asking the operator to tick off a second copy of what they have just recorded is asking
 them to tell it something it can see.

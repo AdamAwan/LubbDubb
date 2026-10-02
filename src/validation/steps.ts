@@ -1,4 +1,4 @@
-import type { ValidationStep, ValidationStepKind } from '../types.js';
+import type { ValidationCheck, ValidationStep, ValidationStepKind } from '../types.js';
 
 // → docs/spec/20-validation.md#the-test-plan
 
@@ -239,4 +239,9 @@ export function segmentBoundary(steps: readonly ValidationStep[]): number | null
 export function fleetCanStart(steps: readonly ValidationStep[]): boolean | null {
   if (steps.length === 0) return null;
   return steps[0]?.actor === 'fleet';
+}
+
+/** Whether rule `validate-check` will take this check, so the bench does not have to. */
+export function fleetWillRun(check: Pick<ValidationCheck, 'actor' | 'state' | 'steps'>): boolean {
+  return check.actor === 'fleet' && check.state === 'unrun' && fleetCanStart(check.steps) !== false;
 }

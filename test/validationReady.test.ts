@@ -175,6 +175,27 @@ test('a check with the fleet is not on the bench, and a hand-back puts it straig
   assert.match(back[0]!.kind === 'file' ? back[0]!.detail : '', /no account on the staging console/);
 });
 
+test('a fleet check whose first step is a person’s is on the bench — the fleet will never start it', () => {
+  const step = {
+    kind: 'state' as const,
+    do: 'Run the query against the unit DB',
+    area: null,
+    expects: null,
+    when: 'inline' as const,
+    script: null,
+    scriptSweptAt: null,
+    actor: 'human' as const,
+    why: 'no environment declares a validate.state.run command',
+  };
+  const stranded = check({ actor: 'fleet', steps: [step] });
+  const steps = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(stranded) });
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]!.kind, 'file');
+
+  const startable = check({ actor: 'fleet', steps: [{ ...step, actor: 'fleet' as const, why: null }] });
+  assert.deepEqual(pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(startable) }), []);
+});
+
 test('a check handed over again is off the bench, note or no note', () => {
   const again = check({ actor: 'fleet', handbackNote: 'no account on the staging console' });
   assert.deepEqual(pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(again) }), []);
