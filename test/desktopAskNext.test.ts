@@ -191,6 +191,26 @@ test('a skip is held by the connection that made it, and never touches the queue
   }
 });
 
+test('ask_next with an id hands back that ask, skipped or not, and refuses one not standing', async () => {
+  const d = await deck();
+  try {
+    const ids = await seed(d.system);
+    await d.call('ask_skip', { id: ids.bench });
+
+    const picked = await d.call('ask_next', { id: ids.bench });
+    assert.equal(picked.isError, false, picked.text);
+    assert.equal((picked.json.ask as { id: string }).id, ids.bench, 'the panel picked it, so a skip does not hide it');
+    assert.equal(picked.json.position, 3);
+    assert.equal((picked.json.answerWith as { tool: string }).tool, 'human_task_settle');
+
+    const gone = await d.call('ask_next', { id: 'nope' });
+    assert.equal(gone.isError, true);
+    assert.match(gone.text, /No standing ask "nope"/);
+  } finally {
+    await d.close();
+  }
+});
+
 test('ask_skip refuses an ask that is not standing', async () => {
   const d = await deck();
   try {

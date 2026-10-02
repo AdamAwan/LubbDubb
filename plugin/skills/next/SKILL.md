@@ -1,6 +1,7 @@
 ---
 name: next
-description: Work through what LubbDubb is waiting on the operator for, one ask at a time — the same order the cockpit's Focus mode walks "Needs you". Use for "/lubbdubb:next", "what's next?", "what does LubbDubb need from me?", "let's clear my asks".
+description: Work through what LubbDubb is waiting on the operator for, one ask at a time — the same order the cockpit's Focus mode walks "Needs you". Use for "/lubbdubb:next", "/lubbdubb:next <ask id>", "what's next?", "what does LubbDubb need from me?", "let's clear my asks".
+argument-hint: '[ask id]'
 ---
 
 ## Work through "Needs you", one ask at a time
@@ -14,7 +15,10 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 1. **`ask_next`.** It hands back the ask in front — the head of the same queue the
    cockpit's Focus mode walks — with `position` and `total`, and `answerWith`: the
    tool and the arguments that answer it, ids already filled in. If it says the
-   queue is empty, say so plainly and stop.
+   queue is empty, say so plainly and stop. **Started with an ask id** (the
+   operator picked one from the panel), the first call is `ask_next` with that
+   `id`; if it is refused as no longer standing, say so and carry on from the
+   head. Every later call is plain `ask_next`.
 2. **Put it to them, compactly.** Four things, in a few lines:
    - **What is asked** — the ask's `title`, and the `question` in full where one
      came back.

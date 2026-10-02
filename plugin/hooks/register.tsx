@@ -254,10 +254,7 @@ export const register: Register = (on, options) => {
               key={`feature-${f.number}-ask`}
               plain
               label={clip(f.title, room)}
-              onPress={draft(
-                $,
-                `What's the state of LubbDubb feature #${f.number} "${f.title}"? What has been delivered, what is in flight, and what is blocking it?`,
-              )}
+              onPress={draft($, `/lubbdubb:feature ${f.number}`)}
             />
           </Box>
           <Box gap={1}>
@@ -321,7 +318,7 @@ export const register: Register = (on, options) => {
               markColor: n.urgent ? 'red' : undefined,
               title: n.title,
               meta: n.kind,
-              onPress: draft($, `Help me decide LubbDubb ask ${n.id} (${n.kind}): ${n.title}`),
+              onPress: draft($, `/lubbdubb:next ${n.id}`),
             }),
           )}
           {now.notices.length > 5 && <Text dimColor>{`  +${now.notices.length - 5} more`}</Text>}

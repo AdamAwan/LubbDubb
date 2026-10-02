@@ -49,6 +49,11 @@ function questionOf(deps: DesktopToolDeps, row: AskRow): Record<string, unknown>
   };
 }
 
+const notStanding = (id: string) =>
+  toolError(
+    `No standing ask "${id}". It has been answered or has otherwise gone — call ask_next for the one in front now.`,
+  );
+
 const ASK_NEXT_NEXT =
   'Put this to the operator: what is asked, who is waiting, what it holds up, and where it is in the queue. ' +
   'Read more only where it helps them decide. Any recommendation is yours, labelled as yours — the operator ' +
@@ -61,9 +66,13 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
     'The next thing the operator has to answer — the head of "Needs you" in the order the cockpit’s Focus mode ' +
     'walks it — with where it stands in the queue and `answerWith`: the exact tool and arguments that answer ' +
     'it on this channel, or the cockpit page where it is answered instead. Asks skipped in this session are ' +
-    'passed over. Records nothing, decides nothing.',
+    'passed over. `id` hands back that one ask instead of the head. Records nothing, decides nothing.',
   inputSchema: toolSchema(
     z.object({
+      id: z
+        .string()
+        .describe('Optional. An ask id to hand back instead of the head — the one the operator picked.')
+        .optional(),
       skip: z
         .array(z.string())
         .describe('Optional. Ask ids to pass over for this call only, on top of those skipped with ask_skip.')
@@ -75,7 +84,9 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
     const skipped = skippedBy(session, args.skip);
     const waiting = queue.filter((row) => !skipped.has(row.id));
     const passedOver = queue.filter((row) => skipped.has(row.id)).map((row) => row.id);
-    const head = waiting[0];
+    const picked = typeof args.id === 'string' ? args.id.trim() : '';
+    const head = picked === '' ? waiting[0] : queue.find((row) => row.id === picked);
+    if (picked !== '' && head === undefined) return notStanding(picked);
     if (head === undefined) {
       return toolJson({
         empty: true,
@@ -126,11 +137,7 @@ export const askSkip: DesktopToolFactory = (deps, session) => ({
       return toolJson({ id, skipped: false, said: had ? 'Back in the queue.' : 'It was not skipped.' });
     }
     const standing = deps.askQueue().some((row) => row.id === id);
-    if (!standing) {
-      return toolError(
-        `No standing ask "${id}". It has been answered or has otherwise gone — call ask_next for the one in front now.`,
-      );
-    }
+    if (!standing) return notStanding(id);
     skipped.add(id);
     return toolJson({
       id,

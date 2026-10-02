@@ -247,7 +247,7 @@ test('the panel draws asks, unfinished features, open pull requests, live agents
   }
 })
 
-test('the panel only drafts into the prompt box; it never sends', async ($, on) => {
+test('the panel only drafts a skill into the prompt box; it never sends', async ($, on) => {
   mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
   harness(on)
   const filled: string[] = []
@@ -271,8 +271,8 @@ test('the panel only drafts into the prompt box; it never sends', async ($, on) 
   expect(sent).toEqual([])
   expect(filled).toEqual([
     '/lubbdubb:next',
-    'What\'s the state of LubbDubb feature #90 "Arrival sheet v2"? What has been delivered, what is in flight, and what is blocking it?',
-    'Help me decide LubbDubb ask e2 (merge): Merge #412',
+    '/lubbdubb:feature 90',
+    '/lubbdubb:next e2',
   ])
 })
 
