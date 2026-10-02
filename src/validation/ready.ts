@@ -3,6 +3,7 @@ import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import { sheetBenchLine } from './remote/sheet.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { liveChecks, outstandingChecks } from './verdict.js';
+import { fleetWillRun } from './steps.js';
 
 // → docs/spec/20-validation.md
 
@@ -128,7 +129,7 @@ function admits(gate: ReadonlySet<string> | null, originRef: string): boolean {
  */
 function owedToAPerson(check: ValidationCheck): boolean {
   if (check.state === 'passed' || check.state === 'waived' || check.state === 'declined') return false;
-  return !(check.actor === 'fleet' && check.state === 'unrun');
+  return !fleetWillRun(check);
 }
 
 function validateTitle(originRef: string): string {

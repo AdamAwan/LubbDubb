@@ -3,7 +3,7 @@ import { issueOrigin } from '../../plans/planning.js';
 import { claimIsLive } from '../../validation/desktop.js';
 import { checkBriefing, validateBranch, validateOrigin } from '../../validation/fleet.js';
 import { checkSetReleased } from '../../validation/planApproval.js';
-import { fleetCanStart } from '../../validation/steps.js';
+import { fleetWillRun } from '../../validation/steps.js';
 import { validationGoalDir } from '../../validation/resources.js';
 import { liveChecks } from '../../validation/verdict.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
@@ -24,14 +24,13 @@ export function validateCheck(s: StageContext): void {
     if (!checkSetReleased({ record: s.validationPlans.get(origin) ?? null, checks })) continue;
 
     for (const check of checks) {
-      if (check.actor !== 'fleet' || check.state !== 'unrun') continue;
-      if (claimIsLive(check, s.now, s.validationClaimMinutes)) continue;
       // A test plan whose *first* step is a person's is a check that can never execute: dispatched,
       // it holds a slot in front of a step no agent can take, and blocks nothing while it does. It
       // stays where an operator can see it — unrun and handed to the fleet — rather than becoming an
       // agent sitting in front of somebody's day.
       // → docs/spec/20-validation.md#an-inline-person-and-a-deferred-one-are-not-the-same-step
-      if (fleetCanStart(check.steps) === false) continue;
+      if (!fleetWillRun(check)) continue;
+      if (claimIsLive(check, s.now, s.validationClaimMinutes)) continue;
 
       const checkOrigin = validateOrigin(issue.number, check.id);
 

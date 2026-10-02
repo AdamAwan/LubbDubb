@@ -718,7 +718,14 @@ export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
 
 function settled(page: GoalPageView): boolean {
   const { issue } = page;
-  return issue.state !== 'open' || issue.conclusion.verdict === 'done' || issue.run?.dismissed === true;
+  if (issue.state !== 'open' || issue.run?.dismissed === true) return true;
+  if (issue.conclusion.verdict !== 'done') return false;
+  return issue.conclusion.by === 'operator' || !checksOwed(page);
+}
+
+function checksOwed(page: GoalPageView): boolean {
+  const v = page.issue.validation;
+  return v !== null && v.unrun + v.failed + v.deferred + v.captured > 0;
 }
 
 function validationBegun(page: GoalPageView): boolean {

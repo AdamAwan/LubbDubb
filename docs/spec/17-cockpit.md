@@ -1596,6 +1596,13 @@ that says why — read top to bottom, first answer wins, and **the order is the 
 | has a plan, a pull request or an agent                        | Plan     |
 | has none of those                                             | Ask      |
 
+**"Finished" is the ticket closed, the run dismissed, or a `done` conclusion that owes no checks.** A
+`done` the harness reached itself — every plan part merged, or an agent's verdict — still has checks
+owed while any live check is `unrun`, `failed`, `deferred` or `captured`. Such a goal is not finished,
+and it falls through to the arms below it, which land it on Validate. An operator's own `done` is
+final whatever the checks say. Without this, every merged plan opened on Close while its checks were
+still to run.
+
 **A press that knows its pane beats every arm of this table.** The rule answers for an arrival at a
 goal, not for an arrival at a question: `openGoalPrediction` and `openGoalForAsk` both put the pane on
 `Place`, and a pick on `Place` is never re-answered here.
