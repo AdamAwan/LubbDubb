@@ -1687,6 +1687,14 @@ asks in order and points at `/lubbdubb:next`.
   to say, with nothing red. So when the board draws, it awaits `next(e)` and stacks that result under
   its own boxed row, outside the box: unboxed, two plugins' lines ran together into one block nobody
   could tell apart. Hide hides the board's row only; `/board` or `/panel` brings it back.
+- **The panel heads with the robot logo, and it is the panel's link lamp.** In the terminal it is a
+  16×8 `Raster` of half-block cells (`plugin/hooks/logo.ts`), its heartbeat repainted by `$.ui.blit`
+  every 100ms from a `$.clock` timer rather than by redrawing the pane; on desktop, VS Code and mobile
+  it is the cockpit's SVG in an interactive `Svg`, animated by its own CSS. While the harness is not
+  answering the timer blits nothing and the robot is drawn flat-lined, as the cockpit's is
+  ([17](17-cockpit.md#the-ident)). A blit while the pane is closed is refused by the engine and
+  ignored. The pixel art is drawn by hand rather than downsampled from the SVG, which at 16 columns
+  turned the heartbeat to noise.
 - **A pane button needs focus on desktop.** A click on a pane that does not hold the keyboard gives
   it the keyboard; the desktop app drops that first press. The pane's hotkeys (`n` Work through asks, `p`
   Pause) need the same focus. This is the engine's, not the board's.

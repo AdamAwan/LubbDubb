@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Feature, PrTone } from '../types'
 import { bandParts, clip, fresh, summary, toBoard, type FeaturesReply, type StateReply } from './board'
+import { LOGO_COLUMNS, LOGO_FRAMES, LOGO_ROWS, logoCells, logoSvg } from './logo'
 
 const board = atom({ plugin: 'lubbdubb', key: 'board' } as const, null)
 const isHidden = atom({ plugin: 'lubbdubb', key: 'isHidden' } as const, false)
@@ -11,6 +12,11 @@ const POLL_MS = 15_000
 const PANE = 'lubbdubb'
 const TITLE = 'LubbDubb'
 const BAR = 10
+const LOGO_KEY = 'logo'
+const BEAT_MS = 100
+const LOGO_MIN_WIDTH = 40
+
+let beat = 0
 
 const TONE: Record<PrTone, { mark: string; color?: string }> = {
   good: { mark: '●', color: 'green' },
@@ -80,6 +86,12 @@ const ago = (since: string): string => {
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}`
 }
 
+async function heartbeat($: EngineInterface): Promise<void> {
+  if ((await read($, board)) === null) return
+  beat = (beat + 1) % LOGO_FRAMES
+  await $.ui.blit({ requestId: PANE, key: LOGO_KEY, columns: LOGO_COLUMNS, rows: LOGO_ROWS, cells: logoCells(beat) })
+}
+
 const draft = ($: EngineInterface, text: string) => () => void act($, 'Added to the prompt box', () => $.prompt.fill({ text }))
 
 export const register: Register = (on, options) => {
@@ -93,6 +105,7 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'panel', description: 'Open the LubbDubb panel' })
     void poll($, where)
     $.clock.every(POLL_MS, () => void poll($, where))
+    $.clock.every(BEAT_MS, () => void heartbeat($))
     void $.ui.open({ id: PANE, title: TITLE })
     return next(e)
   })
@@ -157,7 +170,29 @@ export const register: Register = (on, options) => {
     const now = await read($, board)
     const width = Math.max(24, e.props.bodyColumns)
 
-    if (now === null) return <Text dimColor>{`LubbDubb is not answering at ${where.url}.`}</Text>
+    const logo = (alive: boolean) => {
+      if (width < LOGO_MIN_WIDTH) return null
+      if (e.surface === 'terminal') {
+        const { Raster } = $.ui.resolve(e)
+        return <Raster key={LOGO_KEY} columns={LOGO_COLUMNS} rows={LOGO_ROWS} cells={logoCells(alive ? beat : null)} />
+      }
+      const { Svg } = $.ui.resolve(e)
+      return <Svg source={logoSvg(alive)} alt="LubbDubb" width={44} height={44} isInteractive />
+    }
+    const wordmark = (
+      <Text bold>
+        Lubb<Text color="red">Dubb</Text>
+      </Text>
+    )
+
+    if (now === null) {
+      return (
+        <Box gap={2} alignItems="center">
+          {logo(false)}
+          <Text dimColor>{`LubbDubb is not answering at ${where.url}.`}</Text>
+        </Box>
+      )
+    }
 
     const header = (label: string, count: string, action?: unknown) => (
       <Box justifyContent="space-between">
@@ -242,20 +277,26 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Box justifyContent="space-between">
-          <Box gap={1}>
-            <Text color={now.paused ? 'yellow' : 'green'}>{now.paused ? '■' : '●'}</Text>
-            <Text bold>{now.paused ? 'Paused' : 'Running'}</Text>
-            <Text dimColor>{`· ${now.agents.length} of ${now.cap} slots`}</Text>
+        <Box gap={2} alignItems="center">
+          {logo(true)}
+          <Box flexDirection="column" flexGrow={1}>
+            {wordmark}
+            <Box justifyContent="space-between">
+              <Box gap={1}>
+                <Text color={now.paused ? 'yellow' : 'green'}>{now.paused ? '■' : '●'}</Text>
+                <Text bold>{now.paused ? 'Paused' : 'Running'}</Text>
+                <Text dimColor>{`· ${now.agents.length} of ${now.cap} slots`}</Text>
+              </Box>
+              <Button
+                key="pause"
+                hotkey="p"
+                label={now.paused ? 'Resume' : 'Pause'}
+                onPress={() =>
+                  void act($, now.paused ? 'Fleet resumed' : 'Fleet paused', () => setPaused($, where, !now.paused))
+                }
+              />
+            </Box>
           </Box>
-          <Button
-            key="pause"
-            hotkey="p"
-            label={now.paused ? 'Resume' : 'Pause'}
-            onPress={() =>
-              void act($, now.paused ? 'Fleet resumed' : 'Fleet paused', () => setPaused($, where, !now.paused))
-            }
-          />
         </Box>
 
         <Box flexDirection="column">

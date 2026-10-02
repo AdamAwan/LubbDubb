@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-dark.svg">
+    <img src="docs/brand/logo.svg" alt="LubbDubb" width="120">
+  </picture>
+</p>
+
 # LubbDubb
 
 A self-hosted, always-running **orchestration harness** for one software engineer's work — a

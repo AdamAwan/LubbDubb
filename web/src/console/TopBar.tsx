@@ -5,6 +5,7 @@ import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { BareButton } from '../components/button.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { Icon } from '../components/icons.js';
+import { Logo } from '../components/Logo.js';
 import { ExtLink } from '../components/util.js';
 import { ControlButton } from '../components/controls.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
@@ -76,10 +77,12 @@ function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: s
 
 function Ident({ view }: { view: CockpitView }): JSX.Element {
   return (
-    <div className="cn-ident">
-      <i className="cn-dot" style={view.connected ? undefined : { background: 'var(--cn-red)' }} />
-      LubbDubb
-      {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
+    <div className="cn-ident" title={view.connected ? 'LubbDubb — connected' : 'LubbDubb — the link is down'}>
+      <Logo alive={view.connected} />
+      <span className="cn-wordmark">
+        Lubb<b>Dubb</b>
+      </span>
+      {view.demo && <span className="cn-ident-demo">demo</span>}
     </div>
   );
 }

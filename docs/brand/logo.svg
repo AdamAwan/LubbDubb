@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="LubbDubb">
+<style>
+.a{animation:blink 1.2s infinite}
+.p{stroke-dasharray:30 120;animation:beat 1.2s linear infinite}
+@keyframes blink{0%,70%,100%{opacity:1}35%{opacity:.25}}
+@keyframes beat{from{stroke-dashoffset:30}to{stroke-dashoffset:-110}}
+@media (prefers-reduced-motion:reduce){.a,.p{animation:none}.p{stroke-dasharray:none}}
+</style>
+<rect x="12" y="56" width="10" height="20" rx="4" fill="#E5484D"/>
+<rect x="98" y="56" width="10" height="20" rx="4" fill="#E5484D"/>
+<line x1="60" y1="34" x2="60" y2="22" stroke="#111" stroke-width="5" stroke-linecap="round"/>
+<circle class="a" cx="60" cy="18" r="6" fill="#E5484D"/>
+<rect x="20" y="34" width="80" height="64" rx="18" fill="#111"/>
+<circle cx="44" cy="58" r="7" fill="#fff"/>
+<circle cx="76" cy="58" r="7" fill="#fff"/>
+<polyline points="34,80 46,80 51,71 57,89 62,80 70,80 73,76 76,84 79,80 86,80" fill="none" stroke="#3a3a3e" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline class="p" points="34,80 46,80 51,71 57,89 62,80 70,80 73,76 76,84 79,80 86,80" fill="none" stroke="#E5484D" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

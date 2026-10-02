@@ -190,9 +190,78 @@
 .cn-ident {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+  gap: 7px;
+}
+.cn-wordmark {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+.cn-wordmark b {
+  font-weight: inherit;
+  color: var(--cn-red);
+}
+.cn-ident-demo {
+  color: var(--cn-fg-faint);
+  font-size: 11px;
+}
+.cn-logo {
+  flex: none;
+  contain: paint;
+}
+.cn-logo-mark {
+  fill: var(--cn-red);
+}
+.cn-logo-stalk {
+  stroke: var(--cn-fg);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.cn-logo-head {
+  fill: var(--cn-fg);
+}
+.cn-logo-eye {
+  fill: var(--cn-panel);
+}
+.cn-logo-trace {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cn-panel) 70%, var(--cn-fg));
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cn-logo-pulse {
+  stroke: var(--cn-red);
+  stroke-dasharray: 30 120;
+  animation: cn-logo-beat 1.2s linear infinite;
+}
+.cn-logo-alive .cn-logo-lamp {
+  animation: cn-logo-blink 1.2s infinite;
+}
+@keyframes cn-logo-beat {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: -110;
+  }
+}
+@keyframes cn-logo-blink {
+  0%,
+  70%,
+  100% {
+    opacity: 1;
+  }
+  35% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cn-logo-pulse,
+  .cn-logo-alive .cn-logo-lamp {
+    animation: none;
+    stroke-dasharray: none;
+  }
 }
 /* The two ways out, at the readings' end of the bar. Their own group so the pair
    never comes apart when the strip wraps — the cheaper offer is only offered first
@@ -211,13 +280,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.cn-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cn-green);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-green) 15%, transparent);
 }
 .cn-sep {
   width: 1px;
