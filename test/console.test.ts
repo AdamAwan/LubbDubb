@@ -17,6 +17,7 @@ import { oneLine } from '../web/src/view/needLines.js';
 import { askRows, withAsks } from './support/asks.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
 import { repoPath, repoText } from './support/paths.js';
+import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -71,15 +72,6 @@ const render = (v: CockpitView) =>
       children: createElement(ConsoleRoot, { view: v, actions }),
     }),
   );
-
-function decode(html: string): string {
-  return html
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
-}
 
 test('nothing under console/ imports the api module', () => {
   const dir = repoPath('web/src/console');
@@ -1000,7 +992,7 @@ test('the ask rows are tiles, so the answer sits under the question on any width
   assert.doesNotMatch(rule('.cn-needs-what'), /nowrap/, 'the question wraps inside its tile');
 });
 
-test('the plan’s verdict is asked on the plan card, and not as a line as well', () => {
+test('the plan’s verdict is asked on the plan card, and its row stays as the way down to it', () => {
   const ref = goalRef();
   const plan = goalView(() => {}, ref, [], [], 'plan');
   const row = plan.needsYou.find((n) => n.goalRef === ref && n.kind === 'plan');
@@ -1015,10 +1007,10 @@ test('the plan’s verdict is asked on the plan card, and not as a line as well'
 
   const html = render(plan);
   assert.ok(html.includes('cn-plan-verdict'), 'the ask is drawn in full where the plan is read');
-  assert.ok(
-    !linesOf(html).some((line) => line.includes(oneLine(row.title))),
-    'and not as a row as well — go and find an ask, above the card already asking it, is the same ask twice',
-  );
+  const kept = linesOf(html).filter((line) => line.includes(oneLine(row.title)));
+  assert.equal(kept.length, 1, 'the row stays, so pressing the tab moves nothing under it');
+  assert.match(kept[0]!, /Below/, 'and it reads as the way down to the card, not a second way to answer');
+  assert.ok(html.includes('cn-needs-below'), 'drawn dimmed, since the card below is the one asking');
 
   /* Every other pane draws no plan card, so the row is the only thing there that
      says a verdict is waiting. */
@@ -1028,6 +1020,7 @@ test('the plan’s verdict is asked on the plan card, and not as a line as well'
     linesOf(elsewhere).some((line) => line.includes(oneLine(row.title))),
     'the row is kept on a pane the card is not drawn in',
   );
+  assert.ok(!elsewhere.includes('cn-needs-below'), 'and drawn at full weight there');
 });
 
 test('the verb of the press is on the row, not a faint way in', () => {

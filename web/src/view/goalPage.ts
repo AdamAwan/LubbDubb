@@ -397,19 +397,24 @@ export function splitGoalAsks(
   page: GoalPageView,
   escalations: readonly Escalation[],
   tab: GoalTab,
-): { inPane: NeedRow[]; lines: NeedRow[] } {
-  /* Only on the pane the plan card is drawn in: elsewhere the card is not in front
-     of the operator, and the row is the only thing saying the plan is waiting. */
+): { inPane: NeedRow[]; lines: NeedRow[]; below: Map<string, string> } {
   const onPlanCard = tab === 'plan' ? planCardAsk(page, escalations) : null;
   const inPane: NeedRow[] = [];
   const lines: NeedRow[] = [];
+  const below = new Map<string, string>();
   for (const row of page.needs) {
     if (row.placementField === 'parent') continue;
-    if (row.id === onPlanCard?.id) continue;
-    (GOAL_ASK_TAB[row.kind] === tab ? inPane : lines).push(row);
+    lines.push(row);
+    if (row.id === onPlanCard?.id) below.set(row.id, GOAL_ANCHOR.plan);
+    else if (GOAL_ASK_TAB[row.kind] === tab) {
+      inPane.push(row);
+      below.set(row.id, PANE_ASKS_ANCHOR);
+    }
   }
-  return { inPane, lines };
+  return { inPane, lines, below };
 }
+
+export const PANE_ASKS_ANCHOR = 'cn-paneasks';
 
 function workStarted(page: GoalPageView): boolean {
   return page.plan !== null || page.openPullRequests.length > 0 || page.agents.length > 0;
@@ -419,7 +424,7 @@ function shipped(page: GoalPageView): boolean {
   return page.environments.some((e) => e.status === 'reached' || e.status === 'partial');
 }
 
-function livePageChecks(page: GoalPageView): ValidationCheckView[] {
+export function livePageChecks(page: GoalPageView): ValidationCheckView[] {
   return page.checks.filter((c) => c.supersededReason === null);
 }
 

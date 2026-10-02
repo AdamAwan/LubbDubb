@@ -855,6 +855,12 @@ the operator on a page without it was the same failure one layer up from the one
 to remove — the gap named where the person who could close it can see it, and no way from there to
 closing it.
 
+**One sentence of why, and nothing else.** Where nobody has written a description the card says
+_"You're about to ask someone else to review this — spend the time making that easier for them"_ and
+then the field. The ask's body is the card alone: the part's title repeated the ask's own heading, and
+two paragraphs explaining what the gap costs and how to fill it were reading time spent before the
+writing it was asking for.
+
 #### The agent's draft
 
 The agent writes a body at `open_pr` — the bullet list above, checked by `prBodyRefusal` — so its

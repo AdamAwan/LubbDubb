@@ -19,6 +19,8 @@ import {
   goalSectionsOpen,
   planVerdictAsk,
   splitGoalAsks,
+  PANE_ASKS_ANCHOR,
+  GOAL_ANCHOR,
 } from '../web/src/view/goalPage.js';
 import { buildGoalTrack } from '../web/src/view/goalStages.js';
 import { standsFor } from '../web/src/view/goalRefs.js';
@@ -903,7 +905,7 @@ test('the plan’s verdict is asked beside the plan once it is revealed and stil
   );
 });
 
-test('an ask is drawn in the pane it is about, and stays a row everywhere else', () => {
+test('an ask is drawn in the pane it is about, and keeps its row everywhere, dimmed where the pane draws it', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
@@ -929,8 +931,13 @@ test('an ask is drawn in the pane it is about, and stays a row everywhere else',
   );
   assert.deepEqual(
     onPlan.lines.map((row) => row.id),
-    ['profile:1', 'task:check'],
-    'the checks ask belongs to another pane, and the profile ask to none',
+    ['e:1', 'profile:1', 'task:check'],
+    'every ask keeps its row, so a tab press moves nothing under it',
+  );
+  assert.deepEqual(
+    [...onPlan.below],
+    [['e:1', GOAL_ANCHOR.plan]],
+    'the plan card draws the plan ask, so its row points down to the card',
   );
 
   const onValidate = splitGoalAsks(page, escalations, 'validate');
@@ -941,8 +948,9 @@ test('an ask is drawn in the pane it is about, and stays a row everywhere else',
   );
   assert.deepEqual(
     onValidate.lines.map((row) => row.id),
-    ['e:1', 'profile:1'],
+    ['e:1', 'profile:1', 'task:check'],
   );
+  assert.deepEqual([...onValidate.below], [['task:check', PANE_ASKS_ANCHOR]], 'only the pane’s own ask is dimmed');
 });
 
 test('a withheld plan’s ask is the gate’s, never a card above it as well', () => {
@@ -959,7 +967,12 @@ test('a withheld plan’s ask is the gate’s, never a card above it as well', (
 
   const split = splitGoalAsks(gated, escalations, 'plan');
   assert.deepEqual(split.inPane, [], 'the gate is what asks it — a card saying reveal it is the ask twice');
-  assert.deepEqual(split.lines, [], 'and neither is a row that leads back to the card in front of them');
+  assert.deepEqual(
+    split.lines.map((row) => row.id),
+    ['e:1'],
+    'the row stays, so the tab row does not jump when the pane opens',
+  );
+  assert.deepEqual([...split.below], [['e:1', GOAL_ANCHOR.plan]], 'and it is drawn as the way down to the gate');
   assert.equal(planVerdictAsk(gated, escalations), null, 'no verdict is asked under the gate');
 });
 

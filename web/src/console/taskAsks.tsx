@@ -5,31 +5,19 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { GOAL_ANCHOR, GOAL_TAB_OF, buildGoalPage } from '../view/goalPage.js';
-import { goalIssue } from '../view/goalRefs.js';
-import { scrollToAnchor } from './jump.js';
-import { HumanTaskActions } from '../components/HumanTaskActions.js';
-import { renderMarkdown } from '../components/markdown.js';
+import { livePageChecks, obligationEnvironment } from '../view/goalPage.js';
+import type { GoalPageView } from '../view/goalPage.js';
+import { RunStrip, TenantBanner } from './goalRunners.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
 import { planIssueOf } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { Button, ButtonRow, BareButton } from '../components/button.js';
+import { CloseOutAsk } from './closeOutAsk.js';
+import { goalPageFor, TalkAnswers, TaskAnswers, TaskLede } from './taskAnswers.js';
+import { openGoalChecks } from './jump.js';
 
 // → docs/spec/17-cockpit.md
-
-function noteOwedOnDone(task: HumanTask, view: CockpitView): string | null {
-  if (task.kind !== 'close_out' || task.status !== 'open' || task.originRef === null) return null;
-  const issue = goalIssue(view.state, task.originRef);
-  if (issue?.validation?.state !== 'flagged') return null;
-  return 'Validation is not clear on this goal — the checks listed above are outstanding. Closing it out is still yours to do; what it costs is a sentence saying what you are doing about them, or waiving them first.';
-}
-
-function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
-  if (task.kind !== 'close_out' || task.status !== 'open') return false;
-  if (task.originRef === null || !/^issue:\d+$/.test(task.originRef)) return false;
-  return view.state.config.canCloseIssue;
-}
 
 const LIVE_AGENT: readonly string[] = ['starting', 'running', 'waiting'];
 
@@ -55,8 +43,9 @@ export function taskBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   switch (row.kind) {
     case 'watch':
       return <WatchFinding task={task} view={view} actions={actions} />;
-    case 'validate':
     case 'close_out':
+      return <CloseOutAsk task={task} view={view} actions={actions} inPane={checksBelow} />;
+    case 'validate':
       return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
     case 'supply':
       return <SupplyAsk task={task} view={view} actions={actions} />;
@@ -72,39 +61,6 @@ export function taskBody(row: NeedRow, view: CockpitView, actions: CockpitAction
         />
       );
   }
-}
-
-function TaskLede({ task, view }: { task: HumanTask; view: CockpitView }): JSX.Element {
-  return (
-    <>
-      <p className="cn-lede">{task.title}</p>
-      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-    </>
-  );
-}
-
-function TaskAnswers({
-  task,
-  view,
-  actions,
-  extra,
-}: {
-  task: HumanTask;
-  view: CockpitView;
-  actions: CockpitActions;
-  extra?: ReactNode;
-}): JSX.Element {
-  return (
-    <HumanTaskActions
-      task={task}
-      look={{ tone: 'secondary' }}
-      noteOnDone={noteOwedOnDone(task, view)}
-      onDone={(id, note) => actions.completeHumanTask(id, note)}
-      onDecline={(id, note) => actions.declineHumanTask(id, note)}
-      onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
-      extra={extra}
-    />
-  );
 }
 
 function BenchAsk({
@@ -140,25 +96,9 @@ function BenchAsk({
 }
 
 /**
- * The bench rows that ask for the goal's checks — `validate` — and that say the goal
- * is delivered and its ticket is still open — `close_out` — drawn as the checks
- * themselves.
- *
- * Every other ask on this surface is answered by the ask: a verdict, a pick, a
- * sentence. `validate` is answered somewhere else — somebody runs the checks and
- * records what they saw — so a body that only names them is a page that tells the
- * operator to go and find the work, on the one surface whose whole argument is
- * that the thing to do is in front of you.
- *
- * The decision `close_out` asks for is *what to do about the checks*: the desk's own
- * note on `Done` says so in as many words — closing a goal whose validation is flagged
- * costs a sentence about the outstanding ones, or waiving them first. It said it
- * about a list drawn as prose. So the rows come with it, and both answers the note
- * offers are controls on this page rather than a trip to the goal.
- *
- * The desk's prose stays above the rows. It is its own refreshed statement of what
- * the goal owes — the sheet assembled for an environment, the ticket's link — and
- * it is what the row says everywhere the rows are not in front of the reader.
+ * The bench row that asks for the goal's checks — `validate` — drawn as the runners and the checks
+ * themselves rather than the desk's sentence naming them: the strip with the OK a waiting page needs,
+ * then the rows. `checksBelow` is the goal page, where both are a pane away.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
 function ChecksAsk({
@@ -172,79 +112,86 @@ function ChecksAsk({
   actions: CockpitActions;
   checksBelow: boolean;
 }): JSX.Element {
+  if (checksBelow) {
+    return (
+      <>
+        <ChecksBelow originRef={task.originRef} view={view} actions={actions} />
+        <TaskAnswers task={task} view={view} actions={actions} />
+      </>
+    );
+  }
+  const page = goalPageFor(view, task.originRef);
+  if (page === null) {
+    return (
+      <>
+        <TaskLede task={task} view={view} />
+        <TaskAnswers task={task} view={view} actions={actions} />
+      </>
+    );
+  }
   return (
     <>
-      <TaskLede task={task} view={view} />
-      <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
-      <TaskAnswers task={task} view={view} actions={actions} />
+      <TenantBanner
+        page={page}
+        showing={obligationEnvironment(page, 'validate', view.sheetEnvironment)}
+        actions={actions}
+      />
+      <RunStrip page={page} view={view} actions={actions} />
+      <GoalChecks page={page} view={view} actions={actions} />
+      <TalkAnswers
+        task={task}
+        view={view}
+        actions={actions}
+        issueNumber={page.issue.number}
+        question="what is stopping these checks passing?"
+        label="Stuck? Talk it through"
+      />
     </>
   );
 }
 
 /**
- * A goal's validation checks, drawn inside the ask that is about them, from the
- * same {@link ValidationSection} the goal page manages them with — the steps, the
- * resources and the four readings — with every check still owed already open.
- *
- * Two asks share it because the same rows answer both questions. `validate` asks
- * for the readings; `close_out` asks what closing the goal does about the ones
- * nobody took. A body that only names them is an ask that tells the operator to go
- * and find the work, which on "One ask at a time" is the whole surface arguing
- * against itself.
- *
- * Nothing where the snapshot holds no live check for the goal: a row filed against
- * a goal whose checks this cockpit cannot see is still a row somebody has to
- * settle, and the desk's prose above is what it says then.
- *
- * **Except on the goal page**, which `checksBelow` says this band is on. The rule is
- * about reaching the work from where the ask is read, and on the rail or in the panel
- * that means drawing it; there it means the opposite, because the rows are a pane
- * away already. Two live copies of one control, one of them above the tab row and
- * pushing it off the screen, is the ask drawing the page it is standing on. So there
- * the band says how many and offers the way to them — and counts off the snapshot
- * rather than building the whole goal page to do it.
+ * The goal page's stand-in for the rows: they are a pane away there, and a second live copy above the
+ * tab row is the ask drawing the page it is standing on. So it says how many and offers the way to
+ * them, counted off the snapshot rather than building the whole goal page to do it.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
-function GoalChecks({
+function ChecksBelow({
   originRef,
   view,
   actions,
-  checksBelow,
 }: {
   originRef: string | null;
   view: CockpitView;
   actions: CockpitActions;
-  checksBelow: boolean;
 }): JSX.Element | null {
-  const number = Number(/^issue:(\d+)$/.exec(originRef ?? '')?.[1]);
-  if (originRef === null || !Number.isFinite(number)) return null;
-  if (checksBelow) {
-    const live = (view.state.validationChecks ?? []).filter(
-      (c) => c.originRef === originRef && c.supersededReason === null,
-    );
-    if (live.length === 0) return null;
-    return (
-      <BareButton
-        usage="validation.expand"
-        className="cn-ask-checks-to"
-        onClick={() => {
-          /* All three, in the order `buildJump` does them: the pane, then the card's
-             own fold, then the scroll two frames later. A jump that skipped the fold
-             would land on a heading and read as a control that did nothing.
-             → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet */
-          actions.openGoalTab(GOAL_TAB_OF.validation);
-          actions.openGoalSection('validation', true);
-          scrollToAnchor(GOAL_ANCHOR.validation);
-        }}
-      >
-        {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
-        Checks, below — go to them
-      </BareButton>
-    );
-  }
-  const page = buildGoalPage(view.state, originRef, view.needsYou, null);
-  const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
-  if (page === null || live.length === 0) return null;
+  const live = (view.state.validationChecks ?? []).filter(
+    (c) => c.originRef === originRef && c.supersededReason === null,
+  );
+  if (originRef === null || live.length === 0) return null;
+  return (
+    <BareButton
+      usage="validation.expand"
+      className="cn-ask-checks-to"
+      onClick={() => openGoalChecks(actions, originRef)}
+    >
+      {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
+      Checks, below — go to them
+    </BareButton>
+  );
+}
+
+function GoalChecks({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const number = page.issue.number;
+  if (livePageChecks(page).length === 0) return null;
   return (
     <div className="cn-ask-checks">
       <ValidationSection

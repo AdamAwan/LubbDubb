@@ -7238,6 +7238,54 @@ button.cn-grow {
   font-size: 12px;
   color: var(--cn-fg-dim);
 }
+.cn .cn-needs-below {
+  opacity: 0.45;
+  border-left-color: var(--cn-tone-line);
+  transition: opacity 0.15s;
+}
+.cn .cn-needs-below:hover,
+.cn .cn-needs-below:focus-visible {
+  opacity: 0.8;
+}
+.cn-closeout {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.cn-closeout dt {
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  padding-top: 2px;
+}
+.cn-closeout dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  min-width: 0;
+  margin: 0;
+}
+.cn-closeout dd.cn-closeout-list {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.cn-closeout-age {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+.cn-closeout-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .cn-needs-line .cn-age {
   flex: none;
   margin-left: auto;

@@ -18,6 +18,7 @@ import type { Issue, IssueRelative, WorldSnapshot } from '../src/types.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { AppState, Issue as WebIssue } from '../web/src/types.js';
+import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -112,13 +113,6 @@ test('the snapshot carries the candidate containers, derived once for the whole 
     system.store.close();
   }
 });
-
-function decode(html: string): string {
-  return html
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&');
-}
 
 function pickerHtml(candidates: IssueRelative[], goalNumber = 12, proposed: number | null = null): string {
   const state = buildDemoState().state as AppState;

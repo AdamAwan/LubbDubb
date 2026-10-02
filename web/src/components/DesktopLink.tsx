@@ -13,14 +13,17 @@ export function DesktopLink({
   ready = 'ready to send',
   label = 'Open in Claude Code',
   control,
+  fullSize = false,
   usage,
 }: {
   folder: string;
   prompt: string;
   explain: string;
   ready?: string;
-  label?: 'Open in Claude Code' | 'Question?' | 'Check my description';
+  label?: string;
   control?: boolean;
+  /** Beside a full-size press, at its size rather than the small one a link usually wears. */
+  fullSize?: boolean;
   usage: OpenUsage;
 }): JSX.Element {
   const inControlRow = useInControlRow();
@@ -36,5 +39,9 @@ export function DesktopLink({
       </>
     ),
   };
-  return asControl ? <BareLink className={CONTROL_CLASS} {...link} /> : <LinkButton {...link} ghost size="small" />;
+  return asControl ? (
+    <BareLink className={CONTROL_CLASS} {...link} />
+  ) : (
+    <LinkButton {...link} ghost size={fullSize ? undefined : 'small'} />
+  );
 }

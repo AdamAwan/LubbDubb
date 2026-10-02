@@ -185,7 +185,7 @@ function LocalRunRow({
     <div className="cn-runstrip-row">
       <span className="cn-runstrip-who">your machine</span>
       {flight !== null ? (
-        <span className="cn-sub">{localValidationSaid(flight)} — the panel below follows it</span>
+        <span className="cn-sub">{localValidationSaid(flight)} — its panel on the Validate tab follows it</span>
       ) : offer.offered ? (
         <>
           <AsyncButton

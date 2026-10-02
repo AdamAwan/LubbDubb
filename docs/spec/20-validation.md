@@ -1072,9 +1072,9 @@ being asked for before anybody has seen the page. A sheet with nothing to OK hol
 _Not validating here_ answers it. → [36](36-remote-validation.md#the-ok)
 
 **The cockpit draws the row as the checks themselves**, not as the sentence naming them: the goal's own
-check rows, with the ones still owed already open, under the desk's prose. The detail above them is
-still what this desk writes and still refreshed every pulse — it is what the row says on every surface
-that has no check rows to draw. → [17](17-cockpit.md#an-ask-that-asks-for-work-draws-the-work)
+check rows, with the ones still owed already open, under the goal's run strip — the OK a waiting page
+needs is a control there rather than a sentence. The detail is still what this desk writes and still
+refreshed every pulse — it is what the row says on every surface that has no check rows to draw. → [17](17-cockpit.md#an-ask-that-asks-for-work-draws-the-work)
 
 **It waits for the check set's accept.** A set still proposed is not work yet
 ([The check set is proposed before it is work](#the-check-set-is-proposed-before-it-is-work)), so the

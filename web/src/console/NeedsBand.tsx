@@ -33,7 +33,7 @@ export function NeedsBand({
   row: NeedRow;
   view: CockpitView;
   actions: CockpitActions;
-  /** This band is drawn on the goal page, whose Checks pane holds the same rows. */
+  /** This band is drawn on the goal page, which draws what the ask is about below it — the checks, the reach. */
   checksBelow?: boolean;
   /**
    * Draw the ask as one row rather than the whole thing, answered on the row where
@@ -111,6 +111,21 @@ function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; act
       </BareButton>
       {open && <NeedsBand row={row} view={view} actions={actions} checksBelow={row.kind === 'validate'} />}
     </div>
+  );
+}
+
+/** An ask the open pane already draws in full: kept in its place in the row so the page does not jump, dimmed, and a press down to it. */
+export function BelowLine({ row, anchor, now }: { row: NeedRow; anchor: string; now: number }): JSX.Element {
+  return (
+    <BareButton
+      usage={{ counted: 'escalation.view' }}
+      className={`cn-needs-line cn-needs-below cn-t-${KIND_TONE[row.kind]}`}
+      onClick={() => scrollToAnchor(anchor)}
+      title="This ask is answered in the pane below"
+    >
+      <LineFace row={row} now={now} />
+      <span className="cn-needs-do">Below {'\u2193'}</span>
+    </BareButton>
   );
 }
 
@@ -326,22 +341,8 @@ function assignedBody(row: NeedRow, view: CockpitView): ReactNode {
 function describeBody(row: NeedRow, view: CockpitView): ReactNode {
   const waiting = (view.state.undescribedParts ?? []).find((p) => `describe:${p.originRef}` === row.id);
   if (waiting === undefined) return null;
-  const part = (view.state.planParts ?? []).find((p) => waiting.originRef.endsWith(`:part:${p.slug}`));
   return (
     <>
-      {part !== undefined && (
-        <p>
-          <strong>{part.title}</strong>
-        </p>
-      )}
-      <p className="cn-tick">
-        The pull request is open and carries the agent&rsquo;s evidence and the reference, and nothing else. Nothing
-        fills the gap and nothing is held up by it — the reviewer simply meets a change with nobody&rsquo;s account of
-        it above the coordinates.
-      </p>
-      <p className="cn-tick">
-        Read the change first, then write it in your own words — what you write goes to the top of its body.
-      </p>
       {/* The pull request's own description card, so the ask is answered where it is asked.
           → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer */}
       <PrDescription prNumber={waiting.prNumber} open desktopFolder={view.state.config.desktopFolder} now={view.now} />

@@ -43,8 +43,8 @@ type HumanTaskActionsProps = {
   task: HumanTask;
   look?: ButtonLook;
   noteOnDone?: string | null;
-  onDone: (id: string, note?: string) => Promise<unknown> | unknown;
-  onDecline: (id: string, note: string) => Promise<unknown> | unknown;
+  onDone: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
+  onDecline: ((id: string, note: string) => Promise<unknown> | unknown) | null;
   onCloseTicket?: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
   extra?: ReactNode;
 };
@@ -76,33 +76,16 @@ export function HumanTaskActions({
 
   return (
     <>
-      <ButtonRow bar>
-        {/* The act, ahead of the two records of it. A close-out row asks for one
-            thing, and this is it — so it leads, and the note rule it may owe is
-            the same one Done owes, asked in the same box. */}
-        {onCloseTicket !== null && (
-          <Press
-            look={expected(look)}
-            asks={noteOnDone !== null}
-            words={PRESS_WORDS.close}
-            onRefused={setRefusal}
-            onAct={act(onCloseTicket)}
-            onAsk={() => open('close')}
-          />
-        )}
-        <Press
-          look={onCloseTicket === null ? expected(look) : look}
-          asks={noteOnDone !== null}
-          words={PRESS_WORDS.done}
-          onRefused={setRefusal}
-          onAct={act(onDone)}
-          onAsk={() => open('done')}
-        />
-        <Button {...look} usage="human-task.expand" onClick={() => open('declined')} title="You will not be doing this">
-          Decline
-        </Button>
-        {extra}
-      </ButtonRow>
+      <Verbs
+        look={look}
+        asks={noteOnDone !== null}
+        onClose={onCloseTicket === null ? null : act(onCloseTicket)}
+        onDone={onDone === null ? null : act(onDone)}
+        onDecline={onDecline !== null}
+        open={open}
+        onRefused={setRefusal}
+        extra={extra}
+      />
       {saying !== null && (
         <NoteBox
           saying={saying}
@@ -113,9 +96,8 @@ export function HumanTaskActions({
           onRefused={setRefusal}
           onConfirm={async () => {
             setRefusal(null);
-            if (saying === 'close') await onCloseTicket?.(task.id, note.trim());
-            else if (saying === 'done') await onDone(task.id, note.trim());
-            else await onDecline(task.id, note.trim());
+            const settle = { close: onCloseTicket, done: onDone, declined: onDecline }[saying];
+            await settle?.(task.id, note.trim());
             setSaying(null);
             setNote('');
           }}
@@ -132,6 +114,60 @@ export function HumanTaskActions({
         </p>
       )}
     </>
+  );
+}
+
+/** The presses, the act ahead of any record of it. Each is drawn only where the station passed it. */
+function Verbs({
+  look,
+  asks,
+  onClose,
+  onDone,
+  onDecline,
+  open,
+  onRefused,
+  extra,
+}: {
+  look: ButtonLook;
+  asks: boolean;
+  onClose: (() => unknown) | null;
+  onDone: (() => unknown) | null;
+  onDecline: boolean;
+  open: (verb: Verb) => void;
+  onRefused: (message: string) => void;
+  extra: ReactNode;
+}) {
+  return (
+    <ButtonRow bar>
+      {/* A close-out row asks for one thing, and this is it — so it leads, and the
+          note it may owe is asked in the same box Done's is. */}
+      {onClose !== null && (
+        <Press
+          look={expected(look)}
+          asks={asks}
+          words={PRESS_WORDS.close}
+          onRefused={onRefused}
+          onAct={onClose}
+          onAsk={() => open('close')}
+        />
+      )}
+      {onDone !== null && (
+        <Press
+          look={onClose === null ? expected(look) : look}
+          asks={asks}
+          words={PRESS_WORDS.done}
+          onRefused={onRefused}
+          onAct={onDone}
+          onAsk={() => open('done')}
+        />
+      )}
+      {onDecline && (
+        <Button {...look} usage="human-task.expand" onClick={() => open('declined')} title="You will not be doing this">
+          Decline
+        </Button>
+      )}
+      {extra}
+    </ButtonRow>
   );
 }
 

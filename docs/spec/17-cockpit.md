@@ -1229,21 +1229,33 @@ scrolling to `GOAL_ANCHOR.validation`. The rows themselves stay in one place on 
 the place that already owns them. `test/askBodies.test.ts` pins both halves: the body draws no sheet
 with `checksBelow`, and draws one without it.
 
-The desk's prose stays above the rows. It is the harness's own refreshed statement of what the goal
-owes — the sheet assembled for an environment, the ticket's link — and it is what the row says
-everywhere the rows are not in front of the reader. Where the snapshot holds no checks for the goal,
-the prose is the whole body, as it was: a row filed against a goal whose checks this cockpit cannot
-see is still a row somebody has to settle.
+**Above the rows go the runners, not the desk's prose.** The ask draws the goal page's own
+`TenantBanner` and `RunStrip` (`web/src/console/goalRunners.tsx`) — the tenant that would make a
+reading untrustworthy, then one line per place a run can happen: _your machine_, and each environment
+with a page, with the **OK, run it** that page is waiting on. The desk's detail used to stand there,
+and its first sentence was _"Its validation page on staging is waiting for your OK"_ — on a surface
+that drew no OK to give. The strip says the same thing as a control. It is the same component the
+Validate pane draws, so a run is still started by one implementation; on the goal page itself the ask
+draws neither, for the same reason it draws no rows. The desk's detail is still what the row says
+everywhere nothing is drawn, and where the snapshot cannot build the goal's page the prose is the
+whole body, as it was: a row filed against a goal this cockpit cannot see is still a row somebody has
+to settle.
 
 **A settled check is drawn closed.** Open is what "this one is yours" looks like here, so opening the
 passed and waived ones with them would say nothing, and the rows still owed would be the ones nobody
 could find. `test/askBodies.test.ts` pins both halves off the row's own disclosure.
 
-**The `close_out` row draws the same rows**, and for a reason it was already stating in prose: the note
-on its `Done` says that closing a goal whose validation is flagged costs a sentence about the
-outstanding checks, or waiving them first — a sentence about _a list drawn as prose one paragraph
-above it_. Both answers it offers are controls on the rows, so the rows come with it. It is the same
-`GoalChecks` block, above the verbs, so the note's "listed above" stays literally true.
+**The `close_out` row draws a summary, not the rows.** Its question is _is this goal finished?_, and
+the four things that answer it are a list, not a sheet: **the goal** (its `Ref` and title), **where it
+is** — every environment's reach verdict, with how long ago the goal arrived there off
+`environmentArrivals` (the arrival record, never the reach row's `at`, which is the latest probe) —
+**the checks**, one line each with its state, and **the pull requests** that merged for it. The full
+check rows it used to draw were the validate ask's controls on a question that is no longer about
+recording readings, and the desk's two paragraphs said the same four things as prose. A check is
+`CheckLine`, the sheet's own line, which opens the goal's checks; a pull request is `closedPrRow`,
+the cockpit's one pull-request row. **On the goal page's Close pane it draws only its answers**: the
+pane draws the reach and the record directly below, and the summary above them would be the pane
+twice. Where the snapshot cannot build the goal's page, the desk's prose is the body.
 
 The same reading applies to two more asks, and the rule it follows in each is: **draw the thing the
 answer is about, keep the desk's prose, and never re-derive what the server already decided.**
@@ -1985,6 +1997,13 @@ button components alone, and `role="button"` or an `onClick` on a plain element 
 [34](34-usage-metrics.md#a-control-that-is-not-a-button) has the rules and what stays out: a plain
 navigation link, which the place already counts.
 
+**An anchor wearing the look measures like a button.** `a.btn` is an inline flex row with a 6px gap,
+so an icon before the label has room, and it takes the line height a `<button>` takes beside it: inside
+the console that is inherited (`.cn button { font: inherit }`, so `.cn a.btn` inherits too), and
+outside it is `normal`, as the UA gives a button there. At `normal` inside the console a link sat about
+four pixels short of the press beside it in every bar that mixes the two. A `DesktopLink` is small by default; `fullSize` draws it at the size of a full press,
+for a bar where it is one of the row's answers rather than an aside.
+
 **`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a
 toggle, a drop target, a close cross — passes that class beside the props, which is the bargain
 [the review mark](#the-fleet-reviews-mark) already makes with `t-green`.
@@ -2462,6 +2481,13 @@ and `splitGoalAsks` decides which:
   ([a row opens in place](#a-row-opens-in-place)); the ask panel is one press further, on the card's
   own **Open**.
 
+**The row stays where it was when the pane draws it**, dimmed, with **Below ↓** for its verb — a press
+that scrolls to the card (`BelowLine` in `NeedsBand`). Taking the row out of the list when its pane
+opened moved everything under it up by a row, so every tab press shifted the panel being pressed; the
+operator was chasing the control they had just used. `splitGoalAsks` returns every row in `lines` and
+names the ones drawn below in `below`, with the anchor each scrolls to: `PANE_ASKS_ANCHOR` for the
+pane's own card, `GOAL_ANCHOR.plan` for the plan card's ask.
+
 **Two rows are never in the pane's set.** The parent ask is drawn by the band at the foot. And the
 plan's own ask belongs to the plan card in **both** of its states — the gate while the plan is
 withheld, the verdict card once it is revealed
@@ -2483,6 +2509,23 @@ the goal page for the same reason the others are: the page and the rail's panel 
 the write between them. Embedded, never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
 `buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
 the console reaching into their class.
+
+#### An ask that settles itself offers a conversation, not a dismissal
+
+The `close_out` and `validate` rows settle themselves: a close-out when the tracker shows the ticket
+closed, a validate row when nothing is left owed to a person and no page is waiting for an OK
+([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time), [20](20-validation.md#saying-so-on-the-bench)).
+So **Done** and **Decline** on them were two ways to make the ask go away with the work in whatever
+state it was in. The only reason not to close a delivered goal, or not to finish its checks, is that
+the work is not done or a check is not good enough — and that is a conversation, not a button.
+
+So both draw `TalkAnswers` (`web/src/console/taskAsks.tsx`): the one act there is — **Mark as closed**
+on a close-out, where the sink can close the item — and a `DesktopLink` that opens the operator's own
+Claude Code on `/lubbdubb:ask <n>` with the question already in the box: _Not ready? Talk it through_
+on a close-out, _Stuck? Talk it through_ on a validate row. `HumanTaskActions` takes `onDone` and
+`onDecline` as nullable for this; every other bench row still passes both. A check the operator will
+not run is skipped on its own row, which records why; the agent the conversation reaches can still
+settle the row through `human_task_settle`.
 
 #### An ask with a proposal is answered on its row
 

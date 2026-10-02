@@ -9,6 +9,7 @@ import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
 import { withAsks } from './support/asks.js';
+import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -96,33 +97,66 @@ test('a validate ask draws one check in full — the first still owed — and th
   assert.ok(!html.includes(owed[1]!.id), `${owed[1]!.letter} should be a line, not a second open row`);
 });
 
-test('a validate ask still carries the row’s own verbs', () => {
+test('a validate ask offers a conversation in place of Done and Decline', () => {
   const v = view();
-  const html = askBody(v, validateRow(v));
-  assert.match(html, /Done/, 'the bench row cannot be settled from the ask');
-  assert.match(html, /Decline/, 'the bench row cannot be declined from the ask');
+  const html = decode(askBody(v, validateRow(v)));
+  /* The row settles itself once nothing is owed, so the only reason it is still standing is a check
+     that is not good enough — and that is a conversation, not a button.
+     → docs/spec/17-cockpit.md#an-ask-that-settles-itself-offers-a-conversation-not-a-dismissal */
+  assert.doesNotMatch(html, />Done</, 'Done dismisses an ask that settles itself');
+  assert.doesNotMatch(html, />Decline</, 'Decline dismisses an ask that settles itself');
+  assert.match(html, /Stuck\? Talk it through/);
+  assert.match(html, /claude:\/\/code\/new\?q=%2Flubbdubb%3Aask\+395\+/, 'the talk opens on the goal’s own ask skill');
 });
 
-test('the close-out ask draws the checks its own note is about', () => {
+test('a validate ask draws the run strip above the checks, not the desk’s prose', () => {
+  const v = view();
+  const row = validateRow(v);
+  const html = decode(askBody(v, row));
+  const task = v.state.humanTasks!.find((t) => t.id === row.id)!;
+  assert.ok(html.includes('cn-runstrip'), 'the place a run is started is drawn where the ask is read');
+  assert.ok(html.indexOf('cn-runstrip') < html.indexOf('pm-vrow'), 'the runners come before the list they answer');
+  assert.ok(!html.includes('cn-lede'), 'the desk’s title and prose are not drawn over the strip');
+  assert.match(task.detail ?? '', /waiting for your OK/, 'the demo row must be one whose page waits for an OK');
+  assert.match(html, /OK, run it/, 'the OK the desk’s prose asked for is a control here');
+});
+
+test('the close-out ask is a summary: the goal, where it is, its checks and its pull requests', () => {
   const v = view();
   const row = rowOfKind(v, 'close_out');
-  const html = askBody(v, row);
+  const html = decode(askBody(v, row));
+  const number = Number(row.goalRef!.replace('issue:', ''));
+  const issue = v.state.world.issues.find((i) => i.number === number)!;
+  assert.ok(html.includes(issue.title), 'the goal is named');
   const live = (v.state.validationChecks ?? []).filter(
     (c) => c.originRef === row.goalRef && c.supersededReason === null,
   );
   assert.ok(live.length > 0, 'the goal being closed out has no checks, so there is nothing to assert');
   for (const check of live) {
-    assert.ok(html.includes(check.title), `check ${check.letter} is not drawn on the close-out ask`);
+    assert.ok(html.includes(check.title), `check ${check.letter} is not named on the close-out ask`);
   }
-  /* The note on `Done` says the outstanding checks are listed above it. It is the
-     sentence this body has to keep honest, so the rows it names are drawn before
-     the verbs, and waiving one is a control here rather than a trip to the goal. */
-  assert.ok(html.indexOf('pm-vrow') < html.indexOf('>Decline<'), 'the checks are drawn below the verbs');
+  assert.ok(!html.includes('pm-vrow'), 'a line per check, not the check sheet');
+  assert.ok(!html.includes('cn-lede'), 'the desk’s prose is not drawn over the summary');
+  for (const dt of ['Goal', 'On', 'Checks', 'Pull requests']) {
+    assert.ok(html.includes(`<dt>${dt}</dt>`), `the summary has no ${dt} line`);
+  }
+  const arrival = (v.state.environmentArrivals ?? []).find((a) => a.goalRef === row.goalRef);
+  assert.ok(arrival !== undefined, 'the demo goal must have arrived somewhere');
+  assert.ok(html.includes(`title="${arrival.arrivedAt}"`), 'how long ago it arrived is read off the arrival');
+});
+
+test('the close-out ask offers Mark as closed and a conversation, not Done or Decline', () => {
+  const v = view();
+  const html = decode(askBody(v, rowOfKind(v, 'close_out')));
+  assert.match(html, />Mark as closed</);
+  assert.match(html, /Not ready\? Talk it through/);
+  assert.doesNotMatch(html, />Done</);
+  assert.doesNotMatch(html, />Decline</);
 });
 
 test('on the goal page an ask that is about the checks does not draw them a second time', () => {
   const v = view();
-  for (const kind of ['validate', 'close_out'] as const) {
+  for (const kind of ['validate'] as const) {
     const row = rowOfKind(v, kind);
     const html = askBody(v, row, true);
     const live = v.state.validationChecks!.filter((c) => c.originRef === row.originRef && c.supersededReason === null);
