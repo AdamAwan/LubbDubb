@@ -1623,16 +1623,29 @@ routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their call
 #### The notice board
 
 `plugin/hooks/` is a Claude Code **mod** (function hooks) inside the same plugin. The skills answer
-only when asked; the board answers without being asked. It draws one line above the prompt —
-`LubbDubb · 4 asks · next: Question on #284 · fleet paused · /lubbdubb:next` — raises a toast for
-each ask that is new since its last look, and adds `/board`, which lists the asks in order and points
-at `/lubbdubb:next`.
+only when asked; the board answers without being asked. It draws in two places:
+
+- **A status line above the prompt**, in a box of its own:
+  `● LubbDubb 2/4 agents · 3 asks (1 blocking) · next: Merge #412 · 2 features · 1 PR needs attention
+· 1 ready to merge  Open panel  Hide`. The dot is yellow and `fleet paused` leads while the fleet
+  is paused; a count with nothing in it is left out, except the agents and the asks.
+- **A panel** (`$.ui.open`, docked beside the transcript where the surface docks, inline above the
+  prompt where it does not), opened at session start, from the band's Open panel and by `/panel`. It
+  carries five sections: **Needs you** (the asks, the blocking ones marked), **Features** (each
+  unfinished feature with a bar — delivered and settled parts green, in-flight yellow — and its
+  `delivered/total`, marked when anything blocks it), **Pull requests** (each open PR with one state),
+  **Fleet** (the live agents, how long and what they have cost) and **Up next** (the dispatcher's
+  queue).
+
+It raises a toast for each ask that is new since its last look, and adds `/board`, which lists the
+asks in order and points at `/lubbdubb:next`.
 
 - **It is a reader of the HTTP API, not of this channel.** It polls `GET
-/api/state?sections=asks,control` ([16](16-http-api.md)) every 30 seconds with the cockpit's
-  bearer token: `LUBBDUBB_TOKEN` if set, else the file its `tokenFile` option names, which the bundle
-  defaults to this harness's own. The MCP socket is for a model making calls; nothing here is a
-  model, and the board costs no tokens.
+/api/state?sections=asks,control,fleet,queue,goals` and `GET /api/features` ([16](16-http-api.md))
+  every 15 seconds with the cockpit's bearer token: `LUBBDUBB_TOKEN` if set, else the file its
+  `tokenFile` option names, which the bundle defaults to this harness's own. The MCP socket is for a
+  model making calls; nothing here is a model, and the board costs no tokens. A deployment with no
+  feature board answers `/api/features` with a 404, and the panel simply has no Features section.
 - **It counts what "Needs you" counts, in the order `ask_next` walks it.** The `asks` section is the
   server's one queue ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)); the board
   keeps its standing rows, sorts by `focusRank`, and names the head as `next:` — the ask
@@ -1640,21 +1653,40 @@ at `/lubbdubb:next`.
   tasks itself, which was a third account of what the operator owes, missing every other kind. Plan
   text a withheld plan would show never reaches it, because the queue's titles are drawn off the
   masked inbox.
-- **A toast is keyed by the ask's id**, so an ask that changes its title is not news and one that
-  comes back after being answered is.
-- **It settles nothing.** No button on the board writes; `/board` points at `/lubbdubb:next` and
-  the cockpit, where every write goes through the object the cockpit's click goes through
-  ([above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)).
+- **A pull request's state is the board's own first cut, not `prAttentionStatus`.** The first of
+  conflicts, CI failing, unresolved threads, CI running, ready to merge (approved and not blocked),
+  behind base, in review. It does not weigh the operator's assignment or approval the way the
+  cockpit's lens does ([07](07-pull-requests.md)), so the two can disagree on a PR the operator is
+  reviewing; moving the verdict onto the wire is the fix if that matters.
+- **A link goes to the tracker, and only a bounded `https:` one is drawn as a link.** A PR's title
+  links to the URL `refUrls` carries for it, as the cockpit's `<Ref>` does. The engine refuses the
+  whole tree over one malformed `href`, so a URL that is not plain-ASCII `https:` without an `@` is
+  drawn as text instead — one bad URL never blanks the panel.
+- **Every press drafts; nothing is sent for the operator.** An ask, a feature and Work through each
+  `$.prompt.fill` the prompt box with a sentence — the ask to decide, the feature's state to explain,
+  the queue to walk — and the operator presses Enter. A `$.prompt.submit` from a press waits until the
+  session is idle and says nothing meanwhile, so an operator clicks again and gets two turns; a draft
+  replaces the last one and is in front of them at once.
+- **It settles no ask.** `/board` points at `/lubbdubb:next` and the cockpit, where every write goes
+  through the object the cockpit's click goes through
+  ([above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)). Its one write is
+  the panel's Pause/Resume, which posts `POST /api/control {paused}` — the route the cockpit's own
+  toggle posts.
 - **A harness it cannot reach draws nothing.** An unanswered or refused poll clears the board, so a
-  stopped harness never leaves a stale count standing, and `/board` says it is not answering.
+  stopped harness never leaves a stale count standing: the band goes, the panel says it is not
+  answering, and `/board` says the same.
 - **The first look toasts nothing.** Toasts are the difference between two looks, so starting a
   session with ten items waiting draws the line, not ten toasts.
 - **The band above the prompt is shared, so the board draws _above_ whatever the plugins beneath
-  it draw.** The engine draws one `AbovePrompt` band, and plugins share it by chaining through
-  `next(e)`; a hook that returns its own tree without calling `next` hides every plugin beneath it
-  — another plugin's PR watcher, say — for as long as the board has something to say, with nothing
-  red. So when the board draws, it awaits `next(e)` and stacks that result under its own row. Hide
-  hides the board's row only.
+  it draw, and boxes only its own row.** The engine draws one `AbovePrompt` band, and plugins share
+  it by chaining through `next(e)`; a hook that returns its own tree without calling `next` hides
+  every plugin beneath it — another plugin's PR watcher, say — for as long as the board has something
+  to say, with nothing red. So when the board draws, it awaits `next(e)` and stacks that result under
+  its own boxed row, outside the box: unboxed, two plugins' lines ran together into one block nobody
+  could tell apart. Hide hides the board's row only; `/board` or `/panel` brings it back.
+- **A pane button needs focus on desktop.** A click on a pane that does not hold the keyboard gives
+  it the keyboard; the desktop app drops that first press. The pane's hotkeys (`n` Work through, `p`
+  Pause) need the same focus. This is the engine's, not the board's.
 
 The mod API is early access and changes between Claude Code releases; `claude plugin validate` and
 `claude plugin test` on `plugin/` are its checks, and `npm run check` does not run them.
