@@ -19,31 +19,48 @@ export function prDescriptionCheck(s: StageContext): void {
     const branch = describeCheckBranch(pr.number);
     const title = `Check the description of PR #${pr.number}`;
     const reason = `The operator wrote a description for PR #${pr.number} and nothing has read it against the diff.`;
-    s.consider({
-      origin,
-      rule: 'pr-description-check',
-      title,
-      kind: 'code',
-      branch,
-      reason,
-      action: {
-        type: 'dispatch_code_agent',
-        ...readOnlyDispatch(branch, pr.branch),
-        title,
-        prompt: s.templates.render('pr-description-check', {
-          number: pr.number,
-          title: pr.title,
-          branch: pr.branch,
-          base: pr.baseBranch ?? s.defaultBranch,
-          id: waiting.versionId,
-          description: waiting.text,
-        }),
-        originRef: origin,
-        originTitle: pr.title,
-        originSummary: `PR #${pr.number} on branch ${pr.branch}`,
+    const authored = Date.parse(waiting.authoredAt);
+    s.consider(
+      {
+        origin,
         rule: 'pr-description-check',
+        title,
+        kind: 'code',
+        branch,
         reason,
-      } satisfies RawAction,
-    });
+        action: {
+          type: 'dispatch_code_agent',
+          ...readOnlyDispatch(branch, pr.branch),
+          title,
+          prompt: s.templates.render('pr-description-check', {
+            number: pr.number,
+            title: pr.title,
+            branch: pr.branch,
+            base: pr.baseBranch ?? s.defaultBranch,
+            id: waiting.versionId,
+            description: waiting.text,
+          }),
+          originRef: origin,
+          originTitle: pr.title,
+          originSummary: `PR #${pr.number} on branch ${pr.branch}`,
+          rule: 'pr-description-check',
+          reason,
+        } satisfies RawAction,
+      },
+      {
+        decisions: ctx.recentDecisions.filter((d) => Date.parse(d.createdAt) > authored),
+        escalate: (attempts) => ({
+          type: 'escalate_to_human',
+          escalationType: 'resolve_ambiguity',
+          prompt:
+            `${attempts} agents were dispatched to check the description of PR #${pr.number} and none reported. ` +
+            `Nothing further will be dispatched for this version; writing a new one starts a fresh round.`,
+          context: { originRef: origin, taskTitle: title },
+          rule: 'pr-description-check',
+          admission: 'cooldown-escalate',
+          reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap on this version.`,
+        }),
+      },
+    );
   }
 }

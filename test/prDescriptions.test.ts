@@ -21,6 +21,8 @@ import {
 import type { ActionSink, SendResult } from '../src/sink/actionSink.js';
 import { PrBodyEditDesk } from '../src/pr/prBodyEditDesk.js';
 import { findTask } from './support/tasks.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import type { Decision } from '../src/types.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
 
@@ -1005,4 +1007,68 @@ test('a stale world read is never taken for an edit', () => {
   } finally {
     system.store.close();
   }
+});
+
+// → docs/spec/07-pull-requests.md#every-description-is-checked-without-asking
+test('the check cap counts attempts on this version, not on every version of the pull request', async () => {
+  const origin = 'issue:12:describe-check:40';
+  const executed = (createdAt: string): Decision =>
+    ({
+      outcome: 'executed',
+      action: { type: 'dispatch_code_agent', originRef: origin },
+      createdAt,
+    }) as unknown as Decision;
+  const before = [1, 2, 3].map((n) => executed(`2026-07-28T10:0${n}:00.000Z`));
+  const after = [1, 2, 3].map((n) => executed(`2026-07-28T11:0${n}:00.000Z`));
+  const decide = (recentDecisions: Decision[]) =>
+    new RuleDispatcher({ defaultBranch: 'main' }).decide({
+      world: {
+        takenAt: '2026-07-28T12:00:00.000Z',
+        issues: [],
+        pullRequests: [
+          {
+            id: 'pr_40',
+            number: 40,
+            title: 'PR 40',
+            branch: 'feature/40',
+            baseBranch: 'main',
+            ciStatus: 'passing',
+            unresolvedComments: [],
+          },
+        ],
+      },
+      tasks: [],
+      agents: [],
+      openEscalations: [],
+      queuedJobs: [],
+      agentHeadroom: 5,
+      recentDecisions,
+      uncheckedDescriptions: [
+        {
+          versionId: 'desc_4',
+          originRef: 'issue:12:part:a',
+          prNumber: 40,
+          text: 'A fourth rewrite.',
+          authoredAt: '2026-07-28T11:00:00.000Z',
+        },
+      ],
+    });
+
+  const fresh = await decide(before);
+  assert.equal(
+    fresh.actions.filter((a) => a.type === 'dispatch_code_agent' && a.originRef === origin).length,
+    1,
+    'three checks of earlier versions leave the new version its own attempts',
+  );
+
+  const spent = await decide([...before, ...after]);
+  assert.equal(
+    spent.actions.some((a) => a.type === 'dispatch_code_agent' && a.originRef === origin),
+    false,
+    'three attempts on this version still stop at the cap',
+  );
+  assert.ok(
+    spent.actions.some((a) => a.type === 'escalate_to_human'),
+    'and the operator is told',
+  );
 });

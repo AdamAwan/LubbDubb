@@ -944,6 +944,10 @@ that version exactly as `description_check` does (`recordCheck`, addressed by id
 
 - **One round per version.** A checked version is never dispatched for again, whoever checked it — a
   desktop session's check counts. A rewrite is a new, unchecked version and is read again.
+- **The attempt cap is per version.** The origin is per pull request, so the cooldown is handed only the
+  decisions made after the unchecked version was authored (`DescriptionAwaitingCheck.authoredAt`): earlier
+  versions' checks neither exhaust the three attempts nor hold a quick rewrite in cooldown. A version whose
+  dispatches keep ending without a report still stops at the cap, and raises one `escalate_to_human`.
 - **It is told not to be picky.** Wording, style, length and details a reviewer would not miss are not
   findings. An empty list is the ordinary result.
 - **It is refused outside its own dispatch.** `description_review` answers an error to any origin that
