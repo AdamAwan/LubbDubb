@@ -78,8 +78,9 @@ test('draws the band, and nothing once hidden', async ($, on) => {
       },
     })
     expect(
-      await ui.find({ type: 'Text', text: /3 asks · next: Merge #412 · fleet paused · \/lubbdubb:next/ }),
+      await ui.find({ type: 'Text', text: /3 asks · next: Merge #412 · fleet paused/ }),
     ).toBeDefined()
+    expect(await ui.find({ key: 'next' })).toBeDefined()
     await ui.press({ key: 'hide' })
     expect(await ui.find({ type: 'Text', text: /LubbDubb/ })).toBeUndefined()
     await ui.unmount()
@@ -135,4 +136,36 @@ test('toasts only what is new since the last look', async ($, on) => {
   await $.command.run(BOARD)
 
   expect(toasts).toEqual(['LubbDubb: Approve the plan for 300?'])
+})
+
+test('Next starts /lubbdubb:next', async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(STATE) } }))
+  const started: string[] = []
+  on('command.run', { command: 'lubbdubb:next' }, async (_$, e) => {
+    started.push(e.command)
+    return { text: '' }
+  })
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return h(Box, {}) as RenderElement
+  })
+  await $.command.run(BOARD)
+
+  const ui = await $.ui.mount({
+    plugin: 'lubbdubb',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: {
+      hasSurvey: false,
+      isWorking: false,
+      maxRows: 4,
+      bodyColumns: 120,
+      scroll: { offset: 0, bodyRows: 4 },
+      view: {},
+    },
+  })
+  await ui.press({ key: 'next' })
+  expect(started).toEqual(['lubbdubb:next'])
+  await ui.unmount()
 })

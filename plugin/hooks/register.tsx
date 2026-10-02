@@ -40,6 +40,14 @@ async function poll($: EngineInterface, where: Where): Promise<void> {
   await update($, board, () => after)
 }
 
+async function startNext($: EngineInterface): Promise<void> {
+  try {
+    await $.command.run({ command: 'lubbdubb:next' })
+  } catch {
+    $.ui.toast('LubbDubb: run /lubbdubb:next to work through the asks.')
+  }
+}
+
 export const register: Register = (on, options) => {
   const where: Where = {
     url: String(options.url ?? 'http://127.0.0.1:4300').replace(/\/$/, ''),
@@ -76,7 +84,8 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Box>
-          <Text>{`LubbDubb · ${line}${now.notices.length > 0 ? ' · /lubbdubb:next' : ''} `}</Text>
+          <Text>{`LubbDubb · ${line} `}</Text>
+          {now.notices.length > 0 && <Button key="next" label="Next" onPress={() => startNext($)} />}
           <Button key="hide" label="Hide" onPress={() => update($, isHidden, () => true)} />
         </Box>
         {theirs}
