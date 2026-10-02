@@ -21,6 +21,7 @@ import { deliverySignalQuery } from '../delivery/delivery.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
+import type { SetupReading } from '../setup/reading.js';
 
 // → docs/spec/16-http-api.md
 
@@ -38,6 +39,8 @@ export interface SnapshotOpts {
   localValidationFileSigner?: (id: string, name: string) => string;
   validationCaptureSigner?: (originRef: string, checkId: string) => string;
   remoteCaptureSigner?: (runId: string, rowId: string) => string;
+  /** The last setup reading `/api/setup` took, which the queue's config rows are read off. */
+  setup?: SetupReading | null;
 }
 
 const EJECTION_ROWS = 40;

@@ -12,16 +12,20 @@ import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import type { LocalRunWatch } from '../localRun/watch.js';
 import type { PrRefStyle } from '../pr/prRef.js';
+import type { PrAssignDesk } from '../pr/prAssignAsk.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { IssueWatchContext } from '../issueWatch.js';
 import type { SendResult, WorkItemAreaPathInput, WorkItemParentInput } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { UpcomingPlan } from '../wire.js';
+import type { AskRow, StateSection, UpcomingPlan } from '../wire.js';
 import type { McpTool } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
+
+/** What a write here tells the cockpit — the same broadcast the matching route sends. */
+export type DesktopChange = { type: 'world:changed' } | { type: 'dirty'; sections: StateSection[] };
 
 export interface DesktopToolDeps {
   store: Store;
@@ -40,6 +44,7 @@ export interface DesktopToolDeps {
   localRun(): LocalRunner;
   localRunWatch(): LocalRunWatch;
   proposals(): ProposalDesk;
+  prAssign(): PrAssignDesk;
   runCycle(): Promise<void>;
 
   runtimeControl: RuntimeControl;
@@ -62,12 +67,20 @@ export interface DesktopToolDeps {
   labelPrefix: string;
   issueContainerTypes: string[];
   agentModels: AgentModels | undefined;
+  /** "Needs you" as a one-at-a-time reader walks it — `askQueue` in `src/server/stateSnapshot.ts`. */
+  askQueue(): AskRow[];
+  /** Where the cockpit is served, for a link to the ask an answer here cannot give; null where none is. */
+  cockpitUrl: string | null;
+  /** Re-emitted by `McpDesktopServer` as `changed`, which the hub broadcasts. */
+  changed(change: DesktopChange): void;
   now(): string;
 }
 
 export interface DesktopSession {
   label: string;
   held: { originRef: string; checkId: string; claimedAt: string | null } | null;
+  /** Asks passed over with `ask_skip`, for this connection only. → docs/spec/11-mcp-tools.md#the-next-ask-loop */
+  skipped?: Set<string>;
 }
 
 export type DesktopToolFactory = (deps: DesktopToolDeps, session: DesktopSession) => Omit<McpTool, 'name'>;

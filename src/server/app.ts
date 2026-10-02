@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { apiUrl, LOOPBACK_HOSTS } from './apiUrl.js';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import rateLimit from '@fastify/rate-limit';
@@ -106,8 +107,6 @@ const ROUTE_MODULES: RouteModule[] = [
   registerWork,
 ];
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
-
 function clientRefusalStatus(err: unknown): number | null {
   const status = (err as { statusCode?: unknown } | null)?.statusCode;
   return typeof status === 'number' && status >= 400 && status < 500 ? status : null;
@@ -160,6 +159,7 @@ function routeContext(system: System, hub: Hub, artifactKey: Buffer | null): Rou
     system,
     hub,
     artifactKey,
+    setup: system.setupReading,
     artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
     attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
     localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
@@ -261,13 +261,13 @@ export async function buildApp(system: System): Promise<BuiltApp> {
 
   await serveCockpitBuild(app);
 
-  const urlHost = LOOPBACK_HOSTS.has(config.host) ? config.host : '127.0.0.1';
+  const url = apiUrl(config);
   return {
     app,
     hub,
-    cockpitUrl: auth ? `http://${urlHost}:${config.port}/#t=${auth.token}` : null,
+    cockpitUrl: auth ? `${url}/#t=${auth.token}` : null,
     tokenPath: auth?.source === 'minted' ? auth.path : null,
-    apiUrl: `http://${urlHost}:${config.port}`,
+    apiUrl: url,
   };
 }
 

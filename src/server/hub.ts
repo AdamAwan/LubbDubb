@@ -28,6 +28,14 @@ export type ServerEvent =
 
 const LOCAL_RUN_COALESCE_MS = 400;
 
+/** The sections whose every change can move the ask queue. → docs/spec/16-http-api.md#the-asks-section */
+const FEEDS_ASKS: ReadonlySet<StateSection> = new Set(['goals', 'plans', 'queue', 'inbox']);
+
+function withAsks(event: ServerEvent): ServerEvent {
+  if (event.type !== 'dirty' || event.sections === undefined || event.sections.includes('asks')) return event;
+  return event.sections.some((s) => FEEDS_ASKS.has(s)) ? { ...event, sections: [...event.sections, 'asks'] } : event;
+}
+
 export class Hub {
   private readonly sockets = new Set<WebSocket>();
   private readonly subscriptions = new Map<WebSocket, Set<string>>();
@@ -68,14 +76,14 @@ export class Hub {
     agents.on('retrospective', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     agents.on('files', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));
     agents.on('usage', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));
-    agents.on('resumed', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));
+    agents.on('resumed', () => this.broadcast({ type: 'dirty', sections: ['fleet', 'asks'] }));
     agents.on('status', (e) => {
       this.broadcast({ type: 'agent:status', ...e });
       this.broadcast({ type: 'dirty' });
     });
     agents.on('waiting', (e) => {
       this.broadcast({ type: 'agent:waiting', ...e });
-      this.broadcast({ type: 'dirty', sections: ['fleet'] });
+      this.broadcast({ type: 'dirty', sections: ['fleet', 'asks'] });
     });
     agents.on('done', (e) => {
       this.broadcast({ type: 'agent:done', ...e });
@@ -105,6 +113,7 @@ export class Hub {
     };
     localRun.on('changed', refetchLocalRun);
     localRunWatch.on('changed', refetchLocalRun);
+    system.desktop.on('changed', (change) => this.broadcast(change));
     system.localValidations.on('changed', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     system.remoteRuns.on('tenantSettled', () => this.broadcast({ type: 'dirty', sections: ['goals', 'harness'] }));
   }
@@ -135,7 +144,7 @@ export class Hub {
   }
 
   broadcast(event: ServerEvent): void {
-    const payload = JSON.stringify(event);
+    const payload = JSON.stringify(withAsks(event));
     for (const socket of this.sockets) {
       if (socket.readyState === socket.OPEN) socket.send(payload);
     }

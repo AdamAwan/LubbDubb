@@ -1,3 +1,4 @@
+import { buildAskQueue } from './askQueue.js';
 import type {
   AppState,
   Issue,
@@ -4573,6 +4574,7 @@ export function buildDemoState(): DemoSeed {
       'pr:426': 'https://github.com/example/inkwell-books/pull/426',
       'pr:412:ci': 'https://github.com/example/inkwell-books/pull/412/checks',
     },
+    asks: [],
     dispatchRules: {
       'pr-ci-failing': {
         kind: 'rule',
@@ -4796,6 +4798,7 @@ export function buildDemoState(): DemoSeed {
     };
   }
 
+  state.asks = buildAskQueue(state);
   return { state, transcripts };
 }
 

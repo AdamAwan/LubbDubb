@@ -2491,7 +2491,9 @@ Four properties hold it together:
   A **re-export** of a value is invisible to those checks — they read declarations and `import`
   lines — so `test/wireRuntime.test.ts` pins the modules `src/wire.ts` may pass a value through from,
   and walks each one's transitive relative imports refusing a node builtin or a package value import.
-  The list is empty today: `src/wire.ts` re-exports no runtime.
+  The list is the ask queue's three pure modules under `src/asks/` — `buildAskQueue`, which the
+  demo's fake server derives its queue with, and the line-wording helpers the cockpit shares with the
+  rows it draws ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)). Nothing else.
 - **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
   `extends` it. The cockpit's copy previously widened the server's unions three different ways in one
   file — `Job.status` to `string`, `Proposal.action` to an index-signature bag, `Finding.status`
@@ -2541,6 +2543,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `worldEvents`                   | The last 100 world events.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `errors`                        | The last 100 recorded failures.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `refUrls`                       | The `ref → URL` map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `asks`                          | Every ask on the deployment, in the rail's order, each with its `focusRank` in the one-at-a-time order and the `subject` record it is about — derived on the server by `buildAskQueue` so the cockpit and Claude Code read one queue ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)).                                                                                                                                                                                                                                                                                             |
 | `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits, unattributedCostUsd}`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
@@ -2562,6 +2565,7 @@ value there would become server code in the SPA bundle
 | `queue`    | `jobs`, `schedules`, `upcoming`, `runway`                                                                                                                     |
 | `inbox`    | `escalations`, `proposals`, `humanTasks`, `bugFilings`                                                                                                        |
 | `activity` | `decisions`, `worldEvents`, `errors`                                                                                                                          |
+| `asks`     | `asks`                                                                                                                                                        |
 
 `refUrls` is in **all** of them and rides every response, whatever was asked for. Every other section
 names things the cockpit draws as links, and this is the map it resolves them in — a patch carrying
@@ -2574,6 +2578,25 @@ in one patch has to survive the next.
 place when some frequent signal touches it and leaves the rest alone. `fleet` and `goals` are the pair
 that matters: an agent's usage report, its progress note and every file it writes are all `fleet`, and
 none of them can change a goal's pickup verdict.
+
+#### The asks section
+
+**`asks` is read off every other section, so it is built from whatever the reply already built.**
+`askInputs` (`src/server/stateAsks.ts`) takes each input from the section the reply built for it, and
+reads what it was not given off the same `once()` readings that section would have used — so
+`?sections=asks` alone answers exactly the queue the whole snapshot carries, and a patch never ships
+a queue derived from a different reading than the rows beside it.
+
+**Which signals carry it is the hub's to say, once.** Every section feeds the queue, but `fleet` is the
+one the frequent signals touch — a progress note, a file written, a usage report — and none of those
+can move an ask; ride them and the queue's inputs, the pickup and PR-attention passes among them, are
+rebuilt for every file an agent writes, which is the cost the sections exist to avoid. So
+`Hub.broadcast` appends `asks` to any `dirty` naming `goals`, `plans`, `queue` or `inbox`, the two
+fleet signals that do move an ask — an agent parking on a limit (`waiting`) and resuming — name it
+themselves, and a bare `dirty` already means everything. A route that broadcasts a section-scoped
+`dirty` therefore needs no knowledge of the queue to keep it fresh. `/api/setup` broadcasts `asks`
+alone when its checks change: it keeps its last reading on the route context for the state route,
+because a reading's probes spawn processes and cannot be taken per snapshot.
 
 #### What it is for
 
@@ -2880,10 +2903,10 @@ Two routes, and **neither writes anything**. What the first-run surface produces
 keys, and those go to `POST /api/config` like any other edit — so there is exactly one path that
 writes `lubbdubb.config.json`, with one refusal ladder and one surgical splice behind it.
 
-| Route                     | Answers                                                                           |
-| ------------------------- | --------------------------------------------------------------------------------- |
-| `GET /api/setup`          | `SetupPayload` — the checks with their fixes, and the two prefills                |
-| `POST /api/setup/resolve` | `SetupResolvePayload` — an email and a directory, read into everything they imply |
+| Route                     | Answers                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `GET /api/setup`          | `SetupPayload` — the checks with their fixes, and the two prefills; kept as the ask queue's config rows |
+| `POST /api/setup/resolve` | `SetupResolvePayload` — an email and a directory, read into everything they imply                       |
 
 `resolve` is a `POST` for a read because its answers are a body rather than a path, and because it
 resolves a directory the caller names and may reach the provider to ask who they are — which earns

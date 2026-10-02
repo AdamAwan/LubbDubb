@@ -13,7 +13,7 @@ import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildViewModel } from '../web/src/view/viewModel.js';
-import { buildNeedsYou } from '../web/src/view/needsYou.js';
+import { askRows } from './support/asks.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import { failPlanningOpen } from './support/plans.js';
 
@@ -411,7 +411,7 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
   parked.waitingReason = "Parked on a usage limit: this account's five-hour usage limit is spent.";
   state.parkedOnLimit = [parked.id];
 
-  const rows = buildNeedsYou(state);
+  const rows = askRows(state);
   const row = rows.find((r) => r.kind === 'limit');
   assert.ok(row, 'a parked fleet is something that needs you, not a silence');
   assert.equal(row.agentId, parked.id);

@@ -323,8 +323,10 @@ says something untrue in the operator's own words.
 
 **An `unknown` check draws no row**, and that is not the fold: it is the check saying it could not
 ask, and a row would state a fault nothing has evidence for. `KIND_FOR_VERDICT`
-(`web/src/view/needsYou.ts`) is total over the verdict, so a fifth one fails the typecheck rather than
-silently drawing as a fault.
+(`src/asks/inboxAsks.ts`) is total over the verdict, so a fifth one fails the typecheck rather than
+silently drawing as a fault. The queue is the server's, read off the last reading `GET /api/setup` took,
+and an `ok` or `unknown` check is shipped as a row that is not _standing_ — drawn only while the
+browser that applied its fix shows the undo ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)).
 
 ### Nothing is persisted about it
 

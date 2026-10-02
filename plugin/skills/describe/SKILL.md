@@ -46,3 +46,12 @@ not a finding; drop it rather than reporting it softened.
 
 Leave a description alone where nobody wrote one: `description_read` says so, and
 the answer is that there is nothing to check — not an offer to write it.
+
+### When the operator disagrees with a finding
+
+The check's findings raise a row in the cockpit's "Needs you", and the operator may
+read them and decide the description stands. `description_dismiss` with the pull
+request number is their **Leave it as is**: the row goes, the findings stay readable
+on the pull request, marked as left. Press it only when they have said so — never
+to clear a finding you raised yourself and then thought better of. A rewrite of the
+description, or a re-check, raises findings afresh.

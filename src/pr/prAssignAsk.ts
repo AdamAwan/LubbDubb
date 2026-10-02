@@ -126,6 +126,16 @@ export class PrAssignDesk {
     return allCommentsHandled(pr) && reviewDone(facts.review);
   }
 
+  /** The people an assignment may name — the same list `assign` checks a pick against. */
+  offered(open: readonly PullRequest[]): PrPerson[] {
+    return this.shortlist(open, this.opts.store.prArchive.listArchivedPrs(HISTORY_DEPTH));
+  }
+
+  /** Whether the ask on this pull request has already been answered, or is being answered now. */
+  answered(prNumber: number): boolean {
+    return this.settled(prNumber);
+  }
+
   async assign(prNumber: number, personId: string, open: readonly PullRequest[]): Promise<AssignOutcome> {
     const { store, errors } = this.opts;
     const assignPr = this.assigner();
@@ -135,7 +145,7 @@ export class PrAssignDesk {
     if (pr === undefined || !this.ours(pr))
       return { ok: false, refusal: 'the ask is only for the fleet’s own pull requests' };
     if (this.settled(prNumber)) return ALREADY_ANSWERED;
-    const person = this.shortlist(open, store.prArchive.listArchivedPrs(HISTORY_DEPTH)).find((p) => p.id === personId);
+    const person = this.offered(open).find((p) => p.id === personId);
     if (person === undefined) return { ok: false, refusal: 'that person is not on the shortlist' };
     this.inFlight.add(prNumber);
     try {

@@ -21,7 +21,8 @@ import { ProposalDesk } from '../proposals/proposalDesk.js';
 import { StackLandingDesk } from '../stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from '../escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/server.js';
-import { McpDesktopServer } from '../mcp/desktop.js';
+import type { McpDesktopServer } from '../mcp/desktop.js';
+import { buildDesktop } from './systemDesktop.js';
 import { ValidationReadyDesk } from '../validation/readyDesk.js';
 import { CommandReviewProber } from '../review/reviewedElsewhere.js';
 import type { WatchDryRunner } from '../environments/watchDryRun.js';
@@ -58,7 +59,8 @@ import { LocalValidationDesk } from '../validation/local/desk.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { LiveConfig } from '../config/configApply.js';
 import { ErrorLog } from '../errorLog.js';
-import { planIsWithheld } from '../server/planReveal.js';
+import { askQueue } from '../server/stateSnapshot.js';
+import type { SetupReading } from '../setup/reading.js';
 import {
   type BuildOptions,
   type LateBinding,
@@ -71,7 +73,6 @@ import {
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
-import type { PrAssignDesk } from '../pr/prAssignAsk.js';
 import {
   type IntakeDesks,
   buildIntakeDesks,
@@ -85,6 +86,8 @@ import {
 
 export interface System {
   config: Config;
+  /** The last reading `/api/setup` took — the ask queue's config rows, for the cockpit and for `ask_next`. */
+  setupReading: { latest: SetupReading | null };
   store: Store;
   connector: CompositeConnector;
   agents: AgentManager;
@@ -113,7 +116,7 @@ export interface System {
   remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
-  prAssign: PrAssignDesk;
+  prAssign: IntakeDesks['prAssign'];
   botPrs: BenchDesks['botPrs'];
   botPrRisks: BenchDesks['botPrRisks'];
   filing: TicketFiler;
@@ -160,9 +163,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, bench, late });
   const pulse = wirePulse(config, opts, base, fleet, harness);
   const local = buildLocalRuns(config, opts, base, runtime);
-  late.bind(lateParts({ fleet, envs, bench, harness, local }));
-  return {
+  const system: System = {
     config,
+    setupReading: { latest: null },
     store: base.store,
     connector: base.connector,
     agents: fleet.agents,
@@ -193,7 +196,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
-    prAssign: bench.prAssign,
+    prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,
     updates: bench.updates,
@@ -216,6 +219,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     worktrees: base.worktrees,
     errors: base.errors,
   };
+  late.bind(lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askQueue(system) }));
+  return system;
 }
 
 interface HarnessPhases {
@@ -283,54 +288,6 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
 
   const desktop = buildDesktop(config, base, predictions, prompts, late);
   return { predictions, mcp, prompts, reviewCharters, desktop };
-}
-
-function buildDesktop(
-  config: Config,
-  { store, connector, runtimeControl, errors }: Foundation,
-  predictions: PredictionStore,
-  prompts: PromptTemplates,
-  late: LateBinding,
-): McpDesktopServer {
-  return new McpDesktopServer({
-    store,
-    // The desktop channel is the operator's own Claude Code, and it can read a plan
-    // aloud. It is handed the *answer* to whether a plan is withheld, never the means
-    // to ask — src/mcp/ must not be able to name the prediction store.
-    planWithheld: (plan) => planIsWithheld({ config, predictions }, plan),
-    argsRetentionDays: config.mcpArgsRetentionDays,
-    claimMinutes: config.validation.desktopClaimMinutes,
-    validationRoot: config.validationRoot,
-    environments: config.environments,
-    prRefStyle: prRefStyle(config.integrations.sourceControl),
-    localRun: (): LocalRunner => late.get().localRun,
-    localRunWatch: (): LocalRunWatch => late.get().localRunWatch,
-    runtimeControl,
-    harness: () => late.get().harness,
-    escalations: () => late.get().escalations,
-    permissions: () => late.get().permissions,
-    recovery: () => late.get().recovery,
-    ejections: () => late.get().ejections,
-    agents: () => late.get().agents,
-    filing: () => late.get().filing,
-    briefConfig: () => config,
-    renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
-    profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
-    connector,
-    labelPrefix: config.labelPrefix,
-    issueContainerTypes: config.issueContainerTypes,
-    agentModels: config.agentModels,
-    proposals: () => late.get().proposals,
-    runCycle: () =>
-      late
-        .get()
-        .harness.runCycle('manual')
-        .then(() => undefined),
-    now: () => new Date().toISOString(),
-    socketPath: config.validation.desktopSocketPath,
-    credentialPath: config.validation.desktopCredentialPath,
-    errors,
-  });
 }
 
 function buildHarness(

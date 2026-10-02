@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { prAttentionStatus, type PrAttentionContext } from '../src/pr/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
-import { buildNeedsYou } from '../web/src/view/needsYou.js';
+import { askRows } from './support/asks.js';
 import type { AppState } from '../web/src/types.js';
 import type { PullRequest, Task, TaskSummary } from '../src/types.js';
 
@@ -185,7 +185,7 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
     attention: { status: 'harness' as const, reasons: ['an agent is working this branch', 'assigned to you'] },
   };
 
-  const rows = buildNeedsYou(stateWithPrs([assigned, staffed]));
+  const rows = askRows(stateWithPrs([assigned, staffed]));
   const mine = rows.filter((r) => r.kind === 'assigned');
   assert.equal(mine.length, 1);
   assert.equal(mine[0]?.id, 'assigned:pr:9101');
@@ -215,7 +215,7 @@ test('an assigned row opens the pull request on the provider, and carries the as
   };
 
   const state = stateWithPrs([assigned]);
-  const row = buildNeedsYou({ ...state, refUrls: { 'pr:9101': 'https://example.test/pull/9101' } }).find(
+  const row = askRows({ ...state, refUrls: { 'pr:9101': 'https://example.test/pull/9101' } }).find(
     (r) => r.kind === 'assigned',
   );
   assert.equal(row?.opens, 'provider', 'the body opens the pull request the person put on you, where they wrote it');
@@ -225,7 +225,7 @@ test('an assigned row opens the pull request on the provider, and carries the as
     'which is the ask read in context: the goal’s page where there is one, the ask panel otherwise',
   );
 
-  const unaddressed = buildNeedsYou({ ...state, refUrls: {} }).find((r) => r.kind === 'assigned');
+  const unaddressed = askRows({ ...state, refUrls: {} }).find((r) => r.kind === 'assigned');
   assert.ok(
     unaddressed?.opens === 'goal' || unaddressed?.opens === 'ask',
     'with no address for the pull request the card falls back to the ask',
@@ -237,7 +237,7 @@ test('an assigned row with no clock running draws no age', () => {
   const sample = base.world.pullRequests[0];
   assert.ok(sample, 'the demo fixtures must carry a pull request');
 
-  const rows = buildNeedsYou(
+  const rows = askRows(
     stateWithPrs([
       {
         ...sample,

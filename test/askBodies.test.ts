@@ -8,6 +8,7 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
+import { withAsks } from './support/asks.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -19,7 +20,7 @@ const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 function view(state: CockpitView['state'] = buildDemoState().state): CockpitView {
   return buildViewModel({
-    state,
+    state: withAsks(state),
     now: Date.now(),
     connected: true,
     demo: true,

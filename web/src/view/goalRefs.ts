@@ -52,7 +52,7 @@ function branchGoal(branch: string): string | null {
  * three ways {@link ownsPr} matches, read backwards. **Null is a real answer**: the harness works
  * ticketless pull requests as first-class subjects ([05](../../../docs/spec/05-dispatcher.md)).
  *
- * @public shared with buildNeedsYou, which routes a PR-origin ask by it
+ * @public shared with featureHolds, which reads a goal's pull requests by it
  */
 export function goalOfPr(state: AppState, prNumber: number): string | null {
   const part = (state.planParts ?? []).find((p) => p.prNumber === prNumber);
@@ -107,7 +107,7 @@ export function standsFor(state: AppState, originRef: string | null): string | n
  * The issue a goal ref names — the world's copy, or a run retained after the ticket left the
  * world. Undefined for a ref with no goal behind it.
  *
- * @public shared with buildNeedsYou's destination rule
+ * @public shared with the goal page and the quick answers, which resolve a goal by it
  */
 export function goalIssue(state: AppState, ref: string): Issue | undefined {
   const number = Number(/^issue:(\d+)$/.exec(ref)?.[1]);

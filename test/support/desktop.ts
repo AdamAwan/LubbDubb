@@ -2,6 +2,7 @@ import { orderedProfiles } from '../../src/agents/modelPolicy.js';
 import type { DesktopToolDeps } from '../../src/mcp/desktopContext.js';
 import { planIsWithheld } from '../../src/server/planReveal.js';
 import type { System } from '../../src/system/system.js';
+import { askQueue } from '../../src/server/stateSnapshot.js';
 
 export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
   return {
@@ -13,6 +14,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     localRun: () => system.localRun,
     localRunWatch: () => system.localRunWatch,
     proposals: () => system.proposals,
+    prAssign: () => system.prAssign,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),
     runtimeControl: system.runtimeControl,
     harness: () => system.harness,
@@ -30,5 +32,8 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     errors: system.errors,
     labelPrefix: system.config.labelPrefix,
     issueContainerTypes: system.config.issueContainerTypes,
+    askQueue: () => askQueue(system),
+    cockpitUrl: 'http://127.0.0.1:4300',
+    changed: () => {},
   };
 }

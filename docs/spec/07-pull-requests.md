@@ -969,7 +969,9 @@ under the findings stamps `dismissed_at` on that version (`POST /api/prs/:number
 idempotent) and the rail row goes: `descriptionFeedback` skips a dismissed version. The findings stay
 drawn on the page, marked as left as is, so what the check said is still readable. The stamp is per
 version — a rewrite is a new, undismissed version, and **a re-check of the same version clears it**
-(`recordCheck`), because a new reading is new findings the operator has not yet seen.
+(`recordCheck`), because a new reading is new findings the operator has not yet seen. The press is
+`prDescriptions.dismissFindings`, addressed by pull request, and the desktop channel's
+`description_dismiss` is the same press from the operator's own session — a stamp and no text.
 
 **`description_check` takes marks and findings and no text, and that is the invariant.** A session
 that hands back better prose gets it accepted, and then the pull request carries an account that
@@ -1194,6 +1196,10 @@ is refused rather than recorded against a person the tracker is about to have. M
 carry their author like open ones — on Azure the display name first, as the open list does, because that
 is the name the reviewer shortlist carries — so a self-assigned PR never offers its own author. A refusal from the tracker is recorded to the error log and leaves the ask standing. Either
 answer is one `pr_assign_asks` row ([14](14-persistence.md)).
+
+The operator's own Claude Code answers it too: `pr_assign` on the desktop channel reaches the same
+`PrAssignDesk` — `offered` for the shortlist, `assign` and `decline` for the two answers — so every
+refusal above is the tool's as well ([11](11-mcp-tools.md#every-ask-in-needs-you-and-what-answers-it-here)).
 
 ### How long it has been waiting on a reviewer
 

@@ -27,6 +27,14 @@ reason behind a reordering is the half worth keeping, and a drag loses it.
    than patching it, so **keep every edge you are not deliberately changing**.
    `reason` is what the next person to read the Feature gets.
 
+**An order the sequencer proposed waits for an answer**, and `sequence_read` says
+so in `status: "proposed"`. If the operator agrees with it as it stands,
+`sequence_answer` with `answer: "accept"` makes it hold work from the next pulse,
+exactly as written. If they say the stories are independent, `answer: "decline"`
+is a real answer, stored: it releases every story, and the fleet does not propose
+again until the Feature gains or loses a story. Answer only what they actually
+said — to change an edge, amend instead.
+
 Three things to say out loud when you have written one:
 
 - It lands **accepted**, so it holds work from the next pulse. There is no

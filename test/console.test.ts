@@ -14,7 +14,7 @@ import type { GoalPartView, GoalTab } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, KIND_VERB } from '../web/src/console/QueueRail.js';
 import { oneLine } from '../web/src/view/needLines.js';
-import { buildNeedsYou } from '../web/src/view/needsYou.js';
+import { askRows, withAsks } from './support/asks.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
 import { repoPath, repoText } from './support/paths.js';
 
@@ -735,7 +735,7 @@ function goalView(
     goalTab,
     goalOpen,
     goalShut,
-    state,
+    state: withAsks(state),
     now: Date.now(),
     connected: true,
     demo: true,
@@ -1614,7 +1614,7 @@ test('a goal the appraisal refused is raised on the rail, quoted whole, with its
 test('a goal nothing is holding raises no intake row at all', () => {
   const v = view();
   const issues = v.state.world.issues.map((i) => ({ ...i, appraisal: null }));
-  const cleared = buildNeedsYou({ ...v.state, world: { ...v.state.world, issues } });
+  const cleared = askRows({ ...v.state, world: { ...v.state.world, issues } });
   assert.equal(cleared.filter((r) => r.kind === 'intake').length, 0, 'no goal is held, so nothing claims one is');
 });
 

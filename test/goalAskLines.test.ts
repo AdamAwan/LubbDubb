@@ -12,7 +12,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { groupAsks } = await import('../web/src/view/askGroups.js');
-const { buildNeedsYou } = await import('../web/src/view/needsYou.js');
+const { askRows } = await import('./support/asks.js');
 const { CheckSetAsk } = await import('../web/src/components/CheckSetAsk.js');
 
 // → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask
@@ -86,7 +86,7 @@ function checkSetState(set: Record<string, unknown>[]): AppState {
 }
 
 function titleOf(state: AppState): string {
-  return buildNeedsYou(state).find((r) => r.id === 'e-vp')?.title ?? '';
+  return askRows(state).find((r) => r.id === 'e-vp')?.title ?? '';
 }
 
 test('a check set ask leads with its first check, not with the count the prompt opens on', () => {

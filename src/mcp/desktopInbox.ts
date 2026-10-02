@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { toolSchema } from './schema.js';
 import { proposedCaveats, type CaveatAnswerInput } from '../plans/planCaveats.js';
-import type { DesktopToolFactory } from './desktopContext.js';
+import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
-import type { Proposal } from '../types.js';
+import type { CheckDecline, Proposal } from '../types.js';
 import { toolError, toolJson, type ToolCallResult } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -17,7 +17,31 @@ const ACCEPT_MEANS: Record<string, string> = {
     'the goal was sent back — either to a planner for a rewrite or as a follow-up part, whichever the proposal named.',
   reply_draft: 'the comment was POSTED to the tracker or pull request. It is public and cannot be unsent.',
   merge: 'the pull request was MERGED. This cannot be undone from here.',
+  validation_plan:
+    'the check set is released and its rows open for running. A row named in `declined` is struck with its reason; declining every row sends the set back to be written again instead.',
 };
+
+function readDeclines(raw: unknown): CheckDecline[] {
+  if (!Array.isArray(raw)) return [];
+  const declined: CheckDecline[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { letter, reason } = entry as Record<string, unknown>;
+    if (typeof letter !== 'string' || letter === '' || typeof reason !== 'string') continue;
+    declined.push({ letter, reason: reason.trim() });
+  }
+  return declined;
+}
+
+function withheldRefusal(deps: DesktopToolDeps, proposal: Proposal): string | null {
+  const planId: unknown = (proposal.action as { planId?: unknown }).planId;
+  if (typeof planId !== 'string' || !deps.planWithheld(deps.store.plans.getPlan(planId))) return null;
+  return (
+    'The plan behind this proposal has not been revealed yet, so it can be neither read nor decided here. ' +
+    'Ask the operator to open the goal in the cockpit and press through the gate there first — a plan ' +
+    'decided sight-unseen would read as never offered.'
+  );
+}
 
 function readAnswers(raw: unknown): CaveatAnswerInput[] {
   if (!Array.isArray(raw)) return [];
@@ -35,22 +59,18 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
   description:
     'Read one proposed act in full before deciding it: which kind it is, what accepting it would actually do, ' +
     'the act itself, and any caveats that must be acknowledged first. Call this before proposal_decide — two ' +
-    'of the five kinds publish something that cannot be taken back, and the id alone does not say which.',
+    'of the six kinds publish something that cannot be taken back, and the id alone does not say which.',
   inputSchema: toolSchema(z.object({ id: z.string().describe('The proposal id, from attention_read.') })),
   handler: (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
     const proposal = deps.store.escalations.getProposal(id);
     if (!proposal) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
-    const planId: unknown = (proposal.action as { planId?: unknown }).planId;
     // The proposal's action carries the plan's prompt, its detail and its caveats, so
     // reading one here is reading the plan — and this channel is the operator's own
     // assistant, where that defeats the reveal gate exactly as the cockpit would.
-    if (typeof planId === 'string' && deps.planWithheld(deps.store.plans.getPlan(planId)))
-      return toolError(
-        'The plan behind this proposal has not been revealed yet, so its contents are withheld. Ask the ' +
-          'operator to open the goal in the cockpit and press through the gate there first.',
-      );
+    const withheld = withheldRefusal(deps, proposal);
+    if (withheld !== null) return toolError(withheld);
     const caveats = proposedCaveats(proposal);
     return toolJson({
       id: proposal.id,
@@ -73,49 +93,65 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
   },
 });
 
+const PROPOSAL_DECIDE_INPUT = toolSchema(
+  z.object({
+    id: z.string().describe('The proposal id, from attention_read or proposal_read.'),
+    verdict: z
+      .enum(['accept', 'reject', 'close_ticket', 'hold_ticket'])
+      .describe(
+        '"accept" performs the act. "reject" refuses it — for a plan that sends the goal back to a planner. ' +
+          '"close_ticket" closes the ticket with your note posted on it as the reason; "hold_ticket" takes the ' +
+          'watch tag off so nothing works it. The last two are for a plan only, and are for when the *ticket* ' +
+          'is the problem rather than the plan.',
+      ),
+    note: z
+      .string()
+      .describe('The reason, recorded with the verdict. Required for "close_ticket" — it is posted on the ticket.')
+      .optional(),
+    acknowledged: z
+      .array(z.string())
+      .describe(
+        'Caveat ids from proposal_read, for a plan that raises them. A plan is not released until every one ' +
+          'is named. Acknowledge them because the operator has read them, not to clear the gate.',
+      )
+      .optional(),
+    answers: z
+      .array(
+        z.object({
+          id: z.string().describe('The caveat id being answered.'),
+          answer: z.string().describe("The operator's words, verbatim."),
+        }),
+      )
+      .describe(
+        'What the operator said back about a caveat — the option they picked between two the planner offered, ' +
+          'or the question they still have. Optional, and never a substitute for acknowledging: an answer is ' +
+          'appended to the plan for the agents that work it, and does not send the plan back for a replan.',
+      )
+      .optional(),
+    declined: z
+      .array(
+        z.object({
+          letter: z.string().describe('The check letter being struck, e.g. "C".'),
+          reason: z.string().describe("Why it is not being run, in the operator's words. Required."),
+        }),
+      )
+      .describe(
+        'For accepting a validation check set only: the rows the operator said no to. They are struck with ' +
+          'the reason and the rest released. Declining every row is not an accept of nothing — it sends the ' +
+          'set back to be written again, carrying the reasons.',
+      )
+      .optional(),
+  }),
+);
+
 export const proposalDecide: DesktopToolFactory = (deps) => ({
   description:
     'Decide one proposed act. "accept" PERFORMS it — for a plan that releases the decomposition to be worked, ' +
     'but for a merge it merges the pull request and for a reply it posts the comment, and neither can be ' +
     'undone. "reject" performs nothing. A plan also has two verdicts about the ticket rather than about the ' +
-    'plan: "close_ticket" and "hold_ticket". Read it with proposal_read first.',
-  inputSchema: toolSchema(
-    z.object({
-      id: z.string().describe('The proposal id, from attention_read or proposal_read.'),
-      verdict: z
-        .enum(['accept', 'reject', 'close_ticket', 'hold_ticket'])
-        .describe(
-          '"accept" performs the act. "reject" refuses it — for a plan that sends the goal back to a planner. ' +
-            '"close_ticket" closes the ticket with your note posted on it as the reason; "hold_ticket" takes the ' +
-            'watch tag off so nothing works it. The last two are for a plan only, and are for when the *ticket* ' +
-            'is the problem rather than the plan.',
-        ),
-      note: z
-        .string()
-        .describe('The reason, recorded with the verdict. Required for "close_ticket" — it is posted on the ticket.')
-        .optional(),
-      acknowledged: z
-        .array(z.string())
-        .describe(
-          'Caveat ids from proposal_read, for a plan that raises them. A plan is not released until every one ' +
-            'is named. Acknowledge them because the operator has read them, not to clear the gate.',
-        )
-        .optional(),
-      answers: z
-        .array(
-          z.object({
-            id: z.string().describe('The caveat id being answered.'),
-            answer: z.string().describe("The operator's words, verbatim."),
-          }),
-        )
-        .describe(
-          'What the operator said back about a caveat — the option they picked between two the planner offered, ' +
-            'or the question they still have. Optional, and never a substitute for acknowledging: an answer is ' +
-            'appended to the plan for the agents that work it, and does not send the plan back for a replan.',
-        )
-        .optional(),
-    }),
-  ),
+    'plan: "close_ticket" and "hold_ticket". A validation check set can be accepted with some of its rows ' +
+    '`declined`. Read it with proposal_read first.',
+  inputSchema: PROPOSAL_DECIDE_INPUT,
   handler: async (args) => {
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
@@ -124,22 +160,40 @@ export const proposalDecide: DesktopToolFactory = (deps) => ({
       return toolError('verdict must be "accept", "reject", "close_ticket" or "hold_ticket".');
     const note = typeof args.note === 'string' && args.note.trim() ? args.note.trim() : undefined;
 
-    const standing = deps.store.escalations.getProposal(id);
-    if (!standing) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
-    if (standing.status !== 'pending')
-      return toolError(
-        `Proposal ${id} is already ${standing.status}${standing.note ? ` — "${standing.note}"` : ''}. ` +
-          'Somebody has decided it; nothing more is needed on it.',
-      );
+    const standing = decidable(deps, id);
+    if (typeof standing === 'string') return toolError(standing);
     const kind = standing.kind;
     const desk = deps.proposals();
+    const declined = readDeclines(args.declined);
+    const refused = declineRefusal(declined, verdict, kind);
+    if (refused !== null) return toolError(refused);
 
     if (verdict === 'close_ticket' || verdict === 'hold_ticket') return backOutTicket(desk, id, verdict, kind, note);
     if (verdict === 'reject') return rejectProposal(desk, id, kind, note);
     const acknowledged = Array.isArray(args.acknowledged) ? (args.acknowledged as string[]) : [];
-    return acceptProposal(desk, id, kind, note, acknowledged, readAnswers(args.answers));
+    return acceptProposal(desk, id, kind, note, acknowledged, readAnswers(args.answers), declined);
   },
 });
+
+function decidable(deps: DesktopToolDeps, id: string): Proposal | string {
+  const standing = deps.store.escalations.getProposal(id);
+  if (!standing) return `No proposal "${id}". Call attention_read for what is actually pending.`;
+  if (standing.status !== 'pending')
+    return (
+      `Proposal ${id} is already ${standing.status}${standing.note ? ` — "${standing.note}"` : ''}. ` +
+      'Somebody has decided it; nothing more is needed on it.'
+    );
+  return withheldRefusal(deps, standing) ?? standing;
+}
+
+function declineRefusal(declined: CheckDecline[], verdict: string, kind: Proposal['kind']): string | null {
+  if (declined.length === 0) return null;
+  if (verdict !== 'accept' || kind !== 'validation_plan')
+    return 'declined is for accepting a validation check set only — it strikes rows from the set being released.';
+  if (declined.some((d) => d.reason === ''))
+    return 'Every declined row carries a reason — it is the only account of why the check is not run.';
+  return null;
+}
 
 function isProposalVerdict(verdict: unknown): verdict is 'accept' | 'reject' | 'close_ticket' | 'hold_ticket' {
   return verdict === 'accept' || verdict === 'reject' || verdict === 'close_ticket' || verdict === 'hold_ticket';
@@ -205,8 +259,9 @@ async function acceptProposal(
   note: string | undefined,
   acknowledged: string[],
   answers: CaveatAnswerInput[],
+  declined: CheckDecline[],
 ): Promise<ToolCallResult> {
-  const accepted = await desk.accept(id, note, acknowledged, answers);
+  const accepted = await desk.accept(id, note, acknowledged, answers, declined);
   if (!accepted) return toolError(RACED);
   if ('unacknowledged' in accepted)
     return toolJson({
@@ -218,6 +273,16 @@ async function acceptProposal(
         'Put these to the operator in their own words, and pass their ids in `acknowledged` once they have ' +
         'read them. They are the planner saying what it is least sure about, so acknowledging one nobody read ' +
         'is the whole of what this gate exists to stop.',
+    });
+  if (accepted.proposal.status === 'rejected')
+    return toolJson({
+      id,
+      verdict: 'sent_back',
+      kind,
+      detail: accepted.detail,
+      means:
+        'every row was declined, so nothing was released: the set went back to be written again, carrying ' +
+        'your reasons for the next author.',
     });
   return toolJson({
     id,
@@ -253,6 +318,7 @@ export const recoveryDecide: DesktopToolFactory = (deps) => ({
       return toolError('verdict must be "restore", "requeue" or "remove".');
     const result = deps.recovery().decide(taskId, args.verdict);
     if (!result.ok) return toolError(result.error);
+    deps.changed({ type: 'world:changed' });
     return toolJson({
       taskId,
       verdict: args.verdict,

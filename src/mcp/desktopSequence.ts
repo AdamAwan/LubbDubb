@@ -106,6 +106,54 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
   },
 });
 
+const sequenceAnswer: DesktopToolFactory = (deps, session) => ({
+  description:
+    'Accept or decline the order that stands on a Feature — usually one the sequencer proposed and nobody ' +
+    'has answered. "accept" makes it **hold work** from the next pulse: a story behind another will not ' +
+    'start until that one has pushed a branch. "decline" says the stories are independent and releases ' +
+    'every hold; it is a real answer, stored, and the fleet will not propose again until the Feature gains ' +
+    'or loses a story. Read it with sequence_read first, and only answer the way the operator has said to. ' +
+    'To change the order rather than answer it, use sequence_amend.',
+  inputSchema: toolSchema(
+    z.object({
+      issue: z.number().describe('The Feature, or any story under it, e.g. 500.'),
+      answer: z
+        .enum(['accept', 'decline'])
+        .describe('"accept" holds work behind the order; "decline" releases every story under the Feature.'),
+    }),
+  ),
+  handler: (args) => {
+    const ref = desktopIssueRef(args);
+    if (!ref.ok) return toolError(ref.error);
+    if (args.answer !== 'accept' && args.answer !== 'decline')
+      return toolError('answer must be "accept" or "decline".');
+    const found = featureFor(deps, ref.issue);
+    if (!found.ok) return toolError(found.error);
+    const before = deps.store.sequences.getFeatureSequence(found.originRef);
+    const answered = deps.store.sequences.answerFeatureSequence(
+      found.originRef,
+      args.answer === 'accept' ? 'accepted' : 'declined',
+      session.label,
+    );
+    if (answered === null)
+      return toolError(
+        `Feature #${found.number} has no order to answer — none was proposed, or it has just been re-proposed. ` +
+          'Call sequence_read for what stands now.',
+      );
+    return toolJson({
+      feature: found.number,
+      was: before?.status ?? null,
+      order: describeSequence(answered),
+      means:
+        answered.status === 'declined'
+          ? 'every story under this Feature is eligible again, in whatever order the priority labels rank them. The fleet will not propose an order again until the Feature gains or loses a story.'
+          : answered.edges.length === 0
+            ? 'the order is accepted and holds nothing — it has no edges, so every story is eligible.'
+            : 'the order holds from the next pulse. A story behind another will not start until that one has pushed a branch.',
+    });
+  },
+});
+
 export interface FoundFeature {
   number: number;
   originRef: string;
@@ -181,4 +229,5 @@ function standingFor(deps: DesktopToolDeps, feature: number): { key: string; mem
 export const DESKTOP_SEQUENCE_TOOLS = {
   sequence_read: sequenceRead,
   sequence_amend: sequenceAmend,
+  sequence_answer: sequenceAnswer,
 } satisfies Record<string, DesktopToolFactory>;
