@@ -225,18 +225,6 @@ export function pressableRows(sheet: RemoteSheetView): number {
   return sheet.rows.filter((row) => row.selected && row.blockedReason === null && row.idleReason === null).length;
 }
 
-/**
- * What a press is made of: the ticked checks an operator can see in the list above, and the rows the
- * sheet carries of its own — the `state` queries and `measure` rows, which have no check to tick.
- * Said because the two numbers differ and the difference is the whole of the question *why does it
- * say five when I ticked three*.
- */
-export function pressBreakdown(sheet: RemoteSheetView): { checks: number; own: number } {
-  const rows = sheet.rows.filter((row) => row.selected && row.blockedReason === null && row.idleReason === null);
-  const checks = rows.filter((row) => row.kind === 'check').length;
-  return { checks, own: rows.length - checks };
-}
-
 /** A remote runner offering this goal no run, and why. `environment` null: no environment could. */
 export interface RemoteRunGap {
   environment: string | null;

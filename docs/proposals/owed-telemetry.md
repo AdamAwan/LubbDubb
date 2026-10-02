@@ -1,6 +1,7 @@
 # Proposal — telemetry a plan depends on
 
-**Status: under discussion, after the [arrival sheet](arrival-plan.md).** Nothing here is built.
+**Status: under discussion.** Nothing here is built. It follows the validation page an operator answers
+once ([36](../spec/36-remote-validation.md#the-ok)).
 
 ## The problem
 
@@ -18,7 +19,7 @@ The gap shows up only after arrival, as a watch that never hears anything.
   interpolated. The building agent `watch_declare`s the exact line it emitted.
 - **Nothing waits on it.** A merged part settles by merge; holding it would wedge its dependents with
   nothing red.
-- **The arrival sheet shows it**: _not seen yet, owed by part 2_.
+- **The validation page shows it**: _not seen yet, owed by part 2_.
 
 ## Known problems to settle first
 

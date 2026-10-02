@@ -9,7 +9,6 @@ import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/validation/remote/desk.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
 import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
-import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { validatePlanDocument, parsePlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { testPartNote } from '../src/plans/planning.js';
@@ -236,7 +235,6 @@ test('with the area written, a sheet’s check row confirms and the run has a se
       validationRoot: dir,
       store,
       environments,
-      observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
       scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,
@@ -271,7 +269,6 @@ test('the harness takes no listing of its own, and keeps no offering to be shown
       validationRoot: dir,
       store,
       environments,
-      observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader: new FakeStateReader({}) }),
       scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,

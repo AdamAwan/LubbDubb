@@ -24,12 +24,14 @@ import { BranchReapDesk } from '../pr/branchReapDesk.js';
 import { EnvironmentDesk } from '../environments/environmentDesk.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
-import { CommandEnvironmentObserver } from '../environments/observer.js';
+import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
 import { WatchDryRun } from '../environments/watchDryRun.js';
 import { CommandStateReader } from '../validation/remote/stateReader.js';
 import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteValidationDesk } from '../validation/remote/desk.js';
 import { RemoteRunDesk } from '../validation/remote/run.js';
+import { RemoteIntentDesk } from '../validation/remote/intent.js';
+import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants.js';
@@ -102,7 +104,12 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
 
 export type EnvironmentDesks = ReturnType<typeof buildEnvironmentDesks>;
 
-export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: Foundation) {
+export function buildEnvironmentDesks(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  proposals: Pick<ProposalDesk, 'accept'>,
+) {
   const { store, sink, errors, gitObserver } = base;
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
   const environments = new EnvironmentDesk({
@@ -131,7 +138,21 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
     environments: config.environments,
     observer: environmentObserver,
   });
+  return {
+    environments,
+    watchDryRun,
+    ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
+  };
+}
 
+function buildRemoteValidationDesks(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  environmentObserver: EnvironmentObserver,
+  proposals: Pick<ProposalDesk, 'accept'>,
+) {
+  const { store, sink, errors, gitObserver } = base;
   const stateQueries = new StateQueryDesk({
     store,
     environments: config.environments,
@@ -141,7 +162,6 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
   const remoteValidation = new RemoteValidationDesk({
     store,
     environments: config.environments,
-    observer: environmentObserver,
     queries: stateQueries,
     scriptGraceMs: config.remoteValidation.scriptGraceMs,
     probeIntervalMs: config.environmentProbeIntervalMs,
@@ -173,6 +193,15 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
   // → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
   remoteRuns.resumeTenantPrepares();
 
+  const remoteIntents = new RemoteIntentDesk({
+    store,
+    environments: config.environments,
+    desk: remoteValidation,
+    runs: remoteRuns,
+    proposals,
+    errors,
+  });
+
   const remoteListings = new RemoteListingDesk({ store, errors });
 
   const remoteReadings = new RemoteReadingDesk({
@@ -182,7 +211,7 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
     validationRoot: config.validationRoot,
     errors,
   });
-  return { environments, watchDryRun, stateQueries, remoteValidation, remoteRuns, remoteListings, remoteReadings };
+  return { stateQueries, remoteValidation, remoteRuns, remoteIntents, remoteListings, remoteReadings };
 }
 
 export type BenchDesks = ReturnType<typeof buildBenchDesks>;

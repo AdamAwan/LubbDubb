@@ -994,6 +994,13 @@ export interface ValidationStep {
   why: string | null;
 }
 
+/** What an OK would run on a page, by kind, and how many of its queries it approves. */
+export interface OkScope {
+  checks: number;
+  queries: number;
+  approvals: number;
+}
+
 /**
  * Five different facts, and the whole point of keeping them apart is that one must never be assumed
  * from evidence that supports another. `spec` is **a reviewed spec ran against a real environment
@@ -1029,6 +1036,8 @@ export interface ValidationCheck {
    * Absent is none. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
    */
   satisfies?: string[];
+  /** One line: why this check proves the criteria it satisfies. Absent or null is none written. → docs/spec/20-validation.md#rationale */
+  rationale?: string | null;
   fleetCandidate: boolean;
   candidateWhy: string | null;
   actor: ValidationCheckActor;
@@ -1088,6 +1097,7 @@ export interface ValidationCheckInput {
   uses: string[];
   covers: string[];
   satisfies?: string[];
+  rationale?: string | null;
   fleetCandidate: boolean;
   candidateWhy: string | null;
   /** The resolved test plan. Omitted and empty are the same fact: this check declares no steps. */
@@ -1148,6 +1158,8 @@ export interface ProposedCheck {
   expect: string;
   /** What a pass must hand back. Empty is *none demanded* — the card draws nothing. */
   proof: string;
+  /** Why this check proves its criteria. Empty or absent is none written. */
+  rationale?: string;
   steps: { kind: ValidationStepKind; do: string; actor: ValidationCheckActor; why: string | null }[];
   /** The planner's nomination, with its reason. Advice: the hand-over is still the operator's. */
   fleetCandidate: boolean;
@@ -1742,7 +1754,7 @@ export interface StateQuery extends StateQueryInput {
   dryRunSample: string | null;
 }
 
-export type RemoteRowKind = 'check' | 'state' | 'signal' | 'measure';
+export type RemoteRowKind = 'check' | 'state';
 
 /**
  * What a sheet row came back as. **`captured` is not a synonym for either end of the other three**:
@@ -1860,6 +1872,37 @@ export type RemoteRunStatus = 'pending' | 'dispatched' | 'ended' | 'abandoned';
  * `tenant` is the *key* the lock is enforced on and never a `tenantEnv`'s value — see
  * 36-remote-validation.md#tenants.
  */
+export type RemoteRunIntentState = 'given' | 'withdrawn' | 'consumed' | 'not_here';
+
+/**
+ * An operator's OK to run one goal's sheet on one environment. → docs/spec/36-remote-validation.md#the-ok
+ */
+export interface RemoteRunIntent {
+  goalRef: string;
+  environment: string;
+  state: RemoteRunIntentState;
+  /** What the OK was given over. Empty on a row written for a sheet from before the OK existed. */
+  fingerprint: string;
+  givenAt: string;
+  /** The run a consumed intent opened. */
+  runId: string | null;
+  /** Why a given intent has not been pressed yet, or the operator's reason for not validating here. */
+  note: string | null;
+  updatedAt: string;
+}
+
+/**
+ * Where one environment's validation page stands, worked out once on the server and read by both the
+ * cockpit and the `validate` row's hold. → docs/spec/36-remote-validation.md#the-ok
+ */
+export type OkStatus = 'needs-you' | 'queued' | 'running' | 'done' | 'not-here' | 'open' | 'nothing';
+
+export interface OkStanding {
+  status: OkStatus;
+  /** Why it stands there, where a sentence says more than the status: the run's abandon reason, the queue. */
+  why: string | null;
+}
+
 export interface RemoteRun {
   id: string;
   goalRef: string;

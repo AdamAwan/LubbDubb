@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS remote_sheet_rows (
   goal_ref          TEXT NOT NULL,
   environment       TEXT NOT NULL,
   row_id            TEXT NOT NULL,   -- 'check:<id>' | 'state:<id>' | 'watch:<id>'
-  kind              TEXT NOT NULL,   -- 'check' | 'state' | 'signal' | 'measure'
+  kind              TEXT NOT NULL,   -- 'check' | 'state'; the watch's 'signal' | 'measure' rows are retired
   seq               INTEGER NOT NULL,
   title             TEXT NOT NULL,
   source_id         TEXT NOT NULL,   -- the check, query or watch this row stands for

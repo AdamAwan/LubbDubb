@@ -18,6 +18,7 @@ export interface ValidationCheckRow {
   check_do: string;
   check_expect: string;
   proof: string | null | undefined;
+  rationale: string | null | undefined;
   uses: string;
   covers: string;
   satisfies: string | null | undefined;
@@ -62,6 +63,7 @@ export function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     do: r.check_do,
     expect: r.check_expect,
     proof: r.proof ?? null,
+    rationale: r.rationale ?? null,
     uses: parseStringArray(r.uses),
     covers: parseStringArray(r.covers),
     satisfies: parseStringArray(r.satisfies ?? null),

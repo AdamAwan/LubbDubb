@@ -729,6 +729,9 @@ and an `authoredAt` or a `note`). The `validate` row is only filed once the set 
 showed the checks proposal and the close-out together — the same breath this section exists to stop.
 Accepting files the `validate` row on the same pulse, which takes over the hold.
 
+A validation page waiting for its OK holds the `validate` row open the same way, so the close waits on
+it too ([20](20-validation.md#saying-so-on-the-bench), [36](36-remote-validation.md#the-ok)).
+
 It is read off the **bench**, not off the verdict. A `flagged` verdict would hold the close for good
 on a goal with one failing check, and the operator's way of saying "I am done with this" is the row —
 marked done, or declined — not the checks. The close-out's detail still carries what validation is

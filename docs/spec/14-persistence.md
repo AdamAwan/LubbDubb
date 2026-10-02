@@ -260,6 +260,14 @@ a Feature is, and a migration inventing one would put the harness's words in the
 board that exists to not be the harness's.
 → [17](17-cockpit.md#how-far-along)
 
+**A missing row can mean something too, and then the gate is the table's arrival.** `remote_run_intents`
+holds an operator's OK to run a sheet, and a sheet with no row there reads as _awaiting its OK_ — which
+holds the goal's close-out. So the table alone would ask for an OK on every sheet that already existed.
+`migrate` asks `tableExists` **before** the schema pass and, only on the boot that created it, writes
+a `consumed` intent for every existing sheet (`consumeIntentsForExistingSheets`). On every boot it
+would consume an OK an operator is waiting on. `ensureColumns`' report cannot carry this: a table
+created whole adds no columns. → [36](36-remote-validation.md#the-ok)
+
 `goal_arrivals.watched_at` is the counter-example worth stating beside them: null there means _not
 considered yet_, which **is** a value the running code acts on — and it still needs no backfill,
 because the guard the code applies to it is what makes a database full of nulls safe. An arrival

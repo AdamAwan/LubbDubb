@@ -51,7 +51,11 @@ test('the whole validate block parses, and environments stays fileOnly', () => {
   } as never);
 
   const validate = config.environments[0]!.validate!;
-  assert.deepEqual(validate.permits, ['check', 'state', 'signal', 'measure']);
+  assert.deepEqual(
+    validate.permits,
+    ['check', 'state'],
+    'signal and measure are retired row kinds: the harness still boots, and drops them with a warning',
+  );
   assert.equal(validate.tenant, 'validation-customer-1');
   assert.equal(validate.tenantFreshnessMs, 604_800_000);
   assert.equal(validate.browser!.profile, 'acc-uk');

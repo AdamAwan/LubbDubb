@@ -54,6 +54,7 @@ export const CHECK_STATE_WORDS: Record<ValidationCheckState, string> = {
 };
 
 const CHECK_WORDS = {
+  rationale: 'Why',
   doing: 'Do',
   steps: 'Steps',
   passes: 'Passes when',
@@ -133,6 +134,7 @@ function StepList({ steps }: { steps: CheckStepView[] }): JSX.Element {
  * @public drawn by `CheckSetAsk` and by `ValidationSection`'s row and digest
  */
 export function CheckDetail({
+  rationale = null,
   doing,
   steps,
   foldSteps = false,
@@ -140,6 +142,11 @@ export function CheckDetail({
   proof = null,
   meta,
 }: {
+  /**
+   * Why this check is the right proof of its criteria, in its author's one line. Null is none written
+   * and draws nothing. → docs/spec/20-validation.md#rationale
+   */
+  rationale?: string | null;
   doing: ReactNode;
   steps: CheckStepView[];
   /**
@@ -160,6 +167,12 @@ export function CheckDetail({
 }): JSX.Element {
   return (
     <dl className="cd">
+      {rationale !== null && rationale !== '' && (
+        <>
+          <dt>{CHECK_WORDS.rationale}</dt>
+          <dd>{rationale}</dd>
+        </>
+      )}
       {doing !== null && (
         <>
           <dt>{CHECK_WORDS.doing}</dt>

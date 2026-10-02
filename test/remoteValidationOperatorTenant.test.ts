@@ -10,7 +10,7 @@ import { RemoteRunDesk } from '../src/validation/remote/run.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
 import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
-import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
+import { watchRow } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolveTenant, type OperatorTenants } from '../src/validation/remote/tenants.js';
@@ -106,7 +106,6 @@ function bench(operatorTenants: OperatorTenants): { store: Store; runs: RemoteRu
       validationRoot: NO_CAPTURES,
       store,
       environments,
-      observer: new FakeEnvironmentObserver(),
       queries: new StateQueryDesk({ store, environments, reader }),
       scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
       probeIntervalMs: 60_000,

@@ -1,6 +1,8 @@
 import type { System } from '../system/system.js';
+import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
+import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
 import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -12,6 +14,7 @@ import type {
   IssueShortfall,
   Plan,
   PlanPart,
+  ValidationCheck,
   TaskSummary,
   WatchReading,
   WorkNode,
@@ -130,16 +133,6 @@ function sheetFold(sheet: RemoteSheetView | undefined): string | null {
   );
 }
 
-function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
-  const grouped = new Map<K, T[]>();
-  for (const row of rows) {
-    const held = grouped.get(key(row));
-    if (held) held.push(row);
-    else grouped.set(key(row), [row]);
-  }
-  return grouped;
-}
-
 export function buildGoalWatchWindows(
   store: System['store'],
   environments: EnvironmentConfig[],
@@ -180,11 +173,14 @@ export function buildRemoteSheets(
   tasks: readonly TaskSummary[],
   captureSigner?: (runId: string, rowId: string) => string,
   operatorTenants?: OperatorTenants,
+  checks: readonly ValidationCheck[] = [],
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
   if (sheets.length === 0) return [];
   const runs = store.remoteValidation.listRemoteRuns();
+  const intents = new Map(store.remoteIntents.listIntents().map((i) => [`${i.goalRef} ${i.environment}`, i]));
+  const gone = goneCheckRows(checks);
   // The way from a reading to the transcript of the agent that produced it, walked here: a reading
   // carries the run it came through, a run carries the task it was dispatched as, and a task carries
   // the agent. The tasks are the caller's own list rather than a lookup per reading — one statement a
@@ -219,13 +215,19 @@ export function buildRemoteSheets(
       environment === undefined
         ? { tenant: null, reseededAt: null, ageMs: null, freshnessMs: null, stale: false, blockedReason: null }
         : resolveTenant({ environment, stamped: tenants, now, operatorTenants }).standing;
+    const rows = pageRows(rowsByGoalEnvironment.get(key) ?? [], gone);
+    const intent = intents.get(key) ?? null;
+    const run = runsByGoalEnvironment.get(key)?.at(-1) ?? null;
     return {
       ...sheet,
-      rows: (rowsByGoalEnvironment.get(key) ?? []).map((row) => ({
+      rows: rows.map((row) => ({
         ...row,
         reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null,
       })),
-      run: runsByGoalEnvironment.get(key)?.at(-1) ?? null,
+      run,
+      intent,
+      okable: okScope(rows),
+      ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,

@@ -12,6 +12,7 @@ import {
   remoteValidationRunDir,
 } from './origin.js';
 import { briefing, type RunDrive, type RunScreen, type RunScript } from './remoteRunBriefingText.js';
+import { remoteRunIsLive } from './sheet.js';
 import { resolveTenant, type OperatorTenants, type TenantEnvironment } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
@@ -59,9 +60,7 @@ export function configuredRemoteRunBriefs(
  */
 export function remoteRunBriefs(input: BriefInput): RemoteRunBrief[] {
   const { store } = input;
-  const runs = store.remoteValidation
-    .listRemoteRuns()
-    .filter((run) => run.status === 'pending' || run.status === 'dispatched');
+  const runs = store.remoteValidation.listRemoteRuns().filter(remoteRunIsLive);
   if (runs.length === 0) return [];
   const rows = store.remoteValidation.listRemoteSheetRows();
   const out: RemoteRunBrief[] = [];

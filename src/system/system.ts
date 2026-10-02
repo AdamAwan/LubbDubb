@@ -110,6 +110,7 @@ export interface System {
   remoteValidation: RemoteValidationDesk;
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
+  remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
   prAssign: PrAssignDesk;
@@ -151,7 +152,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const crew = buildAgentManager(config, base, runtime, channels, late);
   const fleet = buildFleet(config, opts, base, runtime, channels, crew);
   const intake = buildIntakeDesks(config, opts, base, channels);
-  const envs = buildEnvironmentDesks(config, opts, base);
+  const envs = buildEnvironmentDesks(config, opts, base, fleet.proposals);
   const bench = {
     ...buildBenchDesks(config, opts, base, channels, fleet),
     graph: new WorkGraphRecorder({ store: base.store, errors: base.errors }),
@@ -189,6 +190,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteValidation: envs.remoteValidation,
     validationReady: bench.validationReady,
     remoteRuns: envs.remoteRuns,
+    remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
     prAssign: new PrAssignDesk({
@@ -366,6 +368,7 @@ function buildHarness(
     branchReaps: intake.branchReaps,
     environments: envs.environments,
     remoteValidation: envs.remoteValidation,
+    remoteIntents: envs.remoteIntents,
     prWatch: intake.prWatch,
     prWorkItems: intake.prWorkItems,
     review: config.review,

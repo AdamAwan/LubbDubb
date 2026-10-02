@@ -178,8 +178,10 @@ export interface CockpitActions {
   ruleRemoteQuery(issueNumber: number, environment: string, rowId: string, accept: boolean): Promise<void>;
   selectRemoteRow(issueNumber: number, environment: string, rowId: string, selected: boolean): Promise<void>;
   setUpRemoteSheet(issueNumber: number, environment: string): Promise<void>;
-  pressRemoteSheet(issueNumber: number, environment: string): Promise<void>;
   cancelRemoteRun(issueNumber: number, environment: string): Promise<void>;
+  giveRemoteOk(issueNumber: number, environment: string): Promise<void>;
+  withdrawRemoteOk(issueNumber: number, environment: string): Promise<void>;
+  markRemoteNotHere(issueNumber: number, environment: string, note: string): Promise<void>;
   reseedRemoteTenant(issueNumber: number, environment: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
   setUpNextProfile(origin: string, profile: string | null): Promise<void>;

@@ -13,8 +13,13 @@ export function validationPlanProposalRef(issueNumber: number): string {
   return validationPlanOrigin(issueNumber);
 }
 
+/** The card a goal's check set is waiting on, if one is pending. */
+export function pendingValidationPlanProposal(ref: string, proposals: readonly Proposal[]): Proposal | null {
+  return proposals.find((p) => p.kind === 'validation_plan' && p.ref === ref && p.status === 'pending') ?? null;
+}
+
 export function validationPlanProposalHold(ref: string, proposals: readonly Proposal[]): string | null {
-  const standing = proposals.find((p) => p.kind === 'validation_plan' && p.ref === ref && p.status === 'pending');
+  const standing = pendingValidationPlanProposal(ref, proposals);
   return standing ? `awaiting your accept/reject (${standing.id})` : null;
 }
 
@@ -39,15 +44,18 @@ export function checkSetReleased(input: {
 export interface CheckSetStanding {
   accepted: boolean;
   acceptedAt: string | null;
+  /** When the validation planner wrote the set, released or not; null for an ingested set. */
+  authoredAt: string | null;
 }
 
 export function checkSetStanding(
   record: ValidationPlanRecord | null,
   checks: () => readonly ValidationCheck[],
 ): CheckSetStanding {
-  if (record?.releasedAt != null) return { accepted: true, acceptedAt: record.releasedAt };
-  if (record?.authoredAt != null) return { accepted: false, acceptedAt: null };
-  return { accepted: checks().length > 0, acceptedAt: null };
+  const authoredAt = record?.authoredAt ?? null;
+  if (record?.releasedAt != null) return { accepted: true, acceptedAt: record.releasedAt, authoredAt };
+  if (authoredAt !== null) return { accepted: false, acceptedAt: null, authoredAt };
+  return { accepted: checks().length > 0, acceptedAt: null, authoredAt: null };
 }
 
 /**
@@ -71,6 +79,7 @@ export function proposedCheckSet(checks: readonly ValidationCheck[]): ProposedCh
     title: check.title,
     expect: check.expect,
     proof: check.proof ?? '',
+    rationale: check.rationale ?? '',
     steps: check.steps.map((step) => ({ kind: step.kind, do: step.do, actor: step.actor, why: step.why })),
     fleetCandidate: check.fleetCandidate,
     candidateWhy: check.candidateWhy,

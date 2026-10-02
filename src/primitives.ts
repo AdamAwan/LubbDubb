@@ -15,3 +15,13 @@ export function prNumberOf(ref: string): number | null {
   const found = /^pr:(\d+)$/.exec(ref)?.[1];
   return found === undefined ? null : Number(found);
 }
+
+export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
+  const grouped = new Map<K, T[]>();
+  for (const row of rows) {
+    const held = grouped.get(key(row));
+    if (held) held.push(row);
+    else grouped.set(key(row), [row]);
+  }
+  return grouped;
+}

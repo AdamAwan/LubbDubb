@@ -1419,6 +1419,9 @@ export function buildDemoState(): DemoSeed {
         goalRef: 'issue:395',
         environment: 'staging',
         assembledAt: ago(6),
+        intent: null,
+        okable: { checks: 3, queries: 2, approvals: 1 },
+        ok: { status: 'needs-you' as const, why: null },
         run: {
           id: 'run-395-staging-2',
           goalRef: 'issue:395',
@@ -1609,59 +1612,6 @@ export function buildDemoState(): DemoSeed {
           {
             goalRef: 'issue:395',
             environment: 'staging',
-            rowId: 'measure:refund-p95',
-            kind: 'measure' as const,
-            seq: 6,
-            title: 'Issuing a refund is no slower at p95',
-            sourceId: 'refund-p95',
-            selected: true,
-            blockedReason: null,
-            awaitingApproval: false,
-            matched: null,
-            idleReason: null,
-            reading: {
-              goalRef: 'issue:395',
-              environment: 'staging',
-              rowId: 'measure:refund-p95',
-              runId: 'run-395-staging-2',
-              outcome: 'failed' as const,
-              capture: null,
-              captureUrl: null,
-              rows: null,
-              value: 1240,
-              detail:
-                'Baseline 410ms; the bar is 900ms. Writing the ledger entry in the same transaction costs about 800ms.',
-              startedSha: '5n4p004',
-              endedSha: '5n4p004',
-              executed: null,
-              retries: null,
-              durationMs: null,
-              taskId: null,
-              agentId: null,
-              artefacts: null,
-              readAt: ago(3),
-            },
-          },
-          {
-            goalRef: 'issue:395',
-            environment: 'staging',
-            rowId: 'signal:no-unbalanced-ledger-writes',
-            kind: 'signal' as const,
-            seq: 7,
-            title: 'No unbalanced ledger write is logged',
-            sourceId: 'no-unbalanced-ledger-writes',
-            selected: true,
-            blockedReason:
-              'the log sink has not answered since the retention change, so nothing can be read here. A signal ' +
-              'never reports clean while its presence query is silent.',
-            awaitingApproval: false,
-            matched: null,
-            idleReason: null,
-            reading: null,
-          },
-          {
-            goalRef: 'issue:395',
-            environment: 'staging',
             rowId: 'check:refunds-work-in-safari',
             kind: 'check' as const,
             seq: 8,
@@ -1682,6 +1632,9 @@ export function buildDemoState(): DemoSeed {
         goalRef: 'issue:395',
         environment: 'prod',
         assembledAt: ago(2),
+        intent: null,
+        okable: { checks: 0, queries: 0, approvals: 0 },
+        ok: { status: 'running' as const, why: null },
         run: {
           id: 'run-395-prod-1',
           goalRef: 'issue:395',
@@ -1782,6 +1735,9 @@ export function buildDemoState(): DemoSeed {
         goalRef: 'issue:398',
         environment: 'staging',
         assembledAt: ago(66),
+        intent: null,
+        okable: { checks: 0, queries: 0, approvals: 0 },
+        ok: { status: 'nothing' as const, why: null },
         run: {
           id: 'run-398-staging-1',
           goalRef: 'issue:398',
@@ -3867,12 +3823,13 @@ export function buildDemoState(): DemoSeed {
       // ones still owed already open. → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
       {
         id: 'hum-5',
-        title: 'Run the checks for issue #395',
+        title: 'Run the validation checks for issue #395',
         detail:
-          '**Every refund writes a ledger entry** is delivered. Five of its nine checks are still to ' +
-          'run — they are below. Record what you saw on each, with a note.\n\n' +
-          'Nothing is blocked by this: checks gate no dispatch, no merge and no close — what they change is ' +
-          'what closing this goal looks like.',
+          'Its validation page on staging is waiting for your OK — nothing there runs until you give it.\n\n' +
+          '**Every refund writes a ledger entry** is delivered, and its validation plan has checks for you to ' +
+          'run — they are below. Run them and record each result on the goal, with a note. Nothing is ' +
+          'blocked by this: validation gates no dispatch, no merge and no close — what it changes is what ' +
+          'closing this goal looks like.',
         originRef: 'issue:395',
         partId: null,
         kind: 'validate',

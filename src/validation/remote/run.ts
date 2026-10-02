@@ -7,7 +7,8 @@ import type { Store } from '../../store/store.js';
 import type { RemoteRun, RemoteSheetRow, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
 import { runnableDrives, runnableScreens, runnableScripts, runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
-import { rowRun } from './sheet.js';
+import { noSheetAssembled, rowRun } from './sheet.js';
+import { checkSetStanding } from '../planApproval.js';
 import {
   resolveTenant,
   stalenessNote,
@@ -89,6 +90,9 @@ export class RemoteRunDesk extends EventEmitter {
     const key = tenant.standing.tenant ?? '';
 
     const pin = await this.pin(goalRef, environment);
+    const open = store.remoteValidation.liveRemoteRun(environmentName, key);
+    if (open !== null) return liveRefusal(environmentName, open, key);
+    const confirmed = pin.abandon === null ? this.deps.desk.pressRows(goalRef, environment) : [];
 
     const { run, live } = store.remoteValidation.beginRemoteRun({
       goalRef,
@@ -103,7 +107,7 @@ export class RemoteRunDesk extends EventEmitter {
       return { ok: true, run: ended ?? run, abandoned: pin.abandon, read: 0, owed: 0 };
     }
 
-    const read = await this.readAll(environment, goalRef, run, rows, tenant.standing);
+    const read = await this.readAll(environment, goalRef, run, confirmed, tenant.standing);
 
     // The deterministic rows are read here, synchronously and under the pin: they are read-only,
     // consented and cheap, and the agent is for the browser half. The run the rule dispatches for is
@@ -114,7 +118,7 @@ export class RemoteRunDesk extends EventEmitter {
     // names neither, and one the agent drives itself at the browser names none of the three — a press
     // counting selectors alone would settle that run on the spot with its whole browser half still
     // owed, which is a press that quietly did less than it said.
-    const owed = owedToAgent(store, environment, goalRef, rows);
+    const owed = owedToAgent(store, environment, goalRef, confirmed);
     if (owed > 0) return { ok: true, run, abandoned: null, read, owed };
 
     const endedSha = await this.deployedSha(environment);
@@ -135,10 +139,17 @@ export class RemoteRunDesk extends EventEmitter {
         error: `"${environmentName}" declares no "validate" block, so there is no sheet here to press.`,
       };
     const { store } = this.deps;
-    if (
-      !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
-    )
-      return { ok: false, code: 404, error: `no validation sheet is assembled for this goal on "${environmentName}".` };
+    if (!this.deps.desk.hasSheet(goalRef, environmentName))
+      return { ok: false, code: 404, error: noSheetAssembled(environmentName) };
+    const checks = checkSetStanding(store.validation.getValidationPlanRecord(goalRef), () =>
+      store.validation.listValidationChecks(goalRef),
+    );
+    if (!checks.accepted && checks.authoredAt !== null)
+      return {
+        ok: false,
+        code: 409,
+        error: "this goal's checks are not accepted yet — the OK accepts them, or the card does.",
+      };
 
     const rows = store.remoteValidation
       .listRemoteSheetRows()
@@ -228,6 +239,20 @@ export class RemoteRunDesk extends EventEmitter {
       env: this.deps.env,
       operatorTenants: this.deps.operatorTenants,
     });
+  }
+
+  /**
+   * Why a press on this environment would wait rather than run, in the sheet's words, or null where it
+   * would run: no tenant, or the `(environment, tenant)` lock held by another run. The same tenant and
+   * lock key the press itself reads, asked before it so a queued OK spawns no `at` probe.
+   *
+   * @public the seam the intent desk asks before it presses
+   */
+  waitReason(environmentName: string): string | null {
+    const standing = this.standing(environmentName);
+    if (standing.blockedReason !== null) return standing.blockedReason;
+    const live = this.deps.store.remoteValidation.liveRemoteRun(environmentName, standing.tenant ?? '');
+    return live === null ? null : `queued behind the run for ${live.goalRef}.`;
   }
 
   private standing(environmentName: string): TenantStanding {
@@ -456,10 +481,9 @@ export class RemoteRunDesk extends EventEmitter {
     const stale = stalenessNote(tenant);
     let read = 0;
     for (const row of rows) {
-      const runs = rowRun(row.rowId);
-      if (runs === null || row.blockedReason !== null) continue;
+      if (rowRun(row.rowId) === null || row.blockedReason !== null) continue;
       try {
-        const reading = await this.deps.desk.readRow(environment, goalRef, runs, row.sourceId);
+        const reading = await this.deps.desk.readRow(environment, goalRef, row.sourceId);
         if (reading === null) continue;
         if (reading.outcome === 'blocked') {
           this.deps.store.remoteValidation.blockRemoteSheetRow(

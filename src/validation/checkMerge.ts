@@ -24,7 +24,7 @@ export function mergeCheck(args: {
     proof: input.proof,
     uses: input.uses,
     covers: input.covers,
-    satisfies: input.satisfies ?? prev?.satisfies ?? [],
+    ...keptWhenOmitted(input, prev),
     fleetCandidate: input.fleetCandidate,
     candidateWhy: input.candidateWhy,
     actor: reading.actor,
@@ -115,15 +115,18 @@ function carriedBand(prev: ValidationCheck | undefined): Band {
   };
 }
 
+/**
+ * The terms a reading was taken under: a check's wording, and the evidence it demands. A rewording is a
+ * change to these, and the OK's fingerprint reads the same list. The evidence is on it because a pass
+ * earned by handing back one screen is not a pass under a `proof` that now asks for another.
+ */
+export function checkTerms(check: ValidationCheckAmendmentLike): (string | null)[] {
+  return [check.title, check.do, check.expect, check.proof];
+}
+
 export function isReworded(prev: ValidationCheck, next: ValidationCheckAmendmentLike): boolean {
-  return (
-    prev.title !== next.title ||
-    prev.do !== next.do ||
-    prev.expect !== next.expect ||
-    // The evidence demanded is part of the terms a reading was taken against: a pass earned by
-    // handing back one screen is not a pass under a `proof` that now asks for another.
-    prev.proof !== next.proof
-  );
+  const before = checkTerms(prev);
+  return checkTerms(next).some((term, i) => term !== before[i]);
 }
 
 interface ValidationCheckAmendmentLike {
@@ -145,5 +148,16 @@ function priorWording(prev: ValidationCheck): ValidationRevision {
     proof: prev.proof,
     state: prev.state === 'unrun' ? null : prev.state,
     note: prev.resultNote,
+  };
+}
+
+/** What a re-declaration that says nothing about them keeps: the criteria a check answers, and why. */
+function keptWhenOmitted(
+  input: Pick<ValidationCheckInput, 'satisfies' | 'rationale'>,
+  prev: ValidationCheck | undefined,
+): Pick<ValidationCheck, 'satisfies' | 'rationale'> {
+  return {
+    satisfies: input.satisfies ?? prev?.satisfies ?? [],
+    rationale: input.rationale ?? prev?.rationale ?? null,
   };
 }

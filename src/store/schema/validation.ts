@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS validation_checks (
                                       -- whose assertion is the whole of its evidence, so nothing is
                                       -- backfilled — and it never folds into "evidence was demanded
                                       -- and none came", which is a blocked row
+  rationale   TEXT,                   -- one line: why this check proves its criteria. NULL is none
+                                      -- written, true of every row from before the column
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (origin_ref, id)

@@ -7,7 +7,6 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { CONTROL_CLASS } from '../components/controls.js';
 import {
-  pressBreakdown,
   pressableRows,
   remoteRunGaps,
   tenantAlerts,
@@ -15,6 +14,7 @@ import {
   type TenantAlert,
 } from '../view/validatePane.js';
 import { SignalsSection } from '../components/SignalsSection.js';
+import { SheetOkRow } from './sheetOk.js';
 import { RemoteValidationSection, ReseedControl } from '../components/RemoteValidationSection.js';
 import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
 import { LocalValidationReport } from './LocalValidationReport.js';
@@ -129,13 +129,10 @@ export function RunStrip({
   return (
     <section className="cn-runstrip">
       <LocalRunRow issue={issue} offer={offer} onValidate={onValidate} onRefused={setRefusal} />
-      {/* One line per environment with a sheet, carrying the gate's own count so the strip never
-          offers a run of rows a press would touch in no way at all. **Rows, not checks**: a sheet
-          carries queries and measures beside its check rows, and a press re-reads the answered ones
-          too — so the line says what a press does and, separately, how many checks are still
-          unanswered there. → docs/spec/36-remote-validation.md#a-row-no-press-can-read */}
+      {/* One line per environment with a page: where it stands, and the one answer it asks for.
+          → docs/spec/36-remote-validation.md#the-ok */}
       {page.remoteSheets.map((sheet) => (
-        <SheetRunRow
+        <SheetOkRow
           key={sheet.environment}
           sheet={sheet}
           issueNumber={issue.number}
@@ -241,50 +238,6 @@ function GapRow({
         </AsyncButton>
       )}
       <span className="cn-sub">{gap.why}</span>
-    </div>
-  );
-}
-
-function SheetRunRow({
-  sheet,
-  issueNumber,
-  actions,
-  onRefused,
-}: {
-  sheet: GoalPageView['remoteSheets'][number];
-  issueNumber: number;
-  actions: CockpitActions;
-  onRefused: (reason: string) => void;
-}): JSX.Element {
-  const rows = pressableRows(sheet);
-  const made = pressBreakdown(sheet);
-  const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
-  return (
-    <div className="cn-runstrip-row">
-      <span className="cn-runstrip-who">{sheet.environment}</span>
-      {live ? (
-        <span className="cn-sub">a run is going — the panel below follows it</span>
-      ) : (
-        <>
-          <AsyncButton
-            usage="validation.create"
-            className={`${CONTROL_CLASS} primary`}
-            onClick={() => actions.pressRemoteSheet(issueNumber, sheet.environment)}
-            onRefused={onRefused}
-            title={`Re-read every selected row on this sheet against the commit ${sheet.environment} stands at right now — the ones already answered included`}
-          >
-            {rows === 1 ? 'Run 1 row' : `Run ${String(rows)} rows`}
-          </AsyncButton>
-          {/* What the number is made of, because it is bigger than the ticks below it: the
-              sheet carries queries and measures that have no check to tick, and a press
-              re-reads the checks already answered. */}
-          <span className="cn-sub">
-            {made.checks === 1 ? '1 check ticked below' : `${String(made.checks)} checks ticked below`}
-            {made.own > 0 &&
-              ` · ${String(made.own)} ${made.own === 1 ? 'query or measure' : 'queries and measures'} of its own`}
-          </span>
-        </>
-      )}
     </div>
   );
 }
@@ -450,7 +403,6 @@ export function RemoteValidation({
           showing={showing}
           switcher={false}
           foldRows
-          press={false}
           alertAbove
           onShow={(environment) => actions.openRemoteSheet(environment)}
           controls={{
@@ -458,7 +410,6 @@ export function RemoteValidation({
               actions.ruleRemoteQuery(page.issue.number, environment, rowId, accept),
             onSelect: (environment, rowId, selected) =>
               actions.selectRemoteRow(page.issue.number, environment, rowId, selected),
-            onPress: (environment) => actions.pressRemoteSheet(page.issue.number, environment),
             onCancel: (environment) => actions.cancelRemoteRun(page.issue.number, environment),
             onReseed: (environment) => actions.reseedRemoteTenant(page.issue.number, environment),
             onOpenAgent: (agentId) => actions.select(agentId),

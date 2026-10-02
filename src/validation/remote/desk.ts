@@ -1,9 +1,6 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { EnvironmentObserver } from '../../environments/observer.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
-import { arrivalSheetStep, sheetableArrivals, watchWindowMs } from '../../environments/watchWindow.js';
-import { watchCheckVerdict } from '../../environments/watchVerdict.js';
-import type { WatchResult } from '../../environments/watchResult.js';
+import { arrivalSheetStep, sheetableArrivals } from '../../environments/watchWindow.js';
 import { issueOriginNumber } from '../../issueOrigins.js';
 import { readFile } from 'node:fs/promises';
 import type { ActionSink, IssueImageSink } from '../../sink/actionSink.js';
@@ -12,10 +9,9 @@ import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import { checkSetStanding, type CheckSetStanding } from '../planApproval.js';
 import { sweptScripts } from '../steps.js';
-import { queryDigest } from '../../store/remoteValidation.js';
-import type { GoalArrival, GoalWatch, RemoteRowOutcome, StateQuery } from '../../types.js';
+import type { GoalArrival, RemoteRowOutcome, RemoteSheetRow, StateQuery } from '../../types.js';
 import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
-import { noSheetReason, sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
+import { noSheetReason, sheetRows, type SheetRowPlan } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type OperatorTenants, type TenantEnvironment } from './tenants.js';
 
@@ -28,7 +24,6 @@ const SWEPT =
 interface RemoteValidationDeskDeps {
   store: Store;
   environments: readonly EnvironmentConfig[];
-  observer: EnvironmentObserver;
   queries: StateQueryDesk;
   probeIntervalMs: number;
   /**
@@ -110,8 +105,7 @@ export class RemoteValidationDesk {
     const { store } = this.deps;
     const validates = this.deps.environments.find((e) => e.name === environment)?.validate !== undefined;
     if (!validates) return noSheetReason({ environment, status: 'reached', step: 'not-validating' }).why;
-    if (store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environment))
-      return `A run is already set up on "${environment}" for this goal.`;
+    if (this.hasSheet(goalRef, environment)) return `A run is already set up on "${environment}" for this goal.`;
     const arrival = store.environments
       .listGoalArrivals()
       .find((a) => a.goalRef === goalRef && a.environment === environment);
@@ -329,51 +323,117 @@ export class RemoteValidationDesk {
     }
   }
 
-  /**
-   * The second key, for a live watch check: an operator has read this query and accepted it *here*.
-   * The watch put it to one environment to learn whether it parses; a sheet puts it to a named place,
-   * and consent to a place is not transferable — so a check live on the watch is still blocked on a
-   * sheet until its digest has been accepted against that environment.
-   *
-   * @public the seam the sheet's approval route writes an operator's consent to a watch query through
-   */
-  async ruleWatchQuery(
-    originRef: string,
-    checkId: string,
-    environmentName: string,
-    accept: boolean,
-  ): Promise<{ check: GoalWatch; reading: RowReading | null; approved: boolean } | null> {
-    const check = this.deps.store.watches.listGoalWatches().find((c) => c.originRef === originRef && c.id === checkId);
-    if (check === undefined) return null;
-    const environment = this.deps.environments.find((e) => e.name === environmentName);
-    if (environment === undefined) return null;
-    const digest = queryDigest(check.query, check.presence ?? '');
-    if (!accept) {
-      this.deps.store.remoteValidation.declineStateQuery(digest, environment.name);
-      return { check, reading: null, approved: false };
-    }
-    const reading = await this.readWatch(environment, originRef, checkId);
-    if (reading === null || reading.outcome === 'blocked') return { check, reading, approved: false };
-    this.deps.store.remoteValidation.approveStateQuery({
-      digest,
-      environment: environment.name,
-      originRef,
-      queryId: checkId,
-      rows: reading.rows,
-      detail: reading.detail,
-    });
-    return { check, reading, approved: true };
-  }
-
   private async assemble(arrival: GoalArrival): Promise<void> {
     const { store } = this.deps;
     const environment = this.deps.environments.find((e) => e.name === arrival.environment);
     if (environment === undefined) return;
     const goalRef = arrival.goalRef;
-    const rows = sheetRows({
+    const rows = this.fold(environment, goalRef);
+    store.remoteValidation.openRemoteSheet({ goalRef, environment: environment.name });
+    store.remoteValidation.saveRemoteSheetRows(
+      goalRef,
+      environment.name,
+      rows.map(({ run: _run, ...row }) => row),
+    );
+    for (const row of rows) await this.read(environment, goalRef, row);
+  }
+
+  /**
+   * The selected rows a press is about to read, their causes re-folded first. A row whose source has
+   * left the fold — a check declined or superseded since assembly — is not among them.
+   * → docs/spec/36-remote-validation.md#the-press
+   *
+   * @public the seam the press re-derives its rows' causes through
+   */
+  pressRows(goalRef: string, environment: EnvironmentConfig): RemoteSheetRow[] {
+    return this.refold(goalRef, environment, (row) => row.selected)
+      .filter(({ row, folded }) => folded && row.selected)
+      .map(({ row }) => row);
+  }
+
+  /**
+   * A `state` query ruled on here. The approval is keyed `(digest, environment)`, so every sheet on the
+   * environment is re-folded, and on each only the rows whose approval moved.
+   *
+   * @public the seam the sheet's approval route writes an operator's consent to a state query through
+   */
+  async ruleStateQuery(originRef: string, queryId: string, environment: EnvironmentConfig, accept: boolean) {
+    const ruled = await this.deps.queries.rule(originRef, queryId, environment.name, accept);
+    if (ruled !== null) this.refoldApprovals(environment);
+    return ruled;
+  }
+
+  private refoldApprovals(environment: EnvironmentConfig): void {
+    for (const sheet of this.deps.store.remoteValidation.listRemoteSheets())
+      if (sheet.environment === environment.name)
+        this.refold(sheet.goalRef, environment, (row, plan) => row.awaitingApproval !== plan.awaitingApproval);
+  }
+
+  /** A fresh fold's causes onto the rows `touches` picks; `selected` and `matched` are never touched. */
+  private refold(
+    goalRef: string,
+    environment: EnvironmentConfig,
+    touches: (row: RemoteSheetRow, plan: SheetRowPlan) => boolean,
+  ): { row: RemoteSheetRow; folded: boolean }[] {
+    const { remoteValidation } = this.deps.store;
+    const fresh = new Map(this.fold(environment, goalRef).map((r) => [r.rowId, r]));
+    const out: { row: RemoteSheetRow; folded: boolean }[] = [];
+    const moved: RemoteSheetRow[] = [];
+    for (const stored of remoteValidation.listRemoteSheetRows()) {
+      if (stored.goalRef !== goalRef || stored.environment !== environment.name) continue;
+      const plan = fresh.get(stored.rowId);
+      if (plan === undefined || !touches(stored, plan)) {
+        out.push({ row: stored, folded: plan !== undefined });
+        continue;
+      }
+      const { blockedReason, awaitingApproval, idleReason } = plan;
+      const row = { ...stored, blockedReason, awaitingApproval, idleReason };
+      if (
+        blockedReason !== stored.blockedReason ||
+        awaitingApproval !== stored.awaitingApproval ||
+        idleReason !== stored.idleReason
+      )
+        moved.push(row);
+      out.push({ row, folded: true });
+    }
+    if (moved.length > 0) remoteValidation.saveRemoteSheetRows(goalRef, environment.name, moved);
+    return out;
+  }
+
+  /** @public the seam the press, the OK and the not-here route ask whether there is a sheet to act on */
+  hasSheet(goalRef: string, environment: string): boolean {
+    return this.deps.store.remoteValidation
+      .listRemoteSheets()
+      .some((s) => s.goalRef === goalRef && s.environment === environment);
+  }
+
+  /**
+   * Rows the fold holds and the sheet does not yet — a check authored since the sheet was assembled.
+   * Added as the assembly adds them, and never removed: a row whose source left the fold is skipped by
+   * the press instead. → docs/spec/36-remote-validation.md#the-ok
+   *
+   * @public the seam the OK brings its page up to date through
+   */
+  adoptNewRows(goalRef: string, environment: EnvironmentConfig): void {
+    const { remoteValidation } = this.deps.store;
+    const held = new Set(
+      remoteValidation
+        .listRemoteSheetRows()
+        .filter((r) => r.goalRef === goalRef && r.environment === environment.name)
+        .map((r) => r.rowId),
+    );
+    const fresh = this.fold(environment, goalRef)
+      .filter((r) => !held.has(r.rowId))
+      .map(({ run: _run, ...row }) => row);
+    if (fresh.length > 0) remoteValidation.saveRemoteSheetRows(goalRef, environment.name, fresh);
+  }
+
+  /** @public the fold the assembly, the press's re-fold, the OK's fingerprint and the tests all read */
+  fold(environment: EnvironmentConfig, goalRef: string): SheetRowPlan[] {
+    const { store } = this.deps;
+    return sheetRows({
       environment,
       checks: store.validation.listValidationChecks(goalRef),
-      watches: store.watches.listGoalWatches().filter((w) => w.originRef === goalRef),
       queries: store.remoteValidation.listStateQueries().filter((q) => q.originRef === goalRef),
       approvals: new Set(store.remoteValidation.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
       // Resolved here rather than in `sheetRows`: the sheet is a pure fold, and where a tenant comes
@@ -386,13 +446,6 @@ export class RemoteValidationDesk {
         operatorTenants: this.deps.operatorTenants,
       }).standing,
     });
-    store.remoteValidation.openRemoteSheet({ goalRef, environment: environment.name });
-    store.remoteValidation.saveRemoteSheetRows(
-      goalRef,
-      environment.name,
-      rows.map(({ run: _run, ...row }) => row),
-    );
-    for (const row of rows) await this.read(environment, goalRef, row);
   }
 
   /**
@@ -402,7 +455,7 @@ export class RemoteValidationDesk {
    */
   private async read(environment: EnvironmentConfig, goalRef: string, row: SheetRowPlan): Promise<void> {
     if (row.blockedReason !== null || row.run === null) return;
-    const reading = await this.readRow(environment, goalRef, row.run, row.sourceId);
+    const reading = await this.readRow(environment, goalRef, row.sourceId);
     if (reading === null) return;
     if (reading.outcome === 'blocked') {
       this.deps.store.remoteValidation.blockRemoteSheetRow(
@@ -436,28 +489,13 @@ export class RemoteValidationDesk {
   }
 
   /**
-   * One row's reading, taken through the same two readers the assembly used. The press re-runs a
-   * confirmed row through this rather than a second reader, which would be free to disagree with
-   * the assembly about what a row of that kind is.
+   * One `state` row's reading, taken through the reader the assembly used. The press re-runs a
+   * confirmed row through this rather than a second reader, which would be free to disagree with the
+   * assembly about what a row of that kind is.
    *
    * @public the seam `RemoteRunDesk` re-reads a confirmed row through
    */
-  async readRow(
-    environment: EnvironmentConfig,
-    goalRef: string,
-    run: Exclude<SheetRowRun, null>,
-    sourceId: string,
-  ): Promise<RowReading | null> {
-    return run === 'state'
-      ? this.readState(environment, goalRef, sourceId)
-      : this.readWatch(environment, goalRef, sourceId);
-  }
-
-  private async readState(
-    environment: EnvironmentConfig,
-    goalRef: string,
-    queryId: string,
-  ): Promise<RowReading | null> {
+  async readRow(environment: EnvironmentConfig, goalRef: string, queryId: string): Promise<RowReading | null> {
     const query: StateQuery | undefined = this.deps.store.remoteValidation
       .listStateQueries()
       .find((q) => q.originRef === goalRef && q.id === queryId);
@@ -473,64 +511,6 @@ export class RemoteValidationDesk {
       detail:
         `${environment.name} answered ${String(rows)} row${rows === 1 ? '' : 's'} where the query declared none ` +
         'should match.',
-    };
-  }
-
-  /**
-   * What a sheet's reading of a live watch check is about: this goal's arrival on
-   * that environment, which is the same instant the window's own readings are
-   * bounded to — so the sheet and the watch answer the same question of the same
-   * period, and a sheet run before the work arrived reads the window the run is in.
-   */
-  private watchSince(environment: EnvironmentConfig, goalRef: string): string {
-    const arrivals = this.deps.store.environments
-      .listGoalArrivals()
-      .filter((a) => a.goalRef === goalRef && a.environment === environment.name);
-    const arrived = arrivals[arrivals.length - 1]?.arrivedAt;
-    return arrived ?? new Date(this.now() - watchWindowMs(environment)).toISOString();
-  }
-
-  private async readWatch(
-    environment: EnvironmentConfig,
-    goalRef: string,
-    checkId: string,
-  ): Promise<RowReading | null> {
-    const check: GoalWatch | undefined = this.deps.store.watches
-      .listGoalWatches()
-      .find((c) => c.originRef === goalRef && c.id === checkId);
-    if (check === undefined) return null;
-    const command = environment.watch?.observe;
-    if (command === undefined) return null;
-    const since = this.watchSince(environment, goalRef);
-    const presence: WatchResult | null =
-      check.presence === null
-        ? null
-        : await this.deps.observer.observe({
-            environment: environment.name,
-            command,
-            checkId: check.id,
-            query: check.presence,
-            kind: 'presence',
-            since,
-          });
-    const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
-    const result = silent
-      ? presence
-      : await this.deps.observer.observe({
-          environment: environment.name,
-          command,
-          checkId: check.id,
-          query: check.query,
-          kind: check.kind === 'measure' ? 'measure' : 'signal',
-          since,
-        });
-    const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading: result });
-    if (verdict.verdict === 'unknown') return { outcome: 'blocked', rows: null, value: null, detail: verdict.detail };
-    return {
-      outcome: verdict.verdict === 'clean' ? 'passed' : 'failed',
-      rows: verdict.rows,
-      value: result.value,
-      detail: verdict.detail,
     };
   }
 }

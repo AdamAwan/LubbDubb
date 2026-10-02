@@ -31,7 +31,6 @@ export const OUTCOME_TONE: Record<RemoteRowOutcome, TagTone> = {
 interface SheetControls {
   onRule: (environment: string, rowId: string, accept: boolean) => Promise<void>;
   onSelect: (environment: string, rowId: string, selected: boolean) => Promise<void>;
-  onPress: (environment: string) => Promise<void>;
   onCancel: (environment: string) => Promise<void>;
   onReseed: (environment: string) => Promise<void>;
   /** Open an agent's transcript. The reading a run produced is only readable beside what it did. */
@@ -55,7 +54,6 @@ export function RemoteValidationSection({
   controls,
   switcher = true,
   foldRows = false,
-  press = true,
   alertAbove = false,
 }: {
   sheets: RemoteSheetView[];
@@ -72,14 +70,6 @@ export function RemoteValidationSection({
    * they are still taken here. → docs/spec/17-cockpit.md#the-validate-pane
    */
   foldRows?: boolean;
-  /**
-   * Draw the gate's start button. False on the goal page, where the pane's run strip carries every
-   * runner's press on one line above the checks: a press offered here as well would be two controls
-   * for one act. Calling a live run off, reseeding the tenant and ruling on a row stay here — they
-   * are about the run and the sheet rather than about starting one.
-   * → docs/spec/17-cockpit.md#the-validate-pane
-   */
-  press?: boolean;
   /**
    * The pane draws an unhealthy tenant as a banner above everything, with its reseed control. The gate
    * then leaves both out, so the one control is in one place. → docs/spec/17-cockpit.md#the-validate-pane
@@ -105,7 +95,7 @@ export function RemoteValidationSection({
           ))}
         </HeadRow>
       )}
-      <Gate sheet={open} controls={controls} press={press} tenantAbove={tenantAbove} />
+      <Gate sheet={open} controls={controls} tenantAbove={tenantAbove} />
       {foldRows ? (
         <OwnRows sheet={open} controls={controls} />
       ) : (
@@ -156,27 +146,19 @@ function OwnRows({ sheet, controls }: { sheet: RemoteSheetView; controls: SheetC
 }
 
 /**
- * The gate: what an operator reads at the moment they decide to press. The tenant's age is drawn
- * here because this is where they can act on it — reseed first, then press.
+ * The gate: the tenant and the last run, with calling a live run off and reseeding. Starting one is the
+ * OK's, on the run strip. The tenant's age is drawn here because this is where they can act on it.
  */
 function Gate({
   sheet,
   controls,
-  press,
   tenantAbove,
 }: {
   sheet: RemoteSheetView;
   controls: SheetControls;
-  press: boolean;
   tenantAbove: boolean;
 }): JSX.Element {
   const live = sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
-  // What a press will actually read or dispatch for, which is not the same as what is selected: a
-  // blocked row is skipped, and a row the server folded an `idleReason` onto names no instrument to
-  // run it with. Counting the selection instead offers to run rows nothing would touch, and the run
-  // settles on the spot reading as one that ran.
-  // → docs/spec/36-remote-validation.md#a-row-no-press-can-read
-  const pressable = sheet.rows.filter((r) => r.selected && r.blockedReason === null && r.idleReason === null).length;
   return (
     <div className="cn-sheet-gate">
       <HeadRow className="cn-sig-head">
@@ -184,20 +166,10 @@ function Gate({
         {sheet.run !== null && <RunLine run={sheet.run} />}
       </HeadRow>
       <div className="cn-sig-ctrls">
-        {live ? (
+        {live && (
           <AsyncButton usage="validation.stop" onClick={() => controls.onCancel(sheet.environment)}>
             Call this run off
           </AsyncButton>
-        ) : (
-          press && (
-            <AsyncButton
-              usage="validation.create"
-              onClick={() => controls.onPress(sheet.environment)}
-              title={`Re-read every selected row against the commit ${sheet.environment} stands at right now`}
-            >
-              {pressable === 1 ? 'Run 1 row' : `Run ${pressable} rows`}
-            </AsyncButton>
-          )
         )}
         {!tenantAbove && <ReseedControl tenant={sheet.tenant} onReseed={() => controls.onReseed(sheet.environment)} />}
       </div>

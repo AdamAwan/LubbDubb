@@ -117,6 +117,7 @@ function Row({ check, declines }: { check: ProposedCheck; declines?: CheckDeclin
           }
         >
           <CheckDetail
+            rationale={check.rationale}
             doing={null}
             steps={check.steps}
             passesWhen={check.expect === '' ? null : renderMarkdown(check.expect)}

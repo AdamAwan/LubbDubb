@@ -33,7 +33,7 @@ export function checkSetOf(proposal: Proposal | undefined): ProposedCheckSet | n
 
 function readCheck(entry: unknown): ProposedCheck | null {
   if (typeof entry !== 'object' || entry === null) return null;
-  const { letter, title, expect, proof, steps, fleetCandidate, candidateWhy, fleetBlocked, carriesQuery } =
+  const { letter, title, expect, proof, rationale, steps, fleetCandidate, candidateWhy, fleetBlocked, carriesQuery } =
     entry as Record<string, unknown>;
   if (typeof letter !== 'string' || letter === '' || typeof title !== 'string' || title === '') return null;
   return {
@@ -41,6 +41,7 @@ function readCheck(entry: unknown): ProposedCheck | null {
     title,
     expect: typeof expect === 'string' ? expect : '',
     proof: typeof proof === 'string' ? proof : '',
+    rationale: typeof rationale === 'string' ? rationale : '',
     steps: readSteps(steps),
     fleetCandidate: fleetCandidate === true,
     candidateWhy: typeof candidateWhy === 'string' && candidateWhy ? candidateWhy : null,

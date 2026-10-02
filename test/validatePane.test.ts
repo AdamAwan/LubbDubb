@@ -1,12 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  checkStandings,
-  panelRows,
-  pressBreakdown,
-  pressableRows,
-  tenantAlerts,
-} from '../web/src/view/validatePane.js';
+import { checkStandings, panelRows, pressableRows, tenantAlerts } from '../web/src/view/validatePane.js';
 import type { RemoteSheetRowView, RemoteSheetView, ValidationCheckView } from '../src/wire.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
@@ -75,6 +69,9 @@ function sheet(over: Partial<RemoteSheetView> = {}): RemoteSheetView {
     assembledAt: NOW,
     rows: [row()],
     run: null,
+    intent: null,
+    okable: { checks: 1, queries: 0, approvals: 0 },
+    ok: { status: 'needs-you', why: null },
     tenant: {
       tenant: 'validation-1',
       reseededAt: null,
@@ -166,22 +163,6 @@ test('the pressable count is the gate’s own, and it counts rows rather than ch
   assert.equal(pressableRows(s), 1);
 });
 
-test('the press says what its number is made of, because it is bigger than the ticks below it', () => {
-  /* The sheet carries queries and measures that have no check to tick, and a press re-reads the
-     checks already answered — so "Run 5 rows" over three ticked boxes needs its arithmetic said.
-     The strip sits above the list, so the ticks it counts are the ones below it. */
-  const s = sheet({
-    rows: [
-      row({ rowId: 'r1', sourceId: 'c1' }),
-      row({ rowId: 'r2', sourceId: 'c2' }),
-      row({ rowId: 'q1', kind: 'state', sourceId: 'q1' }),
-      row({ rowId: 'm1', kind: 'measure', sourceId: 'm1' }),
-    ],
-  });
-  assert.equal(pressableRows(s), 4);
-  assert.deepEqual(pressBreakdown(s), { checks: 2, own: 2 });
-});
-
 test('a check carries the box of the environment the pane is showing, and none where it holds no row', () => {
   /* One answer about what a press will carry: the box writes the sheet's own `selected` through the
      sheet's own route. Where the shown environment has no readable row for the check there is no
@@ -226,7 +207,7 @@ test('the environment panel lists only the rows that are not a check’s own, ba
     rows: [
       row({ rowId: 'r1' }),
       row({ rowId: 'r2', awaitingApproval: true }),
-      row({ rowId: 'q1', kind: 'signal', sourceId: 'q1' }),
+      row({ rowId: 'q1', kind: 'state', sourceId: 'q1' }),
     ],
   });
   assert.deepEqual(

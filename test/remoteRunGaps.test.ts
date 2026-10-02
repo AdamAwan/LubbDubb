@@ -67,7 +67,7 @@ test('an arrival waiting on its checks is never stale, and is fresh again the mo
     arrivalSheetStep({
       arrival: arrival(),
       validates: true,
-      checkSet: () => ({ accepted: true, acceptedAt: null }),
+      checkSet: () => ({ accepted: true, acceptedAt: null, authoredAt: null }),
       probeIntervalMs: 60_000,
       now: Date.parse(NOW),
       ...over,
@@ -75,23 +75,29 @@ test('an arrival waiting on its checks is never stale, and is fresh again the mo
   assert.equal(step({}), 'ready');
   assert.equal(step({ arrival: arrival({ sheetedAt: NOW }) }), 'sheeted');
   assert.equal(
-    step({ arrival: arrival({ sheetedAt: NOW }), checkSet: () => ({ accepted: false, acceptedAt: null }) }),
+    step({
+      arrival: arrival({ sheetedAt: NOW }),
+      checkSet: () => ({ accepted: false, acceptedAt: null, authoredAt: null }),
+    }),
     'awaiting-checks',
     'a stamped arrival is offered by hand only once its checks are accepted',
   );
   assert.equal(step({ validates: false }), 'not-validating');
   assert.equal(
-    step({ now: later, checkSet: () => ({ accepted: false, acceptedAt: null }) }),
+    step({ now: later, checkSet: () => ({ accepted: false, acceptedAt: null, authoredAt: null }) }),
     'awaiting-checks',
     'an hour of waiting on the checks does not make the arrival stale',
   );
   assert.equal(
-    step({ now: later, checkSet: () => ({ accepted: true, acceptedAt: new Date(later - 1_000).toISOString() }) }),
+    step({
+      now: later,
+      checkSet: () => ({ accepted: true, acceptedAt: new Date(later - 1_000).toISOString(), authoredAt: null }),
+    }),
     'ready',
     'accepted just now, so the sheet is assembled',
   );
   assert.equal(
-    step({ now: later, checkSet: () => ({ accepted: true, acceptedAt: NOW }) }),
+    step({ now: later, checkSet: () => ({ accepted: true, acceptedAt: NOW, authoredAt: null }) }),
     'stale',
     'work and checks both settled long ago is the backfill the guard exists for',
   );

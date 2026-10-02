@@ -324,11 +324,11 @@ two different things to meet on a goal page, and only one of them is yours to ac
 
 **What the gate holds:**
 
-| Holds                                                                                                                                                    | Does not hold                                                                                                   |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Sheet assembly — `sheetableArrivals` reads released, not authored ([36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)) | Authoring. The planner still runs on `delivered` and still writes the set                                       |
-| Rule `validate-check` — a check handed to the fleet on an unreleased set dispatches nothing                                                              | An operator's own reading. The rows draw on the goal page, marked as proposed, and a person may run one by hand |
-| The `validate` bench row — `ValidationReadyDesk` files none on an unreleased set, and retracts a standing one ([below](#saying-so-on-the-bench))         |                                                                                                                 |
+| Holds                                                                                                                                                                                    | Does not hold                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| The press — `RemoteRunDesk` refuses `409` on a set authored and not released; the page is drawn once the set is authored, so the OK can accept it ([36](36-remote-validation.md#the-ok)) | Authoring. The planner still runs on `delivered` and still writes the set                                       |
+| Rule `validate-check` — a check handed to the fleet on an unreleased set dispatches nothing                                                                                              | An operator's own reading. The rows draw on the goal page, marked as proposed, and a person may run one by hand |
+| The `validate` bench row — `ValidationReadyDesk` files none on an unreleased set, and retracts a standing one ([below](#saying-so-on-the-bench))                                         |                                                                                                                 |
 
 **A set no press ever released reads as released.** `checkSetReleased` (`src/validation/planApproval.ts`)
 answers on the stamp only where the validation planner wrote one: a goal carrying checks a plan document
@@ -696,8 +696,9 @@ are two steps of one.
 they are read at assembly and again synchronously at the press, both before the agent's browser half
 runs ([36](36-remote-validation.md#the-press)) — which is correct for a row asking whether anything is
 screaming, and wrong for one asking whether the order the browser steps just placed exists. As a step
-it is read where it sits. Rows that belong to no check — the goal's watch-derived `signal` and
-`measure` rows — keep the assembly behaviour they have.
+it is read where it sits. Rows that belong to no check — the goal's own `state` queries — keep the
+assembly behaviour they have; the goal's watch checks are not sheet rows at all
+([36](36-remote-validation.md#the-watch-is-not-on-the-sheet)).
 
 ### An inline person and a deferred one are not the same step
 
@@ -1014,6 +1015,24 @@ That is the whole of the criteria's reading at delivery, and it holds nothing: a
 `validation-failed`'s, never a shortfall ([When a check fails](#when-a-check-fails)).
 → [08](08-planning.md#the-criteria-at-delivery)
 
+### Rationale
+
+A check's `satisfies` says **which** criterion it answers; its `rationale` says **why it is the right
+proof of it** — one line, in the author's words, about what in the change makes this the test that would
+catch it: _the retry is the whole change_, _the old bug was a silent hang_. Without it the operator is
+handed a list of checks and has to work out for themselves why each one is there, which is the question
+they are least placed to answer at the moment they are asked to OK the page
+([36](36-remote-validation.md#the-ok)).
+
+It is optional and, where present, non-empty — a blank one is refused rather than stored as a line that
+says nothing — and a check written before the field shows its `satisfies` alone. The plan document's `validation`
+block, `validation_plan` and `validation_amend` all carry it through `ValidationCheckSchema`; the
+authoring briefing asks for one per check in a line **appended** after the criteria
+(`authoringBriefing`). Like `satisfies`, a re-declaration that omits it keeps the line it had. It is
+commentary, not the check: it is **not** part of a rewording, so editing it never resets a passed
+check. The column is `validation_checks.rationale`, and null reads as none written, true of every row
+before it. The accept card, the goal's check rows and the check digest draw it first, as _Why_.
+
 ## Saying so on the bench
 
 A goal parked as delivered is the one moment a check becomes runnable, and that moment used to
@@ -1038,6 +1057,19 @@ own surface to say. What the browser half adds to the line — the selectors the
 find, the tenant's age — lands with the pre-flight. The press is a person's act, so the row is filed
 for one even where every remaining check is automatable, and **no second bench kind is added**: a
 sheet waiting to be run is this row's business. → [36](36-remote-validation.md#the-desk)
+
+**A page awaiting its OK holds the row as a check owed to a person does.** A goal's environment whose
+page reads _needs you_ — at least one row to OK (one a press would read or hand an agent, or a query
+still waiting for its approval there) and no OK standing: none given, one withdrawn or lapsed, or a run
+it started that was abandoned — counts in the file, settle and reopen arms alike, and the detail says
+which environments are waiting. It is the same `okStanding` the cockpit draws, so the bench and the
+page never disagree about whether you are owed. A row the desk settled **done** comes back when a page needs the OK again — a
+run the pin abandoned, an OK the page outgrew — and for nothing else, as before: its settle-done
+resolution now carries `DESK_SETTLED`, and the unmarked ones it wrote before that are read as its too. A
+row the operator closed or declined stays as they left it. Only
+environments that still declare a `validate` block are asked about. That is what keeps the close-out from
+being asked for before anybody has seen the page. A sheet with nothing to OK holds nothing, and
+_Not validating here_ answers it. → [36](36-remote-validation.md#the-ok)
 
 **The cockpit draws the row as the checks themselves**, not as the sentence naming them: the goal's own
 check rows, with the ones still owed already open, under the desk's prose. The detail above them is
@@ -1212,7 +1244,8 @@ Both writers merge on the check id, on the same terms `upsertPlanParts` folds th
 | **Drop**       | **Superseded, not deleted** — the row stays, greyed, outside the verdict, with the reason on it. | The same settlement an amended plan gives a part it dropped, and what keeps the letter taken. An agent that cannot pass a check must not be able to make it disappear.             |
 
 A rewording is judged on `title`, `do`, `expect` and `proof` alone. `uses`, `covers` and
-`fleetCandidate` are references and a suggestion, and a result is not about them.
+`fleetCandidate` are references and a suggestion, and `rationale` is commentary — a result is not about
+them.
 
 **`proof` is on that list rather than off it**, and it is the one entry that is not obviously wording.
 It is there because it is part of the terms the reading was taken under: a pass earned by handing back

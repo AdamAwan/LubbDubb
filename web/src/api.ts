@@ -360,10 +360,9 @@ const realApi = {
     ),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   ruleRemoteQuery: (issueNumber: number, environment: string, rowId: string, accept: boolean) => {
-    const [kind, id] = splitRemoteRowId(rowId);
     return post<{ ok: true }>(
-      `/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/` +
-        `${kind === 'watch' ? 'watch-queries' : 'queries'}/${encodeURIComponent(id)}`,
+      `/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/queries/` +
+        encodeURIComponent(rowId.slice(rowId.indexOf(':') + 1)),
       { accept },
     );
   },
@@ -375,8 +374,14 @@ const realApi = {
     ),
   setUpRemoteSheet: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/sheet`),
-  pressRemoteSheet: (issueNumber: number, environment: string) =>
-    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/run`),
+  giveRemoteOk: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/ok`),
+  withdrawRemoteOk: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/ok/withdraw`),
+  markRemoteNotHere: (issueNumber: number, environment: string, note: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/not-here`, {
+      note,
+    }),
   cancelRemoteRun: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/cancel`),
   reseedRemoteTenant: (issueNumber: number, environment: string) =>
@@ -480,12 +485,6 @@ const realApi = {
 };
 
 const DEMO = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DEMO === '1';
-
-/** A sheet row id is `<kind>:<id>`; which door its approval goes through follows from the kind. */
-function splitRemoteRowId(rowId: string): [string, string] {
-  const at = rowId.indexOf(':');
-  return at < 0 ? ['', rowId] : [rowId.slice(0, at), rowId.slice(at + 1)];
-}
 
 export const isDemo = DEMO;
 export const api = DEMO ? demoApi : realApi;

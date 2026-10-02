@@ -1,12 +1,11 @@
 import type { EnvironmentConfig } from '../../environments/policy.js';
-import { queryDigest } from '../../store/remoteValidation.js';
 import type { ArrivalSheetStep } from '../../environments/watchWindow.js';
 import type {
   GoalReachStatus,
   NoSheet,
-  GoalWatch,
   RemoteRowKind,
   RemoteRowOutcome,
+  RemoteRun,
   RemoteSheetRow,
   StateQuery,
   ValidationCheck,
@@ -18,7 +17,7 @@ import { selectorFault } from './runner.js';
 // → docs/spec/36-remote-validation.md
 
 /** What the desk executes for a row, once nothing has blocked it. `null` is a row a person runs. */
-export type SheetRowRun = 'state' | 'watch' | null;
+type SheetRowRun = 'state' | null;
 
 /**
  * What a stored row is executed by, read back off its own id. The press re-runs a confirmed row
@@ -27,7 +26,6 @@ export type SheetRowRun = 'state' | 'watch' | null;
  */
 export function rowRun(rowId: string): SheetRowRun {
   if (rowId.startsWith('state:')) return 'state';
-  if (rowId.startsWith('watch:')) return 'watch';
   return null;
 }
 
@@ -38,7 +36,6 @@ export interface SheetRowPlan extends Omit<RemoteSheetRow, 'goalRef' | 'environm
 interface SheetInput {
   environment: EnvironmentConfig;
   checks: readonly ValidationCheck[];
-  watches: readonly GoalWatch[];
   queries: readonly StateQuery[];
   /** `${digest} ${environment}` for every approval a person has written. */
   approvals: ReadonlySet<string>;
@@ -52,8 +49,8 @@ interface SheetInput {
 }
 
 /**
- * The goal's own checks, its live watch checks and its `state` queries, as one list against one
- * environment. Nothing here is a second checklist beside the one an operator already keeps.
+ * The goal's own checks and its `state` queries, as one list against one environment. The watch's
+ * signals and measures are not rows here: the window reads them, and the page draws its readings. Nothing here is a second checklist beside the one an operator already keeps.
  *
  * Every cause of `blocked` this function can see is resolved **per row**: a kind the environment
  * does not permit, a query nobody has accepted here, and an area holding the character its own
@@ -61,17 +58,27 @@ interface SheetInput {
  * a reading can produce, which is why a state row on a store nothing can reach is blocked while
  * every other row on the same sheet still reports.
  */
+/**
+ * Whether a check is a row on a sheet: live, and not declined. A row the operator declined at the accept
+ * gate is settled, and a sheet is a list of what is still to run — assembled, it would be pressed,
+ * dispatched for and reported on, the decline undone by the one surface that never saw it. The page and
+ * the bench read the same rule. → docs/spec/36-remote-validation.md#a-declined-row-is-not-on-the-sheet
+ */
+export function onSheet(check: ValidationCheck): boolean {
+  return liveChecks([check]).length === 1 && check.state !== 'declined';
+}
+
+/** A run still going: `pending` is dispatched-for, not idle. */
+export function remoteRunIsLive(run: RemoteRun | null): boolean {
+  return run?.status === 'pending' || run?.status === 'dispatched';
+}
+
 export function sheetRows(input: SheetInput): SheetRowPlan[] {
   const permits = input.environment.validate?.permits ?? [];
   const out: SheetRowPlan[] = [];
   let seq = 0;
 
-  for (const check of liveChecks(input.checks)) {
-    // A row the operator declined at the accept gate is settled, and a sheet is a list of what is
-    // still to run. Assembled, it would be pressed, dispatched for and reported on — the decline
-    // undone by the one surface that never saw it.
-    // → docs/spec/36-remote-validation.md#a-declined-row-is-not-on-the-sheet
-    if (check.state === 'declined') continue;
+  for (const check of input.checks.filter(onSheet)) {
     seq += 1;
     out.push(checkRow(check, seq, input, permits));
   }
@@ -79,12 +86,6 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
   for (const query of input.queries) {
     seq += 1;
     out.push(queryRow(query, seq, input, permits));
-  }
-
-  for (const watch of input.watches) {
-    if (!watch.live) continue;
-    seq += 1;
-    out.push(watchRow(watch, seq, input, permits));
   }
 
   return out;
@@ -133,32 +134,6 @@ function queryRow(query: StateQuery, seq: number, input: SheetInput, permits: re
     // instrument for it to be missing.
     idleReason: null,
     run: 'state',
-  };
-}
-
-function watchRow(watch: GoalWatch, seq: number, input: SheetInput, permits: readonly RemoteRowKind[]): SheetRowPlan {
-  const { environment } = input;
-  const approved = input.approvals.has(`${queryDigest(watch.query, watch.presence ?? '')} ${environment.name}`);
-  const unpermittedReason = unpermitted(watch.kind, permits, environment.name);
-  const observable = (environment.watch?.observe ?? '').trim() !== '';
-  return {
-    rowId: `watch:${watch.id}`,
-    kind: watch.kind,
-    seq,
-    title: watch.title,
-    sourceId: watch.id,
-    selected: true,
-    blockedReason:
-      unpermittedReason ??
-      (observable
-        ? approved
-          ? null
-          : unapproved(environment.name)
-        : `${environment.name} declares no "watch.observe" command, so there is nothing here to put this query to.`),
-    awaitingApproval: unpermittedReason === null && observable && !approved,
-    matched: null,
-    idleReason: null,
-    run: 'watch',
   };
 }
 
@@ -333,4 +308,9 @@ interface SheetFoldRow {
 
 function count(n: number, noun: string): string {
   return `${String(n)} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** Said by every route that needs a sheet and finds none. */
+export function noSheetAssembled(environment: string): string {
+  return `no validation sheet is assembled for this goal on "${environment}".`;
 }

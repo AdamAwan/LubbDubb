@@ -190,6 +190,16 @@ export const ValidationCheckSchema = z
         'The goal criteria this check answers, each copied exactly as the criteria list states it. Every ' +
           'criterion needs at least one check naming it; one that names nothing is drawn as a gap.',
       ),
+    rationale: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        'One line: why this check is the right proof of the criteria it satisfies — what about the change ' +
+          'makes this the test that would catch it. "The retry is the whole change" or "the old bug was a ' +
+          'silent hang". The operator reads it on the validation page beside the check.',
+      ),
     fleetCandidate: z.boolean().default(false),
     why: z.string().min(1).optional(),
     steps: z
@@ -198,7 +208,7 @@ export const ValidationCheckSchema = z
       .transform((list) => (list !== undefined && list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list)),
   })
   .strict(
-    'a check declares only id/title/do/expect/proof/uses/covers/satisfies/steps/fleetCandidate/why — who runs it is not yours to say',
+    'a check declares only id/title/do/expect/proof/uses/covers/satisfies/rationale/steps/fleetCandidate/why — who runs it is not yours to say',
   );
 
 export const ValidationSchema = z
@@ -322,6 +332,7 @@ function checkAmendment(
     covers: check.covers.filter((slug) => slugs.has(slug)),
     satisfies:
       check.satisfies === undefined ? undefined : check.satisfies.map((c) => c.trim()).filter((c) => criteria.has(c)),
+    rationale: check.rationale ?? null,
     fleetCandidate: check.fleetCandidate,
     candidateWhy: check.fleetCandidate ? (check.why ?? null) : null,
     // The steps are the whole of it. The area a check is verified against and the spec names it

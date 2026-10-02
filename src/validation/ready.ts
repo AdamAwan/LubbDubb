@@ -19,6 +19,8 @@ interface ValidationReadyInput {
   checks: ReadonlyMap<string, readonly ValidationCheck[]>;
   /** The sheet rows an arrival assembled, by goal — one line each on the row's detail. */
   sheetRows: ReadonlyMap<string, readonly RemoteSheetRow[]>;
+  /** The environments whose sheet holds a row to OK and has no OK, by goal. → docs/spec/36-remote-validation.md#the-ok */
+  awaitingOk: ReadonlyMap<string, readonly string[]>;
   opened: ReadonlySet<string> | null;
   /** Goals whose check set is released; null reads every set as released. */
   released: ReadonlySet<string> | null;
@@ -60,8 +62,9 @@ function deliveryStep(
 ): ValidationReadyStep | null {
   const live = liveChecks(input.checks.get(originRef) ?? []);
   const owed = live.filter(owedToAPerson);
+  const awaiting = awaitingOkOf(input, originRef);
 
-  if (owed.length === 0) {
+  if (owed.length + awaiting.length === 0) {
     if (existing?.status !== 'open') return null;
     return { kind: 'settle', taskId: existing.id, status: 'done', resolution: settledResolution(live.length) };
   }
@@ -75,11 +78,11 @@ function deliveryStep(
     };
   }
   if (existing && existing.status !== 'open') {
-    if (!deskSettled(existing)) return null;
+    if (!reopens(existing, awaiting)) return null;
     return {
       kind: 'reopen',
       taskId: existing.id,
-      detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef)),
+      detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
     };
   }
   if (!admits(input.opened, originRef) && !existing) return null;
@@ -88,8 +91,29 @@ function deliveryStep(
     kind: 'file',
     originRef,
     title: validateTitle(originRef),
-    detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef)),
+    detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
   };
+}
+
+/**
+ * A row the desk declined comes back when the set is released, as it always did. A row the desk
+ * settled done comes back only when a page needs the OK again — a run the pin abandoned, an OK the page
+ * outgrew — and never for a check, which is how it read before. A row the operator closed or declined
+ * stays as they left it. The unmarked resolutions are the desk's own from before it marked them.
+ * → docs/spec/20-validation.md#saying-so-on-the-bench
+ */
+function reopens(existing: HumanTask, awaiting: readonly string[]): boolean {
+  if (existing.status !== 'done') return deskSettled(existing);
+  const byDesk = deskSettled(existing) || UNMARKED_SETTLES.has(existing.resolution ?? '');
+  return byDesk && awaiting.length > 0;
+}
+
+const NO_CHECKS = 'the plan no longer asks for any checks';
+const NOTHING_LEFT = 'every check is recorded, waived, or with the fleet — nothing is left for you to run';
+const UNMARKED_SETTLES: ReadonlySet<string> = new Set([NO_CHECKS, NOTHING_LEFT]);
+
+function awaitingOkOf(input: ValidationReadyInput, originRef: string): readonly string[] {
+  return input.awaitingOk.get(originRef) ?? [];
 }
 
 function admits(gate: ReadonlySet<string> | null, originRef: string): boolean {
@@ -116,14 +140,25 @@ function validateDetail(
   live: readonly ValidationCheck[],
   owed: number,
   sheetRows: readonly RemoteSheetRow[] | undefined,
+  awaitingOk: readonly string[],
 ): string {
   const name = issue ? `**${issue.title}**` : 'This goal';
   const lines = [
-    `${name} is delivered, and its validation plan has ${count(owed, 'check')} for you to run — of ${count(live.length, 'check')} in all.`,
-    '',
-    ...outstandingChecks(live),
-    '',
-    'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+    ...(awaitingOk.length === 0
+      ? []
+      : [
+          `Its validation page on ${awaitingOk.join(', ')} is waiting for your OK — nothing there runs until you give it.`,
+          '',
+        ]),
+    ...(owed === 0 && awaitingOk.length > 0
+      ? [`${name} is delivered, and none of its ${count(live.length, 'check')} is yours to run by hand.`]
+      : [
+          `${name} is delivered, and its validation plan has ${count(owed, 'check')} for you to run — of ${count(live.length, 'check')} in all.`,
+          '',
+          ...outstandingChecks(live),
+          '',
+          'Run them and record each result on the goal, with a note. Nothing is blocked by this: validation gates no dispatch, no merge and no close — what it changes is what closing this goal looks like.',
+        ]),
   ];
   for (const line of sheetLines(sheetRows ?? [])) lines.push('', line);
   if (issue?.url) lines.push('', issue.url);
@@ -141,9 +176,7 @@ function sheetLines(rows: readonly RemoteSheetRow[]): string[] {
 }
 
 function settledResolution(total: number): string {
-  return total === 0
-    ? 'the plan no longer asks for any checks'
-    : 'every check is recorded, waived, or with the fleet — nothing is left for you to run';
+  return DESK_SETTLED + (total === 0 ? NO_CHECKS : NOTHING_LEFT);
 }
 
 function count(n: number, noun: string): string {

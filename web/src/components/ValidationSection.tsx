@@ -534,6 +534,7 @@ export function ValidationDigest({
               ))}
             </div>
             <CheckDetail
+              rationale={check.rationale}
               doing={renderMarkdown(check.do, refUrls)}
               steps={check.steps}
               passesWhen={renderMarkdown(check.expect, refUrls)}

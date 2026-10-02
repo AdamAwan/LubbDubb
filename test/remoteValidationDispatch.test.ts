@@ -608,7 +608,6 @@ test('a check the agent would drive, on an environment with no tenant, is blocke
       environment: noTenant,
       checks: b.store.validation.listValidationChecks('issue:12'),
       queries: [],
-      watches: [],
       approvals: new Set<string>(),
       tenant: { tenant: null, blockedReason: null },
     });

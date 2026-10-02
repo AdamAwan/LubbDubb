@@ -147,7 +147,7 @@ test('a declined row is owed to nobody and is never assembled onto a sheet', () 
   const checks = system.store.validation.listValidationChecks(GOAL);
 
   const environment = { name: 'acceptance', validate: { permits: ['check'] } } as unknown as EnvironmentConfig;
-  const rows = sheetRows({ environment, checks, watches: [], queries: [], approvals: new Set() });
+  const rows = sheetRows({ environment, checks, queries: [], approvals: new Set() });
   assert.deepEqual(
     rows.map((r) => r.rowId),
     ['check:a'],
@@ -155,6 +155,7 @@ test('a declined row is owed to nobody and is never assembled onto a sheet', () 
   );
 
   const steps = validationReadyPass({
+    awaitingOk: new Map(),
     issues: [],
     deliveries: [{ originRef: GOAL } as never],
     shortfalls: [],

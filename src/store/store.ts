@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { createPrepare, systemClock, type Clock, type StoreContext } from './context.js';
-import { dropRetiredTables, ensureColumns, rebuildTables, renameTables } from './migrate.js';
+import { dropRetiredTables, ensureColumns, rebuildTables, renameTables, tableExists } from './migrate.js';
 import { POOL_RETIRED_TABLES, PoolStore } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
@@ -69,6 +69,7 @@ import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { GoalCriteriaStore } from './goalCriteria.js';
 import { PredictionStore, PREDICTION_COLUMNS, PREDICTION_REBUILDS } from './predictions.js';
 import { PrDescriptionStore, PR_DESCRIPTION_COLUMNS } from './prDescriptions.js';
+import { consumeIntentsForExistingSheets, RemoteIntentStore, REMOTE_INTENT_COLUMNS } from './remoteIntents.js';
 import type { Job, CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
@@ -78,6 +79,7 @@ const REVIEW_PACK_RETIRED_TABLES: readonly string[] = ['review_packs', 'review_m
 function migrate(db: Database.Database, clock: Clock): void {
   renameTables(db, ISSUE_VERDICT_RENAMES);
   dropRetiredTables(db, [...POOL_RETIRED_TABLES, ...REMOTE_VALIDATION_RETIRED_TABLES, ...REVIEW_PACK_RETIRED_TABLES]);
+  const intentsAreNew = !tableExists(db, 'remote_run_intents');
   rebuildTables(db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...PREDICTION_REBUILDS], () => db.exec(SCHEMA));
   const addedColumns: string[] = [];
   for (const columns of [
@@ -98,6 +100,7 @@ function migrate(db: Database.Database, clock: Clock): void {
     ENVIRONMENT_COLUMNS,
     WATCH_COLUMNS,
     REMOTE_VALIDATION_COLUMNS,
+    REMOTE_INTENT_COLUMNS,
     PR_REVIEW_ROUTE_COLUMNS,
     PR_REVIEW_COLUMNS,
     PR_THREAD_LABEL_COLUMNS,
@@ -114,6 +117,19 @@ function migrate(db: Database.Database, clock: Clock): void {
   if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(db);
   if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(db);
   if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(db, clock());
+  if (intentsAreNew)
+    consumeIntentsForExistingSheets(
+      db,
+      clock(),
+      db.prepare(`SELECT goal_ref, environment FROM remote_sheets`).all() as {
+        goal_ref: string;
+        environment: string;
+      }[],
+    );
+  // The watch's signals and measures were sheet rows once; nothing writes one now, so this is a no-op
+  // after the first boot. → docs/spec/36-remote-validation.md#the-watch-is-not-on-the-sheet
+  db.exec(`DELETE FROM remote_sheet_rows WHERE kind IN ('signal', 'measure');
+           DELETE FROM remote_readings WHERE row_id LIKE 'watch:%';`);
   adoptFloorCompletions(db);
   absorbSinglePlanStatus(db);
   declineRetiredOutcomeRows(db, clock());
@@ -164,6 +180,7 @@ export class Store {
   readonly environments: EnvironmentStore;
   readonly watches: WatchStore;
   readonly remoteValidation: RemoteValidationStore;
+  readonly remoteIntents: RemoteIntentStore;
   readonly localRuns: LocalRunStore;
   readonly localValidations: LocalValidationStore;
   readonly prWatchSeeds: PrWatchSeedStore;
@@ -229,6 +246,7 @@ export class Store {
     this.environments = new EnvironmentStore(ctx);
     this.watches = new WatchStore(ctx);
     this.remoteValidation = new RemoteValidationStore(ctx);
+    this.remoteIntents = new RemoteIntentStore(ctx);
     this.localRuns = new LocalRunStore(ctx);
     this.localValidations = new LocalValidationStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);

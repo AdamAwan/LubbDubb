@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { issueOrigin } from '../../plans/planning.js';
 import { StateQuerySchema } from '../../validation/stateDocument.js';
 import { NO_STATE_EXECUTOR, stateExecutor } from '../../validation/remote/enabled.js';
-import { checked, IssueNumberParams } from '../validation.js';
+import { noSheetAssembled } from '../../validation/remote/sheet.js';
+import { checked, IssueNumberParams, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { TenantCommandOutput } from '../../wire.js';
 
@@ -17,6 +18,10 @@ const RulingBody = z.object({
     required_error: 'accept is required — true to approve this query here, false to decline it',
     invalid_type_error: 'accept is required — true to approve this query here, false to decline it',
   }),
+});
+
+const NotHereBody = z.object({
+  note: requiredText('note is required — say why this environment will not be validated for this goal'),
 });
 
 const EnvironmentParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
@@ -33,6 +38,7 @@ const SelectionBody = z.object({
 export function register(app: FastifyInstance, ctx: RouteContext): void {
   registerQueryRoutes(app, ctx);
   registerSheetRoutes(app, ctx);
+  registerOkRoutes(app, ctx);
 }
 
 function registerQueryRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
@@ -67,48 +73,22 @@ function registerQueryRoutes(app: FastifyInstance, { system, hub }: RouteContext
   app.post(
     '/api/issues/:number/remote-validation/:environment/queries/:queryId',
     checked({ params: ApprovalParams, body: RulingBody }, async ({ params, body, reply }) => {
-      if (stateExecutor(system.config.environments, params.environment) === null)
+      const environment = stateExecutor(system.config.environments, params.environment);
+      if (environment === null)
         return reply.code(409).send({
           error:
             `"${params.environment}" declares no "validate.state.run" command, so a query accepted against it ` +
             'could never be put to anything.',
         });
-      const ruled = await system.stateQueries.rule(
+      const ruled = await system.remoteValidation.ruleStateQuery(
         issueOrigin(params.number),
         params.queryId,
-        params.environment,
+        environment,
         body.accept,
       );
       if (ruled === null) return reply.code(404).send({ error: 'no such state query on that goal' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, query: ruled.query, reading: ruled.reading, approval: ruled.approval };
-    }),
-  );
-
-  /*
-   * The same consent, one row kind over: a check live on the watch is still blocked on a sheet until
-   * its digest has been accepted against *this* environment. The watch asked whether the query
-   * parses; the sheet asks it of a named place. → docs/spec/36-remote-validation.md
-   */
-  app.post(
-    '/api/issues/:number/remote-validation/:environment/watch-queries/:queryId',
-    checked({ params: ApprovalParams, body: RulingBody }, async ({ params, body, reply }) => {
-      const environment = system.config.environments.find((e) => e.name === params.environment);
-      if (environment?.watch === undefined)
-        return reply.code(409).send({
-          error:
-            `"${params.environment}" declares no "watch.observe" command, so a query accepted against it ` +
-            'could never be put to anything.',
-        });
-      const ruled = await system.remoteValidation.ruleWatchQuery(
-        issueOrigin(params.number),
-        params.queryId,
-        params.environment,
-        body.accept,
-      );
-      if (ruled === null) return reply.code(404).send({ error: 'no such watch check on that goal' });
-      hub.broadcast({ type: 'world:changed' });
-      return { ok: true, check: ruled.check, reading: ruled.reading, approved: ruled.approved };
     }),
   );
 }
@@ -208,5 +188,46 @@ function registerSheetRoutes(app: FastifyInstance, { system, hub }: RouteContext
       { params: TenantCommandParams },
       ({ params }) => system.remoteRuns.tenantOutput(params.environment) satisfies TenantCommandOutput,
     ),
+  );
+}
+
+function registerOkRoutes(app: FastifyInstance, { system, hub }: RouteContext): void {
+  /*
+   * The OK: one answer for the whole sheet. It runs a cycle for the press route's reason — the run it
+   * starts is work. → docs/spec/36-remote-validation.md#the-ok
+   */
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/ok',
+    checked({ params: EnvironmentParams }, async ({ params, reply }) => {
+      const given = await system.remoteIntents.give(issueOrigin(params.number), params.environment);
+      if (!given.ok) return reply.code(given.code).send({ error: given.error });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      await system.harness.runCycle('manual');
+      return {
+        ok: true,
+        intent: system.store.remoteIntents.getIntent(given.intent.goalRef, given.intent.environment),
+        refused: given.refused,
+      };
+    }),
+  );
+
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/ok/withdraw',
+    checked({ params: EnvironmentParams }, ({ params, reply }) => {
+      const withdrawn = system.remoteIntents.withdraw(issueOrigin(params.number), params.environment);
+      if (withdrawn === null) return reply.code(404).send({ error: 'there is no OK waiting here to take back.' });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      return { ok: true, intent: withdrawn };
+    }),
+  );
+
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/not-here',
+    checked({ params: EnvironmentParams, body: NotHereBody }, ({ params, body, reply }) => {
+      const marked = system.remoteIntents.notHere(issueOrigin(params.number), params.environment, body.note);
+      if (marked === null) return reply.code(404).send({ error: noSheetAssembled(params.environment) });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      return { ok: true, intent: marked };
+    }),
   );
 }

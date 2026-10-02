@@ -110,6 +110,9 @@ import type {
   Retrospective,
   RemoteReading,
   RemoteRun,
+  RemoteRunIntent,
+  OkScope,
+  OkStanding,
   RemoteSheet,
   RemoteSheetRow,
   ScratchEntry,
@@ -561,6 +564,12 @@ export interface RemoteSheetView extends RemoteSheet {
   rows: RemoteSheetRowView[];
   /** The latest run against this environment, live or ended. Null before anything was ever pressed. */
   run: RemoteRunView | null;
+  /** The operator's OK to run it, and what became of it. Null before one was ever given. */
+  intent: RemoteRunIntent | null;
+  /** What an OK would run — all zero, and the page asks for nothing. */
+  okable: OkScope;
+  /** Where the page stands, worked out on the server — the same reading the `validate` row holds on. */
+  ok: OkStanding;
   /** Which tenant this sheet is put to, how old it is, and why there is none. */
   tenant: RemoteTenantView;
 }
@@ -1043,6 +1052,10 @@ export type {
   Retrospective,
   RemoteReading,
   RemoteRun,
+  RemoteRunIntent,
+  OkScope,
+  OkStanding,
+  OkStatus,
   RemoteRowKind,
   RemoteRowOutcome,
   RemoteSheet,

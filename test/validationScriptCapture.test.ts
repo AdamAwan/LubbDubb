@@ -17,7 +17,6 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { RemoteValidationDesk } from '../src/validation/remote/desk.js';
 import { RemoteReadingDesk } from '../src/validation/remote/readings.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
-import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { remoteRunBriefs, runnableScreens, runnableScripts } from '../src/validation/remote/briefing.js';
 import { sheetRows } from '../src/validation/remote/sheet.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
@@ -196,7 +195,6 @@ test('a script check with no tenant is blocked naming the command or variable th
   const blocked = sheetRows({
     environment: TENANTLESS,
     checks: [{ ...check, steps: [{ ...check.steps[0]!, actor: 'fleet', why: null }] }],
-    watches: [],
     queries: [],
     approvals: new Set(),
     tenant: { tenant: null, blockedReason: null },
@@ -208,7 +206,6 @@ test('a script check with no tenant is blocked naming the command or variable th
   const fine = sheetRows({
     environment: TENANTED,
     checks: [check],
-    watches: [],
     queries: [],
     approvals: new Set(),
     tenant: { tenant: 'validation-customer-1', blockedReason: null },
@@ -435,7 +432,6 @@ test('the grace sweep removes a script past its window, names where it was, and 
     validationRoot: dir,
     store,
     environments: [TENANTED],
-    observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments: [TENANTED], reader: new FakeStateReader({}) }),
     scriptGraceMs: GRACE_MS,
     probeIntervalMs: 60_000,

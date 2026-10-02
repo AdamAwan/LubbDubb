@@ -81,7 +81,8 @@ interface SheetArrivalVerdict {
  * approved row on each sheet, where that one bounds a query.
  *
  * **An arrival waiting on its check set is deferred the same way, however long that takes**; freshness
- * is the arrival's or the acceptance's. → docs/spec/36-remote-validation.md#a-sheet-waits-for-its-checks
+ * is the arrival's, the authoring's or the acceptance's: a sheet is drawn once its set is written, so the
+OK can accept it. → docs/spec/36-remote-validation.md#a-sheet-waits-for-its-checks
  *
  * → docs/spec/36-remote-validation.md#the-desk
  */
@@ -129,11 +130,13 @@ export function arrivalSheetStep(input: {
 }): ArrivalSheetStep {
   if (!input.validates) return 'not-validating';
   const checks = input.checkSet();
-  if (!checks.accepted) return 'awaiting-checks';
+  if (!checks.accepted && checks.authoredAt === null) return 'awaiting-checks';
   if (input.arrival.sheetedAt !== null) return 'sheeted';
   const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
   const since = (at: string | null): boolean => at !== null && Date.parse(at) >= floor;
-  return since(input.arrival.arrivedAt) || since(checks.acceptedAt) ? 'ready' : 'stale';
+  return since(input.arrival.arrivedAt) || since(checks.acceptedAt) || since(checks.authoredAt ?? null)
+    ? 'ready'
+    : 'stale';
 }
 
 export function settlingWindows(windows: readonly WatchWindow[], now: number): WatchWindow[] {
