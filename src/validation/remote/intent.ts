@@ -3,6 +3,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { Store } from '../../store/store.js';
 import type {
+  OkScope,
   OkStanding,
   RemoteRun,
   RemoteRunIntent,
@@ -217,6 +218,18 @@ export function pageRows<T extends RemoteSheetRow>(rows: readonly T[], gone: Rea
  */
 export function okable(row: RemoteSheetRow): boolean {
   return row.selected && row.idleReason === null && (row.blockedReason === null || row.awaitingApproval);
+}
+
+/** What an OK would run, by kind, over the same `okable` rows the standing asks about. */
+export function okScope(rows: readonly RemoteSheetRow[]): OkScope {
+  const scope = { checks: 0, queries: 0, approvals: 0 };
+  for (const row of rows) {
+    if (!okable(row)) continue;
+    if (row.kind === 'check') scope.checks++;
+    else scope.queries++;
+    if (row.awaitingApproval) scope.approvals++;
+  }
+  return scope;
 }
 
 /**

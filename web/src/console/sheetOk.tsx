@@ -36,25 +36,24 @@ export function SheetOkRow({
   const [declining, setDeclining] = useState<string | null>(null);
   const env = sheet.environment;
   const okText = declining === null ? okLabel(status, sheet.okable) : null;
-  const ok = (label: string) => (
-    <AsyncButton
-      usage="validation.create"
-      tone="primary"
-      size="small"
-      onClick={() => actions.giveRemoteOk(issueNumber, env)}
-      onRefused={onRefused}
-      title={`Approve this page's queries on ${env}, accept its checks, and run everything on it as soon as ${env} is free`}
-    >
-      {label}
-    </AsyncButton>
-  );
   return (
     <div className="cn-runstrip-row">
       <span className="cn-runstrip-who">{env}</span>
       <Tag tone={STATUS[status].tone} fill={status === 'needs-you'}>
         {STATUS[status].word}
       </Tag>
-      {okText !== null && ok(okText)}
+      {okText !== null && (
+        <AsyncButton
+          usage="validation.create"
+          tone="primary"
+          size="small"
+          onClick={() => actions.giveRemoteOk(issueNumber, env)}
+          onRefused={onRefused}
+          title={`Approve this page's queries on ${env}, accept its checks, and run everything on it as soon as ${env} is free`}
+        >
+          {okText}
+        </AsyncButton>
+      )}
       {status === 'queued' && (
         <AsyncButton usage="validation.stop" onClick={() => actions.withdrawRemoteOk(issueNumber, env)}>
           Withdraw OK
@@ -91,7 +90,7 @@ export function SheetOkRow({
         </>
       )}
       {status === 'running' && <span className="cn-sub">a run is going — the panel below follows it</span>}
-      {declining === null && showsScope(status, sheet.okable) && (
+      {declining === null && (status === 'needs-you' || status === 'open') && (
         <span className="cn-sub">{scopeLine(sheet.okable)}</span>
       )}
       {why !== null && <span className="cn-sub">{why}</span>}
@@ -107,10 +106,6 @@ function okLabel(status: OkStatus, scope: OkScope): string | null {
   if (status === 'needs-you') return 'OK, run it';
   if (status === 'done') return 'Run again';
   return (status === 'open' || status === 'not-here') && asksFor(scope) ? 'OK, run it' : null;
-}
-
-function showsScope(status: OkStatus, scope: OkScope): boolean {
-  return (status === 'needs-you' || status === 'open') && asksFor(scope);
 }
 
 function scopeLine({ checks, queries, approvals }: OkScope): string {

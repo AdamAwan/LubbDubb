@@ -2,7 +2,7 @@ import type { System } from '../system/system.js';
 import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
-import { goneCheckRows, okable, okStanding, pageRows } from '../validation/remote/intent.js';
+import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
 import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -14,7 +14,6 @@ import type {
   IssueShortfall,
   Plan,
   PlanPart,
-  RemoteSheetRow,
   ValidationCheck,
   TaskSummary,
   WatchReading,
@@ -23,7 +22,6 @@ import type {
 import type {
   GoalReachView,
   GoalWatchView,
-  OkScope,
   RemoteReadingView,
   RemoteSheetView,
   TenantCommandView,
@@ -228,7 +226,7 @@ export function buildRemoteSheets(
       })),
       run,
       intent,
-      okable: okScope(rows.filter(okable)),
+      okable: okScope(rows),
       ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,
@@ -271,12 +269,4 @@ function remoteCaptureUrl(
   if (reading.capture === null || reading.runId === null) return null;
   const base = `/validation-captures/run/${encodeURIComponent(reading.runId)}/${encodeURIComponent(reading.rowId)}`;
   return signer ? `${base}?tk=${encodeURIComponent(signer(reading.runId, reading.rowId))}` : base;
-}
-
-function okScope(rows: readonly RemoteSheetRow[]): OkScope {
-  return {
-    checks: rows.filter((r) => r.kind === 'check').length,
-    queries: rows.filter((r) => r.kind === 'state').length,
-    approvals: rows.filter((r) => r.awaitingApproval).length,
-  };
 }

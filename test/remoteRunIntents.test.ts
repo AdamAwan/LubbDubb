@@ -17,7 +17,7 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { RemoteRun, RemoteRunIntent, RemoteSheetRow, StateQueryInput } from '../src/types.js';
-import { okable, okStanding, pageRows, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
+import { okable, okScope, okStanding, pageRows, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
 import { validationReadyPass } from '../src/validation/ready.js';
 import { DESK_SETTLED } from '../src/benchSettlement.js';
 import { arrivalSheetStep } from '../src/environments/watchWindow.js';
@@ -402,6 +402,14 @@ test('a page reads where it stands off its intent, its run and its rows to OK, o
   assert.equal(okable(sheetRow({ blockedReason: 'not approved here', awaitingApproval: true })), true);
   assert.equal(okable(sheetRow({ blockedReason: 'does not permit state rows' })), false);
   assert.equal(okable(sheetRow({ idleReason: 'a person carries it' })), false);
+  assert.deepEqual(
+    okScope([
+      sheetRow({ kind: 'check' }),
+      sheetRow({ blockedReason: 'not approved here', awaitingApproval: true }),
+      sheetRow({ idleReason: 'a person carries it' }),
+    ]),
+    { checks: 1, queries: 1, approvals: 1 },
+  );
 
   const awaiting = (intents: RemoteRunIntent[], runs: RemoteRun[] = []) =>
     sheetsAwaitingOk({ sheets: [SHEET], rows: [sheetRow()], intents, runs, validates: new Set(['acceptance']) });

@@ -994,6 +994,13 @@ export interface ValidationStep {
   why: string | null;
 }
 
+/** What an OK would run on a page, by kind, and how many of its queries it approves. */
+export interface OkScope {
+  checks: number;
+  queries: number;
+  approvals: number;
+}
+
 /**
  * Five different facts, and the whole point of keeping them apart is that one must never be assumed
  * from evidence that supports another. `spec` is **a reviewed spec ran against a real environment
