@@ -116,6 +116,48 @@ function TaskAnswers({
   );
 }
 
+/**
+ * The answers to an ask that settles itself once the work is done: the one act there is, if any, and
+ * a conversation about why it is not done yet in place of a Done or a Decline.
+ * → docs/spec/17-cockpit.md#an-ask-that-settles-itself-offers-a-conversation-not-a-dismissal
+ */
+function TalkAnswers({
+  task,
+  view,
+  actions,
+  issueNumber,
+  question,
+  label,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+  issueNumber: number;
+  question: string;
+  label: 'Not ready? Talk it through' | 'Stuck? Talk it through';
+}): JSX.Element {
+  return (
+    <HumanTaskActions
+      task={task}
+      look={{ tone: 'secondary' }}
+      noteOnDone={noteOwedOnDone(task, view)}
+      onDone={null}
+      onDecline={null}
+      onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+      extra={
+        <DesktopLink
+          usage="goal.open"
+          folder={view.state.config.desktopFolder}
+          prompt={`${askPrompt(issueNumber)}${question}`}
+          label={label}
+          fullSize
+          explain="answered from what the harness recorded about this goal — the plan, the pull requests, the checks and where the work has reached."
+        />
+      }
+    />
+  );
+}
+
 function BenchAsk({
   task,
   liftTo,
@@ -202,7 +244,18 @@ function ChecksAsk({
       ) : (
         page !== null && <GoalChecks page={page} actions={actions} view={view} />
       )}
-      <TaskAnswers task={task} view={view} actions={actions} />
+      {page === null ? (
+        <TaskAnswers task={task} view={view} actions={actions} />
+      ) : (
+        <TalkAnswers
+          task={task}
+          view={view}
+          actions={actions}
+          issueNumber={page.issue.number}
+          question="what is stopping these checks passing?"
+          label="Stuck? Talk it through"
+        />
+      )}
     </>
   );
 }
@@ -286,24 +339,13 @@ function CloseOutAsk({
               ))}
         </dd>
       </dl>
-      <HumanTaskActions
+      <TalkAnswers
         task={task}
-        look={{ tone: 'secondary' }}
-        noteOnDone={noteOwedOnDone(task, view)}
-        onDone={null}
-        onDecline={null}
-        onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
-        extra={
-          <DesktopLink
-            usage="goal.open"
-            folder={view.state.config.desktopFolder}
-            prompt={`${askPrompt(page.issue.number)}is this ready to close?`}
-            label="Not ready? Talk it through"
-            fullSize
-            ready="ready to send"
-            explain="answered from what the harness recorded about this goal — the plan, the pull requests, the checks and where the work has reached."
-          />
-        }
+        view={view}
+        actions={actions}
+        issueNumber={page.issue.number}
+        question="is this ready to close?"
+        label="Not ready? Talk it through"
       />
     </>
   );

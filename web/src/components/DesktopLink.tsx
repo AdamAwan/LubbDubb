@@ -20,7 +20,12 @@ export function DesktopLink({
   prompt: string;
   explain: string;
   ready?: string;
-  label?: 'Open in Claude Code' | 'Question?' | 'Check my description' | 'Not ready? Talk it through';
+  label?:
+    | 'Open in Claude Code'
+    | 'Question?'
+    | 'Check my description'
+    | 'Not ready? Talk it through'
+    | 'Stuck? Talk it through';
   control?: boolean;
   /** Beside a full-size press, at its size rather than the small one a link usually wears. */
   fullSize?: boolean;
