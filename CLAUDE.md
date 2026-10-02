@@ -150,10 +150,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   a temp directory.** `lubbdubb.project.json` is read from `repoRoot`, and this repo is itself a
   LubbDubb target — the day one is committed here every test on the default starts merging it.
   → [02](docs/spec/02-configuration.md#the-project-layer)
-- **A test that touches `GET /api/plugin` or `POST /api/plugin/install` must inject `pluginCli`.** The default
-  is the real `claude` CLI: a test without `FakePluginCli` installs the plugin into **your own** Claude Code,
-  removes your `lubbdubb` MCP registration, and passes while doing it.
-  → [11](docs/spec/11-mcp-tools.md#the-plugin)
+- **A test touching `/api/plugin` injects `pluginCli` and a temp `desktopCredentialPath`**, or it installs into your own Claude Code. → [11](docs/spec/11-mcp-tools.md#the-plugin)
 - **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter
   reads `lubbdubb.config.json` and the env, so a test on it passes or fails by machine.
   → [02](docs/spec/02-configuration.md#two-loaders)
@@ -175,19 +172,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   with a refusal that points at what replaced it, because a name that is simply gone comes back as an
   unknown method — a broken channel rather than an out-of-date prompt, appearing in no reading at all.
   → [05](docs/spec/05-dispatcher.md#prompt-templates), [11](docs/spec/11-mcp-tools.md#retired-tools)
-
-### The Claude Code plugin
-
-- **A skill the cockpit links to is called `/lubbdubb:<skill>`, never `/lubbdubb <verb>`.** Plugin skills are
-  always namespaced, so a deep link built the old way opens a session that matches no skill — the link
-  renders, the composer fills, and the model gets a sentence with no instructions behind it. A new link is a
-  builder in `web/src/cockpit/desktopLink.ts` naming a directory under `plugin/skills/`, which
-  `test/plugin.test.ts` checks. → [11](docs/spec/11-mcp-tools.md#the-plugin)
-- **The installed plugin is a copy, keyed by its version.** `claude plugin install` snapshots it into
-  Claude Code's cache, so it can never reference a file in this checkout, and an update is seen only
-  through a new version — which `writePluginBundle` derives from a hash of everything shipped. A file the
-  plugin needs is copied into the bundle; a version written by hand is a plugin that never updates.
-  → [11](docs/spec/11-mcp-tools.md#the-plugin)
 
 ### Filing a tracker item
 

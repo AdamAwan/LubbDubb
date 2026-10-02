@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MCP_SERVER_ID } from '../mcp/names.js';
 
@@ -37,8 +37,9 @@ interface PluginSkill {
 
 export function pluginSkills(): PluginSkill[] {
   const root = join(SOURCE_DIR, 'skills');
-  return readdirSync(root)
-    .filter((name) => statSync(join(root, name)).isDirectory())
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
     .sort()
     .map((name) => ({ name, text: readFileSync(join(root, name, 'SKILL.md'), 'utf8') }));
 }
@@ -79,7 +80,7 @@ ${harnessRootSection(input.harnessRoot)}`,
 
   const pluginDir = join(input.outDir, PLUGIN_NAME);
   const catalogue = join(input.outDir, '.claude-plugin', 'marketplace.json');
-  if (existsSync(catalogue) && writtenVersion(pluginDir) === manifest.version) return bundle;
+  if (writtenVersion(pluginDir, catalogue) === manifest.version) return bundle;
   rmSync(pluginDir, { recursive: true, force: true });
   for (const [path, content] of files) {
     mkdirSync(dirname(join(pluginDir, path)), { recursive: true });
@@ -97,10 +98,19 @@ ${harnessRootSection(input.harnessRoot)}`,
   return bundle;
 }
 
-function writtenVersion(pluginDir: string): string | null {
-  const path = join(pluginDir, MANIFEST);
-  if (!existsSync(path)) return null;
-  return (JSON.parse(readFileSync(path, 'utf8')) as { version?: string }).version ?? null;
+function writtenVersion(pluginDir: string, catalogue: string): string | null {
+  const manifest = readIfThere(join(pluginDir, MANIFEST));
+  if (manifest === null || readIfThere(catalogue) === null) return null;
+  return (JSON.parse(manifest) as { version?: string }).version ?? null;
+}
+
+function readIfThere(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw err;
+  }
 }
 
 interface PluginManifest {
@@ -110,12 +120,11 @@ interface PluginManifest {
 }
 
 function collect(root: string, entry: string, into: Map<string, string | Buffer>): void {
-  const path = join(root, entry);
-  if (statSync(path).isDirectory()) {
-    for (const child of readdirSync(path)) collect(root, join(entry, child), into);
-    return;
+  for (const child of readdirSync(join(root, entry), { withFileTypes: true })) {
+    const path = join(entry, child.name);
+    if (child.isDirectory()) collect(root, path, into);
+    else into.set(path.replaceAll('\\', '/'), readFileSync(join(root, path)));
   }
-  into.set(relative(root, path).replaceAll('\\', '/'), readFileSync(path));
 }
 
 function digest(files: Map<string, string | Buffer>): string {
