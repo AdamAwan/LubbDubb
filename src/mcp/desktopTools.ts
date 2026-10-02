@@ -19,7 +19,7 @@ import { checkBriefing } from '../validation/fleet.js';
 import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
-import { descriptionCheck, descriptionDismiss, descriptionRead } from './desktopDescription.js';
+import { descriptionCheck, descriptionDismiss, descriptionRead, descriptionWrite } from './desktopDescription.js';
 import { prAssign } from './desktopPrAssign.js';
 import { askNext, askSkip } from './desktopAskNext.js';
 import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
@@ -507,6 +507,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   description_read: descriptionRead,
   description_check: descriptionCheck,
   description_dismiss: descriptionDismiss,
+  description_write: descriptionWrite,
   pr_assign: prAssign,
   ask_next: askNext,
   ask_skip: askSkip,

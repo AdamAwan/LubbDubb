@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { issueOriginRef } from '../issueOrigins.js';
-import { DESCRIPTION_PROMPTS, descriptionStanding } from '../pr/prDescription.js';
+import { DESCRIPTION_PROMPTS, descriptionRefusal, descriptionStanding } from '../pr/prDescription.js';
 import { DESCRIPTION_QUESTIONS } from '../store/prDescriptions.js';
 import { toolSchema } from './schema.js';
 import type { DescriptionFinding, DescriptionQuestion } from '../types.js';
@@ -174,6 +174,59 @@ export const descriptionDismiss: DesktopToolFactory = (deps) => ({
       means:
         'the row is gone from "Needs you" and the findings stay on the pull request, marked as left as is. A ' +
         'rewrite, or a re-check of this same version, raises them afresh.',
+    });
+  },
+});
+
+/**
+ * The operator's description, typed in this conversation and carried here verbatim. The tool cannot
+ * tell their words from the session's, so the rule is in the schema: this channel carries a description
+ * and never produces one. → docs/spec/07-pull-requests.md#relayed-through-claude-code
+ */
+export const descriptionWrite: DesktopToolFactory = (deps) => ({
+  description:
+    'Save the description the operator wrote for a part’s pull request, exactly as they typed it in this ' +
+    'conversation. It goes on the pull request marked as written by a person, so only their own words may ' +
+    'go in: never draft, suggest, tidy or complete one, and never pass text you wrote that they agreed to. ' +
+    'If they ask you to write it, tell them the agent’s draft is the way to that, from the pull request’s ' +
+    'page, where it is labelled as the agent’s. A rewrite is a new version and is checked against the diff ' +
+    'afresh.',
+  inputSchema: toolSchema(
+    z.object({
+      pr: z.number().describe('The pull request it describes, e.g. 312.'),
+      text: z
+        .string()
+        .describe(
+          'The operator’s words, verbatim — every word theirs, including their typos. Not a summary of what ' +
+            'they said, and nothing of yours.',
+        ),
+    }),
+  ),
+  handler: (args) => {
+    if (typeof args.pr !== 'number' || !Number.isInteger(args.pr) || args.pr <= 0)
+      return toolError('pr must be the pull request number, e.g. 312.');
+    const originRef = deps.store.prDescriptions.partOfPullRequest(args.pr);
+    if (originRef === null)
+      return toolError(
+        `PR #${args.pr} is not a part's pull request this deployment opened, so there is nothing to describe.`,
+      );
+    const text = String(args.text ?? '');
+    const refusal = descriptionRefusal(text);
+    if (refusal !== null) return toolError(`Not saved: ${refusal}.`);
+    const version = deps.store.prDescriptions.appendDescription({
+      originRef,
+      text: text.trim(),
+      author: deps.briefConfig().userId ?? null,
+      via: 'claude-code',
+    });
+    deps.changed({ type: 'dirty', sections: ['plans'] });
+    return toolJson({
+      pr: args.pr,
+      id: version.id,
+      version: version.version,
+      means:
+        'saved as the operator’s, and it replaces whatever the pull request carries on the next pulse. The ' +
+        'fleet reads it against the diff by itself; /lubbdubb:describe checks it now.',
     });
   },
 });

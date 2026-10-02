@@ -2532,6 +2532,8 @@ export interface DescriptionFinding {
   question: DescriptionQuestion | null;
 }
 
+export type DescriptionChannel = 'cockpit' | 'claude-code';
+
 export interface PrDescriptionVersion {
   id: string;
   originRef: string;
@@ -2540,6 +2542,8 @@ export interface PrDescriptionVersion {
   text: string;
   author: string | null;
   authoredAt: string;
+  /** Where the operator's words were entered. → docs/spec/07-pull-requests.md#relayed-through-claude-code */
+  via: DescriptionChannel;
   checkedAt: string | null;
   findings: DescriptionFinding[];
   /** The operator pressed to leave this check's findings as they are. A re-check clears it. */

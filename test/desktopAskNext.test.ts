@@ -260,7 +260,7 @@ const CTX = {
 };
 
 test('answerWith sends the cockpit-only kinds to the cockpit, with a link and a reason', () => {
-  for (const kind of ['sitting', 'config', 'upgrade', 'describe', 'limit'] as const) {
+  for (const kind of ['sitting', 'config', 'upgrade', 'limit'] as const) {
     const answer = answerWith(row({ kind }), CTX);
     assert.equal(answer.in, 'cockpit', kind);
     assert.equal(answer.in === 'cockpit' ? answer.link : null, CTX.link);
@@ -293,6 +293,14 @@ test('answerWith fills the ids each kind is answered by', () => {
   assert.ok(recovery.in === 'claude-code');
   assert.deepEqual(recovery.args, { taskId: 't1' });
   assert.match(recovery.note ?? '', /t2/);
+
+  const describe = answerWith(
+    row({ kind: 'describe', subject: { type: 'part', originRef: 'issue:284:part:a', prNumber: 312 } }),
+    CTX,
+  );
+  assert.ok(describe.in === 'claude-code' && describe.tool === 'description_write');
+  assert.deepEqual(describe.args, { pr: 312 }, 'the ask names the pull request; the words are the operator’s');
+  assert.match(describe.choose.text ?? '', /verbatim/, 'and the session is told to carry them, never to draft');
 
   const assign = answerWith(row({ kind: 'assign', subject: { type: 'pull_request', prNumber: 312 } }), CTX);
   assert.ok(assign.in === 'claude-code' && assign.tool === 'pr_assign');

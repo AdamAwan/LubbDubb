@@ -377,6 +377,7 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
           'to fall back on.',
         author: DEMO_OPERATOR,
         authoredAt: ago(240),
+        via: 'cockpit',
         checkedAt: ago(236),
         findings: [
           {
@@ -409,6 +410,7 @@ const DEMO_DESCRIPTIONS: readonly (readonly [string, PrDescriptionVersion[]])[] 
           'writing the order, which is the behaviour change a reviewer should look hardest at.',
         author: DEMO_OPERATOR,
         authoredAt: ago(20),
+        via: 'cockpit',
         checkedAt: null,
         findings: [],
         dismissedAt: null,
@@ -597,6 +599,7 @@ class DemoServer {
       text,
       author: DEMO_OPERATOR,
       authoredAt: new Date().toISOString(),
+      via: 'cockpit',
       checkedAt: null,
       findings: [],
       dismissedAt: null,
