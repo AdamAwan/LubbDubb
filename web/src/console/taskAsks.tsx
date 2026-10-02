@@ -5,7 +5,9 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { GOAL_ANCHOR, GOAL_TAB_OF, buildGoalPage } from '../view/goalPage.js';
+import { GOAL_ANCHOR, GOAL_TAB_OF, buildGoalPage, obligationEnvironment } from '../view/goalPage.js';
+import type { GoalPageView } from '../view/goalPage.js';
+import { RunStrip, TenantBanner } from './goalRunners.js';
 import { goalIssue } from '../view/goalRefs.js';
 import { scrollToAnchor } from './jump.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
@@ -179,10 +181,27 @@ function ChecksAsk({
   actions: CockpitActions;
   checksBelow: boolean;
 }): JSX.Element {
+  const page =
+    checksBelow || task.originRef === null ? null : buildGoalPage(view.state, task.originRef, view.needsYou, null);
   return (
     <>
-      <TaskLede task={task} view={view} />
-      <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
+      {page !== null ? (
+        <>
+          <TenantBanner
+            page={page}
+            showing={obligationEnvironment(page, 'validate', view.sheetEnvironment)}
+            actions={actions}
+          />
+          <RunStrip page={page} view={view} actions={actions} />
+        </>
+      ) : (
+        !checksBelow && <TaskLede task={task} view={view} />
+      )}
+      {checksBelow ? (
+        <ChecksBelow originRef={task.originRef} view={view} actions={actions} />
+      ) : (
+        page !== null && <GoalChecks page={page} actions={actions} view={view} />
+      )}
       <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
@@ -314,46 +333,50 @@ function CloseOutAsk({
  * rather than building the whole goal page to do it.
  * → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work
  */
-function GoalChecks({
+function ChecksBelow({
   originRef,
   view,
   actions,
-  checksBelow,
 }: {
   originRef: string | null;
   view: CockpitView;
   actions: CockpitActions;
-  checksBelow: boolean;
 }): JSX.Element | null {
-  const number = Number(/^issue:(\d+)$/.exec(originRef ?? '')?.[1]);
-  if (originRef === null || !Number.isFinite(number)) return null;
-  if (checksBelow) {
-    const live = (view.state.validationChecks ?? []).filter(
-      (c) => c.originRef === originRef && c.supersededReason === null,
-    );
-    if (live.length === 0) return null;
-    return (
-      <BareButton
-        usage="validation.expand"
-        className="cn-ask-checks-to"
-        onClick={() => {
-          /* All three, in the order `buildJump` does them: the pane, then the card's
-             own fold, then the scroll two frames later. A jump that skipped the fold
-             would land on a heading and read as a control that did nothing.
-             → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet */
-          actions.openGoalTab(GOAL_TAB_OF.validation);
-          actions.openGoalSection('validation', true);
-          scrollToAnchor(GOAL_ANCHOR.validation);
-        }}
-      >
-        {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
-        Checks, below — go to them
-      </BareButton>
-    );
-  }
-  const page = buildGoalPage(view.state, originRef, view.needsYou, null);
-  const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
-  if (page === null || live.length === 0) return null;
+  const live = (view.state.validationChecks ?? []).filter(
+    (c) => c.originRef === originRef && c.supersededReason === null,
+  );
+  if (originRef === null || live.length === 0) return null;
+  return (
+    <BareButton
+      usage="validation.expand"
+      className="cn-ask-checks-to"
+      onClick={() => {
+        /* All three, in the order `buildJump` does them: the pane, then the card's
+           own fold, then the scroll two frames later. A jump that skipped the fold
+           would land on a heading and read as a control that did nothing.
+           → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet */
+        actions.openGoalTab(GOAL_TAB_OF.validation);
+        actions.openGoalSection('validation', true);
+        scrollToAnchor(GOAL_ANCHOR.validation);
+      }}
+    >
+      {live.length === 1 ? 'The 1 check this asks about is' : `The ${live.length} checks this asks about are`} under
+      Checks, below — go to them
+    </BareButton>
+  );
+}
+
+function GoalChecks({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const number = page.issue.number;
+  if (!page.checks.some((c) => c.supersededReason === null)) return null;
   return (
     <div className="cn-ask-checks">
       <ValidationSection
