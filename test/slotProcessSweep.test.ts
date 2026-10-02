@@ -117,6 +117,36 @@ test('releasing a slot terminates what the last occupant left standing in it', a
   assert.ok(processes.asked.includes(slot));
 });
 
+test('a hand-out requested during a release sweep waits for it and the slot stays leased', async () => {
+  const repo = initRepo();
+  let open!: () => void;
+  const gate = new Promise<void>((r) => (open = r));
+  class SlowProbe extends FakeSlotProcesses {
+    override async holding(dir: string, paths?: string[]): Promise<SlotProcess[] | null> {
+      const held = await super.holding(dir, paths);
+      if (this.asked.length === 1) await gate;
+      return held;
+    }
+  }
+  const processes = new SlowProbe();
+  const wt = manager(repo, 1, processes);
+
+  const slot = await wt.ensure('feature/x');
+  processes.standing(slot, [{ pid: 6000, parentPid: 1, detail: `${slot}/node_modules/.bin/vite` }]);
+  const released = wt.remove('feature/x');
+  while (processes.asked.length === 0) await new Promise((r) => setTimeout(r, 5));
+
+  let handed: string | null = null;
+  const next = wt.ensure('feature/y').then((d) => (handed = d));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(handed, null, 'the slot is not handed out while its sweep is running');
+
+  open();
+  await released;
+  assert.equal(await next, slot);
+  assert.deepEqual(processes.killed, [6000]);
+});
+
 test('a handover sweeps the slot before it wipes it', async () => {
   const repo = initRepo();
   const processes = new FakeSlotProcesses();

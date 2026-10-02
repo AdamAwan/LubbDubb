@@ -195,10 +195,14 @@ export class WorktreeManager implements Worktrees {
     return null;
   }
 
-  async remove(branch: string): Promise<void> {
+  remove(branch: string): Promise<void> {
+    return this.serialised(() => this.release(branch));
+  }
+
+  private async release(branch: string): Promise<void> {
     const dir = this.leases.get(branch);
-    this.leases.delete(branch);
     if (dir !== undefined) await this.sweep(dir);
+    this.leases.delete(branch);
   }
 
   deleteBranch(branch: string): Promise<void> {
@@ -217,7 +221,7 @@ export class WorktreeManager implements Worktrees {
         );
       }
     }
-    await this.remove(branch);
+    await this.release(branch);
     if (holding === resolve(this.repoRoot)) throw new Error(reapBlockedByCheckout(branch, holding));
     if (holding !== null) await runGit(holding, ['switch', '--detach']);
     if (!(await this.branchExists(branch))) return;
