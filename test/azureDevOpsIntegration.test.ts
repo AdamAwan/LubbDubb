@@ -1477,3 +1477,38 @@ test('attachIssueImage uploads the bytes and holds them against the work item', 
     { id: 101, url: held.url, comment: 'capture-confirmation-reads-run-1.png' },
   ]);
 });
+
+test('a watch tag stored in the project casing reads in the configured casing, with authorship intact', async () => {
+  const { api } = fakeApi({
+    viewer: 'bot@acme.com',
+    workItems: [workItem({ id: 7, tags: ['LubbDubb-Watch', 'Bug'] })],
+    historyItems: [workItem({ id: 7, tags: ['LubbDubb-Watch', 'Bug'] })],
+    updates: { 7: [{ revisedByUniqueName: 'bot@acme.com', tagsOld: '', tagsNew: 'LubbDubb-Watch; Bug' }] },
+  });
+  const issues = new AzureDevOpsWorkItemsIntegration({
+    api,
+    ownershipTag: 'lubbdubb-watch',
+    harnessTags: ['lubbdubb-watch'],
+  });
+  const issue = (await issues.snapshot()).issues![0]!;
+  assert.deepEqual(issue.labels, ['lubbdubb-watch', 'Bug']);
+  assert.deepEqual(issue.labelsAddedByViewer, ['lubbdubb-watch', 'Bug']);
+  const history = await issues.listTicketHistory('2026-01-01T00:00:00Z');
+  assert.deepEqual(history[0]!.labels, ['lubbdubb-watch', 'Bug']);
+});
+
+test('harness tags are re-cased on read without an owner filter; other tags are untouched', async () => {
+  const { api } = fakeApi({ workItems: [workItem({ tags: ['LUBBDUBB-WATCH', 'Needs-Review'] })] });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, harnessTags: ['lubbdubb-watch'] });
+  const issue = (await issues.snapshot()).issues![0]!;
+  assert.deepEqual(issue.labels, ['lubbdubb-watch', 'Needs-Review']);
+  assert.equal(issue.labelsAddedByViewer, undefined);
+});
+
+test('viewerAddedTags: a revision that only re-cases a tag keeps its authorship', () => {
+  const updates: AzWorkItemUpdate[] = [
+    { revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'lubbdubb-watch' },
+    { revisedByUniqueName: 'other@acme.com', tagsOld: 'lubbdubb-watch', tagsNew: 'LubbDubb-Watch' },
+  ];
+  assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['LubbDubb-Watch']);
+});

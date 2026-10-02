@@ -33,6 +33,7 @@ import type {
 } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItem, AzWorkItemUpdate } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
+import { sameTag } from './restHelpers.js';
 import { sameIdentity } from '../../pr/prOwnership.js';
 import { HydrationCache } from '../hydrationCache.js';
 import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
@@ -48,6 +49,7 @@ interface AzureWorkItemsOpts {
   workItemTag?: string;
   assignedTo?: string;
   ownershipTag?: string;
+  harnessTags?: string[];
   completedState?: string;
   notPlannedState?: string;
 }
@@ -87,7 +89,7 @@ export class AzureDevOpsWorkItemsIntegration
     return raw.map((w) => ({
       number: w.id,
       title: w.title,
-      labels: w.tags,
+      labels: this.inHarnessCasing(w.tags),
       state: normalizeState(w.state),
       workItemState: w.state,
       url: w.url,
@@ -104,7 +106,8 @@ export class AzureDevOpsWorkItemsIntegration
       const hierarchy = await this.hydrateHierarchy(raw);
       const issues = await Promise.all(
         raw.map(async (w): Promise<Issue> => {
-          const tracksOwner = viewer !== null && ownershipTag !== undefined && w.tags.includes(ownershipTag);
+          const tracksOwner =
+            viewer !== null && ownershipTag !== undefined && w.tags.some((t) => sameTag(t, ownershipTag));
           const labelsAddedByViewer = tracksOwner
             ? await this.viewerAddedTagsFor(w, viewer, hydrationMaxAgeMs(plan, issueReadRef(w.id)))
             : undefined;
@@ -113,7 +116,7 @@ export class AzureDevOpsWorkItemsIntegration
             number: w.id,
             title: w.title,
             body: w.body,
-            labels: w.tags,
+            labels: this.inHarnessCasing(w.tags),
             ...(labelsAddedByViewer ? { labelsAddedByViewer } : {}),
             state: normalizeState(w.state),
             issueType: w.workItemType,
@@ -138,13 +141,19 @@ export class AzureDevOpsWorkItemsIntegration
     }
   }
 
+  private inHarnessCasing(tags: string[]): string[] {
+    const { harnessTags = [], ownershipTag } = this.opts;
+    const known = ownershipTag === undefined ? harnessTags : [...harnessTags, ownershipTag];
+    return tags.map((t) => known.find((k) => sameTag(k, t)) ?? t);
+  }
+
   private async viewerAddedTagsFor(w: AzWorkItem, viewer: string, maxAgeMs: number): Promise<string[]> {
     const token = `${viewer}\u0000${w.changedAt}`;
     if (w.changedAt !== '') {
       const hit = this.tagAuthorship.get(w.id, maxAgeMs);
       if (hit !== undefined && hit.token === token) return [...hit.tags];
     }
-    const tags = [...viewerAddedTags(await this.opts.api.listWorkItemUpdates(w.id), viewer)];
+    const tags = this.inHarnessCasing([...viewerAddedTags(await this.opts.api.listWorkItemUpdates(w.id), viewer)]);
     if (w.changedAt !== '') this.tagAuthorship.set(w.id, { token, tags });
     return tags;
   }
@@ -328,22 +337,24 @@ export function parseTags(raw: string | undefined): string[] {
 }
 
 export function viewerAddedTags(updates: AzWorkItemUpdate[], viewer: string): Set<string> {
-  const owned = new Set<string>();
+  let owned: string[] = [];
   for (const u of updates) {
-    const before = new Set(parseTags(u.tagsOld));
+    const before = parseTags(u.tagsOld);
     const after = parseTags(u.tagsNew);
-    const afterSet = new Set(after);
     const byViewer = sameIdentity(u.revisedByUniqueName, viewer);
     for (const tag of after) {
-      if (before.has(tag)) continue;
-      if (byViewer) owned.add(tag);
-      else owned.delete(tag);
+      if (before.some((b) => sameTag(b, tag))) {
+        owned = owned.map((o) => (sameTag(o, tag) ? tag : o));
+        continue;
+      }
+      owned = owned.filter((o) => !sameTag(o, tag));
+      if (byViewer) owned.push(tag);
     }
     for (const tag of before) {
-      if (!afterSet.has(tag)) owned.delete(tag);
+      if (!after.some((a) => sameTag(a, tag))) owned = owned.filter((o) => !sameTag(o, tag));
     }
   }
-  return owned;
+  return new Set(owned);
 }
 
 const CLOSED_STATES: ReadonlySet<string> = new Set(['Closed', 'Done', 'Removed', 'Resolved']);

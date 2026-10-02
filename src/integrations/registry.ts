@@ -81,6 +81,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         workItemTag: az.filters?.workItemTag,
         assignedTo: filterToViewer(ctx),
         ownershipTag: ownershipLabel(ctx),
+        harnessTags: [watchLabelFor(ctx.config.labelPrefix)],
         completedState: ctx.config.issueCompletedState,
         notPlannedState: ctx.config.issueNotPlannedState,
       });
