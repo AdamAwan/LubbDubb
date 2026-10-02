@@ -101,7 +101,12 @@ ${harnessRootSection(input.harnessRoot)}`,
 function writtenVersion(pluginDir: string, catalogue: string): string | null {
   const manifest = readIfThere(join(pluginDir, MANIFEST));
   if (manifest === null || readIfThere(catalogue) === null) return null;
-  return (JSON.parse(manifest) as { version?: string }).version ?? null;
+  try {
+    return (JSON.parse(manifest) as { version?: string }).version ?? null;
+  } catch {
+    // A half-written manifest is rewritten rather than refused on every boot that follows.
+    return null;
+  }
 }
 
 function readIfThere(path: string): string | null {

@@ -296,3 +296,14 @@ test('only a user-scope install counts, and a second press shares the first', as
     'installed at user scope rather than updated',
   );
 });
+
+test('a corrupt manifest on disk is rewritten, not refused', () => {
+  const into = input();
+  writePluginBundle(into);
+  writeFileSync(join(into.outDir, 'lubbdubb', '.claude-plugin', 'plugin.json'), '{ half');
+  const bundle = writePluginBundle(into);
+  assert.equal(
+    (read(join(into.outDir, 'lubbdubb', '.claude-plugin', 'plugin.json')) as { version: string }).version,
+    bundle.version,
+  );
+});
