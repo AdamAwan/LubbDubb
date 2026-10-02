@@ -1543,7 +1543,11 @@ is not a disk cost but a wedged slot.
 ### Release
 
 `remove(name)` [sweeps the slot](#a-process-left-standing-in-a-slot), releases the lease and
-**deletes nothing** else. That is the whole change: the slot stays on
+**deletes nothing** else. The release runs **inside the slot queue** and the lease is dropped
+**after** the sweep returns, so for the whole sweep the slot still reads as taken: a hand-out
+requested meanwhile — for another branch, or a re-dispatch of the same one — waits for the sweep
+instead of receiving the slot and having its fresh agent reported as the old occupant's leftovers and
+stopped. `reap` is already in the queue and calls the unqueued body, since the queue is not re-entrant. That is the whole change: the slot stays on
 its branch (or at its commit, for a read-only checkout) with everything git ignores in it, and a
 failed or killed agent's tree stays readable until the slot is reissued. A read-only checkout needs no
 other ending: there is no ref for a reap to collect, which is the whole of why it exists.
