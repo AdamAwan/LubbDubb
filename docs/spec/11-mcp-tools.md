@@ -1627,7 +1627,7 @@ only when asked; the board answers without being asked. It draws in two places:
 
 - **A status line above the prompt**, in a box of its own:
   `● LubbDubb 2/4 agents · 3 asks (1 blocking) · next: Merge #412 · 2 features · 1 PR needs attention
-  · 1 ready to merge  Work through asks  Open panel  Hide`. The dot is yellow and `fleet paused`
+· 1 ready to merge  Work through asks  Open panel  Hide`. The dot is yellow and `fleet paused`
   leads while the fleet is paused; a count with nothing in it is left out, except the agents and the
   asks. Work through asks is drawn only while there is an ask.
 - **A panel** (`$.ui.open`, docked beside the transcript where the surface docks, inline above the
