@@ -1310,6 +1310,55 @@ class DemoServer {
     return Promise.resolve({ ok: true });
   }
 
+  /** The OK, as the server does it: the press the pulse would make, and the intent it consumes. */
+  async giveRemoteOk(issueNumber: number, environment: string): Promise<{ ok: true }> {
+    await this.pressRemoteSheet(issueNumber, environment);
+    const sheet = this.remoteSheet(issueNumber, environment);
+    if (sheet !== undefined) {
+      const now = new Date().toISOString();
+      sheet.intent = {
+        goalRef: sheet.goalRef,
+        environment,
+        state: 'consumed',
+        fingerprint: '',
+        givenAt: now,
+        runId: sheet.run?.id ?? null,
+        note: null,
+        updatedAt: now,
+      };
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  withdrawRemoteOk(issueNumber: number, environment: string): Promise<{ ok: true }> {
+    const sheet = this.remoteSheet(issueNumber, environment);
+    if (sheet?.intent?.state === 'given') {
+      sheet.intent = { ...sheet.intent, state: 'withdrawn', note: null };
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  markRemoteNotHere(issueNumber: number, environment: string, note: string): Promise<{ ok: true }> {
+    const sheet = this.remoteSheet(issueNumber, environment);
+    if (sheet !== undefined) {
+      const now = new Date().toISOString();
+      sheet.intent = {
+        goalRef: sheet.goalRef,
+        environment,
+        state: 'not_here',
+        fingerprint: '',
+        givenAt: now,
+        runId: null,
+        note,
+        updatedAt: now,
+      };
+      this.dirty();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
   cancelRemoteRun(issueNumber: number, environment: string): Promise<{ ok: true }> {
     const sheet = this.remoteSheet(issueNumber, environment);
     if (sheet?.run != null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched')) {
@@ -4989,6 +5038,11 @@ export const demoApi = {
   pressRemoteSheet: (issueNumber: number, environment: string) =>
     getServer().pressRemoteSheet(issueNumber, environment),
   cancelRemoteRun: (issueNumber: number, environment: string) => getServer().cancelRemoteRun(issueNumber, environment),
+  giveRemoteOk: (issueNumber: number, environment: string) => getServer().giveRemoteOk(issueNumber, environment),
+  withdrawRemoteOk: (issueNumber: number, environment: string) =>
+    getServer().withdrawRemoteOk(issueNumber, environment),
+  markRemoteNotHere: (issueNumber: number, environment: string, note: string) =>
+    getServer().markRemoteNotHere(issueNumber, environment, note),
   reseedRemoteTenant: (issueNumber: number, environment: string) =>
     getServer().reseedRemoteTenant(issueNumber, environment),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>

@@ -2626,6 +2626,14 @@ line carries **Set up a run** beside its reason ([36](36-remote-validation.md#se
 is the order the question arrives in — _is there a run that would answer some of this, before I start
 answering by hand_ — which is precisely the order the pane had backwards.
 
+**An environment's line is its page's OK** (`SheetOkRow`, `web/src/console/sheetOk.tsx`): where the
+page stands — _needs you_, _queued_, _running_, _done_, _not validating here_ — read by `okStanding`
+off the server's own intent, latest run and count of rows to OK, never re-decided, with the one answer
+it asks for beside it: **OK, run it**, **Withdraw OK** while it waits, **Run again** once it ran, and
+**Not validating here** with a required reason. A run that was abandoned brings the page back to
+_needs you_ with the run's own reason, and an OK the page outgrew says so. There is no separate press:
+the OK is the press ([36](36-remote-validation.md#the-ok)).
+
 The strip is **the only place a run starts**. The panels below read what a run did, so the local
 press left the goal header's `Check the work` group and the sheet's gate no longer draws its own
 start button (`press={false}`): a press offered in two places is two controls for one act. What stays

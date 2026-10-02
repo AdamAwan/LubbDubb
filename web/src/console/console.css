@@ -7394,6 +7394,9 @@ button.cn-grow {
 .cn-runstrip .cn-sub {
   min-width: 0;
 }
+.cn-runstrip .cn-ok-why {
+  flex: 1 1 40ch;
+}
 .cn-runstrip .launch-error {
   margin: 0;
   padding: 7px 10px;

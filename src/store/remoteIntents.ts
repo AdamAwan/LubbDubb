@@ -70,6 +70,11 @@ export class RemoteIntentStore {
     return this.settle(goalRef, environment, 'consumed', runId);
   }
 
+  /** A given OK the harness took back itself, saying why — the page it was given over is gone. */
+  lapseIntent(goalRef: string, environment: string, note: string): RemoteRunIntent | null {
+    return this.settle(goalRef, environment, 'withdrawn', null, note);
+  }
+
   /** Why a given intent is still waiting. Written only where it changed, so a quiet pulse writes nothing. */
   noteIntent(goalRef: string, environment: string, note: string | null): void {
     this.ctx
@@ -99,13 +104,14 @@ export class RemoteIntentStore {
     environment: string,
     state: 'withdrawn' | 'consumed',
     runId: string | null,
+    note: string | null = null,
   ): RemoteRunIntent | null {
     const changed = this.ctx
       .prep(
-        `UPDATE remote_run_intents SET state=?, run_id=?, note=NULL, updated_at=?
+        `UPDATE remote_run_intents SET state=?, run_id=?, note=?, updated_at=?
           WHERE goal_ref=? AND environment=? AND state='given'`,
       )
-      .run(state, runId, this.ctx.now(), goalRef, environment).changes;
+      .run(state, runId, note, this.ctx.now(), goalRef, environment).changes;
     return changed === 0 ? null : this.getIntent(goalRef, environment);
   }
 }

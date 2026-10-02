@@ -562,6 +562,8 @@ export interface RemoteSheetView extends RemoteSheet {
   run: RemoteRunView | null;
   /** The operator's OK to run it, and what became of it. Null before one was ever given. */
   intent: RemoteRunIntent | null;
+  /** How many rows there are to OK — none, and the page asks for nothing. */
+  okable: number;
   /** Which tenant this sheet is put to, how old it is, and why there is none. */
   tenant: RemoteTenantView;
 }

@@ -133,12 +133,14 @@ export class RemoteIntentDesk {
         environment,
         `"${environment}" no longer declares a "validate" block.`,
       );
-    if (this.fingerprint(goalRef, config) !== intent.fingerprint)
-      return store.remoteIntents.noteIntent(
+    if (this.fingerprint(goalRef, config) !== intent.fingerprint) {
+      store.remoteIntents.lapseIntent(
         goalRef,
         environment,
         'the page has changed since the OK was given — read it again and give it again.',
       );
+      return;
+    }
     const standing = runs.standing(environment);
     if (standing.blockedReason !== null)
       return store.remoteIntents.noteIntent(goalRef, environment, standing.blockedReason);

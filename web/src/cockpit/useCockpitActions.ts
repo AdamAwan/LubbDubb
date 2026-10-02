@@ -161,6 +161,9 @@ function remoteValidationActions(then: Then) {
     setUpRemoteSheet: (issueNumber, environment) => then(api.setUpRemoteSheet(issueNumber, environment)),
     pressRemoteSheet: (issueNumber, environment) => then(api.pressRemoteSheet(issueNumber, environment)),
     cancelRemoteRun: (issueNumber, environment) => then(api.cancelRemoteRun(issueNumber, environment)),
+    giveRemoteOk: (issueNumber, environment) => then(api.giveRemoteOk(issueNumber, environment)),
+    withdrawRemoteOk: (issueNumber, environment) => then(api.withdrawRemoteOk(issueNumber, environment)),
+    markRemoteNotHere: (issueNumber, environment, note) => then(api.markRemoteNotHere(issueNumber, environment, note)),
     reseedRemoteTenant: (issueNumber, environment) => then(api.reseedRemoteTenant(issueNumber, environment)),
     tenantCommandOutput: (environment) => api.tenantCommandOutput(environment),
   } satisfies Partial<CockpitActions>;

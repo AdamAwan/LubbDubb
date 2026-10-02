@@ -1416,6 +1416,7 @@ export function buildDemoState(): DemoSeed {
         environment: 'staging',
         assembledAt: ago(6),
         intent: null,
+        okable: 3,
         run: {
           id: 'run-395-staging-2',
           goalRef: 'issue:395',
@@ -1680,6 +1681,7 @@ export function buildDemoState(): DemoSeed {
         environment: 'prod',
         assembledAt: ago(2),
         intent: null,
+        okable: 0,
         run: {
           id: 'run-395-prod-1',
           goalRef: 'issue:395',
@@ -1781,6 +1783,7 @@ export function buildDemoState(): DemoSeed {
         environment: 'staging',
         assembledAt: ago(66),
         intent: null,
+        okable: 0,
         run: {
           id: 'run-398-staging-1',
           goalRef: 'issue:398',

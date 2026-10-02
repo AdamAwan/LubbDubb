@@ -204,7 +204,7 @@ test('an OK given over a page that has since changed is not pressed', async () =
 
     await b.intents.run();
 
-    assert.equal(intentOf(b.store)?.state, 'given');
+    assert.equal(intentOf(b.store)?.state, 'withdrawn', 'the OK lapses, and the page asks again');
     assert.match(intentOf(b.store)?.note ?? '', /changed since the OK/);
     assert.deepEqual(b.store.remoteValidation.listRemoteRuns(), []);
   } finally {

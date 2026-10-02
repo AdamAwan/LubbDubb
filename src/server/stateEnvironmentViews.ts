@@ -1,6 +1,7 @@
 import type { System } from '../system/system.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
+import { okable } from '../validation/remote/intent.js';
 import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -228,6 +229,7 @@ export function buildRemoteSheets(
       })),
       run: runsByGoalEnvironment.get(key)?.at(-1) ?? null,
       intent: intents.get(key) ?? null,
+      okable: (rowsByGoalEnvironment.get(key) ?? []).filter(okable).length,
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,

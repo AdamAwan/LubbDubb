@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  checkStandings,
-  panelRows,
-  pressBreakdown,
-  pressableRows,
-  tenantAlerts,
-} from '../web/src/view/validatePane.js';
-import type { RemoteSheetRowView, RemoteSheetView, ValidationCheckView } from '../src/wire.js';
+import { checkStandings, panelRows, okStanding, pressableRows, tenantAlerts } from '../web/src/view/validatePane.js';
+import type {
+  RemoteRunIntent,
+  RemoteRunView,
+  RemoteSheetRowView,
+  RemoteSheetView,
+  ValidationCheckView,
+} from '../src/wire.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
 
@@ -76,6 +76,7 @@ function sheet(over: Partial<RemoteSheetView> = {}): RemoteSheetView {
     rows: [row()],
     run: null,
     intent: null,
+    okable: 1,
     tenant: {
       tenant: 'validation-1',
       reseededAt: null,
@@ -167,20 +168,43 @@ test('the pressable count is the gate’s own, and it counts rows rather than ch
   assert.equal(pressableRows(s), 1);
 });
 
-test('the press says what its number is made of, because it is bigger than the ticks below it', () => {
-  /* The sheet carries queries and measures that have no check to tick, and a press re-reads the
-     checks already answered — so "Run 5 rows" over three ticked boxes needs its arithmetic said.
-     The strip sits above the list, so the ticks it counts are the ones below it. */
-  const s = sheet({
-    rows: [
-      row({ rowId: 'r1', sourceId: 'c1' }),
-      row({ rowId: 'r2', sourceId: 'c2' }),
-      row({ rowId: 'q1', kind: 'state', sourceId: 'q1' }),
-      row({ rowId: 'm1', kind: 'measure', sourceId: 'm1' }),
-    ],
+test('a page reads where it stands off its intent, its run and its rows to OK', () => {
+  const RUN = { id: 'run_1', status: 'ended', note: null } as unknown as RemoteRunView;
+  const intent = (over: Partial<RemoteRunIntent>): RemoteRunIntent => ({
+    goalRef: 'issue:12',
+    environment: 'staging',
+    state: 'given',
+    fingerprint: 'f',
+    givenAt: NOW,
+    runId: null,
+    note: null,
+    updatedAt: NOW,
+    ...over,
   });
-  assert.equal(pressableRows(s), 4);
-  assert.deepEqual(pressBreakdown(s), { checks: 2, own: 2 });
+  assert.equal(okStanding(sheet()).status, 'needs-you', 'a row to OK and no OK');
+  assert.equal(okStanding(sheet({ okable: 0 })).status, 'nothing', 'nothing to OK asks for nothing');
+  assert.deepEqual(okStanding(sheet({ intent: intent({ note: 'queued behind the run for issue:398.' }) })), {
+    status: 'queued',
+    why: 'queued behind the run for issue:398.',
+  });
+  assert.equal(okStanding(sheet({ run: { ...RUN, status: 'dispatched' } })).status, 'running');
+  assert.equal(okStanding(sheet({ run: RUN, intent: intent({ state: 'consumed', runId: 'run_1' }) })).status, 'done');
+  assert.deepEqual(
+    okStanding(
+      sheet({
+        run: { ...RUN, status: 'abandoned', note: 'gone back past this goal' },
+        intent: intent({ state: 'consumed', runId: 'run_1' }),
+      }),
+    ),
+    { status: 'needs-you', why: 'gone back past this goal' },
+    'an abandoned run comes back to the operator, saying why',
+  );
+  assert.equal(okStanding(sheet({ intent: intent({ state: 'consumed', runId: null }) })).status, 'open', 'ship day');
+  assert.equal(okStanding(sheet({ intent: intent({ state: 'not_here', note: 'rebuilt' }) })).why, 'rebuilt');
+  assert.equal(
+    okStanding(sheet({ intent: intent({ state: 'withdrawn', note: 'the page has changed' }) })).why,
+    'the page has changed',
+  );
 });
 
 test('a check carries the box of the environment the pane is showing, and none where it holds no row', () => {

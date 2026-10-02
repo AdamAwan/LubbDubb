@@ -373,6 +373,14 @@ const realApi = {
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/sheet`),
   pressRemoteSheet: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/run`),
+  giveRemoteOk: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/ok`),
+  withdrawRemoteOk: (issueNumber: number, environment: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/ok/withdraw`),
+  markRemoteNotHere: (issueNumber: number, environment: string, note: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/not-here`, {
+      note,
+    }),
   cancelRemoteRun: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/cancel`),
   reseedRemoteTenant: (issueNumber: number, environment: string) =>
