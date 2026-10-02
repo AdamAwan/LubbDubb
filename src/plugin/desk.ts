@@ -100,6 +100,11 @@ export class PluginDesk {
     return this.cached.status;
   }
 
+  async refresh(): Promise<PluginInstallPayload | null> {
+    this.cached = null;
+    return (await this.status()).state === 'stale' ? this.install() : null;
+  }
+
   install(): Promise<PluginInstallPayload> {
     this.installing ??= this.settle().finally(() => {
       this.installing = null;

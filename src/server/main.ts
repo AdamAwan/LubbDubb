@@ -45,10 +45,16 @@ function announceDesktop(system: System, config: Config, desktopReady: boolean):
 
 function publishPlugin(system: System, config: Config, apiUrl: string): void {
   const bundle = system.plugin.publish({ url: apiUrl, tokenFile: resolve(process.cwd(), config.auth.tokenFile) });
-  if (bundle)
+  if (!bundle) return;
+  console.log(`[lubbdubb] Claude Code plugin ${bundle.version} at ${bundle.marketplaceDir}`);
+  void system.plugin.refresh().then((result) => {
+    if (result === null) return;
     console.log(
-      `[lubbdubb] Claude Code plugin ${bundle.version} at ${bundle.marketplaceDir} — install or update it from the cockpit's MCP tab`,
+      result.ok
+        ? `[lubbdubb] updated the installed Claude Code plugin to ${bundle.version} — sessions pick it up on restart`
+        : `[lubbdubb] could not update the installed Claude Code plugin — see the error log, or update it from the cockpit's MCP tab`,
     );
+  });
 }
 
 function settleRecovery(system: System, crashed: OrphanedWork[]): void {
