@@ -15,6 +15,10 @@ import { Ref } from '../components/refs.js';
 import { planIssueOf } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { Button, ButtonRow, BareButton } from '../components/button.js';
+import { Tag } from '../components/tag.js';
+import { CHECK_STATE_WORDS } from '../components/checkDetail.js';
+import { stateTone } from '../components/validationCheckRows.js';
+import { REACH_TONE } from './goalEnvironments.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -55,8 +59,9 @@ export function taskBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   switch (row.kind) {
     case 'watch':
       return <WatchFinding task={task} view={view} actions={actions} />;
-    case 'validate':
     case 'close_out':
+      return <CloseOutAsk task={task} view={view} actions={actions} />;
+    case 'validate':
       return <ChecksAsk task={task} view={view} actions={actions} checksBelow={checksBelow} />;
     case 'supply':
       return <SupplyAsk task={task} view={view} actions={actions} />;
@@ -176,6 +181,77 @@ function ChecksAsk({
     <>
       <TaskLede task={task} view={view} />
       <GoalChecks originRef={task.originRef} view={view} actions={actions} checksBelow={checksBelow} />
+      <TaskAnswers task={task} view={view} actions={actions} />
+    </>
+  );
+}
+
+/** What closing the goal is closing: the goal, where it is, what was checked and what landed. */
+function CloseOutAsk({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const page = task.originRef === null ? null : buildGoalPage(view.state, task.originRef, view.needsYou, null);
+  if (page === null) {
+    return (
+      <>
+        <TaskLede task={task} view={view} />
+        <TaskAnswers task={task} view={view} actions={actions} />
+      </>
+    );
+  }
+  const checks = page.checks.filter((c) => c.supersededReason === null);
+  const prs = page.closedPullRequests.filter((pr) => pr.merged);
+  return (
+    <>
+      <dl className="cn-closeout">
+        <dt>Goal</dt>
+        <dd>
+          <Ref to={`issue:${page.issue.number}`} />
+          {page.issue.title}
+        </dd>
+        <dt>On</dt>
+        <dd>
+          {page.environments.length === 0
+            ? 'no environments declared'
+            : page.environments.map((env) => (
+                <span key={env.environment} className="cn-closeout-item">
+                  {env.environment}
+                  <Tag tone={REACH_TONE[env.status]} fill={REACH_TONE[env.status] !== undefined}>
+                    {env.status}
+                  </Tag>
+                </span>
+              ))}
+        </dd>
+        <dt>Checks</dt>
+        <dd className="cn-closeout-list">
+          {checks.length === 0
+            ? 'none'
+            : checks.map((check) => (
+                <span key={check.id} className="cn-closeout-item">
+                  <span className="pm-vletter">{check.letter}</span>
+                  <span className="cn-grow">{check.title}</span>
+                  <Tag tone={stateTone(check.state)}>{CHECK_STATE_WORDS[check.state]}</Tag>
+                </span>
+              ))}
+        </dd>
+        <dt>Pull requests</dt>
+        <dd className="cn-closeout-list">
+          {prs.length === 0
+            ? 'none merged'
+            : prs.map((pr) => (
+                <span key={pr.number} className="cn-closeout-item">
+                  <Ref to={`pr:${pr.number}`} />
+                  <span className="cn-grow">{pr.title}</span>
+                </span>
+              ))}
+        </dd>
+      </dl>
       <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
