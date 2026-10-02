@@ -149,19 +149,19 @@ environment with `permits: ["state"]` — read-only, cheap, and nothing driving 
 Stated first, because each boundary is a thing the harness already does and would otherwise be
 re-litigated:
 
-| Not                        | Because                                                                                                                                                                                                                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A new set of checks        | The `check` rows **are** the goal's validation checks ([20](20-validation.md)), assembled against one environment. Nothing here authors a second checklist beside the one an operator already keeps.                                                         |
-| The critical-path suite    | The deployment pipeline runs that on every build, and this design assumes it. The sheet runs the areas **this goal** is about. → [Keeping the critical path lean](#keeping-the-critical-path-lean)                                                           |
+| Not                        | Because                                                                                                                                                                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A new set of checks        | The `check` rows **are** the goal's validation checks ([20](20-validation.md)), assembled against one environment. Nothing here authors a second checklist beside the one an operator already keeps.                                                                             |
+| The critical-path suite    | The deployment pipeline runs that on every build, and this design assumes it. The sheet runs the areas **this goal** is about. → [Keeping the critical path lean](#keeping-the-critical-path-lean)                                                                               |
 | The post-deploy watch      | A watch is **windowed** — it accumulates telemetry over hours and asks _is this behaving_. A sheet row is **point-in-time**, taken at a press. Different clocks, and none of the watch's checks is a row here. → [The watch is not on the sheet](#the-watch-is-not-on-the-sheet) |
-| Local validation           | That drives the machine's one dev environment against work **still in flight**, exploratively, and records no reading on any check ([32](32-local-validation.md)). This runs reviewed specs against a **delivered** goal in a place somebody else deployed.  |
-| A deployment tool          | Nothing here deploys, promotes, approves or rolls back, and nothing writes to the environment. Every command it runs is the project's own, and every query is read-only.                                                                                     |
-| An expiring document       | A sheet does not expire, and a second arrival re-runs the one that exists. A row records **what this goal meant to be true**, and intent does not rot. → [The sheet records intent](#the-sheet-records-intent-and-a-person-retires-it)                       |
-| An obsolescence detector   | Nothing infers that a check has stopped applying. A person waives it, with a reason, through machinery that already exists ([20](20-validation.md#deferral-and-waiving)).                                                                                    |
-| A gate                     | Nothing here holds a dispatch, a merge, a conclusion or a close. A failed row reaches `validation-failed` and changes no verdict. The one hold in the design is a **plan part's**, on an undelivered goal, and it is the plan's hold rather than this one's. |
-| A dispatch input           | The desk that assembles a sheet is a lens over `src/environments/`, and nothing under `src/dispatcher/` may import either. The rule below reads the **store**. → [The lens boundary](#the-lens-boundary)                                                     |
-| An agent's judgement       | An agent runs a command and says where the report landed. **Every** row outcome is folded by the harness out of that report. The tool has no field an agent could state an outcome in. → [The runner contract](#the-runner-contract)                         |
-| Free-form SQL for an agent | A query is written once, read by a person, and accepted against **one environment** on the evidence of a dry run. Nothing runs an unapproved query, ever. → [A query is approved per environment](#a-query-is-approved-by-a-person-before-it-is-ever-run)    |
+| Local validation           | That drives the machine's one dev environment against work **still in flight**, exploratively, and records no reading on any check ([32](32-local-validation.md)). This runs reviewed specs against a **delivered** goal in a place somebody else deployed.                      |
+| A deployment tool          | Nothing here deploys, promotes, approves or rolls back, and nothing writes to the environment. Every command it runs is the project's own, and every query is read-only.                                                                                                         |
+| An expiring document       | A sheet does not expire, and a second arrival re-runs the one that exists. A row records **what this goal meant to be true**, and intent does not rot. → [The sheet records intent](#the-sheet-records-intent-and-a-person-retires-it)                                           |
+| An obsolescence detector   | Nothing infers that a check has stopped applying. A person waives it, with a reason, through machinery that already exists ([20](20-validation.md#deferral-and-waiving)).                                                                                                        |
+| A gate                     | Nothing here holds a dispatch, a merge, a conclusion or a close. A failed row reaches `validation-failed` and changes no verdict. The one hold in the design is a **plan part's**, on an undelivered goal, and it is the plan's hold rather than this one's.                     |
+| A dispatch input           | The desk that assembles a sheet is a lens over `src/environments/`, and nothing under `src/dispatcher/` may import either. The rule below reads the **store**. → [The lens boundary](#the-lens-boundary)                                                                         |
+| An agent's judgement       | An agent runs a command and says where the report landed. **Every** row outcome is folded by the harness out of that report. The tool has no field an agent could state an outcome in. → [The runner contract](#the-runner-contract)                                             |
+| Free-form SQL for an agent | A query is written once, read by a person, and accepted against **one environment** on the evidence of a dry run. Nothing runs an unapproved query, ever. → [A query is approved per environment](#a-query-is-approved-by-a-person-before-it-is-ever-run)                        |
 
 ## The sheet
 
@@ -2405,20 +2405,23 @@ silent:
 ## Routes
 
 `src/server/routes/remoteValidation.ts`, a module and a `ROUTE_MODULES` entry — `app.ts` stays wiring
-only ([16](16-http-api.md#shape)). **All eight are built**, in that one module: a second module for
+only ([16](16-http-api.md#shape)). **All ten are built**, in that one module: a second module for
 the press would put two representations of one surface in two places. Every handler is wrapped in `checked(schemas, handler)` and handed
 `{params, body, req, reply}` already parsed; **a refusal is a returned value and a 400, never a
 throw**.
 
-| Route                                                                            | Does                                                                                                                                           |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/issues/:number/remote-validation/:environment/run`                    | **built.** Press go. The only route here that runs a cycle.                                                                                    |
-| `POST /api/issues/:number/remote-validation/:environment/sheet`                  | **built.** Set up a sheet the pulse did not. → [Setting one up by hand](#setting-one-up-by-hand)                                               |
-| `POST /api/issues/:number/remote-validation/:environment/cancel`                 | **built.** Settle an open run `abandoned`.                                                                                                     |
-| `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`            | **built.** `{selected}` — deselect a row, or take it back.                                                                                     |
-| `POST /api/issues/:number/remote-validation/:environment/queries/:queryId`       | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval.                                     |
-| `POST /api/issues/:number/remote-validation/:environment/reseed`                 | **built.** Invoke the environment's `ensureTenant` where it provisions on demand and its `reseed` where it declares one, and stamp the tenant. |
-| `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                        | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`.                                     |
+| Route                                                                      | Does                                                                                                                                           |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/issues/:number/remote-validation/:environment/run`              | **built.** Press go. Runs a cycle.                                                                                                             |
+| `POST /api/issues/:number/remote-validation/:environment/ok`               | **built.** The OK: dry-run and approve this page's queries, accept its checks, write the intent ([the OK](#the-ok)). Runs a cycle.             |
+| `POST /api/issues/:number/remote-validation/:environment/ok/withdraw`      | **built.** Take back a given OK.                                                                                                               |
+| `POST /api/issues/:number/remote-validation/:environment/not-here`         | **built.** Not validating here, with a required `note`.                                                                                        |
+| `POST /api/issues/:number/remote-validation/:environment/sheet`            | **built.** Set up a sheet the pulse did not. → [Setting one up by hand](#setting-one-up-by-hand)                                               |
+| `POST /api/issues/:number/remote-validation/:environment/cancel`           | **built.** Settle an open run `abandoned`.                                                                                                     |
+| `POST /api/issues/:number/remote-validation/:environment/rows/:rowId`      | **built.** `{selected}` — deselect a row, or take it back.                                                                                     |
+| `POST /api/issues/:number/remote-validation/:environment/queries/:queryId` | **built.** `{accept}`. Runs the dry run in the same call, and writes the `(digest, environment)` approval.                                     |
+| `POST /api/issues/:number/remote-validation/:environment/reseed`           | **built.** Invoke the environment's `ensureTenant` where it provisions on demand and its `reseed` where it declares one, and stamp the tenant. |
+| `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                  | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`.                                     |
 
 **Waiving is not here.** A check the product has moved past is waived through
 `POST /api/issues/:number/validation/:checkId/waive` ([20](20-validation.md#routes)), which already
@@ -2548,12 +2551,11 @@ environment, or queries a deployed store — and passes while doing it. That is 
 lesson exactly ([15](15-integrations.md)): the failure is not that the test breaks, it is that it
 succeeds.
 
-| Seam                                                   | Implementations                                          | Covers                                     |
-| ------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------ |
-| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`     | `at`, for the pin                          |
-| `EnvironmentObserver` (existing)                       | `CommandEnvironmentObserver` · `FakeEnvironmentObserver` | `observe`, for `signal` and `measure` rows |
-| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**     | `state.run`                                |
-| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**   | `ensureTenant`, `reseed`                   |
+| Seam                                                   | Implementations                                        | Covers                   |
+| ------------------------------------------------------ | ------------------------------------------------------ | ------------------------ |
+| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`   | `at`, for the pin        |
+| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**   | `state.run`              |
+| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built** | `ensureTenant`, `reseed` |
 
 **The harness spawns none of the three browser commands, and there is no seam for them.** `runner`,
 `publishArtefacts` and `listSelectors` are all invoked by the run agent in its own shell, from its
@@ -2578,7 +2580,7 @@ Three rules hold them honest:
   absence is**, and both are in `CLAUDE.md` for that reason. There was a third, `remoteRunner`, and the
   `CLAUDE.md` entry that named it is **withdrawn in the same change** the seam is: a sharp edge that is
   no longer real is the stale-documentation failure that file opens by warning about.
-  **`CommandStateReader` parses through the same `src/environments/watchResult.ts` the observer uses**
+  **`CommandStateReader` parses through the same `src/environments/watchResult.ts` the watch's observer uses**
   — the id echo in `lubbdubbWatchId`, the rows-never-counts refusal and `presence`'s zero-means-unknown
   are one implementation. A second parser would pass `knip` (it is used) and pass its own tests, and
   then drift about all three, silently.
@@ -2772,9 +2774,9 @@ without a sheet whether or not anything has been authored — which is the arm t
 guard intact.
 
 The sheet half is built and its tests are in `test/remoteValidationSheet.test.ts` and
-`test/remoteValidationOff.test.ts`: an arrival assembles one sheet of the goal's checks, watches and
-`state` queries; a second arrival re-runs the sheet that exists; an unapproved query is `blocked` and
-says what it waits for, asserted for a `state` query **and** for a live watch check; a query approved
+`test/remoteValidationOff.test.ts`: an arrival assembles one sheet of the goal's checks and
+`state` queries and **never its watch's**; a second arrival re-runs the sheet that exists; an unapproved query is `blocked` and
+says what it waits for; a query approved
 against one environment is still `blocked` on another; a state row on a store nothing can reach is
 `blocked` while every other row on the same sheet still reports; a row of an unpermitted kind is
 `blocked`; **no reading is a `WorldEvent` and nothing is written into `watch_readings`**, asserted
@@ -2789,6 +2791,13 @@ stamp, bench mention, cockpit card, prompt note or spawned command with no `vali
 and all of it with one environment declaring `permits: ["state"]` and a `state.run` — extended, rather
 than duplicated, as each half lands: the press, the cancel and the tenant control are all inert on the
 deployment that configured nothing, and reachable on the same run where one environment did.
+
+The watch's leaving the sheet is asserted in three places: `test/remoteValidationSheet.test.ts`, that
+an arrival's rows are the goal's checks and `state` queries with a live watch check declared beside
+them; `test/remoteValidationConfig.test.ts`, that a `permits` naming `signal` and `measure` still
+parses and comes back without them; and `test/remoteRunIntents.test.ts`, that the boot after the
+change deletes a `signal` row and leaves the `state` row beside it.
+→ [The watch is not on the sheet](#the-watch-is-not-on-the-sheet)
 
 The press half is built and its tests are in `test/remoteValidationPress.test.ts` and
 `test/remoteValidationTenants.test.ts`: two concurrent presses against one `(environment, tenant)`
