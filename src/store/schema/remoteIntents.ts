@@ -7,11 +7,11 @@ export const REMOTE_INTENTS_SCHEMA = `
 CREATE TABLE IF NOT EXISTS remote_run_intents (
   goal_ref    TEXT NOT NULL,      -- issue:<n>
   environment TEXT NOT NULL,
-  state       TEXT NOT NULL,      -- given | withdrawn | consumed
+  state       TEXT NOT NULL,      -- given | withdrawn | consumed | not_here
   fingerprint TEXT NOT NULL,      -- what the OK was given over; '' on a ship-day row
   given_at    TEXT NOT NULL,
   run_id      TEXT,               -- the run a consumed intent opened
-  note        TEXT,               -- why a given intent has not been pressed yet, in the sheet's own words
+  note        TEXT,               -- why a given intent waits, in the sheet's words; the operator's own on not_here
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (goal_ref, environment)
 );

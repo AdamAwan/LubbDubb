@@ -665,16 +665,19 @@ the two probe intervals the freshness guard allows, and the gate used to run the
 sheet, for good, on exactly the goals whose checks took longest to write. Nothing was red: the Validate
 pane read _no run was set up_, and no pulse would ever set one up.
 
-So the check set is read first, and **freshness is the arrival's or the acceptance's**:
+So the check set is read first, and **freshness is the arrival's, the authoring's or the acceptance's**:
 `arrivalSheetStep` (`src/environments/watchWindow.ts`) answers `awaiting-checks` for an arrival whose set
-is not accepted, however old — deferred unstamped, the cap's own arrangement, and re-considered every
-pulse — and `ready` for one whose set was accepted within two probe intervals, however old the arrival.
+is neither accepted nor authored, however old — deferred unstamped, the cap's own arrangement, and
+re-considered every pulse — and `ready` for one whose set was authored or accepted within two probe
+intervals, however old the arrival. **A sheet is drawn once its set is written**, before anyone has
+accepted it, because the OK is where it gets accepted ([the OK](#the-ok)); the press refuses `409` on
+a set authored and not yet released, so nothing runs on checks nobody accepted.
 `CheckSetStanding` carries the acceptance time (`validation_plans.released_at`); a set released before
 that stamp existed has none, and is judged on the arrival alone. The backfill guard is intact where it
 matters: the pulse an operator adds a `validate` block stamps every goal whose work **and** checks were
 both settled long ago, which is the history it exists to keep out. The acceptance is read before the
-stamp as well, so a stamped arrival whose checks are still unaccepted reads `awaiting-checks` — never
-`sheeted`, which therefore always means a set is there to run. What it costs is one read of the plan
+stamp as well, so a stamped arrival whose checks are not yet written reads `awaiting-checks` — never
+`sheeted`, which therefore always means a set is there to read. What it costs is one read of the plan
 records per pulse (`RemoteValidationDesk.checkSets`), with a goal's checks read only where no stamp
 decides.
 
@@ -871,11 +874,14 @@ The OK runs in two steps, because a dry run is a spawn of up to a minute and can
 transaction. First every `state` query of the goal not yet approved **here** is dry-run and approved
 where it answered, through `ruleStateQuery` — the same consent the row's own button gives, given on a
 page that names the place and shows the text. A query whose dry run did not answer is not approved; the
-route returns it in `refused`, and the rest of the page does not wait for it. Then an **intent** is
-written: one `remote_run_intents` row per `(goal, environment)`, `given`, with a fingerprint of what the
-page held.
+route returns it in `refused`, and the rest of the page does not wait for it. Then **the check set is
+accepted** if nobody has yet — through `ProposalDesk.accept` where its card is pending, so the proposal
+and escalation close the ordinary way, and released directly where no card was ever filed. Rows the fold
+holds and the sheet does not — a check authored since the sheet was assembled — are added. Then an
+**intent** is written: one `remote_run_intents` row per `(goal, environment)`, `given`, with a
+fingerprint of what the page held.
 
-**The fingerprint is the page as the operator read it**: every row on the sheet, a check by its title,
+**The fingerprint is the page as the operator read it**: every row the fold holds now, a check by its title,
 `do`, `expect`, `proof` and steps, a query by its digest. A re-authored set, an amended check or an
 edited query moves it; a reading, a selection or an approval does not. An intent whose fingerprint has
 moved is **not pressed** — it says so, and waits for the OK to be given again. Consent to a page is
@@ -888,6 +894,11 @@ only when all three allow it — so a queued OK spawns no `at` probe while it wa
 be pressed carries a `note` saying why, in the sheet's words: the tenant variable or command that would
 supply one, or _queued behind the run for issue:398_. A press that opens a run marks the intent
 `consumed` with the run's id. Nothing re-opens a run on its own: an OK is consumed once.
+
+**Not validating here** (`…/not-here`, a required `note`) records that this environment will not be
+validated for this goal: a `not_here` intent carrying the operator's reason. The pulse presses nothing
+for it, and it answers the page's hold on the `validate` row
+([20](20-validation.md#saying-so-on-the-bench)); an OK given afterwards replaces it.
 
 **Withdraw** (`…/ok/withdraw`) takes back a `given` OK; it is a conditional flip, so there is nothing to
 take back twice. **An OK given after a run is a run again** — `giveIntent` replaces whatever the last
@@ -2388,7 +2399,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                                                                                                                               |
 | `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned and last reseeded                                                                                                                                                                                                                                    |
-| `remote_run_intents`     | `(goal_ref, environment)`     | **built.** `OR REPLACE` on each OK; `withdrawn` and `consumed` are conditional flips from `given`; a ship-day `consumed` row per existing sheet                                                                                                                                                             |
+| `remote_run_intents`     | `(goal_ref, environment)`     | **built.** `OR REPLACE` on each OK and on _not validating here_ (`not_here`); `withdrawn` and `consumed` are conditional flips from `given`; a ship-day `consumed` row per existing sheet                                                                                                                   |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the
 environment went back past the goal's work is the case an operator actually hits, and its reason has

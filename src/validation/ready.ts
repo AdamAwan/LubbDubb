@@ -19,6 +19,8 @@ interface ValidationReadyInput {
   checks: ReadonlyMap<string, readonly ValidationCheck[]>;
   /** The sheet rows an arrival assembled, by goal — one line each on the row's detail. */
   sheetRows: ReadonlyMap<string, readonly RemoteSheetRow[]>;
+  /** The environments whose sheet holds a row to OK and has no OK, by goal. → docs/spec/36-remote-validation.md#the-ok */
+  awaitingOk?: ReadonlyMap<string, readonly string[]>;
   opened: ReadonlySet<string> | null;
   /** Goals whose check set is released; null reads every set as released. */
   released: ReadonlySet<string> | null;
@@ -60,8 +62,9 @@ function deliveryStep(
 ): ValidationReadyStep | null {
   const live = liveChecks(input.checks.get(originRef) ?? []);
   const owed = live.filter(owedToAPerson);
+  const awaiting = awaitingOkOf(input, originRef);
 
-  if (owed.length === 0) {
+  if (owed.length + awaiting.length === 0) {
     if (existing?.status !== 'open') return null;
     return { kind: 'settle', taskId: existing.id, status: 'done', resolution: settledResolution(live.length) };
   }
@@ -79,7 +82,7 @@ function deliveryStep(
     return {
       kind: 'reopen',
       taskId: existing.id,
-      detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef)),
+      detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
     };
   }
   if (!admits(input.opened, originRef) && !existing) return null;
@@ -88,8 +91,12 @@ function deliveryStep(
     kind: 'file',
     originRef,
     title: validateTitle(originRef),
-    detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef)),
+    detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
   };
+}
+
+function awaitingOkOf(input: ValidationReadyInput, originRef: string): readonly string[] {
+  return input.awaitingOk?.get(originRef) ?? [];
 }
 
 function admits(gate: ReadonlySet<string> | null, originRef: string): boolean {
@@ -116,9 +123,16 @@ function validateDetail(
   live: readonly ValidationCheck[],
   owed: number,
   sheetRows: readonly RemoteSheetRow[] | undefined,
+  awaitingOk: readonly string[],
 ): string {
   const name = issue ? `**${issue.title}**` : 'This goal';
   const lines = [
+    ...(awaitingOk.length === 0
+      ? []
+      : [
+          `Its validation page on ${awaitingOk.join(', ')} is waiting for your OK — nothing there runs until you give it.`,
+          '',
+        ]),
     `${name} is delivered, and its validation plan has ${count(owed, 'check')} for you to run — of ${count(live.length, 'check')} in all.`,
     '',
     ...outstandingChecks(live),

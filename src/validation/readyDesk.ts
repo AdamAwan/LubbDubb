@@ -5,6 +5,7 @@ import type { Store } from '../store/store.js';
 import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { checkSetReleased } from './planApproval.js';
 import { validationReadyPass } from './ready.js';
+import { sheetsAwaitingOk } from './remote/intent.js';
 
 // → docs/spec/20-validation.md
 
@@ -32,6 +33,7 @@ export class ValidationReadyDesk {
       checks,
       released: this.releasedOf(checks),
       sheetRows: this.sheetRowsByOrigin(),
+      awaitingOk: this.awaitingOk(),
       watchCleared: watchClearedGoals(
         'validate',
         this.environments,
@@ -84,6 +86,7 @@ export class ValidationReadyDesk {
       existing: open,
       checks: this.checksByOrigin([originRef]),
       sheetRows: this.sheetRowsByOrigin(),
+      awaitingOk: this.awaitingOk(),
       opened: null,
       released: null,
       watchCleared: null,
@@ -103,6 +106,15 @@ export class ValidationReadyDesk {
       if (checkSetReleased({ record: this.store.validation.getValidationPlanRecord(originRef), checks: its }))
         out.add(originRef);
     return out;
+  }
+
+  private awaitingOk(): Map<string, string[]> {
+    if (!this.environments.some((e) => e.validate !== undefined)) return new Map();
+    return sheetsAwaitingOk(
+      this.store.remoteValidation.listRemoteSheets(),
+      this.store.remoteValidation.listRemoteSheetRows(),
+      this.store.remoteIntents.listIntents(),
+    );
   }
 
   private sheetRowsByOrigin(): Map<string, RemoteSheetRow[]> {

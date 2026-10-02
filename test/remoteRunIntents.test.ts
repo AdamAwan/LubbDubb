@@ -16,7 +16,10 @@ import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObser
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { StateQueryInput } from '../src/types.js';
+import type { RemoteRunIntent, RemoteSheetRow, StateQueryInput } from '../src/types.js';
+import { okable, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
+import { validationReadyPass } from '../src/validation/ready.js';
+import { arrivalSheetStep } from '../src/environments/watchWindow.js';
 
 /*
  * The OK and the desk arm that presses it. → docs/spec/36-remote-validation.md#the-ok
@@ -45,7 +48,12 @@ const QUERY: StateQueryInput = {
 };
 
 function bench(
-  opts: { environments?: EnvironmentConfig[]; env?: Record<string, string | undefined>; presence?: unknown[] } = {},
+  opts: {
+    environments?: EnvironmentConfig[];
+    env?: Record<string, string | undefined>;
+    presence?: unknown[];
+    accepted?: string[];
+  } = {},
 ) {
   const environments = opts.environments ?? [ACCEPTANCE];
   const store = new Store(':memory:');
@@ -76,7 +84,18 @@ function bench(
     now: () => NOW,
     env: opts.env ?? {},
   });
-  const intents = new RemoteIntentDesk({ store, environments, desk, runs });
+  const intents = new RemoteIntentDesk({
+    store,
+    environments,
+    desk,
+    runs,
+    proposals: {
+      accept: async (id: string) => {
+        opts.accepted?.push(id);
+        return null;
+      },
+    },
+  });
   const environment = environments[0]!;
   store.remoteValidation.saveStateQueries('issue:12', [QUERY], 'agent');
   store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
@@ -229,4 +248,141 @@ test('ship day: every sheet from before the table gets a consumed intent, once',
   const later = new Store(path);
   assert.equal(later.remoteIntents.getIntent('issue:15', 'acceptance'), null, 'a later boot consumes nothing');
   later.close();
+});
+
+test('the OK accepts an authored set nobody has answered: through the card where one is pending', async () => {
+  const accepted: string[] = [];
+  const b = bench({ accepted });
+  try {
+    b.store.validation.recordValidationAuthoring('issue:12', { note: '', emptyReason: null });
+    const pressed = await b.runs.press('issue:12', 'acceptance');
+    assert.equal(!pressed.ok && pressed.code, 409, 'nothing runs on checks nobody accepted');
+
+    const card = b.store.escalations.createProposal({
+      kind: 'validation_plan',
+      ref: 'issue:12:validate-plan',
+      action: { type: 'noop' } as never,
+      escalationId: null,
+    });
+    await b.intents.give('issue:12', 'acceptance');
+    assert.deepEqual(accepted, [card.id], 'the card’s own accept, so its proposal and escalation close');
+  } finally {
+    b.close();
+  }
+});
+
+test('the OK releases an authored set directly where no card was ever filed', async () => {
+  const b = bench();
+  try {
+    b.store.validation.recordValidationAuthoring('issue:12', { note: '', emptyReason: null });
+    await b.intents.give('issue:12', 'acceptance');
+    assert.notEqual(b.store.validation.getValidationPlanRecord('issue:12')?.releasedAt, null);
+    await b.intents.run();
+    assert.equal(intentOf(b.store)?.state, 'consumed');
+  } finally {
+    b.close();
+  }
+});
+
+test('not validating here records the operator’s reason and asks nothing more', () => {
+  const b = bench();
+  try {
+    assert.equal(b.intents.notHere('issue:12', 'nowhere', 'no such sheet'), null);
+    const marked = b.intents.notHere('issue:12', 'acceptance', 'acceptance is being rebuilt this week');
+    assert.equal(marked?.state, 'not_here');
+    assert.equal(marked?.note, 'acceptance is being rebuilt this week');
+  } finally {
+    b.close();
+  }
+});
+
+const SHEET = { goalRef: 'issue:12', environment: 'acceptance', assembledAt: '2026-09-08T12:00:00.000Z' };
+
+function sheetRow(over: Partial<RemoteSheetRow> = {}): RemoteSheetRow {
+  return {
+    goalRef: 'issue:12',
+    environment: 'acceptance',
+    rowId: `state:${QUERY.id}`,
+    kind: 'state',
+    seq: 1,
+    title: QUERY.title,
+    sourceId: QUERY.id,
+    selected: true,
+    blockedReason: null,
+    awaitingApproval: false,
+    matched: null,
+    idleReason: null,
+    ...over,
+  };
+}
+
+function intent(state: RemoteRunIntent['state']): RemoteRunIntent {
+  return {
+    goalRef: 'issue:12',
+    environment: 'acceptance',
+    state,
+    fingerprint: '',
+    givenAt: SHEET.assembledAt,
+    runId: null,
+    note: null,
+    updatedAt: SHEET.assembledAt,
+  };
+}
+
+test('a sheet with a row to OK and no OK is awaiting it; an answered one, or one with nothing to OK, is not', () => {
+  assert.deepEqual([...sheetsAwaitingOk([SHEET], [sheetRow()], [])], [['issue:12', ['acceptance']]]);
+  assert.equal(sheetsAwaitingOk([SHEET], [sheetRow()], [intent('withdrawn')]).size, 1, 'a withdrawn OK is no OK');
+  for (const state of ['given', 'consumed', 'not_here'] as const)
+    assert.equal(sheetsAwaitingOk([SHEET], [sheetRow()], [intent(state)]).size, 0, state);
+
+  assert.equal(okable(sheetRow({ blockedReason: 'not approved here', awaitingApproval: true })), true);
+  assert.equal(okable(sheetRow({ blockedReason: 'does not permit state rows' })), false);
+  assert.equal(okable(sheetRow({ idleReason: 'a person carries it' })), false);
+  assert.equal(okable(sheetRow({ selected: false })), false);
+  assert.equal(sheetsAwaitingOk([SHEET], [sheetRow({ selected: false })], []).size, 0, 'nothing to OK, no hold');
+});
+
+test('the validate row is held open while a page awaits its OK, though no check is owed to a person', () => {
+  const input = {
+    issues: [],
+    deliveries: [
+      {
+        originRef: 'issue:12',
+        summary: 'PR #40 landed it',
+        detail: null,
+        by: 'assessor' as const,
+        agentId: null,
+        taskId: null,
+        decidedAt: SHEET.assembledAt,
+        updatedAt: SHEET.assembledAt,
+      },
+    ],
+    shortfalls: [],
+    existing: [],
+    checks: new Map(),
+    sheetRows: new Map(),
+    opened: null,
+    released: null,
+    watchCleared: null,
+  };
+  assert.deepEqual(validationReadyPass(input), [], 'nothing owed and nothing awaiting: no row');
+  const held = validationReadyPass({ ...input, awaitingOk: new Map([['issue:12', ['acceptance']]]) });
+  assert.equal(held[0]?.kind, 'file');
+  assert.match(held[0]?.kind === 'file' ? held[0].detail : '', /on acceptance is waiting for your OK/);
+});
+
+test('a sheet is drawn once its checks are written, before anyone has accepted them', () => {
+  const arrival = {
+    goalRef: 'issue:12',
+    environment: 'acceptance',
+    arrivedAt: new Date(NOW - 86_400_000).toISOString(),
+    announcedAt: null,
+    watchedAt: null,
+    sheetedAt: null,
+  };
+  const step = (checkSet: { accepted: boolean; acceptedAt: string | null; authoredAt: string | null }) =>
+    arrivalSheetStep({ arrival, validates: true, checkSet: () => checkSet, probeIntervalMs: 60_000, now: NOW });
+
+  assert.equal(step({ accepted: false, acceptedAt: null, authoredAt: null }), 'awaiting-checks');
+  assert.equal(step({ accepted: false, acceptedAt: null, authoredAt: new Date(NOW).toISOString() }), 'ready');
 });

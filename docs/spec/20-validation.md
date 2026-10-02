@@ -1039,6 +1039,13 @@ find, the tenant's age — lands with the pre-flight. The press is a person's ac
 for one even where every remaining check is automatable, and **no second bench kind is added**: a
 sheet waiting to be run is this row's business. → [36](36-remote-validation.md#the-desk)
 
+**A page awaiting its OK holds the row as a check owed to a person does.** A goal's environment whose
+sheet holds at least one row to OK — one a press would read or hand an agent, or a query still waiting
+for its approval there — and no OK (none given, or one withdrawn) counts in the file, settle and reopen
+arms alike, and the detail says which environments are waiting. That is what keeps the close-out from
+being asked for before anybody has seen the page. A sheet with nothing to OK holds nothing, and
+_Not validating here_ answers it. → [36](36-remote-validation.md#the-ok)
+
 **The cockpit draws the row as the checks themselves**, not as the sentence naming them: the goal's own
 check rows, with the ones still owed already open, under the desk's prose. The detail above them is
 still what this desk writes and still refreshed every pulse — it is what the row says on every surface

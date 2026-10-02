@@ -142,6 +142,13 @@ export class RemoteRunDesk extends EventEmitter {
       !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
     )
       return { ok: false, code: 404, error: `no validation sheet is assembled for this goal on "${environmentName}".` };
+    const plan = store.validation.getValidationPlanRecord(goalRef);
+    if (plan?.authoredAt != null && plan.releasedAt === null)
+      return {
+        ok: false,
+        code: 409,
+        error: "this goal's checks are not accepted yet — the OK accepts them, or the card does.",
+      };
 
     const rows = store.remoteValidation
       .listRemoteSheetRows()

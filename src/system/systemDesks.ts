@@ -31,6 +31,7 @@ import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteValidationDesk } from '../validation/remote/desk.js';
 import { RemoteRunDesk } from '../validation/remote/run.js';
 import { RemoteIntentDesk } from '../validation/remote/intent.js';
+import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants.js';
@@ -103,7 +104,12 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
 
 export type EnvironmentDesks = ReturnType<typeof buildEnvironmentDesks>;
 
-export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: Foundation) {
+export function buildEnvironmentDesks(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  proposals: Pick<ProposalDesk, 'accept'>,
+) {
   const { store, sink, errors, gitObserver } = base;
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
   const environments = new EnvironmentDesk({
@@ -132,7 +138,11 @@ export function buildEnvironmentDesks(config: Config, opts: BuildOptions, base: 
     environments: config.environments,
     observer: environmentObserver,
   });
-  return { environments, watchDryRun, ...buildRemoteValidationDesks(config, opts, base, environmentObserver) };
+  return {
+    environments,
+    watchDryRun,
+    ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
+  };
 }
 
 function buildRemoteValidationDesks(
@@ -140,6 +150,7 @@ function buildRemoteValidationDesks(
   opts: BuildOptions,
   base: Foundation,
   environmentObserver: EnvironmentObserver,
+  proposals: Pick<ProposalDesk, 'accept'>,
 ) {
   const { store, sink, errors, gitObserver } = base;
   const stateQueries = new StateQueryDesk({
@@ -188,6 +199,7 @@ function buildRemoteValidationDesks(
     environments: config.environments,
     desk: remoteValidation,
     runs: remoteRuns,
+    proposals,
     errors,
   });
 

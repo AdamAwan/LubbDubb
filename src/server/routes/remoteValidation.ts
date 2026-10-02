@@ -19,6 +19,16 @@ const RulingBody = z.object({
   }),
 });
 
+const NotHereBody = z.object({
+  note: z
+    .string({
+      required_error: 'note is required — say why this environment will not be validated for this goal',
+      invalid_type_error: 'note is required — say why this environment will not be validated for this goal',
+    })
+    .trim()
+    .min(1, 'note is required — say why this environment will not be validated for this goal'),
+});
+
 const EnvironmentParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
 const TenantCommandParams = z.object({ environment: z.string().min(1, 'environment is required') });
 const RowParams = EnvironmentParams.extend({ rowId: z.string().min(1, 'rowId is required') });
@@ -240,6 +250,19 @@ function registerOkRoutes(app: FastifyInstance, { system, hub }: RouteContext): 
       if (withdrawn === null) return reply.code(404).send({ error: 'there is no OK waiting here to take back.' });
       hub.broadcast({ type: 'dirty', sections: ['goals'] });
       return { ok: true, intent: withdrawn };
+    }),
+  );
+
+  app.post(
+    '/api/issues/:number/remote-validation/:environment/not-here',
+    checked({ params: EnvironmentParams, body: NotHereBody }, ({ params, body, reply }) => {
+      const marked = system.remoteIntents.notHere(issueOrigin(params.number), params.environment, body.note);
+      if (marked === null)
+        return reply
+          .code(404)
+          .send({ error: `no validation sheet is assembled for this goal on "${params.environment}".` });
+      hub.broadcast({ type: 'dirty', sections: ['goals'] });
+      return { ok: true, intent: marked };
     }),
   );
 }

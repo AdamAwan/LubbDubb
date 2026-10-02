@@ -48,6 +48,19 @@ export class RemoteIntentStore {
     return this.getIntent(goalRef, environment)!;
   }
 
+  /** The operator's word that this environment will not be validated for this goal, with their reason. */
+  markNotHere(goalRef: string, environment: string, note: string): RemoteRunIntent {
+    const now = this.ctx.now();
+    this.ctx
+      .prep(
+        `INSERT OR REPLACE INTO remote_run_intents
+           (goal_ref, environment, state, fingerprint, given_at, run_id, note, updated_at)
+         VALUES (?, ?, 'not_here', '', ?, NULL, ?, ?)`,
+      )
+      .run(goalRef, environment, now, note, now);
+    return this.getIntent(goalRef, environment)!;
+  }
+
   /** Only a given intent is withdrawn or consumed; the flip is conditional, so a second one finds nothing. */
   withdrawIntent(goalRef: string, environment: string): RemoteRunIntent | null {
     return this.settle(goalRef, environment, 'withdrawn', null);

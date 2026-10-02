@@ -39,15 +39,18 @@ export function checkSetReleased(input: {
 export interface CheckSetStanding {
   accepted: boolean;
   acceptedAt: string | null;
+  /** When the validation planner wrote the set, released or not; null for an ingested set. */
+  authoredAt?: string | null;
 }
 
 export function checkSetStanding(
   record: ValidationPlanRecord | null,
   checks: () => readonly ValidationCheck[],
 ): CheckSetStanding {
-  if (record?.releasedAt != null) return { accepted: true, acceptedAt: record.releasedAt };
-  if (record?.authoredAt != null) return { accepted: false, acceptedAt: null };
-  return { accepted: checks().length > 0, acceptedAt: null };
+  const authoredAt = record?.authoredAt ?? null;
+  if (record?.releasedAt != null) return { accepted: true, acceptedAt: record.releasedAt, authoredAt };
+  if (authoredAt !== null) return { accepted: false, acceptedAt: null, authoredAt };
+  return { accepted: checks().length > 0, acceptedAt: null, authoredAt: null };
 }
 
 /**

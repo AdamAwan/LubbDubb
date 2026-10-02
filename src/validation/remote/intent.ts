@@ -3,9 +3,12 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { Store } from '../../store/store.js';
 import { queryDigest } from '../../store/remoteValidation.js';
-import type { RemoteRunIntent } from '../../types.js';
+import type { RemoteRunIntent, RemoteSheet, RemoteSheetRow } from '../../types.js';
 import type { RemoteValidationDesk } from './desk.js';
 import type { RemoteRunDesk } from './run.js';
+import type { ProposalDesk } from '../../proposals/proposalDesk.js';
+import { validationPlanProposalRef } from '../planApproval.js';
+import { issueOriginNumber } from '../../issueOrigins.js';
 
 // → docs/spec/36-remote-validation.md#the-ok
 
@@ -14,6 +17,8 @@ interface RemoteIntentDeps {
   environments: readonly EnvironmentConfig[];
   desk: RemoteValidationDesk;
   runs: RemoteRunDesk;
+  /** Accepts the goal's check set through the card's own path, so its proposal and escalation close. */
+  proposals: Pick<ProposalDesk, 'accept'>;
   errors?: ErrorRecorder;
 }
 
@@ -48,8 +53,54 @@ export class RemoteIntentDesk {
           refused.push({ queryId: query, detail: ruled.reading?.blocked ?? 'the dry run did not answer' });
       }
 
-    const intent = store.remoteIntents.giveIntent(goalRef, environmentName, this.fingerprint(goalRef, environmentName));
+    await this.acceptCheckSet(goalRef, environmentName);
+    this.addNewRows(goalRef, environment);
+    const intent = store.remoteIntents.giveIntent(goalRef, environmentName, this.fingerprint(goalRef, environment));
     return { ok: true, intent, refused };
+  }
+
+  /** @public the seam the not-validating-here route records an operator's word through */
+  notHere(goalRef: string, environmentName: string, note: string): RemoteRunIntent | null {
+    const { store } = this.deps;
+    if (
+      !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
+    )
+      return null;
+    return store.remoteIntents.markNotHere(goalRef, environmentName, note);
+  }
+
+  /**
+   * The OK accepts the set the page shows if nobody has yet. Through the card's own accept where one is
+   * pending, so its proposal and escalation close the ordinary way; released directly where none was
+   * ever filed, because then there is nothing to close.
+   */
+  private async acceptCheckSet(goalRef: string, environmentName: string): Promise<void> {
+    const { store } = this.deps;
+    const record = store.validation.getValidationPlanRecord(goalRef);
+    if (record?.authoredAt == null || record.releasedAt !== null) return;
+    const number = issueOriginNumber('root', goalRef);
+    const ref = number === null ? null : validationPlanProposalRef(number);
+    const pending = store.escalations
+      .listProposals()
+      .find((p) => p.kind === 'validation_plan' && p.status === 'pending' && p.ref === ref);
+    if (pending === undefined) store.validation.releaseValidationPlan(goalRef);
+    else await this.deps.proposals.accept(pending.id, `Accepted with the OK on ${environmentName}.`);
+  }
+
+  /** Rows the fold holds and the sheet does not yet — a check authored since the sheet was assembled. */
+  private addNewRows(goalRef: string, environment: EnvironmentConfig): void {
+    const { remoteValidation } = this.deps.store;
+    const held = new Set(
+      remoteValidation
+        .listRemoteSheetRows()
+        .filter((r) => r.goalRef === goalRef && r.environment === environment.name)
+        .map((r) => r.rowId),
+    );
+    const fresh = this.deps.desk
+      .fold(environment, goalRef)
+      .filter((r) => !held.has(r.rowId))
+      .map(({ run: _run, ...row }) => row);
+    if (fresh.length > 0) remoteValidation.saveRemoteSheetRows(goalRef, environment.name, fresh);
   }
 
   /** @public the seam the withdraw route takes an OK back through */
@@ -75,7 +126,14 @@ export class RemoteIntentDesk {
   private async press(intent: RemoteRunIntent): Promise<void> {
     const { store, runs } = this.deps;
     const { goalRef, environment } = intent;
-    if (this.fingerprint(goalRef, environment) !== intent.fingerprint)
+    const config = this.deps.environments.find((e) => e.name === environment);
+    if (config?.validate === undefined)
+      return store.remoteIntents.noteIntent(
+        goalRef,
+        environment,
+        `"${environment}" no longer declares a "validate" block.`,
+      );
+    if (this.fingerprint(goalRef, config) !== intent.fingerprint)
       return store.remoteIntents.noteIntent(
         goalRef,
         environment,
@@ -112,7 +170,7 @@ export class RemoteIntentDesk {
    * is its wording and steps, a query its digest — so a re-authored set, an amended check or an edited
    * query moves it, and a reading, a selection or an approval does not.
    */
-  private fingerprint(goalRef: string, environmentName: string): string {
+  private fingerprint(goalRef: string, environment: EnvironmentConfig): string {
     const { store } = this.deps;
     const checks = new Map(store.validation.listValidationChecks(goalRef).map((c) => [c.id, c]));
     const queries = new Map(
@@ -127,9 +185,8 @@ export class RemoteIntentDesk {
         .filter((w) => w.originRef === goalRef)
         .map((w) => [w.id, queryDigest(w.query, w.presence ?? '')]),
     );
-    const parts = store.remoteValidation
-      .listRemoteSheetRows()
-      .filter((r) => r.goalRef === goalRef && r.environment === environmentName)
+    const parts = this.deps.desk
+      .fold(environment, goalRef)
       .map((r) => {
         if (r.kind === 'check') {
           const c = checks.get(r.sourceId);
@@ -140,4 +197,32 @@ export class RemoteIntentDesk {
       .sort();
     return createHash('sha256').update(parts.join('\x01')).digest('hex').slice(0, 32);
   }
+}
+
+/**
+ * A row there is something to OK for: one a press would read or hand an agent, or a query still waiting
+ * for its approval here. A row blocked for any other reason, or a person's, is not asked about.
+ */
+export function okable(row: RemoteSheetRow): boolean {
+  return row.selected && row.idleReason === null && (row.blockedReason === null || row.awaitingApproval);
+}
+
+/**
+ * Each goal's environments whose sheet holds a row to OK and has no OK: no intent at all, or one taken
+ * back. A sheet with nothing to OK holds nothing. → docs/spec/36-remote-validation.md#the-ok
+ */
+export function sheetsAwaitingOk(
+  sheets: readonly RemoteSheet[],
+  rows: readonly RemoteSheetRow[],
+  intents: readonly RemoteRunIntent[],
+): Map<string, string[]> {
+  const answered = new Set(intents.filter((i) => i.state !== 'withdrawn').map((i) => `${i.goalRef} ${i.environment}`));
+  const asking = new Set(rows.filter(okable).map((r) => `${r.goalRef} ${r.environment}`));
+  const out = new Map<string, string[]>();
+  for (const sheet of sheets) {
+    const key = `${sheet.goalRef} ${sheet.environment}`;
+    if (answered.has(key) || !asking.has(key)) continue;
+    out.set(sheet.goalRef, [...(out.get(sheet.goalRef) ?? []), sheet.environment]);
+  }
+  return out;
 }

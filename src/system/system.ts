@@ -150,7 +150,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const crew = buildAgentManager(config, base, runtime, channels, late);
   const fleet = buildFleet(config, opts, base, runtime, channels, crew);
   const intake = buildIntakeDesks(config, opts, base, channels);
-  const envs = buildEnvironmentDesks(config, opts, base);
+  const envs = buildEnvironmentDesks(config, opts, base, fleet.proposals);
   const bench = {
     ...buildBenchDesks(config, opts, base, channels, fleet),
     graph: new WorkGraphRecorder({ store: base.store, errors: base.errors }),
