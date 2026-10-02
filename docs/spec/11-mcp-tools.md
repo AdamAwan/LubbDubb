@@ -1433,7 +1433,10 @@ skipped) and `skipped`. For an agent's own question — an escalation or a permi
 proposal behind it — the full `question` rides beside the row, because the row's `title` is one line
 of it and the answer is typed straight into the agent. A proposal's body is not quoted: it is read
 with `proposal_read`, which applies the reveal gate ([above](#a-withheld-plan-is-withheld-here-too)).
-An empty queue says so in a sentence, and one emptied only by skips says that instead.
+An empty queue says so in a sentence, and one emptied only by skips says that instead. Handed an
+`id`, it returns that standing ask instead of the head — skipped or not — which is how the panel's
+press on one ask opens the loop at it (`/lubbdubb:next <id>`); an id not standing is refused, as
+`ask_skip` refuses one.
 
 **It reads the setup reading the cockpit reads.** The config rows come off the last reading
 `/api/setup` took, and that holder is `System.setupReading` — the route writes it and both
@@ -1664,10 +1667,11 @@ asks in order and points at `/lubbdubb:next`.
   links to the URL `refUrls` carries for it, as the cockpit's `<Ref>` does. The engine refuses the
   whole tree over one malformed `href`, so a URL that is not plain-ASCII `https:` without an `@` is
   drawn as text instead — one bad URL never blanks the panel.
-- **Every press drafts; nothing is sent for the operator.** An ask and a feature each
-  `$.prompt.fill` the prompt box with a sentence — the ask to decide, the feature's state to explain
-  — and Work through asks, on the band and on the panel, fills it with `/lubbdubb:next`; the operator
-  presses Enter. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
+- **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
+  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, and Work through asks, on the
+  band and on the panel, with `/lubbdubb:next`; the operator presses Enter. A plain sentence would
+  leave whether a skill loads to description matching, and the skill is where the rules for the
+  conversation live. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
   and says nothing meanwhile, so an operator clicks again and gets two turns; a draft replaces the
   last one and is in front of them at once. The band's button used to `$.command.run` the skill.
 - **It settles no ask.** `/board` points at `/lubbdubb:next` and the cockpit, where every write goes
