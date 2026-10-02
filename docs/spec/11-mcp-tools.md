@@ -1380,6 +1380,34 @@ Per-connection state is the reason `SocketChannel` mints a connection id: a clai
 connection, so closing that terminal releases it and a second terminal sharing the same token cannot
 release the first one's check.
 
+### The notice board
+
+`mods/lubbdubb-board/` is a Claude Code **mod** (a plugin of function hooks) for the same operator's
+own Claude Code. The `/lubbdubb` skill answers only when asked; the board answers without being
+asked. It draws one line above the prompt — `LubbDubb · 1 question · 2 to approve · 1 task for you ·
+fleet paused` — raises a toast for each item that is new since its last look, and adds `/board`,
+which lists the items.
+
+- **It is a reader of the HTTP API, not of this channel.** It polls `GET
+/api/state?sections=inbox,control` ([16](16-http-api.md)) every 30 seconds with the cockpit's
+  bearer token: `LUBBDUBB_TOKEN` if set, else the file its `tokenFile` option names. The MCP socket
+  is for a model making calls; nothing here is a model, and the board costs no tokens.
+- **It counts what the cockpit's inbox counts:** open escalations, `pending` proposals, `open`
+  human tasks, and `control.paused`. Plan text a withheld plan would show never reaches it, because
+  `inboxSection` already masks it before the wire.
+- **It settles nothing.** No button on the board writes; `/board` points at `/lubbdubb fleet` and
+  the cockpit, where every write goes through the object the cockpit's click goes through
+  ([above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)).
+- **A harness it cannot reach draws nothing.** An unanswered or refused poll clears the board, so a
+  stopped harness never leaves a stale count standing, and `/board` says it is not answering.
+- **The first look toasts nothing.** Toasts are the difference between two looks, so starting a
+  session with ten items waiting draws the line, not ten toasts.
+
+It is loaded with `claude --plugin-dir <repo>/mods/lubbdubb-board`, or by naming that folder in
+`CLAUDE_CODE_PLUGIN_DIRS`. The mod API is early access and changes between Claude Code releases;
+`claude plugin validate` and `claude plugin test` on the folder are its checks, and `npm run check`
+does not run them.
+
 ## The wire protocol
 
 `src/mcp/protocol.ts`, pure. MCP revision `2024-11-05`. Only the methods a tools-only server must

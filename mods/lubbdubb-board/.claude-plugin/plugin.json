@@ -1,0 +1,20 @@
+{
+  "name": "lubbdubb-board",
+  "version": "0.1.0",
+  "description": "A notice board above the prompt: what LubbDubb is waiting on you for.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "LubbDubb URL",
+      "description": "Where the harness serves its API.",
+      "default": "http://127.0.0.1:4300"
+    },
+    "tokenFile": {
+      "type": "string",
+      "title": "Token file",
+      "description": "The harness's auth.tokenFile, read when LUBBDUBB_TOKEN is unset. Absolute, or relative to the session's folder.",
+      "default": ".lubbdubb/cockpit-token"
+    }
+  }
+}

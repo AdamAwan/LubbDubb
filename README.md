@@ -267,6 +267,15 @@ start, so the registration keeps working; the `/lubbdubb` skill is rewritten alo
 and nothing breaks: every check simply falls to the fleet.
 → [docs/spec/20](docs/spec/20-validation.md#the-desktop-channel)
 
+Optional: a **notice board** above your Claude Code prompt, showing what the harness is waiting on
+you for, with a toast when something new arrives. Load the mod and give it the token:
+
+```
+LUBBDUBB_TOKEN=$(cat <lubbdubb>/.lubbdubb/cockpit-token) claude --plugin-dir <lubbdubb>/mods/lubbdubb-board
+```
+
+→ [docs/spec/11](docs/spec/11-mcp-tools.md#the-notice-board)
+
 Then: use **Inject event** to simulate the world moving (a CI failure, a review comment) and watch the
 harness react; click an agent to see its live transcript and type into it; answer items in **Needs
 you**; use **New job** to launch an ad-hoc prompt, or **New schedule** to have one queued on a cron
