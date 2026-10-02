@@ -280,6 +280,7 @@ function CloseOutAsk({
             folder={view.state.config.desktopFolder}
             prompt={`${askPrompt(page.issue.number)}is this ready to close?`}
             label="Not ready? Talk it through"
+            fullSize
             ready="ready to send"
             explain="answered from what the harness recorded about this goal — the plan, the pull requests, the checks and where the work has reached."
           />

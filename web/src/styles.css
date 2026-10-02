@@ -595,8 +595,9 @@ body {
    than behind a click handler — so these are only the three things an <a> does not
    already inherit from `.btn`. No colour of its own: it is the same control. */
 a.btn {
-  display: inline-block;
-  line-height: normal;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   text-decoration: none;
 }
 .btn:disabled {
