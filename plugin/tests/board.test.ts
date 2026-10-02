@@ -298,5 +298,27 @@ test('the panel says so when the harness does not answer', async ($, on) => {
 
   const ui = await $.ui.mount({ plugin: 'lubbdubb', surface: 'terminal', component: 'Pane', requestId: 'lubbdubb', props: PANE })
   expect(await ui.find({ type: 'Text', text: 'LubbDubb is not answering at http://127.0.0.1:4300.' })).toBeDefined()
+  expect(await ui.find({ type: 'Raster', key: 'logo' })).toBeDefined()
   await ui.unmount()
+
+  const desk = await $.ui.mount({ plugin: 'lubbdubb', surface: 'desktop', component: 'Pane', requestId: 'lubbdubb', props: PANE })
+  expect(String((await desk.find({ type: 'Svg' }))?.props.source)).not.toContain('class="p"')
+  await desk.unmount()
+})
+
+test('the panel heads with the robot: cells in the terminal, SVG elsewhere', async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  harness(on)
+  await $.command.run(PANEL)
+
+  const term = await $.ui.mount({ plugin: 'lubbdubb', surface: 'terminal', component: 'Pane', requestId: 'lubbdubb', props: PANE })
+  expect((await term.find({ type: 'Raster', key: 'logo' }))?.props).toMatchObject({ columns: 16, rows: 8 })
+  expect(await term.find({ type: 'Text', text: 'Dubb' })).toBeDefined()
+  await term.unmount()
+
+  const desk = await $.ui.mount({ plugin: 'lubbdubb', surface: 'desktop', component: 'Pane', requestId: 'lubbdubb', props: PANE })
+  const svg = await desk.find({ type: 'Svg' })
+  expect(svg?.props).toMatchObject({ alt: 'LubbDubb', isInteractive: true })
+  expect(String(svg?.props.source)).toContain('class="p"')
+  await desk.unmount()
 })
