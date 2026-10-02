@@ -7275,6 +7275,11 @@ button.cn-grow {
   align-items: stretch;
   gap: 4px;
 }
+.cn-closeout-age {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
 .cn-closeout-item {
   display: flex;
   align-items: center;

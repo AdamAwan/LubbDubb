@@ -12,7 +12,7 @@ import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
-import { planIssueOf } from '../components/util.js';
+import { planIssueOf, relTime } from '../components/util.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { Button, ButtonRow, BareButton } from '../components/button.js';
 import { Tag } from '../components/tag.js';
@@ -207,6 +207,11 @@ function CloseOutAsk({
   }
   const checks = page.checks.filter((c) => c.supersededReason === null);
   const prs = page.closedPullRequests.filter((pr) => pr.merged);
+  const arrivedAt = new Map(
+    (view.state.environmentArrivals ?? [])
+      .filter((a) => a.goalRef === task.originRef)
+      .map((a) => [a.environment, a.arrivedAt]),
+  );
   return (
     <>
       <dl className="cn-closeout">
@@ -219,14 +224,22 @@ function CloseOutAsk({
         <dd>
           {page.environments.length === 0
             ? 'no environments declared'
-            : page.environments.map((env) => (
-                <span key={env.environment} className="cn-closeout-item">
-                  {env.environment}
-                  <Tag tone={REACH_TONE[env.status]} fill={REACH_TONE[env.status] !== undefined}>
-                    {env.status}
-                  </Tag>
-                </span>
-              ))}
+            : page.environments.map((env) => {
+                const at = arrivedAt.get(env.environment);
+                return (
+                  <span key={env.environment} className="cn-closeout-item">
+                    {env.environment}
+                    <Tag tone={REACH_TONE[env.status]} fill={REACH_TONE[env.status] !== undefined}>
+                      {env.status}
+                    </Tag>
+                    {at !== undefined && (
+                      <i className="cn-closeout-age" title={at}>
+                        {relTime(at, view.now)}
+                      </i>
+                    )}
+                  </span>
+                );
+              })}
         </dd>
         <dt>Checks</dt>
         <dd className="cn-closeout-list">
