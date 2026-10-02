@@ -70,11 +70,9 @@ import {
   lateParts,
   buildAgentRuntime,
   buildPluginDesk,
-  buildPrAssign,
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
-import type { PrAssignDesk } from '../pr/prAssignAsk.js';
 import {
   type IntakeDesks,
   buildIntakeDesks,
@@ -118,7 +116,7 @@ export interface System {
   remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
-  prAssign: PrAssignDesk;
+  prAssign: IntakeDesks['prAssign'];
   botPrs: BenchDesks['botPrs'];
   botPrRisks: BenchDesks['botPrRisks'];
   filing: TicketFiler;
@@ -165,7 +163,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, bench, late });
   const pulse = wirePulse(config, opts, base, fleet, harness);
   const local = buildLocalRuns(config, opts, base, runtime);
-  const prAssign = buildPrAssign(config, base);
   const system: System = {
     config,
     setupReading: { latest: null },
@@ -199,7 +196,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
-    prAssign,
+    prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,
     updates: bench.updates,
@@ -222,7 +219,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     worktrees: base.worktrees,
     errors: base.errors,
   };
-  late.bind(lateParts({ fleet, envs, bench, harness, local, prAssign, asks: () => askQueue(system) }));
+  late.bind(lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askQueue(system) }));
   return system;
 }
 

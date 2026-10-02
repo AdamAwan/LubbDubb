@@ -161,16 +161,6 @@ interface LatePhases {
   asks: () => AskRow[];
 }
 
-export function buildPrAssign(config: Config, base: Pick<Foundation, 'store' | 'sink' | 'errors'>): PrAssignDesk {
-  return new PrAssignDesk({
-    store: base.store,
-    sink: base.sink,
-    errors: base.errors,
-    operator: config.userId,
-    prAuthorConfigured: config.ownWorkOnly && config.userId !== undefined,
-  });
-}
-
 export function buildPluginDesk(config: Config, opts: BuildOptions, errors: ErrorLog): PluginDesk {
   return new PluginDesk({
     cli: opts.pluginCli ?? new ClaudePluginCli(config.claudeCommand),
