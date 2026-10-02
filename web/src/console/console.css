@@ -7238,6 +7238,15 @@ button.cn-grow {
   font-size: 12px;
   color: var(--cn-fg-dim);
 }
+.cn .cn-needs-below {
+  opacity: 0.45;
+  border-left-color: var(--cn-tone-line);
+  transition: opacity 0.15s;
+}
+.cn .cn-needs-below:hover,
+.cn .cn-needs-below:focus-visible {
+  opacity: 0.8;
+}
 .cn-needs-line .cn-age {
   flex: none;
   margin-left: auto;

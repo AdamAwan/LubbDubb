@@ -114,6 +114,21 @@ function FoldLine({ row, view, actions }: { row: NeedRow; view: CockpitView; act
   );
 }
 
+/** An ask the open pane already draws in full: kept in its place in the row so the page does not jump, dimmed, and a press down to it. */
+export function BelowLine({ row, anchor, now }: { row: NeedRow; anchor: string; now: number }): JSX.Element {
+  return (
+    <BareButton
+      usage={{ counted: 'escalation.view' }}
+      className={`cn-needs-line cn-needs-below cn-t-${KIND_TONE[row.kind]}`}
+      onClick={() => scrollToAnchor(anchor)}
+      title="This ask is answered in the pane below"
+    >
+      <LineFace row={row} now={now} />
+      <span className="cn-needs-do">Below {'\u2193'}</span>
+    </BareButton>
+  );
+}
+
 function LineFace({ row, now }: { row: NeedRow; now: number }): JSX.Element {
   return (
     <>

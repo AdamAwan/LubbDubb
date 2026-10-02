@@ -15,6 +15,7 @@ import {
   obligationEnvironment,
   planUnderWay,
   splitGoalAsks,
+  PANE_ASKS_ANCHOR,
   GOAL_ANCHOR,
   goalLanding,
   goalPaneOf,
@@ -31,7 +32,7 @@ import { ValidationSection } from '../components/ValidationSection.js';
 import { checkStandings, type CheckStanding } from '../view/validatePane.js';
 import { GoalReachMatrix } from '../components/GoalReachMatrix.js';
 import { HeadRow } from '../components/panel.js';
-import { NeedsBand } from './NeedsBand.js';
+import { BelowLine, NeedsBand } from './NeedsBand.js';
 import { AssignGroup } from './assignAsks.js';
 import { groupAsks } from '../view/askGroups.js';
 import { OrphanBand } from './OrphanBand.js';
@@ -78,7 +79,7 @@ export function GoalPage({
           stands or opened in place, and costs the page one line where a band cost
           it three hundred.
           → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */}
-      <AskLines rows={asks.lines} view={view} actions={actions} />
+      <AskLines rows={asks.lines} below={asks.below} view={view} actions={actions} />
       {/* The stages are the tabs, and the tabs are cut out of the panel they
           select: one object, so the row cannot read as a strip that merely sits
           above the pane. → docs/spec/17-cockpit.md#the-panes */}
@@ -94,7 +95,7 @@ export function GoalPage({
             filled primary button inside the pane is competing with.
             → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */}
         {asks.inPane.length > 0 && (
-          <div className="cn-paneasks">
+          <div className="cn-paneasks" id={PANE_ASKS_ANCHOR}>
             <AskItems rows={asks.inPane} view={view} actions={actions} />
           </div>
         )}
@@ -115,17 +116,19 @@ export function GoalPage({
 /** One row per ask, in the order the rail ranked them. */
 function AskLines({
   rows,
+  below,
   view,
   actions,
 }: {
   rows: readonly NeedRow[];
+  below: ReadonlyMap<string, string>;
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element | null {
   if (rows.length === 0) return null;
   return (
     <div className="cn-asklines">
-      <AskItems rows={rows} view={view} actions={actions} line />
+      <AskItems rows={rows} below={below} view={view} actions={actions} line />
     </div>
   );
 }
@@ -133,11 +136,13 @@ function AskLines({
 /** The asks in rank order, the same assign ask on several pull requests folded into one. */
 function AskItems({
   rows,
+  below,
   view,
   actions,
   line = false,
 }: {
   rows: readonly NeedRow[];
+  below?: ReadonlyMap<string, string>;
   view: CockpitView;
   actions: CockpitActions;
   line?: boolean;
@@ -145,7 +150,9 @@ function AskItems({
   return (
     <>
       {groupAsks(rows, view.state).map((item) =>
-        item.kind === 'assign' ? (
+        item.kind !== 'assign' && below?.has(item.row.id) ? (
+          <BelowLine key={item.row.id} row={item.row} anchor={below.get(item.row.id) ?? ''} now={view.now} />
+        ) : item.kind === 'assign' ? (
           <AssignGroup key={`assign:${item.first.id}`} asks={item.asks} actions={actions} />
         ) : (
           <NeedsBand
