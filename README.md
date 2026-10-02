@@ -213,7 +213,8 @@ Two things are deliberately fixed: every act reaching the outside world is autho
 ## Getting started
 
 Node **^20.19 || >=22.12** and git. A fresh clone installs with `npm ci` — `better-sqlite3` and
-`node-pty` are native builds, so it is not instant.
+`node-pty` are native builds, so it is not instant (on npm 12+ they build because `package.json`
+lists them in `allowScripts`).
 
 ```bash
 npm ci                                               # native deps: better-sqlite3, node-pty
