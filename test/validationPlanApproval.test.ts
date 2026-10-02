@@ -373,6 +373,7 @@ test('a set a plan document ingested before the gate reads as released, on both 
     checkSet: (goalRef: string) => ({
       accepted: checkSetReleased({ record: null, checks: goalRef === GOAL ? checks : [] }),
       acceptedAt: null,
+      authoredAt: null,
     }),
     probeIntervalMs: 60_000,
     now: Date.parse(NOW) + 1_000,

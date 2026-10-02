@@ -98,6 +98,7 @@ function task(over: Partial<HumanTask> = {}): HumanTask {
 
 const pass = (over: Partial<Parameters<typeof validationReadyPass>[0]> = {}) =>
   validationReadyPass({
+    awaitingOk: new Map(),
     issues: [],
     deliveries: [],
     shortfalls: [],

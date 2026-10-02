@@ -9,7 +9,7 @@ import { Store } from '../src/store/store.js';
 import { RemoteValidationDesk } from '../src/validation/remote/desk.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
 import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
-import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
+import { watchRow } from '../src/environments/fakeObserver.js';
 import { sheetBenchLine } from '../src/validation/remote/sheet.js';
 import { NO_STEP_CAPABILITIES, resolveSteps } from '../src/validation/steps.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
@@ -37,14 +37,12 @@ const NOW = Date.parse('2026-09-08T12:00:00.000Z');
 const ACCEPTANCE: EnvironmentConfig = {
   name: 'acceptance',
   at: 'echo unused',
-  watch: { observe: './telemetry.sh acceptance' },
   validate: { permits: ['state'], state: { run: './query.sh acceptance' } },
 };
 
 const PRODUCTION: EnvironmentConfig = {
   name: 'production',
   at: 'echo unused',
-  watch: { observe: './telemetry.sh production' },
   validate: { permits: ['state'], state: { run: './query.sh production' } },
 };
 
@@ -92,28 +90,19 @@ function reader(): FakeStateReader {
   });
 }
 
-function observer(): FakeEnvironmentObserver {
-  return new FakeEnvironmentObserver({
-    [`${SIGNAL.id}:presence`]: JSON.stringify([watchRow(SIGNAL.id, { op: 'checkout' })]),
-    [`${SIGNAL.id}:signal`]: JSON.stringify([]),
-  });
-}
-
 interface Bench {
   store: Store;
   desk: RemoteValidationDesk;
   reader: FakeStateReader;
-  observer: FakeEnvironmentObserver;
 }
 
 function bench(
   environments: EnvironmentConfig[] = [ACCEPTANCE],
   now: () => number = () => NOW,
-  opts: { reader?: FakeStateReader; observer?: FakeEnvironmentObserver } = {},
+  opts: { reader?: FakeStateReader } = {},
 ): Bench {
   const store = new Store(':memory:');
   const stateReader = opts.reader ?? reader();
-  const env = opts.observer ?? observer();
   const desk = new RemoteValidationDesk({
     sink: commentSink(),
     validationRoot: NO_CAPTURES,
@@ -124,7 +113,7 @@ function bench(
     probeIntervalMs: PROBE_MS,
     now,
   });
-  return { store, desk, reader: stateReader, observer: env };
+  return { store, desk, reader: stateReader };
 }
 
 function seedGoal(store: Store, goalRef = 'issue:12'): void {

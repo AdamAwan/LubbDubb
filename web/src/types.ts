@@ -278,6 +278,7 @@ export type {
   BotPrRisk,
   BotPrRiskLevel,
   BotPrRiskStanding,
+  OkStatus,
   BotPrsPayload,
   UpdateKind,
   CockpitState as AppState,

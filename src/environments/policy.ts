@@ -273,9 +273,20 @@ function validateValidate(validate: EnvironmentValidate | undefined, where: stri
     throw new Error(`${where}: "validate" must be an object — {"permits": ["state"], "state": {"run": "..."}}.`);
 
   validatePermits(validate.permits, where);
+  validate.permits = withoutRetiredKinds(validate.permits, where);
   validateValidateStrings(validate, where);
   validateRunnable(validate, where);
   validateTenantShape(validate, where);
+}
+
+function withoutRetiredKinds(permits: RemoteRowKind[], where: string): RemoteRowKind[] {
+  const retired = permits.filter((kind) => RETIRED_ROW_KINDS.includes(kind));
+  if (retired.length === 0) return permits;
+  console.warn(
+    `[lubbdubb] ${where}: "validate.permits" names ${retired.join(', ')}, which a sheet no longer has — the ` +
+      'watch reads them and the page draws its readings. Ignoring it; delete the name.',
+  );
+  return permits.filter((kind) => !RETIRED_ROW_KINDS.includes(kind));
 }
 
 function validatePermits(permits: RemoteRowKind[], where: string): void {
@@ -289,16 +300,8 @@ function validatePermits(permits: RemoteRowKind[], where: string): void {
       `${where}: "validate.permits" is empty. It reads as a configuration and permits nothing, so every row ` +
         `would come back blocked forever — name ${REMOTE_ROW_KINDS.join(' / ')}, or drop the "validate" block.`,
     );
-  const retired = permits.filter((kind) => RETIRED_ROW_KINDS.includes(kind));
-  if (retired.length > 0) {
-    console.warn(
-      `[lubbdubb] ${where}: "validate.permits" names ${retired.join(', ')}, which a sheet no longer has — the ` +
-        'watch reads them and the page draws its readings. Ignoring it; delete the name.',
-    );
-    permits.splice(0, permits.length, ...permits.filter((kind) => !RETIRED_ROW_KINDS.includes(kind)));
-  }
   for (const kind of permits)
-    if (!REMOTE_ROW_KINDS.includes(kind))
+    if (!REMOTE_ROW_KINDS.includes(kind) && !RETIRED_ROW_KINDS.includes(kind))
       throw new Error(
         `${where}: "${String(kind)}" is not a row kind a sheet has. ` +
           `"validate.permits" names ${REMOTE_ROW_KINDS.join(' / ')}.`,

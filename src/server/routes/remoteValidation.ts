@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { issueOrigin } from '../../plans/planning.js';
 import { StateQuerySchema } from '../../validation/stateDocument.js';
 import { NO_STATE_EXECUTOR, stateExecutor } from '../../validation/remote/enabled.js';
-import { checked, IssueNumberParams } from '../validation.js';
+import { noSheetAssembled } from '../../validation/remote/sheet.js';
+import { checked, IssueNumberParams, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { TenantCommandOutput } from '../../wire.js';
 
@@ -20,13 +21,7 @@ const RulingBody = z.object({
 });
 
 const NotHereBody = z.object({
-  note: z
-    .string({
-      required_error: 'note is required — say why this environment will not be validated for this goal',
-      invalid_type_error: 'note is required — say why this environment will not be validated for this goal',
-    })
-    .trim()
-    .min(1, 'note is required — say why this environment will not be validated for this goal'),
+  note: requiredText('note is required — say why this environment will not be validated for this goal'),
 });
 
 const EnvironmentParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
@@ -230,10 +225,7 @@ function registerOkRoutes(app: FastifyInstance, { system, hub }: RouteContext): 
     '/api/issues/:number/remote-validation/:environment/not-here',
     checked({ params: EnvironmentParams, body: NotHereBody }, ({ params, body, reply }) => {
       const marked = system.remoteIntents.notHere(issueOrigin(params.number), params.environment, body.note);
-      if (marked === null)
-        return reply
-          .code(404)
-          .send({ error: `no validation sheet is assembled for this goal on "${params.environment}".` });
+      if (marked === null) return reply.code(404).send({ error: noSheetAssembled(params.environment) });
       hub.broadcast({ type: 'dirty', sections: ['goals'] });
       return { ok: true, intent: marked };
     }),

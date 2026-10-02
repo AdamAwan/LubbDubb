@@ -921,7 +921,8 @@ page that names the place and shows the text. A query whose dry run did not answ
 route returns it in `refused`, and the rest of the page does not wait for it. Then **the check set is
 accepted** if nobody has yet — through `ProposalDesk.accept` where its card is pending, so the proposal
 and escalation close the ordinary way, and released directly where no card was ever filed. Rows the fold
-holds and the sheet does not — a check authored since the sheet was assembled — are added. Then an
+holds and the sheet does not — a check authored since the sheet was assembled — are added, by the desk
+that owns the sheet (`RemoteValidationDesk.adoptNewRows`). Then an
 **intent** is written: one `remote_run_intents` row per `(goal, environment)`, `given`, with a
 fingerprint of what the page held.
 
@@ -935,7 +936,9 @@ not consent to the page it became.
 **The pulse presses it.** `RemoteIntentDesk.run` sits immediately below `RemoteValidationDesk` in the
 reconcile pass, so a sheet assembled this pulse can be pressed in the same one. For each `given`
 intent it checks the fingerprint, then the tenant, then the lock, and calls today's press unchanged
-only when all three allow it — so a queued OK spawns no `at` probe while it waits. An intent that cannot
+only when all three allow it — so a queued OK spawns no `at` probe while it waits. The tenant and lock
+are asked of the press desk itself (`RemoteRunDesk.waitReason`), so the gate before the press and the
+press read one rule. An intent that cannot
 be pressed carries a `note` saying why, in the sheet's words: the tenant variable or command that would
 supply one, or _queued behind the run for issue:398_. A press that opens a run marks the intent
 `consumed` with the run's id. Nothing re-opens a run on its own: an OK is consumed once.
@@ -944,6 +947,12 @@ supply one, or _queued behind the run for issue:398_. A press that opens a run m
 validated for this goal: a `not_here` intent carrying the operator's reason. The pulse presses nothing
 for it, and it answers the page's hold on the `validate` row
 ([20](20-validation.md#saying-so-on-the-bench)); an OK given afterwards replaces it.
+
+**Where a page stands is worked out once, on the server.** `okStanding` reads the intent, the latest
+run and the rows to OK into _needs you_, _queued_, _running_, _done_, _not validating here_ — or
+_nothing_ to OK, or _open_ for a ship-day sheet — and both the cockpit (`RemoteSheetView.ok`) and the
+`validate` row's hold read it, so a run the pin abandoned brings the page back to _needs you_ on the
+bench as well as on the strip.
 
 **Withdraw** (`…/ok/withdraw`) takes back a `given` OK; it is a conditional flip, so there is nothing to
 take back twice. **An OK given after a run is a run again** — `giveIntent` replaces whatever the last

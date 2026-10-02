@@ -1884,6 +1884,18 @@ export interface RemoteRunIntent {
   updatedAt: string;
 }
 
+/**
+ * Where one environment's validation page stands, worked out once on the server and read by both the
+ * cockpit and the `validate` row's hold. → docs/spec/36-remote-validation.md#the-ok
+ */
+export type OkStatus = 'needs-you' | 'queued' | 'running' | 'done' | 'not-here' | 'open' | 'nothing';
+
+export interface OkStanding {
+  status: OkStatus;
+  /** Why it stands there, where a sentence says more than the status: the run's abandon reason, the queue. */
+  why: string | null;
+}
+
 export interface RemoteRun {
   id: string;
   goalRef: string;

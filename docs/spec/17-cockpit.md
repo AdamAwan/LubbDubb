@@ -2627,8 +2627,8 @@ is the order the question arrives in — _is there a run that would answer some 
 answering by hand_ — which is precisely the order the pane had backwards.
 
 **An environment's line is its page's OK** (`SheetOkRow`, `web/src/console/sheetOk.tsx`): where the
-page stands — _needs you_, _queued_, _running_, _done_, _not validating here_ — read by `okStanding`
-off the server's own intent, latest run and count of rows to OK, never re-decided, with the one answer
+page stands — _needs you_, _queued_, _running_, _done_, _not validating here_ — drawn from the server's
+`RemoteSheetView.ok` (the same `okStanding` the `validate` row holds on), never re-decided, with the one answer
 it asks for beside it: **OK, run it**, **Withdraw OK** while it waits, **Run again** once it ran, and
 **Not validating here** with a required reason. A run that was abandoned brings the page back to
 _needs you_ with the run's own reason, and an OK the page outgrew says so. There is no separate press:

@@ -324,11 +324,11 @@ two different things to meet on a goal page, and only one of them is yours to ac
 
 **What the gate holds:**
 
-| Holds                                                                                                                                                    | Does not hold                                                                                                   |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Sheet assembly — `sheetableArrivals` reads released, not authored ([36](36-remote-validation.md#when-a-sheet-is-assembled-and-what-runs-without-asking)) | Authoring. The planner still runs on `delivered` and still writes the set                                       |
-| Rule `validate-check` — a check handed to the fleet on an unreleased set dispatches nothing                                                              | An operator's own reading. The rows draw on the goal page, marked as proposed, and a person may run one by hand |
-| The `validate` bench row — `ValidationReadyDesk` files none on an unreleased set, and retracts a standing one ([below](#saying-so-on-the-bench))         |                                                                                                                 |
+| Holds                                                                                                                                                                                    | Does not hold                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| The press — `RemoteRunDesk` refuses `409` on a set authored and not released; the page is drawn once the set is authored, so the OK can accept it ([36](36-remote-validation.md#the-ok)) | Authoring. The planner still runs on `delivered` and still writes the set                                       |
+| Rule `validate-check` — a check handed to the fleet on an unreleased set dispatches nothing                                                                                              | An operator's own reading. The rows draw on the goal page, marked as proposed, and a person may run one by hand |
+| The `validate` bench row — `ValidationReadyDesk` files none on an unreleased set, and retracts a standing one ([below](#saying-so-on-the-bench))                                         |                                                                                                                 |
 
 **A set no press ever released reads as released.** `checkSetReleased` (`src/validation/planApproval.ts`)
 answers on the stamp only where the validation planner wrote one: a goal carrying checks a plan document
@@ -1059,9 +1059,11 @@ for one even where every remaining check is automatable, and **no second bench k
 sheet waiting to be run is this row's business. → [36](36-remote-validation.md#the-desk)
 
 **A page awaiting its OK holds the row as a check owed to a person does.** A goal's environment whose
-sheet holds at least one row to OK — one a press would read or hand an agent, or a query still waiting
-for its approval there — and no OK (none given, or one withdrawn) counts in the file, settle and reopen
-arms alike, and the detail says which environments are waiting. That is what keeps the close-out from
+page reads _needs you_ — at least one row to OK (one a press would read or hand an agent, or a query
+still waiting for its approval there) and no OK standing: none given, one withdrawn or lapsed, or a run
+it started that was abandoned — counts in the file, settle and reopen arms alike, and the detail says
+which environments are waiting. It is the same `okStanding` the cockpit draws, so the bench and the
+page never disagree about whether you are owed. That is what keeps the close-out from
 being asked for before anybody has seen the page. A sheet with nothing to OK holds nothing, and
 _Not validating here_ answers it. → [36](36-remote-validation.md#the-ok)
 

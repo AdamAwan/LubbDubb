@@ -1,7 +1,7 @@
 import type { System } from '../system/system.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
-import { okable } from '../validation/remote/intent.js';
+import { okable, okStanding } from '../validation/remote/intent.js';
 import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
@@ -13,6 +13,9 @@ import type {
   IssueShortfall,
   Plan,
   PlanPart,
+  RemoteRun,
+  RemoteRunIntent,
+  RemoteSheetRow,
   TaskSummary,
   WatchReading,
   WorkNode,
@@ -227,9 +230,7 @@ export function buildRemoteSheets(
         ...row,
         reading: newest.get(`${row.goalRef} ${row.environment} ${row.rowId}`) ?? null,
       })),
-      run: runsByGoalEnvironment.get(key)?.at(-1) ?? null,
-      intent: intents.get(key) ?? null,
-      okable: (rowsByGoalEnvironment.get(key) ?? []).filter(okable).length,
+      ...pageStanding(rowsByGoalEnvironment.get(key), intents.get(key), runsByGoalEnvironment.get(key)?.at(-1)),
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
@@ -238,6 +239,15 @@ export function buildRemoteSheets(
       },
     };
   });
+}
+
+/** The page's run, its OK and where it stands, off the rows, the intent and the latest run. */
+function pageStanding(
+  rows: readonly RemoteSheetRow[] = [],
+  intent: RemoteRunIntent | null = null,
+  run: RemoteRun | null = null,
+): Pick<RemoteSheetView, 'run' | 'intent' | 'okable' | 'ok'> {
+  return { run, intent, okable: rows.filter(okable).length, ok: okStanding({ rows, intent, run }) };
 }
 
 export function tenantCommandViews(

@@ -7,7 +7,8 @@ import type { Store } from '../../store/store.js';
 import type { RemoteRun, RemoteSheetRow, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
 import { runnableDrives, runnableScreens, runnableScripts, runnableSelectors } from './briefing.js';
 import type { RemoteValidationDesk } from './desk.js';
-import { rowRun } from './sheet.js';
+import { noSheetAssembled, rowRun } from './sheet.js';
+import { checkSetStanding } from '../planApproval.js';
 import {
   resolveTenant,
   stalenessNote,
@@ -138,12 +139,12 @@ export class RemoteRunDesk extends EventEmitter {
         error: `"${environmentName}" declares no "validate" block, so there is no sheet here to press.`,
       };
     const { store } = this.deps;
-    if (
-      !store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environmentName)
-    )
-      return { ok: false, code: 404, error: `no validation sheet is assembled for this goal on "${environmentName}".` };
-    const plan = store.validation.getValidationPlanRecord(goalRef);
-    if (plan?.authoredAt != null && plan.releasedAt === null)
+    if (!this.deps.desk.hasSheet(goalRef, environmentName))
+      return { ok: false, code: 404, error: noSheetAssembled(environmentName) };
+    const checks = checkSetStanding(store.validation.getValidationPlanRecord(goalRef), () =>
+      store.validation.listValidationChecks(goalRef),
+    );
+    if (!checks.accepted && checks.authoredAt !== null)
       return {
         ok: false,
         code: 409,
@@ -240,8 +241,21 @@ export class RemoteRunDesk extends EventEmitter {
     });
   }
 
-  /** @public the seam the intent desk reads a tenant's standing and lock key through before it presses */
-  standing(environmentName: string): TenantStanding {
+  /**
+   * Why a press on this environment would wait rather than run, in the sheet's words, or null where it
+   * would run: no tenant, or the `(environment, tenant)` lock held by another run. The same tenant and
+   * lock key the press itself reads, asked before it so a queued OK spawns no `at` probe.
+   *
+   * @public the seam the intent desk asks before it presses
+   */
+  waitReason(environmentName: string): string | null {
+    const standing = this.standing(environmentName);
+    if (standing.blockedReason !== null) return standing.blockedReason;
+    const live = this.deps.store.remoteValidation.liveRemoteRun(environmentName, standing.tenant ?? '');
+    return live === null ? null : `queued behind the run for ${live.goalRef}.`;
+  }
+
+  private standing(environmentName: string): TenantStanding {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
     return environment === undefined ? absent() : this.resolve(environment).standing;
   }
@@ -467,10 +481,9 @@ export class RemoteRunDesk extends EventEmitter {
     const stale = stalenessNote(tenant);
     let read = 0;
     for (const row of rows) {
-      const runs = rowRun(row.rowId);
-      if (runs === null || row.blockedReason !== null) continue;
+      if (rowRun(row.rowId) === null || row.blockedReason !== null) continue;
       try {
-        const reading = await this.deps.desk.readRow(environment, goalRef, runs, row.sourceId);
+        const reading = await this.deps.desk.readRow(environment, goalRef, row.sourceId);
         if (reading === null) continue;
         if (reading.outcome === 'blocked') {
           this.deps.store.remoteValidation.blockRemoteSheetRow(

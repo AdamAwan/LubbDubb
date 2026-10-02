@@ -20,7 +20,7 @@ interface ValidationReadyInput {
   /** The sheet rows an arrival assembled, by goal — one line each on the row's detail. */
   sheetRows: ReadonlyMap<string, readonly RemoteSheetRow[]>;
   /** The environments whose sheet holds a row to OK and has no OK, by goal. → docs/spec/36-remote-validation.md#the-ok */
-  awaitingOk?: ReadonlyMap<string, readonly string[]>;
+  awaitingOk: ReadonlyMap<string, readonly string[]>;
   opened: ReadonlySet<string> | null;
   /** Goals whose check set is released; null reads every set as released. */
   released: ReadonlySet<string> | null;
@@ -96,7 +96,7 @@ function deliveryStep(
 }
 
 function awaitingOkOf(input: ValidationReadyInput, originRef: string): readonly string[] {
-  return input.awaitingOk?.get(originRef) ?? [];
+  return input.awaitingOk.get(originRef) ?? [];
 }
 
 function admits(gate: ReadonlySet<string> | null, originRef: string): boolean {

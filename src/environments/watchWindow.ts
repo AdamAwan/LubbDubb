@@ -130,7 +130,7 @@ export function arrivalSheetStep(input: {
 }): ArrivalSheetStep {
   if (!input.validates) return 'not-validating';
   const checks = input.checkSet();
-  if (!checks.accepted && checks.authoredAt == null) return 'awaiting-checks';
+  if (!checks.accepted && checks.authoredAt === null) return 'awaiting-checks';
   if (input.arrival.sheetedAt !== null) return 'sheeted';
   const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
   const since = (at: string | null): boolean => at !== null && Date.parse(at) >= floor;

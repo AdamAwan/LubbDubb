@@ -16,7 +16,7 @@ import { selectorFault } from './runner.js';
 // → docs/spec/36-remote-validation.md
 
 /** What the desk executes for a row, once nothing has blocked it. `null` is a row a person runs. */
-export type SheetRowRun = 'state' | null;
+type SheetRowRun = 'state' | null;
 
 /**
  * What a stored row is executed by, read back off its own id. The press re-runs a confirmed row
@@ -297,4 +297,9 @@ interface SheetFoldRow {
 
 function count(n: number, noun: string): string {
   return `${String(n)} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** Said by every route that needs a sheet and finds none. */
+export function noSheetAssembled(environment: string): string {
+  return `no validation sheet is assembled for this goal on "${environment}".`;
 }

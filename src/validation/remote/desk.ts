@@ -11,7 +11,7 @@ import { checkSetStanding, type CheckSetStanding } from '../planApproval.js';
 import { sweptScripts } from '../steps.js';
 import type { GoalArrival, RemoteRowOutcome, RemoteSheetRow, StateQuery } from '../../types.js';
 import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
-import { noSheetReason, sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
+import { noSheetReason, sheetRows, type SheetRowPlan } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
 import { resolveTenant, type OperatorTenants, type TenantEnvironment } from './tenants.js';
 
@@ -105,8 +105,7 @@ export class RemoteValidationDesk {
     const { store } = this.deps;
     const validates = this.deps.environments.find((e) => e.name === environment)?.validate !== undefined;
     if (!validates) return noSheetReason({ environment, status: 'reached', step: 'not-validating' }).why;
-    if (store.remoteValidation.listRemoteSheets().some((s) => s.goalRef === goalRef && s.environment === environment))
-      return `A run is already set up on "${environment}" for this goal.`;
+    if (this.hasSheet(goalRef, environment)) return `A run is already set up on "${environment}" for this goal.`;
     const arrival = store.environments
       .listGoalArrivals()
       .find((a) => a.goalRef === goalRef && a.environment === environment);
@@ -401,7 +400,35 @@ export class RemoteValidationDesk {
     return out;
   }
 
-  /** @public the seam a test seeds a sheet as the assembly would through */
+  /** @public the seam the press, the OK and the not-here route ask whether there is a sheet to act on */
+  hasSheet(goalRef: string, environment: string): boolean {
+    return this.deps.store.remoteValidation
+      .listRemoteSheets()
+      .some((s) => s.goalRef === goalRef && s.environment === environment);
+  }
+
+  /**
+   * Rows the fold holds and the sheet does not yet — a check authored since the sheet was assembled.
+   * Added as the assembly adds them, and never removed: a row whose source left the fold is skipped by
+   * the press instead. → docs/spec/36-remote-validation.md#the-ok
+   *
+   * @public the seam the OK brings its page up to date through
+   */
+  adoptNewRows(goalRef: string, environment: EnvironmentConfig): void {
+    const { remoteValidation } = this.deps.store;
+    const held = new Set(
+      remoteValidation
+        .listRemoteSheetRows()
+        .filter((r) => r.goalRef === goalRef && r.environment === environment.name)
+        .map((r) => r.rowId),
+    );
+    const fresh = this.fold(environment, goalRef)
+      .filter((r) => !held.has(r.rowId))
+      .map(({ run: _run, ...row }) => row);
+    if (fresh.length > 0) remoteValidation.saveRemoteSheetRows(goalRef, environment.name, fresh);
+  }
+
+  /** @public the fold the assembly, the press's re-fold, the OK's fingerprint and the tests all read */
   fold(environment: EnvironmentConfig, goalRef: string): SheetRowPlan[] {
     const { store } = this.deps;
     return sheetRows({
@@ -428,7 +455,7 @@ export class RemoteValidationDesk {
    */
   private async read(environment: EnvironmentConfig, goalRef: string, row: SheetRowPlan): Promise<void> {
     if (row.blockedReason !== null || row.run === null) return;
-    const reading = await this.readRow(environment, goalRef, row.run, row.sourceId);
+    const reading = await this.readRow(environment, goalRef, row.sourceId);
     if (reading === null) return;
     if (reading.outcome === 'blocked') {
       this.deps.store.remoteValidation.blockRemoteSheetRow(
@@ -462,26 +489,13 @@ export class RemoteValidationDesk {
   }
 
   /**
-   * One row's reading, taken through the same two readers the assembly used. The press re-runs a
-   * confirmed row through this rather than a second reader, which would be free to disagree with
-   * the assembly about what a row of that kind is.
+   * One `state` row's reading, taken through the reader the assembly used. The press re-runs a
+   * confirmed row through this rather than a second reader, which would be free to disagree with the
+   * assembly about what a row of that kind is.
    *
    * @public the seam `RemoteRunDesk` re-reads a confirmed row through
    */
-  async readRow(
-    environment: EnvironmentConfig,
-    goalRef: string,
-    run: Exclude<SheetRowRun, null>,
-    sourceId: string,
-  ): Promise<RowReading | null> {
-    return this.readState(environment, goalRef, sourceId);
-  }
-
-  private async readState(
-    environment: EnvironmentConfig,
-    goalRef: string,
-    queryId: string,
-  ): Promise<RowReading | null> {
+  async readRow(environment: EnvironmentConfig, goalRef: string, queryId: string): Promise<RowReading | null> {
     const query: StateQuery | undefined = this.deps.store.remoteValidation
       .listStateQueries()
       .find((q) => q.originRef === goalRef && q.id === queryId);

@@ -32,8 +32,7 @@ export class ValidationReadyDesk {
       existing,
       checks,
       released: this.releasedOf(checks),
-      sheetRows: this.sheetRowsByOrigin(),
-      awaitingOk: this.awaitingOk(),
+      ...this.sheetsOf(),
       watchCleared: watchClearedGoals(
         'validate',
         this.environments,
@@ -85,8 +84,7 @@ export class ValidationReadyDesk {
       shortfalls: this.store.verdicts.listShortfalls(),
       existing: open,
       checks: this.checksByOrigin([originRef]),
-      sheetRows: this.sheetRowsByOrigin(),
-      awaitingOk: this.awaitingOk(),
+      ...this.sheetsOf(),
       opened: null,
       released: null,
       watchCleared: null,
@@ -108,24 +106,20 @@ export class ValidationReadyDesk {
     return out;
   }
 
-  private awaitingOk(): Map<string, string[]> {
-    if (!this.environments.some((e) => e.validate !== undefined)) return new Map();
-    return sheetsAwaitingOk(
-      this.store.remoteValidation.listRemoteSheets(),
-      this.store.remoteValidation.listRemoteSheetRows(),
-      this.store.remoteIntents.listIntents(),
-    );
-  }
-
-  private sheetRowsByOrigin(): Map<string, RemoteSheetRow[]> {
-    const out = new Map<string, RemoteSheetRow[]>();
-    if (!this.environments.some((e) => e.validate !== undefined)) return out;
-    for (const row of this.store.remoteValidation.listRemoteSheetRows()) {
-      const held = out.get(row.goalRef);
-      if (held === undefined) out.set(row.goalRef, [row]);
-      else held.push(row);
-    }
-    return out;
+  /** The sheet rows by goal, and each goal's environments awaiting an OK — off one read of the rows. */
+  private sheetsOf(): { sheetRows: Map<string, RemoteSheetRow[]>; awaitingOk: Map<string, string[]> } {
+    if (!this.environments.some((e) => e.validate !== undefined))
+      return { sheetRows: new Map(), awaitingOk: new Map() };
+    const rows = this.store.remoteValidation.listRemoteSheetRows();
+    const sheetRows = new Map<string, RemoteSheetRow[]>();
+    for (const row of rows) sheetRows.set(row.goalRef, [...(sheetRows.get(row.goalRef) ?? []), row]);
+    const awaitingOk = sheetsAwaitingOk({
+      sheets: this.store.remoteValidation.listRemoteSheets(),
+      rows,
+      intents: this.store.remoteIntents.listIntents(),
+      runs: this.store.remoteValidation.listRemoteRuns(),
+    });
+    return { sheetRows, awaitingOk };
   }
 
   private checksByOrigin(origins: readonly string[]): Map<string, ValidationCheck[]> {

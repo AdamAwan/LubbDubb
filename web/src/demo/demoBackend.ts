@@ -1326,6 +1326,7 @@ class DemoServer {
         note: null,
         updatedAt: now,
       };
+      sheet.ok = { status: 'done', why: null };
       this.dirty();
     }
     return { ok: true };
@@ -1335,6 +1336,7 @@ class DemoServer {
     const sheet = this.remoteSheet(issueNumber, environment);
     if (sheet?.intent?.state === 'given') {
       sheet.intent = { ...sheet.intent, state: 'withdrawn', note: null };
+      sheet.ok = { status: 'needs-you', why: null };
       this.dirty();
     }
     return Promise.resolve({ ok: true });
@@ -1354,6 +1356,7 @@ class DemoServer {
         note,
         updatedAt: now,
       };
+      sheet.ok = { status: 'not-here', why: note };
       this.dirty();
     }
     return Promise.resolve({ ok: true });
@@ -5035,8 +5038,6 @@ export const demoApi = {
     getServer().selectRemoteRow(issueNumber, environment, rowId, selected),
   setUpRemoteSheet: (issueNumber: number, environment: string) =>
     getServer().setUpRemoteSheet(issueNumber, environment),
-  pressRemoteSheet: (issueNumber: number, environment: string) =>
-    getServer().pressRemoteSheet(issueNumber, environment),
   cancelRemoteRun: (issueNumber: number, environment: string) => getServer().cancelRemoteRun(issueNumber, environment),
   giveRemoteOk: (issueNumber: number, environment: string) => getServer().giveRemoteOk(issueNumber, environment),
   withdrawRemoteOk: (issueNumber: number, environment: string) =>

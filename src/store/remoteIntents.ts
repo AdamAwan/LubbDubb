@@ -37,42 +37,21 @@ export class RemoteIntentStore {
 
   /** A new OK replaces whatever the last one was, consumed or withdrawn alike. */
   giveIntent(goalRef: string, environment: string, fingerprint: string): RemoteRunIntent {
-    const now = this.ctx.now();
-    this.ctx
-      .prep(
-        `INSERT OR REPLACE INTO remote_run_intents
-           (goal_ref, environment, state, fingerprint, given_at, run_id, note, updated_at)
-         VALUES (?, ?, 'given', ?, ?, NULL, NULL, ?)`,
-      )
-      .run(goalRef, environment, fingerprint, now, now);
-    return this.getIntent(goalRef, environment)!;
+    return this.replace(goalRef, environment, 'given', fingerprint, null);
   }
 
   /** The operator's word that this environment will not be validated for this goal, with their reason. */
   markNotHere(goalRef: string, environment: string, note: string): RemoteRunIntent {
-    const now = this.ctx.now();
-    this.ctx
-      .prep(
-        `INSERT OR REPLACE INTO remote_run_intents
-           (goal_ref, environment, state, fingerprint, given_at, run_id, note, updated_at)
-         VALUES (?, ?, 'not_here', '', ?, NULL, ?, ?)`,
-      )
-      .run(goalRef, environment, now, note, now);
-    return this.getIntent(goalRef, environment)!;
+    return this.replace(goalRef, environment, 'not_here', '', note);
   }
 
   /** Only a given intent is withdrawn or consumed; the flip is conditional, so a second one finds nothing. */
-  withdrawIntent(goalRef: string, environment: string): RemoteRunIntent | null {
-    return this.settle(goalRef, environment, 'withdrawn', null);
+  withdrawIntent(goalRef: string, environment: string, note: string | null = null): RemoteRunIntent | null {
+    return this.settle(goalRef, environment, 'withdrawn', null, note);
   }
 
   consumeIntent(goalRef: string, environment: string, runId: string): RemoteRunIntent | null {
     return this.settle(goalRef, environment, 'consumed', runId);
-  }
-
-  /** A given OK the harness took back itself, saying why — the page it was given over is gone. */
-  lapseIntent(goalRef: string, environment: string, note: string): RemoteRunIntent | null {
-    return this.settle(goalRef, environment, 'withdrawn', null, note);
   }
 
   /** Why a given intent is still waiting. Written only where it changed, so a quiet pulse writes nothing. */
@@ -92,11 +71,37 @@ export class RemoteIntentStore {
     return row === undefined ? null : toIntent(row);
   }
 
+  /** The OKs the pulse still has to act on — never the history of every sheet ever answered. */
+  listGivenIntents(): RemoteRunIntent[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM remote_run_intents WHERE state='given' ORDER BY given_at ASC, environment ASC`)
+      .all() as IntentRow[];
+    return rows.map(toIntent);
+  }
+
   listIntents(): RemoteRunIntent[] {
     const rows = this.ctx
       .prep(`SELECT * FROM remote_run_intents ORDER BY given_at ASC, environment ASC`)
       .all() as IntentRow[];
     return rows.map(toIntent);
+  }
+
+  private replace(
+    goalRef: string,
+    environment: string,
+    state: 'given' | 'not_here',
+    fingerprint: string,
+    note: string | null,
+  ): RemoteRunIntent {
+    const now = this.ctx.now();
+    this.ctx
+      .prep(
+        `INSERT OR REPLACE INTO remote_run_intents
+           (goal_ref, environment, state, fingerprint, given_at, run_id, note, updated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+      )
+      .run(goalRef, environment, state, fingerprint, now, note, now);
+    return this.getIntent(goalRef, environment)!;
   }
 
   private settle(

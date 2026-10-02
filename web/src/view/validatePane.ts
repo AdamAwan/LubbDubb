@@ -218,34 +218,6 @@ export function pressableRows(sheet: RemoteSheetView): number {
   return sheet.rows.filter((row) => row.selected && row.blockedReason === null && row.idleReason === null).length;
 }
 
-/**
- * Where one environment's page stands, read off the server's own rows: the intent, the latest run and
- * how many rows there are to OK. → docs/spec/36-remote-validation.md#the-ok
- */
-export type OkStatus = 'needs-you' | 'queued' | 'running' | 'done' | 'not-here' | 'open' | 'nothing';
-
-export function okStanding(sheet: RemoteSheetView): { status: OkStatus; why: string | null } {
-  const { run, intent } = sheet;
-  if (runIsLive(run)) return { status: 'running', why: null };
-  if (intent?.state === 'not_here') return { status: 'not-here', why: intent.note };
-  if (intent?.state === 'given') return { status: 'queued', why: intent.note };
-  if (intent?.state === 'consumed' && intent.runId !== null) return consumedStanding(run, intent.runId);
-  if (sheet.okable === 0) return { status: 'nothing', why: null };
-  // A consumed intent with no run is one written on ship day, for a sheet from before the OK: it is
-  // answered, so it asks for nothing, and it can still be run.
-  if (intent?.state === 'consumed') return { status: 'open', why: null };
-  return { status: 'needs-you', why: intent?.note ?? null };
-}
-
-function runIsLive(run: RemoteSheetView['run']): boolean {
-  return run?.status === 'pending' || run?.status === 'dispatched';
-}
-
-function consumedStanding(run: RemoteSheetView['run'], runId: string): { status: OkStatus; why: string | null } {
-  if (run?.id !== runId || run.status !== 'abandoned') return { status: 'done', why: null };
-  return { status: 'needs-you', why: run.note ?? 'the run was called off before it finished' };
-}
-
 /** A remote runner offering this goal no run, and why. `environment` null: no environment could. */
 export interface RemoteRunGap {
   environment: string | null;

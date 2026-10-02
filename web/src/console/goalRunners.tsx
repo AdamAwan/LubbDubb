@@ -403,7 +403,6 @@ export function RemoteValidation({
           showing={showing}
           switcher={false}
           foldRows
-          press={false}
           alertAbove
           onShow={(environment) => actions.openRemoteSheet(environment)}
           controls={{
@@ -411,7 +410,6 @@ export function RemoteValidation({
               actions.ruleRemoteQuery(page.issue.number, environment, rowId, accept),
             onSelect: (environment, rowId, selected) =>
               actions.selectRemoteRow(page.issue.number, environment, rowId, selected),
-            onPress: (environment) => actions.pressRemoteSheet(page.issue.number, environment),
             onCancel: (environment) => actions.cancelRemoteRun(page.issue.number, environment),
             onReseed: (environment) => actions.reseedRemoteTenant(page.issue.number, environment),
             onOpenAgent: (agentId) => actions.select(agentId),

@@ -471,7 +471,7 @@ test('sheet assembly waits for the check set however long it takes, and the guar
     sheetableArrivals({
       arrivals: [arrival(over)],
       environments,
-      checkSet: () => ({ accepted, acceptedAt }),
+      checkSet: () => ({ accepted, acceptedAt, authoredAt: null }),
       probeIntervalMs: 5 * 60 * 1000,
       now,
     });

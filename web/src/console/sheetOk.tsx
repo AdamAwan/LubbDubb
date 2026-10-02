@@ -1,11 +1,10 @@
 import { useState, type JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { RemoteSheetView } from '../types.js';
+import type { OkStatus, RemoteSheetView } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { CONTROL_CLASS } from '../components/controls.js';
 import { Button } from '../components/button.js';
 import { Tag, type TagTone } from '../components/tag.js';
-import { okStanding, type OkStatus } from '../view/validatePane.js';
 
 // → docs/spec/36-remote-validation.md#the-ok
 
@@ -34,7 +33,7 @@ export function SheetOkRow({
   actions: CockpitActions;
   onRefused: (reason: string) => void;
 }): JSX.Element {
-  const { status, why } = okStanding(sheet);
+  const { status, why } = sheet.ok;
   const [declining, setDeclining] = useState<string | null>(null);
   const env = sheet.environment;
   const ok = (label: string) => (

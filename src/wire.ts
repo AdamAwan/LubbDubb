@@ -111,6 +111,7 @@ import type {
   RemoteReading,
   RemoteRun,
   RemoteRunIntent,
+  OkStanding,
   RemoteSheet,
   RemoteSheetRow,
   ScratchEntry,
@@ -564,6 +565,8 @@ export interface RemoteSheetView extends RemoteSheet {
   intent: RemoteRunIntent | null;
   /** How many rows there are to OK — none, and the page asks for nothing. */
   okable: number;
+  /** Where the page stands, worked out on the server — the same reading the `validate` row holds on. */
+  ok: OkStanding;
   /** Which tenant this sheet is put to, how old it is, and why there is none. */
   tenant: RemoteTenantView;
 }
@@ -1047,6 +1050,8 @@ export type {
   RemoteReading,
   RemoteRun,
   RemoteRunIntent,
+  OkStanding,
+  OkStatus,
   RemoteRowKind,
   RemoteRowOutcome,
   RemoteSheet,

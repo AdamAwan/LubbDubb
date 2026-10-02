@@ -155,6 +155,7 @@ test('a declined row is owed to nobody and is never assembled onto a sheet', () 
   );
 
   const steps = validationReadyPass({
+    awaitingOk: new Map(),
     issues: [],
     deliveries: [{ originRef: GOAL } as never],
     shortfalls: [],

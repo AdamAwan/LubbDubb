@@ -159,7 +159,6 @@ function remoteValidationActions(then: Then) {
     selectRemoteRow: (issueNumber, environment, rowId, selected) =>
       then(api.selectRemoteRow(issueNumber, environment, rowId, selected)),
     setUpRemoteSheet: (issueNumber, environment) => then(api.setUpRemoteSheet(issueNumber, environment)),
-    pressRemoteSheet: (issueNumber, environment) => then(api.pressRemoteSheet(issueNumber, environment)),
     cancelRemoteRun: (issueNumber, environment) => then(api.cancelRemoteRun(issueNumber, environment)),
     giveRemoteOk: (issueNumber, environment) => then(api.giveRemoteOk(issueNumber, environment)),
     withdrawRemoteOk: (issueNumber, environment) => then(api.withdrawRemoteOk(issueNumber, environment)),

@@ -16,8 +16,8 @@ import { watchRow } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { RemoteRunIntent, RemoteSheetRow, StateQueryInput } from '../src/types.js';
-import { okable, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
+import type { RemoteRun, RemoteRunIntent, RemoteSheetRow, StateQueryInput } from '../src/types.js';
+import { okable, okStanding, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
 import { validationReadyPass } from '../src/validation/ready.js';
 import { arrivalSheetStep } from '../src/environments/watchWindow.js';
 
@@ -328,17 +328,46 @@ function intent(state: RemoteRunIntent['state']): RemoteRunIntent {
   };
 }
 
-test('a sheet with a row to OK and no OK is awaiting it; an answered one, or one with nothing to OK, is not', () => {
-  assert.deepEqual([...sheetsAwaitingOk([SHEET], [sheetRow()], [])], [['issue:12', ['acceptance']]]);
-  assert.equal(sheetsAwaitingOk([SHEET], [sheetRow()], [intent('withdrawn')]).size, 1, 'a withdrawn OK is no OK');
-  for (const state of ['given', 'consumed', 'not_here'] as const)
-    assert.equal(sheetsAwaitingOk([SHEET], [sheetRow()], [intent(state)]).size, 0, state);
+test('a page reads where it stands off its intent, its run and its rows to OK, once for the cockpit and the hold', () => {
+  const RUN = { id: 'run_1', goalRef: 'issue:12', environment: 'acceptance', status: 'ended', note: null } as RemoteRun;
+  const standing = (over: { rows?: RemoteSheetRow[]; intent?: RemoteRunIntent | null; run?: RemoteRun | null }) =>
+    okStanding({ rows: [sheetRow()], intent: null, run: null, ...over });
+  assert.equal(standing({}).status, 'needs-you', 'a row to OK and no OK');
+  assert.equal(standing({ rows: [sheetRow({ selected: false })] }).status, 'nothing', 'nothing to OK asks nothing');
+  assert.deepEqual(standing({ intent: { ...intent('given'), note: 'queued behind the run for issue:398.' } }), {
+    status: 'queued',
+    why: 'queued behind the run for issue:398.',
+  });
+  assert.equal(standing({ run: { ...RUN, status: 'dispatched' } }).status, 'running');
+  assert.equal(standing({ run: RUN, intent: { ...intent('consumed'), runId: 'run_1' } }).status, 'done');
+  assert.deepEqual(
+    standing({
+      run: { ...RUN, status: 'abandoned', note: 'gone back past this goal' },
+      intent: { ...intent('consumed'), runId: 'run_1' },
+    }),
+    { status: 'needs-you', why: 'gone back past this goal' },
+    'an abandoned run comes back to the operator, saying why',
+  );
+  assert.equal(standing({ intent: intent('consumed') }).status, 'open', 'ship day: answered, still runnable');
+  assert.equal(standing({ intent: { ...intent('not_here'), note: 'rebuilt' } }).why, 'rebuilt');
+  assert.equal(
+    standing({ intent: { ...intent('withdrawn'), note: 'the page has changed' } }).why,
+    'the page has changed',
+  );
 
   assert.equal(okable(sheetRow({ blockedReason: 'not approved here', awaitingApproval: true })), true);
   assert.equal(okable(sheetRow({ blockedReason: 'does not permit state rows' })), false);
   assert.equal(okable(sheetRow({ idleReason: 'a person carries it' })), false);
-  assert.equal(okable(sheetRow({ selected: false })), false);
-  assert.equal(sheetsAwaitingOk([SHEET], [sheetRow({ selected: false })], []).size, 0, 'nothing to OK, no hold');
+
+  const awaiting = (intents: RemoteRunIntent[], runs: RemoteRun[] = []) =>
+    sheetsAwaitingOk({ sheets: [SHEET], rows: [sheetRow()], intents, runs });
+  assert.deepEqual([...awaiting([])], [['issue:12', ['acceptance']]]);
+  assert.equal(awaiting([intent('given')]).size, 0);
+  assert.equal(
+    awaiting([{ ...intent('consumed'), runId: 'run_1' }], [{ ...RUN, status: 'abandoned' }]).size,
+    1,
+    'the hold reads the same standing the cockpit draws',
+  );
 });
 
 test('the validate row is held open while a page awaits its OK, though no check is owed to a person', () => {
@@ -363,6 +392,7 @@ test('the validate row is held open while a page awaits its OK, though no check 
     opened: null,
     released: null,
     watchCleared: null,
+    awaitingOk: new Map<string, string[]>(),
   };
   assert.deepEqual(validationReadyPass(input), [], 'nothing owed and nothing awaiting: no row');
   const held = validationReadyPass({ ...input, awaitingOk: new Map([['issue:12', ['acceptance']]]) });
