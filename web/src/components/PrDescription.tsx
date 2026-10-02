@@ -154,17 +154,9 @@ function usePrDescription(prNumber: number): { reading: Reading; reload: () => P
 
 function Unwritten(): JSX.Element {
   return (
-    <>
-      {/* Only where nobody has written one. On a page that already carries a
-          description the argument for writing it has been made and won. */}
-      <p className="cn-desc-why">
-        A reviewer reads this before the diff, and you are the one spending their hour — so it is yours to write, not
-        the agent&rsquo;s. Read the change above first; what you write goes to the top of this pull request&rsquo;s
-        body. It holds nothing up: leave it and the pull request carries the evidence alone, or use the agent&rsquo;s
-        draft instead.
-      </p>
-      <p className="cn-empty">Nobody has described this pull request.</p>
-    </>
+    <p className="cn-desc-why">
+      You&rsquo;re about to ask someone else to review this — spend the time making that easier for them.
+    </p>
   );
 }
 

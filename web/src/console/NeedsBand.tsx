@@ -341,22 +341,8 @@ function assignedBody(row: NeedRow, view: CockpitView): ReactNode {
 function describeBody(row: NeedRow, view: CockpitView): ReactNode {
   const waiting = (view.state.undescribedParts ?? []).find((p) => `describe:${p.originRef}` === row.id);
   if (waiting === undefined) return null;
-  const part = (view.state.planParts ?? []).find((p) => waiting.originRef.endsWith(`:part:${p.slug}`));
   return (
     <>
-      {part !== undefined && (
-        <p>
-          <strong>{part.title}</strong>
-        </p>
-      )}
-      <p className="cn-tick">
-        The pull request is open and carries the agent&rsquo;s evidence and the reference, and nothing else. Nothing
-        fills the gap and nothing is held up by it — the reviewer simply meets a change with nobody&rsquo;s account of
-        it above the coordinates.
-      </p>
-      <p className="cn-tick">
-        Read the change first, then write it in your own words — what you write goes to the top of its body.
-      </p>
       {/* The pull request's own description card, so the ask is answered where it is asked.
           → docs/spec/07-pull-requests.md#the-rail-asks-for-it-and-nothing-waits-on-the-answer */}
       <PrDescription prNumber={waiting.prNumber} open desktopFolder={view.state.config.desktopFolder} now={view.now} />
