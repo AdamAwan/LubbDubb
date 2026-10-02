@@ -1326,7 +1326,7 @@ class DemoServer {
         note: null,
         updatedAt: now,
       };
-      sheet.ok = { status: 'done', why: null };
+      sheet.ok = { status: sheet.run === null || sheet.run.status === 'ended' ? 'done' : 'running', why: null };
       this.dirty();
     }
     return { ok: true };
@@ -1367,6 +1367,7 @@ class DemoServer {
     if (sheet?.run != null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched')) {
       sheet.run.status = 'abandoned';
       sheet.run.note = 'an operator called this run off from the sheet.';
+      sheet.ok = { status: 'needs-you', why: sheet.run.note };
       sheet.run.endedAt = new Date().toISOString();
       this.dirty();
     }

@@ -78,7 +78,7 @@ function deliveryStep(
     };
   }
   if (existing && existing.status !== 'open') {
-    if (!reopens(existing, awaiting)) return null;
+    if (!deskSettled(existing)) return null;
     return {
       kind: 'reopen',
       taskId: existing.id,
@@ -93,15 +93,6 @@ function deliveryStep(
     title: validateTitle(originRef),
     detail: validateDetail(issue, live, owed.length, input.sheetRows.get(originRef), awaiting),
   };
-}
-
-/**
- * A settled row comes back where the desk settled it, or where it was marked done and a page has since
- * come back to needing an OK — a run the pin abandoned, an OK the page outgrew. A row the operator
- * declined stays declined. → docs/spec/20-validation.md#saying-so-on-the-bench
- */
-function reopens(existing: HumanTask, awaiting: readonly string[]): boolean {
-  return deskSettled(existing) || (existing.status === 'done' && awaiting.length > 0);
 }
 
 function awaitingOkOf(input: ValidationReadyInput, originRef: string): readonly string[] {
@@ -168,9 +159,12 @@ function sheetLines(rows: readonly RemoteSheetRow[]): string[] {
 }
 
 function settledResolution(total: number): string {
-  return total === 0
-    ? 'the plan no longer asks for any checks'
-    : 'every check is recorded, waived, or with the fleet — nothing is left for you to run';
+  return (
+    DESK_SETTLED +
+    (total === 0
+      ? 'the plan no longer asks for any checks'
+      : 'every check is recorded, waived, or with the fleet — nothing is left for you to run')
+  );
 }
 
 function count(n: number, noun: string): string {

@@ -914,24 +914,24 @@ here does — nothing else schedules anything.
 **Built.** `POST /api/issues/:number/remote-validation/:environment/ok`, over `RemoteIntentDesk`
 (`src/validation/remote/intent.ts`). An operator answers a sheet once, and the harness does the rest.
 
-The OK runs in two steps, because a dry run is a spawn of up to a minute and cannot sit inside a
-transaction. First every `state` query on a row the page still **selects** and not yet approved **here** is dry-run and approved
-where it answered, through `ruleStateQuery` — the same consent the row's own button gives, given on a
-page that names the place and shows the text. A query whose dry run did not answer is not approved; the
-route returns it in `refused`, and the rest of the page does not wait for it. Then **the check set is
-accepted** if nobody has yet — through `ProposalDesk.accept` where its card is pending, so the proposal
-and escalation close the ordinary way, and released directly where no card was ever filed. Where it is
-still not accepted after that — a card whose caveats want answering on the card itself — the OK is
-refused `409` and no intent is written. Rows the fold
-holds and the sheet does not — a check authored since the sheet was assembled — are added, by the desk
-that owns the sheet (`RemoteValidationDesk.adoptNewRows`). Then an
-**intent** is written: one `remote_run_intents` row per `(goal, environment)`, `given`, with a
-fingerprint of what the page held.
+The OK runs in steps, because a dry run is a spawn of up to a minute and cannot sit inside a
+transaction. First **the check set is accepted** if nobody has yet — through `ProposalDesk.accept` where
+its card is pending, so the proposal and escalation close the ordinary way, and released directly where
+no card was ever filed. Where it is still not accepted after that — a card whose caveats want answering
+on the card itself — the OK is refused `409` before anything else is done: no row adopted, no query
+dry-run or approved, no intent written. Then rows the fold holds and the sheet does not — a check
+authored since the sheet was assembled — are added, by the desk that owns the sheet
+(`RemoteValidationDesk.adoptNewRows`). Then every `state` query on a row the page still **selects** and
+not yet approved **here** is dry-run and approved where it answered, through `ruleStateQuery` — the same
+consent the row's own button gives, given on a page that names the place and shows the text. A query
+whose dry run did not answer is not approved; the route returns it in `refused`, and the rest of the
+page does not wait for it. Last an **intent** is written: one `remote_run_intents` row per
+`(goal, environment)`, `given`, with a fingerprint of what the page held.
 
 **The fingerprint is the page as the operator read it**: every row the fold holds now, a check by its title,
 `do`, `expect`, `proof` and steps, a query by its digest. A re-authored set, an amended check or an
-edited query moves it; a reading, a selection, an approval or the one-off-script sweep does not (a
-step's `script` and `scriptSweptAt` are left out). An intent whose fingerprint has
+edited query moves it; a reading, a selection, an approval or the one-off-script sweep's stamp does not (a
+step's `scriptSweptAt` is left out; its `script` is in, so an edited script lapses the OK). An intent whose fingerprint has
 moved is **not pressed**: it lapses to `withdrawn` with a note saying the page changed, so the page
 asks for its OK again. Consent to a page is
 not consent to the page it became.
@@ -954,7 +954,9 @@ for it, and it answers the page's hold on the `validate` row
 **A check row whose check has left the set is off the page.** The sheet is drawn before the set is
 accepted, so a check declined on the card, or superseded since, can still have a stored row. The press
 skips it (`pressRows`), and the page does too: `pageRows` leaves it out of what is drawn, counted and
-asked about, so a declined row never holds the bench.
+asked about, so a declined row never holds the bench. A `state` query deleted from the goal takes its
+sheet rows with it (`deleteStateQuery`), and a page on an environment that no longer declares a
+`validate` block reads _nothing_ to OK, as the hold does.
 
 **Where a page stands is worked out once, on the server.** `okStanding` reads the intent, the latest
 run and the rows to OK into _needs you_, _queued_, _running_, _done_, _not validating here_ — or

@@ -52,6 +52,12 @@ export class RemoteIntentDesk {
     if (!this.deps.desk.hasSheet(goalRef, environmentName))
       return { ok: false, code: 404, error: noSheetAssembled(environmentName) };
 
+    if (!(await this.acceptCheckSet(goalRef, environmentName)))
+      return {
+        ok: false,
+        code: 409,
+        error: "this goal's checks could not be accepted from here — answer their card, then give the OK.",
+      };
     this.deps.desk.adoptNewRows(goalRef, environment);
     const refused: { queryId: string; detail: string }[] = [];
     for (const query of this.unapproved(goalRef, environmentName)) {
@@ -60,12 +66,6 @@ export class RemoteIntentDesk {
         refused.push({ queryId: query, detail: ruled.reading?.blocked ?? 'the dry run did not answer' });
     }
 
-    if (!(await this.acceptCheckSet(goalRef, environmentName)))
-      return {
-        ok: false,
-        code: 409,
-        error: "this goal's checks could not be accepted from here — answer their card, then give the OK.",
-      };
     const intent = store.remoteIntents.giveIntent(goalRef, environmentName, this.fingerprint(goalRef, environment));
     return { ok: true, intent, refused };
   }
@@ -189,7 +189,7 @@ export class RemoteIntentDesk {
       .map((r) => {
         if (r.kind === 'check') {
           const c = checks.get(r.sourceId);
-          return `${r.rowId}\x00${JSON.stringify(c === undefined ? null : [...checkTerms(c), c.steps.map(({ script: _script, scriptSweptAt: _swept, ...step }) => step)])}`;
+          return `${r.rowId}\x00${JSON.stringify(c === undefined ? null : [...checkTerms(c), c.steps.map(({ scriptSweptAt: _swept, ...step }) => step)])}`;
         }
         return `${r.rowId}\x00${queries.get(r.sourceId) ?? ''}`;
       })

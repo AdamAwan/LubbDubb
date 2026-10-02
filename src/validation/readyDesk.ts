@@ -6,7 +6,7 @@ import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { checkSetReleased } from './planApproval.js';
 import { validationReadyPass } from './ready.js';
 import { groupBy } from '../primitives.js';
-import { goneCheckRows, sheetsAwaitingOk } from './remote/intent.js';
+import { goneCheckRows, pageRows, sheetsAwaitingOk } from './remote/intent.js';
 
 // → docs/spec/20-validation.md
 
@@ -121,11 +121,14 @@ export class ValidationReadyDesk {
   } {
     const validates = new Set(this.environments.filter((e) => e.validate !== undefined).map((e) => e.name));
     if (validates.size === 0) return { sheetRows: new Map(), awaitingOk: new Map() };
-    const rows = this.store.remoteValidation.listRemoteSheetRows();
+    const rows = pageRows(
+      this.store.remoteValidation.listRemoteSheetRows(),
+      goneCheckRows([...checks.values()].flat()),
+    );
     const awaitingOk = sheetsAwaitingOk({
       sheets: this.store.remoteValidation.listRemoteSheets().filter((s) => validates.has(s.environment)),
       rows,
-      gone: goneCheckRows([...checks.values()].flat()),
+      gone: new Set(),
       intents: this.store.remoteIntents.listIntents(),
       runs: this.store.remoteValidation.listRemoteRuns(),
     });

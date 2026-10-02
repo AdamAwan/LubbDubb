@@ -226,9 +226,9 @@ export function buildRemoteSheets(
       })),
       run,
       intent,
-      okable: rows.filter(okable).length,
       // An environment that no longer validates asks for nothing, as the `validate` row's hold reads it.
-      ok: okStanding({ rows: validate === undefined ? [] : rows, intent, run }),
+      okable: validate === undefined ? 0 : rows.filter(okable).length,
+      ok: validate === undefined ? { status: 'nothing', why: null } : okStanding({ rows, intent, run }),
       tenant: {
         ...standing,
         reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,

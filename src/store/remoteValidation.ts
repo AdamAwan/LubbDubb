@@ -198,6 +198,7 @@ export class RemoteValidationStore {
       if (row === undefined) return false;
       this.ctx.prep(`DELETE FROM remote_state_queries WHERE goal_ref=? AND query_id=?`).run(originRef, queryId);
       this.ctx.prep(`DELETE FROM remote_query_approvals WHERE query_digest=?`).run(row.digest);
+      this.ctx.prep(`DELETE FROM remote_sheet_rows WHERE goal_ref=? AND row_id=?`).run(originRef, `state:${queryId}`);
       return true;
     })();
   }

@@ -19,6 +19,7 @@ import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { RemoteRun, RemoteRunIntent, RemoteSheetRow, StateQueryInput } from '../src/types.js';
 import { okable, okStanding, pageRows, sheetsAwaitingOk } from '../src/validation/remote/intent.js';
 import { validationReadyPass } from '../src/validation/ready.js';
+import { DESK_SETTLED } from '../src/benchSettlement.js';
 import { arrivalSheetStep } from '../src/environments/watchWindow.js';
 
 /*
@@ -428,23 +429,17 @@ test('the validate row is held open while a page awaits its OK, though no check 
     'nothing to run by hand is asked for',
   );
 
-  const settled = (status: 'done' | 'declined') =>
-    ({ id: 't1', originRef: 'issue:12', kind: 'validate', status, resolution: 'marked by you' }) as never;
-  const back = validationReadyPass({
-    ...input,
-    existing: [settled('done')],
-    awaitingOk: new Map([['issue:12', ['acceptance']]]),
-  });
-  assert.equal(back[0]?.kind, 'reopen', 'a page that needs the OK again brings a done row back');
-  assert.deepEqual(
-    validationReadyPass({
-      ...input,
-      existing: [settled('declined')],
-      awaitingOk: new Map([['issue:12', ['acceptance']]]),
-    }),
-    [],
-    'a row the operator declined stays declined',
+  const settled = (status: 'done' | 'declined', resolution: string) =>
+    ({ id: 't1', originRef: 'issue:12', kind: 'validate', status, resolution }) as never;
+  const ask = (existing: never) =>
+    validationReadyPass({ ...input, existing: [existing], awaitingOk: new Map([['issue:12', ['acceptance']]]) });
+  assert.equal(
+    ask(settled('done', `${DESK_SETTLED}every check is recorded`))[0]?.kind,
+    'reopen',
+    'a row the desk settled comes back when a page needs the OK again — a run the pin abandoned',
   );
+  assert.deepEqual(ask(settled('done', 'marked by you')), [], 'a row the operator closed stays closed');
+  assert.deepEqual(ask(settled('declined', 'not now')), [], 'and so does one they declined');
 });
 
 test('a sheet is drawn once its checks are written, before anyone has accepted them', () => {
