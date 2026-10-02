@@ -276,6 +276,11 @@ const assign: Answerer = (row, ctx) => {
   };
 };
 
+const VERBATIM =
+  'Only the operator’s own words, typed by them in this conversation and passed verbatim — never a draft, ' +
+  'a suggestion or a tidy-up of yours. If they want it written for them, that is the agent’s draft, taken ' +
+  'from the pull request’s page where it is labelled as the agent’s.';
+
 const description: Answerer = (row, ctx) => {
   const pr = subjectOf(row, 'description_check')?.prNumber ?? null;
   if (pr === null) return unanswerable(ctx);
@@ -284,9 +289,26 @@ const description: Answerer = (row, ctx) => {
     tool: 'description_dismiss',
     args: { pr },
     choose: {},
+    instead: {
+      tool: 'description_write',
+      args: { pr },
+      when: `The operator agrees with a finding and rewrites the description. ${VERBATIM}`,
+    },
+    note: 'description_dismiss is sent only when the operator disagrees with the findings and leaves it as it is.',
+  };
+};
+
+const describe: Answerer = (row, ctx) => {
+  const pr = subjectOf(row, 'part')?.prNumber ?? null;
+  if (pr === null) return unanswerable(ctx);
+  return {
+    in: 'claude-code',
+    tool: 'description_write',
+    args: { pr },
+    choose: { text: `What the change does, in the operator’s words. ${VERBATIM}` },
     note:
-      'Sent only when the operator disagrees with the findings and leaves the description as it is. If they ' +
-      'agree, the fix is theirs to write in their own words — no tool writes it.',
+      'Show them the four questions a reviewer needs answered — is this what we asked for, what can’t be undone ' +
+      'if it is wrong, what’s missing, how far does it reach — as hints, not boxes to fill.',
   };
 };
 
@@ -326,9 +348,7 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
     'The operator’s own prediction and criteria, asked before the planner. A prediction typed through an ' +
       'assistant is not the blind guess it exists to be, so it is never taken here.',
   ),
-  describe: cockpit(
-    'The description is the operator’s own words. This channel checks one (/lubbdubb:describe) and never writes one.',
-  ),
+  describe,
   assigned: nowhere(
     'Somebody put this pull request on the operator where the fleet cannot see it. Nothing in the harness acts ' +
       'on it; the answer is the review itself.',

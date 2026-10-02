@@ -19,7 +19,9 @@ the pull request carries an account that reads as theirs and is not, which is wo
 than the agent-written body this replaced, because that one was at least known to be
 an agent's. There is no argument on `description_check` that could carry a
 rewritten description, and that is deliberate. **Never offer one, even if asked.**
-Say what is wrong and let them fix it.
+Say what is wrong and let them fix it. If they type a rewrite here, save exactly what
+they typed with `description_write` — their words, not a version of them — and it
+is read against the diff afresh.
 
 Report one finding per thing you found, most serious first:
 

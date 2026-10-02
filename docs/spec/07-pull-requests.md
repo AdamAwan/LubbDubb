@@ -971,7 +971,8 @@ drawn on the page, marked as left as is, so what the check said is still readabl
 version — a rewrite is a new, undismissed version, and **a re-check of the same version clears it**
 (`recordCheck`), because a new reading is new findings the operator has not yet seen. The press is
 `prDescriptions.dismissFindings`, addressed by pull request, and the desktop channel's
-`description_dismiss` is the same press from the operator's own session — a stamp and no text.
+`description_dismiss` is the same press from the operator's own session — a stamp and no text. An
+operator who agrees with a finding rewrites it, in the cockpit or [through their session](#relayed-through-claude-code).
 
 **`description_check` takes marks and findings and no text, and that is the invariant.** A session
 that hands back better prose gets it accepted, and then the pull request carries an account that
@@ -980,6 +981,30 @@ replaces, because that one is at least _known_ to be an agent's. Every reason fo
 gone and the surface still reads as though it is working. There is no argument on the tool that
 could carry a description, the skill says never to offer one, and the press is named **Check my
 description** rather than anything that suggests the session produces it.
+
+#### Relayed through Claude Code
+
+The operator may also _type_ their description in their own Claude Code session — answering the
+`describe` ask from `/lubbdubb:next`, or a rewrite after a check — and the session saves it with
+`description_write` on the desktop channel. It is the same act as the field on the pull request's
+page: a new version, written under `config.userId`, pushed with `HUMAN_NOTE`, read against the diff
+by rule `pr-description-check` like any other.
+
+**The channel may carry the operator's words; it must never produce them.** That is the invariant
+above, moved one step: `description_check` still takes no text, and `description_write` takes only
+text the operator typed in the conversation, passed verbatim. Nothing can enforce that mechanically —
+the harness cannot tell a person's sentence from a session's — and the cockpit cannot either: an
+operator can paste anything into the field. What the cockpit adds is friction, not proof. So the rule
+lives where the session reads it: the tool's description and argument, the `answerWith` the `describe`
+ask hands over, and the `next`, `fleet` and `describe` skills all say never to draft, suggest, tidy or
+complete one, and that a description the operator wants written for them is **the agent's draft**,
+taken on the pull request's page where it is labelled as the agent's.
+
+**Every version records where it was entered**, as `pr_descriptions.written_via` — `cockpit` or
+`claude-code`. Rows from before the column read `cockpit`, which is true of every one of them: the
+cockpit was the only writer. A version relayed through a session is still a person's for every
+reading of it — the mark, the pool's "who decided", the ask it answers — and the column exists so that
+claim can be audited rather than assumed.
 
 #### A check is findings, not four answers
 
