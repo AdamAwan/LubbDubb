@@ -1118,6 +1118,8 @@ export type { BuildReading, SnoozeStamps, SnoozeTarget, UpgradeAction } from './
 export type { AskDestination, AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
 export { buildAskQueue } from './asks/queue.js';
 export { askLine, oneLine } from './asks/lines.js';
+export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
+export { PART_GROUP, type PartGroup } from './plans/partGroup.js';
 export { projectName, upgradeHeadline } from './asks/updateAsks.js';
 export type { BuildStanding } from './selfUpdate/buildStanding.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';

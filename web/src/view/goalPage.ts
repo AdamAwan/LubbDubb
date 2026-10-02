@@ -23,6 +23,8 @@ import type {
   ValidationPlanRecord,
   ValidationResourceView,
 } from '../types.js';
+import type { PartGroup } from '../types.js';
+import { PART_GROUP } from '../../../src/wire.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
 import { belongsToGoal, closedPrs, goalIssue, ownsPr, reachesGoal } from './goalRefs.js';
 import {
@@ -38,7 +40,7 @@ import {
 
 // → docs/spec/17-cockpit.md
 
-export type PartGroup = 'merged' | 'now' | 'held' | 'waiting';
+export type { PartGroup } from '../types.js';
 
 export interface GoalPartView {
   part: PlanPart;
@@ -119,17 +121,6 @@ export function goalObligations(environments: readonly CockpitEnvironment[]): Go
   };
 }
 
-const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
-  merged: 'merged',
-  concluded: 'merged',
-  dispatched: 'now',
-  in_review: 'now',
-  blocked: 'held',
-  ready: 'waiting',
-  pending: 'waiting',
-  retired: null,
-};
-
 export function buildGoalPage(
   state: AppState,
   ref: string,
@@ -204,7 +195,7 @@ function goalParts(
 ): GoalPartView[] {
   return planParts
     .flatMap<GoalPartView>((part) => {
-      const group = GROUP_OF[part.status];
+      const group = PART_GROUP[part.status];
       if (!group) return [];
       const origins = new Set([`${ref}:part:${part.slug}`, ...(part.prNumber === null ? [] : [`pr:${part.prNumber}`])]);
       const on = goalAgents.filter((a) => origins.has(originOf(a) ?? ''));

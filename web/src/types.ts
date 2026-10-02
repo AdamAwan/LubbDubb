@@ -296,6 +296,7 @@ export type {
   ScratchEntry as ScratchEntryView,
   UnrecordedWork as UnrecordedWorkView,
   WorkNode as WorkNodeView,
+  PartGroup,
 } from '../../src/wire.js';
 
 // → docs/spec/16-http-api.md
