@@ -237,6 +237,7 @@ export const DESKTOP_TOOL_NAMES = [
   'description_read',
   'description_check',
   'description_dismiss',
+  'description_write',
   'pr_assign',
   'ask_next',
   'ask_skip',

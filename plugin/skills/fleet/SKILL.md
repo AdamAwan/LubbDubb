@@ -97,6 +97,9 @@ The rest actually do something:
 - **`description_dismiss`** — the operator's **Leave it as is** on the findings
   a check raised about their pull-request description. Only when they disagree
   with the findings; if they agree, the fix is theirs to write.
+- **`description_write`** — saves a pull-request description the operator typed
+  in this conversation, verbatim. It is published as a person's, so it carries
+  their words and never yours: no drafting, no tidying, no "how about…".
 - **`proposal_decide`** — see below. This is the one to be careful with.
 
 ### Deciding a proposed act

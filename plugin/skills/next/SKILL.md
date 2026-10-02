@@ -69,7 +69,7 @@ What they can say at any point:
 
 - **`answerWith.in: "cockpit"`** — this kind is answered in the cockpit, on
   purpose: a failing setup check or another deployment setting, upgrades, the operator's own prediction, a
-  description in their own words, a usage-limit park, a plan not yet revealed. Say
+  usage-limit park, a plan not yet revealed. Say
   what it is and why (`why`), give them the `link`, and offer to skip it.
 - **`answerWith.in: "nowhere"`** — there is no decision to make: a pull request
   somebody put on them, or a dispatch refused for the reason the row names. Say what
@@ -91,6 +91,13 @@ What they can say at any point:
   and **show the operator what you saw before** calling `validation_report` — they
   confirm the reading, you do not grade your own run. The `check` skill is the whole
   of how. Settle the row with `human_task_settle` once the checks are read.
+- **A `describe` ask carries the operator's words, and only theirs.** Ask them
+  what the change does, with the four questions in `answerWith.choose` as hints,
+  and pass what they type to `description_write` verbatim. It goes on the pull
+  request marked as written by a person, so **never draft, suggest, tidy or
+  finish one** — not even when asked, and not as "something like…" for them to
+  agree to. If they want it written for them, that is the agent's draft, taken on
+  the pull request's page where it is labelled as the agent's.
 - **A `bench` or `close_out` row is work, not a question.** `done` only once the
   thing has actually been done — ask, do not assume.
 - **An agent's question is typed straight into a running agent**, and it acts on

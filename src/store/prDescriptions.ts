@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type {
   DescriptionAwaitingCheck,
+  DescriptionChannel,
   DescriptionFinding,
   DescriptionQuestion,
   PrDescriptionDraft,
@@ -25,6 +26,7 @@ export const PR_DESCRIPTION_COLUMNS: ColumnMigrations = {
   pr_descriptions: {
     pushed_at: 'TEXT',
     dismissed_at: 'TEXT',
+    written_via: "TEXT NOT NULL DEFAULT 'cockpit'",
   },
 };
 
@@ -54,7 +56,12 @@ export class PrDescriptionStore {
    * plus one, taken inside the write so two presses cannot mint the same number —
    * the `UNIQUE (origin_ref, version)` index refuses the second if they do.
    */
-  appendDescription(input: { originRef: string; text: string; author: string | null }): PrDescriptionVersion {
+  appendDescription(input: {
+    originRef: string;
+    text: string;
+    author: string | null;
+    via?: DescriptionChannel;
+  }): PrDescriptionVersion {
     const write = this.ctx.db.transaction((): PrDescriptionVersion => {
       const standing = this.currentDescription(input.originRef);
       const version: PrDescriptionVersion = {
@@ -65,14 +72,15 @@ export class PrDescriptionStore {
         text: input.text,
         author: input.author,
         authoredAt: this.ctx.now(),
+        via: input.via ?? 'cockpit',
         checkedAt: null,
         findings: [],
         dismissedAt: null,
       };
       this.ctx
         .prep(
-          `INSERT INTO pr_descriptions (id, origin_ref, version, supersedes, text, author, authored_at)
-           VALUES (@id, @originRef, @version, @supersedes, @text, @author, @authoredAt)`,
+          `INSERT INTO pr_descriptions (id, origin_ref, version, supersedes, text, author, authored_at, written_via)
+           VALUES (@id, @originRef, @version, @supersedes, @text, @author, @authoredAt, @via)`,
         )
         .run({
           id: version.id,
@@ -82,6 +90,7 @@ export class PrDescriptionStore {
           text: version.text,
           author: version.author,
           authoredAt: version.authoredAt,
+          via: version.via,
         });
       return version;
     });
@@ -507,6 +516,7 @@ export class PrDescriptionStore {
       text: r.text,
       author: r.author,
       authoredAt: r.authored_at,
+      via: r.written_via,
       checkedAt: r.checked_at,
       findings: r.checked_at === null ? [] : this.findingsOf(r.id),
       dismissedAt: r.dismissed_at,
@@ -522,6 +532,7 @@ interface DescriptionRow {
   text: string;
   author: string | null;
   authored_at: string;
+  written_via: DescriptionChannel;
   checked_at: string | null;
   dismissed_at: string | null;
 }

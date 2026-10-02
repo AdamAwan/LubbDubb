@@ -177,6 +177,33 @@ test('leaves room for a band drawn beneath it, outside its box, and hides only i
   }
 })
 
+test('Next on the band drafts /lubbdubb:next; it does not run it', async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  harness(on)
+  const filled: string[] = []
+  const started: string[] = []
+  on('prompt.fill', async (_$, e) => {
+    filled.push(e.text)
+    return { value: { isFilled: true, text: e.text, cursor: e.text.length } }
+  })
+  on('command.run', { command: 'lubbdubb:next' }, async (_$, e) => {
+    started.push(e.command)
+    return { text: '' }
+  })
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return h(Box, {}) as RenderElement
+  })
+  await $.command.run(BOARD)
+
+  const ui = await $.ui.mount({ plugin: 'lubbdubb', surface: 'terminal', component: 'AbovePrompt', props: BAND })
+  await ui.press({ key: 'next' })
+  await ui.unmount()
+
+  expect(filled).toEqual(['/lubbdubb:next'])
+  expect(started).toEqual([])
+})
+
 test('toasts only what is new since the last look', async ($, on) => {
   mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
   let state: unknown = STATE
@@ -243,7 +270,7 @@ test('the panel only drafts into the prompt box; it never sends', async ($, on) 
 
   expect(sent).toEqual([])
   expect(filled).toEqual([
-    'Work through what LubbDubb is waiting on me for, one ask at a time.',
+    '/lubbdubb:next',
     'What\'s the state of LubbDubb feature #90 "Arrival sheet v2"? What has been delivered, what is in flight, and what is blocking it?',
     'Help me decide LubbDubb ask e2 (merge): Merge #412',
   ])

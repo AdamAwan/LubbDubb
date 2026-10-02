@@ -101,7 +101,7 @@ async function deck(planWithheld = false): Promise<Deck> {
 }
 
 test('the answering tools are the operator’s and never the fleet’s', () => {
-  for (const name of ['sequence_answer', 'pr_assign', 'description_dismiss']) {
+  for (const name of ['sequence_answer', 'pr_assign', 'description_dismiss', 'description_write']) {
     assert.ok(DESKTOP_TOOL_NAMES.includes(name as never), `${name} is a desktop tool`);
     assert.ok(!MCP_TOOL_NAMES.includes(name as never), `${name} is not one the fleet can call`);
   }
@@ -279,6 +279,39 @@ test('description_dismiss leaves a check’s findings as they are, and refuses a
     assert.equal(current?.findings.length, 1, 'and the findings stay readable');
     assert.equal(current?.text, 'Adds X.', 'the text is untouched — this channel never writes one');
     assert.deepEqual(d.changes, [{ type: 'dirty', sections: ['plans'] }], 'the route’s own broadcast, once');
+  } finally {
+    await d.close();
+  }
+});
+
+test('description_write saves the operator’s words verbatim as a new version, marked as entered here', async () => {
+  const d = await deck();
+  try {
+    const originRef = 'issue:4:part:a';
+    d.system.store.prDescriptions.recordPrBody({ originRef, prNumber: 12, tail: 'footer' });
+
+    const written = await d.call('description_write', { pr: 12, text: '  Reconciles the empty statements.  ' });
+    assert.equal(written.isError, false, written.text);
+    const current = d.system.store.prDescriptions.currentDescription(originRef);
+    assert.equal(current?.text, 'Reconciles the empty statements.', 'their words, trimmed and nothing else');
+    assert.equal(current?.author, 'me', 'under the operator, as the cockpit writes it');
+    assert.equal(current?.via, 'claude-code', 'and recorded as entered through their session');
+    assert.equal(current?.version, 1);
+    assert.deepEqual(d.changes, [{ type: 'dirty', sections: ['plans'] }], 'the route’s own broadcast, once');
+
+    const rewrite = await d.call('description_write', { pr: 12, text: 'Second go.' });
+    assert.equal(rewrite.isError, false, rewrite.text);
+    assert.equal(d.system.store.prDescriptions.currentDescription(originRef)?.version, 2, 'a rewrite is a new version');
+
+    const cockpit = d.system.store.prDescriptions.appendDescription({
+      originRef,
+      text: 'From the field.',
+      author: 'me',
+    });
+    assert.equal(cockpit.via, 'cockpit', 'the field on the page is the default channel');
+
+    assert.ok((await d.call('description_write', { pr: 12, text: '   ' })).isError, 'an empty description is refused');
+    assert.ok((await d.call('description_write', { pr: 99, text: 'x' })).isError, 'as is a pull request no part owns');
   } finally {
     await d.close();
   }

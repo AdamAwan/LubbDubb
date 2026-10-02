@@ -135,6 +135,9 @@ export const register: Register = (on, options) => {
               </Text>
             )
           })}
+          {now.notices.length > 0 && (
+            <Button key="next" plain label="Work through asks" onPress={draft($, '/lubbdubb:next')} />
+          )}
           <Button
             key="open-panel"
             plain
@@ -264,8 +267,8 @@ export const register: Register = (on, options) => {
                 key="next"
                 hotkey="n"
                 variant="primary"
-                label="Work through"
-                onPress={draft($, 'Work through what LubbDubb is waiting on me for, one ask at a time.')}
+                label="Work through asks"
+                onPress={draft($, '/lubbdubb:next')}
               />
             ),
           )}
