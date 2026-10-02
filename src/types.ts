@@ -1742,7 +1742,7 @@ export interface StateQuery extends StateQueryInput {
   dryRunSample: string | null;
 }
 
-export type RemoteRowKind = 'check' | 'state' | 'signal' | 'measure';
+export type RemoteRowKind = 'check' | 'state';
 
 /**
  * What a sheet row came back as. **`captured` is not a synonym for either end of the other three**:

@@ -356,10 +356,10 @@ const realApi = {
     ),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   ruleRemoteQuery: (issueNumber: number, environment: string, rowId: string, accept: boolean) => {
-    const [kind, id] = splitRemoteRowId(rowId);
+    const [, id] = splitRemoteRowId(rowId);
     return post<{ ok: true }>(
-      `/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/` +
-        `${kind === 'watch' ? 'watch-queries' : 'queries'}/${encodeURIComponent(id)}`,
+      `/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/queries/` +
+        encodeURIComponent(id),
       { accept },
     );
   },

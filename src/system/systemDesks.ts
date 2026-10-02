@@ -162,7 +162,6 @@ function buildRemoteValidationDesks(
   const remoteValidation = new RemoteValidationDesk({
     store,
     environments: config.environments,
-    observer: environmentObserver,
     queries: stateQueries,
     scriptGraceMs: config.remoteValidation.scriptGraceMs,
     probeIntervalMs: config.environmentProbeIntervalMs,

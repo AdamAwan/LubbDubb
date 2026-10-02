@@ -13,7 +13,15 @@ export interface EnvironmentConfig {
   validate?: EnvironmentValidate;
 }
 
-const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state', 'signal', 'measure'];
+const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state'];
+
+/**
+ * Row kinds a sheet no longer has: the watch's signals and measures are read by the window and drawn on
+ * the page, never asked again as sheet rows. Named in a deployment's `permits`, each is dropped with a
+ * warning rather than refused, because refusing would stop the harness booting over a word that now
+ * means nothing. → docs/spec/36-remote-validation.md#the-watch-is-not-on-the-sheet
+ */
+const RETIRED_ROW_KINDS: readonly string[] = ['signal', 'measure'];
 
 interface EnvironmentValidate {
   permits: RemoteRowKind[];
@@ -281,6 +289,14 @@ function validatePermits(permits: RemoteRowKind[], where: string): void {
       `${where}: "validate.permits" is empty. It reads as a configuration and permits nothing, so every row ` +
         `would come back blocked forever — name ${REMOTE_ROW_KINDS.join(' / ')}, or drop the "validate" block.`,
     );
+  const retired = permits.filter((kind) => RETIRED_ROW_KINDS.includes(kind));
+  if (retired.length > 0) {
+    console.warn(
+      `[lubbdubb] ${where}: "validate.permits" names ${retired.join(', ')}, which a sheet no longer has — the ` +
+        'watch reads them and the page draws its readings. Ignoring it; delete the name.',
+    );
+    permits.splice(0, permits.length, ...permits.filter((kind) => !RETIRED_ROW_KINDS.includes(kind)));
+  }
   for (const kind of permits)
     if (!REMOTE_ROW_KINDS.includes(kind))
       throw new Error(

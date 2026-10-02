@@ -530,20 +530,14 @@ rather than with time. The one case a reading is deleted is a check an amendment
 which takes its readings with it in the same transaction: neither a verdict nor its evidence is left
 behind, because a reading of a check no document declares is a number with no rule.
 
-### A sheet reads these checks, and takes nothing from this table
+### A sheet does not read these checks
 
-A remote validation sheet draws its `signal` and `measure` rows from the goal's **live** watch checks,
-through `listGoalWatches` like every other reader that puts a query to an environment — so an agent's
-unapproved declaration cannot reach the operator's telemetry through it either. Two rules keep the two
-subsystems from folding into one:
-
-- **A sheet's reading is never written into `watch_readings`.** Those rows are a window's evidence on
-  the window's own clock, and a point-in-time read folded in would move a settled verdict and look
-  exactly like the watch working. The sheet keeps its own readings.
-- **A live check is still `blocked` on a sheet until its query digest has been accepted against that
-  environment.** The dry run puts a query to one environment to learn whether it parses, which is a
-  property of the query; a sheet puts it to a named place, and consent to a place is not transferable.
-  → [36](36-remote-validation.md#a-query-is-approved-by-a-person-before-it-is-ever-run)
+A remote validation sheet carried the goal's live `signal` and `measure` checks as rows once, read a
+second time against each environment and approved a second time per environment — one question with
+two answers in two tables. It no longer does: the window reads them, on its own clock, and the
+validation page draws the window's readings read-only. Nothing a sheet does is ever written into
+`watch_readings`, and the window's findings stay on the `watch` row.
+→ [36](36-remote-validation.md#the-watch-is-not-on-the-sheet)
 
 ## The verdict
 

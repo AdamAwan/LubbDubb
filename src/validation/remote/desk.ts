@@ -1,9 +1,6 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { EnvironmentObserver } from '../../environments/observer.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
-import { arrivalSheetStep, sheetableArrivals, watchWindowMs } from '../../environments/watchWindow.js';
-import { watchCheckVerdict } from '../../environments/watchVerdict.js';
-import type { WatchResult } from '../../environments/watchResult.js';
+import { arrivalSheetStep, sheetableArrivals } from '../../environments/watchWindow.js';
 import { issueOriginNumber } from '../../issueOrigins.js';
 import { readFile } from 'node:fs/promises';
 import type { ActionSink, IssueImageSink } from '../../sink/actionSink.js';
@@ -12,8 +9,7 @@ import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import { checkSetStanding, type CheckSetStanding } from '../planApproval.js';
 import { sweptScripts } from '../steps.js';
-import { queryDigest } from '../../store/remoteValidation.js';
-import type { GoalArrival, GoalWatch, RemoteRowOutcome, RemoteSheetRow, StateQuery } from '../../types.js';
+import type { GoalArrival, RemoteRowOutcome, RemoteSheetRow, StateQuery } from '../../types.js';
 import { captureComment, postableCaptures, type CaptureLink, type PostableCapture } from './capturePost.js';
 import { noSheetReason, sheetRows, type SheetRowPlan, type SheetRowRun } from './sheet.js';
 import type { StateQueryDesk } from './stateQueries.js';
@@ -28,7 +24,6 @@ const SWEPT =
 interface RemoteValidationDeskDeps {
   store: Store;
   environments: readonly EnvironmentConfig[];
-  observer: EnvironmentObserver;
   queries: StateQueryDesk;
   probeIntervalMs: number;
   /**
@@ -329,44 +324,6 @@ export class RemoteValidationDesk {
     }
   }
 
-  /**
-   * The second key, for a live watch check: an operator has read this query and accepted it *here*.
-   * The watch put it to one environment to learn whether it parses; a sheet puts it to a named place,
-   * and consent to a place is not transferable — so a check live on the watch is still blocked on a
-   * sheet until its digest has been accepted against that environment.
-   *
-   * @public the seam the sheet's approval route writes an operator's consent to a watch query through
-   */
-  async ruleWatchQuery(
-    originRef: string,
-    checkId: string,
-    environmentName: string,
-    accept: boolean,
-  ): Promise<{ check: GoalWatch; reading: RowReading | null; approved: boolean } | null> {
-    const check = this.deps.store.watches.listGoalWatches().find((c) => c.originRef === originRef && c.id === checkId);
-    if (check === undefined) return null;
-    const environment = this.deps.environments.find((e) => e.name === environmentName);
-    if (environment === undefined) return null;
-    const digest = queryDigest(check.query, check.presence ?? '');
-    if (!accept) {
-      this.deps.store.remoteValidation.declineStateQuery(digest, environment.name);
-      this.refoldApprovals(environment);
-      return { check, reading: null, approved: false };
-    }
-    const reading = await this.readWatch(environment, originRef, checkId);
-    if (reading === null || reading.outcome === 'blocked') return { check, reading, approved: false };
-    this.deps.store.remoteValidation.approveStateQuery({
-      digest,
-      environment: environment.name,
-      originRef,
-      queryId: checkId,
-      rows: reading.rows,
-      detail: reading.detail,
-    });
-    this.refoldApprovals(environment);
-    return { check, reading, approved: true };
-  }
-
   private async assemble(arrival: GoalArrival): Promise<void> {
     const { store } = this.deps;
     const environment = this.deps.environments.find((e) => e.name === arrival.environment);
@@ -450,7 +407,6 @@ export class RemoteValidationDesk {
     return sheetRows({
       environment,
       checks: store.validation.listValidationChecks(goalRef),
-      watches: store.watches.listGoalWatches().filter((w) => w.originRef === goalRef),
       queries: store.remoteValidation.listStateQueries().filter((q) => q.originRef === goalRef),
       approvals: new Set(store.remoteValidation.listStateQueryApprovals().map((a) => `${a.digest} ${a.environment}`)),
       // Resolved here rather than in `sheetRows`: the sheet is a pure fold, and where a tenant comes
@@ -518,9 +474,7 @@ export class RemoteValidationDesk {
     run: Exclude<SheetRowRun, null>,
     sourceId: string,
   ): Promise<RowReading | null> {
-    return run === 'state'
-      ? this.readState(environment, goalRef, sourceId)
-      : this.readWatch(environment, goalRef, sourceId);
+    return this.readState(environment, goalRef, sourceId);
   }
 
   private async readState(
@@ -543,64 +497,6 @@ export class RemoteValidationDesk {
       detail:
         `${environment.name} answered ${String(rows)} row${rows === 1 ? '' : 's'} where the query declared none ` +
         'should match.',
-    };
-  }
-
-  /**
-   * What a sheet's reading of a live watch check is about: this goal's arrival on
-   * that environment, which is the same instant the window's own readings are
-   * bounded to — so the sheet and the watch answer the same question of the same
-   * period, and a sheet run before the work arrived reads the window the run is in.
-   */
-  private watchSince(environment: EnvironmentConfig, goalRef: string): string {
-    const arrivals = this.deps.store.environments
-      .listGoalArrivals()
-      .filter((a) => a.goalRef === goalRef && a.environment === environment.name);
-    const arrived = arrivals[arrivals.length - 1]?.arrivedAt;
-    return arrived ?? new Date(this.now() - watchWindowMs(environment)).toISOString();
-  }
-
-  private async readWatch(
-    environment: EnvironmentConfig,
-    goalRef: string,
-    checkId: string,
-  ): Promise<RowReading | null> {
-    const check: GoalWatch | undefined = this.deps.store.watches
-      .listGoalWatches()
-      .find((c) => c.originRef === goalRef && c.id === checkId);
-    if (check === undefined) return null;
-    const command = environment.watch?.observe;
-    if (command === undefined) return null;
-    const since = this.watchSince(environment, goalRef);
-    const presence: WatchResult | null =
-      check.presence === null
-        ? null
-        : await this.deps.observer.observe({
-            environment: environment.name,
-            command,
-            checkId: check.id,
-            query: check.presence,
-            kind: 'presence',
-            since,
-          });
-    const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
-    const result = silent
-      ? presence
-      : await this.deps.observer.observe({
-          environment: environment.name,
-          command,
-          checkId: check.id,
-          query: check.query,
-          kind: check.kind === 'measure' ? 'measure' : 'signal',
-          since,
-        });
-    const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading: result });
-    if (verdict.verdict === 'unknown') return { outcome: 'blocked', rows: null, value: null, detail: verdict.detail };
-    return {
-      outcome: verdict.verdict === 'clean' ? 'passed' : 'failed',
-      rows: verdict.rows,
-      value: result.value,
-      detail: verdict.detail,
     };
   }
 }

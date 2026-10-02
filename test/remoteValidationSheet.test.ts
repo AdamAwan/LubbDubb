@@ -38,14 +38,14 @@ const ACCEPTANCE: EnvironmentConfig = {
   name: 'acceptance',
   at: 'echo unused',
   watch: { observe: './telemetry.sh acceptance' },
-  validate: { permits: ['state', 'signal'], state: { run: './query.sh acceptance' } },
+  validate: { permits: ['state'], state: { run: './query.sh acceptance' } },
 };
 
 const PRODUCTION: EnvironmentConfig = {
   name: 'production',
   at: 'echo unused',
   watch: { observe: './telemetry.sh production' },
-  validate: { permits: ['state', 'signal'], state: { run: './query.sh production' } },
+  validate: { permits: ['state'], state: { run: './query.sh production' } },
 };
 
 const QUERY: StateQueryInput = {
@@ -119,7 +119,6 @@ function bench(
     validationRoot: NO_CAPTURES,
     store,
     environments,
-    observer: env,
     queries: new StateQueryDesk({ store, environments, reader: stateReader }),
     scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: PROBE_MS,
@@ -154,7 +153,7 @@ function approve(store: Store, goalRef: string, environment: string, query: stri
   });
 }
 
-test('an arrival assembles one sheet, of the goal’s checks, watches and state queries', async () => {
+test('an arrival assembles one sheet, of the goal’s checks and state queries — never its watch', async () => {
   const { store, desk } = bench();
   try {
     seedGoal(store);
@@ -167,7 +166,8 @@ test('an arrival assembles one sheet, of the goal’s checks, watches and state 
     );
     assert.deepEqual(
       store.remoteValidation.listRemoteSheetRows().map((r) => `${r.kind}:${r.sourceId}`),
-      ['check:an-order-places', 'state:orders-carry-a-channel', 'signal:checkout-throws'],
+      ['check:an-order-places', 'state:orders-carry-a-channel'],
+      'the watch reads its own signals; the page draws them, and they are never asked again as rows',
     );
     assert.notEqual(store.environments.listGoalArrivals()[0]?.sheetedAt, null, 'the arrival is stamped');
   } finally {
@@ -194,7 +194,7 @@ test('a second arrival re-runs the sheet that exists rather than opening a secon
       first.assembledAt,
       'a sheet does not expire',
     );
-    assert.equal(store.remoteValidation.listRemoteSheetRows().length, 3, 'and its rows are replaced, never duplicated');
+    assert.equal(store.remoteValidation.listRemoteSheetRows().length, 2, 'and its rows are replaced, never duplicated');
   } finally {
     store.close();
   }
@@ -238,22 +238,18 @@ test('a state query that matches rows fails the row, and says what it answered',
   }
 });
 
-test('an unapproved query is blocked, never run and never failed — a state query and a live watch check alike', async () => {
-  const { store, desk, reader: asked, observer: watched } = bench();
+test('an unapproved query is blocked, never run and never failed', async () => {
+  const { store, desk, reader: asked } = bench();
   try {
     seedGoal(store);
     arrive(store, 'acceptance');
     await desk.run();
 
-    const rows = store.remoteValidation.listRemoteSheetRows();
-    for (const rowId of [`state:${QUERY.id}`, `watch:${SIGNAL.id}`]) {
-      const row = rows.find((r) => r.rowId === rowId);
-      assert.equal(row?.awaitingApproval, true, `${rowId} says what it waits for`);
-      assert.match(row?.blockedReason ?? '', /waiting for an operator to read it and accept it against acceptance/);
-    }
+    const row = store.remoteValidation.listRemoteSheetRows().find((r) => r.rowId === `state:${QUERY.id}`);
+    assert.equal(row?.awaitingApproval, true, 'it says what it waits for');
+    assert.match(row?.blockedReason ?? '', /waiting for an operator to read it and accept it against acceptance/);
     assert.deepEqual(store.remoteValidation.listRemoteReadings(), [], 'nothing unapproved was run');
     assert.deepEqual(asked.asked, [], 'and no command was put to the store');
-    assert.deepEqual(watched.asked, [], 'nor to the telemetry');
   } finally {
     store.close();
   }
@@ -281,12 +277,17 @@ test('a query approved against one environment is still blocked on another', asy
 });
 
 test('a state row on a store nothing can reach is blocked while every other row on the sheet still reports', async () => {
-  const unreachable = new FakeStateReader({});
-  const { store, desk } = bench([ACCEPTANCE], () => NOW, { reader: unreachable });
+  const OTHER: StateQueryInput = { ...QUERY, id: 'refunds-balance', seq: 2, query: 'select id from refunds where 1=0' };
+  const partly = new FakeStateReader({
+    [`${OTHER.id}:presence`]: JSON.stringify([watchRow(OTHER.id, { id: 1 })]),
+    [`${OTHER.id}:state`]: JSON.stringify([]),
+  });
+  const { store, desk } = bench([ACCEPTANCE], () => NOW, { reader: partly });
   try {
     seedGoal(store);
+    store.remoteValidation.saveStateQueries('issue:12', [OTHER], 'agent');
     approve(store, 'issue:12', 'acceptance', QUERY.query, QUERY.presence);
-    approve(store, 'issue:12', 'acceptance', SIGNAL.query, SIGNAL.presence!);
+    approve(store, 'issue:12', 'acceptance', OTHER.query, OTHER.presence);
     arrive(store, 'acceptance');
     await desk.run();
 
@@ -298,7 +299,7 @@ test('a state row on a store nothing can reach is blocked while every other row 
       'and an observation that fails is never a reading',
     );
     assert.equal(
-      store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `watch:${SIGNAL.id}`)?.outcome,
+      store.remoteValidation.listRemoteReadings().find((r) => r.rowId === `state:${OTHER.id}`)?.outcome,
       'passed',
       'blocked resolves per row, never per run',
     );
@@ -340,12 +341,6 @@ test('a row of a kind the environment does not permit is blocked, saying so', as
 
     const rows = store.remoteValidation.listRemoteSheetRows();
     assert.match(rows.find((r) => r.kind === 'check')?.blockedReason ?? '', /does not permit check rows/);
-    assert.match(rows.find((r) => r.kind === 'signal')?.blockedReason ?? '', /does not permit signal rows/);
-    assert.equal(
-      rows.find((r) => r.kind === 'signal')?.awaitingApproval,
-      false,
-      'a kind nothing may ask for is not waiting on a person',
-    );
   } finally {
     store.close();
   }
@@ -439,7 +434,6 @@ test('a pass that throws is recorded and never fails the cycle', async () => {
       validationRoot: NO_CAPTURES,
       store,
       environments: [ACCEPTANCE],
-      observer: observer(),
       queries: {
         read: () => {
           throw new Error('the reader blew up');
@@ -640,7 +634,6 @@ test('a database written before goal_arrivals.sheeted_at gains it on boot, and n
         validationRoot: NO_CAPTURES,
         store,
         environments: [ACCEPTANCE],
-        observer: observer(),
         queries: new StateQueryDesk({ store, environments: [ACCEPTANCE], reader: reader() }),
         scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
         probeIntervalMs: PROBE_MS,

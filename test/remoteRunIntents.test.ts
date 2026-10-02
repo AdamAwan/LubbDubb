@@ -12,7 +12,7 @@ import { RemoteIntentDesk } from '../src/validation/remote/intent.js';
 import { StateQueryDesk } from '../src/validation/remote/stateQueries.js';
 import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
-import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
+import { watchRow } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
@@ -68,7 +68,6 @@ function bench(
     validationRoot: join(tmpdir(), 'lubbdubb-no-captures'),
     store,
     environments,
-    observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments, reader }),
     scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: 60_000,
@@ -385,4 +384,26 @@ test('a sheet is drawn once its checks are written, before anyone has accepted t
 
   assert.equal(step({ accepted: false, acceptedAt: null, authoredAt: null }), 'awaiting-checks');
   assert.equal(step({ accepted: false, acceptedAt: null, authoredAt: new Date(NOW).toISOString() }), 'ready');
+});
+
+test('the boot after the watch left the sheet deletes the watch rows and their readings, and nothing else', () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-watchrows-')), 'db.sqlite');
+  const first = new Store(path);
+  first.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+  first.close();
+  const raw = new Database(path);
+  const insert = raw.prepare(
+    `INSERT INTO remote_sheet_rows (goal_ref, environment, row_id, kind, seq, title, source_id, selected, updated_at)
+     VALUES ('issue:12', 'acceptance', ?, ?, 1, 't', 's', 1, '2026-09-08T12:00:00.000Z')`,
+  );
+  insert.run('watch:checkout-throws', 'signal');
+  insert.run(`state:${QUERY.id}`, 'state');
+  raw.close();
+
+  const upgraded = new Store(path);
+  assert.deepEqual(
+    upgraded.remoteValidation.listRemoteSheetRows().map((r) => r.rowId),
+    [`state:${QUERY.id}`],
+  );
+  upgraded.close();
 });

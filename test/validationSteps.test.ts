@@ -545,7 +545,6 @@ test('a check’s state step is not a sheet row — it is read where it sits, no
         },
       ]),
     ],
-    watches: [],
     queries: [],
     approvals: new Set(),
   });

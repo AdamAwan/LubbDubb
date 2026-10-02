@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { Store } from '../../store/store.js';
-import { queryDigest } from '../../store/remoteValidation.js';
 import type { RemoteRunIntent, RemoteSheet, RemoteSheetRow } from '../../types.js';
 import type { RemoteValidationDesk } from './desk.js';
 import type { RemoteRunDesk } from './run.js';
@@ -181,12 +180,6 @@ export class RemoteIntentDesk {
         .filter((q) => q.originRef === goalRef)
         .map((q) => [q.id, q.digest]),
     );
-    const watches = new Map(
-      store.watches
-        .listGoalWatches()
-        .filter((w) => w.originRef === goalRef)
-        .map((w) => [w.id, queryDigest(w.query, w.presence ?? '')]),
-    );
     const parts = this.deps.desk
       .fold(environment, goalRef)
       .map((r) => {
@@ -194,7 +187,7 @@ export class RemoteIntentDesk {
           const c = checks.get(r.sourceId);
           return `${r.rowId}\x00${JSON.stringify(c === undefined ? null : [c.title, c.do, c.expect, c.proof, c.steps])}`;
         }
-        return `${r.rowId}\x00${(r.kind === 'state' ? queries : watches).get(r.sourceId) ?? ''}`;
+        return `${r.rowId}\x00${queries.get(r.sourceId) ?? ''}`;
       })
       .sort();
     return createHash('sha256').update(parts.join('\x01')).digest('hex').slice(0, 32);

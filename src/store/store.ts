@@ -126,6 +126,10 @@ function migrate(db: Database.Database, clock: Clock): void {
         environment: string;
       }[],
     );
+  // The watch's signals and measures were sheet rows once; nothing writes one now, so this is a no-op
+  // after the first boot. → docs/spec/36-remote-validation.md#the-watch-is-not-on-the-sheet
+  db.exec(`DELETE FROM remote_sheet_rows WHERE kind IN ('signal', 'measure');
+           DELETE FROM remote_readings WHERE row_id LIKE 'watch:%';`);
   adoptFloorCompletions(db);
   absorbSinglePlanStatus(db);
   declineRetiredOutcomeRows(db, clock());

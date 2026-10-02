@@ -111,7 +111,6 @@ function bench(
     validationRoot: NO_CAPTURES,
     store,
     environments,
-    observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments, reader }),
     scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: 60_000,

@@ -696,8 +696,9 @@ are two steps of one.
 they are read at assembly and again synchronously at the press, both before the agent's browser half
 runs ([36](36-remote-validation.md#the-press)) — which is correct for a row asking whether anything is
 screaming, and wrong for one asking whether the order the browser steps just placed exists. As a step
-it is read where it sits. Rows that belong to no check — the goal's watch-derived `signal` and
-`measure` rows — keep the assembly behaviour they have.
+it is read where it sits. Rows that belong to no check — the goal's own `state` queries — keep the
+assembly behaviour they have; the goal's watch checks are not sheet rows at all
+([36](36-remote-validation.md#the-watch-is-not-on-the-sheet)).
 
 ### An inline person and a deferred one are not the same step
 

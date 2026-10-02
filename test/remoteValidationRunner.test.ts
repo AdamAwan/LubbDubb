@@ -12,7 +12,7 @@ import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { parseSelectorListing } from '../src/validation/remote/runner.js';
 import { preflightRows } from '../src/validation/remote/preflight.js';
 import { runnableSelectors } from '../src/validation/remote/briefing.js';
-import { FakeEnvironmentObserver, watchRow } from '../src/environments/fakeObserver.js';
+import { watchRow } from '../src/environments/fakeObserver.js';
 import { queryDigest } from '../src/store/remoteValidation.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { StateQueryInput, ValidationCheck, ValidationCheckInput, ValidationStep } from '../src/types.js';
@@ -121,7 +121,6 @@ function bench(environments: EnvironmentConfig[] = [ACCEPTANCE]): Bench {
     validationRoot: dir,
     store,
     environments,
-    observer: new FakeEnvironmentObserver(),
     queries: new StateQueryDesk({ store, environments, reader: reader() }),
     scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
     probeIntervalMs: PROBE_MS,

@@ -1,10 +1,8 @@
 import type { EnvironmentConfig } from '../../environments/policy.js';
-import { queryDigest } from '../../store/remoteValidation.js';
 import type { ArrivalSheetStep } from '../../environments/watchWindow.js';
 import type {
   GoalReachStatus,
   NoSheet,
-  GoalWatch,
   RemoteRowKind,
   RemoteRowOutcome,
   RemoteSheetRow,
@@ -18,7 +16,7 @@ import { selectorFault } from './runner.js';
 // → docs/spec/36-remote-validation.md
 
 /** What the desk executes for a row, once nothing has blocked it. `null` is a row a person runs. */
-export type SheetRowRun = 'state' | 'watch' | null;
+export type SheetRowRun = 'state' | null;
 
 /**
  * What a stored row is executed by, read back off its own id. The press re-runs a confirmed row
@@ -27,7 +25,6 @@ export type SheetRowRun = 'state' | 'watch' | null;
  */
 export function rowRun(rowId: string): SheetRowRun {
   if (rowId.startsWith('state:')) return 'state';
-  if (rowId.startsWith('watch:')) return 'watch';
   return null;
 }
 
@@ -38,7 +35,6 @@ export interface SheetRowPlan extends Omit<RemoteSheetRow, 'goalRef' | 'environm
 interface SheetInput {
   environment: EnvironmentConfig;
   checks: readonly ValidationCheck[];
-  watches: readonly GoalWatch[];
   queries: readonly StateQuery[];
   /** `${digest} ${environment}` for every approval a person has written. */
   approvals: ReadonlySet<string>;
@@ -52,8 +48,8 @@ interface SheetInput {
 }
 
 /**
- * The goal's own checks, its live watch checks and its `state` queries, as one list against one
- * environment. Nothing here is a second checklist beside the one an operator already keeps.
+ * The goal's own checks and its `state` queries, as one list against one environment. The watch's
+ * signals and measures are not rows here: the window reads them, and the page draws its readings. Nothing here is a second checklist beside the one an operator already keeps.
  *
  * Every cause of `blocked` this function can see is resolved **per row**: a kind the environment
  * does not permit, a query nobody has accepted here, and an area holding the character its own
@@ -79,12 +75,6 @@ export function sheetRows(input: SheetInput): SheetRowPlan[] {
   for (const query of input.queries) {
     seq += 1;
     out.push(queryRow(query, seq, input, permits));
-  }
-
-  for (const watch of input.watches) {
-    if (!watch.live) continue;
-    seq += 1;
-    out.push(watchRow(watch, seq, input, permits));
   }
 
   return out;
@@ -133,32 +123,6 @@ function queryRow(query: StateQuery, seq: number, input: SheetInput, permits: re
     // instrument for it to be missing.
     idleReason: null,
     run: 'state',
-  };
-}
-
-function watchRow(watch: GoalWatch, seq: number, input: SheetInput, permits: readonly RemoteRowKind[]): SheetRowPlan {
-  const { environment } = input;
-  const approved = input.approvals.has(`${queryDigest(watch.query, watch.presence ?? '')} ${environment.name}`);
-  const unpermittedReason = unpermitted(watch.kind, permits, environment.name);
-  const observable = (environment.watch?.observe ?? '').trim() !== '';
-  return {
-    rowId: `watch:${watch.id}`,
-    kind: watch.kind,
-    seq,
-    title: watch.title,
-    sourceId: watch.id,
-    selected: true,
-    blockedReason:
-      unpermittedReason ??
-      (observable
-        ? approved
-          ? null
-          : unapproved(environment.name)
-        : `${environment.name} declares no "watch.observe" command, so there is nothing here to put this query to.`),
-    awaitingApproval: unpermittedReason === null && observable && !approved,
-    matched: null,
-    idleReason: null,
-    run: 'watch',
   };
 }
 

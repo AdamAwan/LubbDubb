@@ -251,7 +251,7 @@ test('the environment panel lists only the rows that are not a check’s own, ba
     rows: [
       row({ rowId: 'r1' }),
       row({ rowId: 'r2', awaitingApproval: true }),
-      row({ rowId: 'q1', kind: 'signal', sourceId: 'q1' }),
+      row({ rowId: 'q1', kind: 'state', sourceId: 'q1' }),
     ],
   });
   assert.deepEqual(
