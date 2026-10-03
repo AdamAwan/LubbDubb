@@ -1583,10 +1583,12 @@ release the first one's check.
 
 ### The plugin
 
-Everything the operator's own Claude Code needs from the harness arrives as **one Claude Code plugin**,
-`lubbdubb`: the skills, the tool channel's registration, and [the notice board](#the-notice-board).
-`plugin/` is its source — `.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`, `hooks/`, `types/`,
-and `tests/`, which is not shipped.
+Everything the operator's own Claude Code needs from the harness arrives as **two Claude Code plugins
+from one marketplace**. `lubbdubb` carries the skills, the tool channel's registration, and
+[the notice board](#the-notice-board); `plugin/` is its source — `.claude-plugin/plugin.json`,
+`skills/<name>/SKILL.md`, `hooks/`, `types/`, and `tests/`, which is not shipped. `pr-assistant` is
+[the PR assistant](#the-pr-assistant); `pr-assistant/` is its source — `.claude-plugin/plugin.json`,
+`hooks/`, `types/`, and `tests/`, which is not shipped either.
 
 **Thirteen skills, one per job:** `fleet`, `next`, `ask`, `feature`, `file`, `clarify`, `plan`, `order`,
 `run`, `eject`, `check`, `describe`, `pr` ([20](20-validation.md#the-skill) owns what they say; `next` is
@@ -1602,8 +1604,10 @@ job is one document, read on its own and loaded only when it is the job.
   red.
 - **`pr` is a family of pull-request jobs, told apart by its first word.** `/lubbdubb:pr map 1091`
   reads `map/map.md` beside the `SKILL.md` and draws the PR as one page, through the `build.mjs` and
-  `template.html` in the same folder. A new PR job is a row in the skill's table and a folder of its
-  own, not a new skill. It was the repository's own `.claude/skills/pr-map`, which only a session
+  `template.html` in the same folder; `/lubbdubb:pr walk 1091` reads `walk/walk.md` and goes through
+  the PR with the person one stop at a time, driving [the PR assistant](#the-pr-assistant)'s panel
+  when its tools are there and running in chat alone when they are not. A new PR job is a row in the
+  skill's table and a folder of its own, not a new skill. It was the repository's own `.claude/skills/pr-map`, which only a session
   open on this checkout could reach.
 - **`clarify` carries its own copy of the `file` skill's _What a ticket has to say_.** A skill cannot
   include another's text, and clarify is that bar worked through with the author. Edit one and edit
@@ -1612,9 +1616,11 @@ job is one document, read on its own and loaded only when it is the job.
 #### The bundle
 
 `writePluginBundle` (`src/plugin/bundle.ts`), called at **every** boot by `publishPlugin` in
-`src/server/main.ts`, writes a one-plugin local marketplace to
+`src/server/main.ts`, writes a two-plugin local marketplace to
 `<dirname(validation.desktopCredentialPath)>/plugin` — `~/.lubbdubb/plugin` on the defaults:
-`.claude-plugin/marketplace.json` (marketplace `lubbdubb`) and a `lubbdubb/` folder beside it holding
+`.claude-plugin/marketplace.json` (marketplace `lubbdubb`, listing `lubbdubb` then `pr-assistant`), a
+`pr-assistant/` folder holding that source's `hooks/`, `types/` and `plugin.json` as they are — no
+skills, no `.mcp.json`, no `userConfig` — and a `lubbdubb/` folder holding
 
 - the shipped files — `hooks/`, `types/` and every file under `skills/`, so a skill's scripts and
   templates travel with its `SKILL.md` — and a copy of `src/mcp/bridge.mjs` at `mcp/bridge.mjs`;
@@ -1628,11 +1634,16 @@ job is one document, read on its own and loaded only when it is the job.
 **It is a copy, not a reference to the repository**, because `claude plugin install` copies the
 plugin into `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` — verified — so a path into
 the checkout is a path the installed plugin never reads. **The version is `1.0.0-<12 hex of a sha256
-over every file>`**, because `claude plugin update` sees a change only through a new version: a
-hand-bumped number is one forgotten bump from an operator running last month's skills against this
-month's tools, and a digest moves exactly when what the plugin carries moves — not on a restart that
-changed nothing. **A boot whose digest matches the version already on disk writes nothing**, so the
-marketplace Claude Code reads is not churned on every restart.
+over every file of both plugins>`**, written into both manifests, because `claude plugin update` sees
+a change only through a new version: a hand-bumped number is one forgotten bump from an operator
+running last month's skills against this month's tools, and a digest moves exactly when what the
+plugins carry moves — not on a restart that changed nothing. One digest for both keeps
+`PluginBundle.version` one value, so the status compares each installed row against the same number;
+it costs the other plugin an update it did not strictly need, which is a copy, not a behaviour.
+**A boot whose digest matches the version already in _both_ manifests on disk writes nothing**, so
+the marketplace Claude Code reads is not churned on every restart; either one missing or behind
+rewrites both folders and the catalogue. `PluginBundleInput.assistantSourceDir` points the bundle at another
+`pr-assistant` source, so a test of what ships does not depend on the checkout's.
 
 #### Installing it
 
@@ -1642,23 +1653,29 @@ marketplace Claude Code reads is not churned on every restart.
 injects `FakePluginCli` (`src/plugin/fakePluginCli.ts`), so no test touches the real plugin store.
 
 - **`status()` is four-valued, and `unknown` is never folded into `missing`.** It reads
-  `claude plugin list --json` and answers `missing`, `stale` (installed at another version)
+  `claude plugin list --json` and answers for the pair: `stale` while **either installed** plugin is
+  at another version — `installed` naming the first one behind, `lubbdubb`'s before `pr-assistant`'s,
+  so the Update the tab offers names a version that is actually out of date — then `missing` while
+  either has no row, and `current` only when both are at the bundle's. **Stale wins over missing**,
+  because `refresh()` acts on `stale` alone: the other order leaves every deployment from before the
+  PR assistant, and anyone who uninstalls it, on a board that never updates at boot again
   — reading the **user-scope** row only, because the links open sessions in any folder and a project or
   local install would answer `stale` and then send `update --scope user` at a plugin that is not there —
-  `current`, or `unknown` — the bundle was not written, or the CLI could not answer — with a `reason`.
+  or `unknown` — the bundle was not written, or the CLI could not answer — with a `reason`.
   The answer is held for a minute, and dropped on a publish or an install: each read spawns a `claude`,
   and the band and the tab are drawn far more often than anybody installs anything.
   Folded into `missing`, a CLI that is briefly unreachable draws an install band over every page of a
   deployment that is fine. It also answers `legacySkill`: the old file at
   `validation.desktopSkillPath` still exists **and** carries the marker.
 - **`install()` places, then tidies, and stops at the first failed placing step.**
-  `claude plugin marketplace add <dir> --scope user` (idempotent), then `plugin install
-lubbdubb@lubbdubb --scope user --json --config url=… --config tokenFile=…` — or `plugin update`
-  if it is already installed. **A `plugin list` that cannot answer stops it there** rather than
+  `claude plugin marketplace add <dir> --scope user` (idempotent, once), then for each plugin in turn
+  `plugin install lubbdubb@lubbdubb --scope user --json --config url=… --config tokenFile=…` and
+  `plugin install pr-assistant@lubbdubb --scope user --json` (it has no options) — or `plugin update`
+  for whichever already has a user-scope row. **A `plugin list` that cannot answer stops it there** rather than
   guessing `install` over a plugin that may already be in place. Then the old skill is deleted, with its
   folder if that leaves it empty, and the hand registration is removed — `claude mcp remove --scope user
-  lubbdubb` — **only when `claude mcp get lubbdubb` shows it is the old bridge** (`bridge.mjs
-  --desktop`). Every step is reported as `{label, ok, detail}`, the payload carries the status read
+lubbdubb` — **only when `claude mcp get lubbdubb` shows it is the old bridge** (`bridge.mjs
+--desktop`). Every step is reported as `{label, ok, detail}`, the payload carries the status read
   afresh afterwards, and any failure goes through `errors.record`.
 - **A second press while one is running is handed the first one's answer**, so two tabs cannot run
   two `marketplace add`/`install` pairs into one plugin store.
@@ -1669,9 +1686,11 @@ lubbdubb@lubbdubb --scope user --json --config url=… --config tokenFile=…` �
   on one credential, and which one a session is talking through is not something anybody can see.
 
 - **An installed plugin is updated at boot; a missing one is not installed.** `refresh()`, called by
-  `publishPlugin` straight after the bundle is written, reads the status afresh and runs `install()`
-  only on `stale` — a user-scope install at another version. Somebody installing it once is the
-  consent; a plugin nobody installed stays a button, `unknown` is never updated over, and
+  `publishPlugin` straight after the bundle is written, reads the status afresh and, only on `stale`,
+  runs the install's steps **updating only the plugins that have a user-scope row**. Somebody
+  installing a plugin once is the consent; a plugin nobody installed stays a button — which is also
+  how a deployment from before the PR assistant meets it: the board is updated at boot as ever, then
+  reads `missing`, the band asks, and one press installs the assistant. `unknown` is never updated over, and
   `current` spawns nothing past the one `plugin list`. It does not block boot, and a failure is
   recorded like a pressed one, leaving the band and the tab offering Update. A Claude Code session
   already open keeps the version it loaded until it restarts.
@@ -1764,6 +1783,28 @@ The mod API is early access and changes between Claude Code releases; `claude pl
 `claude plugin test` on `plugin/` are its checks, and `npm run check` does not run them.
 `claude --plugin-dir <repo>/plugin` loads the source directly for working on it — without the
 bundle's filled-in defaults or its copy of the bridge, so the skills load and the tools do not.
+
+#### The PR assistant
+
+`pr-assistant/` is a second plugin, a **mod only** — no skills, no MCP server: a panel that follows a
+PR walkthrough (`/lubbdubb:pr walk <n>`) — the stops, which one is current, the diff hunk for it, and
+the notes raised. It is a separate plugin so the walkthrough panel can be loaded, disabled or updated
+without the fleet board, and the walk works in chat alone when it is not installed.
+
+- **The model drives it through four tools the mod registers**: `walk_start` (the PR and its stops;
+  opens the panel), `walk_goto` (the current stop and its hunk), `walk_note` (add a `likely` or
+  `check` note, or `clear` / `reopen` one) and `walk_end`. They are `mcp__pr-assistant__walk_*` to
+  the model, and `walk/walk.md` names them — rename one and the skill silently falls back to chat.
+- **A refusal is a `deny`, never a quiet success**: a call before `walk_start`, a stop out of range,
+  an unknown note, or a hunk over the 10,000 characters a `Code` element draws. The model reads why
+  and corrects itself; a panel that silently drew nothing would leave the chat and the panel telling
+  two different stories.
+- **Moving buttons submit; anything that writes elsewhere only drafts.** Next, Back, Wrap up and a
+  stop's own button send the person's move as their prompt (`asUser`), because pressing them _is_ the
+  move. Ask about this and Post open notes as a review only fill the prompt box: posting a review
+  writes to GitHub, and the person confirms that with Enter.
+- The walk lives in `$.state`, so it survives a reload of the mod but not a new session. `/walk-panel`
+  reopens the panel.
 
 ## The wire protocol
 

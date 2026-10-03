@@ -1679,22 +1679,25 @@ names its path only.
 
 ### `GET /api/plugin`
 
-Whether the operator's Claude Code has [the LubbDubb plugin](11-mcp-tools.md#the-plugin), for the MCP
+Whether the operator's Claude Code has [the LubbDubb plugins](11-mcp-tools.md#the-plugin) — `lubbdubb` and
+`pr-assistant`, read as one answer — for the MCP
 tab's first step and the band under the top bar ([17](17-cockpit.md#the-plugin)):
 `PluginStatusPayload` — `{ state, bundle: {marketplaceDir, version} | null, skills, legacySkill }` with
 `reason` on `unknown` and `installed` on the rest, a union rather than nullable fields. `state` is
 `missing`, `stale`, `current` or `unknown`, and `unknown` is never folded into `missing` — it means the bundle was not written at boot or
 `claude plugin list` could not answer, and a cockpit told _not installed_ on that would ask every
-operator to reinstall a plugin that is fine. `installed` is the version Claude Code holds, `bundle`
-the one this harness wrote; `stale` is the two differing.
+operator to reinstall a plugin that is fine. `missing` is either plugin absent at user scope while neither installed one is behind. `bundle`
+is the version this harness wrote, into both; `installed` is the version Claude Code holds — on `stale`,
+the first installed plugin's that differs from it, `lubbdubb`'s before `pr-assistant`'s
+([11](11-mcp-tools.md#installing-it)).
 
-`skills` is the plugin's skill names, which the tab lists rather than a copy of its own. Held for a
+`skills` is the `lubbdubb` plugin's skill names, which the tab lists rather than a copy of its own. Held for a
 minute by `PluginDesk.status()`: each fresh read spawns `claude plugin list --json`, and the minute is
 how long an install from a terminal goes unseen.
 
 ### `POST /api/plugin/install`
 
-Installs or updates the plugin at user scope, then removes the old `/lubbdubb` skill (only a file
+Installs or updates each plugin at user scope, then removes the old `/lubbdubb` skill (only a file
 carrying the _Managed by LubbDubb_ marker) and the hand-registered `lubbdubb` MCP server
 ([11](11-mcp-tools.md#installing-it)). Returns `PluginInstallPayload` — `{ ok, steps: [{label, ok,
 detail}], status }`, `status` read afresh so the cockpit needs no second round trip — with `200` whether

@@ -46,6 +46,7 @@ export default tseslint.config(
       'node_modules/**',
       '.lubbdubb/**',
       '.claude/worktrees/**',
+      '**/.claude-plugin/types/**',
     ],
   },
 

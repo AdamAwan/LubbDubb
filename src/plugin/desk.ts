@@ -6,7 +6,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import { MCP_SERVER_ID } from '../mcp/names.js';
 import type { PluginInstallPayload, PluginStatusPayload } from '../wire.js';
 import { firstLine } from '../primitives.js';
-import { MANAGED_MARKER, PLUGIN_ID, writePluginBundle, type PluginBundle } from './bundle.js';
+import { ASSISTANT_ID, MANAGED_MARKER, PLUGIN_ID, writePluginBundle, type PluginBundle } from './bundle.js';
 
 // → docs/spec/11-mcp-tools.md#the-plugin
 
@@ -63,7 +63,11 @@ interface PluginDeskOptions {
   errors: ErrorRecorder;
 }
 
-type Listed = { ok: true; installed: string | null } | { ok: false; reason: string };
+interface Installed {
+  plugin: string | null;
+  assistant: string | null;
+}
+type Listed = { ok: true; installed: Installed } | { ok: false; reason: string };
 
 export class PluginDesk {
   private bundle: PluginBundle | null = null;
@@ -102,18 +106,22 @@ export class PluginDesk {
 
   async refresh(): Promise<PluginInstallPayload | null> {
     this.cached = null;
-    return (await this.status()).state === 'stale' ? this.install() : null;
+    return (await this.status()).state === 'stale' ? this.place(true) : null;
   }
 
   install(): Promise<PluginInstallPayload> {
-    this.installing ??= this.settle().finally(() => {
+    return this.place(false);
+  }
+
+  private place(updateOnly: boolean): Promise<PluginInstallPayload> {
+    this.installing ??= this.settle(updateOnly).finally(() => {
       this.installing = null;
     });
     return this.installing;
   }
 
-  private async settle(): Promise<PluginInstallPayload> {
-    const steps = await this.attempt();
+  private async settle(updateOnly: boolean): Promise<PluginInstallPayload> {
+    const steps = await this.attempt(updateOnly);
     this.cached = null;
     const ok = steps.every((s) => s.ok);
     if (!ok)
@@ -136,22 +144,25 @@ export class PluginDesk {
       return { ...base, state: 'unknown', reason: 'the plugin was not written at boot — see the error log' };
     const listed = await this.listed();
     if (!listed.ok) return { ...base, state: 'unknown', reason: listed.reason };
-    const { installed } = listed;
-    if (installed === null) return { ...base, state: 'missing', installed };
-    return { ...base, state: installed === this.bundle.version ? 'current' : 'stale', installed };
+    const { plugin, assistant } = listed.installed;
+    const { version } = this.bundle;
+    const behind = [plugin, assistant].find((v) => v !== null && v !== version);
+    if (behind !== undefined && behind !== null) return { ...base, state: 'stale', installed: behind };
+    if (plugin === null || assistant === null) return { ...base, state: 'missing', installed: null };
+    return { ...base, state: 'current', installed: version };
   }
 
   private async listed(): Promise<Listed> {
     const result = await this.opts.cli.run(['plugin', 'list', '--json']);
     if (result.code !== 0) return { ok: false, reason: failure('claude plugin list', result) };
     try {
-      return { ok: true, installed: installedVersion(result.stdout) };
+      return { ok: true, installed: installedVersions(result.stdout) };
     } catch (err) {
       return { ok: false, reason: `could not read claude plugin list: ${(err as Error).message}` };
     }
   }
 
-  private async attempt(): Promise<PluginInstallPayload['steps']> {
+  private async attempt(updateOnly: boolean): Promise<PluginInstallPayload['steps']> {
     const { bundle, config } = this;
     if (bundle === null || config === null)
       return [{ label: 'write the plugin', ok: false, detail: 'it was not written at boot — see the error log' }];
@@ -169,22 +180,31 @@ export class PluginDesk {
       return steps;
     const listed = await this.listed();
     if (!listed.ok) return [...steps, { label: 'read what is installed', ok: false, detail: listed.reason }];
-    const placed =
-      listed.installed === null
-        ? await step('install the plugin', [
-            'plugin',
-            'install',
-            PLUGIN_ID,
-            '--scope',
-            'user',
-            '--json',
-            '--config',
-            `url=${config.url}`,
-            '--config',
-            `tokenFile=${config.tokenFile}`,
-          ])
-        : await step('update the plugin', ['plugin', 'update', PLUGIN_ID, '--scope', 'user']);
-    if (!placed) return steps;
+    const placings = [
+      {
+        key: 'plugin' as const,
+        id: PLUGIN_ID,
+        what: 'the plugin',
+        config: ['--config', `url=${config.url}`, '--config', `tokenFile=${config.tokenFile}`],
+      },
+      { key: 'assistant' as const, id: ASSISTANT_ID, what: 'the PR assistant', config: [] },
+    ];
+    for (const placing of placings) {
+      if (updateOnly && listed.installed[placing.key] === null) continue;
+      const placed =
+        listed.installed[placing.key] === null
+          ? await step(`install ${placing.what}`, [
+              'plugin',
+              'install',
+              placing.id,
+              '--scope',
+              'user',
+              '--json',
+              ...placing.config,
+            ])
+          : await step(`update ${placing.what}`, ['plugin', 'update', placing.id, '--scope', 'user']);
+      if (!placed) return steps;
+    }
 
     steps.push(this.removeLegacySkill());
     const registered = await this.opts.cli.run(['mcp', 'get', MCP_SERVER_ID]);
@@ -221,11 +241,14 @@ export class PluginDesk {
   }
 }
 
-function installedVersion(stdout: string): string | null {
+function installedVersions(stdout: string): Installed {
   const rows = JSON.parse(stdout) as { id?: string; version?: string; scope?: string }[];
   if (!Array.isArray(rows)) throw new Error('expected a list');
-  const row = rows.find((r) => r.id === PLUGIN_ID && r.scope === 'user');
-  return row === undefined ? null : (row.version ?? '');
+  const version = (id: string): string | null => {
+    const row = rows.find((r) => r.id === id && r.scope === 'user');
+    return row === undefined ? null : (row.version ?? '');
+  };
+  return { plugin: version(PLUGIN_ID), assistant: version(ASSISTANT_ID) };
 }
 
 function failure(what: string, result: PluginCliResult): string {
