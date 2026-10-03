@@ -59,7 +59,7 @@ import { LocalValidationDesk } from '../validation/local/desk.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { LiveConfig } from '../config/configApply.js';
 import { ErrorLog } from '../errorLog.js';
-import { askQueue } from '../server/stateSnapshot.js';
+import { askSnapshot } from '../server/stateSnapshot.js';
 import type { SetupReading } from '../setup/reading.js';
 import {
   type BuildOptions,
@@ -219,7 +219,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     worktrees: base.worktrees,
     errors: base.errors,
   };
-  late.bind(lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askQueue(system) }));
+  late.bind(
+    lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askSnapshot(system) }),
+  );
   return system;
 }
 

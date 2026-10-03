@@ -13,13 +13,15 @@ import { REPO_ROOT as ROOT } from './support/paths.js';
  * pass through, because a re-export is not a declaration and would slip past that
  * assertion with the whole server graph behind it. The ask queue is the one passed through: the
  * demo's fake server derives it with the harness's own code, and the cockpit shares its wording —
- * and the tables that name an ask's kind and place a goal's parts, which `ask_next`'s card reads too.
+ * and the tables that name an ask's kind and place a goal's parts, and the goal an ask is about, which
+ * `ask_next`'s card reads too.
  */
 const RUNTIME_MODULES: string[] = [
   './asks/queue.js',
   './asks/lines.js',
   './asks/updateAsks.js',
   './asks/kinds.js',
+  './asks/askGoal.js',
   './plans/partGroup.js',
 ];
 

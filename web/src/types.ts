@@ -297,6 +297,7 @@ export type {
   UnrecordedWork as UnrecordedWorkView,
   WorkNode as WorkNodeView,
   PartGroup,
+  AskGoalPart,
 } from '../../src/wire.js';
 
 // → docs/spec/16-http-api.md

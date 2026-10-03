@@ -1486,18 +1486,16 @@ not a replica: the same words and tones, the goal beside the ask.
 **The widget carries no position.** Focus mode's "2 of 7" sits beside its Prev and Next, and means
 _you can move_; in Claude Code the loop walks the queue and the operator cannot, so a count drawn
 there reads as a pager with its buttons missing. The queue is drawn, if at all, as read-only pips and
-"n more after this" (`after`). `position` and `total` stay on the reply for the markdown card's
-header.
+"n more after this" — `total` less `position`, which stay on the reply for the markdown card's header.
 
 - **`kind`** — the label, glyph and tone the rail and Focus mode give it, off `KIND_LABEL`,
   `KIND_SYMBOL` and `KIND_TONE` in `src/asks/kinds.ts`.
-- **`queue`** — one entry per standing ask, in the one-at-a-time order, with its kind and tone and
-  `here` on this one: Focus mode's pips. `after` is how many follow it, `heldInTotal` the parts held
-  across the whole queue — the card's footer.
+- **`queue`** — one entry per standing ask, in the one-at-a-time order, with its kind and `here` on
+  this one: Focus mode's pips.
 - **`goal`** — null for an ask on no goal, which the card says rather than drawing an empty column.
-  Otherwise its ref, its title off the world baseline, how many other asks stand on it, and its
-  `plan`: each live part's number, name and place (`PART_GROUP_WORD`), with `here` on the part the
-  ask's origin names (`askedPart`). Retired parts are left out, as the goal page leaves them out.
+  Otherwise its `title` and its `plan`: each live part's number, name and place (`PART_GROUP_WORD`),
+  with `here` on the part the ask's origin names. Retired parts are left out, as the goal page leaves
+  them out. The goal's ref is the ask's own `goalRef`, and "m of n merged" is counted off the parts.
 
 **The tables are the cockpit's own, not copies.** A session composing the card from `ask` and
 `goal_read` worked out each kind's word and each part's place for itself, and a card that names an
@@ -1505,9 +1503,18 @@ ask differently from the rail beside it is two answers to "what is this". So the
 part placement moved to `src/` and reach the cockpit through the wire
 ([17](17-cockpit.md#the-queue-rail--needs-you)); `card` is built from the same ones.
 
+**And the goal is the cockpit's own reading of it.** `goal` is `askGoal` (`src/asks/askGoal.ts`) —
+the function Focus mode draws its goal column with ([17](17-cockpit.md#the-setting-beside-the-act)) —
+run over the very `AskInputs` the queue was derived from, which is why `DesktopToolDeps.asks()` hands
+back the inputs beside the rows (`askSnapshot`, `src/server/stateSnapshot.ts`). Read off the store
+instead, the card was a second derivation already disagreeing with the first: it missed a goal that had
+left the world for the retained runs, and asked the reveal gate itself where the wire had already
+answered it.
+
 **A withheld plan is withheld here too.** Where the goal's plan waits on the operator's reveal
 ([above](#a-withheld-plan-is-withheld-here-too)), `plan` is `{withheld: true}` with no parts: a part's
-name is the plan, read aloud.
+name is the plan, read aloud. It is read off the wire plan's `revealed`, the answer every cockpit
+surface already draws from.
 
 ##### The operator decides, and Claude's view is labelled
 

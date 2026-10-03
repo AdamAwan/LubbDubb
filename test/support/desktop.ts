@@ -2,7 +2,7 @@ import { orderedProfiles } from '../../src/agents/modelPolicy.js';
 import type { DesktopToolDeps } from '../../src/mcp/desktopContext.js';
 import { planIsWithheld } from '../../src/server/planReveal.js';
 import type { System } from '../../src/system/system.js';
-import { askQueue } from '../../src/server/stateSnapshot.js';
+import { askSnapshot } from '../../src/server/stateSnapshot.js';
 
 export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
   return {
@@ -32,7 +32,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     errors: system.errors,
     labelPrefix: system.config.labelPrefix,
     issueContainerTypes: system.config.issueContainerTypes,
-    askQueue: () => askQueue(system),
+    asks: () => askSnapshot(system),
     cockpitUrl: 'http://127.0.0.1:4300',
     changed: () => {},
   };

@@ -40,8 +40,6 @@ import {
 
 // → docs/spec/17-cockpit.md
 
-export type { PartGroup } from '../types.js';
-
 export interface GoalPartView {
   part: PlanPart;
   group: PartGroup;

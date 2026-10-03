@@ -1,4 +1,5 @@
 import type { PlanPart } from '../types.js';
+import { issueOriginId } from '../issueOrigins.js';
 
 // → docs/spec/17-cockpit.md#the-setting-beside-the-act
 
@@ -26,5 +27,5 @@ export const PART_GROUP_WORD: Record<PartGroup, string> = {
 
 /** The slug of the part an ask is about, where its origin names one — the part Focus mode and the card mark. */
 export function askedPart(originRef: string | null): string | null {
-  return /^issue:\d+:part:(.+)$/.exec(originRef ?? '')?.[1] ?? null;
+  return issueOriginId('part', originRef)?.id ?? null;
 }

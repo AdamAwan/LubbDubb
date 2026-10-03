@@ -4,12 +4,10 @@ import type { CockpitView } from '../../view/viewModel.js';
 import type { CockpitActions } from '../../cockpit/actions.js';
 import type { NeedRow } from '../../view/needsYou.js';
 import { Ref } from '../../components/refs.js';
-import { buildGoalPage, type GoalPartView } from '../../view/goalPage.js';
-import { PART_GROUP_WORD, askedPart } from '../../view/partGroups.js';
-import { goalIssue } from '../../view/goalRefs.js';
+import { PART_GROUP_WORD, askGoal } from '../../view/partGroups.js';
 import { relTime } from '../../components/util.js';
 import { Button, ButtonRow, BareButton } from '../../components/button.js';
-import type { ControlUsage } from '../../types.js';
+import type { AskGoalPart, ControlUsage } from '../../types.js';
 import { holdingLabel, subjectLabel } from '../QueueRail.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../../view/askKinds.js';
 import { needBody } from '../NeedsBand.js';
@@ -289,10 +287,10 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
     );
   }
 
-  const issue = goalIssue(view.state, row.goalRef);
-  const page = buildGoalPage(view.state, row.goalRef, view.needsYou, null);
-  const parts = page?.parts ?? [];
-  const siblings = view.needsYou.filter((n) => n.goalRef === row.goalRef && n.id !== row.id).length;
+  const goal = askGoal(view.state, row, view.needsYou);
+  const issue = goal?.issue;
+  const parts = goal?.parts ?? [];
+  const siblings = goal?.otherAsks ?? 0;
   const merged = parts.filter((p) => p.group === 'merged').length;
 
   return (
@@ -321,7 +319,7 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
               {merged} of {parts.length} merged
             </span>
           </h3>
-          <Track parts={parts} about={askedPart(row.originRef)} />
+          <Track parts={parts} />
         </>
       )}
 
@@ -339,23 +337,20 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
  * says how many parts there are and nothing about what any of them is — and the
  * part the ask is about is the one the reader is looking for.
  */
-function Track({ parts, about }: { parts: readonly GoalPartView[]; about: string | null }): JSX.Element {
+function Track({ parts }: { parts: readonly AskGoalPart[] }): JSX.Element {
   return (
     <ol className="cn-ov-track">
-      {parts.map(({ part, group }) => {
-        const here = about !== null && part.slug === about;
-        return (
-          <li
-            key={part.id}
-            className={`cn-ov-seg cn-ov-seg-${group} ${here ? 'cn-ov-seg-here' : ''}`}
-            title={`${part.title} — ${PART_GROUP_WORD[group]}`}
-          >
-            <b>{part.seq}</b>
-            <span className="cn-ov-seg-name">{part.title}</span>
-            <span className="cn-ov-seg-state">{here ? 'this ask' : PART_GROUP_WORD[group]}</span>
-          </li>
-        );
-      })}
+      {parts.map((part) => (
+        <li
+          key={part.id}
+          className={`cn-ov-seg cn-ov-seg-${part.group} ${part.here ? 'cn-ov-seg-here' : ''}`}
+          title={`${part.title} — ${PART_GROUP_WORD[part.group]}`}
+        >
+          <b>{part.seq}</b>
+          <span className="cn-ov-seg-name">{part.title}</span>
+          <span className="cn-ov-seg-state">{part.here ? 'this ask' : PART_GROUP_WORD[part.group]}</span>
+        </li>
+      ))}
     </ol>
   );
 }

@@ -655,8 +655,8 @@ tier, the group, `holding`, the rail's sort and the Focus order all live in `src
 - **The demo derives it with the same code.** The Pages build has no server, so its fake one calls
   `buildAskQueue` over its own state on every `getState` — the queue's modules are runtime the wire
   passes through ([above](#17--the-cockpit)), beside the tables that name an ask's kind
-  (`src/asks/kinds.ts`) and place a goal's parts (`src/plans/partGroup.ts`), which `ask_next`'s card
-  reads too ([11](11-mcp-tools.md#the-card)).
+  (`src/asks/kinds.ts`), place a goal's parts (`src/plans/partGroup.ts`) and read the goal beside an
+  ask (`src/asks/askGoal.ts`), which `ask_next`'s card reads too ([11](11-mcp-tools.md#the-card)).
 
 **The snapshot carries only the escalations that are still open** — the rail's own
 `status === 'open'` filter is belt-and-braces over a list that already holds nothing else
@@ -4671,9 +4671,12 @@ can see it is the fourth of five parts and which of them are waiting on it — s
 the goal, its standing, and **its plan as named parts**, off the goal page's own `parts` fold.
 
 **The part the ask is about is marked**, in the ask's own tone, off the `issue:<n>:part:<slug>` its
-origin already carries (`askedPart`). Where a part sits — merged, being worked, held, not started — is
-`PART_GROUP` and `PART_GROUP_WORD` in `src/plans/partGroup.ts`, which the goal page reads as well, and
-which `ask_next`'s card reads to draw this same column in Claude Code ([11](11-mcp-tools.md#the-card)). That mark is most of what the column is for: the reader is looking for where
+origin already carries (`askedPart`, off the `part` origin family). Where a part sits — merged, being
+worked, held, not started — is `PART_GROUP` and `PART_GROUP_WORD` in `src/plans/partGroup.ts`, which the
+goal page reads as well. The column itself — the goal's issue, its parts placed and marked, the other
+asks on it — is `askGoal` (`src/asks/askGoal.ts`), over the same `AskInputs` the queue is derived from,
+and `ask_next`'s card is that same reading, so the column in Claude Code cannot disagree with this one
+([11](11-mcp-tools.md#the-card)). That mark is most of what the column is for: the reader is looking for where
 this decision sits in the work, and a column of named rows with none of them marked leaves them
 counting. An ask belonging to no goal — an upgrade, a config gap — says so rather than drawing an empty
 column, because a band that silently vanishes reads as one that failed to load.

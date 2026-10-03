@@ -404,7 +404,7 @@ function partInput(
   };
 }
 
-test('ask_next carries the card Focus mode draws: kind, queue, and the goal plan with the asked part marked', async () => {
+test("ask_next carries a card like Focus mode's: kind, queue, and the goal plan with the asked part marked", async () => {
   const d = await deck();
   try {
     const { store } = d.system;
@@ -435,37 +435,22 @@ test('ask_next carries the card Focus mode draws: kind, queue, and the goal plan
     const next = await d.call('ask_next', { id: bench.id });
     assert.equal(next.isError, false, next.text);
     const queue = askQueue(d.system);
-    const card = next.json.card as {
-      kind: { label: string; tone: string };
-      queue: { here: boolean }[];
-      after: number;
-      goal: {
-        ref: string;
-        title: string;
-        plan: { merged: number; total: number; parts: unknown[] };
-        otherAsks: number;
-      };
-    };
-    assert.deepEqual(card.kind, { label: 'Bench', symbol: '◆', tone: 'blue' });
+    const card = next.json.card as { kind: unknown; queue: { here: boolean }[]; goal: unknown };
+    assert.deepEqual(card.kind, { label: 'Bench', symbol: '\u25c6', tone: 'blue' });
     assert.equal(card.queue.length, queue.length, 'a pip for every standing ask');
     assert.equal(
       card.queue.findIndex((p) => p.here),
       queue.findIndex((r) => r.id === bench.id),
     );
-    assert.equal(card.after, queue.length - queue.findIndex((r) => r.id === bench.id) - 1);
     assert.deepEqual(card.goal, {
-      ref: 'issue:12',
       title: 'Ship the export',
       plan: {
         withheld: false,
-        merged: 0,
-        total: 2,
         parts: [
           { seq: 1, title: 'Schema', state: 'being worked', here: false },
           { seq: 2, title: 'Export', state: 'not started', here: true },
         ],
       },
-      otherAsks: 0,
     });
 
     const merge = await d.call('ask_next', { id: ids.merge });

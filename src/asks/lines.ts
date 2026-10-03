@@ -1,6 +1,7 @@
 import type { Issue, PullRequest } from '../wire.js';
 import type { AskDestination } from './askRow.js';
 import type { AskInputs } from './queue.js';
+import { issueOriginNumber } from '../issueOrigins.js';
 
 // → docs/spec/17-cockpit.md#a-row-is-one-factual-line
 
@@ -44,9 +45,13 @@ export function goalOfPr(state: AskInputs, prNumber: number): string | null {
   return pr ? branchGoal(pr.branch) : null;
 }
 
-function goalIssue(state: AskInputs, ref: string): Issue | undefined {
-  const number = Number(/^issue:(\d+)$/.exec(ref)?.[1]);
-  if (!Number.isFinite(number)) return undefined;
+/** The goal's issue, off the world or, once it has left the world, the retained runs. */
+export function goalIssue(
+  state: Pick<AskInputs, 'retainedRuns'> & { world: Pick<AskInputs['world'], 'issues'> },
+  ref: string,
+): Issue | undefined {
+  const number = issueOriginNumber('root', ref);
+  if (number === null) return undefined;
   return (
     state.world.issues.find((i) => i.number === number) ?? (state.retainedRuns ?? []).find((i) => i.number === number)
   );

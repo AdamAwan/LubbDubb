@@ -83,7 +83,7 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
     }),
   ),
   handler: (args) => {
-    const queue = deps.askQueue();
+    const { queue, inputs } = deps.asks();
     const skipped = skippedBy(session, args.skip);
     const waiting = queue.filter((row) => !skipped.has(row.id));
     const passedOver = queue.filter((row) => skipped.has(row.id)).map((row) => row.id);
@@ -109,7 +109,7 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
       remaining: waiting.length,
       skipped: passedOver.length,
       ask: describeRow(head),
-      card: askCard(deps, head, queue),
+      card: askCard(inputs, head, queue),
       ...(question === null ? {} : { question }),
       answerWith: answerWith(head, {
         link: cockpitLink(deps, head.id),
@@ -140,7 +140,7 @@ export const askSkip: DesktopToolFactory = (deps, session) => ({
       const had = skipped.delete(id);
       return toolJson({ id, skipped: false, said: had ? 'Back in the queue.' : 'It was not skipped.' });
     }
-    const standing = deps.askQueue().some((row) => row.id === id);
+    const standing = deps.asks().queue.some((row) => row.id === id);
     if (!standing) return notStanding(id);
     skipped.add(id);
     return toolJson({

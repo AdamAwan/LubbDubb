@@ -19,7 +19,8 @@ import type { TicketFiler } from '../tickets/filing.js';
 import type { IssueWatchContext } from '../issueWatch.js';
 import type { SendResult, WorkItemAreaPathInput, WorkItemParentInput } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { AskRow, StateSection, UpcomingPlan } from '../wire.js';
+import type { AskSnapshot } from '../asks/queue.js';
+import type { StateSection, UpcomingPlan } from '../wire.js';
 import type { McpTool } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -67,8 +68,8 @@ export interface DesktopToolDeps {
   labelPrefix: string;
   issueContainerTypes: string[];
   agentModels: AgentModels | undefined;
-  /** "Needs you" as a one-at-a-time reader walks it — `askQueue` in `src/server/stateSnapshot.ts`. */
-  askQueue(): AskRow[];
+  /** "Needs you" as a one-at-a-time reader walks it, with its inputs — `askSnapshot` in `src/server/stateSnapshot.ts`. */
+  asks(): AskSnapshot;
   /** Where the cockpit is served, for a link to the ask an answer here cannot give; null where none is. */
   cockpitUrl: string | null;
   /** Re-emitted by `McpDesktopServer` as `changed`, which the hub broadcasts. */

@@ -40,7 +40,7 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    **Where you can render a widget** (a `show_widget` tool, read its guide once per
    session first), draw it as one:
 
-   - **The goal** beside the ask: `goal.title` and its ref, then its plan — "m of n
+   - **The goal** beside the ask: `goal.title` and `ask.goalRef`, then its plan — "m of n
      merged" and each part as a numbered row with its `state`, the `here` one marked
      "this ask" in the kind's tone. `plan.withheld` → "plan not revealed yet", and
      no parts. `goal: null` → "The fleet itself, rather than any one goal."
@@ -55,7 +55,7 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    - **No position.** No "1 of 4", no Prev/Next: the operator cannot move along
      the queue from here, and a count that looks like a pager says they can. The
      queue can be a row of pips in each ask's `tone`, read-only, with "n more after
-     this" (`after`) beneath the ask.
+     this" (`total` less `position`) beneath the ask.
    - **No buttons, no links that send anything**: the card is something to read,
      and the answer is asked for in the chat (step 5), where a pick is unmistakably
      the operator's. Do not repeat the card as text under it.

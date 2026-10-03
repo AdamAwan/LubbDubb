@@ -1119,7 +1119,8 @@ export type { AskDestination, AskGroup, AskKind, AskRow, AskUrgency } from './as
 export { buildAskQueue } from './asks/queue.js';
 export { askLine, oneLine } from './asks/lines.js';
 export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
-export { PART_GROUP, PART_GROUP_WORD, askedPart, type PartGroup } from './plans/partGroup.js';
+export { PART_GROUP, PART_GROUP_WORD, type PartGroup } from './plans/partGroup.js';
+export { askGoal, type AskGoalPart } from './asks/askGoal.js';
 export { projectName, upgradeHeadline } from './asks/updateAsks.js';
 export type { BuildStanding } from './selfUpdate/buildStanding.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
