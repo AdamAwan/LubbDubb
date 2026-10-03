@@ -401,7 +401,21 @@ test('a boot refresh updates only a plugin somebody already installed', async ()
 
   const half = new FakePluginCli();
   half.installed = [{ id: PLUGIN_ID, version: '1.0.0-old', scope: 'user' }];
-  assert.equal(await desk(half).plugin.refresh(), null, 'a plugin nobody installed is not installed at boot');
+  const halfDesk = desk(half).plugin;
+  assert.equal((await halfDesk.status()).state, 'stale', 'the board is behind whether or not the assistant is there');
+  const halfUpdated = await halfDesk.refresh();
+  assert.equal(halfUpdated?.ok, true);
+  assert.ok(
+    half.calls.some((c) => c[1] === 'update' && c[2] === PLUGIN_ID),
+    'the board still updates at boot',
+  );
+  assert.ok(!half.calls.some((c) => c[1] === 'install'), 'a plugin nobody installed is not installed at boot');
+
+  const halfCurrent = new FakePluginCli();
+  const halfCurrentDesk = desk(halfCurrent);
+  halfCurrent.installed = [{ id: PLUGIN_ID, version: halfCurrentDesk.bundle.version, scope: 'user' }];
+  assert.equal((await halfCurrentDesk.plugin.status()).state, 'missing');
+  assert.equal(await halfCurrentDesk.plugin.refresh(), null, 'nothing installed is behind, so nothing runs');
 
   const down = new FakePluginCli();
   down.refuse.set('plugin list', { code: 1, stdout: '', stderr: 'claude: not logged in' });

@@ -232,8 +232,8 @@ export const register: Register = on => {
         {stop !== undefined && stop !== null && (
           <Box flexDirection="column">
             {header(`Stop ${at + 1}`, stop.kind)}
-            {stop.files.map(f => (
-              <Text key={`file-${f}`} dimColor>
+            {stop.files.map((f, i) => (
+              <Text key={`file-${i}`} dimColor>
                 {clip(f, width)}
               </Text>
             ))}

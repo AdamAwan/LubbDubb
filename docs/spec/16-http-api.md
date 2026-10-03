@@ -1686,9 +1686,9 @@ tab's first step and the band under the top bar ([17](17-cockpit.md#the-plugin))
 `reason` on `unknown` and `installed` on the rest, a union rather than nullable fields. `state` is
 `missing`, `stale`, `current` or `unknown`, and `unknown` is never folded into `missing` — it means the bundle was not written at boot or
 `claude plugin list` could not answer, and a cockpit told _not installed_ on that would ask every
-operator to reinstall a plugin that is fine. `missing` is either plugin absent at user scope. `bundle`
+operator to reinstall a plugin that is fine. `missing` is either plugin absent at user scope while neither installed one is behind. `bundle`
 is the version this harness wrote, into both; `installed` is the version Claude Code holds — on `stale`,
-the first plugin's that differs from it, `lubbdubb`'s before `pr-assistant`'s
+the first installed plugin's that differs from it, `lubbdubb`'s before `pr-assistant`'s
 ([11](11-mcp-tools.md#installing-it)).
 
 `skills` is the `lubbdubb` plugin's skill names, which the tab lists rather than a copy of its own. Held for a

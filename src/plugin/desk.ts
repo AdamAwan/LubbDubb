@@ -106,18 +106,22 @@ export class PluginDesk {
 
   async refresh(): Promise<PluginInstallPayload | null> {
     this.cached = null;
-    return (await this.status()).state === 'stale' ? this.install() : null;
+    return (await this.status()).state === 'stale' ? this.place(true) : null;
   }
 
   install(): Promise<PluginInstallPayload> {
-    this.installing ??= this.settle().finally(() => {
+    return this.place(false);
+  }
+
+  private place(updateOnly: boolean): Promise<PluginInstallPayload> {
+    this.installing ??= this.settle(updateOnly).finally(() => {
       this.installing = null;
     });
     return this.installing;
   }
 
-  private async settle(): Promise<PluginInstallPayload> {
-    const steps = await this.attempt();
+  private async settle(updateOnly: boolean): Promise<PluginInstallPayload> {
+    const steps = await this.attempt(updateOnly);
     this.cached = null;
     const ok = steps.every((s) => s.ok);
     if (!ok)
@@ -141,12 +145,11 @@ export class PluginDesk {
     const listed = await this.listed();
     if (!listed.ok) return { ...base, state: 'unknown', reason: listed.reason };
     const { plugin, assistant } = listed.installed;
-    if (plugin === null || assistant === null) return { ...base, state: 'missing', installed: null };
     const { version } = this.bundle;
-    const behind = [plugin, assistant].find((v) => v !== version);
-    return behind === undefined
-      ? { ...base, state: 'current', installed: version }
-      : { ...base, state: 'stale', installed: behind };
+    const behind = [plugin, assistant].find((v) => v !== null && v !== version);
+    if (behind !== undefined && behind !== null) return { ...base, state: 'stale', installed: behind };
+    if (plugin === null || assistant === null) return { ...base, state: 'missing', installed: null };
+    return { ...base, state: 'current', installed: version };
   }
 
   private async listed(): Promise<Listed> {
@@ -159,7 +162,7 @@ export class PluginDesk {
     }
   }
 
-  private async attempt(): Promise<PluginInstallPayload['steps']> {
+  private async attempt(updateOnly: boolean): Promise<PluginInstallPayload['steps']> {
     const { bundle, config } = this;
     if (bundle === null || config === null)
       return [{ label: 'write the plugin', ok: false, detail: 'it was not written at boot — see the error log' }];
@@ -187,6 +190,7 @@ export class PluginDesk {
       { key: 'assistant' as const, id: ASSISTANT_ID, what: 'the PR assistant', config: [] },
     ];
     for (const placing of placings) {
+      if (updateOnly && listed.installed[placing.key] === null) continue;
       const placed =
         listed.installed[placing.key] === null
           ? await step(`install ${placing.what}`, [

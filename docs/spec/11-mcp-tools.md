@@ -1653,10 +1653,12 @@ rewrites both folders and the catalogue. `PluginBundleInput.assistantSourceDir` 
 injects `FakePluginCli` (`src/plugin/fakePluginCli.ts`), so no test touches the real plugin store.
 
 - **`status()` is four-valued, and `unknown` is never folded into `missing`.** It reads
-  `claude plugin list --json` and answers for the pair: `missing` while **either** plugin has no row,
-  `stale` while both do and either is at another version — `installed` naming the first one behind,
-  `lubbdubb`'s before `pr-assistant`'s, so the Update the tab offers names a version that is actually
-  out of date — `current` only when both are at the bundle's
+  `claude plugin list --json` and answers for the pair: `stale` while **either installed** plugin is
+  at another version — `installed` naming the first one behind, `lubbdubb`'s before `pr-assistant`'s,
+  so the Update the tab offers names a version that is actually out of date — then `missing` while
+  either has no row, and `current` only when both are at the bundle's. **Stale wins over missing**,
+  because `refresh()` acts on `stale` alone: the other order leaves every deployment from before the
+  PR assistant, and anyone who uninstalls it, on a board that never updates at boot again
   — reading the **user-scope** row only, because the links open sessions in any folder and a project or
   local install would answer `stale` and then send `update --scope user` at a plugin that is not there —
   or `unknown` — the bundle was not written, or the CLI could not answer — with a `reason`.
@@ -1684,11 +1686,11 @@ lubbdubb` — **only when `claude mcp get lubbdubb` shows it is the old bridge**
   on one credential, and which one a session is talking through is not something anybody can see.
 
 - **An installed plugin is updated at boot; a missing one is not installed.** `refresh()`, called by
-  `publishPlugin` straight after the bundle is written, reads the status afresh and runs `install()`
-  only on `stale` — both plugins installed at user scope, at another version. Somebody installing it
-  once is the consent; a plugin nobody installed stays a button — which is also how a deployment from
-  before the PR assistant meets it: `lubbdubb` alone reads `missing`, the band asks, and one press
-  installs the assistant and updates the board, `unknown` is never updated over, and
+  `publishPlugin` straight after the bundle is written, reads the status afresh and, only on `stale`,
+  runs the install's steps **updating only the plugins that have a user-scope row**. Somebody
+  installing a plugin once is the consent; a plugin nobody installed stays a button — which is also
+  how a deployment from before the PR assistant meets it: the board is updated at boot as ever, then
+  reads `missing`, the band asks, and one press installs the assistant. `unknown` is never updated over, and
   `current` spawns nothing past the one `plugin list`. It does not block boot, and a failure is
   recorded like a pressed one, leaving the band and the tab offering Update. A Claude Code session
   already open keeps the version it loaded until it restarts.
