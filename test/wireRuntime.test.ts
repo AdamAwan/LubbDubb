@@ -12,9 +12,18 @@ import { REPO_ROOT as ROOT } from './support/paths.js';
  * holds that the contract declares no runtime of its own; this holds what it may
  * pass through, because a re-export is not a declaration and would slip past that
  * assertion with the whole server graph behind it. The ask queue is the one passed through: the
- * demo's fake server derives it with the harness's own code, and the cockpit shares its wording.
+ * demo's fake server derives it with the harness's own code, and the cockpit shares its wording —
+ * and the tables that name an ask's kind and place a goal's parts, and the goal an ask is about, which
+ * `ask_next`'s card reads too.
  */
-const RUNTIME_MODULES: string[] = ['./asks/queue.js', './asks/lines.js', './asks/updateAsks.js'];
+const RUNTIME_MODULES: string[] = [
+  './asks/queue.js',
+  './asks/lines.js',
+  './asks/updateAsks.js',
+  './asks/kinds.js',
+  './asks/askGoal.js',
+  './plans/partGroup.js',
+];
 
 test('the contract passes through runtime from the declared modules and no others', () => {
   const source = readFileSync(join(ROOT, 'src/wire.ts'), 'utf8');

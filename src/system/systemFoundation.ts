@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import type { AskRow } from '../asks/askRow.js';
+import type { AskSnapshot } from '../asks/queue.js';
 import { dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import { Store } from '../store/store.js';
@@ -107,7 +107,7 @@ interface Late {
   localRunWatch: LocalRunWatch;
   localValidations: LocalValidationDesk;
   prAssign: PrAssignDesk;
-  askQueue(): AskRow[];
+  askSnapshot(): AskSnapshot;
 }
 
 export interface LateBinding {
@@ -147,7 +147,7 @@ export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
     prAssign,
-    askQueue: asks,
+    askSnapshot: asks,
   };
 }
 
@@ -158,7 +158,7 @@ interface LatePhases {
   harness: Harness;
   local: LocalRuns;
   prAssign: PrAssignDesk;
-  asks: () => AskRow[];
+  asks: () => AskSnapshot;
 }
 
 export function buildPluginDesk(config: Config, opts: BuildOptions, errors: ErrorLog): PluginDesk {

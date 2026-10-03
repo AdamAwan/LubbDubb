@@ -1,5 +1,6 @@
 import type { GoalEnvironmentReachView, GoalGroupReach, GoalWatchView } from '../types.js';
-import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from './goalPage.js';
+import type { GoalPageView, GoalPartView, GoalTrack } from './goalPage.js';
+import type { PartGroup } from '../types.js';
 import { inFlight, localValidationSaid } from './localValidation.js';
 
 // → docs/spec/17-cockpit.md

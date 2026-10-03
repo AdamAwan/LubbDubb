@@ -11,7 +11,8 @@ import type {
   PullRequest,
   TaskSummary,
 } from '../web/src/types.js';
-import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
+import type { GoalPageView, GoalPartView, GoalTrack } from '../web/src/view/goalPage.js';
+import type { PartGroup } from '../web/src/types.js';
 import {
   buildGoalPage,
   buildGoalNav,

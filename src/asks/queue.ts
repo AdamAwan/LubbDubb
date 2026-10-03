@@ -34,6 +34,12 @@ export type AskInputs = Pick<
   config: Pick<CockpitState['config'], 'watchLabel' | 'desktopFolder'>;
 };
 
+/** The standing asks in the one-at-a-time order, beside the inputs they were derived from. */
+export interface AskSnapshot {
+  queue: AskRow[];
+  inputs: AskInputs;
+}
+
 /** A row as its source writes it; the tier, the standing and the Focus rank are added in one pass. */
 export type AskDraft = Omit<AskRow, 'urgency' | 'focusRank' | 'standing'> & { standing?: boolean };
 

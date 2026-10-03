@@ -1476,9 +1476,49 @@ the URL the harness serves on, shared with `buildApp`. It carries **no token**: 
 chat is a link anybody reading the transcript holds, and the cockpit already has its token in the
 browser that opened it.
 
+##### The card
+
+Every ask `ask_next` hands back carries `card` (`src/mcp/askCard.ts`): what Focus mode draws for that
+ask ([17](17-cockpit.md#one-ask-at-a-time)), as data, so the skill draws a card that looks like it — as
+a widget where the session can render one, and as a few lines of markdown where it cannot. A likeness,
+not a replica: the same words and tones, the goal beside the ask.
+
+**The widget carries no position.** Focus mode's "2 of 7" sits beside its Prev and Next, and means
+_you can move_; in Claude Code the loop walks the queue and the operator cannot, so a count drawn
+there reads as a pager with its buttons missing. The queue is drawn, if at all, as read-only pips and
+"n more after this" — `total` less `position`, which stay on the reply for the markdown card's header.
+
+- **`kind`** — the label, glyph and tone the rail and Focus mode give it, off `KIND_LABEL`,
+  `KIND_SYMBOL` and `KIND_TONE` in `src/asks/kinds.ts`.
+- **`queue`** — one entry per standing ask, in the one-at-a-time order, with its kind and `here` on
+  this one: Focus mode's pips.
+- **`goal`** — null for an ask on no goal, which the card says rather than drawing an empty column.
+  Otherwise its `title` and its `plan`: each live part's number, name and place (`PART_GROUP_WORD`),
+  with `here` on the part the ask's origin names. Retired parts are left out, as the goal page leaves
+  them out. The goal's ref is the ask's own `goalRef`, and "m of n merged" is counted off the parts.
+
+**The tables are the cockpit's own, not copies.** A session composing the card from `ask` and
+`goal_read` worked out each kind's word and each part's place for itself, and a card that names an
+ask differently from the rail beside it is two answers to "what is this". So the kind tables and the
+part placement moved to `src/` and reach the cockpit through the wire
+([17](17-cockpit.md#the-queue-rail--needs-you)); `card` is built from the same ones.
+
+**And the goal is the cockpit's own reading of it.** `goal` is `askGoal` (`src/asks/askGoal.ts`) —
+the function Focus mode draws its goal column with ([17](17-cockpit.md#the-setting-beside-the-act)) —
+run over the very `AskInputs` the queue was derived from, which is why `DesktopToolDeps.asks()` hands
+back the inputs beside the rows (`askSnapshot`, `src/server/stateSnapshot.ts`). Read off the store
+instead, the card was a second derivation already disagreeing with the first: it missed a goal that had
+left the world for the retained runs, and asked the reveal gate itself where the wire had already
+answered it.
+
+**A withheld plan is withheld here too.** Where the goal's plan waits on the operator's reveal
+([above](#a-withheld-plan-is-withheld-here-too)), `plan` is `{withheld: true}` with no parts: a part's
+name is the plan, read aloud. It is read off the wire plan's `revealed`, the answer every cockpit
+surface already draws from.
+
 ##### The operator decides, and Claude's view is labelled
 
-The skill puts each ask to the operator as a short card and may then give its own view. **It is set
+The skill puts each ask to the operator as a short card — [`card`](#the-card), drawn — and may then give its own view. **It is set
 apart and labelled as Claude's own view, never LubbDubb's**, and nothing is sent until the operator
 answers — in their own words, or by explicitly picking an option.
 
@@ -1488,7 +1528,10 @@ as approval of whatever it suggested has answered ten questions with nobody deci
 every record says the operator did. And a recommendation phrased as the harness's — "LubbDubb
 recommends accepting" — is a false statement about where it came from: the harness asked a
 question and proposed no answer, and an operator deciding on the belief that it did is deciding on
-the wrong evidence. So the skill keeps the facts and the opinion in two blocks, asks for a reason on
+the wrong evidence. So the skill keeps the facts and the opinion in two blocks — in the widget, the
+view is a band of its own at the card's foot headed **"Claude's view — not from LubbDubb"**, in a
+neutral colour rather than the ask's tone, so it is read beside the facts it weighs without being
+mistaken for one of them — asks for a reason on
 every rejection (it is what the next planner reads), never takes a secret through chat, and confirms a
 validation reading with the operator before reporting it.
 

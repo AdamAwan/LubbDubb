@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AskRow } from '../asks/askRow.js';
 import { answerWith } from './askAnswers.js';
+import { askCard } from './askCard.js';
 import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { toolSchema } from './schema.js';
 import { toolError, toolJson } from './protocol.js';
@@ -55,7 +56,8 @@ const notStanding = (id: string) =>
   );
 
 const ASK_NEXT_NEXT =
-  'Put this to the operator as a short card: where it is, what is asked, who is waiting, what it holds up. ' +
+  'Put this to the operator as a short card — drawn from `card` as a widget where you can draw one, looking ' +
+  'like Focus mode but with no position in the queue: what is asked, who is waiting, what it holds up. ' +
   'Read more only where it helps them decide. Any view is yours, labelled as yours — the operator decides, ' +
   'and nothing is sent until they answer or explicitly pick an option. Then call `answerWith.tool` with ' +
   'their answer, or ask_skip if they want it later. An answer refused as already settled means somebody ' +
@@ -64,7 +66,8 @@ const ASK_NEXT_NEXT =
 export const askNext: DesktopToolFactory = (deps, session) => ({
   description:
     'The next thing the operator has to answer — the head of "Needs you" in the order the cockpit’s Focus mode ' +
-    'walks it — with where it stands in the queue and `answerWith`: the exact tool and arguments that answer ' +
+    'walks it — with where it stands in the queue, `card`: what Focus mode draws for it, and `answerWith`: the ' +
+    'exact tool and arguments that answer ' +
     'it on this channel, or the cockpit page where it is answered instead. Asks skipped in this session are ' +
     'passed over. `id` hands back that one ask instead of the head. Records nothing, decides nothing.',
   inputSchema: toolSchema(
@@ -80,7 +83,7 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
     }),
   ),
   handler: (args) => {
-    const queue = deps.askQueue();
+    const { queue, inputs } = deps.asks();
     const skipped = skippedBy(session, args.skip);
     const waiting = queue.filter((row) => !skipped.has(row.id));
     const passedOver = queue.filter((row) => skipped.has(row.id)).map((row) => row.id);
@@ -106,6 +109,7 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
       remaining: waiting.length,
       skipped: passedOver.length,
       ask: describeRow(head),
+      card: askCard(inputs, head, queue),
       ...(question === null ? {} : { question }),
       answerWith: answerWith(head, {
         link: cockpitLink(deps, head.id),
@@ -136,7 +140,7 @@ export const askSkip: DesktopToolFactory = (deps, session) => ({
       const had = skipped.delete(id);
       return toolJson({ id, skipped: false, said: had ? 'Back in the queue.' : 'It was not skipped.' });
     }
-    const standing = deps.askQueue().some((row) => row.id === id);
+    const standing = deps.asks().queue.some((row) => row.id === id);
     if (!standing) return notStanding(id);
     skipped.add(id);
     return toolJson({

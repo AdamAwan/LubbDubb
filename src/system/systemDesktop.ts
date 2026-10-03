@@ -47,7 +47,7 @@ export function buildDesktop(
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,
     agentModels: config.agentModels,
-    askQueue: () => late.get().askQueue(),
+    asks: () => late.get().askSnapshot(),
     cockpitUrl: apiUrl(config),
     proposals: () => late.get().proposals,
     prAssign: () => late.get().prAssign,

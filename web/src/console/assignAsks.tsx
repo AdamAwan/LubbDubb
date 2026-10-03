@@ -7,7 +7,7 @@ import { Ref } from '../components/refs.js';
 import { ButtonRow } from '../components/button.js';
 import { oneLine } from '../view/needLines.js';
 import { assignAskOf, assignGroupLine, type AssignAsk } from '../view/askGroups.js';
-import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
 
 // → docs/spec/17-cockpit.md
 

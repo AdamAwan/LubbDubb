@@ -1,7 +1,8 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalPageView, PartGroup } from '../view/goalPage.js';
+import type { GoalPageView } from '../view/goalPage.js';
+import type { PartGroup } from '../types.js';
 import { planUnderWay, planVerdictAsk, GOAL_ANCHOR } from '../view/goalPage.js';
 import type { OpenPullRequest, PlanPart, PullRequest } from '../types.js';
 import { PartDescriptionTag } from '../components/partDescriptions.js';
