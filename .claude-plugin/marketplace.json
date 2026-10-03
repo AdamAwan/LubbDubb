@@ -1,0 +1,12 @@
+{
+  "name": "pr-assistant",
+  "owner": {
+    "name": "LubbDubb"
+  },
+  "plugins": [
+    {
+      "name": "pr-assistant",
+      "source": "./pr-assistant"
+    }
+  ]
+}

@@ -135,7 +135,7 @@ test('the panel says how to start before any walk, and the command opens it', as
   expect(out.text).toBe('PR walkthrough panel opened.')
   expect(seen.opened).toEqual(['pr-walk'])
   const ui = await $.ui.mount({ plugin: 'pr-assistant', surface: 'terminal', component: 'Pane', requestId: 'pr-walk', props: PANE })
-  expect(await ui.find({ type: 'Text', text: /lubbdubb:pr walk/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /pr-assistant:pr walk/ })).toBeDefined()
   await ui.unmount()
 })
 

@@ -13,7 +13,6 @@ export const SKILL_NAMES = [
   'next',
   'order',
   'plan',
-  'pr',
   'run',
 ] as const;
 

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   ASSISTANT_ID,
+  MANAGED_MARKER,
   PLUGIN_ID,
   pluginSkills,
   writePluginBundle,
@@ -93,10 +94,7 @@ test('the bundle’s lubbdubb plugin carries the skills, the board, the bridge a
   );
   assert.ok(existsSync(join(plugin, 'hooks', 'register.tsx')));
   assert.ok(!existsSync(join(plugin, 'tests')), 'the board’s own tests do not ship');
-  assert.ok(
-    existsSync(join(plugin, 'skills', 'pr', 'map', 'build.mjs')),
-    'a skill ships the files beside its SKILL.md',
-  );
+  assert.ok(!existsSync(join(plugin, 'skills', 'pr')), 'the PR jobs are the PR assistant’s');
 
   for (const skill of pluginSkills()) {
     const shipped = readFileSync(join(plugin, 'skills', skill.name, 'SKILL.md'), 'utf8');
@@ -126,6 +124,8 @@ function assistantSource(description = 'Follows a walkthrough.'): string {
   write('hooks/hooks.json', '{}');
   write('hooks/register.tsx', 'export default {};');
   write('types/index.d.ts', 'export {};');
+  write('skills/pr/SKILL.md', '---\nname: pr\n---\n');
+  write('skills/pr/map/build.mjs', 'export {};');
   write('tests/walk.test.ts', 'it ships nowhere');
   return dir;
 }
@@ -155,7 +155,12 @@ test('the bundle carries the PR assistant as a second plugin, at the one version
   assert.ok(existsSync(join(assistant, 'types', 'index.d.ts')));
   assert.ok(!existsSync(join(assistant, 'tests')), 'the panel’s own tests do not ship');
   assert.ok(!existsSync(join(assistant, '.mcp.json')), 'a mod only: no server of its own');
-  assert.ok(!existsSync(join(assistant, 'skills')));
+  assert.ok(existsSync(join(assistant, 'skills', 'pr', 'map', 'build.mjs')), 'a skill ships the files beside it');
+  assert.doesNotMatch(
+    readFileSync(join(assistant, 'skills', 'pr', 'SKILL.md'), 'utf8'),
+    new RegExp(MANAGED_MARKER),
+    'the PR assistant ships its skill as written, with nothing about the harness',
+  );
 
   const stray = join(assistant, 'stray.txt');
   writeFileSync(stray, 'left by hand');
