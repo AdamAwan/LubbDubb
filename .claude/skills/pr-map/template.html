@@ -1,0 +1,228 @@
+<title>__TITLE__</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: header, Before/After toggle, column map of cards with SVG edges behind, then the numbered story. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --fg:#1b1f24; --muted:#5d6670; --line:#d5dae0;
+  --new:#1f8a5b; --new-bg:#e3f4ec; --chg:#b7791f; --chg-bg:#fbf0dc; --aff:#3b6fd8; --aff-bg:#e5edfc;
+  --test:#7a5bc7; --test-bg:#efe9fb; --doc:#6b7480; --doc-bg:#eceef1; --accent:var(--aff); --bad:#c0392b; --bad-bg:#fbe7e4;
+  --display:"Fraunces",Georgia,serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12151a; --panel:#1a1e25; --fg:#e6e9ee; --muted:#9aa3ad; --line:#2e353f;
+  --new:#4cc38a; --new-bg:#163326; --chg:#e0a84a; --chg-bg:#3a2c14; --aff:#7aa2f7; --aff-bg:#1c2944;
+  --test:#b39af0; --test-bg:#2a2340; --doc:#a3abb5; --doc-bg:#262b33; --bad:#f07a6a; --bad-bg:#3a1d1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151a; --panel:#1a1e25; --fg:#e6e9ee; --muted:#9aa3ad; --line:#2e353f;
+  --new:#4cc38a; --new-bg:#163326; --chg:#e0a84a; --chg-bg:#3a2c14; --aff:#7aa2f7; --aff-bg:#1c2944;
+  --test:#b39af0; --test-bg:#2a2340; --doc:#a3abb5; --doc-bg:#262b33; --bad:#f07a6a; --bad-bg:#3a1d1a; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:32px 64px;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--display);font-size:1.9rem;margin:0;text-wrap:balance}
+.pr{font-family:var(--mono);font-size:.85rem;color:var(--muted)}
+.pr a{color:inherit}
+.lede{color:var(--muted);max-width:68ch;margin:6px 0 0}
+code{font-family:var(--mono);font-size:.88em}
+.bar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;border:2px solid}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.toggle button{font:inherit;font-size:.85rem;padding:6px 14px;border:0;background:var(--panel);color:var(--muted);cursor:pointer}
+.toggle button[aria-pressed="true"]{background:var(--accent);color:var(--panel)}
+.toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.root[data-mode=before] .only-after,.root[data-mode=after] .only-before{display:none!important}
+
+.mapwrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.map{position:relative;padding:20px;min-width:var(--minw)}
+.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
+.cols{position:relative;z-index:1;display:grid;column-gap:44px}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.colhd{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stack{display:flex;flex-direction:column;justify-content:center;gap:22px;flex:1}
+.card{position:relative;border:2px solid;border-radius:8px;padding:8px 10px;cursor:pointer;transition:opacity .2s;min-width:0}
+.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ct{font-weight:600;font-size:13px;overflow-wrap:anywhere}
+.cf{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cn{font-family:var(--mono);font-size:11px;margin-top:4px}
+.cn.good{color:var(--new)}.cn.bad{color:var(--bad)}.cn.chg{color:var(--chg)}
+.badges{position:absolute;top:-10px;left:-10px;display:flex;gap:3px}
+.badge{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;background:var(--fg);color:var(--panel)}
+.st-changed{background:var(--chg-bg);border-color:var(--chg)}
+.st-new{background:var(--new-bg);border-color:var(--new)}
+.st-removed{background:var(--bad-bg);border-color:var(--bad)}
+.st-path{background:var(--aff-bg);border-color:var(--aff);border-width:1.5px}
+.st-outside{background:var(--panel);border-color:var(--line);border-width:1.5px}
+.st-test{background:var(--test-bg);border-color:var(--test);border-width:1.5px}
+.st-doc{background:var(--doc-bg);border-color:var(--doc);border-width:1.5px}
+.root[data-mode=before] .card.ghost-before,.root[data-mode=after] .card.ghost-after{opacity:.35;border-style:dashed}
+.root.has-sel .card:not(.sel){opacity:.6}
+.root.has-sel[data-mode=before] .card.ghost-before:not(.sel),.root.has-sel[data-mode=after] .card.ghost-after:not(.sel){opacity:.25}
+.e{fill:none;stroke-width:1.5;stroke:var(--muted)}
+.e.changed{stroke:var(--chg);stroke-width:2.5}
+.e.blocked{stroke:var(--bad);stroke-width:2}
+.e.ghost{stroke:var(--line);stroke-dasharray:4 4}
+.e.dash{stroke-dasharray:4 4}
+.mk-normal{fill:var(--muted)}.mk-changed{fill:var(--chg)}.mk-blocked{fill:var(--bad)}.mk-ghost{fill:var(--line)}
+.elbl{font-family:var(--mono);font-size:10px;fill:var(--muted);paint-order:stroke;stroke:var(--panel);stroke-width:4px}
+.xmark{stroke:var(--bad);stroke-width:2.5}
+@media (prefers-reduced-motion:no-preference){.e.changed{stroke-dasharray:6 4;animation:flow 1.2s linear infinite}}
+@keyframes flow{to{stroke-dashoffset:-20}}
+
+.story{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.story li{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.story li.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.story li>p,.story li>.tl,.story li>.meter{margin:0 0 0 34px}
+.story li>p{max-width:72ch}
+.story li>p:not(.d){color:var(--muted)}
+.sh{all:unset;cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.sh:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.sn{flex:none;width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:12px;font-weight:600;background:var(--aff-bg);color:var(--aff)}
+.sn.chg{background:var(--chg-bg);color:var(--chg)}
+.file{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.d{padding:6px 10px;border-radius:0 6px 6px 0}
+.d.bad{background:var(--bad-bg);border-left:3px solid var(--bad)}
+.d.good{background:var(--new-bg);border-left:3px solid var(--new)}
+.scen{margin:0;max-width:72ch;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+
+.tl{overflow-x:auto}
+.axis{stroke:var(--line);stroke-width:2}
+.ev-item{fill:var(--doc-bg);stroke:var(--doc);stroke-width:2}
+.ev-focus{fill:var(--aff-bg);stroke:var(--aff);stroke-width:2}
+.ev-event{fill:var(--chg-bg);stroke:var(--chg);stroke-width:2}
+.ev-now{stroke:var(--fg);stroke-width:2}
+.evt{font-size:12px;fill:var(--fg)}.evtop{font-size:11px;fill:var(--chg)}.evtime{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+.win{stroke-width:2;stroke-dasharray:6 4}
+.win.bad{fill:var(--bad-bg);stroke:var(--bad)}.win.good{fill:var(--new-bg);stroke:var(--new)}
+.winlbl{font-size:12px;font-weight:600}.winlbl.bad{fill:var(--bad)}.winlbl.good{fill:var(--new)}
+.meter{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--muted)}
+.slots{display:flex;gap:4px}.slot{width:22px;height:12px;border-radius:3px;border:2px solid var(--line);background:var(--panel)}
+.slot.on{background:var(--chg);border-color:var(--chg)}
+.mcount{font-family:var(--mono);font-weight:500}.mcount.bad{color:var(--bad)}.mcount.good{color:var(--new)}
+</style>
+
+<div class="wrap root" id="root" data-mode="before">
+  <header>
+    <div class="pr" id="prline"></div>
+    <h1 id="prtitle"></h1>
+    <p class="lede" id="summary"></p>
+  </header>
+  <div class="bar">
+    <div class="legend" id="legend"></div>
+    <div class="toggle" role="group" aria-label="Show code version">
+      <button id="t-before" aria-pressed="true">Before this PR</button>
+      <button id="t-after" aria-pressed="false">After this PR</button>
+    </div>
+  </div>
+  <div class="mapwrap"><div class="map" id="map">
+    <svg class="edges" id="edges" aria-hidden="true"></svg>
+    <div class="cols" id="cols"></div>
+  </div></div>
+  <p class="scen" id="scenario" hidden></p>
+  <ol class="story" id="story"></ol>
+</div>
+
+<script type="application/json" id="pr-data">__PR_DATA__</script>
+<script>
+(function(){
+const D=JSON.parse(document.getElementById('pr-data').textContent);
+const $=id=>document.getElementById(id), root=$('root');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+const STATUS={changed:'Changed in this PR',new:'New in this PR',removed:'Removed in this PR',path:'Not changed, on the path',outside:'Outside the code',test:'Test',doc:'Spec / docs'};
+const MODES=['before','after'],TONE={before:'bad',after:'good'};
+const GHOST_IN={new:'before',removed:'after'};
+const nodeById=Object.fromEntries(D.nodes.map(n=>[n.id,n]));
+const colIdx=Object.fromEntries(D.columns.map((c,i)=>[c.id,i]));
+const steps=D.steps.map((s,i)=>({...s,n:i+1}));
+
+const pr=D.pr;
+$('prline').innerHTML=(pr.url?`<a href="${esc(pr.url)}">`:'')+esc(pr.repo)+' · PR #'+esc(pr.number)+(pr.url?'</a>':'');
+$('prtitle').textContent=pr.title;
+$('summary').innerHTML=fmt(D.summary);
+const used=new Set(D.nodes.map(n=>n.status));
+$('legend').innerHTML=Object.keys(STATUS).filter(k=>used.has(k)).map(k=>`<span><i class="sw st-${k}"></i>${STATUS[k]}</span>`).join('');
+if(D.scenario){$('scenario').hidden=false;$('scenario').innerHTML='<b>The scenario:</b> '+fmt(D.scenario);}
+
+const stepsOf={};steps.forEach(s=>s.nodes.forEach(id=>(stepsOf[id]=stepsOf[id]||[]).push(s.n)));
+const cols=$('cols');
+cols.style.gridTemplateColumns=`repeat(${D.columns.length},minmax(160px,1fr))`;
+$('map').style.setProperty('--minw',(D.columns.length*204)+'px');
+const note=(t,cls)=>t?`<div class="cn ${cls}">${fmt(t)}</div>`:'';
+cols.innerHTML=D.columns.map(c=>`<div class="col"><div class="colhd">${esc(c.label)}</div><div class="stack">`+
+  D.nodes.filter(n=>n.column===c.id).map(n=>{
+    const ghost=GHOST_IN[n.status]?' ghost-'+GHOST_IN[n.status]:'';
+    const b=(stepsOf[n.id]||[]).map(k=>`<span class="badge">${k}</span>`).join('');
+    return `<div class="card st-${n.status}${ghost}" data-id="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.title)}">`+
+      (b?`<span class="badges">${b}</span>`:'')+
+      `<div class="ct">${fmt(n.title)}</div>`+(n.file?`<div class="cf" title="${esc(n.file)}">${esc(n.file.split('/').pop())}</div>`:'')+
+      note(n.note,'')+MODES.map(k=>note(n[k],`${TONE[k]} only-${k}`)).join('')+`</div>`;
+  }).join('')+`</div></div>`).join('');
+
+const edgeState=(e,mode)=>e[mode]||(e.changed&&mode==='after'?'changed':'normal');
+function draw(){
+  const svg=$('edges'),map=$('map'),mr=map.getBoundingClientRect(),mode=root.dataset.mode,boxes={};
+  map.querySelectorAll('.card').forEach(c=>{const r=c.getBoundingClientRect();
+    boxes[c.dataset.id]={l:r.left-mr.left,r:r.right-mr.left,t:r.top-mr.top,b:r.bottom-mr.top,cx:(r.left+r.right)/2-mr.left,cy:(r.top+r.bottom)/2-mr.top};});
+  let out=`<defs>${['normal','changed','blocked','ghost'].map(k=>`<marker id="mk-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-${k}"/></marker>`).join('')}</defs>`;
+  D.edges.forEach(e=>{
+    const st=edgeState(e,mode); if(st==='absent')return;
+    const a=boxes[e.from],b=boxes[e.to],ca=colIdx[nodeById[e.from].column],cb=colIdx[nodeById[e.to].column];
+    let d,mx,my;
+    if(ca===cb){const down=b.cy>a.cy,y1=down?a.b:a.t,y2=down?b.t-4:b.b+4,x=Math.min(a.cx,b.cx);
+      d=`M${x} ${y1}V${y2}`;mx=x;my=(y1+y2)/2;}
+    else{const fwd=cb>ca,x1=fwd?a.r:a.l,x2=fwd?b.l-4:b.r+4,c=(x1+x2)/2;
+      d=`M${x1} ${a.cy}C${c} ${a.cy} ${c} ${b.cy} ${x2} ${b.cy}`;mx=c;my=(a.cy+b.cy)/2;}
+    out+=`<path d="${d}" class="e ${st}${e.dashed?' dash':''}" marker-end="url(#mk-${st})"/>`;
+    if(st==='blocked')out+=`<path d="M${mx-6} ${my-6}L${mx+6} ${my+6}M${mx+6} ${my-6}L${mx-6} ${my+6}" class="xmark"/>`;
+    if(e.label)out+=`<text x="${mx}" y="${my-8}" text-anchor="middle" class="elbl">${esc(e.label)}</text>`;
+  });
+  svg.innerHTML=out;
+}
+
+function timeline(t){
+  const W=900,P=50,n=t.events.length,step=(W-2*P)/Math.max(n-1,1),X=i=>P+i*step,Y=82,w=t.windows||{};
+  const inWin=(win,i)=>win&&i>=win.from&&i<=(win.to??n-1);
+  const win=k=>{const v=w[k];if(!v)return'';const x=X(v.from)-step/2+8,x2=v.to==null?W-15:X(v.to)+step/2-8;
+    return `<g class="only-${k}"><rect x="${x}" y="24" width="${x2-x}" height="96" rx="10" class="win ${TONE[k]}"/><text x="${x+12}" y="42" class="winlbl ${TONE[k]}">${esc(v.label)}</text></g>`;};
+  let s=MODES.map(win).join('')+`<line x1="30" y1="${Y}" x2="${W-25}" y2="${Y}" class="axis"/>`;
+  t.events.forEach((e,i)=>{const x=X(i);
+    if(e.kind==='now')s+=`<line x1="${x}" y1="${Y-14}" x2="${x}" y2="${Y+14}" class="ev-now"/>`;
+    else if(e.kind==='event')s+=`<circle cx="${x}" cy="${Y}" r="9" class="ev-event"/>`;
+    else{const z=e.kind==='focus'?20:16;s+=`<rect x="${x-z/2}" y="${Y-z/2}" width="${z}" height="${z}" rx="3" class="ev-${e.kind}"/>`;}
+    if(e.top)s+=`<text x="${x}" y="${Y-18}" text-anchor="middle" class="evtop">${esc(e.top)}</text>`;
+    if(e.label)s+=`<text x="${x}" y="${Y+30}" text-anchor="middle" class="evt"${e.kind==='focus'?' font-weight="600"':''}>${esc(e.label)}</text>`;
+    if(e.time)s+=`<text x="${x}" y="${Y+58}" text-anchor="middle" class="evtime">${esc(e.time)}</text>`;});
+  let html=`<div class="tl"><svg viewBox="0 0 ${W} 160" width="${W}" height="160" role="img" aria-label="${esc(t.label||'Timeline')}">${s}</svg></div>`;
+  if(t.meter)html+=MODES.map(k=>{const m=t.meter,v=t.events.filter((e,i)=>e.kind==='event'&&inWin(w[k],i)).length;
+    return `<div class="meter only-${k}"><span>${esc(m.label)}</span><span class="slots">${Array.from({length:m.max},(_,i)=>`<i class="slot${i<v?' on':''}"></i>`).join('')}</span><span class="mcount ${TONE[k]}">${v} of ${m.max}</span></div>`;}).join('');
+  return html;
+}
+
+const files=s=>[...new Set(s.nodes.map(id=>nodeById[id].file).filter(Boolean).map(f=>f.split('/').pop()))].join(' · ');
+$('story').innerHTML=steps.map(s=>{
+  const ch=s.before||s.after,f=files(s);
+  return `<li data-n="${s.n}"><button class="sh"><span class="sn${ch?' chg':''}">${s.n}</span><b>${fmt(s.title)}</b>${f?` <span class="file">${esc(f)}</span>`:''}</button>`+
+    (s.text?`<p>${fmt(s.text)}</p>`:'')+
+    MODES.map(k=>s[k]?`<p class="d ${TONE[k]} only-${k}">${fmt(s[k])}</p>`:'').join('')+
+    (s.timeline?timeline(s.timeline):'')+`</li>`;
+}).join('');
+
+function select(n){
+  const step=steps[n-1];if(!step)return;
+  root.classList.add('has-sel');
+  document.querySelectorAll('.card').forEach(c=>c.classList.toggle('sel',step.nodes.includes(c.dataset.id)));
+  document.querySelectorAll('.story li').forEach(li=>li.classList.toggle('sel',+li.dataset.n===n));
+}
+function setMode(m){root.dataset.mode=m;MODES.forEach(k=>$('t-'+k).setAttribute('aria-pressed',String(m===k)));draw();}
+MODES.forEach(k=>$('t-'+k).onclick=()=>setMode(k));
+document.querySelectorAll('.story .sh').forEach(b=>b.onclick=()=>select(+b.parentElement.dataset.n));
+document.querySelectorAll('.card').forEach(c=>{const go=()=>{const s=stepsOf[c.dataset.id];if(s)select(s[0]);};
+  c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};});
+
+root.dataset.mode='before';
+select(D.focusStep??(steps.find(s=>s.before||s.after)||steps[0]).n);
+new ResizeObserver(draw).observe($('map'));
+document.fonts.ready.then(draw);
+})();
+</script>

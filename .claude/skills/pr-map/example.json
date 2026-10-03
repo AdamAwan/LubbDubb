@@ -1,0 +1,222 @@
+{
+  "pr": {
+    "repo": "adamawan/lubbdubb",
+    "number": 1091,
+    "title": "Count description-check attempts per version, not per PR",
+    "url": "https://github.com/adamawan/lubbdubb/pull/1091"
+  },
+  "summary": "A new PR description got no checker if older versions had already used up the 3 tries. Now each version gets its own 3 tries, and a person is asked when they run out.",
+  "scenario": "The operator wrote three versions of a PR description, and a checker was sent for each one. At 11:00 they write **version 4**. The rule allows **3 checker tries**. Does version 4 get checked?",
+  "focusStep": 4,
+  "columns": [
+    {
+      "id": "who",
+      "label": "Who"
+    },
+    {
+      "id": "store",
+      "label": "Store"
+    },
+    {
+      "id": "inputs",
+      "label": "Inputs"
+    },
+    {
+      "id": "rule",
+      "label": "Dispatcher rule"
+    },
+    {
+      "id": "outcome",
+      "label": "Outcome"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "operator",
+      "column": "who",
+      "title": "Operator writes v4",
+      "status": "outside",
+      "note": "PR description"
+    },
+    {
+      "id": "query",
+      "column": "store",
+      "title": "uncheckedDescriptions()",
+      "file": "src/store/prDescriptions.ts",
+      "status": "changed",
+      "after": "+ when it was written"
+    },
+    {
+      "id": "type",
+      "column": "store",
+      "title": "DescriptionAwaitingCheck",
+      "file": "src/types.ts",
+      "status": "changed",
+      "after": "+ authoredAt"
+    },
+    {
+      "id": "inputs",
+      "column": "inputs",
+      "title": "dispatchInputs",
+      "file": "src/dispatcher/dispatchInputs.ts",
+      "status": "path"
+    },
+    {
+      "id": "decisions",
+      "column": "inputs",
+      "title": "recentDecisions",
+      "note": "past checker tries",
+      "status": "path"
+    },
+    {
+      "id": "rule",
+      "column": "rule",
+      "title": "prDescriptionCheck",
+      "file": "src/dispatcher/rules/prDescriptionCheck.ts",
+      "status": "changed",
+      "before": "counts every try on the PR",
+      "after": "counts tries since v4; asks a person at the cap"
+    },
+    {
+      "id": "send",
+      "column": "outcome",
+      "title": "Send checker",
+      "status": "outside",
+      "before": "blocked: cap used",
+      "after": "sent for v4"
+    },
+    {
+      "id": "escalate",
+      "column": "outcome",
+      "title": "Ask a person",
+      "status": "new",
+      "after": "after 3 silent tries"
+    }
+  ],
+  "edges": [
+    {
+      "from": "operator",
+      "to": "query"
+    },
+    {
+      "from": "query",
+      "to": "type",
+      "dashed": true
+    },
+    {
+      "from": "query",
+      "to": "inputs",
+      "changed": true
+    },
+    {
+      "from": "inputs",
+      "to": "rule",
+      "changed": true
+    },
+    {
+      "from": "decisions",
+      "to": "rule"
+    },
+    {
+      "from": "rule",
+      "to": "send",
+      "before": "blocked",
+      "after": "changed"
+    },
+    {
+      "from": "rule",
+      "to": "escalate",
+      "before": "absent",
+      "after": "changed"
+    }
+  ],
+  "steps": [
+    {
+      "nodes": ["operator"],
+      "title": "Operator writes version 4 of the PR description.",
+      "text": "Versions 1 to 3 were each checked once already."
+    },
+    {
+      "nodes": ["query", "type"],
+      "title": "The store lists descriptions nobody has checked yet.",
+      "before": "It returns the text, but not when it was written. Later steps can't tell old tries from new ones.",
+      "after": "It now also returns `authoredAt`, the time this version was written. Step 4 needs that."
+    },
+    {
+      "nodes": ["inputs", "decisions"],
+      "title": "Each cycle, the dispatcher gathers its inputs.",
+      "text": "The unchecked description, plus the last 200 decisions, which include every checker sent before. Not changed by this PR."
+    },
+    {
+      "nodes": ["rule", "decisions"],
+      "title": "The rule decides whether to send a checker.",
+      "before": "It allows 3 tries, but counts **every try on this PR**. The 3 tries on older versions use up the limit.",
+      "after": "It only counts tries **after v4 was written**, so v4 starts with all 3.",
+      "timeline": {
+        "label": "Which checker tries the rule counts",
+        "events": [
+          {
+            "kind": "item",
+            "label": "v1",
+            "time": "10:00"
+          },
+          {
+            "kind": "event",
+            "top": "checker",
+            "time": "10:01"
+          },
+          {
+            "kind": "item",
+            "label": "v2",
+            "time": "10:15"
+          },
+          {
+            "kind": "event",
+            "top": "checker",
+            "time": "10:16"
+          },
+          {
+            "kind": "item",
+            "label": "v3",
+            "time": "10:30"
+          },
+          {
+            "kind": "event",
+            "top": "checker",
+            "time": "10:31"
+          },
+          {
+            "kind": "focus",
+            "label": "v4",
+            "time": "11:00"
+          },
+          {
+            "kind": "now",
+            "label": "now",
+            "time": "12:00"
+          }
+        ],
+        "windows": {
+          "before": {
+            "from": 0,
+            "label": "Counted: every try on this PR"
+          },
+          "after": {
+            "from": 6,
+            "label": "Counted: tries since v4"
+          }
+        },
+        "meter": {
+          "label": "Tries counted",
+          "max": 3
+        }
+      }
+    },
+    {
+      "nodes": ["send", "escalate"],
+      "title": "What happens to version 4.",
+      "before": "**Never checked, and nobody is told.** The limit is used up, so nothing is sent.",
+      "after": "**A checker is sent.** If 3 checkers in a row don't report back, a person is asked instead of it going quiet."
+    }
+  ]
+}
