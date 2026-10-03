@@ -80,6 +80,10 @@ test('the bundle is a one-plugin marketplace carrying the skills, the board, the
   );
   assert.ok(existsSync(join(plugin, 'hooks', 'register.tsx')));
   assert.ok(!existsSync(join(plugin, 'tests')), 'the board’s own tests do not ship');
+  assert.ok(
+    existsSync(join(plugin, 'skills', 'pr', 'map', 'build.mjs')),
+    'a skill ships the files beside its SKILL.md',
+  );
 
   for (const skill of pluginSkills()) {
     const shipped = readFileSync(join(plugin, 'skills', skill.name, 'SKILL.md'), 'utf8');

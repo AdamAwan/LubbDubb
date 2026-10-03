@@ -1588,8 +1588,8 @@ Everything the operator's own Claude Code needs from the harness arrives as **on
 `plugin/` is its source — `.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`, `hooks/`, `types/`,
 and `tests/`, which is not shipped.
 
-**Twelve skills, one per job:** `fleet`, `next`, `ask`, `feature`, `file`, `clarify`, `plan`, `order`,
-`run`, `eject`, `check`, `describe` ([20](20-validation.md#the-skill) owns what they say; `next` is
+**Thirteen skills, one per job:** `fleet`, `next`, `ask`, `feature`, `file`, `clarify`, `plan`, `order`,
+`run`, `eject`, `check`, `describe`, `pr` ([20](20-validation.md#the-skill) owns what they say; `next` is
 [the next-ask loop](#the-next-ask-loop)). They were one
 `/lubbdubb` skill told apart by its argument, held as a string in a `.ts` module; as static files each
 job is one document, read on its own and loaded only when it is the job.
@@ -1600,6 +1600,11 @@ job is one document, read on its own and loaded only when it is the job.
   (`/lubbdubb:clarify 12`, [06](06-issue-pickup.md)) carries the `lubbdubb:` prefix, and a new one
   must too: an unqualified command fills the composer with something that does nothing, with nothing
   red.
+- **`pr` is a family of pull-request jobs, told apart by its first word.** `/lubbdubb:pr map 1091`
+  reads `map/map.md` beside the `SKILL.md` and draws the PR as one page, through the `build.mjs` and
+  `template.html` in the same folder. A new PR job is a row in the skill's table and a folder of its
+  own, not a new skill. It was the repository's own `.claude/skills/pr-map`, which only a session
+  open on this checkout could reach.
 - **`clarify` carries its own copy of the `file` skill's _What a ticket has to say_.** A skill cannot
   include another's text, and clarify is that bar worked through with the author. Edit one and edit
   the other, or the two hold a ticket to different bars.
@@ -1611,7 +1616,8 @@ job is one document, read on its own and loaded only when it is the job.
 `<dirname(validation.desktopCredentialPath)>/plugin` — `~/.lubbdubb/plugin` on the defaults:
 `.claude-plugin/marketplace.json` (marketplace `lubbdubb`) and a `lubbdubb/` folder beside it holding
 
-- the shipped files, and a copy of `src/mcp/bridge.mjs` at `mcp/bridge.mjs`;
+- the shipped files — `hooks/`, `types/` and every file under `skills/`, so a skill's scripts and
+  templates travel with its `SKILL.md` — and a copy of `src/mcp/bridge.mjs` at `mcp/bridge.mjs`;
 - a `.mcp.json` declaring server `lubbdubb` as `node ${CLAUDE_PLUGIN_ROOT}/mcp/bridge.mjs --desktop`,
   with `LUBBDUBB_DESKTOP_CREDENTIAL` set to the configured credential path;
 - `plugin.json` with its `userConfig` defaults `url` and `tokenFile` filled in with this harness's API
@@ -1718,8 +1724,9 @@ asks in order and points at `/lubbdubb:next`.
   whole tree over one malformed `href`, so a URL that is not plain-ASCII `https:` without an `@` is
   drawn as text instead — one bad URL never blanks the panel.
 - **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
-  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, and Work through asks, on the
-  band and on the panel, with `/lubbdubb:next`; the operator presses Enter. A plain sentence would
+  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Map with
+  `/lubbdubb:pr map <n>`, and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
+  the operator presses Enter. A plain sentence would
   leave whether a skill loads to description matching, and the skill is where the rules for the
   conversation live. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
   and says nothing meanwhile, so an operator clicks again and gets two turns; a draft replaces the

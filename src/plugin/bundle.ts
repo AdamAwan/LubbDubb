@@ -12,7 +12,7 @@ export const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 
 const SOURCE_DIR = fileURLToPath(new URL('../../plugin/', import.meta.url));
 const BRIDGE_PATH = fileURLToPath(new URL('../mcp/bridge.mjs', import.meta.url));
-const SHIPPED = ['hooks', 'types'];
+const SHIPPED = ['hooks', 'skills', 'types'];
 const MANIFEST = '.claude-plugin/plugin.json';
 export const MANAGED_MARKER = 'Managed by LubbDubb';
 
