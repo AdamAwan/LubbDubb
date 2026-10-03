@@ -19,64 +19,65 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    operator picked one from the panel), the first call is `ask_next` with that
    `id`; if it is refused as no longer standing, say so and carry on from the
    head. Every later call is plain `ask_next`.
-2. **Put it to them as a card — the one Focus mode draws.** `card` is that card as
-   data: the kind's `label`, `symbol` and `tone`, the `queue` pips, and the `goal` with
-   its plan. Draw it from `card` and `ask`; do not work out a kind's word or a part's
-   state yourself.
-
-   **Where you can render a widget** (a `show_widget` tool, read its guide once per
-   session first), draw it as one, laid out the way Focus mode lays it out:
-
-   - **Top row:** a pip per `card.queue` entry in its `tone`, the `here` one marked;
-     `position of total`; and, where `ask.urgency` is `now`, "fleet is stuck on this".
-   - **Left: "The goal this is about".** `goal.title` and its ref; "Its plan — m of n
-     merged", then each part as a numbered row with its `state`, and **"this ask"** on
-     the `here` one, outlined in the kind's tone. `plan.withheld` → "plan not revealed
-     yet", and no parts. `goal: null` → "The fleet itself, rather than any one goal."
-     `goal.otherAsks` → "n other asks on this goal".
-   - **Right: "Your move".** The `symbol` and the title; then `label` · goal ref ·
-     when it was raised; "holding n parts" where `holding` is above zero; the `note`;
-     the `question` in full where one came back.
-   - **Footer:** "`after` after this · `heldInTotal` parts held in total", or "last ask"
-     where `after` is 0.
-   - The tone colours the kind and the marked part, nothing else. **No buttons, no
-     links that send anything**: the widget is something to read, and the answer is
-     asked for in the chat (step 5), where a pick is unmistakably the operator's.
-     Do not repeat the card as text under it.
-
-   **Without a widget tool**, send it as markdown, one line each, not in a code block:
-
-   ```
-   2/7 · proposal · fleet is stuck on this
-   **Merge #412?**
-   Goal 88's fix, blocking 3 parts.
-   ```
-
-   - **Header** — where it is, its kind (`card.kind.label`), and its urgency said
-     plainly: `now` is "fleet is stuck on this"; `next` needs nothing.
-   - **Title** in bold, then the `question` in full where one came back.
-   - **One line of facts** — who is waiting (the agent, goal or pull request) and
-     what it holds up ("blocking 3 parts"). Leave out what is empty, rather than
-     "nobody" and "nothing".
-
-3. **Read more only where it helps them decide.** `answerWith.readFirst` names the
+2. **Read more only where it helps them decide.** `answerWith.readFirst` names the
    read that matters for this kind — `proposal_read` before any proposal,
    `pr_assign` with just `pr` for the shortlist, `validation_read` for checks. Beyond
    that, `goal_read`, `agent_read` and the real diff or code in this checkout are
    there when the decision turns on them. Do not read everything for every ask; an
    operator clearing ten asks does not want ten essays.
-4. **Then, if you have one, your view — one quoted line, labelled as yours.**
-   After the facts, never mixed into them:
+3. **Form your view, if you have one.** One sentence of why, then how sure you are.
+   It is your opinion, from what you just read. It is **never** phrased as what
+   LubbDubb wants, expects or recommends — the harness asked a question; it did not
+   suggest an answer, and a sentence that makes it sound as though it did is the
+   operator deciding on a false premise. If you have no real basis for a view, leave
+   it out rather than invent one.
+4. **Put it to them as a card that looks like Focus mode's.** `card` carries what
+   it needs: the kind's `label`, `symbol` and `tone`, the `queue`, and the `goal`
+   with its plan. Take those words from `card` and `ask`; do not work out a kind's
+   word or a part's state yourself. The look is Focus mode's — the same tones, the
+   goal beside the ask — but it is a likeness, not a replica.
+
+   **Where you can render a widget** (a `show_widget` tool, read its guide once per
+   session first), draw it as one:
+
+   - **The goal** beside the ask: `goal.title` and its ref, then its plan — "m of n
+     merged" and each part as a numbered row with its `state`, the `here` one marked
+     "this ask" in the kind's tone. `plan.withheld` → "plan not revealed yet", and
+     no parts. `goal: null` → "The fleet itself, rather than any one goal."
+   - **The ask:** the `symbol` and the title; `label` · goal ref · when it was raised;
+     "fleet is stuck on this" where `ask.urgency` is `now`; "holding n parts" where
+     `holding` is above zero; the `note`; the `question` in full where one came back;
+     the facts that came out of step 2 which the decision turns on, briefly — a
+     plan's caveats in the planner's words, a merge's CI.
+   - **Your view, inside the card and set apart from the facts** — its own band at
+     the foot, headed **"Claude's view — not from LubbDubb"**, in a neutral colour
+     rather than the kind's tone. Left out where you have none.
+   - **No position.** No "1 of 4", no Prev/Next: the operator cannot move along
+     the queue from here, and a count that looks like a pager says they can. The
+     queue can be a row of pips in each ask's `tone`, read-only, with "n more after
+     this" (`after`) beneath the ask.
+   - **No buttons, no links that send anything**: the card is something to read,
+     and the answer is asked for in the chat (step 5), where a pick is unmistakably
+     the operator's. Do not repeat the card as text under it.
+
+   **Without a widget tool**, send it as markdown, one line each, not in a code block,
+   with your view as one quoted line after it:
+
+   ```
+   proposal · fleet is stuck on this
+   **Merge #412?**
+   Goal 88's fix, blocking 3 parts.
+   ```
 
    > **Claude's view (not LubbDubb's):** Accept the merge — CI is green and the
    > one review thread is answered. (high)
 
-   One sentence of why, then how sure you are. It is your opinion, from what you
-   just read. It is **never** phrased as what LubbDubb wants, expects or
-   recommends — the harness asked a question; it did not suggest an answer, and a
-   sentence that makes it sound as though it did is the operator deciding on a
-   false premise. If you have no real basis for a view, leave the line out rather
-   than invent one.
+   - **Header** — its kind (`card.kind.label`) and its urgency said plainly: `now`
+     is "fleet is stuck on this"; `next` needs nothing.
+   - **Title** in bold, then the `question` in full where one came back.
+   - **One line of facts** — who is waiting (the agent, goal or pull request) and
+     what it holds up ("blocking 3 parts"). Leave out what is empty, rather than
+     "nobody" and "nothing".
 
 5. **Ask for their answer — as choices where you can.** Where the
    `AskUserQuestion` tool is available, offer the answers `answerWith.choose`
@@ -158,7 +159,7 @@ What they can say at any point:
 - **Do not decide.** Not the easy ones, not the ones where your view is
   obviously right, not to save them a keystroke.
 - **Do not blur your view into the facts.** The card says what the harness
-  holds; the quoted line says what you think. Two blocks, every time — and your
-  view is never drawn inside the widget, which shows only what `card` carries.
+  holds; your view says what you think. Two blocks, every time — in the widget, a
+  band of its own headed as Claude's, never a line among the facts.
 - **Do not work around a cockpit-only ask** with a tool that happens to take the
   call. Each one is cockpit-only for a stated reason.

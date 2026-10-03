@@ -1479,8 +1479,15 @@ browser that opened it.
 ##### The card
 
 Every ask `ask_next` hands back carries `card` (`src/mcp/askCard.ts`): what Focus mode draws for that
-ask ([17](17-cockpit.md#one-ask-at-a-time)), as data, so the skill draws the same card — as a widget
-where the session can render one, and as a few lines of markdown where it cannot.
+ask ([17](17-cockpit.md#one-ask-at-a-time)), as data, so the skill draws a card that looks like it — as
+a widget where the session can render one, and as a few lines of markdown where it cannot. A likeness,
+not a replica: the same words and tones, the goal beside the ask.
+
+**The widget carries no position.** Focus mode's "2 of 7" sits beside its Prev and Next, and means
+_you can move_; in Claude Code the loop walks the queue and the operator cannot, so a count drawn
+there reads as a pager with its buttons missing. The queue is drawn, if at all, as read-only pips and
+"n more after this" (`after`). `position` and `total` stay on the reply for the markdown card's
+header.
 
 - **`kind`** — the label, glyph and tone the rail and Focus mode give it, off `KIND_LABEL`,
   `KIND_SYMBOL` and `KIND_TONE` in `src/asks/kinds.ts`.
@@ -1514,7 +1521,10 @@ as approval of whatever it suggested has answered ten questions with nobody deci
 every record says the operator did. And a recommendation phrased as the harness's — "LubbDubb
 recommends accepting" — is a false statement about where it came from: the harness asked a
 question and proposed no answer, and an operator deciding on the belief that it did is deciding on
-the wrong evidence. So the skill keeps the facts and the opinion in two blocks, asks for a reason on
+the wrong evidence. So the skill keeps the facts and the opinion in two blocks — in the widget, the
+view is a band of its own at the card's foot headed **"Claude's view — not from LubbDubb"**, in a
+neutral colour rather than the ask's tone, so it is read beside the facts it weighs without being
+mistaken for one of them — asks for a reason on
 every rejection (it is what the next planner reads), never takes a secret through chat, and confirms a
 validation reading with the operator before reporting it.
 
