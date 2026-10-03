@@ -1,9 +1,3 @@
----
-name: pr-map
-description: Draw a pull request as one interactive page — a map of what links to what, a numbered story of how it flows, and a Before/After toggle showing what the change does. Use when asked to visualise, map, diagram or explain a PR, a branch's diff, or "how this all links together".
-argument-hint: '[PR number | branch | blank for the current diff]'
----
-
 ## Draw a PR map
 
 The page answers three reviewer questions at once:
@@ -14,7 +8,8 @@ The page answers three reviewer questions at once:
    story together, built around one concrete scenario.
 
 You never write HTML. You write one JSON file; `build.mjs` checks it and renders it into
-`template.html`. `example.json` is a finished map of PR #1091. Read it before you start, and
+`template.html`. All three files sit beside this one, in the `map/` folder of the skill's base
+directory. `example.json` is a finished map of PR #1091. Read it before you start, and
 copy its shape.
 
 ### 1. Read the change
@@ -79,7 +74,7 @@ code, and every After claim true of the new code. If you can't verify one, cut i
 ### 5. Build and publish
 
 ```sh
-node .claude/skills/pr-map/build.mjs <scratchpad>/pr-<n>-map.json
+node <skill base directory>/map/build.mjs <scratchpad>/pr-<n>-map.json
 ```
 
 It prints the HTML path, or every problem in the data with exit code 1. Fix the problems and
