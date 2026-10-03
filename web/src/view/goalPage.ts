@@ -24,7 +24,7 @@ import type {
   ValidationResourceView,
 } from '../types.js';
 import type { PartGroup } from '../types.js';
-import { PART_GROUP } from '../../../src/wire.js';
+import { PART_GROUP } from './partGroups.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
 import { belongsToGoal, closedPrs, goalIssue, ownsPr, reachesGoal } from './goalRefs.js';
 import {

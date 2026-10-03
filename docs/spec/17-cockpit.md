@@ -653,8 +653,10 @@ tier, the group, `holding`, the rail's sort and the Focus order all live in `src
 - **The clock is the server's.** A snoozed upgrade row comes back on the first snapshot after the
   snooze expires — a pulse at most — rather than on the browser's next tick.
 - **The demo derives it with the same code.** The Pages build has no server, so its fake one calls
-  `buildAskQueue` over its own state on every `getState` — the one runtime the wire passes through
-  ([above](#17--the-cockpit)).
+  `buildAskQueue` over its own state on every `getState` — the queue's modules are runtime the wire
+  passes through ([above](#17--the-cockpit)), beside the tables that name an ask's kind
+  (`src/asks/kinds.ts`) and place a goal's parts (`src/plans/partGroup.ts`), which `ask_next`'s card
+  reads too ([11](11-mcp-tools.md#the-card)).
 
 **The snapshot carries only the escalations that are still open** — the rail's own
 `status === 'open'` filter is belt-and-braces over a list that already holds nothing else
@@ -1002,9 +1004,11 @@ parked and no slot is held. They are also the only rows whose controls act on a 
 on a piece of work, which is why the body opens the build panel and the acts sit in the card's
 [action bar](#the-action-bar) beneath it. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
-`KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
-`KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
-sheet said.
+`KIND_TONE` and `KIND_SYMBOL` are total over `AskKind`, beside `KIND_LABEL`, so a new kind fails the
+typecheck rather than drawing in whatever the last rule in the sheet said. All three live in
+`src/asks/kinds.ts` and reach the cockpit through the wire (`web/src/view/askKinds.ts`), because
+`ask_next`'s card names and colours an ask with them too — a second copy would let Claude Code call an
+ask something the rail does not ([11](11-mcp-tools.md#the-card)).
 
 **The glyph is a second reading of the word, never a replacement for it.** The tag still spells the
 kind out beside it, which is what makes the set need no legend, and the glyph is `aria-hidden` — a
@@ -4667,7 +4671,9 @@ can see it is the fourth of five parts and which of them are waiting on it — s
 the goal, its standing, and **its plan as named parts**, off the goal page's own `parts` fold.
 
 **The part the ask is about is marked**, in the ask's own tone, off the `issue:<n>:part:<slug>` its
-origin already carries. That mark is most of what the column is for: the reader is looking for where
+origin already carries (`askedPart`). Where a part sits — merged, being worked, held, not started — is
+`PART_GROUP` and `PART_GROUP_WORD` in `src/plans/partGroup.ts`, which the goal page reads as well, and
+which `ask_next`'s card reads to draw this same column in Claude Code ([11](11-mcp-tools.md#the-card)). That mark is most of what the column is for: the reader is looking for where
 this decision sits in the work, and a column of named rows with none of them marked leaves them
 counting. An ask belonging to no goal — an upgrade, a config gap — says so rather than drawing an empty
 column, because a band that silently vanishes reads as one that failed to load.

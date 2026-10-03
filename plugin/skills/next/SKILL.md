@@ -19,8 +19,32 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    operator picked one from the panel), the first call is `ask_next` with that
    `id`; if it is refused as no longer standing, say so and carry on from the
    head. Every later call is plain `ask_next`.
-2. **Put it to them as a card.** Short, plain words, no field names — sent as
-   markdown, one line each, not in a code block:
+2. **Put it to them as a card — the one Focus mode draws.** `card` is that card as
+   data: the kind's `label`, `symbol` and `tone`, the `queue` pips, and the `goal` with
+   its plan. Draw it from `card` and `ask`; do not work out a kind's word or a part's
+   state yourself.
+
+   **Where you can render a widget** (a `show_widget` tool, read its guide once per
+   session first), draw it as one, laid out the way Focus mode lays it out:
+
+   - **Top row:** a pip per `card.queue` entry in its `tone`, the `here` one marked;
+     `position of total`; and, where `ask.urgency` is `now`, "fleet is stuck on this".
+   - **Left: "The goal this is about".** `goal.title` and its ref; "Its plan — m of n
+     merged", then each part as a numbered row with its `state`, and **"this ask"** on
+     the `here` one, outlined in the kind's tone. `plan.withheld` → "plan not revealed
+     yet", and no parts. `goal: null` → "The fleet itself, rather than any one goal."
+     `goal.otherAsks` → "n other asks on this goal".
+   - **Right: "Your move".** The `symbol` and the title; then `label` · goal ref ·
+     when it was raised; "holding n parts" where `holding` is above zero; the `note`;
+     the `question` in full where one came back.
+   - **Footer:** "`after` after this · `heldInTotal` parts held in total", or "last ask"
+     where `after` is 0.
+   - The tone colours the kind and the marked part, nothing else. **No buttons, no
+     links that send anything**: the widget is something to read, and the answer is
+     asked for in the chat (step 5), where a pick is unmistakably the operator's.
+     Do not repeat the card as text under it.
+
+   **Without a widget tool**, send it as markdown, one line each, not in a code block:
 
    ```
    2/7 · proposal · fleet is stuck on this
@@ -28,8 +52,8 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    Goal 88's fix, blocking 3 parts.
    ```
 
-   - **Header** — where it is, its kind, and its urgency said plainly: `now` is
-     "fleet is stuck on this"; `next` needs nothing.
+   - **Header** — where it is, its kind (`card.kind.label`), and its urgency said
+     plainly: `now` is "fleet is stuck on this"; `next` needs nothing.
    - **Title** in bold, then the `question` in full where one came back.
    - **One line of facts** — who is waiting (the agent, goal or pull request) and
      what it holds up ("blocking 3 parts"). Leave out what is empty, rather than
@@ -134,6 +158,7 @@ What they can say at any point:
 - **Do not decide.** Not the easy ones, not the ones where your view is
   obviously right, not to save them a keystroke.
 - **Do not blur your view into the facts.** The card says what the harness
-  holds; the quoted line says what you think. Two blocks, every time.
+  holds; the quoted line says what you think. Two blocks, every time — and your
+  view is never drawn inside the widget, which shows only what `card` carries.
 - **Do not work around a cockpit-only ask** with a tool that happens to take the
   call. Each one is cockpit-only for a stated reason.

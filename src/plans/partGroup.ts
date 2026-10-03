@@ -15,3 +15,16 @@ export const PART_GROUP: Record<PlanPart['status'], PartGroup | null> = {
   pending: 'waiting',
   retired: null,
 };
+
+/** The word a part's place is said in beside its name — Focus mode's track and `ask_next`'s card. */
+export const PART_GROUP_WORD: Record<PartGroup, string> = {
+  merged: 'merged',
+  now: 'being worked',
+  held: 'held',
+  waiting: 'not started',
+};
+
+/** The slug of the part an ask is about, where its origin names one — the part Focus mode and the card mark. */
+export function askedPart(originRef: string | null): string | null {
+  return /^issue:\d+:part:(.+)$/.exec(originRef ?? '')?.[1] ?? null;
+}

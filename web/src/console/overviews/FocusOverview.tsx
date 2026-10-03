@@ -4,7 +4,8 @@ import type { CockpitView } from '../../view/viewModel.js';
 import type { CockpitActions } from '../../cockpit/actions.js';
 import type { NeedRow } from '../../view/needsYou.js';
 import { Ref } from '../../components/refs.js';
-import { buildGoalPage, type GoalPartView, type PartGroup } from '../../view/goalPage.js';
+import { buildGoalPage, type GoalPartView } from '../../view/goalPage.js';
+import { PART_GROUP_WORD, askedPart } from '../../view/partGroups.js';
 import { goalIssue } from '../../view/goalRefs.js';
 import { relTime } from '../../components/util.js';
 import { Button, ButtonRow, BareButton } from '../../components/button.js';
@@ -320,7 +321,7 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
               {merged} of {parts.length} merged
             </span>
           </h3>
-          <Track parts={parts} about={partOf(row)} />
+          <Track parts={parts} about={askedPart(row.originRef)} />
         </>
       )}
 
@@ -347,34 +348,17 @@ function Track({ parts, about }: { parts: readonly GoalPartView[]; about: string
           <li
             key={part.id}
             className={`cn-ov-seg cn-ov-seg-${group} ${here ? 'cn-ov-seg-here' : ''}`}
-            title={`${part.title} — ${GROUP_WORD[group]}`}
+            title={`${part.title} — ${PART_GROUP_WORD[group]}`}
           >
             <b>{part.seq}</b>
             <span className="cn-ov-seg-name">{part.title}</span>
-            <span className="cn-ov-seg-state">{here ? 'this ask' : GROUP_WORD[group]}</span>
+            <span className="cn-ov-seg-state">{here ? 'this ask' : PART_GROUP_WORD[group]}</span>
           </li>
         );
       })}
     </ol>
   );
 }
-
-/**
- * The part the ask is about, where its origin names one. Marking it is most of
- * what the band is for: the reader is looking for where this decision sits in the
- * work, and five named rows with none of them marked still leaves them counting.
- */
-function partOf(row: NeedRow): string | null {
-  const m = /^issue:\d+:part:(.+)$/.exec(row.originRef ?? '');
-  return m?.[1] ?? null;
-}
-
-const GROUP_WORD: Record<PartGroup, string> = {
-  merged: 'merged',
-  now: 'being worked',
-  held: 'held',
-  waiting: 'not started',
-};
 
 /**
  * The last stop on the queue: what nobody is asking about.

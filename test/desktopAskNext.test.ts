@@ -383,3 +383,94 @@ test('ask_next reads the setup reading the cockpit reads, and sends a config ask
     await d.close();
   }
 });
+
+function partInput(
+  slug: string,
+  seq: number,
+  title: string,
+): Parameters<System['store']['plans']['upsertPlanParts']>[1][number] {
+  return {
+    slug,
+    seq,
+    title,
+    scope: 'the store',
+    touches: [],
+    dependsOn: [],
+    rationale: null,
+    acceptance: null,
+    size: null,
+    expectedKind: null,
+    profile: null,
+  };
+}
+
+test('ask_next carries the card Focus mode draws: kind, queue, and the goal plan with the asked part marked', async () => {
+  const d = await deck();
+  try {
+    const { store } = d.system;
+    store.world.setWorldBaseline({
+      takenAt: NOW,
+      pullRequests: [],
+      issues: [
+        { id: 'i12', number: 12, title: 'Ship the export', body: '', labels: [], state: 'open', linkedPrNumber: null },
+      ],
+    });
+    const plan = store.plans.upsertPlan({ originRef: 'issue:12', title: 'Two parts', status: 'active' });
+    const [schema] = store.plans.upsertPlanParts(plan.id, [
+      partInput('schema', 1, 'Schema'),
+      partInput('export', 2, 'Export'),
+    ]);
+    assert.ok(schema);
+    store.plans.markPartDispatched(schema.id, 't1', 'issue/12/schema');
+    const bench = store.humanTasks.recordHumanTask({
+      title: 'Check the export opens in Excel',
+      detail: null,
+      agentId: null,
+      taskId: null,
+      originRef: 'issue:12:part:export',
+    }).task;
+    await tick();
+    const ids = await seed(d.system);
+
+    const next = await d.call('ask_next', { id: bench.id });
+    assert.equal(next.isError, false, next.text);
+    const queue = askQueue(d.system);
+    const card = next.json.card as {
+      kind: { label: string; tone: string };
+      queue: { here: boolean }[];
+      after: number;
+      goal: {
+        ref: string;
+        title: string;
+        plan: { merged: number; total: number; parts: unknown[] };
+        otherAsks: number;
+      };
+    };
+    assert.deepEqual(card.kind, { label: 'Bench', symbol: '◆', tone: 'blue' });
+    assert.equal(card.queue.length, queue.length, 'a pip for every standing ask');
+    assert.equal(
+      card.queue.findIndex((p) => p.here),
+      queue.findIndex((r) => r.id === bench.id),
+    );
+    assert.equal(card.after, queue.length - queue.findIndex((r) => r.id === bench.id) - 1);
+    assert.deepEqual(card.goal, {
+      ref: 'issue:12',
+      title: 'Ship the export',
+      plan: {
+        withheld: false,
+        merged: 0,
+        total: 2,
+        parts: [
+          { seq: 1, title: 'Schema', state: 'being worked', here: false },
+          { seq: 2, title: 'Export', state: 'not started', here: true },
+        ],
+      },
+      otherAsks: 0,
+    });
+
+    const merge = await d.call('ask_next', { id: ids.merge });
+    assert.equal((merge.json.card as { goal: unknown }).goal, null, 'an ask on no goal draws no goal column');
+  } finally {
+    await d.close();
+  }
+});
