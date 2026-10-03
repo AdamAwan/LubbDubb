@@ -2560,6 +2560,7 @@ export interface DescriptionAwaitingCheck {
   originRef: string;
   prNumber: number;
   text: string;
+  authoredAt: string;
 }
 
 /**

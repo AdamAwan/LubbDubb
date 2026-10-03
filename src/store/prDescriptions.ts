@@ -211,15 +211,22 @@ export class PrDescriptionStore {
   uncheckedDescriptions(): DescriptionAwaitingCheck[] {
     const rows = this.ctx
       .prep(
-        `SELECT d.id AS id, d.origin_ref AS origin_ref, b.pr_number AS pr_number, d.text AS text
+        `SELECT d.id AS id, d.origin_ref AS origin_ref, b.pr_number AS pr_number, d.text AS text,
+                d.authored_at AS authored_at
            FROM pr_descriptions d
            JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
           WHERE d.checked_at IS NULL
             AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
           ORDER BY d.authored_at ASC`,
       )
-      .all() as { id: string; origin_ref: string; pr_number: number; text: string }[];
-    return rows.map((r) => ({ versionId: r.id, originRef: r.origin_ref, prNumber: r.pr_number, text: r.text }));
+      .all() as { id: string; origin_ref: string; pr_number: number; text: string; authored_at: string }[];
+    return rows.map((r) => ({
+      versionId: r.id,
+      originRef: r.origin_ref,
+      prNumber: r.pr_number,
+      text: r.text,
+      authoredAt: r.authored_at,
+    }));
   }
 
   /**
