@@ -1,0 +1,6 @@
+{
+  "name": "pr-assistant",
+  "version": "0.0.0",
+  "description": "A panel that follows a pull-request walkthrough: the stops, the diff for the one you are on, and the notes raised along the way.",
+  "types": "./types/index.d.ts"
+}

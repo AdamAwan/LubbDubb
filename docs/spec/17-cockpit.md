@@ -7030,7 +7030,8 @@ would connect to the other one.
 
 **Step 1 is `PluginStep`** (`web/src/components/PluginStep.tsx`), over `GET /api/plugin` and
 `POST /api/plugin/install` ([16](16-http-api.md#get-apiplugin), [11](11-mcp-tools.md#installing-it)).
-It draws a status line — installed and current, installed at an older build than this harness has,
+The reading covers both plugins the marketplace carries, `lubbdubb` and `pr-assistant`, as one: either
+absent is _not installed_, and one press places both. It draws a status line — installed and current, installed at an older build than this harness has,
 not installed (naming the old `/lubbdubb` skill when it is still there, which the links no longer
 call), or could not tell, with the reason — and, unless the plugin is current, an **Install** or
 **Update** button (an `AsyncButton`, so a refused press flashes and says why). The press shows each

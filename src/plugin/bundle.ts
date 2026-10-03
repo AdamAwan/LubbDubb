@@ -7,12 +7,16 @@ import { MCP_SERVER_ID } from '../mcp/names.js';
 // → docs/spec/11-mcp-tools.md#the-plugin
 
 const PLUGIN_NAME = 'lubbdubb';
+const ASSISTANT_NAME = 'pr-assistant';
 const MARKETPLACE_NAME = 'lubbdubb';
 export const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
+export const ASSISTANT_ID = `${ASSISTANT_NAME}@${MARKETPLACE_NAME}`;
 
 const SOURCE_DIR = fileURLToPath(new URL('../../plugin/', import.meta.url));
+const ASSISTANT_SOURCE_DIR = fileURLToPath(new URL('../../pr-assistant/', import.meta.url));
 const BRIDGE_PATH = fileURLToPath(new URL('../mcp/bridge.mjs', import.meta.url));
 const SHIPPED = ['hooks', 'skills', 'types'];
+const ASSISTANT_SHIPPED = ['hooks', 'types'];
 const MANIFEST = '.claude-plugin/plugin.json';
 export const MANAGED_MARKER = 'Managed by LubbDubb';
 
@@ -22,6 +26,7 @@ export interface PluginBundleInput {
   url: string;
   tokenFile: string;
   credentialPath: string;
+  assistantSourceDir?: string;
 }
 
 export interface PluginBundle {
@@ -74,17 +79,44 @@ ${harnessRootSection(input.harnessRoot)}`,
   const manifest = JSON.parse(readFileSync(join(SOURCE_DIR, MANIFEST), 'utf8')) as PluginManifest;
   manifest.userConfig.url.default = input.url;
   manifest.userConfig.tokenFile.default = input.tokenFile;
-  manifest.version = `1.0.0-${digest(new Map([...files, [MANIFEST, json({ ...manifest, version: '' })]]))}`;
-  files.set(MANIFEST, json(manifest));
-  const bundle = { marketplaceDir: input.outDir, version: manifest.version, skills: skills.map((s) => s.name) };
 
-  const pluginDir = join(input.outDir, PLUGIN_NAME);
+  const assistantDir = input.assistantSourceDir ?? ASSISTANT_SOURCE_DIR;
+  const assistantFiles = new Map<string, string | Buffer>();
+  for (const entry of ASSISTANT_SHIPPED) collect(assistantDir, entry, assistantFiles);
+  const assistantManifest = JSON.parse(readFileSync(join(assistantDir, MANIFEST), 'utf8')) as {
+    version: string;
+    description: string;
+  };
+
+  const version = `1.0.0-${digest(
+    new Map([
+      ...prefixed(PLUGIN_NAME, new Map([...files, [MANIFEST, json({ ...manifest, version: '' })]])),
+      ...prefixed(
+        ASSISTANT_NAME,
+        new Map([...assistantFiles, [MANIFEST, json({ ...assistantManifest, version: '' })]]),
+      ),
+    ]),
+  )}`;
+  manifest.version = version;
+  assistantManifest.version = version;
+  files.set(MANIFEST, json(manifest));
+  assistantFiles.set(MANIFEST, json(assistantManifest));
+  const bundle = { marketplaceDir: input.outDir, version, skills: skills.map((s) => s.name) };
+
+  const plugins = [
+    { name: PLUGIN_NAME, files, description: manifest.description },
+    { name: ASSISTANT_NAME, files: assistantFiles, description: assistantManifest.description },
+  ];
   const catalogue = join(input.outDir, '.claude-plugin', 'marketplace.json');
-  if (writtenVersion(pluginDir, catalogue) === manifest.version) return bundle;
-  rmSync(pluginDir, { recursive: true, force: true });
-  for (const [path, content] of files) {
-    mkdirSync(dirname(join(pluginDir, path)), { recursive: true });
-    writeFileSync(join(pluginDir, path), content);
+  if (readIfThere(catalogue) !== null && plugins.every((p) => writtenVersion(join(input.outDir, p.name)) === version))
+    return bundle;
+  for (const plugin of plugins) {
+    const pluginDir = join(input.outDir, plugin.name);
+    rmSync(pluginDir, { recursive: true, force: true });
+    for (const [path, content] of plugin.files) {
+      mkdirSync(dirname(join(pluginDir, path)), { recursive: true });
+      writeFileSync(join(pluginDir, path), content);
+    }
   }
   mkdirSync(join(input.outDir, '.claude-plugin'), { recursive: true });
   writeFileSync(
@@ -92,15 +124,19 @@ ${harnessRootSection(input.harnessRoot)}`,
     json({
       name: MARKETPLACE_NAME,
       owner: { name: 'LubbDubb' },
-      plugins: [{ name: PLUGIN_NAME, source: `./${PLUGIN_NAME}`, description: manifest.description }],
+      plugins: plugins.map((p) => ({ name: p.name, source: `./${p.name}`, description: p.description })),
     }),
   );
   return bundle;
 }
 
-function writtenVersion(pluginDir: string, catalogue: string): string | null {
+function prefixed(name: string, files: Map<string, string | Buffer>): Map<string, string | Buffer> {
+  return new Map([...files].map(([path, content]) => [`${name}/${path}`, content]));
+}
+
+function writtenVersion(pluginDir: string): string | null {
   const manifest = readIfThere(join(pluginDir, MANIFEST));
-  if (manifest === null || readIfThere(catalogue) === null) return null;
+  if (manifest === null) return null;
   try {
     return (JSON.parse(manifest) as { version?: string }).version ?? null;
   } catch {
