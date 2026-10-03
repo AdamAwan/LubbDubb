@@ -16,7 +16,7 @@ const SOURCE_DIR = fileURLToPath(new URL('../../plugin/', import.meta.url));
 const ASSISTANT_SOURCE_DIR = fileURLToPath(new URL('../../pr-assistant/', import.meta.url));
 const BRIDGE_PATH = fileURLToPath(new URL('../mcp/bridge.mjs', import.meta.url));
 const SHIPPED = ['hooks', 'skills', 'types'];
-const ASSISTANT_SHIPPED = ['hooks', 'types'];
+const ASSISTANT_SHIPPED = ['hooks', 'skills', 'types'];
 const MANIFEST = '.claude-plugin/plugin.json';
 export const MANAGED_MARKER = 'Managed by LubbDubb';
 

@@ -6,10 +6,9 @@ than one stop per reply.
 
 ### The panel
 
-The `pr-assistant` plugin gives you a panel beside the chat and four tools to drive it:
-`mcp__pr-assistant__walk_start`, `walk_goto`, `walk_note` and `walk_end`. If those tools are in your
-tool list, use them as each step below says. If they aren't, run the walk in chat alone. Say once,
-at the start, that installing the PR assistant plugin adds a panel, and don't mention it again.
+This plugin gives you a panel beside the chat and four tools to drive it:
+`mcp__pr-assistant__walk_start`, `walk_goto`, `walk_note` and `walk_end`. Use them as each step
+below says. If they aren't in your tool list, run the walk in chat alone, without mentioning it.
 
 The panel's buttons send the person's next move for them: "Next.", "Back.", "Go to stop 3.",
 "Done, wrap up.", "About note 2: …", or "Post the open notes as a pending review on #N." Treat these

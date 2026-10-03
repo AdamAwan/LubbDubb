@@ -144,7 +144,7 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column">
           <Text dimColor>No walkthrough yet.</Text>
-          <Text dimColor>Start one with /lubbdubb:pr walk &lt;PR number&gt;.</Text>
+          <Text dimColor>Start one with /pr-assistant:pr walk &lt;PR number&gt;.</Text>
         </Box>
       )
     }

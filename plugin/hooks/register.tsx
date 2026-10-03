@@ -347,7 +347,7 @@ export const register: Register = (on, options) => {
               meta: pr.state,
               metaColor: TONE[pr.tone].color,
               href: pr.url,
-              action: { label: 'Map', onPress: draft($, `/lubbdubb:pr map ${pr.number}`) },
+              action: { label: 'Map', onPress: draft($, `/pr-assistant:pr map ${pr.number}`) },
             }),
           )}
           {now.prs.length > 6 && <Text dimColor>{`  +${now.prs.length - 6} more`}</Text>}

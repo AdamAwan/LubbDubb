@@ -1,0 +1,11 @@
+{
+  "name": "pr-assistant",
+  "owner": { "name": "LubbDubb" },
+  "plugins": [
+    {
+      "name": "pr-assistant",
+      "source": "./pr-assistant",
+      "description": "Map a pull request or walk through it together, with a panel that follows the walk. Needs no LubbDubb."
+    }
+  ]
+}

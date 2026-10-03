@@ -1588,10 +1588,10 @@ from one marketplace**. `lubbdubb` carries the skills, the tool channel's regist
 [the notice board](#the-notice-board); `plugin/` is its source — `.claude-plugin/plugin.json`,
 `skills/<name>/SKILL.md`, `hooks/`, `types/`, and `tests/`, which is not shipped. `pr-assistant` is
 [the PR assistant](#the-pr-assistant); `pr-assistant/` is its source — `.claude-plugin/plugin.json`,
-`hooks/`, `types/`, and `tests/`, which is not shipped either.
+`skills/pr/`, `hooks/`, `types/`, and `tests/`, which is not shipped either.
 
-**Thirteen skills, one per job:** `fleet`, `next`, `ask`, `feature`, `file`, `clarify`, `plan`, `order`,
-`run`, `eject`, `check`, `describe`, `pr` ([20](20-validation.md#the-skill) owns what they say; `next` is
+**Twelve skills, one per job:** `fleet`, `next`, `ask`, `feature`, `file`, `clarify`, `plan`, `order`,
+`run`, `eject`, `check`, `describe` ([20](20-validation.md#the-skill) owns what they say; `next` is
 [the next-ask loop](#the-next-ask-loop)). They were one
 `/lubbdubb` skill told apart by its argument, held as a string in a `.ts` module; as static files each
 job is one document, read on its own and loaded only when it is the job.
@@ -1602,13 +1602,6 @@ job is one document, read on its own and loaded only when it is the job.
   (`/lubbdubb:clarify 12`, [06](06-issue-pickup.md)) carries the `lubbdubb:` prefix, and a new one
   must too: an unqualified command fills the composer with something that does nothing, with nothing
   red.
-- **`pr` is a family of pull-request jobs, told apart by its first word.** `/lubbdubb:pr map 1091`
-  reads `map/map.md` beside the `SKILL.md` and draws the PR as one page, through the `build.mjs` and
-  `template.html` in the same folder; `/lubbdubb:pr walk 1091` reads `walk/walk.md` and goes through
-  the PR with the person one stop at a time, driving [the PR assistant](#the-pr-assistant)'s panel
-  when its tools are there and running in chat alone when they are not. A new PR job is a row in the
-  skill's table and a folder of its own, not a new skill. It was the repository's own `.claude/skills/pr-map`, which only a session
-  open on this checkout could reach.
 - **`clarify` carries its own copy of the `file` skill's _What a ticket has to say_.** A skill cannot
   include another's text, and clarify is that bar worked through with the author. Edit one and edit
   the other, or the two hold a ticket to different bars.
@@ -1619,8 +1612,9 @@ job is one document, read on its own and loaded only when it is the job.
 `src/server/main.ts`, writes a two-plugin local marketplace to
 `<dirname(validation.desktopCredentialPath)>/plugin` — `~/.lubbdubb/plugin` on the defaults:
 `.claude-plugin/marketplace.json` (marketplace `lubbdubb`, listing `lubbdubb` then `pr-assistant`), a
-`pr-assistant/` folder holding that source's `hooks/`, `types/` and `plugin.json` as they are — no
-skills, no `.mcp.json`, no `userConfig` — and a `lubbdubb/` folder holding
+`pr-assistant/` folder holding that source's `hooks/`, `skills/`, `types/` and `plugin.json` as they
+are — no harness section or managed marker on its skill, no `.mcp.json`, no `userConfig` — and a
+`lubbdubb/` folder holding
 
 - the shipped files — `hooks/`, `types/` and every file under `skills/`, so a skill's scripts and
   templates travel with its `SKILL.md` — and a copy of `src/mcp/bridge.mjs` at `mcp/bridge.mjs`;
@@ -1744,7 +1738,7 @@ asks in order and points at `/lubbdubb:next`.
   drawn as text instead — one bad URL never blanks the panel.
 - **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
   with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Map with
-  `/lubbdubb:pr map <n>`, and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
+  `/pr-assistant:pr map <n>` (the PR assistant's skill, which the desk installs beside the board), and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
   the operator presses Enter. A plain sentence would
   leave whether a skill loads to description matching, and the skill is where the rules for the
   conversation live. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
@@ -1786,10 +1780,23 @@ bundle's filled-in defaults or its copy of the bridge, so the skills load and th
 
 #### The PR assistant
 
-`pr-assistant/` is a second plugin, a **mod only** — no skills, no MCP server: a panel that follows a
-PR walkthrough (`/lubbdubb:pr walk <n>`) — the stops, which one is current, the diff hunk for it, and
-the notes raised. It is a separate plugin so the walkthrough panel can be loaded, disabled or updated
-without the fleet board, and the walk works in chat alone when it is not installed.
+`pr-assistant/` is a second plugin that **needs no harness**: the `pr` skill and a mod, but no MCP
+server, no `userConfig`, and nothing that reads the fleet. Its skill and panel only read the PR — the
+diff, the code, and the spec when the repo has one — so it is useful in any repository. The harness
+ships it in its own marketplace beside `lubbdubb`, and the repository root's
+`.claude-plugin/marketplace.json` (marketplace `pr-assistant`) lists it alone, so
+`claude plugin marketplace add AdamAwan/LubbDubb` then `claude plugin install pr-assistant@pr-assistant`
+installs it with no LubbDubb running. Its source `plugin.json` carries no `version`, so a git install
+updates by commit; the bundle stamps its own.
+
+- **`pr` is a family of pull-request jobs, told apart by its first word.** `/pr-assistant:pr map 1091`
+  reads `map/map.md` beside the `SKILL.md` and draws the PR as one page, through the `build.mjs` and
+  `template.html` in the same folder; `/pr-assistant:pr walk 1091` reads `walk/walk.md` and goes
+  through the PR with the person one stop at a time, driving the panel. A new PR job is a row in the
+  skill's table and a folder of its own, not a new skill. It was `/lubbdubb:pr`, and before that the
+  repository's own `.claude/skills/pr-map`; it moved here because nothing in it needs the harness.
+- **The panel follows the walk**: the stops, which one is current, the diff hunk for it, and the notes
+  raised. The walk runs in chat alone when the mod's tools are not in the session.
 
 - **The model drives it through four tools the mod registers**: `walk_start` (the PR and its stops;
   opens the panel), `walk_goto` (the current stop and its hunk), `walk_note` (add a `likely` or
