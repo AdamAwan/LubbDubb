@@ -16,7 +16,6 @@ const SOURCE_DIR = fileURLToPath(new URL('../../plugin/', import.meta.url));
 const ASSISTANT_SOURCE_DIR = fileURLToPath(new URL('../../pr-assistant/', import.meta.url));
 const BRIDGE_PATH = fileURLToPath(new URL('../mcp/bridge.mjs', import.meta.url));
 const SHIPPED = ['hooks', 'skills', 'types'];
-const ASSISTANT_SHIPPED = ['hooks', 'skills', 'types'];
 const MANIFEST = '.claude-plugin/plugin.json';
 export const MANAGED_MARKER = 'Managed by LubbDubb';
 
@@ -82,7 +81,7 @@ ${harnessRootSection(input.harnessRoot)}`,
 
   const assistantDir = input.assistantSourceDir ?? ASSISTANT_SOURCE_DIR;
   const assistantFiles = new Map<string, string | Buffer>();
-  for (const entry of ASSISTANT_SHIPPED) collect(assistantDir, entry, assistantFiles);
+  for (const entry of SHIPPED) collect(assistantDir, entry, assistantFiles);
   const assistantManifest = JSON.parse(readFileSync(join(assistantDir, MANIFEST), 'utf8')) as {
     version: string;
     description: string;

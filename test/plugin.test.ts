@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   ASSISTANT_ID,
+  MANAGED_MARKER,
   PLUGIN_ID,
   pluginSkills,
   writePluginBundle,
@@ -157,7 +158,7 @@ test('the bundle carries the PR assistant as a second plugin, at the one version
   assert.ok(existsSync(join(assistant, 'skills', 'pr', 'map', 'build.mjs')), 'a skill ships the files beside it');
   assert.doesNotMatch(
     readFileSync(join(assistant, 'skills', 'pr', 'SKILL.md'), 'utf8'),
-    /Managed by LubbDubb/,
+    new RegExp(MANAGED_MARKER),
     'the PR assistant ships its skill as written, with nothing about the harness',
   );
 
