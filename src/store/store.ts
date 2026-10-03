@@ -35,7 +35,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
-import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
+import { ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { dateInterruptionsFromBeforeTheStamp, LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { LocalValidationStore, LOCAL_VALIDATION_COLUMNS } from './localValidations.js';
 import { WatchStore, WATCH_COLUMNS } from './watches.js';
@@ -136,20 +136,6 @@ function migrate(db: Database.Database, clock: Clock): void {
   backfillWholePlanParts(db, clock());
   backfillTaskDispatchKind(db);
   repairPartRefGoals(db);
-  const partialGoalRefs = db
-    .prepare(
-      `SELECT DISTINCT plans.origin_ref AS goal_ref
-       FROM plan_parts
-       JOIN plans ON plans.id = plan_parts.plan_id
-       WHERE plans.status <> 'abandoned'
-         AND plan_parts.status NOT IN ('retired', 'merged', 'concluded')
-         AND (plan_parts.expected_kind IS NULL OR plan_parts.expected_kind = 'code')`,
-    )
-    .all() as { goal_ref: string }[];
-  dropPartialGoalArrivals(
-    db,
-    partialGoalRefs.map((row) => row.goal_ref),
-  );
 }
 
 export class Store {
