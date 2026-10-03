@@ -29,14 +29,6 @@ export function repairPartRefGoals(db: Database.Database): void {
   })();
 }
 
-export function dropPartialGoalArrivals(db: Database.Database, goalRefs: readonly string[]): void {
-  if (goalRefs.length === 0) return;
-  const remove = db.prepare(`DELETE FROM goal_arrivals WHERE goal_ref=?`);
-  db.transaction((refs: readonly string[]) => {
-    for (const goalRef of refs) remove.run(goalRef);
-  })(goalRefs);
-}
-
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 

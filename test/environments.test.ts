@@ -87,17 +87,6 @@ function plannedGoal(): WorkNode[] {
   ];
 }
 
-function fourPartGoal(): WorkNode[] {
-  const slugs = ['api', 'ui', 'docs', 'tests'];
-  return [
-    node({ ref: 'issue:12', kind: 'issue' }),
-    ...slugs.map((slug) => node({ ref: `issue:12:part:${slug}`, kind: 'part', parentRef: 'issue:12' })),
-    ...slugs.map((slug, i) =>
-      node({ ref: `pr:${i + 1}`, kind: 'pr', parentRef: `issue:12:part:${slug}`, status: 'merged', terminal: true }),
-    ),
-  ];
-}
-
 function landing(over: Partial<GoalLanding> & { prNumber: number; sha: string }): GoalLanding {
   return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', onIntegration: null, ...over };
 }
@@ -1302,85 +1291,40 @@ test('the rows a part ref was already filed under are repaired on the next boot'
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('a partial goal arrival is discarded and re-derived after every part arrives', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-partial-arrival-'));
+test('an announced arrival survives a restart while the goal still owes a code part', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-arrival-restart-'));
   const path = join(dir, 'landings.db');
-  const old = Date.parse('2026-08-19T12:00:00.000Z');
-  const now = Date.parse('2026-08-23T12:00:00.000Z');
-  const before = new Store(path, () => new Date(old).toISOString());
-  before.graph.recordWorkGraph(fourPartGoal());
-  const plan = before.plans.upsertPlan({ originRef: 'issue:12', title: 'Four parts', status: 'active' });
-  const parts = before.plans.upsertPlanParts(
-    plan.id,
-    ['api', 'ui', 'docs', 'tests'].map((slug, i) => ({
-      slug,
-      seq: i + 1,
-      title: slug,
-      scope: slug,
+  const before = new Store(path);
+  const plan = before.plans.upsertPlan({ originRef: 'issue:12', title: 'Follow-up', status: 'active' });
+  before.plans.upsertPlanParts(plan.id, [
+    {
+      slug: 'follow-up',
+      seq: 1,
+      title: 'follow-up',
+      scope: 'follow-up',
       touches: [],
       dependsOn: [],
       rationale: null,
       acceptance: null,
       size: null,
-      expectedKind: null,
+      expectedKind: 'code',
       profile: null,
-    })),
-  );
-  before.plans.updatePlanPart(parts[0]!.id, { status: 'merged' });
-  before.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' });
-  before.environments.recordEnvironmentReach({ sha: 'sha1', environment: 'testUk', status: 'reached', detail: null });
+    },
+  ]);
   before.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'testUk',
-    arrivedAt: new Date(old).toISOString(),
+    arrivedAt: '2026-08-19T12:00:00.000Z',
   });
+  before.environments.markArrivalAnnounced('issue:12', 'testUk');
+  before.environments.markArrivalSheeted('issue:12', 'testUk');
   before.close();
 
-  const after = new Store(path, () => new Date(now).toISOString());
-  const environments: EnvironmentConfig[] = [
-    { name: 'testUk', at: 'unused', arrival: { opens: ['close_out'], comment: true } },
-  ];
-  assert.equal(
-    openedGoals('close_out', environments, after.environments.listGoalArrivals(), [])?.has('issue:12'),
-    false,
-    'a stale partial arrival must not keep the gate open',
-  );
-  assert.deepEqual(after.environments.listGoalArrivals(), []);
-
-  const comments: IssueCommentInput[] = [];
-  const sink = {
-    async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
-      comments.push(input);
-      return { ok: true, ref: `comment_${comments.length}` };
-    },
-  } as unknown as ActionSink;
-  const prober = new FakeEnvironmentProber({ testUk: ['head-testUk'] });
-  const git = new FakeGitObserver();
-  for (const sha of ['sha1', 'sha2', 'sha3', 'sha4']) git.setContains('head-testUk', sha, true);
-  for (const part of parts.slice(1)) after.plans.updatePlanPart(part!.id, { status: 'merged' });
-  const desk = new EnvironmentDesk({
-    store: after,
-    environments,
-    healthProber: new FakeEnvironmentHealthProber(),
-    healthIntervalMs: 60_000,
-    prober,
-    git,
-    sink,
-    integrationBranch: 'main',
-    probeIntervalMs: 60_000,
-    now: () => now,
-  });
-
-  await desk.run(
-    world({ closedPullRequests: [mergedPr({ number: 2 }), mergedPr({ number: 3 }), mergedPr({ number: 4 })] }),
-  );
-
+  const after = new Store(path);
   const arrivals = after.environments.listGoalArrivals();
-  assert.equal(arrivals.length, 1);
-  assert.equal(arrivals[0]?.goalRef, 'issue:12');
-  assert.equal(arrivals[0]?.environment, 'testUk');
+  assert.equal(arrivals.length, 1, 'a boot never deletes an arrival, or the follow-up announces it a second time');
   assert.notEqual(arrivals[0]?.announcedAt, null);
-  assert.equal(comments.length, 1, 'the repaired row must not suppress the real arrival or duplicate it');
+  assert.notEqual(arrivals[0]?.sheetedAt, null);
   after.close();
   rmSync(dir, { recursive: true, force: true });
 });
