@@ -1718,8 +1718,10 @@ asks in order and points at `/lubbdubb:next`.
   whole tree over one malformed `href`, so a URL that is not plain-ASCII `https:` without an `@` is
   drawn as text instead — one bad URL never blanks the panel.
 - **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
-  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, and Work through asks, on the
-  band and on the panel, with `/lubbdubb:next`; the operator presses Enter. A plain sentence would
+  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Map with `/pr-map <n>`,
+  and Work through asks, on the band and on the panel, with `/lubbdubb:next`; the operator presses
+  Enter. `pr-map` is a project skill (`.claude/skills/pr-map/`), not the plugin's, so Map answers only
+  in a checkout that carries it. A plain sentence would
   leave whether a skill loads to description matching, and the skill is where the rules for the
   conversation live. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
   and says nothing meanwhile, so an operator clicks again and gets two turns; a draft replaces the

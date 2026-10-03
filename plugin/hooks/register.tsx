@@ -213,8 +213,9 @@ export const register: Register = (on, options) => {
       metaColor?: string
       onPress?: () => void
       href?: string | null
+      action?: { label: string; onPress: () => void }
     }) => {
-      const room = Math.max(8, width - r.meta.length - 4)
+      const room = Math.max(8, width - r.meta.length - (r.action ? r.action.label.length + 1 : 0) - 4)
       const label = clip(r.title, room)
       return (
         <Box key={r.id} justifyContent="space-between">
@@ -232,9 +233,12 @@ export const register: Register = (on, options) => {
               <Text>{label}</Text>
             )}
           </Box>
-          <Text color={r.metaColor} dimColor={r.metaColor === undefined}>
-            {r.meta}
-          </Text>
+          <Box gap={1}>
+            <Text color={r.metaColor} dimColor={r.metaColor === undefined}>
+              {r.meta}
+            </Text>
+            {r.action && <Button key={`${r.id}-action`} plain dimColor label={r.action.label} onPress={r.action.onPress} />}
+          </Box>
         </Box>
       )
     }
@@ -343,6 +347,7 @@ export const register: Register = (on, options) => {
               meta: pr.state,
               metaColor: TONE[pr.tone].color,
               href: pr.url,
+              action: { label: 'Map', onPress: draft($, `/pr-map ${pr.number}`) },
             }),
           )}
           {now.prs.length > 6 && <Text dimColor>{`  +${now.prs.length - 6} more`}</Text>}
