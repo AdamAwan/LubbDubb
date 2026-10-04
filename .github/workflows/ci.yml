@@ -91,3 +91,28 @@ jobs:
 
       - name: Build cockpit SPA (vite)
         run: npm run web:build
+
+  pr-assistant-version:
+    name: PR assistant version bumped
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: A change to what pr-assistant ships bumps its version
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE"...HEAD -- pr-assistant/ ':!pr-assistant/tests/')
+          [ -z "$changed" ] && exit 0
+          manifest=pr-assistant/.claude-plugin/plugin.json
+          version() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s||"{}").version??""))'; }
+          before=$(git show "$(git merge-base "$BASE" HEAD)":"$manifest" 2>/dev/null | version)
+          after=$(version < "$manifest")
+          if [ -z "$after" ] || [ "$before" = "$after" ]; then
+            echo "::error file=$manifest::pr-assistant changed but its version did not (still '$after'). Bump \"version\" in $manifest."
+            echo "$changed"
+            exit 1
+          fi

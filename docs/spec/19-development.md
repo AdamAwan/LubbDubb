@@ -195,7 +195,8 @@ AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@p
   to it by hand or with `--suppress-all`; split the function instead. The file is in
   `.prettierignore` because ESLint rewrites it in its own format.
 
-CI additionally runs `npm run smoke` and coverage, and there are CodeQL and security workflows.
+CI additionally runs `npm run smoke`, coverage and, on a pull request, the PR assistant's version
+bump check ([11](11-mcp-tools.md#the-pr-assistant)), and there are CodeQL and security workflows.
 CodeQL is a hard gate: code scanning is enabled on the repository, the analysis uploads its
 results, and a failure fails the check. The security workflow is split — the runtime-dependency
 advisory gate blocks, while the full-tree scan and dependency review stay advisory.
