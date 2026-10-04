@@ -837,7 +837,8 @@ test('the goal rung leads to the goal even when the page was opened without one'
 
   const crumb = findComponent(ConsoleRoot({ view, actions: recorder }), 'PrCrumb');
   assert.ok(crumb, 'the pull request page draws its crumb');
-  const trail = (crumb.type as (props: unknown) => ReactElement)(crumb.props).props.trail as ReadonlyArray<{
+  const trail = (crumb.type as (props: unknown) => ReactElement<{ trail: unknown }>)(crumb.props).props
+    .trail as ReadonlyArray<{
     label: string;
     go: () => void;
   }>;

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { BareButton } from '../components/button.js';

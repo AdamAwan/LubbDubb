@@ -1,6 +1,6 @@
 # 17 — The cockpit
 
-`web/` is a React 18 + Vite SPA with its own `web/tsconfig.json`, so `npm run typecheck` and
+`web/` is a React 19 + Vite SPA with its own `web/tsconfig.json`, so `npm run typecheck` and
 `npm run typecheck:web` are separate passes.
 
 **The web bundle never imports server code**, and that constraint is about _runtime_. The shapes the

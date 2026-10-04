@@ -13,7 +13,7 @@ export function useTip(): {
   tip: Tip | null;
   show: ShowTip;
   hide: () => void;
-  wrap: RefObject<HTMLDivElement>;
+  wrap: RefObject<HTMLDivElement | null>;
 } {
   const wrap = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<Tip | null>(null);

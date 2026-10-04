@@ -268,7 +268,7 @@ function useColumnRows(
   refUrls: Record<string, string>;
   total: number | null;
   loading: boolean;
-  foot: RefObject<HTMLDivElement>;
+  foot: RefObject<HTMLDivElement | null>;
 } {
   const [rows, setRows] = useState<TicketRow[]>([]);
   const [refUrls, setRefUrls] = useState<Record<string, string>>({});
