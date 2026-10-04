@@ -60,7 +60,7 @@ function closeOutStep(
 ): CloseOutStep | null {
   const originRef = delivery.originRef;
   if (existing && existing.status !== 'open') {
-    if (deskSettled(existing) && issue && issue.state !== 'closed')
+    if (deskSettled(existing) && issue && issue.state !== 'closed' && readyToFile(input, originRef))
       return { kind: 'reopen', taskId: existing.id, detail: deliveryDetail(input, issue, delivery) };
     return null;
   }

@@ -758,7 +758,9 @@ exists to stop.
 **Clearing the delivery retracts the `close_out` row, and re-delivering brings it back**, on the
 validate row's rule and through the same mechanism: the retraction wears the `DESK_SETTLED` marker
 ([13](13-jobs-and-tickets.md#the-seven-arms-that-file-one)) and the pass reopens the row it recognises.
-Without the second half the retraction is permanent, and a missing `close_out` row is the one absence
+The reopen waits on the same holds as a first filing — environment opened, no validation ahead, watch
+cleared — and while one applies the row stays declined, with nothing filed beside it; it reopens on the
+first pulse the holds clear. Without the second half the retraction is permanent, and a missing `close_out` row is the one absence
 that looks exactly like a goal that was never delivered — worse here than on the validate side, since
 this is the row that says the goal is finished. An operator's own answer on the row still stands
 forever.
