@@ -13,8 +13,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   const ReopenBody = z.object({
     reopened: z.boolean({
-      required_error: 'reopened is required — true to put the thread back to the fleet, false to take the ask back',
-      invalid_type_error: 'reopened is required — true to put the thread back to the fleet, false to take the ask back',
+      error: 'reopened is required — true to put the thread back to the fleet, false to take the ask back',
     }),
   });
 

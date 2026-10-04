@@ -226,7 +226,7 @@ export function trendSince(window: ResolvedWindow): string | null {
 export const InsightsQuery = z.object({
   window: z
     .enum(['session', '6h', '24h', '7d', '30d', 'all'], {
-      errorMap: () => ({ message: `window must be one of ${INSIGHTS_WINDOWS.join(', ')}` }),
+      error: `window must be one of ${INSIGHTS_WINDOWS.join(', ')}`,
     })
     .default(DEFAULT_INSIGHTS_WINDOW),
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../schemaErrors.js';
 import type { GoalWatchDeclaration, GoalWatchInput } from '../types.js';
 import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRefusal } from './watchQueryShape.js';
 
@@ -6,8 +7,8 @@ import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRef
 
 const MAX_SIGNALS = 20;
 
-const WatchSignalSchema = z
-  .object({
+const WatchSignalSchema = strictObject(
+  {
     id: z
       .string()
       .min(1)
@@ -17,24 +18,25 @@ const WatchSignalSchema = z
     presence: z.string().min(1),
     tolerate: z.number().int().min(0).default(0),
     why: z.string().min(1).optional(),
-  })
-  .strict('a signal declares only id/title/query/presence/tolerate/why');
+  },
+  'a signal declares only id/title/query/presence/tolerate/why',
+);
 
-const WatchExpectSchema = z
-  .object({
+const WatchExpectSchema = strictObject(
+  {
     under: z.number().optional(),
     over: z.number().optional(),
     noWorseThan: z.literal('baseline').optional(),
-  })
-  .strict('a measure expects only under/over/noWorseThan')
-  .refine((e) => e.under !== undefined || e.over !== undefined || e.noWorseThan !== undefined, {
-    message:
-      'a measure must declare a threshold ("under"/"over") or "noWorseThan": "baseline" — one that ' +
-      'declares neither reads as a check and can never fail',
-  });
+  },
+  'a measure expects only under/over/noWorseThan',
+).refine((e) => e.under !== undefined || e.over !== undefined || e.noWorseThan !== undefined, {
+  message:
+    'a measure must declare a threshold ("under"/"over") or "noWorseThan": "baseline" — one that ' +
+    'declares neither reads as a check and can never fail',
+});
 
-const WatchMeasureSchema = z
-  .object({
+const WatchMeasureSchema = strictObject(
+  {
     id: z
       .string()
       .min(1)
@@ -44,8 +46,9 @@ const WatchMeasureSchema = z
     expect: WatchExpectSchema,
     unit: z.string().min(1).optional(),
     why: z.string().min(1).optional(),
-  })
-  .strict('a measure declares only id/title/query/expect/unit/why');
+  },
+  'a measure declares only id/title/query/expect/unit/why',
+);
 
 function refuseQueryShape(
   check: { id: string; query: string; presence?: string },
@@ -59,21 +62,21 @@ function refuseQueryShape(
     const operator = kind === 'signal' ? aggregatingTail(query) : null;
     if (operator !== null)
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: [...path, field],
         message: `${kind} "${check.id}": ${aggregatingQueryRefusal(field, operator)}`,
       });
     if (!carriesSince(query))
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: [...path, field],
         message: `${kind} "${check.id}": ${missingSinceRefusal(field)}`,
       });
   }
 }
 
-export const WatchSchema = z
-  .object({
+export const WatchSchema = strictObject(
+  {
     signals: z
       .array(WatchSignalSchema)
       .default([])
@@ -82,29 +85,31 @@ export const WatchSchema = z
       .array(WatchMeasureSchema)
       .default([])
       .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
-  })
-  .strict('a watch block declares only "signals" and "measures"')
-  .superRefine((block, ctx) => {
-    block.signals.forEach((signal, index) => {
-      refuseQueryShape(signal, 'signal', ctx, ['signals', index]);
-    });
-    block.measures.forEach((measure, index) => {
-      refuseQueryShape(measure, 'measure', ctx, ['measures', index]);
-    });
-    const ids = new Set<string>();
-    for (const check of [...block.signals, ...block.measures]) {
-      if (ids.has(check.id))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['signals'], message: `duplicate check id "${check.id}"` });
-      ids.add(check.id);
-    }
+  },
+  'a watch block declares only "signals" and "measures"',
+).superRefine((block, ctx) => {
+  block.signals.forEach((signal, index) => {
+    refuseQueryShape(signal, 'signal', ctx, ['signals', index]);
   });
+  block.measures.forEach((measure, index) => {
+    refuseQueryShape(measure, 'measure', ctx, ['measures', index]);
+  });
+  const ids = new Set<string>();
+  for (const check of [...block.signals, ...block.measures]) {
+    if (ids.has(check.id))
+      ctx.addIssue({ code: 'custom', path: ['signals'], message: `duplicate check id "${check.id}"` });
+    ids.add(check.id);
+  }
+});
 
-export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, z.ZodTypeDef, unknown> = z
+export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, unknown> = z
   .discriminatedUnion('kind', [
-    WatchSignalSchema.extend({ kind: z.literal('signal') }).strict(
+    strictObject(
+      { ...WatchSignalSchema.shape, kind: z.literal('signal') },
       'a signal declares only kind/id/title/query/presence/tolerate/why',
     ),
-    WatchMeasureSchema.extend({ kind: z.literal('measure') }).strict(
+    strictObject(
+      { ...WatchMeasureSchema.shape, kind: z.literal('measure') },
       'a measure declares only kind/id/title/query/expect/unit/why',
     ),
   ])

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { absentOr } from '../schemaErrors.js';
 import type { JobAttachmentInput } from '../types.js';
 
 // → docs/spec/13-jobs-and-tickets.md
@@ -26,15 +27,15 @@ const SIGNATURES: { mime: string; ext: string; matches: (buf: Buffer) => boolean
 
 export const ACCEPTED_IMAGE_MIMES = SIGNATURES.map((s) => s.mime);
 
-const AttachmentInputSchema: z.ZodType<JobAttachmentInput, z.ZodTypeDef, unknown> = z.object({
-  name: z.string({ invalid_type_error: 'attachment name must be a string' }).trim().optional(),
+const AttachmentInputSchema: z.ZodType<JobAttachmentInput, unknown> = z.object({
+  name: z.string({ error: 'attachment name must be a string' }).trim().optional(),
   data: z
-    .string({ required_error: 'attachment data required', invalid_type_error: 'attachment data must be base64' })
+    .string(absentOr('attachment data required', 'attachment data must be base64'))
     .min(1, 'attachment data required'),
 });
 
 export const AttachmentsField = z
-  .array(AttachmentInputSchema, { invalid_type_error: 'attachments must be an array' })
+  .array(AttachmentInputSchema, { error: 'attachments must be an array' })
   .max(MAX_ATTACHMENTS, `at most ${MAX_ATTACHMENTS} attachments per brief`)
   .optional();
 

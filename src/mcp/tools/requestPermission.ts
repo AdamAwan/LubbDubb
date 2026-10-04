@@ -13,7 +13,7 @@ export const requestPermission: ToolFactory = ({ deps, agent, task }) => ({
   inputSchema: toolSchema(
     z.object({
       tool_name: z.string().describe('The tool the permission is for.').optional(),
-      input: z.record(z.unknown()).describe('The tool input awaiting approval.').optional(),
+      input: z.record(z.string(), z.unknown()).describe('The tool input awaiting approval.').optional(),
       tool_use_id: z.string().describe('Claude Code’s id for this tool use.').optional(),
     }),
   ),

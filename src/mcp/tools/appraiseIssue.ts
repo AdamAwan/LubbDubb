@@ -8,7 +8,7 @@ import {
 } from '../goalAppraisal.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
-import { enumOf, toolSchema } from '../schema.js';
+import { toolSchema } from '../schema.js';
 import type { McpToolDeps, ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -64,9 +64,9 @@ function appraisalDescription(profiles: Profiles, areas: Areas): string {
 function appraisalInput(profiles: Profiles, areas: Areas) {
   const names = profiles.map((p) => p.name);
   return z.object({
-    status: enumOf(GOAL_APPRAISAL_VERDICTS).describe(
-      GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
-    ),
+    status: z
+      .enum(GOAL_APPRAISAL_VERDICTS)
+      .describe(GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. ')),
     summary: z
       .string()
       .describe(
@@ -87,7 +87,8 @@ function appraisalInput(profiles: Profiles, areas: Areas) {
       .optional(),
     ...(names.length > 0
       ? {
-          profile: enumOf(names)
+          profile: z
+            .enum(names)
             .describe(
               'Which model profile this issue\'s work should run on. Required with "workable"; ' +
                 'ignored with "unclear", since a goal nobody can start from has no work to size. ' +
@@ -109,7 +110,8 @@ function appraisalInput(profiles: Profiles, areas: Areas) {
       .optional(),
     ...(areas.paths.length > 0
       ? {
-          area_path: enumOf(areas.paths)
+          area_path: z
+            .enum(areas.paths)
             .describe(
               'The area path this issue should be filed under, if it is still on the project root. ' +
                 'This is what puts it on a team board, so an item left unfiled is invisible to whoever ' +

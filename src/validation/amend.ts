@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../schemaErrors.js';
 import { issueOriginHead, issueOriginNumber } from '../issueOrigins.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
 
@@ -40,18 +41,14 @@ export function validationAmendIssue(
 
 const WithdrawSchema = z.object({
   id: z.string().min(1),
-  reason: z
-    .string({ required_error: 'a withdrawal needs a reason', invalid_type_error: 'a withdrawal needs a reason' })
-    .trim()
-    .min(1, 'a withdrawal needs a reason'),
+  reason: z.string({ error: 'a withdrawal needs a reason' }).trim().min(1, 'a withdrawal needs a reason'),
 });
 
-const AmendmentSchema = z
-  .object({
+const AmendmentSchema = strictObject(
+  {
     note: z
       .string({
-        required_error: 'note is required — say why the validation plan is changing',
-        invalid_type_error: 'note is required — say why the validation plan is changing',
+        error: 'note is required — say why the validation plan is changing',
       })
       .trim()
       .min(1, 'note is required — say why the validation plan is changing'),
@@ -64,29 +61,29 @@ const AmendmentSchema = z
       .array(ValidationResourceSchema)
       .default([])
       .transform((list) => (list.length > MAX_AMENDED_RESOURCES ? list.slice(0, MAX_AMENDED_RESOURCES) : list)),
-  })
-  .strict('an amendment declares only "note", "checks", "withdraw" and "resources"')
-  .superRefine((amendment, ctx) => {
-    const add = (message: string, path: string): void => {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-    };
-    const ids = new Set<string>();
-    for (const check of amendment.checks) {
-      if (ids.has(check.id)) add(`duplicate check id "${check.id}"`, 'checks');
-      ids.add(check.id);
-    }
-    const names = new Set<string>();
-    for (const resource of amendment.resources) {
-      if (names.has(resource.name)) add(`duplicate resource "${resource.name}"`, 'resources');
-      names.add(resource.name);
-    }
-    for (const { id } of amendment.withdraw) {
-      if (ids.has(id)) add(`"${id}" is both declared and withdrawn — say one or the other`, 'withdraw');
-    }
-    if (amendment.checks.length === 0 && amendment.withdraw.length === 0) {
-      add('an amendment must declare at least one check or withdraw one', 'checks');
-    }
-  });
+  },
+  'an amendment declares only "note", "checks", "withdraw" and "resources"',
+).superRefine((amendment, ctx) => {
+  const add = (message: string, path: string): void => {
+    ctx.addIssue({ code: 'custom', path: [path], message });
+  };
+  const ids = new Set<string>();
+  for (const check of amendment.checks) {
+    if (ids.has(check.id)) add(`duplicate check id "${check.id}"`, 'checks');
+    ids.add(check.id);
+  }
+  const names = new Set<string>();
+  for (const resource of amendment.resources) {
+    if (names.has(resource.name)) add(`duplicate resource "${resource.name}"`, 'resources');
+    names.add(resource.name);
+  }
+  for (const { id } of amendment.withdraw) {
+    if (ids.has(id)) add(`"${id}" is both declared and withdrawn — say one or the other`, 'withdraw');
+  }
+  if (amendment.checks.length === 0 && amendment.withdraw.length === 0) {
+    add('an amendment must declare at least one check or withdraw one', 'checks');
+  }
+});
 
 type ParsedAmendment = z.infer<typeof AmendmentSchema>;
 

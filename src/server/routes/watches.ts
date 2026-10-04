@@ -15,8 +15,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   const RulingBody = z.object({
     accept: z.boolean({
-      required_error: 'accept is required — true to run this check, false to decline it',
-      invalid_type_error: 'accept is required — true to run this check, false to decline it',
+      error: 'accept is required — true to run this check, false to decline it',
     }),
   });
 

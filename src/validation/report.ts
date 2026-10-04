@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { absentOr, strictObject } from '../schemaErrors.js';
 import type { ValidationCheck } from '../types.js';
 import { validateOriginParts } from './fleet.js';
 
@@ -33,12 +34,11 @@ const CaptureName = z
   .regex(/^[^/\\]+$/, 'a capture is a file name in the check\u2019s own directory, not a path')
   .refine((name) => name !== '.' && name !== '..', 'a capture is a file name, not a path');
 
-export const ReportSchema = z
-  .object({
+export const ReportSchema = strictObject(
+  {
     result: z
       .enum(['passed', 'failed', 'blocked', 'captured'], {
-        required_error: 'result must be "passed", "failed", "captured" or "blocked"',
-        invalid_type_error: 'result must be "passed", "failed", "captured" or "blocked"',
+        error: 'result must be "passed", "failed", "captured" or "blocked"',
       })
       .describe(
         '"passed" — you followed the procedure and saw what it expects. "failed" — you followed it and did ' +
@@ -53,26 +53,24 @@ export const ReportSchema = z
         'run, because somebody still has to be able to look at it.',
     ).optional(),
     note: z
-      .string({ required_error: 'note is required — say what you saw', invalid_type_error: 'note is required' })
+      .string(absentOr('note is required — say what you saw', 'note is required'))
       .trim()
       .min(1, 'note is required — say what you saw')
       .describe(
         'What you actually saw, or what stopped you. This is the whole of what an operator reads later ' +
           'instead of running the check again, so "passed" is not a note.',
       ),
-  })
-  .strict(
-    'a report declares only "result", "note" and — with "captured" — "capture"; which check is decided by what ' +
-      'you were dispatched to run',
-  )
-  .superRefine((report, ctx) => {
-    if (report.result === 'captured' && report.capture === undefined)
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['capture'],
-        message: 'a "captured" report names the screenshot it took — without one there is nothing to look at',
-      });
-  });
+  },
+  'a report declares only "result", "note" and — with "captured" — "capture"; which check is decided by what ' +
+    'you were dispatched to run',
+).superRefine((report, ctx) => {
+  if (report.result === 'captured' && report.capture === undefined)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capture'],
+      message: 'a "captured" report names the screenshot it took — without one there is nothing to look at',
+    });
+});
 
 type ParsedReport = z.infer<typeof ReportSchema>;
 
@@ -136,7 +134,7 @@ export function validateReport(
     const fault = captureFault(parsed.data, check);
     return fault === null ? { ok: true, report: parsed.data } : { ok: false, error: fault };
   }
-  const first = parsed.error.errors[0];
+  const first = parsed.error.issues[0];
   return { ok: false, error: first ? first.message : 'the report could not be read' };
 }
 

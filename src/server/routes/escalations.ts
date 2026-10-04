@@ -35,7 +35,7 @@ const AnswerBody = z
   .object({
     response: requiredText('response required').optional(),
     answers: z
-      .array(z.string({ invalid_type_error: 'each answer must be a string or null' }).nullable())
+      .array(z.string({ error: 'each answer must be a string or null' }).nullable())
       .min(1, 'answers required')
       .optional(),
   })
@@ -48,21 +48,19 @@ const NoteBody = z.object({ note: optionalText('note') });
 const PermissionBody = NoteBody.extend({ allow: requiredBoolean('allow (boolean) required') });
 
 const AcceptBody = NoteBody.extend({
-  acknowledged: z
-    .array(z.string().min(1), { invalid_type_error: 'acknowledged must be an array of caveat ids' })
-    .optional(),
+  acknowledged: z.array(z.string().min(1), { error: 'acknowledged must be an array of caveat ids' }).optional(),
   answers: z
     .array(
       z.object(
         {
           id: z
-            .string({ invalid_type_error: 'each answer names the caveat id it answers' })
+            .string({ error: 'each answer names the caveat id it answers' })
             .min(1, 'each answer names the caveat id it answers'),
-          answer: z.string({ invalid_type_error: "each answer is the operator's words, as text" }),
+          answer: z.string({ error: "each answer is the operator's words, as text" }),
         },
-        { invalid_type_error: 'each answer must be an object of {id, answer}' },
+        { error: 'each answer must be an object of {id, answer}' },
       ),
-      { invalid_type_error: 'answers must be an array of {id, answer}' },
+      { error: 'answers must be an array of {id, answer}' },
     )
     .optional(),
   // One entry per row the operator struck out of the set they are accepting. The reason is
@@ -74,23 +72,23 @@ const AcceptBody = NoteBody.extend({
       z.object(
         {
           letter: z
-            .string({ invalid_type_error: 'each decline names the check letter it declines' })
+            .string({ error: 'each decline names the check letter it declines' })
             .min(1, 'each decline names the check letter it declines'),
           reason: z
-            .string({ invalid_type_error: 'each decline carries your reason, as text' })
+            .string({ error: 'each decline carries your reason, as text' })
             .trim()
             .min(1, 'a declined check carries your reason — it is the only account of why it is not being run'),
         },
-        { invalid_type_error: 'each decline must be an object of {letter, reason}' },
+        { error: 'each decline must be an object of {letter, reason}' },
       ),
-      { invalid_type_error: 'declined must be an array of {letter, reason}' },
+      { error: 'declined must be an array of {letter, reason}' },
     )
     .optional(),
 });
 
 const BackOutBody = z
   .object({
-    verdict: z.enum(['close', 'hold'], { errorMap: () => ({ message: "verdict must be 'close' or 'hold'" }) }),
+    verdict: z.enum(['close', 'hold'], { error: "verdict must be 'close' or 'hold'" }),
     note: optionalText('note'),
   })
   .refine((b) => b.verdict !== 'close' || (b.note !== undefined && b.note.trim() !== ''), {

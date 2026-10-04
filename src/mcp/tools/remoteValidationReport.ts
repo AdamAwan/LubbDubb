@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../../schemaErrors.js';
 import { remoteValidationOriginParts } from '../../validation/remote/origin.js';
 import type { RemoteReadingDesk } from '../../validation/remote/readings.js';
 import { toolSchema } from '../schema.js';
@@ -14,8 +15,8 @@ import type { ToolFactory } from './context.js';
  * model's opinion becomes a reading. The model in this loop has every reason to believe the goal
  * works and no way to have watched a spec run.
  */
-const ReportSchema = z
-  .object({
+const ReportSchema = strictObject(
+  {
     reportPath: z
       .string()
       .trim()
@@ -47,11 +48,10 @@ const ReportSchema = z
           'last resort: an agent that could not reach the environment has learned nothing about the goal.',
       )
       .optional(),
-  })
-  .strict(
-    'a remote validation report says only where the report and the artefacts landed, or why there is ' +
-      'neither — which rows it concerns, and what each of them came back as, are not yours to state',
-  );
+  },
+  'a remote validation report says only where the report and the artefacts landed, or why there is ' +
+    'neither — which rows it concerns, and what each of them came back as, are not yours to state',
+);
 
 export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -81,7 +81,7 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
       );
     const parsed = ReportSchema.safeParse(args);
     if (!parsed.success)
-      return toolError(`Report rejected: ${parsed.error.errors[0]?.message ?? 'the report could not be read'}`);
+      return toolError(`Report rejected: ${parsed.error.issues[0]?.message ?? 'the report could not be read'}`);
     const { reportPath, artefacts, blocked } = parsed.data;
 
     const desk = deps.remoteReadings?.();

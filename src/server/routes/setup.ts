@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import type { SetupPayload, SetupResolvePayload } from '../../wire.js';
 import { RealSetupProbes } from '../../setup/probes.js';
 import { buildSetupReading } from '../../setup/reading.js';
@@ -28,9 +29,9 @@ export function register(app: FastifyInstance, { system, hub, setup }: RouteCont
   });
 
   const ResolveBody = z.object({
-    email: z.string({ required_error: 'email is required', invalid_type_error: 'email must be a string' }).trim(),
+    email: z.string(absentOr('email is required', 'email must be a string')).trim(),
     repoRoot: z
-      .string({ required_error: 'repoRoot is required', invalid_type_error: 'repoRoot must be a string' })
+      .string(absentOr('repoRoot is required', 'repoRoot must be a string'))
       .trim()
       .min(1, 'repoRoot must name a directory'),
   });

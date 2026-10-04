@@ -13,9 +13,9 @@ type RequestRead<P, B, Q> = { ok: true; params: P; body: B; query: Q } | Refused
 export function readRequest<P = undefined, B = undefined, Q = undefined>(
   req: { params?: unknown; body?: unknown; query?: unknown },
   schemas: {
-    params?: z.ZodType<P, z.ZodTypeDef, unknown>;
-    body?: z.ZodType<B, z.ZodTypeDef, unknown>;
-    query?: z.ZodType<Q, z.ZodTypeDef, unknown>;
+    params?: z.ZodType<P, unknown>;
+    body?: z.ZodType<B, unknown>;
+    query?: z.ZodType<Q, unknown>;
   },
 ): RequestRead<P, B, Q> {
   const params = readPart(schemas.params, req.params);
@@ -28,7 +28,7 @@ export function readRequest<P = undefined, B = undefined, Q = undefined>(
 }
 
 function readPart<T>(
-  schema: z.ZodType<T, z.ZodTypeDef, unknown> | undefined,
+  schema: z.ZodType<T, unknown> | undefined,
   raw: unknown,
 ): { ok: true; data: T | undefined } | Refused {
   const parsed = schema?.safeParse(raw ?? {});
@@ -38,9 +38,9 @@ function readPart<T>(
 
 export function checked<P = undefined, B = undefined, Q = undefined>(
   schemas: {
-    params?: z.ZodType<P, z.ZodTypeDef, unknown>;
-    body?: z.ZodType<B, z.ZodTypeDef, unknown>;
-    query?: z.ZodType<Q, z.ZodTypeDef, unknown>;
+    params?: z.ZodType<P, unknown>;
+    body?: z.ZodType<B, unknown>;
+    query?: z.ZodType<Q, unknown>;
   },
   handler: (input: { params: P; body: B; query: Q; req: FastifyRequest; reply: FastifyReply }) => unknown,
 ): (req: FastifyRequest, reply: FastifyReply) => Promise<unknown> {
@@ -55,7 +55,7 @@ function refusalMessage(error: z.ZodError): string {
   return error.issues.map((issue) => issue.message).join('; ');
 }
 
-function integerParam(label: string): z.ZodType<number, z.ZodTypeDef, string> {
+function integerParam(label: string): z.ZodType<number, string> {
   return z
     .string()
     .refine((raw) => Number.isInteger(Number(raw)), { message: `invalid ${label}` })
@@ -71,17 +71,17 @@ export const IdParams = z.object({ id: z.string() });
 export const RefParams = z.object({ ref: z.string() });
 
 export function requiredBoolean(message: string): z.ZodBoolean {
-  return z.boolean({ required_error: message, invalid_type_error: message });
+  return z.boolean({ error: message });
 }
 
 export function requiredText(message: string, max?: { length: number; message: string }): z.ZodType<string> {
-  const base = z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message);
+  const base = z.string({ error: message }).trim().min(1, message);
   return max ? base.max(max.length, max.message) : base;
 }
 
 export function optionalText(field: string): z.ZodType<string | undefined> {
   return z
-    .string({ invalid_type_error: `${field} must be a string` })
+    .string({ error: `${field} must be a string` })
     .trim()
     .optional()
     .transform((text) => text || undefined);

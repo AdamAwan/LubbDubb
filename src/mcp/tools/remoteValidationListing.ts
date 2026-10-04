@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../../schemaErrors.js';
 import { remoteValidationOriginParts } from '../../validation/remote/origin.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
@@ -12,8 +13,8 @@ import type { ToolFactory } from './context.js';
  * the listing in the agent's own checkout safe is that the agent hands back a **path** to what the
  * runner printed, exactly as `reportPath` does. A path says where a file is, not what is in it.
  */
-const ListingSchema = z
-  .object({
+const ListingSchema = strictObject(
+  {
     listingPath: z
       .string()
       .trim()
@@ -34,11 +35,10 @@ const ListingSchema = z
           'have answered for blocks with your reason, and the run stays open for whatever else it owes.',
       )
       .optional(),
-  })
-  .strict(
-    'a listing says only where the runner’s own output landed, or why there is none — which selectors it ' +
-      'offers, and how many tests any of them holds, are not yours to state',
-  );
+  },
+  'a listing says only where the runner’s own output landed, or why there is none — which selectors it ' +
+    'offers, and how many tests any of them holds, are not yours to state',
+);
 
 export const remoteValidationListing: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -60,7 +60,7 @@ export const remoteValidationListing: ToolFactory = ({ deps, task, ok }) => ({
       );
     const parsed = ListingSchema.safeParse(args);
     if (!parsed.success)
-      return toolError(`Listing rejected: ${parsed.error.errors[0]?.message ?? 'the listing could not be read'}`);
+      return toolError(`Listing rejected: ${parsed.error.issues[0]?.message ?? 'the listing could not be read'}`);
     const { listingPath, blocked } = parsed.data;
 
     const desk = deps.remoteListings?.();

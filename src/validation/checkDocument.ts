@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../schemaErrors.js';
 import type { ValidationCheckAmendment, ValidationCheckInput, ValidationResourceInput } from '../types.js';
 import { NO_STEP_CAPABILITIES, resolveSteps, STEP_KINDS, type StepCapabilities } from './steps.js';
 import type { ValidationStepKind } from '../types.js';
@@ -34,46 +35,44 @@ export const ValidationResourceSchema = z.object({
  * `actor` is not among them, exactly as it is not on the check — who carries a step is read off the
  * configuration at ingestion. → docs/spec/20-validation.md#who-carries-a-step
  */
-const ValidationStepSchema = z
-  .object({
+const ValidationStepSchema = strictObject(
+  {
     kind: z.enum(STEP_KINDS as unknown as [ValidationStepKind, ...ValidationStepKind[]]),
     do: z.string().min(1),
     area: z.string().min(1).optional(),
     expects: z.array(z.string().min(1)).optional(),
     when: z.enum(['inline', 'deferred']).optional(),
     script: z.string().min(1).max(MAX_SCRIPT_LENGTH).optional(),
-  })
-  .strict(
-    'a step declares only kind/do/area/expects/when/script — who carries it is read off the configuration, ' +
-      'not yours to say',
-  )
-  .superRefine((step, ctx) => {
-    const add = (message: string, path: string): void => {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-    };
-    // An area on any other kind would be a second author for the string a `suite` step names, and
-    // the pre-flight compares that string character for character.
-    if (step.area !== undefined && step.kind !== 'suite')
-      add(`"area" belongs to a "suite" step — a ${step.kind} step runs no named area of the suite`, 'area');
-    if (step.kind === 'suite' && step.area === undefined)
-      add('a "suite" step names the area it runs, as the runner selects on it — not as a config file names it', 'area');
-    // The same string the pre-flight compares character for character, one level down; and the same
-    // rule about a second author, for the same reason.
-    if (step.expects !== undefined && step.kind !== 'suite')
-      add(`"expects" belongs to a "suite" step — a ${step.kind} step runs no named spec of the suite`, 'expects');
-    // Inline and deferred are the same word on any other kind: a step that runs, runs where it sits.
-    if (step.when !== undefined && step.kind !== 'manual')
-      add(`"when" belongs to a "manual" step — a ${step.kind} step is taken where it sits`, 'when');
-    // A one-off script acts on the environment, and `browser` is the only kind that does. On a
-    // `suite` step it would be a second, unreviewed body of code wearing a reviewed step's clothes;
-    // on a `screenshot` step it would be an assertion on the one kind that must never assert.
-    if (step.script !== undefined && step.kind !== 'browser')
-      add(
-        `"script" belongs to a "browser" step — a ${step.kind} step runs nothing of its own, and a one-off ` +
-          'script is the browser-shaped instrument',
-        'script',
-      );
-  });
+  },
+  'a step declares only kind/do/area/expects/when/script — who carries it is read off the configuration, ' +
+    'not yours to say',
+).superRefine((step, ctx) => {
+  const add = (message: string, path: string): void => {
+    ctx.addIssue({ code: 'custom', path: [path], message });
+  };
+  // An area on any other kind would be a second author for the string a `suite` step names, and
+  // the pre-flight compares that string character for character.
+  if (step.area !== undefined && step.kind !== 'suite')
+    add(`"area" belongs to a "suite" step — a ${step.kind} step runs no named area of the suite`, 'area');
+  if (step.kind === 'suite' && step.area === undefined)
+    add('a "suite" step names the area it runs, as the runner selects on it — not as a config file names it', 'area');
+  // The same string the pre-flight compares character for character, one level down; and the same
+  // rule about a second author, for the same reason.
+  if (step.expects !== undefined && step.kind !== 'suite')
+    add(`"expects" belongs to a "suite" step — a ${step.kind} step runs no named spec of the suite`, 'expects');
+  // Inline and deferred are the same word on any other kind: a step that runs, runs where it sits.
+  if (step.when !== undefined && step.kind !== 'manual')
+    add(`"when" belongs to a "manual" step — a ${step.kind} step is taken where it sits`, 'when');
+  // A one-off script acts on the environment, and `browser` is the only kind that does. On a
+  // `suite` step it would be a second, unreviewed body of code wearing a reviewed step's clothes;
+  // on a `screenshot` step it would be an assertion on the one kind that must never assert.
+  if (step.script !== undefined && step.kind !== 'browser')
+    add(
+      `"script" belongs to a "browser" step — a ${step.kind} step runs nothing of its own, and a one-off ` +
+        'script is the browser-shaped instrument',
+      'script',
+    );
+});
 
 /**
  * The same test plan as the agent is shown it: the tool-facing shape both transports that author a
@@ -149,8 +148,8 @@ export const validationStepsSchema = z
   )
   .optional();
 
-export const ValidationCheckSchema = z
-  .object({
+export const ValidationCheckSchema = strictObject(
+  {
     id: z
       .string()
       .min(1)
@@ -204,46 +203,46 @@ export const ValidationCheckSchema = z
     why: z.string().min(1).optional(),
     steps: z
       .array(ValidationStepSchema)
-      .optional()
-      .transform((list) => (list !== undefined && list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list)),
-  })
-  .strict(
-    'a check declares only id/title/do/expect/proof/uses/covers/satisfies/rationale/steps/fleetCandidate/why — who runs it is not yours to say',
-  );
 
-export const ValidationSchema = z
-  .object({
+      .transform((list) => (list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list))
+      .optional(),
+  },
+  'a check declares only id/title/do/expect/proof/uses/covers/satisfies/rationale/steps/fleetCandidate/why — who runs it is not yours to say',
+);
+
+export const ValidationSchema = strictObject(
+  {
     hint: z.string().min(1).optional(),
     resources: z
       .array(ValidationResourceSchema)
-      .optional()
-      .transform((list) => (list !== undefined && list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
+
+      .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list))
+      .optional(),
     checks: z
       .array(ValidationCheckSchema)
-      .optional()
-      .transform((list) => (list !== undefined && list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
-  })
-  .strict(
-    'a validation block declares only "hint", and — from a plan written before the hint — "resources" and "checks"',
-  )
-  .superRefine((block, ctx) => {
-    const ids = new Set<string>();
-    for (const check of block.checks ?? []) {
-      if (ids.has(check.id))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['checks'], message: `duplicate check id "${check.id}"` });
-      ids.add(check.id);
-    }
-    const names = new Set<string>();
-    for (const resource of block.resources ?? []) {
-      if (names.has(resource.name))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['resources'],
-          message: `duplicate resource "${resource.name}"`,
-        });
-      names.add(resource.name);
-    }
-  });
+
+      .transform((list) => (list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list))
+      .optional(),
+  },
+  'a validation block declares only "hint", and — from a plan written before the hint — "resources" and "checks"',
+).superRefine((block, ctx) => {
+  const ids = new Set<string>();
+  for (const check of block.checks ?? []) {
+    if (ids.has(check.id))
+      ctx.addIssue({ code: 'custom', path: ['checks'], message: `duplicate check id "${check.id}"` });
+    ids.add(check.id);
+  }
+  const names = new Set<string>();
+  for (const resource of block.resources ?? []) {
+    if (names.has(resource.name))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['resources'],
+        message: `duplicate resource "${resource.name}"`,
+      });
+    names.add(resource.name);
+  }
+});
 
 type ValidationBlock = z.infer<typeof ValidationSchema>;
 

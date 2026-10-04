@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import type { UsagePayload } from '../../wire.js';
 import type { SurfaceReachInput } from '../../types.js';
 import { buildOperatorInsights } from '../../insights/operatorInsights.js';
@@ -65,13 +66,13 @@ const BATCH_MAX = 500;
 const UsageEventRow = z
   .object({
     subject: z.enum(USAGE_SUBJECTS as [string, ...string[]], {
-      errorMap: () => ({ message: 'subject must be one of the registry’s subjects' }),
+      error: 'subject must be one of the registry’s subjects',
     }),
-    verb: z.string({ required_error: 'verb must be one the subject offers' }),
+    verb: z.string(absentOr('verb must be one the subject offers')),
     place: z.enum(PLACE_KEYS as unknown as [string, ...string[]], {
-      errorMap: () => ({ message: `place must be one of ${PLACE_KEYS.join(', ')}` }),
+      error: `place must be one of ${PLACE_KEYS.join(', ')}`,
     }),
-    arrival: z.enum(['linked', 'direct'], { errorMap: () => ({ message: 'arrival must be linked or direct' }) }),
+    arrival: z.enum(['linked', 'direct'], { error: 'arrival must be linked or direct' }),
   })
   .refine(
     (row) => (VERBS_BY_SUBJECT[row.subject as keyof typeof VERBS_BY_SUBJECT] as readonly string[]).includes(row.verb),
@@ -82,6 +83,6 @@ const UsageEventRow = z
 
 const UsageBatchBody = z.object({
   events: z
-    .array(UsageEventRow, { required_error: 'events must be an array of usage rows' })
+    .array(UsageEventRow, absentOr('events must be an array of usage rows'))
     .max(BATCH_MAX, { message: `events must hold at most ${BATCH_MAX} rows` }),
 });

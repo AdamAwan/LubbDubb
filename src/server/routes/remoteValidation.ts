@@ -15,8 +15,7 @@ const ApprovalParams = QueryParams.extend({ environment: z.string().min(1, 'envi
 
 const RulingBody = z.object({
   accept: z.boolean({
-    required_error: 'accept is required — true to approve this query here, false to decline it',
-    invalid_type_error: 'accept is required — true to approve this query here, false to decline it',
+    error: 'accept is required — true to approve this query here, false to decline it',
   }),
 });
 
@@ -30,8 +29,7 @@ const RowParams = EnvironmentParams.extend({ rowId: z.string().min(1, 'rowId is 
 
 const SelectionBody = z.object({
   selected: z.boolean({
-    required_error: 'selected is required — false to take this row out of the next press, true to put it back',
-    invalid_type_error: 'selected is required — false to take this row out of the next press, true to put it back',
+    error: 'selected is required — false to take this row out of the next press, true to put it back',
   }),
 });
 

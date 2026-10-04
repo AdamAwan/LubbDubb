@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import { enumOf, toolSchema } from '../src/mcp/schema.js';
+import { toolSchema } from '../src/mcp/schema.js';
 import { ReportSchema, validateReport } from '../src/validation/report.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -39,9 +39,9 @@ test('strictness is still read through a refinement', () => {
   assert.equal(toolSchema(refined).additionalProperties, false);
 });
 
-test('enumOf accepts a list built at runtime', () => {
+test('z.enum accepts a list built at runtime', () => {
   const names: readonly string[] = ['alpha', 'beta'];
-  const json = toolSchema(z.object({ pick: enumOf(names) }));
+  const json = toolSchema(z.object({ pick: z.enum(names) }));
   assert.deepEqual(prop(json, 'pick').enum, ['alpha', 'beta']);
 });
 

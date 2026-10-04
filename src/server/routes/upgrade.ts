@@ -23,7 +23,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   const SnoozeBody = z.object({
     target: z.enum(['upgrade', 'projectPull'], {
-      errorMap: () => ({ message: 'target must be upgrade or projectPull' }),
+      error: 'target must be upgrade or projectPull',
     }),
   });
   app.post(
@@ -37,7 +37,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   const UpgradeBody = z.object({
     action: z.enum(['drain', 'cancel', 'apply'], {
-      errorMap: () => ({ message: 'action must be drain, cancel or apply' }),
+      error: 'action must be drain, cancel or apply',
     }),
     interrupt: requiredBoolean('interrupt must be true or false').optional(),
   });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../schemaErrors.js';
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { assessIssueNumber } from '../delivery/assessment.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
@@ -450,12 +451,11 @@ const MAX_RESOURCES = 20;
  * and every set carries a note, because a hint nobody says they departed from is theatre and the
  * operator's read at the approval gate was worth nothing.
  */
-const CheckSetSchema = z
-  .object({
+const CheckSetSchema = strictObject(
+  {
     note: z
       .string({
-        required_error: 'note is required — say where you went a different way from the plan’s hint, and why',
-        invalid_type_error: 'note is required — say where you went a different way from the plan’s hint, and why',
+        error: 'note is required — say where you went a different way from the plan’s hint, and why',
       })
       .trim()
       .min(1, 'note is required — say where you went a different way from the plan’s hint, and why'),
@@ -468,30 +468,30 @@ const CheckSetSchema = z
       .array(ValidationResourceSchema)
       .default([])
       .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
-  })
-  .strict('a check set declares only "note", "emptyReason", "checks" and "resources"')
-  .superRefine((set, ctx) => {
-    const add = (message: string, path: string): void => {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-    };
-    const ids = new Set<string>();
-    for (const check of set.checks) {
-      if (ids.has(check.id)) add(`duplicate check id "${check.id}"`, 'checks');
-      ids.add(check.id);
-    }
-    const names = new Set<string>();
-    for (const resource of set.resources) {
-      if (names.has(resource.name)) add(`duplicate resource "${resource.name}"`, 'resources');
-      names.add(resource.name);
-    }
-    if (set.checks.length === 0 && set.emptyReason === undefined) {
-      add(
-        'declaring no checks is a complete answer and it carries a reason — say what already settles the ' +
-          'question, so an operator meeting an empty bench can tell it from a planner that never ran',
-        'emptyReason',
-      );
-    }
-  });
+  },
+  'a check set declares only "note", "emptyReason", "checks" and "resources"',
+).superRefine((set, ctx) => {
+  const add = (message: string, path: string): void => {
+    ctx.addIssue({ code: 'custom', path: [path], message });
+  };
+  const ids = new Set<string>();
+  for (const check of set.checks) {
+    if (ids.has(check.id)) add(`duplicate check id "${check.id}"`, 'checks');
+    ids.add(check.id);
+  }
+  const names = new Set<string>();
+  for (const resource of set.resources) {
+    if (names.has(resource.name)) add(`duplicate resource "${resource.name}"`, 'resources');
+    names.add(resource.name);
+  }
+  if (set.checks.length === 0 && set.emptyReason === undefined) {
+    add(
+      'declaring no checks is a complete answer and it carries a reason — say what already settles the ' +
+        'question, so an operator meeting an empty bench can tell it from a planner that never ran',
+      'emptyReason',
+    );
+  }
+});
 
 type ParsedCheckSet = z.infer<typeof CheckSetSchema>;
 

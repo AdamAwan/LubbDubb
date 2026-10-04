@@ -8,19 +8,13 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-const CronField = z
-  .string({ required_error: 'cron required', invalid_type_error: 'cron required' })
-  .trim()
-  .min(1, 'cron required');
+const CronField = z.string({ error: 'cron required' }).trim().min(1, 'cron required');
 
-const KindField = z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) });
+const KindField = z.enum(['code', 'desk'], { error: "kind must be 'code' or 'desk'" });
 
 const CreateBody = z.object({
   cron: CronField,
-  prompt: z
-    .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
-    .trim()
-    .min(1, 'prompt required'),
+  prompt: z.string({ error: 'prompt required' }).trim().min(1, 'prompt required'),
   title: optionalText('title'),
   kind: KindField.default('code'),
 });
@@ -30,7 +24,7 @@ const UpdateBody = z.object({
   prompt: optionalText('prompt'),
   title: optionalText('title'),
   kind: KindField.optional(),
-  enabled: z.boolean({ invalid_type_error: 'enabled must be a boolean' }).optional(),
+  enabled: z.boolean({ error: 'enabled must be a boolean' }).optional(),
 });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {

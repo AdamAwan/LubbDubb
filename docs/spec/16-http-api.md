@@ -202,10 +202,13 @@ Four properties hold across the surface:
 
   The trap is that a message on the **refinement** looks like a message on the field:
   `z.string().min(1, 'slug is required')` words the _blank_ case and leaves absence and a wrong type
-  stock, and `z.enum([...], {required_error, invalid_type_error})` words absence and a non-string and
-  leaves the arm an operator actually hits — a string that is not one of the values — stock. So a
-  required string takes `requiredText`, which words all three arms alike, and an enum takes an
-  `errorMap`, which is the only option that reaches the enum arm at all.
+  stock. Zod's schema-level `error` option is the one that reaches absence, a wrong type and — on an
+  enum — a string that is not one of the values. So a required string takes `requiredText`, which
+  words all three arms alike, and an enum takes `{error: '…'}`. Where absence and a wrong type need
+  different words, the field takes `absentOr(absent, wrongType)` (`src/schemaErrors.ts`). A strict
+  object whose refusal of an unknown key needs its own words is built with `strictObject(shape, message)`
+  from the same module — never `.strict()` beside a hand-written `error` callback, which is one forgotten
+  half away from Zod's stock wording.
   `test/requestValidation.test.ts` drives every declared `POST`/`DELETE` with an empty body and with
   a junk one, and every `/api/tickets` filter with a bad value, and refuses any 400 whose message
   opens in zod's words — structural for the same reason the two greps above are: the module written
@@ -226,7 +229,7 @@ the same `Number` + `Number.isInteger` pair the seven hand-written copies used, 
 check accepted is now refused), `IdParams`, `RefParams`, `TicketTitleBody`, `requiredBoolean`,
 `requiredText` and `optionalText`.
 `requiredText(message, max?)` is `requiredBoolean`'s argument applied to the type most of this
-surface is made of: `required_error`, `invalid_type_error` and the `min(1)` message are one sentence,
+surface is made of: the schema's `error` and the `min(1)` message are one sentence,
 and the value is trimmed, so `"   "` refuses as blank rather than passing as a value.
 Optional text — a note, a summary, an operator's reworded title — is **trimmed, with blank read as
 absent**, which every route taking one already did before falling back to its own default.

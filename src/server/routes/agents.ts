@@ -9,14 +9,14 @@ import type { RouteContext } from './context.js';
 
 const TranscriptQuery = z.object({
   from: z.coerce
-    .number({ invalid_type_error: 'from must be a number of characters' })
+    .number({ error: 'from must be a number of characters' })
     .int('from must be a whole number of characters')
     .min(0, 'from must not be negative')
     .default(0),
 });
 
 const RespondBody = z.object({
-  text: z.string({ required_error: 'text required', invalid_type_error: 'text required' }).min(1, 'text required'),
+  text: z.string({ error: 'text required' }).min(1, 'text required'),
 });
 
 const LiftBody = z.object({ profile: optionalText('profile') });

@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { reviewTargetPr } from '../../review/prReview.js';
-import { enumOf, toolSchema } from '../schema.js';
+import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
 function modeField(modes: string[], allowSkip: boolean): z.ZodTypeAny {
-  const base = modes.length > 0 ? enumOf(modes) : z.string();
+  const base = modes.length > 0 ? z.enum(modes) : z.string();
   const described = base.describe(
     allowSkip
       ? 'The mode this pull request should be reviewed in. One of the names listed above. Omit it ' +
