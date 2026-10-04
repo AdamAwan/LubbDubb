@@ -328,8 +328,7 @@ export class ValidationStore {
 
   getValidationPlanRecord(originRef: string): ValidationPlanRecord | null {
     const row = this.ctx.prep(`SELECT * FROM validation_plans WHERE origin_ref=?`).get(originRef) as
-      | ValidationPlanRow
-      | undefined;
+      ValidationPlanRow | undefined;
     return row ? rowToPlanRecord(row) : null;
   }
 

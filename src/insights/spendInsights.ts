@@ -25,15 +25,7 @@ import {
 // → docs/spec/18-observability.md
 
 export type SpendPhase =
-  | 'deliberation'
-  | 'build'
-  | 'ci'
-  | 'landing'
-  | 'evidence'
-  | 'local'
-  | 'obstacle'
-  | 'job'
-  | 'other';
+  'deliberation' | 'build' | 'ci' | 'landing' | 'evidence' | 'local' | 'obstacle' | 'job' | 'other';
 
 export const PHASE_ORDER: readonly SpendPhase[] = [
   'deliberation',

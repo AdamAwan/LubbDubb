@@ -309,34 +309,28 @@ export function contextReads(r: VerdictReadsOn) {
   const { system, store, config, world, tasks, control, plans, planParts } = r;
   const { deliveries, deliverySignals, appraisals, issueRuns } = r;
   const recentDecisions = once(() => store.decisions.listDecisions(200));
-  const pickupCtx = once(
-    (): IssuePickupContext => ({
-      policy: {
-        ...system.issuePickup,
-        pausedIssues: pausedIssueNumbers(
-          store.pauses.listGoalPauses(),
-          world.issues,
-          system.issuePickup.containerTypes,
-        ),
-      },
-      cooldown: DEFAULT_COOLDOWN,
-      now: world.takenAt,
-      tasks,
-      recentDecisions: recentDecisions(),
-      openPrs: world.pullRequests,
-      plans,
-      planParts: planParts(),
-      deliveries: deliveries(),
-      deliverySignals: deliverySignals(),
-      appraisals,
-      closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
-      obstacleBlocks: store.obstacles.listObstacleBlocks(),
-      obstacles: store.obstacles.obstacleBoard(),
-      runs: issueRuns,
-      headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
-      paused: control.paused,
-    }),
-  );
+  const pickupCtx = once((): IssuePickupContext => ({
+    policy: {
+      ...system.issuePickup,
+      pausedIssues: pausedIssueNumbers(store.pauses.listGoalPauses(), world.issues, system.issuePickup.containerTypes),
+    },
+    cooldown: DEFAULT_COOLDOWN,
+    now: world.takenAt,
+    tasks,
+    recentDecisions: recentDecisions(),
+    openPrs: world.pullRequests,
+    plans,
+    planParts: planParts(),
+    deliveries: deliveries(),
+    deliverySignals: deliverySignals(),
+    appraisals,
+    closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
+    obstacleBlocks: store.obstacles.listObstacleBlocks(),
+    obstacles: store.obstacles.obstacleBoard(),
+    runs: issueRuns,
+    headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
+    paused: control.paused,
+  }));
   const reviewRows = once(() => ({
     prReviews: new Map(store.prReviews.listPrReviews().map((review) => [review.prNumber, review])),
     prReviewRoutes: new Map(store.prReviewRoutes.listPrReviewRoutes().map((route) => [route.prNumber, route])),

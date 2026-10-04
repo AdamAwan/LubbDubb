@@ -291,8 +291,7 @@ export class PredictionStore {
 
   getPrediction(originRef: string): GoalPrediction | null {
     const row = this.ctx.prep(`SELECT * FROM goal_predictions WHERE origin_ref=?`).get(originRef) as
-      | PredictionRow
-      | undefined;
+      PredictionRow | undefined;
     return row ? rowToPrediction(row) : null;
   }
 

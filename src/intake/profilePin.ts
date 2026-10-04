@@ -17,8 +17,7 @@ interface ProfilePinContext {
 }
 
 type ProfilePinOutcome =
-  | { ok: true; profile: string | null; answered: boolean }
-  | { ok: false; error: string; wrote: boolean };
+  { ok: true; profile: string | null; answered: boolean } | { ok: false; error: string; wrote: boolean };
 
 export async function applyProfilePin(
   ctx: ProfilePinContext,

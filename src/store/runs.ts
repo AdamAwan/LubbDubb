@@ -72,8 +72,7 @@ export class RunStore {
 
 export function adoptFloorCompletions(db: Database.Database): void {
   const old = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='floor_completions'`).get() as
-    | { name: string }
-    | undefined;
+    { name: string } | undefined;
   if (!old) return;
   const { n } = db.prepare(`SELECT COUNT(*) AS n FROM issue_runs`).get() as { n: number };
   db.transaction(() => {

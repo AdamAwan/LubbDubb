@@ -4,8 +4,7 @@ import type { IssueDelivery, IssueInstruction } from '../types.js';
 // → docs/spec/24-environments.md
 
 type OverruleOutcome =
-  | { ok: true; delivery: IssueDelivery; instruction: IssueInstruction }
-  | { ok: false; error: string };
+  { ok: true; delivery: IssueDelivery; instruction: IssueInstruction } | { ok: false; error: string };
 
 export function overruleShortfall(store: OverruleStore, originRef: string, text: string): OverruleOutcome {
   if (!store.verdicts.getShortfall(originRef)) return { ok: false, error: 'no standing shortfall to overrule' };

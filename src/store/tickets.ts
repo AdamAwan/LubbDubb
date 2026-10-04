@@ -54,8 +54,7 @@ export class TicketStore {
 
   readTrackerSweep(): TrackerSweepMark | null {
     const row = this.ctx.prep(`SELECT anchor_at, swept_to, restated_at FROM tracker_sweep WHERE id = 1`).get() as
-      | { anchor_at: string; swept_to: string | null; restated_at: string | null }
-      | undefined;
+      { anchor_at: string; swept_to: string | null; restated_at: string | null } | undefined;
     return row ? { anchorAt: row.anchor_at, sweptTo: row.swept_to, restatedAt: row.restated_at } : null;
   }
 
@@ -259,8 +258,7 @@ export class TicketStore {
 
   getFeatureSummary(originRef: string): FeatureSummary | null {
     const row = this.ctx.prep(`SELECT * FROM feature_summaries WHERE origin_ref=?`).get(originRef) as
-      | FeatureSummaryRow
-      | undefined;
+      FeatureSummaryRow | undefined;
     return row ? rowToFeatureSummary(row) : null;
   }
 

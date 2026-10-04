@@ -73,8 +73,7 @@ export class PetStore {
 
   private lastChain(): string | null {
     const row = this.ctx.prep(`SELECT chain FROM pets ORDER BY rowid DESC LIMIT 1`).get() as
-      | { chain: string | null }
-      | undefined;
+      { chain: string | null } | undefined;
     return row?.chain ?? null;
   }
 
@@ -160,15 +159,13 @@ export class PetStore {
 
   petRolledSince(since: string): boolean {
     const row = this.ctx.prep(`SELECT 1 AS n FROM pet_actions WHERE at >= ? LIMIT 1`).get(since) as
-      | { n: number }
-      | undefined;
+      { n: number } | undefined;
     return row !== undefined;
   }
 
   vivariumStart(): string | null {
     const row = this.ctx.prep(`SELECT started_at FROM pet_vivarium WHERE id=1`).get() as
-      | { started_at: string }
-      | undefined;
+      { started_at: string } | undefined;
     return row?.started_at ?? null;
   }
 
