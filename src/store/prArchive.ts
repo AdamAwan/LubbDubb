@@ -28,8 +28,7 @@ export class PrArchiveStore implements ClosedPrSweep {
 
   readClosedSweep(): string | null {
     const row = this.ctx.prep(`SELECT swept_to FROM closed_pr_sweep WHERE id = 1`).get() as
-      | { swept_to: string }
-      | undefined;
+      { swept_to: string } | undefined;
     return row?.swept_to ?? null;
   }
 

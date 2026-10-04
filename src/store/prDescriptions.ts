@@ -424,8 +424,7 @@ export class PrDescriptionStore {
 
   draftOf(originRef: string): PrDescriptionDraft | null {
     const row = this.ctx.prep(`SELECT * FROM pr_description_drafts WHERE origin_ref=?`).get(originRef) as
-      | DraftRow
-      | undefined;
+      DraftRow | undefined;
     return row ? toDraft(row) : null;
   }
 

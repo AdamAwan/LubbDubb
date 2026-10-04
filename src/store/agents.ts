@@ -191,8 +191,7 @@ export class AgentStore {
 
   recordFlag(agentId: string, input: AgentFlagInput): AgentFlag {
     const existing = this.ctx.prep(`SELECT id FROM agent_flags WHERE agent_id=? AND ref=?`).get(agentId, input.ref) as
-      | { id: string }
-      | undefined;
+      { id: string } | undefined;
     const flag: AgentFlag = {
       id: existing?.id ?? `flag_${nanoid(10)}`,
       agentId,

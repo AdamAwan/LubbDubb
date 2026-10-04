@@ -10,10 +10,7 @@ export interface CooldownPolicy {
 export const DEFAULT_COOLDOWN: CooldownPolicy = { maxAttempts: 3, cooldownMs: 15 * 60_000 };
 
 export type DispatchVerdict =
-  | { kind: 'dispatch' }
-  | { kind: 'cooldown' }
-  | { kind: 'escalate'; attempts: number }
-  | { kind: 'hold' };
+  { kind: 'dispatch' } | { kind: 'cooldown' } | { kind: 'escalate'; attempts: number } | { kind: 'hold' };
 
 const ATTEMPT_TYPES: ReadonlySet<Action['type']> = new Set<Action['type']>([
   'dispatch_code_agent',

@@ -73,8 +73,7 @@ export class ScratchStore {
 
   getRetrospective(originRef: string): Retrospective | null {
     const row = this.ctx.prep(`SELECT * FROM retrospectives WHERE origin_ref=?`).get(originRef) as
-      | RetrospectiveRow
-      | undefined;
+      RetrospectiveRow | undefined;
     return row ? rowToRetrospective(row) : null;
   }
 

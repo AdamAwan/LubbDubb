@@ -77,7 +77,7 @@ function hunks(ops: Op[]): string {
   const out: string[] = [];
   let oldLine = 1;
   let newLine = 1;
-  for (let k = 0; k < ops.length; ) {
+  for (let k = 0; k < ops.length;) {
     if (!keep[k]) {
       oldLine += 1;
       newLine += 1;

@@ -5,17 +5,7 @@ import { DERIVED_TOKENS } from './tokenTints.js';
 export type TokenKind = 'colour' | 'radius' | 'space' | 'metric' | 'font';
 
 export type TokenGroup =
-  | 'ground'
-  | 'ink'
-  | 'edges'
-  | 'hues'
-  | 'tints'
-  | 'refs'
-  | 'overlays'
-  | 'terminal'
-  | 'features'
-  | 'shape'
-  | 'type';
+  'ground' | 'ink' | 'edges' | 'hues' | 'tints' | 'refs' | 'overlays' | 'terminal' | 'features' | 'shape' | 'type';
 
 export interface ThemeToken {
   name: string;

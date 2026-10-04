@@ -5,11 +5,7 @@ import { inWindow, type ResolvedWindow } from './insightsWindow.js';
 // → docs/spec/18-observability.md
 
 export type SurfaceVerdict =
-  | 'console-dark'
-  | 'never-linked'
-  | 'linked-never-visited'
-  | 'visited-never-operated'
-  | 'operated';
+  'console-dark' | 'never-linked' | 'linked-never-visited' | 'visited-never-operated' | 'operated';
 
 export interface SurfaceRow {
   subject: UsageSubject;

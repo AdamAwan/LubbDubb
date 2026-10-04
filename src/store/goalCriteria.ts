@@ -112,8 +112,7 @@ export class GoalCriteriaStore {
   }): GoalCriteriaDrift {
     const write = this.ctx.db.transaction((): GoalCriteriaDrift => {
       const standing = this.ctx.prep(`SELECT * FROM goal_criteria_drift WHERE criteria_id=?`).get(input.criteriaId) as
-        | DriftRow
-        | undefined;
+        DriftRow | undefined;
       if (standing !== undefined) return rowToDrift(standing);
       const drift: GoalCriteriaDrift = {
         id: `drift_${nanoid(10)}`,
