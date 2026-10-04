@@ -309,7 +309,7 @@ function useColumnRows(
     void read(null);
   }, [read]);
 
-  const foot = useRef<HTMLDivElement | null>(null);
+  const foot = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const sentinel = foot.current;
     if (sentinel === null || done || loading) return;

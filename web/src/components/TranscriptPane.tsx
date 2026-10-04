@@ -96,7 +96,7 @@ export function TranscriptPane({
   const paneRef = useRef<HTMLDivElement>(null);
   const writtenRef = useRef('');
   const stateRef = useRef<PaneState>({ ansi: {}, blocks: emptyBlockState, body: null });
-  const tailRef = useRef<HTMLSpanElement | null>(null);
+  const tailRef = useRef<HTMLSpanElement>(null);
   const streamIdRef = useRef(streamId);
 
   useEffect(() => {
