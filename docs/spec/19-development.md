@@ -172,6 +172,17 @@ Failure modes that are not obvious:
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy
   both.
+- **Two TypeScripts are installed, on purpose.** `typecheck`, `typecheck:web` and `build` run
+  TypeScript 7, the native compiler, installed as the alias `typescript7`. The plain `typescript`
+  dependency is pinned to 6.0 because TypeScript 7 ships no compiler API and `typescript-eslint`
+  parses through it; point `typescript` at 7 and lint crashes on load. Both declare a `tsc` bin, so
+  the scripts never call a bare `tsc`: they go through `scripts/tsc.ts`, which finds `typescript7`
+  by node's own module lookup — an agent worktree borrows the parent checkout's `node_modules`, where
+  neither `.bin/` nor a fixed path reaches. Drop the 6.0 pin once `typescript-eslint` supports 7.
+- **CSS imports are declared in `web/src/vite-env.d.ts`.** TypeScript 6 and later turn on
+  `noUncheckedSideEffectImports`, so `import './styles.css'` needs a module declaration. It is one
+  line there rather than `vite/client` in `types`, which would widen `ImportMetaEnv` to any key and
+  stop a misspelt `import.meta.env` name failing the typecheck.
 - **lint walks the repo root, so nested checkouts are ignored by path.** `eslint.config.js` ignores
   `.lubbdubb/**` and `.claude/worktrees/**` alongside the build outputs: both hold worktrees of this
   same repository, and linting them reports every finding a second time under a path that is not the
@@ -283,7 +294,7 @@ it to understand why a decision was made, and check the code before relying on a
 | `npm run test:build`     | `scripts/testBuild.ts` — the esbuild pass into `.testbuild/` (see above).       |
 | `npm run test:coverage`  | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).               |
 | `npm run smoke`          | The real end-to-end run (see below).                                            |
-| `npm run build`          | `tsc -p tsconfig.json`.                                                         |
+| `npm run build`          | TypeScript 7's `tsc -p tsconfig.json` (see the two TypeScripts above).          |
 | `npm run web:dev`        | Vite dev server for the cockpit.                                                |
 | `npm run web:build`      | Production bundle into `web/dist`.                                              |
 | `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.                |
