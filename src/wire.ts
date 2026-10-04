@@ -953,8 +953,7 @@ export type SetupPayload = SetupReading;
 
 export type SetupResolvePayload = SetupResolution;
 
-export type { SetupCheck, SetupFix, SetupVerdict } from './setup/reading.js';
-export type { RemoteTarget } from './setup/remote.js';
+export type { SetupCheck, SetupFix } from './setup/reading.js';
 
 export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
@@ -995,69 +994,50 @@ export type {
   EnvironmentGate,
   EnvironmentGateRelease,
   EnvironmentHealthReading,
-  EnvironmentHealthState,
-  EnvironmentHealthTier,
-  ErrorLogEntry,
   Escalation,
   GoalArrival,
-  NoSheet,
   CriterionCoverage,
   CriteriaAlignmentPoint,
   GoalCriteriaAlignment,
   GoalCriteriaDrift,
   GoalCriteriaVersion,
   CriteriaStanding,
-  GoalEnvironmentReach,
   GoalGroupReach,
   GoalLandingReach,
   GoalPrediction,
   GoalReachStatus,
   GoalReveal,
   HumanTask,
-  IssueRelative,
   IssueSpend,
   Job,
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
-  DescriptionFinding,
   DescriptionFindingKind,
   DescriptionQuestion,
   PrDescriptionDraft,
   PrDescriptionVersion,
   PredictionMark,
-  PredictionOutcomeMarks,
-  PredictionPlanMarks,
   PredictionSlot,
-  Obstacle,
-  LocalValidation,
   LocalValidationFinding,
   LocalValidationStatus,
   ObstacleKey,
   ObstacleSighting,
-  ObstacleStanding,
   ObstacleState,
   Plan,
-  PlanAmendmentAuthor,
   PlanAtom,
-  PlanAtomRejection,
   PlanCaveat,
   PlanCaveatAnswer,
-  PlanEvidence,
   PlanNarrative,
   PlanPart,
-  PlanPartInput,
   PlanRevision,
   PrReviewThread,
   PrThreadMessage,
   PrThreadState,
-  Pet,
   PetActionKind,
-  PetFlaw,
   PetRarity,
   PetSpecies,
   PetStage,
-  PetWallet,
   FeatureSequence,
   FeatureSequenceEdge,
   FeatureSummary,
@@ -1066,28 +1046,18 @@ export type {
   ReadyingStep,
   ReadyingStepTiming,
   Retrospective,
-  RemoteReading,
-  RemoteRun,
-  RemoteRunIntent,
   OkScope,
-  OkStanding,
   OkStatus,
-  RemoteRowKind,
   RemoteRowOutcome,
-  RemoteSheet,
-  RemoteSheetRow,
   ScratchEntry,
   GoalWatch,
   GoalWatchDeclaration,
   GoalWatchInput,
   GoalWatchKind,
-  GoalWatchProposal,
   StackLanding,
-  StallPark,
   StateQuery,
   TaskSummary,
   TenantPreparation,
-  TenantStanding,
   CheckDecline,
   ProposedCheck,
   ValidationCheck,
@@ -1095,39 +1065,31 @@ export type {
   ValidationCheckResultBy,
   ValidationCheckState,
   ValidationPlanRecord,
-  ValidationResource,
-  ValidationResourceKind,
   ValidationStep,
   ValidationStepKind,
   ValidationVerdict,
   ViewerAssignment,
-  PrPerson,
   WatchCheckVerdict,
-  WatchReading,
   WatchReadingVerdict,
-  WatchWindow,
   WorkNode,
   WorldEvent,
   WorldEventKind,
 } from './types.js';
-export type { OperatorInsights, OperatorRow, OperatorRowKind } from './insights/operatorInsights.js';
-export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
-export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
+export type { OperatorRow } from './insights/operatorInsights.js';
+export type { SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
+export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
-export type { BuildReading, SnoozeStamps, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
-export type { AskDestination, AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
+export type { BuildReading, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
+export type { AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
 export { buildAskQueue } from './asks/queue.js';
 export { askLine, oneLine } from './asks/lines.js';
 export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
 export { PART_GROUP, PART_GROUP_WORD, type PartGroup } from './plans/partGroup.js';
 export { askGoal, type AskGoalPart } from './asks/askGoal.js';
 export { projectName, upgradeHeadline } from './asks/updateAsks.js';
-export type { BuildStanding } from './selfUpdate/buildStanding.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';
-export type { DispatchRule } from './dispatcher/rules.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
-export type { FileOverlap } from './fileOverlap.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
 export type { RunningConfigEntry } from './server/runningConfig.js';
@@ -1140,7 +1102,6 @@ export type {
   RunOutcomeTotal,
   RunPhaseHealth,
   RunRepeat,
-  RunTally,
 } from './insights/reliabilityInsights.js';
 export type {
   ThroughputBucket,
@@ -1153,23 +1114,13 @@ export type {
 } from './insights/throughputInsights.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
-export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
-export type {
-  AssessedBotPr,
-  BotPr,
-  BotPrRisk,
-  BotPrRiskLevel,
-  BotPrRiskStanding,
-  DependencyUpdate,
-  UpdateKind,
-} from './types.js';
-export type { McpChannel } from './types.js';
+export type { RemedyCause } from './types.js';
+export type { AssessedBotPr, BotPrRisk, BotPrRiskLevel, BotPrRiskStanding, UpdateKind } from './types.js';
 export type { CiCheck } from './types.js';
 export type { PrComment } from './types.js';
-export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } from './types.js';
-export type { PoolStatus } from './pool/poolDesk.js';
+export type { PoolFleetReading } from './types.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
-export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
+export type { PoolRollupRow } from './pool/aggregate.js';
 export type { RunClearOut } from './runs/endRun.js';
 export type {
   AllowanceApportionment,
@@ -1205,15 +1156,11 @@ export type {
 export type { PredictionAggregate } from './insights/predictionAggregate.js';
 
 export type { ChecksSpend, TaskTypeSpend } from './insights/taskTypeSpend.js';
-export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { CaveatAnswerInput } from './plans/planCaveats.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
 export type { SupplyState } from './supply/runway.js';
 export type { PlanningPolicy } from './plans/planning.js';
-export type { PetRules } from './pets/rules.js';
-export type { ValidationPolicy } from './validation/policy.js';
-export type { LocalRunOption } from './localRun/ref.js';
 
 export interface PetView extends Pet {
   rarity: PetRarity;

@@ -29,9 +29,8 @@ of the change, not a follow-up: a diff that touches behaviour and no spec is inc
 
 Two `check` failures are not obvious ([19](docs/spec/19-development.md) has the rest): **knip runs
 with every rule at `error`** — the fix for an unused type or helper is to **drop the `export`**,
-never an ignore list; a class member reached only through a structural seam reads as unused, so
-declare `implements` or tag it `@public` naming the seam. And there are **two typecheckers**:
-`typecheck` (server) and `typecheck:web` (cockpit) are separate passes.
+never an ignore list (unused class members are not checked: knip 6 dropped that rule). And there
+are **two typecheckers**: `typecheck` (server) and `typecheck:web` (cockpit) are separate passes.
 
 A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are native builds.
 
