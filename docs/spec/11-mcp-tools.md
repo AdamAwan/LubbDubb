@@ -1737,7 +1737,7 @@ asks in order and points at `/lubbdubb:next`.
   whole tree over one malformed `href`, so a URL that is not plain-ASCII `https:` without an `@` is
   drawn as text instead — one bad URL never blanks the panel.
 - **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
-  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Map with
+  with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Review With Me with
   `/pr-assistant:pr map <n>` (the PR assistant's skill, which the desk installs beside the board), and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
   the operator presses Enter. A plain sentence would
   leave whether a skill loads to description matching, and the skill is where the rules for the
