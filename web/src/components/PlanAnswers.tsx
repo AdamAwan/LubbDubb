@@ -212,7 +212,7 @@ function PlanDrawer({
   onClose,
 }: {
   drawer: (typeof DRAWERS)[DrawerId];
-  field: RefObject<HTMLInputElement>;
+  field: RefObject<HTMLInputElement | null>;
   text: string;
   onText: (text: string) => void;
   onSubmit: (words: string) => Promise<unknown> | unknown;

@@ -1,4 +1,4 @@
-import type { MutableRefObject, ReactNode } from 'react';
+import type { RefObject, ReactNode } from 'react';
 import type {
   GoalWatch,
   CaveatAnswerInput,
@@ -60,7 +60,7 @@ export interface PlanModalProps {
 
 export type SheetView = 'plan' | 'history';
 
-export type Sections = MutableRefObject<Record<string, HTMLElement | null>>;
+export type Sections = RefObject<Record<string, HTMLElement | null>>;
 type Acknowledgements = ReturnType<typeof useAcknowledgements>;
 
 /** What the modal derives once and every part of the sheet reads. */

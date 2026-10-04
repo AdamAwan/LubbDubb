@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { api } from '../api.js';
 import type {
   TicketFeatureFacet,
@@ -23,7 +23,7 @@ export interface TicketFeed {
   backfilling: boolean;
   loading: boolean;
   done: boolean;
-  foot: MutableRefObject<HTMLDivElement | null>;
+  foot: RefObject<HTMLDivElement | null>;
 }
 
 export function useTicketFeed({
@@ -90,7 +90,7 @@ export function useTicketFeed({
     void read(null);
   }, [read]);
 
-  const foot = useRef<HTMLDivElement | null>(null);
+  const foot = useRef<HTMLDivElement>(null);
   useNextPage(foot, cursor, done, loading, read);
 
   return {
@@ -112,7 +112,7 @@ export function useTicketFeed({
 }
 
 function useNextPage(
-  foot: MutableRefObject<HTMLDivElement | null>,
+  foot: RefObject<HTMLDivElement | null>,
   cursor: string | null,
   done: boolean,
   loading: boolean,

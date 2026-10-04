@@ -268,7 +268,7 @@ function useColumnRows(
   refUrls: Record<string, string>;
   total: number | null;
   loading: boolean;
-  foot: RefObject<HTMLDivElement>;
+  foot: RefObject<HTMLDivElement | null>;
 } {
   const [rows, setRows] = useState<TicketRow[]>([]);
   const [refUrls, setRefUrls] = useState<Record<string, string>>({});
@@ -309,7 +309,7 @@ function useColumnRows(
     void read(null);
   }, [read]);
 
-  const foot = useRef<HTMLDivElement | null>(null);
+  const foot = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const sentinel = foot.current;
     if (sentinel === null || done || loading) return;
