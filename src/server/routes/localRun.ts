@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import { issueOriginRef } from '../../issueOrigins.js';
 import { checked, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -11,10 +12,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   const StartBody = z.object({
     issue: z
-      .number({
-        error: (issue) =>
-          issue.input === undefined ? 'issue is required — the goal number, e.g. 284' : 'issue must be a number',
-      })
+      .number(absentOr('issue is required — the goal number, e.g. 284', 'issue must be a number'))
       .int()
       .positive(),
     ref: optionalText('ref'),

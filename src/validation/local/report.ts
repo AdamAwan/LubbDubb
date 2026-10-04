@@ -1,57 +1,41 @@
 import { z } from 'zod';
+import { absentOr, strictObject } from '../../schemaErrors.js';
 import type { LocalValidationFinding } from '../../types.js';
 
 // → docs/spec/32-local-validation.md
 
-const FindingSchema = z
-  .object(
-    {
-      title: z.string().trim().min(1, 'every finding needs a title'),
-      detail: z.string().trim().min(1, 'every finding needs a detail — what you did and what happened'),
-      severity: z.enum(['blocker', 'defect', 'nit'], {
-        error: 'severity must be "blocker", "defect" or "nit"',
-      }),
-      url: z.string().trim().min(1).nullish(),
-      screenshot: z
-        .string()
-        .trim()
-        .min(1)
-        .refine((name) => !/[\\/]/.test(name) && name !== '..', 'screenshot is a file name, not a path')
-        .nullish(),
-    },
-    {
-      error: (issue) =>
-        issue.code === 'unrecognized_keys'
-          ? 'a finding declares "title", "detail", "severity", and optionally "url" and "screenshot"'
-          : undefined,
-    },
-  )
-  .strict();
+const FindingSchema = strictObject(
+  {
+    title: z.string().trim().min(1, 'every finding needs a title'),
+    detail: z.string().trim().min(1, 'every finding needs a detail — what you did and what happened'),
+    severity: z.enum(['blocker', 'defect', 'nit'], {
+      error: 'severity must be "blocker", "defect" or "nit"',
+    }),
+    url: z.string().trim().min(1).nullish(),
+    screenshot: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((name) => !/[\\/]/.test(name) && name !== '..', 'screenshot is a file name, not a path')
+      .nullish(),
+  },
+  'a finding declares "title", "detail", "severity", and optionally "url" and "screenshot"',
+);
 
-const ReportSchema = z
-  .object(
-    {
-      result: z.enum(['passed', 'failed', 'blocked'], {
-        error: 'result must be "passed", "failed" or "blocked"',
-      }),
-      summary: z
-        .string({
-          error: (issue) =>
-            issue.input === undefined ? 'summary is required — say what you did and what you saw' : undefined,
-        })
-        .trim()
-        .min(1, 'summary is required — say what you did and what you saw'),
-      findings: z.array(FindingSchema).default([]),
-      visited: z.array(z.string().trim().min(1)).default([]),
-    },
-    {
-      error: (issue) =>
-        issue.code === 'unrecognized_keys'
-          ? 'a report declares "result", "summary", "findings" and "visited" — which validation is decided by what you were dispatched to run'
-          : undefined,
-    },
-  )
-  .strict();
+const ReportSchema = strictObject(
+  {
+    result: z.enum(['passed', 'failed', 'blocked'], {
+      error: 'result must be "passed", "failed" or "blocked"',
+    }),
+    summary: z
+      .string(absentOr('summary is required — say what you did and what you saw'))
+      .trim()
+      .min(1, 'summary is required — say what you did and what you saw'),
+    findings: z.array(FindingSchema).default([]),
+    visited: z.array(z.string().trim().min(1)).default([]),
+  },
+  'a report declares "result", "summary", "findings" and "visited" — which validation is decided by what you were dispatched to run',
+);
 
 type ParsedReport = z.infer<typeof ReportSchema>;
 

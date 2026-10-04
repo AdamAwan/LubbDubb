@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import type { StateSection } from '../../wire.js';
 import type {
   CiPolicyPayload,
@@ -35,7 +36,7 @@ const StateQuery = z.object({
       const unknown = named.filter((part) => !(STATE_SECTIONS as readonly string[]).includes(part));
       if (unknown.length > 0) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: `unknown state section(s): ${unknown.join(', ')} — known: ${STATE_SECTIONS.join(', ')}`,
         });
         return z.NEVER;
@@ -47,23 +48,17 @@ const StateQuery = z.object({
 const ConfigSaveBody = z.object({
   set: z.record(z.string(), z.unknown(), { error: 'set must be an object of path → value' }).optional(),
   clear: z.array(z.string(), { error: 'clear must be a list of paths' }).optional(),
-  baseline: z.string({
-    error: (issue) => (issue.input === undefined ? 'baseline is required' : 'baseline must be a string'),
-  }),
+  baseline: z.string(absentOr('baseline is required', 'baseline must be a string')),
 });
 const ConfigPreviewBody = z.object({
   set: z.record(z.string(), z.unknown(), { error: 'set must be an object of path → value' }).optional(),
   clear: z.array(z.string(), { error: 'clear must be a list of paths' }).optional(),
   text: z.string({ error: 'text must be a string' }).optional(),
-  baseline: z.string({
-    error: (issue) => (issue.input === undefined ? 'baseline is required' : 'baseline must be a string'),
-  }),
+  baseline: z.string(absentOr('baseline is required', 'baseline must be a string')),
 });
 const ConfigRawBody = z.object({
-  text: z.string({ error: (issue) => (issue.input === undefined ? 'text is required' : 'text must be a string') }),
-  baseline: z.string({
-    error: (issue) => (issue.input === undefined ? 'baseline is required' : 'baseline must be a string'),
-  }),
+  text: z.string(absentOr('text is required', 'text must be a string')),
+  baseline: z.string(absentOr('baseline is required', 'baseline must be a string')),
 });
 const RestartBody = z.object({
   interrupt: z.boolean({ error: 'interrupt must be a boolean' }).optional(),

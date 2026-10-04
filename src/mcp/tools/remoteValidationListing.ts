@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../../schemaErrors.js';
 import { remoteValidationOriginParts } from '../../validation/remote/origin.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
@@ -12,39 +13,32 @@ import type { ToolFactory } from './context.js';
  * the listing in the agent's own checkout safe is that the agent hands back a **path** to what the
  * runner printed, exactly as `reportPath` does. A path says where a file is, not what is in it.
  */
-const ListingSchema = z
-  .object(
-    {
-      listingPath: z
-        .string()
-        .trim()
-        .min(1)
-        .describe(
-          'Path to the file the listing command’s output was written to, inside the run’s own directory. The ' +
-            'harness parses that file and reads every row’s area against it, so point at the file rather than ' +
-            'describing, summarising or counting what is in it.',
-        )
-        .optional(),
-      blocked: z
-        .string()
-        .trim()
-        .min(1)
-        .describe(
-          'A reason, **instead of** a listing: the runner could not be asked what it offers at all — it would ' +
-            'not answer, the install failed, the credentials are not here. Every check row this listing would ' +
-            'have answered for blocks with your reason, and the run stays open for whatever else it owes.',
-        )
-        .optional(),
-    },
-    {
-      error: (issue) =>
-        issue.code === 'unrecognized_keys'
-          ? 'a listing says only where the runner’s own output landed, or why there is none — which selectors it ' +
-            'offers, and how many tests any of them holds, are not yours to state'
-          : undefined,
-    },
-  )
-  .strict();
+const ListingSchema = strictObject(
+  {
+    listingPath: z
+      .string()
+      .trim()
+      .min(1)
+      .describe(
+        'Path to the file the listing command’s output was written to, inside the run’s own directory. The ' +
+          'harness parses that file and reads every row’s area against it, so point at the file rather than ' +
+          'describing, summarising or counting what is in it.',
+      )
+      .optional(),
+    blocked: z
+      .string()
+      .trim()
+      .min(1)
+      .describe(
+        'A reason, **instead of** a listing: the runner could not be asked what it offers at all — it would ' +
+          'not answer, the install failed, the credentials are not here. Every check row this listing would ' +
+          'have answered for blocks with your reason, and the run stays open for whatever else it owes.',
+      )
+      .optional(),
+  },
+  'a listing says only where the runner’s own output landed, or why there is none — which selectors it ' +
+    'offers, and how many tests any of them holds, are not yours to state',
+);
 
 export const remoteValidationListing: ToolFactory = ({ deps, task, ok }) => ({
   description:

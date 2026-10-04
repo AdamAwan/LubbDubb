@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { strictObject } from '../schemaErrors.js';
 import type { StateQueryInput } from '../types.js';
 import { aggregatingQueryRefusal, aggregatingTail } from './watchQueryShape.js';
 
@@ -6,24 +7,19 @@ import { aggregatingQueryRefusal, aggregatingTail } from './watchQueryShape.js';
 
 const MAX_QUERIES = 20;
 
-const StateQuerySchemaShape = z
-  .object(
-    {
-      id: z
-        .string()
-        .min(1)
-        .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
-      title: z.string().min(1),
-      query: z.string().min(1),
-      presence: z.string().min(1),
-      why: z.string().min(1).optional(),
-    },
-    {
-      error: (issue) =>
-        issue.code === 'unrecognized_keys' ? 'a state query declares only id/title/query/presence/why' : undefined,
-    },
-  )
-  .strict();
+const StateQuerySchemaShape = strictObject(
+  {
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+    title: z.string().min(1),
+    query: z.string().min(1),
+    presence: z.string().min(1),
+    why: z.string().min(1).optional(),
+  },
+  'a state query declares only id/title/query/presence/why',
+);
 
 function refuseAggregation(
   declared: { id: string; query: string; presence: string },
@@ -34,33 +30,30 @@ function refuseAggregation(
     const operator = aggregatingTail(declared[field]);
     if (operator === null) continue;
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: [...path, field],
       message: `state query "${declared.id}": ${aggregatingQueryRefusal(field, operator)}`,
     });
   }
 }
 
-export const StateSchema = z
-  .object(
-    {
-      queries: z
-        .array(StateQuerySchemaShape)
-        .default([])
-        .transform((list) => (list.length > MAX_QUERIES ? list.slice(0, MAX_QUERIES) : list)),
-    },
-    { error: (issue) => (issue.code === 'unrecognized_keys' ? 'a state block declares only "queries"' : undefined) },
-  )
-  .strict()
-  .superRefine((block, ctx) => {
-    const ids = new Set<string>();
-    block.queries.forEach((query, index) => {
-      refuseAggregation(query, ctx, ['queries', index]);
-      if (ids.has(query.id))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['queries'], message: `duplicate query id "${query.id}"` });
-      ids.add(query.id);
-    });
+export const StateSchema = strictObject(
+  {
+    queries: z
+      .array(StateQuerySchemaShape)
+      .default([])
+      .transform((list) => (list.length > MAX_QUERIES ? list.slice(0, MAX_QUERIES) : list)),
+  },
+  'a state block declares only "queries"',
+).superRefine((block, ctx) => {
+  const ids = new Set<string>();
+  block.queries.forEach((query, index) => {
+    refuseAggregation(query, ctx, ['queries', index]);
+    if (ids.has(query.id))
+      ctx.addIssue({ code: 'custom', path: ['queries'], message: `duplicate query id "${query.id}"` });
+    ids.add(query.id);
   });
+});
 
 export const StateQuerySchema: z.ZodType<Omit<StateQueryInput, 'seq'>, unknown> = StateQuerySchemaShape.superRefine(
   (query, ctx) => {

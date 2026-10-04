@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
@@ -41,12 +42,12 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   const RaiseIssueBody = z.object({
     title: z
-      .string({ error: (issue) => (issue.input === undefined ? 'title is required' : 'title must be a string') })
+      .string(absentOr('title is required', 'title must be a string'))
       .trim()
       .min(1, 'title is required — say what this is about')
       .max(MAX_ISSUE_TITLE, `title is too long (max ${MAX_ISSUE_TITLE} characters)`),
     body: z
-      .string({ error: (issue) => (issue.input === undefined ? 'body is required' : 'body must be a string') })
+      .string(absentOr('body is required', 'body must be a string'))
       .trim()
       .min(1, 'body is required — say what should happen')
       .max(MAX_BUG_SUMMARY, `body is too long (max ${MAX_BUG_SUMMARY} characters)`),

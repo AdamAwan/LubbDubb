@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { issueOriginRef, parseIssueOrigin } from '../../issueOrigins.js';
 import { toolError } from '../protocol.js';
-import { enumOf, toolSchema } from '../schema.js';
+import { toolSchema } from '../schema.js';
 import { CRITERIA_ALIGNMENT_VERDICTS, CRITERIA_POINT_TAGS } from '../../criteria/alignment.js';
 import type { CriteriaAlignmentPoint, CriteriaAlignmentVerdict } from '../../types.js';
 import type { ToolFactory } from './context.js';
@@ -20,18 +20,22 @@ export const criteriaAlignment: ToolFactory = ({ deps, agent, task, ok }) => ({
         .number()
         .int()
         .describe('The version of the operator’s criteria you were handed, as your prompt names it.'),
-      verdict: enumOf(CRITERIA_ALIGNMENT_VERDICTS).describe(
-        'aligned: the two say the same thing in substance. partial: they overlap, with points only one side ' +
-          'makes and nothing contradicting. conflicting: at least one point contradicts.',
-      ),
+      verdict: z
+        .enum(CRITERIA_ALIGNMENT_VERDICTS)
+        .describe(
+          'aligned: the two say the same thing in substance. partial: they overlap, with points only one side ' +
+            'makes and nothing contradicting. conflicting: at least one point contradicts.',
+        ),
       summary: z.string().describe('One or two sentences for the operator: what lines up and what does not.'),
       points: z
         .array(
           z.object({
-            tag: enumOf(CRITERIA_POINT_TAGS).describe(
-              'matches: both say it. extra: only the operator says it. uncovered: only the ticket says it. ' +
-                'contradicts: the two disagree.',
-            ),
+            tag: z
+              .enum(CRITERIA_POINT_TAGS)
+              .describe(
+                'matches: both say it. extra: only the operator says it. uncovered: only the ticket says it. ' +
+                  'contradicts: the two disagree.',
+              ),
             point: z.string().describe('The point, in a short sentence.'),
             note: z.string().describe('Why you tagged it so, where that is not obvious.').optional(),
           }),

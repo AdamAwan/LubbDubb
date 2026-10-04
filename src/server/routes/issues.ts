@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import { issueConclusionOrigin } from '../../issueConclusion.js';
 import { bugTicketFields } from '../../tickets/bugFiling.js';
 import { trackerCoordinates } from '../../mcp/findings.js';
@@ -203,7 +204,7 @@ function registerSteering(app: FastifyInstance, { system, hub }: RouteContext): 
 
   const InstructionBody = z.object({
     text: z
-      .string({ error: (issue) => (issue.input === undefined ? 'text is required' : 'text must be a string') })
+      .string(absentOr('text is required', 'text must be a string'))
       .trim()
       .min(1, 'text is required — say what you want done')
       .max(MAX_INSTRUCTION, `text is too long (max ${MAX_INSTRUCTION} characters)`),
@@ -339,7 +340,7 @@ function registerDeliveryOutcome(app: FastifyInstance, { system, hub }: RouteCon
 
   const OverruleBody = z.object({
     text: z
-      .string({ error: (issue) => (issue.input === undefined ? 'text is required' : 'text must be a string') })
+      .string(absentOr('text is required', 'text must be a string'))
       .trim()
       .min(1, 'text is required — say why the assessment is wrong')
       .max(MAX_INSTRUCTION, `text is too long (max ${MAX_INSTRUCTION} characters)`),
@@ -380,7 +381,7 @@ function registerBugFiling(app: FastifyInstance, { system, hub }: RouteContext):
   const { store, harness, config } = system;
   const RaiseBugBody = z.object({
     summary: z
-      .string({ error: (issue) => (issue.input === undefined ? 'summary is required' : 'summary must be a string') })
+      .string(absentOr('summary is required', 'summary must be a string'))
       .trim()
       .min(1, 'summary is required — say what is wrong')
       .max(MAX_BUG_SUMMARY, `summary is too long (max ${MAX_BUG_SUMMARY} characters)`),
@@ -429,7 +430,7 @@ function registerGoalAgents(app: FastifyInstance, { system }: RouteContext): voi
         const parts = raw.split(',').map((p) => p.trim());
         const numbers = parts.map(Number);
         if (numbers.some((n) => !Number.isInteger(n) || n <= 0)) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'prs must be a comma-separated list of PR numbers' });
+          ctx.addIssue({ code: 'custom', message: 'prs must be a comma-separated list of PR numbers' });
           return z.NEVER;
         }
         return numbers;

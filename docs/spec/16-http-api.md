@@ -205,7 +205,10 @@ Four properties hold across the surface:
   stock. Zod's schema-level `error` option is the one that reaches absence, a wrong type and — on an
   enum — a string that is not one of the values. So a required string takes `requiredText`, which
   words all three arms alike, and an enum takes `{error: '…'}`. Where absence and a wrong type need
-  different words, `error` is a function reading `issue.input === undefined`.
+  different words, the field takes `absentOr(absent, wrongType)` (`src/schemaErrors.ts`). A strict
+  object whose refusal of an unknown key needs its own words is built with `strictObject(shape, message)`
+  from the same module — never `.strict()` beside a hand-written `error` callback, which is one forgotten
+  half away from Zod's stock wording.
   `test/requestValidation.test.ts` drives every declared `POST`/`DELETE` with an empty body and with
   a junk one, and every `/api/tickets` filter with a bad value, and refuses any 400 whose message
   opens in zod's words — structural for the same reason the two greps above are: the module written

@@ -924,9 +924,9 @@ Two things follow from the derivation and are load-bearing:
   own `z.toJSONSchema` in `input` mode, which emits `additionalProperties: false` exactly where the
   validator rejects unknown keys (`.strict()`) and nothing for the default strip mode. A
   hand-maintained "is this one strict" flag would be the second copy again, one layer down.
-- **A runtime-built enum goes through `enumOf`.** `z.enum` needs a non-empty tuple and a list like
-  `CAUSES_BY_KIND[kind]` or `Object.keys(AGENT_ACTIONS)` is `readonly T[]`, so the cast lives in one
-  place rather than at each call site.
+- **A schema JSON Schema cannot express throws, rather than advertising `{}`.** `toolSchema` runs
+  with `unrepresentable: 'throw'`, so a tool whose input cannot be described fails where it is built
+  instead of telling every agent that anything is acceptable.
 
 What this does **not** yet do is collapse every tool's advertised schema onto the domain validator
 behind it. `validation_report` and the plan document (`PLAN_DOCUMENT_SHAPE`, shared by `plan_submit`,

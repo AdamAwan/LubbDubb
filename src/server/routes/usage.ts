@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import type { UsagePayload } from '../../wire.js';
 import type { SurfaceReachInput } from '../../types.js';
 import { buildOperatorInsights } from '../../insights/operatorInsights.js';
@@ -67,9 +68,7 @@ const UsageEventRow = z
     subject: z.enum(USAGE_SUBJECTS as [string, ...string[]], {
       error: 'subject must be one of the registry’s subjects',
     }),
-    verb: z.string({
-      error: (issue) => (issue.input === undefined ? 'verb must be one the subject offers' : undefined),
-    }),
+    verb: z.string(absentOr('verb must be one the subject offers')),
     place: z.enum(PLACE_KEYS as unknown as [string, ...string[]], {
       error: `place must be one of ${PLACE_KEYS.join(', ')}`,
     }),
@@ -84,8 +83,6 @@ const UsageEventRow = z
 
 const UsageBatchBody = z.object({
   events: z
-    .array(UsageEventRow, {
-      error: (issue) => (issue.input === undefined ? 'events must be an array of usage rows' : undefined),
-    })
+    .array(UsageEventRow, absentOr('events must be an array of usage rows'))
     .max(BATCH_MAX, { message: `events must hold at most ${BATCH_MAX} rows` }),
 });

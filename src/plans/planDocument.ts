@@ -94,7 +94,7 @@ const PlanDocumentSchema = z
   .superRefine((doc, ctx) => {
     if (doc.parts.length === 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['parts'],
         message: 'a plan needs at least one part — work that is one pull request is a plan with one part',
       });
@@ -103,17 +103,17 @@ const PlanDocumentSchema = z
     const slugs = new Set<string>();
     for (const part of doc.parts) {
       if (slugs.has(part.slug)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['parts'], message: `duplicate slug "${part.slug}"` });
+        ctx.addIssue({ code: 'custom', path: ['parts'], message: `duplicate slug "${part.slug}"` });
       }
       slugs.add(part.slug);
     }
     for (const part of doc.parts) {
       for (const dep of part.dependsOn) {
         if (dep === part.slug) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['parts'], message: `"${part.slug}" depends on itself` });
+          ctx.addIssue({ code: 'custom', path: ['parts'], message: `"${part.slug}" depends on itself` });
         } else if (!slugs.has(dep)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             path: ['parts'],
             message: `"${part.slug}" depends on unknown part "${dep}"`,
           });
@@ -123,7 +123,7 @@ const PlanDocumentSchema = z
     const cycle = findDependencyCycle(doc.parts);
     if (cycle) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['parts'],
         message: `dependency cycle: ${cycle.join(' -> ')}`,
       });
@@ -133,7 +133,7 @@ const PlanDocumentSchema = z
 
 function refineAtoms(doc: { atoms: AtomInput[]; parts: { slug: string; atoms: string[] }[] }, ctx: z.RefinementCtx) {
   const refuse = (message: string, path: 'atoms' | 'parts' = 'atoms'): void => {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    ctx.addIssue({ code: 'custom', path: [path], message });
   };
   const known = new Set<string>();
   for (const atom of doc.atoms) {

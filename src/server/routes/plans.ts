@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { planAmendmentProposalRef, planProposalRef } from '../../proposals/proposals.js';
 import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
@@ -36,12 +37,10 @@ const RegroupBody = z.object({
         title: optionalText('title'),
         scope: optionalText('scope'),
       }),
-      {
-        error: (issue) =>
-          issue.input === undefined
-            ? 'groups is required — one entry per part, saying which atoms it carries'
-            : 'groups must be a list — one entry per part, saying which atoms it carries',
-      },
+      absentOr(
+        'groups is required — one entry per part, saying which atoms it carries',
+        'groups must be a list — one entry per part, saying which atoms it carries',
+      ),
     )
     .min(1, 'a regrouped plan still needs at least one part'),
 });

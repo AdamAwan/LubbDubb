@@ -1,21 +1,13 @@
 import { z } from 'zod';
+import { absentOr } from '../schemaErrors.js';
 import type { ValidationCheck } from '../types.js';
 
 // → docs/spec/20-validation.md
 
 const CheckRefSchema = z.object({
-  issue: z
-    .number({
-      error: (issue) =>
-        issue.input === undefined ? 'issue is required — the goal number, e.g. 284' : 'issue must be a number',
-    })
-    .int()
-    .positive(),
+  issue: z.number(absentOr('issue is required — the goal number, e.g. 284', 'issue must be a number')).int().positive(),
   check: z
-    .string({
-      error: (issue) =>
-        issue.input === undefined ? 'check is required — a letter like "C", or the check id' : undefined,
-    })
+    .string(absentOr('check is required — a letter like "C", or the check id'))
     .trim()
     .min(1, 'check is required — a letter like "C", or the check id'),
 });

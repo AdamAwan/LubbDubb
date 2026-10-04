@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { absentOr } from '../schemaErrors.js';
 import type { JobAttachmentInput } from '../types.js';
 
 // → docs/spec/13-jobs-and-tickets.md
@@ -29,9 +30,7 @@ export const ACCEPTED_IMAGE_MIMES = SIGNATURES.map((s) => s.mime);
 const AttachmentInputSchema: z.ZodType<JobAttachmentInput, unknown> = z.object({
   name: z.string({ error: 'attachment name must be a string' }).trim().optional(),
   data: z
-    .string({
-      error: (issue) => (issue.input === undefined ? 'attachment data required' : 'attachment data must be base64'),
-    })
+    .string(absentOr('attachment data required', 'attachment data must be base64'))
     .min(1, 'attachment data required'),
 });
 

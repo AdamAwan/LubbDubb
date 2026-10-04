@@ -3,7 +3,7 @@ import type { AgentManager } from '../agents/agentManager.js';
 import type { Config } from '../config/config.js';
 import { submitBrief } from '../jobs/brief.js';
 import { ticketFilingTarget } from '../tickets/target.js';
-import { enumOf, toolSchema } from './schema.js';
+import { toolSchema } from './schema.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson, type ToolCallResult } from './protocol.js';
 
@@ -120,11 +120,13 @@ export const agentControl: DesktopToolFactory = (deps) => ({
   inputSchema: toolSchema(
     z.object({
       agentId: z.string().describe('The agent id, from fleet_status or agent_read.'),
-      action: enumOf(Object.keys(AGENT_ACTIONS)).describe(
-        '"respond" types `text` into the session. "interrupt" sends Ctrl-C. "complete" records the work as ' +
-          'finished. "kill" stops it and reaps its process subtree. "extend_stall" buys time on a stall park. ' +
-          '"resume" re-opens a session parked on a usage limit.',
-      ),
+      action: z
+        .enum(Object.keys(AGENT_ACTIONS))
+        .describe(
+          '"respond" types `text` into the session. "interrupt" sends Ctrl-C. "complete" records the work as ' +
+            'finished. "kill" stops it and reaps its process subtree. "extend_stall" buys time on a stall park. ' +
+            '"resume" re-opens a session parked on a usage limit.',
+        ),
       text: z.string().describe('Required for "respond": what the agent reads.').optional(),
     }),
   ),

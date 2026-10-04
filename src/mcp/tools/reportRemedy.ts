@@ -8,7 +8,7 @@ import {
   validateRemedy,
 } from '../../remedies/remedies.js';
 import { toolError } from '../protocol.js';
-import { enumOf, toolSchema } from '../schema.js';
+import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -38,8 +38,8 @@ export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
       'finished — nothing here replaces pushing the fix.',
     inputSchema: toolSchema(
       z.object({
-        cause: enumOf(causes).describe(causes.map((c) => `${c}: ${CAUSE_COPY[c].blurb}`).join('. ')),
-        guard: enumOf(GUARD_ORDER).describe(GUARD_ORDER.map((g) => `${g}: ${GUARD_COPY[g].blurb}`).join('. ')),
+        cause: z.enum(causes).describe(causes.map((c) => `${c}: ${CAUSE_COPY[c].blurb}`).join('. ')),
+        guard: z.enum(GUARD_ORDER).describe(GUARD_ORDER.map((g) => `${g}: ${GUARD_COPY[g].blurb}`).join('. ')),
         summary: z
           .string()
           .describe(

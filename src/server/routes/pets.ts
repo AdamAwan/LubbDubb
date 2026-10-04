@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { absentOr } from '../../schemaErrors.js';
 import { checked, IdParams, optionalText, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 import { PET_CATALOGUE } from '../../pets/compendium.js';
@@ -22,7 +23,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   const FeedBody = z.object({
-    beats: z.number({ error: (issue) => (issue.input === undefined ? 'beats is required' : 'beats must be a number') }),
+    beats: z.number(absentOr('beats is required', 'beats must be a number')),
   });
   app.post(
     '/api/pets/:id/feed',
