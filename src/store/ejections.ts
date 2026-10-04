@@ -85,8 +85,7 @@ export class EjectionStore {
 
   ejectionOnBranch(branch: string): Ejection | null {
     const row = this.ctx.prep(`SELECT ${COLUMNS} FROM ejections WHERE branch=? AND settled_at IS NULL`).get(branch) as
-      | Row
-      | undefined;
+      Row | undefined;
     return row ? hydrate(row) : null;
   }
 

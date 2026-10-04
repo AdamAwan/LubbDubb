@@ -225,8 +225,7 @@ test('the procedure and the expectation reach the agent, appended rather than in
     ctx({ validationChecks: [check({ actor: 'fleet', uses: ['fixture-repo.tar.gz'] })] }),
   );
   const dispatch = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate:csv-opens') as
-    | { prompt: string }
-    | undefined;
+    { prompt: string } | undefined;
   assert.ok(dispatch);
   assert.match(dispatch.prompt, /Export a report and open it\./);
   assert.match(dispatch.prompt, /It opens with the columns intact\./);

@@ -146,8 +146,7 @@ export class GraphStore {
       .run(ticketRef, updatedAt, targetRef);
     if (result.changes === 0) return null;
     const row = this.ctx.prep(`SELECT * FROM work_item_filings WHERE target_ref=?`).get(targetRef) as
-      | WorkItemFilingRow
-      | undefined;
+      WorkItemFilingRow | undefined;
     return row ? rowToWorkItemFiling(row) : null;
   }
 

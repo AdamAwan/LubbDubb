@@ -301,8 +301,7 @@ export class ObstacleStore {
 
   obstacleReading(obstacleId: string): ObstacleDeskReading | null {
     const row = this.ctx.prep(`SELECT * FROM obstacle_readings WHERE obstacle_id=?`).get(obstacleId) as
-      | ReadingRow
-      | undefined;
+      ReadingRow | undefined;
     return row ? toReading(row) : null;
   }
 
@@ -481,8 +480,7 @@ export class ObstacleStore {
 
   private obstacleIdForKey(value: string): string | null {
     const row = this.ctx.prep(`SELECT obstacle_id FROM obstacle_keys WHERE value=?`).get(value) as
-      | { obstacle_id: string }
-      | undefined;
+      { obstacle_id: string } | undefined;
     return row?.obstacle_id ?? null;
   }
 

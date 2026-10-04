@@ -9,8 +9,7 @@ import { verifyBasicCredential, verifyGitHubSignature } from './signature.js';
 export type IngressProvider = 'github' | 'azure';
 
 type IngressVerdict =
-  | { ok: true; refs: readonly string[]; summary: string }
-  | { ok: false; status: 401 | 404; error: string };
+  { ok: true; refs: readonly string[]; summary: string } | { ok: false; status: 401 | 404; error: string };
 
 interface IngressDelivery {
   raw: Buffer;

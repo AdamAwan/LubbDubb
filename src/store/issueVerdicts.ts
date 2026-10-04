@@ -81,8 +81,7 @@ export class IssueVerdictStore {
 
   getIssueConclusion(originRef: string): IssueConclusion | null {
     const row = this.ctx.prep(`SELECT * FROM issue_conclusions WHERE origin_ref=?`).get(originRef) as
-      | IssueConclusionRow
-      | undefined;
+      IssueConclusionRow | undefined;
     return row ? rowToIssueConclusion(row) : null;
   }
 
@@ -128,8 +127,7 @@ export class IssueVerdictStore {
 
   getDelivery(originRef: string): IssueDelivery | null {
     const row = this.ctx.prep(`SELECT * FROM issue_deliveries WHERE origin_ref=?`).get(originRef) as
-      | IssueDeliveryRow
-      | undefined;
+      IssueDeliveryRow | undefined;
     return row ? rowToDelivery(row) : null;
   }
 
@@ -180,8 +178,7 @@ export class IssueVerdictStore {
 
   getShortfall(originRef: string): IssueShortfall | null {
     const row = this.ctx.prep(`SELECT * FROM issue_shortfalls WHERE origin_ref=?`).get(originRef) as
-      | IssueShortfallRow
-      | undefined;
+      IssueShortfallRow | undefined;
     return row ? rowToShortfall(row) : null;
   }
 
@@ -250,8 +247,7 @@ export class IssueVerdictStore {
 
   getAppraisal(originRef: string): IssueAppraisal | null {
     const row = this.ctx.prep(`SELECT * FROM issue_appraisals WHERE origin_ref=?`).get(originRef) as
-      | IssueAppraisalRow
-      | undefined;
+      IssueAppraisalRow | undefined;
     return row ? rowToAppraisal(row) : null;
   }
 

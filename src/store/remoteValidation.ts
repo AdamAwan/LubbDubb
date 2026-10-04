@@ -603,8 +603,7 @@ export class RemoteValidationStore {
   /** The launch behind an environment's preparation, running or last run. Null where none launched. */
   tenantLaunch(environment: string): { call: TenantCall; launch: TenantLaunch } | null {
     const row = this.ctx.prep(`SELECT * FROM remote_tenant_prepares WHERE environment=?`).get(environment) as
-      | PrepareRow
-      | undefined;
+      PrepareRow | undefined;
     return row === undefined ? null : launchOf(row);
   }
 
@@ -648,8 +647,7 @@ export class RemoteValidationStore {
 
   private tenantPrepare(environment: string): TenantPreparation | null {
     const row = this.ctx.prep(`SELECT * FROM remote_tenant_prepares WHERE environment=?`).get(environment) as
-      | PrepareRow
-      | undefined;
+      PrepareRow | undefined;
     return row === undefined ? null : toTenantPreparation(row);
   }
 

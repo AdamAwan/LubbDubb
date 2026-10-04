@@ -101,8 +101,7 @@ export class LocalRunStore {
 
   currentLocalRun(): LocalRun | null {
     const row = this.ctx.prep(`SELECT * FROM local_runs ORDER BY started_at DESC LIMIT 1`).get() as
-      | LocalRunRow
-      | undefined;
+      LocalRunRow | undefined;
     return row ? toLocalRun(row) : null;
   }
 

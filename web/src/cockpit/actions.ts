@@ -43,15 +43,7 @@ export type ConsolePanel =
 export type ConsoleTab = 'overview' | 'tickets' | 'obstacles' | 'features' | 'bots' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
-  | 'economics'
-  | 'allowance'
-  | 'reliability'
-  | 'throughput'
-  | 'causes'
-  | 'trend'
-  | 'mcp'
-  | 'prediction'
-  | 'usage';
+  'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'prediction' | 'usage';
 
 /* Whose numbers a reading is over. Every tab answers for this fleet; four of them
    the pool can answer too. → docs/spec/17-cockpit.md#just-me-or-the-pool */

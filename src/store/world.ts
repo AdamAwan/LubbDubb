@@ -97,8 +97,7 @@ export class WorldStore {
 
   getConnectorState(key: string): string | null {
     const row = this.ctx.prep(`SELECT value FROM connector_state WHERE key=?`).get(key) as
-      | { value: string }
-      | undefined;
+      { value: string } | undefined;
     return row?.value ?? null;
   }
 

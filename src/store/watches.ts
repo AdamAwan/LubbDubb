@@ -164,8 +164,7 @@ export class WatchStore {
 
   ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
     const row = this.ctx.prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`).get(originRef, checkId) as
-      | GoalWatchRow
-      | undefined;
+      GoalWatchRow | undefined;
     if (row === undefined || row.proposal === null) return null;
     const proposal = JSON.parse(row.proposal) as GoalWatchProposal;
     const now = this.ctx.now();

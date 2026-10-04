@@ -136,8 +136,7 @@ export class PlanStore {
   recordPlanRevision(planId: string, input: { narrative: PlanNarrative; parts: PlanPartInput[] }): PlanRevision {
     const at = this.ctx.now();
     const row = this.ctx.prep(`SELECT MAX(seq) AS seq FROM plan_revisions WHERE plan_id=?`).get(planId) as
-      | { seq: number | null }
-      | undefined;
+      { seq: number | null } | undefined;
     const revision: PlanRevision = {
       id: `rev_${nanoid(10)}`,
       planId,

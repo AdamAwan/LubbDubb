@@ -99,15 +99,7 @@ export function placeReach(place: Place): { key: PlaceKey; view: UiUsageEvent | 
 type Panel = Exclude<ConsolePanel, null | { ask: string }>;
 
 type PanelSubject =
-  | 'fault'
-  | 'job'
-  | 'upgrade'
-  | 'local-run'
-  | 'config'
-  | 'record'
-  | 'queue'
-  | 'signal'
-  | 'environment';
+  'fault' | 'job' | 'upgrade' | 'local-run' | 'config' | 'record' | 'queue' | 'signal' | 'environment';
 
 type TabView = Extract<UiUsageEvent, `${string}.view`>;
 

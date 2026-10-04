@@ -138,8 +138,7 @@ test('a pending shortfall holds the rule, so one question is asked once', () => 
 test('a plan-cause shortfall is proposed, not taken', async () => {
   const { actions } = await decide(ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [planRow()] }));
   const proposed = actions.find((a) => a.type === 'propose_shortfall') as
-    | { cause: string; planId: string; prompt: string; detail: string | null; rule: string }
-    | undefined;
+    { cause: string; planId: string; prompt: string; detail: string | null; rule: string } | undefined;
   assert.ok(proposed, 'both routable arms spend a fleet, so a human authorizes them');
   assert.equal(proposed!.cause, 'plan');
   assert.equal(proposed!.planId, 'plan_1');
