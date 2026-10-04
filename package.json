@@ -10,7 +10,7 @@
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || exit 0",
-    "build": "tsc -p tsconfig.json",
+    "build": "node node_modules/typescript7/bin/tsc -p tsconfig.json",
     "dev": "node --import tsx --watch src/server/main.ts",
     "start": "npm run web:build && node --import tsx src/server/main.ts",
     "start:server": "node --import tsx src/server/main.ts",
@@ -23,8 +23,8 @@
     "web:dev": "vite --config web/vite.config.ts",
     "web:build": "vite --config web/vite.config.ts build",
     "web:build:demo": "vite --config web/vite.config.ts build --mode demo --base=/LubbDubb/",
-    "typecheck": "tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/server.tsbuildinfo",
-    "typecheck:web": "tsc -p web/tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/web.tsbuildinfo",
+    "typecheck": "node node_modules/typescript7/bin/tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/server.tsbuildinfo",
+    "typecheck:web": "node node_modules/typescript7/bin/tsc -p web/tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/web.tsbuildinfo",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "lint:fix": "eslint . --fix",
     "lint:prune": "eslint . --prune-suppressions",
@@ -68,8 +68,9 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.5.4",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.65.0",
+    "typescript7": "npm:typescript@^7.0.2",
     "vite": "^8.1.5"
   },
   "allowScripts": {
