@@ -1786,8 +1786,12 @@ diff, the code, and the spec when the repo has one — so it is useful in any re
 ships it in its own marketplace beside `lubbdubb`, and the repository root's
 `.claude-plugin/marketplace.json` (marketplace `pr-assistant`) lists it alone, so
 `claude plugin marketplace add AdamAwan/LubbDubb` then `claude plugin install pr-assistant@pr-assistant`
-installs it with no LubbDubb running. Its source `plugin.json` carries no `version`, so a git install
-updates by commit; the bundle stamps its own.
+installs it with no LubbDubb running. **Its source `plugin.json` carries a hand-bumped `version`**,
+which is what a git install updates by: without one Claude Code versions it by the repository's commit,
+so every LubbDubb change reads as a plugin update that carries nothing. A forgotten bump is the cost,
+and CI's `pr-assistant-version` job refuses it: a pull request that changes anything under
+`pr-assistant/` other than `tests/` must change that `version`. The bundle ignores it and stamps its
+own digest.
 
 - **`pr` is a family of pull-request jobs, told apart by its first word.** `/pr-assistant:pr map 1091`
   reads `map/map.md` beside the `SKILL.md` and draws the PR as one page, through the `build.mjs` and
