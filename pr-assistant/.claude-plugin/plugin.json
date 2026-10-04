@@ -1,5 +1,5 @@
 {
   "name": "pr-assistant",
-  "description": "Help with a pull request: /pr-assistant:pr map draws it as one page, /pr-assistant:pr walk goes through it with you beside a panel of the stops, the diff and the notes.",
+  "description": "Help with a pull request: /pr-assistant:pr map draws it as one page, /pr-assistant:pr walk draws that map and goes through it with you beside a panel of the stops, the diff and the notes.",
   "types": "./types/index.d.ts"
 }

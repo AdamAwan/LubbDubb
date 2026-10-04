@@ -1738,7 +1738,7 @@ asks in order and points at `/lubbdubb:next`.
   drawn as text instead — one bad URL never blanks the panel.
 - **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
   with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Review With Me with
-  `/pr-assistant:pr map <n>` (the PR assistant's skill, which the desk installs beside the board), and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
+  `/pr-assistant:pr walk <n>` (the PR assistant's skill, which the desk installs beside the board), and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
   the operator presses Enter. A plain sentence would
   leave whether a skill loads to description matching, and the skill is where the rules for the
   conversation live. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
@@ -1791,8 +1791,9 @@ updates by commit; the bundle stamps its own.
 
 - **`pr` is a family of pull-request jobs, told apart by its first word.** `/pr-assistant:pr map 1091`
   reads `map/map.md` beside the `SKILL.md` and draws the PR as one page, through the `build.mjs` and
-  `template.html` in the same folder; `/pr-assistant:pr walk 1091` reads `walk/walk.md` and goes
-  through the PR with the person one stop at a time, driving the panel. A new PR job is a row in the
+  `template.html` in the same folder; `/pr-assistant:pr walk 1091` reads `walk/walk.md`, draws the map first (the
+  walk's stops follow its steps, so one reading of the path serves both) and then goes through the PR
+  with the person one stop at a time, driving the panel. A new PR job is a row in the
   skill's table and a folder of its own, not a new skill. It was `/lubbdubb:pr`, and before that the
   repository's own `.claude/skills/pr-map`; it moved here because nothing in it needs the harness.
 - **The panel follows the walk**: the stops, which one is current, the diff hunk for it, and the notes

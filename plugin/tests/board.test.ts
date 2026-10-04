@@ -274,7 +274,7 @@ test('the panel only drafts a skill into the prompt box; it never sends', async 
     '/lubbdubb:next',
     '/lubbdubb:feature 90',
     '/lubbdubb:next e2',
-    '/pr-assistant:pr map 413',
+    '/pr-assistant:pr walk 413',
   ])
 })
 
