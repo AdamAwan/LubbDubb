@@ -4,14 +4,18 @@ import { z } from 'zod';
 
 export const SequenceAnswerBody = z.object({
   answer: z.enum(['accepted', 'declined'], {
-    errorMap: () => ({ message: 'answer must be "accepted" or "declined" — an agent writes "proposed", nobody else' }),
+    error: 'answer must be "accepted" or "declined" — an agent writes "proposed", nobody else',
   }),
-  by: z.string({ required_error: 'by must name who answered' }).min(1, 'by must name who answered'),
+  by: z
+    .string({ error: (issue) => (issue.input === undefined ? 'by must name who answered' : undefined) })
+    .min(1, 'by must name who answered'),
 });
 
 export const NumberParams = z.object({
   number: z.coerce
-    .number({ required_error: 'number must be the Feature’s tracker number' })
+    .number({
+      error: (issue) => (issue.input === undefined ? 'number must be the Feature’s tracker number' : undefined),
+    })
     .int('number must be the Feature’s tracker number')
     .positive('number must be the Feature’s tracker number'),
 });

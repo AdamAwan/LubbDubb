@@ -7,17 +7,23 @@ import { aggregatingQueryRefusal, aggregatingTail } from './watchQueryShape.js';
 const MAX_QUERIES = 20;
 
 const StateQuerySchemaShape = z
-  .object({
-    id: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
-    title: z.string().min(1),
-    query: z.string().min(1),
-    presence: z.string().min(1),
-    why: z.string().min(1).optional(),
-  })
-  .strict('a state query declares only id/title/query/presence/why');
+  .object(
+    {
+      id: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+      title: z.string().min(1),
+      query: z.string().min(1),
+      presence: z.string().min(1),
+      why: z.string().min(1).optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys' ? 'a state query declares only id/title/query/presence/why' : undefined,
+    },
+  )
+  .strict();
 
 function refuseAggregation(
   declared: { id: string; query: string; presence: string },
@@ -36,13 +42,16 @@ function refuseAggregation(
 }
 
 export const StateSchema = z
-  .object({
-    queries: z
-      .array(StateQuerySchemaShape)
-      .default([])
-      .transform((list) => (list.length > MAX_QUERIES ? list.slice(0, MAX_QUERIES) : list)),
-  })
-  .strict('a state block declares only "queries"')
+  .object(
+    {
+      queries: z
+        .array(StateQuerySchemaShape)
+        .default([])
+        .transform((list) => (list.length > MAX_QUERIES ? list.slice(0, MAX_QUERIES) : list)),
+    },
+    { error: (issue) => (issue.code === 'unrecognized_keys' ? 'a state block declares only "queries"' : undefined) },
+  )
+  .strict()
   .superRefine((block, ctx) => {
     const ids = new Set<string>();
     block.queries.forEach((query, index) => {
@@ -53,13 +62,11 @@ export const StateSchema = z
     });
   });
 
-export const StateQuerySchema: z.ZodType<
-  Omit<StateQueryInput, 'seq'>,
-  z.ZodTypeDef,
-  unknown
-> = StateQuerySchemaShape.superRefine((query, ctx) => {
-  refuseAggregation(query, ctx, []);
-}).transform((query) => ({
+export const StateQuerySchema: z.ZodType<Omit<StateQueryInput, 'seq'>, unknown> = StateQuerySchemaShape.superRefine(
+  (query, ctx) => {
+    refuseAggregation(query, ctx, []);
+  },
+).transform((query) => ({
   id: query.id,
   title: query.title,
   query: query.query,

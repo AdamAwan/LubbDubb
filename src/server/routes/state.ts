@@ -45,22 +45,28 @@ const StateQuery = z.object({
 });
 
 const ConfigSaveBody = z.object({
-  set: z.record(z.unknown(), { invalid_type_error: 'set must be an object of path → value' }).optional(),
-  clear: z.array(z.string(), { invalid_type_error: 'clear must be a list of paths' }).optional(),
-  baseline: z.string({ required_error: 'baseline is required', invalid_type_error: 'baseline must be a string' }),
+  set: z.record(z.string(), z.unknown(), { error: 'set must be an object of path → value' }).optional(),
+  clear: z.array(z.string(), { error: 'clear must be a list of paths' }).optional(),
+  baseline: z.string({
+    error: (issue) => (issue.input === undefined ? 'baseline is required' : 'baseline must be a string'),
+  }),
 });
 const ConfigPreviewBody = z.object({
-  set: z.record(z.unknown(), { invalid_type_error: 'set must be an object of path → value' }).optional(),
-  clear: z.array(z.string(), { invalid_type_error: 'clear must be a list of paths' }).optional(),
-  text: z.string({ invalid_type_error: 'text must be a string' }).optional(),
-  baseline: z.string({ required_error: 'baseline is required', invalid_type_error: 'baseline must be a string' }),
+  set: z.record(z.string(), z.unknown(), { error: 'set must be an object of path → value' }).optional(),
+  clear: z.array(z.string(), { error: 'clear must be a list of paths' }).optional(),
+  text: z.string({ error: 'text must be a string' }).optional(),
+  baseline: z.string({
+    error: (issue) => (issue.input === undefined ? 'baseline is required' : 'baseline must be a string'),
+  }),
 });
 const ConfigRawBody = z.object({
-  text: z.string({ required_error: 'text is required', invalid_type_error: 'text must be a string' }),
-  baseline: z.string({ required_error: 'baseline is required', invalid_type_error: 'baseline must be a string' }),
+  text: z.string({ error: (issue) => (issue.input === undefined ? 'text is required' : 'text must be a string') }),
+  baseline: z.string({
+    error: (issue) => (issue.input === undefined ? 'baseline is required' : 'baseline must be a string'),
+  }),
 });
 const RestartBody = z.object({
-  interrupt: z.boolean({ invalid_type_error: 'interrupt must be a boolean' }).optional(),
+  interrupt: z.boolean({ error: 'interrupt must be a boolean' }).optional(),
 });
 
 export function register(app: FastifyInstance, ctx: RouteContext): void {

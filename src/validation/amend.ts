@@ -40,32 +40,36 @@ export function validationAmendIssue(
 
 const WithdrawSchema = z.object({
   id: z.string().min(1),
-  reason: z
-    .string({ required_error: 'a withdrawal needs a reason', invalid_type_error: 'a withdrawal needs a reason' })
-    .trim()
-    .min(1, 'a withdrawal needs a reason'),
+  reason: z.string({ error: 'a withdrawal needs a reason' }).trim().min(1, 'a withdrawal needs a reason'),
 });
 
 const AmendmentSchema = z
-  .object({
-    note: z
-      .string({
-        required_error: 'note is required — say why the validation plan is changing',
-        invalid_type_error: 'note is required — say why the validation plan is changing',
-      })
-      .trim()
-      .min(1, 'note is required — say why the validation plan is changing'),
-    checks: z
-      .array(ValidationCheckSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_AMENDED_CHECKS ? list.slice(0, MAX_AMENDED_CHECKS) : list)),
-    withdraw: z.array(WithdrawSchema).default([]),
-    resources: z
-      .array(ValidationResourceSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_AMENDED_RESOURCES ? list.slice(0, MAX_AMENDED_RESOURCES) : list)),
-  })
-  .strict('an amendment declares only "note", "checks", "withdraw" and "resources"')
+  .object(
+    {
+      note: z
+        .string({
+          error: 'note is required — say why the validation plan is changing',
+        })
+        .trim()
+        .min(1, 'note is required — say why the validation plan is changing'),
+      checks: z
+        .array(ValidationCheckSchema)
+        .default([])
+        .transform((list) => (list.length > MAX_AMENDED_CHECKS ? list.slice(0, MAX_AMENDED_CHECKS) : list)),
+      withdraw: z.array(WithdrawSchema).default([]),
+      resources: z
+        .array(ValidationResourceSchema)
+        .default([])
+        .transform((list) => (list.length > MAX_AMENDED_RESOURCES ? list.slice(0, MAX_AMENDED_RESOURCES) : list)),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys'
+          ? 'an amendment declares only "note", "checks", "withdraw" and "resources"'
+          : undefined,
+    },
+  )
+  .strict()
   .superRefine((amendment, ctx) => {
     const add = (message: string, path: string): void => {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });

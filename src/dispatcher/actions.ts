@@ -87,7 +87,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     type: z.literal('escalate_to_human'),
     escalationType: z.enum(['approve_change', 'answer_question', 'resolve_ambiguity', 'review_reply']),
     prompt: z.string().min(1),
-    context: z.record(z.unknown()).default({}),
+    context: z.record(z.string(), z.unknown()).default({}),
     taskId: z.string().nullable().default(null),
     agentId: z.string().nullable().default(null),
     ...base,

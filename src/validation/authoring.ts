@@ -451,25 +451,32 @@ const MAX_RESOURCES = 20;
  * operator's read at the approval gate was worth nothing.
  */
 const CheckSetSchema = z
-  .object({
-    note: z
-      .string({
-        required_error: 'note is required — say where you went a different way from the plan’s hint, and why',
-        invalid_type_error: 'note is required — say where you went a different way from the plan’s hint, and why',
-      })
-      .trim()
-      .min(1, 'note is required — say where you went a different way from the plan’s hint, and why'),
-    emptyReason: z.string().trim().min(1).optional(),
-    checks: z
-      .array(ValidationCheckSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
-    resources: z
-      .array(ValidationResourceSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
-  })
-  .strict('a check set declares only "note", "emptyReason", "checks" and "resources"')
+  .object(
+    {
+      note: z
+        .string({
+          error: 'note is required — say where you went a different way from the plan’s hint, and why',
+        })
+        .trim()
+        .min(1, 'note is required — say where you went a different way from the plan’s hint, and why'),
+      emptyReason: z.string().trim().min(1).optional(),
+      checks: z
+        .array(ValidationCheckSchema)
+        .default([])
+        .transform((list) => (list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
+      resources: z
+        .array(ValidationResourceSchema)
+        .default([])
+        .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys'
+          ? 'a check set declares only "note", "emptyReason", "checks" and "resources"'
+          : undefined,
+    },
+  )
+  .strict()
   .superRefine((set, ctx) => {
     const add = (message: string, path: string): void => {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });

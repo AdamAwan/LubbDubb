@@ -8,19 +8,16 @@ import type { RouteContext } from './context.js';
 
 const EjectBody = z.object({
   reason: z
-    .string({ required_error: 'reason required', invalid_type_error: 'reason required' })
+    .string({ error: 'reason required' })
     .trim()
     .min(1, 'reason required — say why you are taking this off the fleet'),
 });
 
 const SettleBody = z.object({
   outcome: z.enum(['handed_back', 'requeued', 'delivered'], {
-    errorMap: () => ({ message: 'outcome must be handed_back, requeued or delivered' }),
+    error: 'outcome must be handed_back, requeued or delivered',
   }),
-  note: z
-    .string({ invalid_type_error: 'note must be text — what you did with the work while you held it' })
-    .trim()
-    .optional(),
+  note: z.string({ error: 'note must be text — what you did with the work while you held it' }).trim().optional(),
 });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {

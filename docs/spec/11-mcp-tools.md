@@ -920,11 +920,10 @@ rejects what it just asked for. Deriving one from the other makes that shape imp
 
 Two things follow from the derivation and are load-bearing:
 
-- **Strictness is read off the schema, not declared beside it.** `zod-to-json-schema` renders
-  `.strict()` and the default strip mode identically, so `toolSchema` inspects the schema's own
-  `unknownKeys` and emits `additionalProperties: false` only where the validator genuinely rejects
-  unknown keys. A hand-maintained "is this one strict" flag would be the second copy again, one layer
-  down.
+- **Strictness is read off the schema, not declared beside it.** `toolSchema` renders through Zod's
+  own `z.toJSONSchema` in `input` mode, which emits `additionalProperties: false` exactly where the
+  validator rejects unknown keys (`.strict()`) and nothing for the default strip mode. A
+  hand-maintained "is this one strict" flag would be the second copy again, one layer down.
 - **A runtime-built enum goes through `enumOf`.** `z.enum` needs a non-empty tuple and a list like
   `CAUSES_BY_KIND[kind]` or `Object.keys(AGENT_ACTIONS)` is `readonly T[]`, so the cast lives in one
   place rather than at each call site.

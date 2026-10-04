@@ -35,18 +35,24 @@ export const ValidationResourceSchema = z.object({
  * configuration at ingestion. → docs/spec/20-validation.md#who-carries-a-step
  */
 const ValidationStepSchema = z
-  .object({
-    kind: z.enum(STEP_KINDS as unknown as [ValidationStepKind, ...ValidationStepKind[]]),
-    do: z.string().min(1),
-    area: z.string().min(1).optional(),
-    expects: z.array(z.string().min(1)).optional(),
-    when: z.enum(['inline', 'deferred']).optional(),
-    script: z.string().min(1).max(MAX_SCRIPT_LENGTH).optional(),
-  })
-  .strict(
-    'a step declares only kind/do/area/expects/when/script — who carries it is read off the configuration, ' +
-      'not yours to say',
+  .object(
+    {
+      kind: z.enum(STEP_KINDS as unknown as [ValidationStepKind, ...ValidationStepKind[]]),
+      do: z.string().min(1),
+      area: z.string().min(1).optional(),
+      expects: z.array(z.string().min(1)).optional(),
+      when: z.enum(['inline', 'deferred']).optional(),
+      script: z.string().min(1).max(MAX_SCRIPT_LENGTH).optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys'
+          ? 'a step declares only kind/do/area/expects/when/script — who carries it is read off the configuration, ' +
+            'not yours to say'
+          : undefined,
+    },
   )
+  .strict()
   .superRefine((step, ctx) => {
     const add = (message: string, path: string): void => {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
@@ -150,82 +156,97 @@ export const validationStepsSchema = z
   .optional();
 
 export const ValidationCheckSchema = z
-  .object({
-    id: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
-    title: z.string().min(1),
-    do: z.string().min(1),
-    expect: z
-      .string()
-      .min(1)
-      .describe(
-        'What a pass looks like — everything this one run has to satisfy. Markdown, and the ' +
-          'approval card draws it as markdown: write it as **grouped bullets**, one fact per ' +
-          'bullet, under short bold headings where there is more than a handful. Put the numbers ' +
-          'and the log lines in the bullets — they are what the check is falsifiable on. An ' +
-          'operator reads this while deciding whether to release the set, so a dense paragraph is ' +
-          'read by skimming.',
-      ),
-    proof: z
-      .string()
-      .trim()
-      .min(1)
-      .optional()
-      .describe(
-        'What must come **back** for a pass to count — the evidence, not the assertion. A screen of ' +
-          'the page that proves it, named for what has to be visible on it. Write it wherever the ' +
-          'check is one an agent carries out unwatched: it is the only thing standing between an ' +
-          'agent\u2019s word and a green row, and a check that declares it cannot be recorded as ' +
-          'passed without it. Leave it out where the assertion is the whole of the evidence \u2014 a ' +
-          'store reading, a log line, a suite area\u2019s own report.',
-      ),
-    uses: z.array(z.string().min(1)).default([]),
-    covers: z.array(z.string().min(1)).default([]),
-    satisfies: z
-      .array(z.string().min(1))
-      .optional()
-      .describe(
-        'The goal criteria this check answers, each copied exactly as the criteria list states it. Every ' +
-          'criterion needs at least one check naming it; one that names nothing is drawn as a gap.',
-      ),
-    rationale: z
-      .string()
-      .trim()
-      .min(1)
-      .optional()
-      .describe(
-        'One line: why this check is the right proof of the criteria it satisfies — what about the change ' +
-          'makes this the test that would catch it. "The retry is the whole change" or "the old bug was a ' +
-          'silent hang". The operator reads it on the validation page beside the check.',
-      ),
-    fleetCandidate: z.boolean().default(false),
-    why: z.string().min(1).optional(),
-    steps: z
-      .array(ValidationStepSchema)
-      .optional()
-      .transform((list) => (list !== undefined && list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list)),
-  })
-  .strict(
-    'a check declares only id/title/do/expect/proof/uses/covers/satisfies/rationale/steps/fleetCandidate/why — who runs it is not yours to say',
-  );
+  .object(
+    {
+      id: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+      title: z.string().min(1),
+      do: z.string().min(1),
+      expect: z
+        .string()
+        .min(1)
+        .describe(
+          'What a pass looks like — everything this one run has to satisfy. Markdown, and the ' +
+            'approval card draws it as markdown: write it as **grouped bullets**, one fact per ' +
+            'bullet, under short bold headings where there is more than a handful. Put the numbers ' +
+            'and the log lines in the bullets — they are what the check is falsifiable on. An ' +
+            'operator reads this while deciding whether to release the set, so a dense paragraph is ' +
+            'read by skimming.',
+        ),
+      proof: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          'What must come **back** for a pass to count — the evidence, not the assertion. A screen of ' +
+            'the page that proves it, named for what has to be visible on it. Write it wherever the ' +
+            'check is one an agent carries out unwatched: it is the only thing standing between an ' +
+            'agent\u2019s word and a green row, and a check that declares it cannot be recorded as ' +
+            'passed without it. Leave it out where the assertion is the whole of the evidence \u2014 a ' +
+            'store reading, a log line, a suite area\u2019s own report.',
+        ),
+      uses: z.array(z.string().min(1)).default([]),
+      covers: z.array(z.string().min(1)).default([]),
+      satisfies: z
+        .array(z.string().min(1))
+        .optional()
+        .describe(
+          'The goal criteria this check answers, each copied exactly as the criteria list states it. Every ' +
+            'criterion needs at least one check naming it; one that names nothing is drawn as a gap.',
+        ),
+      rationale: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          'One line: why this check is the right proof of the criteria it satisfies — what about the change ' +
+            'makes this the test that would catch it. "The retry is the whole change" or "the old bug was a ' +
+            'silent hang". The operator reads it on the validation page beside the check.',
+        ),
+      fleetCandidate: z.boolean().default(false),
+      why: z.string().min(1).optional(),
+      steps: z
+        .array(ValidationStepSchema)
+
+        .transform((list) => (list.length > MAX_STEPS ? list.slice(0, MAX_STEPS) : list))
+        .optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys'
+          ? 'a check declares only id/title/do/expect/proof/uses/covers/satisfies/rationale/steps/fleetCandidate/why — who runs it is not yours to say'
+          : undefined,
+    },
+  )
+  .strict();
 
 export const ValidationSchema = z
-  .object({
-    hint: z.string().min(1).optional(),
-    resources: z
-      .array(ValidationResourceSchema)
-      .optional()
-      .transform((list) => (list !== undefined && list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
-    checks: z
-      .array(ValidationCheckSchema)
-      .optional()
-      .transform((list) => (list !== undefined && list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
-  })
-  .strict(
-    'a validation block declares only "hint", and — from a plan written before the hint — "resources" and "checks"',
+  .object(
+    {
+      hint: z.string().min(1).optional(),
+      resources: z
+        .array(ValidationResourceSchema)
+
+        .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list))
+        .optional(),
+      checks: z
+        .array(ValidationCheckSchema)
+
+        .transform((list) => (list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list))
+        .optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys'
+          ? 'a validation block declares only "hint", and — from a plan written before the hint — "resources" and "checks"'
+          : undefined,
+    },
   )
+  .strict()
   .superRefine((block, ctx) => {
     const ids = new Set<string>();
     for (const check of block.checks ?? []) {

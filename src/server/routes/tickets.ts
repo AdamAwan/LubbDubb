@@ -15,25 +15,21 @@ import type { RouteContext } from './context.js';
 const TicketQuery = z.object({
   watch: z
     .enum(['any', 'watched', 'unwatched'], {
-      errorMap: () => ({ message: "watch must be 'any', 'watched' or 'unwatched'" }),
+      error: "watch must be 'any', 'watched' or 'unwatched'",
     })
     .default('any'),
-  tracking: z
-    .enum(['any', 'live', 'frozen'], { errorMap: () => ({ message: "tracking must be 'any', 'live' or 'frozen'" }) })
-    .default('live'),
+  tracking: z.enum(['any', 'live', 'frozen'], { error: "tracking must be 'any', 'live' or 'frozen'" }).default('live'),
   state: z
-    .string({ invalid_type_error: 'state must be a tracker state name' })
+    .string({ error: 'state must be a tracker state name' })
     .max(80, 'state must be at most 80 characters')
     .default('any'),
   feature: z
-    .string({ invalid_type_error: 'feature must be a feature number, or none' })
+    .string({ error: 'feature must be a feature number, or none' })
     .max(20, 'feature must be at most 20 characters')
     .optional(),
-  order: z
-    .enum(['added', 'changed', 'cost'], { errorMap: () => ({ message: "order must be 'added', 'changed' or 'cost'" }) })
-    .default('added'),
+  order: z.enum(['added', 'changed', 'cost'], { error: "order must be 'added', 'changed' or 'cost'" }).default('added'),
   cursor: z
-    .string({ invalid_type_error: 'cursor must be a page cursor from an earlier response' })
+    .string({ error: 'cursor must be a page cursor from an earlier response' })
     .max(64, 'cursor must be at most 64 characters')
     .optional(),
 });

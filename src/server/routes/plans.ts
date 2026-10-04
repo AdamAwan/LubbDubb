@@ -32,13 +32,15 @@ const RegroupBody = z.object({
     .array(
       z.object({
         slug: requiredText('every group needs the slug of the part it is'),
-        atoms: z.array(z.string().min(1), { invalid_type_error: 'atoms must be a list of atom slugs' }).default([]),
+        atoms: z.array(z.string().min(1), { error: 'atoms must be a list of atom slugs' }).default([]),
         title: optionalText('title'),
         scope: optionalText('scope'),
       }),
       {
-        required_error: 'groups is required — one entry per part, saying which atoms it carries',
-        invalid_type_error: 'groups must be a list — one entry per part, saying which atoms it carries',
+        error: (issue) =>
+          issue.input === undefined
+            ? 'groups is required — one entry per part, saying which atoms it carries'
+            : 'groups must be a list — one entry per part, saying which atoms it carries',
       },
     )
     .min(1, 'a regrouped plan still needs at least one part'),

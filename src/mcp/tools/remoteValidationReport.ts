@@ -15,43 +15,49 @@ import type { ToolFactory } from './context.js';
  * works and no way to have watched a spec run.
  */
 const ReportSchema = z
-  .object({
-    reportPath: z
-      .string()
-      .trim()
-      .min(1)
-      .describe(
-        'Path to the runner’s machine-readable report, inside the run’s own report directory. The harness ' +
-          'parses that file and folds every row’s outcome out of it, so point at the file rather than ' +
-          'describing what is in it.',
-      )
-      .optional(),
-    artefacts: z
-      .string()
-      .trim()
-      .min(1)
-      .describe(
-        'The URL the publish command printed, verbatim, if it ran. It is what turns a red row somebody ' +
-          'clicks into and understands in thirty seconds into the difference from a red row somebody ' +
-          'reproduces by hand.',
-      )
-      .optional(),
-    blocked: z
-      .string()
-      .trim()
-      .min(1)
-      .describe(
-        'A reason, **instead of** a report: the run could not be carried out at all — the environment would ' +
-          'not answer, the credentials are not here, the install failed. It records nothing, leaves every row ' +
-          'exactly as it was, and carries your reason to the operator. It is a right answer rather than a ' +
-          'last resort: an agent that could not reach the environment has learned nothing about the goal.',
-      )
-      .optional(),
-  })
-  .strict(
-    'a remote validation report says only where the report and the artefacts landed, or why there is ' +
-      'neither — which rows it concerns, and what each of them came back as, are not yours to state',
-  );
+  .object(
+    {
+      reportPath: z
+        .string()
+        .trim()
+        .min(1)
+        .describe(
+          'Path to the runner’s machine-readable report, inside the run’s own report directory. The harness ' +
+            'parses that file and folds every row’s outcome out of it, so point at the file rather than ' +
+            'describing what is in it.',
+        )
+        .optional(),
+      artefacts: z
+        .string()
+        .trim()
+        .min(1)
+        .describe(
+          'The URL the publish command printed, verbatim, if it ran. It is what turns a red row somebody ' +
+            'clicks into and understands in thirty seconds into the difference from a red row somebody ' +
+            'reproduces by hand.',
+        )
+        .optional(),
+      blocked: z
+        .string()
+        .trim()
+        .min(1)
+        .describe(
+          'A reason, **instead of** a report: the run could not be carried out at all — the environment would ' +
+            'not answer, the credentials are not here, the install failed. It records nothing, leaves every row ' +
+            'exactly as it was, and carries your reason to the operator. It is a right answer rather than a ' +
+            'last resort: an agent that could not reach the environment has learned nothing about the goal.',
+        )
+        .optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys'
+          ? 'a remote validation report says only where the report and the artefacts landed, or why there is ' +
+            'neither — which rows it concerns, and what each of them came back as, are not yours to state'
+          : undefined,
+    },
+  )
+  .strict();
 
 export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -81,7 +87,7 @@ export const remoteValidationReport: ToolFactory = ({ deps, task, ok }) => ({
       );
     const parsed = ReportSchema.safeParse(args);
     if (!parsed.success)
-      return toolError(`Report rejected: ${parsed.error.errors[0]?.message ?? 'the report could not be read'}`);
+      return toolError(`Report rejected: ${parsed.error.issues[0]?.message ?? 'the report could not be read'}`);
     const { reportPath, artefacts, blocked } = parsed.data;
 
     const desk = deps.remoteReadings?.();

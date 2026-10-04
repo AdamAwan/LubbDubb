@@ -6,13 +6,16 @@ import type { ValidationCheck } from '../types.js';
 const CheckRefSchema = z.object({
   issue: z
     .number({
-      required_error: 'issue is required — the goal number, e.g. 284',
-      invalid_type_error: 'issue must be a number',
+      error: (issue) =>
+        issue.input === undefined ? 'issue is required — the goal number, e.g. 284' : 'issue must be a number',
     })
     .int()
     .positive(),
   check: z
-    .string({ required_error: 'check is required — a letter like "C", or the check id' })
+    .string({
+      error: (issue) =>
+        issue.input === undefined ? 'check is required — a letter like "C", or the check id' : undefined,
+    })
     .trim()
     .min(1, 'check is required — a letter like "C", or the check id'),
 });
@@ -22,14 +25,14 @@ type DesktopCheckRef = z.infer<typeof CheckRefSchema>;
 export function desktopIssueRef(args: unknown): { ok: true; issue: number } | { ok: false; error: string } {
   const parsed = CheckRefSchema.pick({ issue: true }).safeParse(args);
   if (parsed.success) return { ok: true, issue: parsed.data.issue };
-  const first = parsed.error.errors[0];
+  const first = parsed.error.issues[0];
   return { ok: false, error: first ? first.message : 'the issue could not be read' };
 }
 
 export function desktopCheckRef(args: unknown): { ok: true; ref: DesktopCheckRef } | { ok: false; error: string } {
   const parsed = CheckRefSchema.safeParse(args);
   if (parsed.success) return { ok: true, ref: parsed.data };
-  const first = parsed.error.errors[0];
+  const first = parsed.error.issues[0];
   return { ok: false, error: first ? first.message : 'the check could not be read' };
 }
 

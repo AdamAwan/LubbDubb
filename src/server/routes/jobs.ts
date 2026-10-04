@@ -9,14 +9,11 @@ import type { RouteContext } from './context.js';
 // → docs/spec/16-http-api.md
 
 const JobBody = z.object({
-  prompt: z
-    .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
-    .trim()
-    .min(1, 'prompt required'),
+  prompt: z.string({ error: 'prompt required' }).trim().min(1, 'prompt required'),
   title: optionalText('title'),
-  kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
+  kind: z.enum(['code', 'desk'], { error: "kind must be 'code' or 'desk'" }).default('code'),
   branch: z
-    .union([z.string({ invalid_type_error: 'branch must be a string' }).trim(), z.null()])
+    .union([z.string({ error: 'branch must be a string' }).trim(), z.null()])
     .optional()
     .transform((branch) => branch || null),
   attachments: AttachmentsField,
@@ -24,18 +21,14 @@ const JobBody = z.object({
 
 const UpNextOrderBody = z.object({
   origins: z
-    .array(z.string({ invalid_type_error: 'origins must be an array of strings' }), {
-      required_error: 'origins must be an array of strings',
-      invalid_type_error: 'origins must be an array of strings',
+    .array(z.string({ error: 'origins must be an array of strings' }), {
+      error: 'origins must be an array of strings',
     })
     .refine((origins) => new Set(origins).size === origins.length, { message: 'origins must be unique' }),
 });
 
 const UpNextProfileBody = z.object({
-  origin: z
-    .string({ required_error: 'origin required', invalid_type_error: 'origin required' })
-    .trim()
-    .min(1, 'origin required'),
+  origin: z.string({ error: 'origin required' }).trim().min(1, 'origin required'),
   profile: optionalText('profile'),
 });
 

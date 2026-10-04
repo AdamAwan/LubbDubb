@@ -41,16 +41,16 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   const RaiseIssueBody = z.object({
     title: z
-      .string({ required_error: 'title is required', invalid_type_error: 'title must be a string' })
+      .string({ error: (issue) => (issue.input === undefined ? 'title is required' : 'title must be a string') })
       .trim()
       .min(1, 'title is required — say what this is about')
       .max(MAX_ISSUE_TITLE, `title is too long (max ${MAX_ISSUE_TITLE} characters)`),
     body: z
-      .string({ required_error: 'body is required', invalid_type_error: 'body must be a string' })
+      .string({ error: (issue) => (issue.input === undefined ? 'body is required' : 'body must be a string') })
       .trim()
       .min(1, 'body is required — say what should happen')
       .max(MAX_BUG_SUMMARY, `body is too long (max ${MAX_BUG_SUMMARY} characters)`),
-    watch: z.boolean({ invalid_type_error: 'watch must be a boolean' }).optional().default(false),
+    watch: z.boolean({ error: 'watch must be a boolean' }).optional().default(false),
   });
   app.post(
     '/api/issues',

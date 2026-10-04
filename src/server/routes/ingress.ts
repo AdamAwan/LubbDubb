@@ -13,8 +13,7 @@ const DeliveryBody = z
   .object(
     {},
     {
-      invalid_type_error: 'a delivery body must be a JSON object',
-      required_error: 'a delivery body must be a JSON object',
+      error: 'a delivery body must be a JSON object',
     },
   )
   .passthrough();

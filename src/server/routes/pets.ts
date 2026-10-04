@@ -22,7 +22,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   const FeedBody = z.object({
-    beats: z.number({ required_error: 'beats is required', invalid_type_error: 'beats must be a number' }),
+    beats: z.number({ error: (issue) => (issue.input === undefined ? 'beats is required' : 'beats must be a number') }),
   });
   app.post(
     '/api/pets/:id/feed',

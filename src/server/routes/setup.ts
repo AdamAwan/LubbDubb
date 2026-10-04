@@ -28,9 +28,11 @@ export function register(app: FastifyInstance, { system, hub, setup }: RouteCont
   });
 
   const ResolveBody = z.object({
-    email: z.string({ required_error: 'email is required', invalid_type_error: 'email must be a string' }).trim(),
+    email: z
+      .string({ error: (issue) => (issue.input === undefined ? 'email is required' : 'email must be a string') })
+      .trim(),
     repoRoot: z
-      .string({ required_error: 'repoRoot is required', invalid_type_error: 'repoRoot must be a string' })
+      .string({ error: (issue) => (issue.input === undefined ? 'repoRoot is required' : 'repoRoot must be a string') })
       .trim()
       .min(1, 'repoRoot must name a directory'),
   });

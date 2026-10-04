@@ -7,9 +7,9 @@ import { issueOrigin } from '../../plans/planning.js';
 
 // → docs/spec/16-http-api.md
 
-const requiredNote = (field: string, what: string): z.ZodType<string, z.ZodTypeDef, unknown> => {
+const requiredNote = (field: string, what: string): z.ZodType<string, unknown> => {
   const message = `${field} is required — ${what}`;
-  return z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message);
+  return z.string({ error: message }).trim().min(1, message);
 };
 
 const CheckParams = IssueNumberParams.extend({ checkId: z.string().min(1, 'checkId is required') });
@@ -20,14 +20,14 @@ const CheckParams = IssueNumberParams.extend({ checkId: z.string().min(1, 'check
    that it is *reversible*: the row says who recorded it and `Undo` puts it back. A note stays
    accepted, because an agent and the desktop channel both still write one worth having. */
 const ResultBody = z.object({
-  result: z.enum(['passed', 'failed'], { errorMap: () => ({ message: 'result must be "passed" or "failed"' }) }),
+  result: z.enum(['passed', 'failed'], { error: 'result must be "passed" or "failed"' }),
   note: optionalText('note'),
 });
 
 const DeferBody = z.object({
   reason: requiredNote('reason', 'say what it is waiting for'),
   until: z
-    .string({ invalid_type_error: 'until must be a string saying when, or be left out' })
+    .string({ error: 'until must be a string saying when, or be left out' })
     .trim()
     .min(1, 'until must say when, or be left out — a deferral with no date is honest')
     .optional(),
@@ -36,7 +36,7 @@ const DeferBody = z.object({
 const WaiveBody = z.object({ reason: optionalText('reason') });
 
 const HandoverBody = z.object({
-  to: z.enum(['fleet', 'human'], { errorMap: () => ({ message: 'to must be "fleet" or "human"' }) }),
+  to: z.enum(['fleet', 'human'], { error: 'to must be "fleet" or "human"' }),
 });
 
 /*

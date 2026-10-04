@@ -12,8 +12,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   const StartBody = z.object({
     issue: z
       .number({
-        required_error: 'issue is required — the goal number, e.g. 284',
-        invalid_type_error: 'issue must be a number',
+        error: (issue) =>
+          issue.input === undefined ? 'issue is required — the goal number, e.g. 284' : 'issue must be a number',
       })
       .int()
       .positive(),

@@ -7,26 +7,38 @@ import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRef
 const MAX_SIGNALS = 20;
 
 const WatchSignalSchema = z
-  .object({
-    id: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
-    title: z.string().min(1),
-    query: z.string().min(1),
-    presence: z.string().min(1),
-    tolerate: z.number().int().min(0).default(0),
-    why: z.string().min(1).optional(),
-  })
-  .strict('a signal declares only id/title/query/presence/tolerate/why');
+  .object(
+    {
+      id: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+      title: z.string().min(1),
+      query: z.string().min(1),
+      presence: z.string().min(1),
+      tolerate: z.number().int().min(0).default(0),
+      why: z.string().min(1).optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys' ? 'a signal declares only id/title/query/presence/tolerate/why' : undefined,
+    },
+  )
+  .strict();
 
 const WatchExpectSchema = z
-  .object({
-    under: z.number().optional(),
-    over: z.number().optional(),
-    noWorseThan: z.literal('baseline').optional(),
-  })
-  .strict('a measure expects only under/over/noWorseThan')
+  .object(
+    {
+      under: z.number().optional(),
+      over: z.number().optional(),
+      noWorseThan: z.literal('baseline').optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys' ? 'a measure expects only under/over/noWorseThan' : undefined,
+    },
+  )
+  .strict()
   .refine((e) => e.under !== undefined || e.over !== undefined || e.noWorseThan !== undefined, {
     message:
       'a measure must declare a threshold ("under"/"over") or "noWorseThan": "baseline" — one that ' +
@@ -34,18 +46,24 @@ const WatchExpectSchema = z
   });
 
 const WatchMeasureSchema = z
-  .object({
-    id: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
-    title: z.string().min(1),
-    query: z.string().min(1),
-    expect: WatchExpectSchema,
-    unit: z.string().min(1).optional(),
-    why: z.string().min(1).optional(),
-  })
-  .strict('a measure declares only id/title/query/expect/unit/why');
+  .object(
+    {
+      id: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+      title: z.string().min(1),
+      query: z.string().min(1),
+      expect: WatchExpectSchema,
+      unit: z.string().min(1).optional(),
+      why: z.string().min(1).optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys' ? 'a measure declares only id/title/query/expect/unit/why' : undefined,
+    },
+  )
+  .strict();
 
 function refuseQueryShape(
   check: { id: string; query: string; presence?: string },
@@ -73,17 +91,23 @@ function refuseQueryShape(
 }
 
 export const WatchSchema = z
-  .object({
-    signals: z
-      .array(WatchSignalSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
-    measures: z
-      .array(WatchMeasureSchema)
-      .default([])
-      .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
-  })
-  .strict('a watch block declares only "signals" and "measures"')
+  .object(
+    {
+      signals: z
+        .array(WatchSignalSchema)
+        .default([])
+        .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
+      measures: z
+        .array(WatchMeasureSchema)
+        .default([])
+        .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys' ? 'a watch block declares only "signals" and "measures"' : undefined,
+    },
+  )
+  .strict()
   .superRefine((block, ctx) => {
     block.signals.forEach((signal, index) => {
       refuseQueryShape(signal, 'signal', ctx, ['signals', index]);
@@ -99,13 +123,25 @@ export const WatchSchema = z
     }
   });
 
-export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, z.ZodTypeDef, unknown> = z
+export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, unknown> = z
   .discriminatedUnion('kind', [
-    WatchSignalSchema.extend({ kind: z.literal('signal') }).strict(
-      'a signal declares only kind/id/title/query/presence/tolerate/why',
+    z.strictObject(
+      { ...WatchSignalSchema.shape, kind: z.literal('signal') },
+      {
+        error: (issue) =>
+          issue.code === 'unrecognized_keys'
+            ? 'a signal declares only kind/id/title/query/presence/tolerate/why'
+            : undefined,
+      },
     ),
-    WatchMeasureSchema.extend({ kind: z.literal('measure') }).strict(
-      'a measure declares only kind/id/title/query/expect/unit/why',
+    z.strictObject(
+      { ...WatchMeasureSchema.shape, kind: z.literal('measure') },
+      {
+        error: (issue) =>
+          issue.code === 'unrecognized_keys'
+            ? 'a measure declares only kind/id/title/query/expect/unit/why'
+            : undefined,
+      },
     ),
   ])
   .superRefine((check, ctx) => {

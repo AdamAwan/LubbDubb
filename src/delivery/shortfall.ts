@@ -12,7 +12,7 @@ export const ShortfallBody = z
   .object({
     cause: z
       .union([z.enum(SHORTFALL_CAUSES), z.null()], {
-        errorMap: () => ({ message: `cause must be null or one of ${SHORTFALL_CAUSES.join(', ')}` }),
+        error: `cause must be null or one of ${SHORTFALL_CAUSES.join(', ')}`,
       })
       .optional(),
     part: optionalText('part'),

@@ -22,8 +22,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   });
 
   const ControlBody = z.object({
-    cap: z.number({ invalid_type_error: 'cap must be a number' }).optional(),
-    paused: z.boolean({ invalid_type_error: 'paused must be a boolean' }).optional(),
+    cap: z.number({ error: 'cap must be a number' }).optional(),
+    paused: z.boolean({ error: 'paused must be a boolean' }).optional(),
   });
   app.post(
     '/api/control',
