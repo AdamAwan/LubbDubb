@@ -12,8 +12,10 @@ export type Step = { walk: Walk; reply: string } | { refusal: string }
 
 type Args = Record<string, unknown>
 
-const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
+export const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
 const whole = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null)
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+const oneOf = <T,>(list: readonly T[], v: unknown): T | null => ((list as unknown[]).includes(v) ? (v as T) : null)
 
 export function start(args: Args, map: PrMap | null = null): Step {
   const pr = (args.pr ?? {}) as Args
@@ -25,10 +27,10 @@ export function start(args: Args, map: PrMap | null = null): Step {
   const stops: Stop[] = []
   for (const [i, s] of raw.entries()) {
     const title = text(s.title)
-    const kind = (STOP_KINDS as unknown[]).includes(s.kind) ? (s.kind as StopKind) : null
+    const kind = oneOf(STOP_KINDS, s.kind)
     if (title === null || kind === null)
       return { refusal: `Stop ${i + 1} needs a \`title\` and a \`kind\` (${STOP_KINDS.join(', ')}).` }
-    const files = Array.isArray(s.files) ? s.files.filter((f): f is string => typeof f === 'string') : []
+    const files = strings(s.files)
     const steps = Array.isArray(s.steps) ? s.steps.map(whole) : []
     if (steps.length > 0 && map === null) return { refusal: `Stop ${i + 1} names map \`steps\` but no \`map\` was given.` }
     if (map !== null && steps.some(n => n === null || n < 1 || n > map.steps.length))
@@ -80,7 +82,7 @@ export function note(walk: Walk | null, args: Args): Step {
   if (walk === null) return { refusal: 'No walkthrough is running. Call walk_start first.' }
   const action = args.action ?? 'add'
   if (action === 'add') {
-    const kind = (NOTE_KINDS as unknown[]).includes(args.kind) ? (args.kind as NoteKind) : null
+    const kind = oneOf(NOTE_KINDS, args.kind)
     const body = text(args.text)
     if (kind === null || body === null)
       return { refusal: `A note needs a \`kind\` (${NOTE_KINDS.join(', ')}) and a \`text\`.` }
@@ -132,23 +134,21 @@ export function readMap(raw: unknown): PrMap | string {
     title: text(n.title) ?? '',
     file: text(n.file),
     column: text(n.column) ?? '',
-    status: (MAP_STATUSES as unknown[]).includes(n.status) ? (n.status as MapStatus) : 'path',
+    status: oneOf(MAP_STATUSES, n.status) ?? 'path',
     note: text(n.note),
     before: text(n.before),
     after: text(n.after),
   }))
-  const state = (v: unknown, fallback: EdgeState): EdgeState =>
-    (EDGE_STATES as unknown[]).includes(v) ? (v as EdgeState) : fallback
   const edges = list(d.edges).map(e => ({
     from: text(e.from) ?? '',
     to: text(e.to) ?? '',
     label: text(e.label),
-    before: state(e.before, 'normal'),
-    after: state(e.after, e.changed === true ? 'changed' : 'normal'),
+    before: oneOf(EDGE_STATES, e.before) ?? 'normal',
+    after: oneOf(EDGE_STATES, e.after) ?? (e.changed === true ? 'changed' : 'normal'),
   }))
   const steps: MapStep[] = list(d.steps).map(s => ({
     title: text(s.title) ?? '',
-    nodes: Array.isArray(s.nodes) ? s.nodes.filter((x): x is string => typeof x === 'string') : [],
+    nodes: strings(s.nodes),
     text: text(s.text),
     before: text(s.before),
     after: text(s.after),
@@ -161,8 +161,8 @@ export function readMap(raw: unknown): PrMap | string {
 export function slice(map: PrMap, steps: number[]): Slice | null {
   const chosen = steps.flatMap(n => (map.steps[n - 1] === undefined ? [] : [{ ...map.steps[n - 1]!, n }]))
   if (chosen.length === 0) return null
-  const ids = new Set(chosen.flatMap(s => s.nodes))
   const byId = new Map(map.nodes.map(n => [n.id, n]))
+  const ids = new Set(chosen.flatMap(s => s.nodes).filter(id => byId.has(id)))
   return {
     columns: map.columns
       .map(c => ({ label: c.label, nodes: map.nodes.filter(n => n.column === c.id && ids.has(n.id)) }))

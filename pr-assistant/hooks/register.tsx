@@ -13,6 +13,7 @@ import {
   plain,
   readMap,
   slice,
+  text,
   start,
   STOP_KINDS,
   where,
@@ -24,29 +25,31 @@ const walk = atom({ plugin: 'pr-assistant', key: 'walk' } as const, null)
 const PANE = 'pr-walk'
 const TITLE = 'PR walkthrough'
 
-const KIND: Record<StopKind, { mark: string; color?: string }> = {
-  changed: { mark: '~', color: 'yellow' },
-  new: { mark: '+', color: 'green' },
-  removed: { mark: '-', color: 'red' },
-  unchanged: { mark: '·' },
-}
 
 const NOTE: Record<Note['kind'], { label: string; color: string }> = {
   likely: { label: 'likely', color: 'red' },
   check: { label: 'check me', color: 'yellow' },
 }
 
-const NODE: Record<MapStatus, { mark: string; color?: string }> = {
+type Mark = { mark: string; color?: string }
+
+const CHANGE = {
   changed: { mark: '~', color: 'yellow' },
   new: { mark: '+', color: 'green' },
   removed: { mark: '-', color: 'red' },
+} satisfies Record<string, Mark>
+
+const KIND: Record<StopKind, Mark> = { ...CHANGE, unchanged: { mark: '·' } }
+
+const NODE: Record<MapStatus, Mark> = {
+  ...CHANGE,
   path: { mark: '·', color: 'blue' },
   outside: { mark: '○' },
   test: { mark: 't', color: 'magenta' },
   doc: { mark: 'd' },
 }
 
-const ARROW: Record<EdgeState, { mark: string; color?: string }> = {
+const ARROW: Record<EdgeState, Mark> = {
   normal: { mark: '→' },
   changed: { mark: '→', color: 'yellow' },
   blocked: { mark: '✕', color: 'red' },
@@ -164,14 +167,15 @@ export const register: Register = on => {
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_start' }, async ($, e) => {
     const args = e as Record<string, unknown>
+    const path = text(args.map)
     let map = null
-    if (typeof args.map === 'string' && args.map.trim() !== '') {
+    if (path !== null) {
       const loaded = await $.fs
-        .read(args.map.trim())
+        .read(path)
         .then(t => readMap(JSON.parse(t)))
         .catch((err: unknown) => (err instanceof Error ? err.message : String(err)))
       if (typeof loaded === 'string')
-        return { deny: `Could not use the map at ${args.map}: ${loaded} Leave \`map\` out to walk without it.` }
+        return { deny: `Could not use the map at ${path}: ${loaded} Leave \`map\` out to walk without it.` }
       map = loaded
     }
     const out = await apply($, start(args, map))
@@ -191,10 +195,12 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'ToolResult', props: { tool: 'mcp__pr-assistant__walk_goto' } }, async ($, e, next) => {
     const now = await read($, walk)
-    const at = now?.views[e.props.tool_use_id]
-    const stop = at === undefined ? undefined : now?.stops[at]
-    const part = now?.map == null || stop === undefined ? null : slice(now.map, stop.steps)
-    if (e.props.isErrored || part === null) return next(e)
+    if (e.props.isErrored || now?.map == null) return next(e)
+    const at = now.views[e.props.tool_use_id]
+    const stop = at === undefined ? undefined : now.stops[at]
+    if (at === undefined || stop === undefined) return next(e)
+    const part = slice(now.map, stop.steps)
+    if (part === null) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const width = Math.max(24, (e.viewport?.columns ?? 80) - 8)
 
@@ -213,6 +219,8 @@ export const register: Register = on => {
       </Box>
     )
 
+    const shown = part.edges.filter(x => x.before !== x.after || x.label !== null)
+
     const link = (mode: 'before' | 'after', state: EdgeState) => (
       <Text key={mode} color={ARROW[state].color} dimColor={ARROW[state].color === undefined}>
         {state === 'absent' ? `${mode}: none` : `${mode}: ${ARROW[state].mark}`}
@@ -221,7 +229,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
-        <Text dimColor>{clip(`Map · stop ${at! + 1}: ${stop!.title}`, width)}</Text>
+        <Text dimColor>{clip(`Map · stop ${at + 1}: ${stop.title}`, width)}</Text>
         {part.columns.map((c, i) => (
           <Box key={`col-${i}`} flexDirection="column">
             {i > 0 && <Text dimColor>  ↓</Text>}
@@ -229,11 +237,9 @@ export const register: Register = on => {
             {c.nodes.map(card)}
           </Box>
         ))}
-        {part.edges.some(x => x.before !== x.after || x.label !== null) && (
+        {shown.length > 0 && (
           <Box flexDirection="column" marginTop={1}>
-            {part.edges
-              .filter(x => x.before !== x.after || x.label !== null)
-              .map((x, i) => (
+            {shown.map((x, i) => (
                 <Box key={`edge-${i}`} gap={1}>
                   <Text>{clip(`${plain(x.fromTitle)} → ${plain(x.toTitle)}`, Math.max(12, width - 28))}</Text>
                   {x.label !== null && <Text dimColor>{x.label}</Text>}
