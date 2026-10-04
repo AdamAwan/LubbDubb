@@ -1802,6 +1802,15 @@ own digest.
   repository's own `.claude/skills/pr-map`; it moved here because nothing in it needs the harness.
 - **The panel follows the walk**: the stops, which one is current, the diff hunk for it, and the notes
   raised. The walk runs in chat alone when the mod's tools are not in the session.
+- **Each stop's part of the map is drawn in the chat**, under its `walk_goto` call. `walk_start` takes
+  `map`, the path of the map's JSON, and each stop's `steps`, the map steps it covers; the mod reads the
+  map once and keeps it in the walk. A `ToolResult` hook on `walk_goto` draws those steps' cards by
+  column, the links that differ before and after, and each step's Before and After side by side, so the
+  person never toggles to compare. It finds the stop by the call's `tool_use_id`, recorded at the call,
+  so an earlier stop's widget keeps showing that stop. An unreadable map, or `steps` with no map, is a
+  `deny`; with no map the row is the engine's own.
+- **The map page's Before/After toggle stays in view**: its bar is sticky, and the `b` and `a` keys
+  switch modes from anywhere on the page.
 
 - **The model drives it through four tools the mod registers**: `walk_start` (the PR and its stops;
   opens the panel), `walk_goto` (the current stop and its hunk), `walk_note` (add a `likely` or

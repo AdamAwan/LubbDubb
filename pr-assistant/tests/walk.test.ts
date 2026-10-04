@@ -28,6 +28,26 @@ const START = {
   ],
 }
 
+const MAP = {
+  columns: [
+    { id: 'store', label: 'Store' },
+    { id: 'rule', label: 'Rule' },
+  ],
+  nodes: [
+    { id: 'query', title: '`unchecked` query', file: 'src/store/prDescriptions.ts', column: 'store', status: 'changed', after: 'returns authoredAt' },
+    { id: 'rule', title: 'description-check', file: 'src/dispatcher/rules/check.ts', column: 'rule', status: 'changed', before: 'counts all tries' },
+    { id: 'ask', title: 'Ask a person', column: 'rule', status: 'new' },
+  ],
+  edges: [
+    { from: 'query', to: 'rule', label: 'versions' },
+    { from: 'rule', to: 'ask', before: 'absent' },
+  ],
+  steps: [
+    { title: 'Store lists versions', nodes: ['query'], before: 'Versions only.', after: 'Versions with **when** written.' },
+    { title: 'The rule decides', nodes: ['rule', 'ask'], before: 'Three tries in all.', after: 'Three tries per version.' },
+  ],
+}
+
 const HUNK = "@@ -1,2 +1,2 @@\n-  'SELECT pr_ref, body'\n+  'SELECT pr_ref, body, authored_at'\n   ).all()\n"
 
 function quiet(on: On) {
@@ -152,4 +172,47 @@ test('wrapping up hides the controls and keeps the notes', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: 'done' })).toBeDefined()
   expect(await ui.find({ key: 'review' })).toBeDefined()
   await ui.unmount()
+})
+
+test('with a map, each stop draws its part of the map under the goto in the chat', async ($, on) => {
+  quiet(on)
+  on('fs.read', async (_$, e, next) => (e.path.endsWith('map.json') ? { value: JSON.stringify(MAP) } : next(e)))
+  const started = await $.tool.call({
+    ...START,
+    map: 'map.json',
+    stops: [
+      { ...START.stops[0]!, steps: [] },
+      { ...START.stops[1]!, steps: [1, 2] },
+      { ...START.stops[2]!, steps: [2] },
+    ],
+  })
+  expect(started.deny).toBeUndefined()
+  expect(started.result).toContain('the map loaded')
+
+  const done = await $.tool.call({ tool: 'mcp__pr-assistant__walk_goto', stop: 2, tool_use_id: 'call-2' })
+  expect(done.result).toBe('Panel on stop 2 of 3.')
+
+  const ui = await $.ui.mount({
+    plugin: 'pr-assistant',
+    surface: 'terminal',
+    component: 'ToolResult',
+    requestId: 'call-2',
+    props: { tool_use_id: 'call-2', tool: 'mcp__pr-assistant__walk_goto', output: done.result, isErrored: false },
+  })
+  expect(await ui.find({ type: 'Text', text: /^Map · stop 2/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Before: Three tries in all.' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'After:  Versions with when written.' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '    after:  returns authoredAt' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'before: none' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a map that cannot be read is refused, and steps without a map too', async ($, on) => {
+  quiet(on)
+
+  const missing = await $.tool.call({ ...START, map: 'nowhere/map.json' })
+  const loose = await $.tool.call({ ...START, stops: [{ title: 'A', kind: 'changed', steps: [1] }] })
+
+  expect(missing.deny).toContain('Could not use the map at nowhere/map.json')
+  expect(loose.deny).toContain('no `map` was given')
 })

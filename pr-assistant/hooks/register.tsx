@@ -1,24 +1,60 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Note, StopKind } from '../types'
-import { clip, finish, goto, MAX_HUNK, MAX_STOPS, note, NOTE_KINDS, start, STOP_KINDS, where, type Step } from './walk'
+import type { EdgeState, MapNode, MapStatus, Note, StopKind } from '../types'
+import {
+  clip,
+  finish,
+  goto,
+  MAX_HUNK,
+  MAX_STOPS,
+  note,
+  NOTE_KINDS,
+  plain,
+  readMap,
+  slice,
+  text,
+  start,
+  STOP_KINDS,
+  where,
+  type Step,
+} from './walk'
 
 const walk = atom({ plugin: 'pr-assistant', key: 'walk' } as const, null)
 
 const PANE = 'pr-walk'
 const TITLE = 'PR walkthrough'
 
-const KIND: Record<StopKind, { mark: string; color?: string }> = {
-  changed: { mark: '~', color: 'yellow' },
-  new: { mark: '+', color: 'green' },
-  removed: { mark: '-', color: 'red' },
-  unchanged: { mark: '·' },
-}
 
 const NOTE: Record<Note['kind'], { label: string; color: string }> = {
   likely: { label: 'likely', color: 'red' },
   check: { label: 'check me', color: 'yellow' },
+}
+
+type Mark = { mark: string; color?: string }
+
+const CHANGE = {
+  changed: { mark: '~', color: 'yellow' },
+  new: { mark: '+', color: 'green' },
+  removed: { mark: '-', color: 'red' },
+} satisfies Record<string, Mark>
+
+const KIND: Record<StopKind, Mark> = { ...CHANGE, unchanged: { mark: '·' } }
+
+const NODE: Record<MapStatus, Mark> = {
+  ...CHANGE,
+  path: { mark: '·', color: 'blue' },
+  outside: { mark: '○' },
+  test: { mark: 't', color: 'magenta' },
+  doc: { mark: 'd' },
+}
+
+const ARROW: Record<EdgeState, Mark> = {
+  normal: { mark: '→' },
+  changed: { mark: '→', color: 'yellow' },
+  blocked: { mark: '✕', color: 'red' },
+  ghost: { mark: '⇢' },
+  absent: { mark: ' ' },
 }
 
 const TOOLS = [
@@ -35,6 +71,11 @@ const TOOLS = [
           required: ['number', 'title'],
         },
         summary: { type: 'string', description: 'One or two plain sentences: what the PR does.' },
+        map: {
+          type: 'string',
+          description:
+            "Path to the PR map's JSON (the file the map job built from). With it, each walk_goto draws that stop's part of the map in the chat.",
+        },
         stops: {
           type: 'array',
           minItems: 1,
@@ -45,6 +86,11 @@ const TOOLS = [
               title: { type: 'string', description: 'A few words, what happens at this stop.' },
               kind: { type: 'string', enum: STOP_KINDS },
               files: { type: 'array', items: { type: 'string' } },
+              steps: {
+                type: 'array',
+                items: { type: 'integer', minimum: 1 },
+                description: 'The map step numbers (1-based) this stop covers. Needs `map`.',
+              },
             },
             required: ['title', 'kind'],
           },
@@ -120,13 +166,25 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_start' }, async ($, e) => {
-    const out = await apply($, start(e as Record<string, unknown>))
+    const args = e as Record<string, unknown>
+    const path = text(args.map)
+    let map = null
+    if (path !== null) {
+      const loaded = await $.fs
+        .read(path)
+        .then(t => readMap(JSON.parse(t)))
+        .catch((err: unknown) => (err instanceof Error ? err.message : String(err)))
+      if (typeof loaded === 'string')
+        return { deny: `Could not use the map at ${path}: ${loaded} Leave \`map\` out to walk without it.` }
+      map = loaded
+    }
+    const out = await apply($, start(args, map))
     if ('result' in out) await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
     return out
   })
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_goto' }, async ($, e) =>
-    apply($, goto(await read($, walk), e as Record<string, unknown>)),
+    apply($, goto(await read($, walk), e as Record<string, unknown>, e.tool_use_id)),
   )
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_note' }, async ($, e) =>
@@ -134,6 +192,73 @@ export const register: Register = on => {
   )
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_end' }, async $ => apply($, finish(await read($, walk))))
+
+  on('ui.render', { component: 'ToolResult', props: { tool: 'mcp__pr-assistant__walk_goto' } }, async ($, e, next) => {
+    const now = await read($, walk)
+    if (e.props.isErrored || now?.map == null) return next(e)
+    const at = now.views[e.props.tool_use_id]
+    const stop = at === undefined ? undefined : now.stops[at]
+    if (at === undefined || stop === undefined) return next(e)
+    const part = slice(now.map, stop.steps)
+    if (part === null) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    const width = Math.max(24, (e.viewport?.columns ?? 80) - 8)
+
+    const card = (n: MapNode) => (
+      <Box key={`node-${n.id}`} flexDirection="column" paddingLeft={2}>
+        <Box gap={1}>
+          <Text color={NODE[n.status].color} dimColor={NODE[n.status].color === undefined}>
+            {NODE[n.status].mark}
+          </Text>
+          <Text bold>{plain(n.title)}</Text>
+          {n.file !== null && <Text dimColor>{clip(n.file.split('/').pop() ?? n.file, 40)}</Text>}
+        </Box>
+        {n.note !== null && <Text dimColor>{`    ${plain(n.note)}`}</Text>}
+        {n.before !== null && <Text color="red">{`    before: ${plain(n.before)}`}</Text>}
+        {n.after !== null && <Text color="green">{`    after:  ${plain(n.after)}`}</Text>}
+      </Box>
+    )
+
+    const shown = part.edges.filter(x => x.before !== x.after || x.label !== null)
+
+    const link = (mode: 'before' | 'after', state: EdgeState) => (
+      <Text key={mode} color={ARROW[state].color} dimColor={ARROW[state].color === undefined}>
+        {state === 'absent' ? `${mode}: none` : `${mode}: ${ARROW[state].mark}`}
+      </Text>
+    )
+
+    return (
+      <Box flexDirection="column" borderStyle="round" paddingX={1}>
+        <Text dimColor>{clip(`Map · stop ${at + 1}: ${stop.title}`, width)}</Text>
+        {part.columns.map((c, i) => (
+          <Box key={`col-${i}`} flexDirection="column">
+            {i > 0 && <Text dimColor>  ↓</Text>}
+            <Text dimColor>{c.label.toUpperCase()}</Text>
+            {c.nodes.map(card)}
+          </Box>
+        ))}
+        {shown.length > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            {shown.map((x, i) => (
+                <Box key={`edge-${i}`} gap={1}>
+                  <Text>{clip(`${plain(x.fromTitle)} → ${plain(x.toTitle)}`, Math.max(12, width - 28))}</Text>
+                  {x.label !== null && <Text dimColor>{x.label}</Text>}
+                  {x.before !== x.after && [link('before', x.before), link('after', x.after)]}
+                </Box>
+              ))}
+          </Box>
+        )}
+        {part.steps.map(s => (
+          <Box key={`step-${s.n}`} flexDirection="column" marginTop={1}>
+            <Text bold>{`${s.n}. ${plain(s.title)}`}</Text>
+            {s.text !== null && <Text dimColor>{plain(s.text)}</Text>}
+            {s.before !== null && <Text color="red">{`Before: ${plain(s.before)}`}</Text>}
+            {s.after !== null && <Text color="green">{`After:  ${plain(s.after)}`}</Text>}
+          </Box>
+        ))}
+      </Box>
+    )
+  })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Link, Code } = $.ui.resolve(e)

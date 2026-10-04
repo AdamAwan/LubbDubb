@@ -1,6 +1,44 @@
 export type StopKind = 'changed' | 'new' | 'removed' | 'unchanged'
 
-export type Stop = { title: string; kind: StopKind; files: string[] }
+export type Stop = { title: string; kind: StopKind; files: string[]; steps: number[] }
+
+export type MapStatus = 'changed' | 'new' | 'removed' | 'path' | 'outside' | 'test' | 'doc'
+
+export type EdgeState = 'normal' | 'changed' | 'blocked' | 'ghost' | 'absent'
+
+export type MapNode = {
+  id: string
+  title: string
+  file: string | null
+  column: string
+  status: MapStatus
+  note: string | null
+  before: string | null
+  after: string | null
+}
+
+export type MapEdge = { from: string; to: string; label: string | null; before: EdgeState; after: EdgeState }
+
+export type MapStep = {
+  title: string
+  nodes: string[]
+  text: string | null
+  before: string | null
+  after: string | null
+}
+
+export type PrMap = {
+  columns: { id: string; label: string }[]
+  nodes: MapNode[]
+  edges: MapEdge[]
+  steps: MapStep[]
+}
+
+export type Slice = {
+  columns: { label: string; nodes: MapNode[] }[]
+  edges: (MapEdge & { fromTitle: string; toTitle: string })[]
+  steps: (MapStep & { n: number })[]
+}
 
 export type NoteKind = 'likely' | 'check'
 
@@ -25,6 +63,8 @@ export type Walk = {
   hunk: Hunk | null
   notes: Note[]
   isDone: boolean
+  map: PrMap | null
+  views: Record<string, number>
 }
 
 declare module 'claude-code' {
