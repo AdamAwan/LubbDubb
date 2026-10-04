@@ -40,7 +40,10 @@ but the PR doesn't touch.
 
 Reply with the map's link, the PR in two sentences and the numbered stops, the main stop marked
 as such. Then ask where to start. Call `walk_start` with the PR (`number`, `title`, `url`), the
-two-sentence `summary` and the stops, each with its `files`.
+two-sentence `summary`, `map` (the path of the map's JSON file) and the stops, each with its
+`files` and `steps`: the map step numbers it covers. Each `walk_goto` then draws that part of the
+map in the chat under the call — the cards, their Before/After notes and the step's Before/After —
+so don't repeat those in your reply. Without a map, leave `map` and `steps` out.
 
 ### 4. One stop at a time
 

@@ -23,7 +23,7 @@ h1{font-family:var(--display);font-size:1.9rem;margin:0;text-wrap:balance}
 .pr a{color:inherit}
 .lede{color:var(--muted);max-width:68ch;margin:6px 0 0}
 code{font-family:var(--mono);font-size:.88em}
-.bar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.bar{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5;background:var(--bg);padding-block:8px;margin-block:-8px}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:12px;height:12px;border-radius:3px;border:2px solid}
@@ -109,9 +109,9 @@ code{font-family:var(--mono);font-size:.88em}
   </header>
   <div class="bar">
     <div class="legend" id="legend"></div>
-    <div class="toggle" role="group" aria-label="Show code version">
-      <button id="t-before" aria-pressed="true">Before this PR</button>
-      <button id="t-after" aria-pressed="false">After this PR</button>
+    <div class="toggle" role="group" aria-label="Show code version (keys b and a)">
+      <button id="t-before" aria-pressed="true" title="Key: b">Before this PR</button>
+      <button id="t-after" aria-pressed="false" title="Key: a">After this PR</button>
     </div>
   </div>
   <div class="mapwrap"><div class="map" id="map">
@@ -216,6 +216,8 @@ function select(n){
 }
 function setMode(m){root.dataset.mode=m;MODES.forEach(k=>$('t-'+k).setAttribute('aria-pressed',String(m===k)));draw();}
 MODES.forEach(k=>$('t-'+k).onclick=()=>setMode(k));
+document.addEventListener('keydown',e=>{if(e.ctrlKey||e.metaKey||e.altKey||/INPUT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.key==='b')setMode('before');else if(e.key==='a')setMode('after');});
 document.querySelectorAll('.story .sh').forEach(b=>b.onclick=()=>select(+b.parentElement.dataset.n));
 document.querySelectorAll('.card').forEach(c=>{const go=()=>{const s=stepsOf[c.dataset.id];if(s)select(s[0]);};
   c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};});
