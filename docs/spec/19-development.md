@@ -160,13 +160,14 @@ Failure modes that are not obvious:
   name `src/wire.ts` or `web/src/types.ts` passes on that nothing downstream imports is reported
   too, and the fix is to drop it from the list.
 
-  **Unused class members are not checked.** knip 6 dropped the `classMembers` issue type (its new
-  parser has no reference-finding service to back it), so a public method nothing calls no longer
-  turns `check` red. Prefer declaring `implements` where a class satisfies an interface structurally
-  — it keeps the contract checked by the typechecker.
+  **Unused class members are not checked** — knip has no rule for them. Prefer declaring
+  `implements` where a class satisfies an interface structurally; it keeps the contract checked by
+  the typechecker.
 
-  `ignoreDependencies` holds exactly `claude-code`: the plugin and PR-assistant tests import
-  `claude-code/testing`, which the Claude Code host provides at run time and no package supplies.
+  `plugin/**` and `pr-assistant/**` are in `ignore`. Their `*.test.ts` files run on the Claude Code
+  host's harness, not `node --test`, but knip's Node plugin adds every `*.test.ts` as an entry
+  because `npm test` uses `node --test`, and then reports the host-provided `claude-code` import as
+  unlisted.
 
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy

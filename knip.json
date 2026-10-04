@@ -2,8 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["src/server/main.ts", "test/**/*.test.ts", "scripts/*.ts", "web/src/main.tsx"],
   "project": ["src/**/*.ts", "web/src/**/*.{ts,tsx}", "scripts/*.ts"],
-  "ignore": [],
-  "ignoreDependencies": ["claude-code"],
+  "ignore": ["plugin/**", "pr-assistant/**"],
+  "ignoreDependencies": [],
   "ignoreBinaries": [],
   "vite": {
     "config": ["web/vite.config.ts"]
