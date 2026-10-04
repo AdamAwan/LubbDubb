@@ -146,35 +146,28 @@ same gate.
 Failure modes that are not obvious:
 
 - **knip** fails the build on **every** class of unused code it can find. Adding an `export` nothing
-  imports, a type nothing names, a dependency you do not end up using, or a public method nothing
-  calls turns `check` red. Remove dead code or wire it up. **Every** rule is `error` — there is no
-  `warn` tier, so nothing accumulates unnoticed: files, dependencies, devDependencies,
-  optionalPeerDependencies, unlisted, unresolved, binaries, exports, types, namespace exports/types,
-  duplicates, enum members and class members. Two switches widen it beyond knip's defaults:
-  `includeEntryExports` (an entry file's own exports are checked too, so a helper exported from a
-  test or a script is held to the same standard) and `include: ["classMembers"]`.
+  imports, a type nothing names, or a dependency you do not end up using turns `check` red. Remove
+  dead code or wire it up. **Every** rule is `error` — there is no `warn` tier, so nothing
+  accumulates unnoticed: files, dependencies, devDependencies, optionalPeerDependencies, unlisted,
+  unresolved, binaries, exports, types, namespace exports/types, duplicates and enum members.
+  `includeEntryExports` widens it beyond knip's defaults: an entry file's own exports are checked
+  too, so a helper exported from a test or a script is held to the same standard.
 
   The usual fix for a type or a helper reported here is to **drop the `export` keyword**, not to
   delete it: a type naming an exported function's parameters or return value stays perfectly usable
   by callers without being exported, and structural typing means nothing downstream breaks.
-  ESLint's `no-unused-vars` then catches whatever is left genuinely dead.
+  ESLint's `no-unused-vars` then catches whatever is left genuinely dead. A re-export counts: a
+  name `src/wire.ts` or `web/src/types.ts` passes on that nothing downstream imports is reported
+  too, and the fix is to drop it from the list.
 
-  Class-member analysis is **name-based**, so a method reached only through a structural seam — an
-  interface the class satisfies without declaring `implements` — reads as unused. Two honest ways
-  out, and neither is an ignore list: declare the `implements` clause (`PtySession implements
-AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@public` with a note
-  naming the seam.
+  **Unused class members are not checked** — knip has no rule for them. Prefer declaring
+  `implements` where a class satisfies an interface structurally; it keeps the contract checked by
+  the typechecker.
 
-  **Reach for `implements` first**, including when the interface belongs to a consumer the class
-  should not depend on backwards. An `import type` is erased at compile time, so it adds no runtime
-  module edge and cannot invert a layering: the question to ask is what the _value_ graph already
-  does. `AgentManager` was tagged for eleven methods on that reasoning while the same file
-  value-imported `assessmentOrigin`, `appraiserOrigin` and `partConclusionOrigin` from `src/mcp/` —
-  the edge was already there, and the tags bought nothing but the loss of a checked contract.
-
-  That leaves `@public` for the case where the interface genuinely cannot be named — it would close
-  a real runtime cycle, or it lives outside the typecheck project. There are currently no instances
-  in `src/`, which is the state to keep it in.
+  `plugin/**` and `pr-assistant/**` are in `ignore`. Their `*.test.ts` files run on the Claude Code
+  host's harness, not `node --test`, but knip's Node plugin adds every `*.test.ts` as an entry
+  because `npm test` uses `node --test`, and then reports the host-provided `claude-code` import as
+  unlisted.
 
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy

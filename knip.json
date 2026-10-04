@@ -1,15 +1,14 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["src/server/main.ts", "test/**/*.test.ts", "scripts/*.ts", "web/src/main.tsx"],
   "project": ["src/**/*.ts", "web/src/**/*.{ts,tsx}", "scripts/*.ts"],
-  "ignore": ["web/vite.config.ts", "web/src/vite-env.d.ts"],
+  "ignore": ["plugin/**", "pr-assistant/**"],
   "ignoreDependencies": [],
   "ignoreBinaries": [],
   "vite": {
     "config": ["web/vite.config.ts"]
   },
   "includeEntryExports": true,
-  "include": ["classMembers"],
   "rules": {
     "files": "error",
     "dependencies": "error",
@@ -23,7 +22,6 @@
     "nsExports": "error",
     "nsTypes": "error",
     "duplicates": "error",
-    "enumMembers": "error",
-    "classMembers": "error"
+    "enumMembers": "error"
   }
 }
