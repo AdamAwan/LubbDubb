@@ -173,13 +173,16 @@ Failure modes that are not obvious:
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy
   both.
 - **Two TypeScripts are installed, on purpose.** `typecheck`, `typecheck:web` and `build` run
-  TypeScript 7 — the native compiler, installed as the alias `typescript7` and called by path
-  (`node node_modules/typescript7/bin/tsc`). The plain `typescript` dependency is pinned to 6.0
-  because TypeScript 7 ships no compiler API and `typescript-eslint` parses through that API; point
-  `typescript` at 7 and lint crashes on load. Both packages declare a `tsc` bin, which is why the
-  scripts never call a bare `tsc`. Drop the 6.0 pin once `typescript-eslint` supports 7. TypeScript
-  6 and later turn on `noUncheckedSideEffectImports`, so the cockpit's CSS imports type-check only
-  through `vite/client` in `web/tsconfig.json`'s `types`.
+  TypeScript 7, the native compiler, installed as the alias `typescript7`. The plain `typescript`
+  dependency is pinned to 6.0 because TypeScript 7 ships no compiler API and `typescript-eslint`
+  parses through it; point `typescript` at 7 and lint crashes on load. Both declare a `tsc` bin, so
+  the scripts never call a bare `tsc`: they go through `scripts/tsc.ts`, which finds `typescript7`
+  by node's own module lookup — an agent worktree borrows the parent checkout's `node_modules`, where
+  neither `.bin/` nor a fixed path reaches. Drop the 6.0 pin once `typescript-eslint` supports 7.
+- **CSS imports are declared in `web/src/vite-env.d.ts`.** TypeScript 6 and later turn on
+  `noUncheckedSideEffectImports`, so `import './styles.css'` needs a module declaration. It is one
+  line there rather than `vite/client` in `types`, which would widen `ImportMetaEnv` to any key and
+  stop a misspelt `import.meta.env` name failing the typecheck.
 - **lint walks the repo root, so nested checkouts are ignored by path.** `eslint.config.js` ignores
   `.lubbdubb/**` and `.claude/worktrees/**` alongside the build outputs: both hold worktrees of this
   same repository, and linting them reports every finding a second time under a path that is not the
