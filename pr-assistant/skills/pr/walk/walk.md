@@ -23,20 +23,26 @@ exactly as if they had typed them.
 - Read the spec that owns the behaviour (`docs/spec/`, through `docs/README.md`) when the repo has
   one. A change the spec contradicts, or a spec the diff leaves wrong, is a note.
 
-### 2. Lay out the stops
+### 2. Draw the map
 
-Split the PR into **2 to 8 stops** in reading order: the order the data or control flows, as in
-`map/map.md`'s one path. A stop is one thing that happens ("the rule counts tries per version"),
-not one file. Things off the path (renames, tests, docs) can be one last stop, or be left out.
+Before your first reply, draw the PR's map: read `map/map.md` in full and follow it, build and
+publish. The walk and the map share one path, so the map's steps are your stops' starting point.
+Put the map's link in your first reply. If the build won't pass after a few tries, say so in one
+line and walk without it.
+
+### 3. Lay out the stops
+
+Split the PR into **2 to 8 stops** in reading order, following the map's steps. A stop is one
+thing that happens ("the rule counts tries per version"), not one file. Things off the path (renames, tests, docs) can be one last stop, or be left out.
 
 Give each stop a `kind`: `changed`, `new`, `removed`, or `unchanged` for context the reader needs
 but the PR doesn't touch.
 
-Reply with the PR in two sentences and the numbered stops, the main stop marked as such. Then ask
-where to start. Call `walk_start` with the PR (`number`, `title`, `url`), the two-sentence
-`summary` and the stops, each with its `files`.
+Reply with the map's link, the PR in two sentences and the numbered stops, the main stop marked
+as such. Then ask where to start. Call `walk_start` with the PR (`number`, `title`, `url`), the
+two-sentence `summary` and the stops, each with its `files`.
 
-### 3. One stop at a time
+### 4. One stop at a time
 
 When you present a stop:
 
@@ -55,7 +61,7 @@ When you present a stop:
 An `unchanged` stop gets two or three sentences and no problems section, unless the change breaks
 an assumption it makes.
 
-### 4. Answer what they ask
+### 5. Answer what they ask
 
 - Answer from the code. Read what you need first (grep, open the file, `git show`), and say what you
   read. If you can't settle it, say so, and add or keep a **check me** note.
@@ -65,7 +71,7 @@ an assumption it makes.
 - A question about a different stop moves there: call `walk_goto` first.
 - Never claim something about the old or new code that you haven't read.
 
-### 5. Wrap up
+### 6. Wrap up
 
 On `done` (or after the last stop, when they say so):
 
