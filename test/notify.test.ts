@@ -12,7 +12,7 @@ const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures
 const buildDemoState = () => buildDemoSeed().state;
 
 function snap(over: Partial<Snapshot> = {}) {
-  return { needsYou: [], errors: [], agents: [], environments: [], ...over };
+  return { needsYou: [], errors: [], agents: [], validations: [], environments: [], ...over };
 }
 
 type Snapshot = ReturnType<typeof notifySnapshot>;
@@ -259,7 +259,10 @@ function withEngine(
   return raised;
 }
 
-const ON = { enabled: true, categories: { needsYou: true, errors: true, agents: true, environments: true } };
+const ON = {
+  enabled: true,
+  categories: { needsYou: true, errors: true, agents: true, validations: true, environments: true },
+};
 const ONE_ITEM = [{ id: 'esc_1', kind: 'escalation' as const, title: 'Which database?' }];
 const oneChange = () => notifiableChanges(snap(), snap({ needsYou: ONE_ITEM }));
 
@@ -488,4 +491,45 @@ test('a notification the desktop drops after accepting it comes back as undelive
   assert.equal(late, null, 'nothing is undelivered until the engine says so');
   raised[0]!.fireError();
   assert.equal(late, 'undelivered');
+});
+
+function validation(over: Partial<Snapshot['validations'][number]> & { id: string; ended: boolean }) {
+  return { verdict: 'Validation passed', goal: '#12 Fix login', where: 'your machine', summary: null, ...over };
+}
+
+test('a validation notifies when it ends, so its results can be reviewed', () => {
+  const running = snap({ validations: [validation({ id: 'local:v1', ended: false, verdict: 'dispatched' })] });
+  assert.deepEqual(notifiableChanges(snap(), running), []);
+
+  const done = snap({
+    validations: [validation({ id: 'local:v1', ended: true, verdict: 'Validation failed', summary: 'Login loops' })],
+  });
+  const items = notifiableChanges(running, done);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.category, 'validations');
+  assert.equal(items[0]!.title, 'Validation failed: #12 Fix login');
+  assert.equal(items[0]!.body, 'your machine · Login loops');
+  assert.equal(items[0]!.tag, 'validation:local:v1');
+
+  assert.deepEqual(notifiableChanges(done, done), []);
+});
+
+test('a remote validation run says which environment it ran against', () => {
+  const before = snap({
+    validations: [validation({ id: 'remote:r1', ended: false, verdict: 'Validation finished', where: 'staging' })],
+  });
+  const after = snap({
+    validations: [validation({ id: 'remote:r1', ended: true, verdict: 'Validation finished', where: 'staging' })],
+  });
+  const [item] = notifiableChanges(before, after);
+  assert.equal(item!.title, 'Validation finished: #12 Fix login');
+  assert.equal(item!.body, 'staging');
+});
+
+test('notifySnapshot reads local validations off the goals and remote runs off the sheets', () => {
+  const state = buildDemoState();
+  const reduced = notifySnapshot(state);
+  const local = state.world.issues.filter((i) => i.localValidation).length;
+  const remote = (state.remoteSheets ?? []).filter((s) => s.run).length;
+  assert.equal(reduced.validations.length, local + remote);
 });
