@@ -61,6 +61,7 @@ export async function azCliAccessToken(): Promise<string> {
     throw new Error(
       `Could not get an Azure DevOps token from the az CLI (${(err as Error).message}). ` +
         'Run `az login`, or set AZURE_DEVOPS_PAT to a Personal Access Token.',
+      { cause: err },
     );
   }
 }

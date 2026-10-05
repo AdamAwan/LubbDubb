@@ -129,7 +129,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         waitingReason: agent.waitingReason,
       });
       this.store.tasks.updateTask(task.id, { status: task.status });
-      throw new Error(`resume spawn failed for agent ${agent.id}: ${(err as Error).message}`);
+      throw new Error(`resume spawn failed for agent ${agent.id}: ${(err as Error).message}`, {
+        cause: err,
+      });
     }
 
     if (wasWaiting) {

@@ -282,6 +282,7 @@ export class AzureDevOpsWorkItemsIntegration
       } catch (err) {
         throw new Error(
           `work item ${created.id} was created but linking it to #${input.relatedTo} failed: ${(err as Error).message}`,
+          { cause: err },
         );
       }
     }
