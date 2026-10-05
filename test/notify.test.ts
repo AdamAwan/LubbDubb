@@ -493,18 +493,15 @@ test('a notification the desktop drops after accepting it comes back as undelive
   assert.equal(late, 'undelivered');
 });
 
-function validation(over: Partial<Snapshot['validations'][number]> & { id: string; ended: boolean }) {
-  return { verdict: 'Validation passed', goal: '#12 Fix login', where: 'your machine', summary: null, ...over };
+function validation(over: Partial<Snapshot['validations'][number]> & { id: string }) {
+  return { title: 'Validation passed: #12 Fix login', where: 'your machine', summary: null, ...over };
 }
 
 test('a validation notifies when it ends, so its results can be reviewed', () => {
-  const running = snap({ validations: [validation({ id: 'local:v1', ended: false, verdict: 'dispatched' })] });
-  assert.deepEqual(notifiableChanges(snap(), running), []);
-
   const done = snap({
-    validations: [validation({ id: 'local:v1', ended: true, verdict: 'Validation failed', summary: 'Login loops' })],
+    validations: [validation({ id: 'local:v1', title: 'Validation failed: #12 Fix login', summary: 'Login loops' })],
   });
-  const items = notifiableChanges(running, done);
+  const items = notifiableChanges(snap(), done);
   assert.equal(items.length, 1);
   assert.equal(items[0]!.category, 'validations');
   assert.equal(items[0]!.title, 'Validation failed: #12 Fix login');
@@ -515,21 +512,17 @@ test('a validation notifies when it ends, so its results can be reviewed', () =>
 });
 
 test('a remote validation run says which environment it ran against', () => {
-  const before = snap({
-    validations: [validation({ id: 'remote:r1', ended: false, verdict: 'Validation finished', where: 'staging' })],
-  });
-  const after = snap({
-    validations: [validation({ id: 'remote:r1', ended: true, verdict: 'Validation finished', where: 'staging' })],
-  });
-  const [item] = notifiableChanges(before, after);
-  assert.equal(item!.title, 'Validation finished: #12 Fix login');
+  const after = snap({ validations: [validation({ id: 'remote:r1', where: 'staging' })] });
+  const [item] = notifiableChanges(snap(), after);
   assert.equal(item!.body, 'staging');
 });
 
-test('notifySnapshot reads local validations off the goals and remote runs off the sheets', () => {
+test('notifySnapshot carries only validations that ended with something to review', () => {
   const state = buildDemoState();
   const reduced = notifySnapshot(state);
-  const local = state.world.issues.filter((i) => i.localValidation).length;
-  const remote = (state.remoteSheets ?? []).filter((s) => s.run).length;
+  const local = state.world.issues.filter(
+    (i) => i.localValidation && ['passed', 'failed', 'blocked'].includes(i.localValidation.status),
+  ).length;
+  const remote = (state.remoteSheets ?? []).filter((s) => s.run?.status === 'ended').length;
   assert.equal(reduced.validations.length, local + remote);
 });
