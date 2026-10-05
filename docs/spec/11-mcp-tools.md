@@ -1697,13 +1697,19 @@ routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their call
 only when asked; the board answers without being asked. It draws in two places:
 
 - **A status line above the prompt**, in a box of its own:
-  `● LubbDubb 2/4 agents · 3 asks (1 blocking) · 1 PR needs attention  Work through asks  Open panel
+  `● LubbDubb 2/4 agents · 3 asks (1 blocking) · 1 PR needs attention  Work through asks  Show panel
 Hide`. It stays short enough to sit on one line: the head ask, the feature count and the PRs ready to
   merge are left to the panel. The dot is yellow and `fleet paused`
   leads while the fleet is paused; a count with nothing in it is left out, except the agents and the
-  asks. Work through asks is drawn only while there is an ask.
+  asks. Work through asks is drawn only while there is an ask. Show panel reads Hide panel while the
+  panel is open and closes it; the band knows which from a `$.state` flag set on its own open and
+  cleared by its `ui.close` hook, so a panel the operator closes with the pane's own mark flips the
+  button back too. `session.start` seeds the flag from `$.ui.panes()`, because a reload keeps a pane
+  the engine still holds open.
 - **A panel** (`$.ui.open`, docked beside the transcript where the surface docks, inline above the
-  prompt where it does not), opened at session start, from the band's Open panel and by `/panel`. It
+  prompt where it does not), **closed by default** — opened from the band's Show panel and by
+  `/panel`, never at session start: unasked, it took a column of every session whether the operator
+  wanted the fleet in view or not. It
   carries five sections: **Needs you** (the asks, the blocking ones marked), **Features** (each
   unfinished feature with a bar — delivered and settled parts green, in-flight yellow — and its
   `delivered/total`, marked when anything blocks it), **Pull requests** (each open PR with one state),
@@ -1766,7 +1772,7 @@ asks in order and points at `/lubbdubb:next`.
   it is the cockpit's SVG in an interactive `Svg`, animated by its own CSS. While the harness is not
   answering the timer blits nothing and the robot is drawn flat-lined, as the cockpit's is
   ([17](17-cockpit.md#the-ident)). A blit while the pane is closed is refused by the engine and
-  ignored. The pixel art is drawn by hand rather than downsampled from the SVG, which at 16 columns
+  ignored; the timer skips the blit outright while the board's flag says the pane is closed. The pixel art is drawn by hand rather than downsampled from the SVG, which at 16 columns
   turned the heartbeat to noise.
 - **A pane button needs focus on desktop.** A click on a pane that does not hold the keyboard gives
   it the keyboard; the desktop app drops that first press. The pane's hotkeys (`n` Work through asks, `p`

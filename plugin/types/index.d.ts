@@ -22,6 +22,6 @@ export type Board = {
 
 declare module 'claude-code' {
   interface PluginState {
-    lubbdubb: { board: Board | null; isHidden: boolean }
+    lubbdubb: { board: Board | null; isHidden: boolean; isPaneOpen: boolean }
   }
 }

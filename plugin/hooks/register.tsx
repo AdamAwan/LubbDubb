@@ -7,6 +7,7 @@ import { LOGO_COLUMNS, LOGO_FRAMES, LOGO_ROWS, logoCells, logoSvg } from './logo
 
 const board = atom({ plugin: 'lubbdubb', key: 'board' } as const, null)
 const isHidden = atom({ plugin: 'lubbdubb', key: 'isHidden' } as const, false)
+const isPaneOpen = atom({ plugin: 'lubbdubb', key: 'isPaneOpen' } as const, false)
 
 const POLL_MS = 15_000
 const PANE = 'lubbdubb'
@@ -87,9 +88,19 @@ const ago = (since: string): string => {
 }
 
 async function heartbeat($: EngineInterface): Promise<void> {
-  if ((await read($, board)) === null) return
+  if ((await read($, board)) === null || !(await read($, isPaneOpen))) return
   beat = (beat + 1) % LOGO_FRAMES
   await $.ui.blit({ requestId: PANE, key: LOGO_KEY, columns: LOGO_COLUMNS, rows: LOGO_ROWS, cells: logoCells(beat) })
+}
+
+async function openPane($: EngineInterface): Promise<void> {
+  await $.ui.open({ id: PANE, title: TITLE })
+  await update($, isPaneOpen, () => true)
+}
+
+async function closePane($: EngineInterface): Promise<void> {
+  await $.ui.close({ id: PANE })
+  await update($, isPaneOpen, () => false)
 }
 
 const draft = ($: EngineInterface, text: string) => () => void act($, 'Added to the prompt box', () => $.prompt.fill({ text }))
@@ -106,8 +117,15 @@ export const register: Register = (on, options) => {
     void poll($, where)
     $.clock.every(POLL_MS, () => void poll($, where))
     $.clock.every(BEAT_MS, () => void heartbeat($))
-    void $.ui.open({ id: PANE, title: TITLE })
+    const panes = await $.ui.panes()
+    await update($, isPaneOpen, () => panes.some(pane => pane.id === PANE))
     return next(e)
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    const closed = await next(e)
+    await update($, isPaneOpen, () => false)
+    return closed
   })
 
   on('command.run', { command: 'board' }, async $ => {
@@ -126,7 +144,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'panel' }, async $ => {
     await poll($, where)
     await update($, isHidden, () => false)
-    await $.ui.open({ id: PANE, title: TITLE })
+    await openPane($)
     return { text: 'LubbDubb panel opened.' }
   })
 
@@ -134,6 +152,7 @@ export const register: Register = (on, options) => {
     const now = await read($, board)
     if (e.props.hasSurvey || now === null || (await read($, isHidden))) return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
+    const paneOpen = await read($, isPaneOpen)
     const theirs = await next(e)
     return (
       <Box flexDirection="column">
@@ -152,11 +171,15 @@ export const register: Register = (on, options) => {
             <Button key="next" plain label="Work through asks" onPress={draft($, '/lubbdubb:next')} />
           )}
           <Button
-            key="open-panel"
+            key="toggle-panel"
             plain
             dimColor
-            label="Open panel"
-            onPress={() => void act($, 'LubbDubb panel opened', () => $.ui.open({ id: PANE, title: TITLE }))}
+            label={paneOpen ? 'Hide panel' : 'Show panel'}
+            onPress={() =>
+              void act($, paneOpen ? 'LubbDubb panel hidden' : 'LubbDubb panel opened', () =>
+                paneOpen ? closePane($) : openPane($),
+              )
+            }
           />
           <Button key="hide" plain dimColor label="Hide" onPress={() => update($, isHidden, () => true)} />
         </Box>
