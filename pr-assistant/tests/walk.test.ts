@@ -216,3 +216,16 @@ test('a map that cannot be read is refused, and steps without a map too', async 
   expect(missing.deny).toContain('Could not use the map at nowhere/map.json')
   expect(loose.deny).toContain('no `map` was given')
 })
+
+test('a panel the engine dropped comes back on the next walk call', async ($, on) => {
+  const seen = quiet(on)
+  let open = true
+  on('ui.panes', async () => ({ value: open ? [{ id: 'pr-walk', title: 'PR walkthrough', isShown: true, isFocused: false, isPlaced: true }] : [] }))
+  await $.tool.call(START)
+  await $.tool.call({ tool: 'mcp__pr-assistant__walk_goto', stop: 1 })
+  expect(seen.opened).toEqual(['pr-walk'])
+
+  open = false
+  await $.tool.call({ tool: 'mcp__pr-assistant__walk_goto', stop: 2 })
+  expect(seen.opened).toEqual(['pr-walk', 'pr-walk'])
+})
