@@ -150,7 +150,7 @@ async function apply($: EngineInterface, step: Step, isStart = false): Promise<{
   if ('refusal' in step) return { deny: step.refusal }
   await update($, walk, () => step.walk)
   if (isStart) await reopen($).catch(() => undefined)
-  else await keepOpen($)
+  else await keepOpen($).catch(() => undefined)
   return { result: step.reply }
 }
 
@@ -160,9 +160,9 @@ async function reopen($: EngineInterface) {
 }
 
 async function keepOpen($: EngineInterface) {
-  const [isShut, panes] = await Promise.all([read($, isPanelShut), $.ui.panes().catch(() => null)])
-  if (isShut || panes === null || panes.some(p => p.id === PANE)) return
-  await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
+  const [isShut, panes] = await Promise.all([read($, isPanelShut), $.ui.panes()])
+  if (isShut || panes.some(p => p.id === PANE)) return
+  await $.ui.open({ id: PANE, title: TITLE })
 }
 
 export const register: Register = on => {
