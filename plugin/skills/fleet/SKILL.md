@@ -99,7 +99,8 @@ The rest actually do something:
   with the findings; if they agree, the fix is theirs to write.
 - **`description_write`** — saves a pull-request description the operator typed
   in this conversation, verbatim. It is published as a person's, so it carries
-  their words and never yours: no drafting, no tidying, no "how about…".
+  their words and never yours: no drafting, no tidying, no "how about…". Then
+  check it at once with `description_check`, from the `checkNow` it returns.
 - **`proposal_decide`** — see below. This is the one to be careful with.
 
 ### Deciding a proposed act

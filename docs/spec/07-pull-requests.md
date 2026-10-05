@@ -997,8 +997,16 @@ description** rather than anything that suggests the session produces it.
 The operator may also _type_ their description in their own Claude Code session — answering the
 `describe` ask from `/lubbdubb:next`, or a rewrite after a check — and the session saves it with
 `description_write` on the desktop channel. It is the same act as the field on the pull request's
-page: a new version, written under `config.userId`, pushed with `HUMAN_NOTE`, read against the diff
-by rule `pr-description-check` like any other.
+page: a new version, written under `config.userId`, pushed with `HUMAN_NOTE`.
+
+**It is checked in the same conversation, not on the next pulse.** The operator is already talking to
+a session sitting on the repository, so waiting for rule `pr-description-check` to dispatch an agent
+would turn instant feedback into a row they have to come back for. `description_write` answers with a
+`checkNow` block — the new version's id, the pull request's branch and base from the last world
+snapshot (base falling back to `defaultBranch`), and the `git diff` to read — and the `describe`, `next`
+and `fleet` skills tell the session to read it and report through `description_check` straight away.
+A version checked there is never dispatched for (one round per version), so the fleet's check is only
+the fallback for a session that did not report.
 
 **The channel may carry the operator's words; it must never produce them.** That is the invariant
 above, moved one step: `description_check` still takes no text, and `description_write` takes only
