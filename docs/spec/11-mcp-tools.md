@@ -1721,10 +1721,23 @@ asks in order and points at `/lubbdubb:next`.
 
 - **It is a reader of the HTTP API, not of this channel.** It polls `GET
 /api/state?sections=asks,control,fleet,queue,goals` and `GET /api/features` ([16](16-http-api.md))
-  every 15 seconds with the cockpit's bearer token: `LUBBDUBB_TOKEN` if set, else the file its
+  every 30 seconds with the cockpit's bearer token: `LUBBDUBB_TOKEN` if set, else the file its
   `tokenFile` option names, which the bundle defaults to this harness's own. The MCP socket is for a
   model making calls; nothing here is a model, and the board costs no tokens. A deployment with no
   feature board answers `/api/features` with a 404, and the panel simply has no Features section.
+- **One session polls; every other session reads what it fetched.** Each open Claude Code session
+  loads the plugin, and when every one polled on its own timer the harness served a full `/api/state`
+  per session per period — enough, with a handful open, to starve the cycle. The sessions share the
+  plugin's `$.store` (one file on the machine): a **lease** (`leader`: owner session id and expiry,
+  three poll periods) names the one session that calls the harness, and it publishes each board it
+  fetches as `snapshot` with the time it was taken. Every session ticks every 5 seconds against the
+  store alone: the leader renews its lease and polls once the snapshot is 30 seconds old; the others
+  adopt any snapshot newer than the last they drew. A lapsed lease is claimed on one tick and polled
+  on the next, so two sessions racing for it settle on the store's last write before either calls the
+  harness; a session that ends drops its lease so another takes over at once. **A poll is never
+  started while one is still out** — a slow harness is not asked again until it answers, which is
+  exactly when it most needs not to be. `/board`, `/panel` and Pause refresh at once from whichever
+  session they were run in, and publish what they fetched like the leader does.
 - **It counts what "Needs you" counts, in the order `ask_next` walks it.** The `asks` section is the
   server's one queue ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)); the board
   keeps its standing rows and sorts by `focusRank`, so `/board` lists them in the order
