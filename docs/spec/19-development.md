@@ -3,13 +3,19 @@
 ## Fresh clone
 
 `node_modules` is not committed, and **`node-pty` is a native build**, so a clean checkout needs
-`npm ci` (or `npm install`) before anything runs — and it is not instant. `better-sqlite3` is native too,
-but from 13 it ships prebuilt binaries in its tarball and runs no install step.
+`npm ci` (or `npm install`) before anything runs — and it is not instant.
 `node-pty`'s build and `esbuild`'s binary download are install scripts, which npm 12 refuses to run
 unless the package is listed in `package.json`'s `allowScripts`. Entries are listed **by name, not
-by version**, so a dependency bump does not quietly bring the block back — `better-sqlite3` keeps its
-entry for the same reason: without the entry, `npm ci` succeeds with a warning and the server fails at
-its first `require` of a binding that was never built.
+by version**, so a dependency bump does not quietly bring the block back: without the entry, `npm ci`
+succeeds with a warning and the server fails at its first `require` of a binding that was never built.
+
+`better-sqlite3` is native too, but from 13 it ships prebuilt binaries in its tarball and loads them
+before any `build/`. It still carries a `binding.gyp`, and npm ignores its `"gypfile": false` when
+installing from the lockfile, so it synthesises a `node-gyp rebuild` — which fails on any machine
+without a C++ toolchain, even though the build would do nothing. `allowScripts` therefore **denies** it
+(`false`, not absent: absent warns on every install). Flipping it to `true` breaks `npm ci` on every
+Windows machine without the Visual Studio C++ workload. npm older than 12 has no `allowScripts` and
+runs the build, so it needs that toolchain.
 `npm run web:build` bundles the cockpit SPA into `web/dist`, which the server serves in production.
 
 Node 22 or newer — `engines.node` in `package.json` is the exact floor; `better-sqlite3` 13 is what
