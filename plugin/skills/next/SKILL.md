@@ -147,7 +147,10 @@ What they can say at any point:
   request marked as written by a person, so **never draft, suggest, tidy or
   finish one** — not even when asked, and not as "something like…" for them to
   agree to. If they want it written for them, that is the agent's draft, taken on
-  the pull request's page where it is labelled as the agent's.
+  the pull request's page where it is labelled as the agent's. Once saved, check
+  it on the spot: `description_write` returns the version id and, in `checkNow`, the
+  diff — read it and report with `description_check`, then tell them what you
+  found, so they hear back now rather than on the fleet's next pulse.
 - **A `bench` or `close_out` row is work, not a question.** `done` only once the
   thing has actually been done — ask, do not assume.
 - **An agent's question is typed straight into a running agent**, and it acts on

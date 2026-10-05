@@ -4,7 +4,7 @@ import { DESCRIPTION_PROMPTS, descriptionRefusal, descriptionStanding } from '..
 import { DESCRIPTION_QUESTIONS } from '../store/prDescriptions.js';
 import { toolSchema } from './schema.js';
 import type { DescriptionFinding, DescriptionQuestion } from '../types.js';
-import type { DesktopToolFactory } from './desktopContext.js';
+import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md#the-desktop-channel
@@ -225,8 +225,24 @@ export const descriptionWrite: DesktopToolFactory = (deps) => ({
       id: version.id,
       version: version.version,
       means:
-        'saved as the operator’s, and it replaces whatever the pull request carries on the next pulse. The ' +
-        'fleet reads it against the diff by itself; /lubbdubb:describe checks it now.',
+        'saved as the operator’s, and it replaces whatever the pull request carries on the next pulse. A check ' +
+        'reported here is the one the fleet would have made, so no agent is dispatched for it.',
+      checkNow: checkNow(deps, args.pr),
     });
   },
 });
+
+// → docs/spec/07-pull-requests.md#relayed-through-claude-code
+function checkNow(deps: DesktopToolDeps, pr: number): { diff: string | null; then: string } {
+  const open = deps.store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === pr);
+  const base = open?.baseBranch ?? deps.briefConfig().defaultBranch;
+  return {
+    diff:
+      open === undefined
+        ? null
+        : `git fetch origin ${open.branch} ${base} && git diff origin/${base}...origin/${open.branch}`,
+    then:
+      'Read the diff, then call description_check with the id above — contradicted findings first, an empty list ' +
+      'if it stands up — and tell the operator what you found. Findings, never a rewrite.',
+  };
+}

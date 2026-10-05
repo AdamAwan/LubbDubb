@@ -298,6 +298,9 @@ test('description_write saves the operator’s words verbatim as a new version, 
     assert.equal(current?.via, 'claude-code', 'and recorded as entered through their session');
     assert.equal(current?.version, 1);
     assert.deepEqual(d.changes, [{ type: 'dirty', sections: ['plans'] }], 'the route’s own broadcast, once');
+    const reply = JSON.parse(written.text) as { id: string; checkNow: { then: string } };
+    assert.equal(reply.id, current?.id, 'it hands back the version to check on the spot');
+    assert.match(reply.checkNow.then, /description_check/, 'and says to check it now');
 
     const rewrite = await d.call('description_write', { pr: 12, text: 'Second go.' });
     assert.equal(rewrite.isError, false, rewrite.text);
