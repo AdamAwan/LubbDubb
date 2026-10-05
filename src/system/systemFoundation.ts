@@ -102,6 +102,8 @@ interface Late {
   stateQueries: StateQueryDesk;
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
+  remoteRuns: EnvironmentDesks['remoteRuns'];
+  remoteIntents: EnvironmentDesks['remoteIntents'];
   harness: Harness;
   localRun: LocalRunner;
   localRunWatch: LocalRunWatch;
@@ -142,6 +144,8 @@ export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }
     stateQueries: envs.stateQueries,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
+    remoteRuns: envs.remoteRuns,
+    remoteIntents: envs.remoteIntents,
     harness,
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,

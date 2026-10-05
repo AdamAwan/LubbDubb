@@ -3,6 +3,7 @@ import { allGoalReach } from '../environments/reach.js';
 import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { DESKTOP_FEATURE_TOOLS } from './desktopFeature.js';
+import { DESKTOP_REMOTE_TOOLS } from './desktopRemote.js';
 import { issueOrigin } from '../plans/planning.js';
 import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
@@ -315,7 +316,8 @@ function recordReading(
 const READ_NEXT =
   'Claim the one you are going to run with validation_claim before you start, then report it with ' +
   'validation_report. Checks marked actor "fleet" were handed to the harness\'s own agents — claiming one is ' +
-  'still fine and takes it off them for as long as you hold it.';
+  'still fine and takes it off them for as long as you hold it. Validation against a deployed environment’s ' +
+  'tenant is not here: remote_validation_read and remote_validation_run hand it to the harness.';
 
 const localRun: DesktopToolFactory = (deps) => ({
   description:
@@ -499,6 +501,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,
+  ...DESKTOP_REMOTE_TOOLS,
   plan_read: planRead,
   plan_amend: planAmend,
   ...DESKTOP_SEQUENCE_TOOLS,

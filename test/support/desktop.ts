@@ -3,6 +3,7 @@ import type { DesktopToolDeps } from '../../src/mcp/desktopContext.js';
 import { planIsWithheld } from '../../src/server/planReveal.js';
 import type { System } from '../../src/system/system.js';
 import { askSnapshot } from '../../src/server/stateSnapshot.js';
+import { desktopRemoteValidation } from '../../src/system/systemDesktop.js';
 
 export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
   return {
@@ -16,6 +17,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     proposals: () => system.proposals,
     prAssign: () => system.prAssign,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),
+    remoteValidation: () => desktopRemoteValidation(system.config, system.store, system),
     runtimeControl: system.runtimeControl,
     harness: () => system.harness,
     escalations: () => system.escalations,

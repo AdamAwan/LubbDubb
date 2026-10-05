@@ -6,7 +6,7 @@ import type { EjectionDesk } from '../ejection/desk.js';
 import type { Config } from '../config/config.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { ErrorRecorder } from '../errorLog.js';
-import type { Plan } from '../types.js';
+import type { Plan, RemoteRun } from '../types.js';
 import type { CycleStanding } from '../harness.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { LocalRunner } from '../localRun/runner.js';
@@ -20,13 +20,29 @@ import type { IssueWatchContext } from '../issueWatch.js';
 import type { SendResult, WorkItemAreaPathInput, WorkItemParentInput } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { AskSnapshot } from '../asks/queue.js';
-import type { StateSection, UpcomingPlan } from '../wire.js';
+import type { RemoteSheetView, StateSection, UpcomingPlan } from '../wire.js';
+import type { RemoteIntentDesk } from '../validation/remote/intent.js';
+import type { RemoteRunDesk } from '../validation/remote/run.js';
 import type { McpTool } from './protocol.js';
 
 // → docs/spec/11-mcp-tools.md
 
 /** What a write here tells the cockpit — the same broadcast the matching route sends. */
 export type DesktopChange = { type: 'world:changed' } | { type: 'dirty'; sections: StateSection[] };
+
+/**
+ * Remote validation as the cockpit's sheet drives it, so the operator's own Claude Code asks the
+ * harness to run a tenant's checks rather than running them itself.
+ * → docs/spec/11-mcp-tools.md#remote-validation-from-the-desktop
+ */
+export interface DesktopRemoteValidation {
+  /** This goal's sheets, folded exactly as the cockpit's `remoteSheets` are. */
+  sheets(goalRef: string): RemoteSheetView[];
+  give: RemoteIntentDesk['give'];
+  press: RemoteRunDesk['press'];
+  cancel(environment: string): RemoteRun | null;
+  prepareTenant(environment: string): ReturnType<RemoteRunDesk['beginPrepareTenant']>;
+}
 
 export interface DesktopToolDeps {
   store: Store;
@@ -47,6 +63,7 @@ export interface DesktopToolDeps {
   proposals(): ProposalDesk;
   prAssign(): PrAssignDesk;
   runCycle(): Promise<void>;
+  remoteValidation(): DesktopRemoteValidation;
 
   runtimeControl: RuntimeControl;
   harness(): { upcoming: UpcomingPlan | null; inFlightCycle: CycleStanding | null };

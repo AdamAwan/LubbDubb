@@ -1572,6 +1572,12 @@ What differs is where the check comes from: the fleet's from the origin it was d
 desktop's from what the session claimed. Both are the same rule — **which check a report is about is
 settled before the report rather than by it.**
 
+**A check against a deployed environment's tenant is not claimed here at all.** Remote validation
+([36](36-remote-validation.md)) is run by the harness under its `(environment, tenant)` lock, so the
+desktop channel's tools for it — `remote_validation_read` and `remote_validation_run` — only ask:
+they are the sheet's controls, never a way to take the reading from this machine.
+→ [11](11-mcp-tools.md#remote-validation-from-the-desktop)
+
 ### The claim
 
 **One check at a time, across the whole harness.** Not one lock per check, and that is the operator's
