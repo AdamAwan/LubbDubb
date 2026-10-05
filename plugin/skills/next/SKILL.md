@@ -37,6 +37,13 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    word or a part's state yourself. The look is Focus mode's — the same tones, the
    goal beside the ask — but it is a likeness, not a replica.
 
+   **Every ticket and pull request is a link** wherever `card` carries its url:
+   the goal (`card.goal.url`), the pull request the ask is about (`card.pr`), and
+   each plan part's pull request (`part.pr`). Draw the reference — "#412", "goal
+   88" — as the link, and add "Open in cockpit" (`card.cockpit`). A `url` that is
+   null is drawn as plain text: never build an address yourself. These links only
+   open a page; they send nothing.
+
    **Where you can render a widget** (a `show_widget` tool, read its guide once per
    session first), draw it as one:
 
@@ -56,7 +63,8 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
      the queue from here, and a count that looks like a pager says they can. The
      queue can be a row of pips in each ask's `tone`, read-only, with "n more after
      this" (`total` less `position`) beneath the ask.
-   - **No buttons, no links that send anything**: the card is something to read,
+   - **No buttons, no links that send anything** — links that open a ticket, a pull
+     request or the cockpit are wanted; the card is something to read,
      and the answer is asked for in the chat (step 5), where a pick is unmistakably
      the operator's. Do not repeat the card as text under it.
 
@@ -65,8 +73,8 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 
    ```
    proposal · fleet is stuck on this
-   **Merge #412?**
-   Goal 88's fix, blocking 3 parts.
+   **Merge [#412](https://github.com/o/r/pull/412)?**
+   [Goal 88](https://github.com/o/r/issues/88)'s fix, blocking 3 parts. [Open in cockpit](http://127.0.0.1:4300/?ask=…)
    ```
 
    > **Claude's view (not LubbDubb's):** Accept the merge — CI is green and the
@@ -77,7 +85,9 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    - **Title** in bold, then the `question` in full where one came back.
    - **One line of facts** — who is waiting (the agent, goal or pull request) and
      what it holds up ("blocking 3 parts"). Leave out what is empty, rather than
-     "nobody" and "nothing".
+     "nobody" and "nothing". The goal and pull request are markdown links where
+     `card` has their url, and the line ends with "Open in cockpit" where
+     `card.cockpit` is set.
 
 5. **Ask for their answer — as choices where you can.** Where the
    `AskUserQuestion` tool is available, offer the answers `answerWith.choose`
@@ -120,10 +130,12 @@ What they can say at any point:
 - **`answerWith.in: "cockpit"`** — this kind is answered in the cockpit, on
   purpose: a failing setup check or another deployment setting, upgrades, the operator's own prediction, a
   usage-limit park, a plan not yet revealed. Say
-  what it is and why (`why`), give them the `link`, and offer to skip it.
+  what it is and why (`why`), give them the `link` as a markdown link, and offer
+  to skip it.
 - **`answerWith.in: "nowhere"`** — there is no decision to make: a pull request
   somebody put on them, or a dispatch refused for the reason the row names. Say what
-  it is and what would make it go away, and offer to skip it.
+  it is and what would make it go away — linking the pull request through
+  `card.pr` — and offer to skip it.
 
 ### Kinds that need more care
 

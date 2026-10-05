@@ -1521,8 +1521,18 @@ there reads as a pager with its buttons missing. The queue is drawn, if at all, 
   this one: Focus mode's pips.
 - **`goal`** — null for an ask on no goal, which the card says rather than drawing an empty column.
   Otherwise its `title` and its `plan`: each live part's number, name and place (`PART_GROUP_WORD`),
-  with `here` on the part the ask's origin names. Retired parts are left out, as the goal page leaves
-  them out. The goal's ref is the ask's own `goalRef`, and "m of n merged" is counted off the parts.
+  with `here` on the part the ask's origin names, and each part's `pr` — its number and url — once it
+  has one. Retired parts are left out, as the goal page leaves them out. The goal's ref is the ask's own
+  `goalRef`, its `url` the ticket's, and "m of n merged" is counted off the parts.
+- **`pr`** — the pull request the ask is about, with its url: the row's own, else its subject's, else
+  the `prNumber` an agent's question or proposal was raised with. Null for an ask on no pull request.
+- **`cockpit`** — the ask's own page in the cockpit, null where the channel knows no cockpit URL.
+
+**Every ticket and pull request on the card is a link.** An operator handed "Merge #412?" with no
+way to #412 has to go and find it before they can decide, which is the dead end the cockpit's `<Ref>`
+exists to prevent ([17](17-cockpit.md#links)). Each url is read off the same `refUrls` the cockpit
+links with (`prAddress`, `issueAddress` in `src/asks/lines.ts`), so a reference the cockpit cannot
+open has `url: null` here too, and the skill draws it as plain text rather than a guessed address.
 
 **The tables are the cockpit's own, not copies.** A session composing the card from `ask` and
 `goal_read` worked out each kind's word and each part's place for itself, and a card that names an

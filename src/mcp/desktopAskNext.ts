@@ -58,6 +58,7 @@ const notStanding = (id: string) =>
 const ASK_NEXT_NEXT =
   'Put this to the operator as a short card — drawn from `card` as a widget where you can draw one, looking ' +
   'like Focus mode but with no position in the queue: what is asked, who is waiting, what it holds up. ' +
+  'Every ticket and pull request on it is drawn as a link wherever `card` carries its url. ' +
   'Read more only where it helps them decide. Any view is yours, labelled as yours — the operator decides, ' +
   'and nothing is sent until they answer or explicitly pick an option. Then call `answerWith.tool` with ' +
   'their answer, or ask_skip if they want it later. An answer refused as already settled means somebody ' +
@@ -103,16 +104,17 @@ export const askNext: DesktopToolFactory = (deps, session) => ({
       });
     }
     const question = questionOf(deps, head);
+    const link = cockpitLink(deps, head.id);
     return toolJson({
       position: queue.indexOf(head) + 1,
       total: queue.length,
       remaining: waiting.length,
       skipped: passedOver.length,
       ask: describeRow(head),
-      card: askCard(inputs, head, queue),
+      card: askCard(inputs, head, queue, link),
       ...(question === null ? {} : { question }),
       answerWith: answerWith(head, {
-        link: cockpitLink(deps, head.id),
+        link,
         profileNames: deps.profileNames(),
         proposalKind: (id) => deps.store.escalations.getProposal(id)?.kind ?? null,
       }),

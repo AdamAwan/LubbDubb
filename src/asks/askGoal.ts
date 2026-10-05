@@ -12,6 +12,7 @@ export interface AskGoalPart {
   title: string;
   group: PartGroup;
   here: boolean;
+  prNumber: number | null;
 }
 
 interface AskGoal {
@@ -43,7 +44,16 @@ export function askGoal(
       const group = PART_GROUP[part.status];
       return group === null
         ? []
-        : [{ id: part.id, seq: part.seq, title: part.title, group, here: about !== null && part.slug === about }];
+        : [
+            {
+              id: part.id,
+              seq: part.seq,
+              title: part.title,
+              group,
+              here: about !== null && part.slug === about,
+              prNumber: part.prNumber,
+            },
+          ];
     })
     .sort((a, b) => a.seq - b.seq);
   return {
