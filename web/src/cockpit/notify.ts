@@ -1,7 +1,7 @@
-import type { AppState, EnvironmentHealthReading } from '../types.js';
+import type { AppState, EnvironmentHealthReading, LocalValidationStatus } from '../types.js';
 import { refLabel } from '../components/refs.js';
 import { goalIssue, standsFor } from '../view/goalRefs.js';
-import { inFlight, STATUS_WORD } from '../view/localValidation.js';
+import { STATUS_WORD } from '../view/localValidation.js';
 import { needsYouOf, type NeedKind } from '../view/needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -164,11 +164,13 @@ export function notifySnapshot(state: AppState): NotifySnapshot {
   };
 }
 
+const REVIEWABLE: ReadonlySet<LocalValidationStatus> = new Set(['passed', 'failed', 'blocked']);
+
 function validationsOf(state: AppState): NotifyValidation[] {
   const out: NotifyValidation[] = [];
   for (const issue of state.world.issues) {
     const lv = issue.localValidation;
-    if (!lv || inFlight(lv) || lv.status === 'abandoned') continue;
+    if (!lv || !REVIEWABLE.has(lv.status)) continue;
     out.push({
       id: `local:${lv.id}`,
       title: `Validation ${STATUS_WORD[lv.status]}: ${refLabel(lv.originRef)} ${issue.title}`,
