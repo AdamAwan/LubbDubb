@@ -24,9 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      # Skip native postinstall (better-sqlite3/node-pty) — the demo build only
+      # Skip native postinstall (node-pty) — the demo build only
       # needs the web toolchain (vite/react/typescript), not the server.
       - run: npm ci --ignore-scripts
       - run: npm run web:build:demo
