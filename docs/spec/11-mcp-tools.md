@@ -1830,7 +1830,9 @@ own digest.
   "pr-assistant has not drawn in this pane" as it goes; nothing reopens it, so mid-walk the panel
   vanished for good. Every successful `walk_goto`, `walk_note` and `walk_end` now reopens it if it is
   not among `$.ui.panes()` — unless the person closed it by hand (`ui.close` origin `person`,
-  remembered as `isPanelShut`). `walk_start` and `/walk-panel` clear that and always open it.
+  remembered as `isPanelShut`). `walk_start` and `/walk-panel` clear that and always open it. The
+  panel's own drawing never throws: a failure draws one dim line saying why, so it cannot be the
+  drop.
 
 ## The wire protocol
 

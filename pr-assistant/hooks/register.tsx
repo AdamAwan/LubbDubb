@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderInput } from 'claude-code'
 
 import type { EdgeState, MapNode, MapStatus, Note, StopKind } from '../types'
 import {
@@ -160,9 +160,8 @@ async function reopen($: EngineInterface) {
 }
 
 async function keepOpen($: EngineInterface) {
-  if (await read($, isPanelShut)) return
-  const panes = await $.ui.panes().catch(() => null)
-  if (panes === null || panes.some(p => p.id === PANE)) return
+  const [isShut, panes] = await Promise.all([read($, isPanelShut), $.ui.panes().catch(() => null)])
+  if (isShut || panes === null || panes.some(p => p.id === PANE)) return
   await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
 }
 
@@ -279,138 +278,147 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Link, Code } = $.ui.resolve(e)
-    const now = await read($, walk)
-    const width = Math.max(24, e.props.bodyColumns)
-
-    if (now === null) {
-      return (
-        <Box flexDirection="column">
-          <Text dimColor>No walkthrough yet.</Text>
-          <Text dimColor>Start one with /pr-assistant:pr walk &lt;PR number&gt;.</Text>
-        </Box>
-      )
+    try {
+      return await drawPane($, e)
+    } catch (err) {
+      const { Text } = $.ui.resolve(e)
+      return <Text dimColor>{`The panel could not draw: ${err instanceof Error ? err.message : String(err)}`}</Text>
     }
-
-    const heading = clip(`#${now.pr.number} ${now.pr.title}`, width)
-    const open = now.notes.filter(n => !n.isCleared)
-    const stop = now.current === null ? null : now.stops[now.current]
-    const at = now.current ?? -1
-
-    const header = (label: string, count?: string) => (
-      <Box gap={1}>
-        <Text bold>{label}</Text>
-        {count !== undefined && <Text dimColor>{count}</Text>}
-      </Box>
-    )
-
-    const noteRow = (n: Note) => {
-      const place = where(n)
-      return (
-        <Box key={`note-${n.id}`} flexDirection="column">
-          <Box gap={1}>
-            <Text dimColor>{`${n.id}.`}</Text>
-            {n.isCleared ? (
-              <Text dimColor>cleared</Text>
-            ) : (
-              <Text bold color={NOTE[n.kind].color}>
-                {NOTE[n.kind].label}
-              </Text>
-            )}
-            {place !== null && <Text dimColor>{clip(place, Math.max(8, width - 16))}</Text>}
-          </Box>
-          <Text dimColor={n.isCleared} strikethrough={n.isCleared}>
-            {n.text}
-          </Text>
-          {!n.isCleared && (
-            <Button
-              key={`note-${n.id}-ask`}
-              plain
-              dimColor
-              label="Ask about this"
-              onPress={draft($, `About note ${n.id}: `)}
-            />
-          )}
-        </Box>
-      )
-    }
-
-    return (
-      <Box flexDirection="column" gap={1}>
-        <Box flexDirection="column">
-          {now.pr.url !== null ? (
-            <Text bold>
-              <Link href={now.pr.url} label={heading} />
-            </Text>
-          ) : (
-            <Text bold>{heading}</Text>
-          )}
-          {now.summary !== null && <Text dimColor>{now.summary}</Text>}
-        </Box>
-
-        <Box flexDirection="column">
-          {header('Stops', now.isDone ? 'done' : now.current === null ? `${now.stops.length}` : `${at + 1} of ${now.stops.length}`)}
-          {now.stops.map((s, i) => {
-            const isHere = i === at
-            const seen = now.seen.includes(i)
-            return (
-              <Box key={`stop-${i + 1}`} gap={1}>
-                <Text color={isHere ? 'cyan' : undefined} dimColor={!isHere && !seen}>
-                  {isHere ? '▶' : seen ? '✓' : ' '}
-                </Text>
-                <Text color={KIND[s.kind].color} dimColor={KIND[s.kind].color === undefined}>
-                  {KIND[s.kind].mark}
-                </Text>
-                <Button
-                  key={`stop-${i + 1}-go`}
-                  plain
-                  label={clip(`${i + 1}. ${s.title}`, Math.max(8, width - 6))}
-                  onPress={say($, `Go to stop ${i + 1}.`)}
-                />
-              </Box>
-            )
-          })}
-        </Box>
-
-        {stop !== undefined && stop !== null && (
-          <Box flexDirection="column">
-            {header(`Stop ${at + 1}`, stop.kind)}
-            {stop.files.map((f, i) => (
-              <Text key={`file-${i}`} dimColor>
-                {clip(f, width)}
-              </Text>
-            ))}
-            {now.hunk !== null && (
-              <Code
-                source={now.hunk.source}
-                format="diff"
-                {...(now.hunk.path !== null ? { path: now.hunk.path } : {})}
-              />
-            )}
-          </Box>
-        )}
-
-        {!now.isDone && (
-          <Box gap={2}>
-            <Button key="back" label="Back" onPress={say($, 'Back.')} />
-            <Button key="next" variant="primary" label="Next" onPress={say($, 'Next.')} />
-            <Button key="done" label="Wrap up" onPress={say($, 'Done, wrap up.')} />
-          </Box>
-        )}
-
-        <Box flexDirection="column" gap={1}>
-          {header('Notes', `${open.length} open`)}
-          {now.notes.length === 0 && <Text dimColor>Nothing flagged yet.</Text>}
-          {now.notes.map(noteRow)}
-          {open.length > 0 && (
-            <Button
-              key="review"
-              label="Post open notes as a review"
-              onPress={draft($, `Post the open notes as a pending review on #${now.pr.number}.`)}
-            />
-          )}
-        </Box>
-      </Box>
-    )
   })
+}
+
+async function drawPane($: EngineInterface, e: RenderInput<'Pane'>) {
+  const { Box, Text, Button, Link, Code } = $.ui.resolve(e)
+  const now = await read($, walk)
+  const width = Math.max(24, e.props.bodyColumns)
+
+  if (now === null) {
+    return (
+      <Box flexDirection="column">
+        <Text dimColor>No walkthrough yet.</Text>
+        <Text dimColor>Start one with /pr-assistant:pr walk &lt;PR number&gt;.</Text>
+      </Box>
+    )
+  }
+
+  const heading = clip(`#${now.pr.number} ${now.pr.title}`, width)
+  const open = now.notes.filter(n => !n.isCleared)
+  const stop = now.current === null ? null : now.stops[now.current]
+  const at = now.current ?? -1
+
+  const header = (label: string, count?: string) => (
+    <Box gap={1}>
+      <Text bold>{label}</Text>
+      {count !== undefined && <Text dimColor>{count}</Text>}
+    </Box>
+  )
+
+  const noteRow = (n: Note) => {
+    const place = where(n)
+    return (
+      <Box key={`note-${n.id}`} flexDirection="column">
+        <Box gap={1}>
+          <Text dimColor>{`${n.id}.`}</Text>
+          {n.isCleared ? (
+            <Text dimColor>cleared</Text>
+          ) : (
+            <Text bold color={NOTE[n.kind].color}>
+              {NOTE[n.kind].label}
+            </Text>
+          )}
+          {place !== null && <Text dimColor>{clip(place, Math.max(8, width - 16))}</Text>}
+        </Box>
+        <Text dimColor={n.isCleared} strikethrough={n.isCleared}>
+          {n.text}
+        </Text>
+        {!n.isCleared && (
+          <Button
+            key={`note-${n.id}-ask`}
+            plain
+            dimColor
+            label="Ask about this"
+            onPress={draft($, `About note ${n.id}: `)}
+          />
+        )}
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        {now.pr.url !== null ? (
+          <Text bold>
+            <Link href={now.pr.url} label={heading} />
+          </Text>
+        ) : (
+          <Text bold>{heading}</Text>
+        )}
+        {now.summary !== null && <Text dimColor>{now.summary}</Text>}
+      </Box>
+
+      <Box flexDirection="column">
+        {header('Stops', now.isDone ? 'done' : now.current === null ? `${now.stops.length}` : `${at + 1} of ${now.stops.length}`)}
+        {now.stops.map((s, i) => {
+          const isHere = i === at
+          const seen = now.seen.includes(i)
+          return (
+            <Box key={`stop-${i + 1}`} gap={1}>
+              <Text color={isHere ? 'cyan' : undefined} dimColor={!isHere && !seen}>
+                {isHere ? '▶' : seen ? '✓' : ' '}
+              </Text>
+              <Text color={KIND[s.kind].color} dimColor={KIND[s.kind].color === undefined}>
+                {KIND[s.kind].mark}
+              </Text>
+              <Button
+                key={`stop-${i + 1}-go`}
+                plain
+                label={clip(`${i + 1}. ${s.title}`, Math.max(8, width - 6))}
+                onPress={say($, `Go to stop ${i + 1}.`)}
+              />
+            </Box>
+          )
+        })}
+      </Box>
+
+      {stop !== undefined && stop !== null && (
+        <Box flexDirection="column">
+          {header(`Stop ${at + 1}`, stop.kind)}
+          {stop.files.map((f, i) => (
+            <Text key={`file-${i}`} dimColor>
+              {clip(f, width)}
+            </Text>
+          ))}
+          {now.hunk !== null && (
+            <Code
+              source={now.hunk.source}
+              format="diff"
+              {...(now.hunk.path !== null ? { path: now.hunk.path } : {})}
+            />
+          )}
+        </Box>
+      )}
+
+      {!now.isDone && (
+        <Box gap={2}>
+          <Button key="back" label="Back" onPress={say($, 'Back.')} />
+          <Button key="next" variant="primary" label="Next" onPress={say($, 'Next.')} />
+          <Button key="done" label="Wrap up" onPress={say($, 'Done, wrap up.')} />
+        </Box>
+      )}
+
+      <Box flexDirection="column" gap={1}>
+        {header('Notes', `${open.length} open`)}
+        {now.notes.length === 0 && <Text dimColor>Nothing flagged yet.</Text>}
+        {now.notes.map(noteRow)}
+        {open.length > 0 && (
+          <Button
+            key="review"
+            label="Post open notes as a review"
+            onPress={draft($, `Post the open notes as a pending review on #${now.pr.number}.`)}
+          />
+        )}
+      </Box>
+    </Box>
+  )
 }
