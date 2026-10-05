@@ -1,6 +1,7 @@
-import type { AppState, EnvironmentHealthReading, LocalValidationStatus } from '../types.js';
+import type { AppState, EnvironmentHealthReading } from '../types.js';
 import { refLabel } from '../components/refs.js';
-import { standsFor } from '../view/goalRefs.js';
+import { goalIssue, standsFor } from '../view/goalRefs.js';
+import { inFlight, STATUS_WORD } from '../view/localValidation.js';
 import { needsYouOf, type NeedKind } from '../view/needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -86,9 +87,7 @@ interface NotifyAgent {
 
 interface NotifyValidation {
   id: string;
-  ended: boolean;
-  verdict: string;
-  goal: string;
+  title: string;
   where: string;
   summary: string | null;
 }
@@ -110,12 +109,6 @@ const ENDING_WORD: Record<string, string> = {
 };
 
 const AGENT_ENDINGS = new Set(Object.keys(ENDING_WORD));
-
-const LOCAL_VERDICT_WORD: Partial<Record<LocalValidationStatus, string>> = {
-  passed: 'Validation passed',
-  failed: 'Validation failed',
-  blocked: 'Validation blocked',
-};
 
 const NEED_KIND_LABEL: Record<NeedKind, string> = {
   config: "This harness's own configuration is stopping it",
@@ -175,25 +168,21 @@ function validationsOf(state: AppState): NotifyValidation[] {
   const out: NotifyValidation[] = [];
   for (const issue of state.world.issues) {
     const lv = issue.localValidation;
-    if (!lv) continue;
-    const word = LOCAL_VERDICT_WORD[lv.status];
+    if (!lv || inFlight(lv) || lv.status === 'abandoned') continue;
     out.push({
       id: `local:${lv.id}`,
-      ended: word !== undefined,
-      verdict: word ?? lv.status,
-      goal: `${refLabel(lv.originRef)} ${issue.title}`,
+      title: `Validation ${STATUS_WORD[lv.status]}: ${refLabel(lv.originRef)} ${issue.title}`,
       where: 'your machine',
       summary: lv.summary,
     });
   }
   for (const sheet of state.remoteSheets ?? []) {
     const run = sheet.run;
-    if (!run) continue;
+    if (run?.status !== 'ended') continue;
+    const title = goalIssue(state, run.goalRef)?.title;
     out.push({
       id: `remote:${run.id}`,
-      ended: run.status === 'ended',
-      verdict: 'Validation finished',
-      goal: refLabel(run.goalRef),
+      title: `Validation finished: ${refLabel(run.goalRef)}${title ? ` ${title}` : ''}`,
       where: run.environment,
       summary: run.note,
     });
@@ -243,7 +232,7 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
     });
   }
 
-  items.push(...endedValidations(prev.validations, next.validations));
+  items.push(...newValidations(prev.validations, next.validations));
 
   const wasRead = new Map(prev.environments.map((e) => [e.environment, e]));
   for (const env of next.environments) {
@@ -262,16 +251,16 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
   return coalesce(items);
 }
 
-function endedValidations(prev: readonly NotifyValidation[], next: readonly NotifyValidation[]): NotifyItem[] {
-  const wasEnded = new Map(prev.map((v) => [v.id, v.ended]));
+function newValidations(prev: readonly NotifyValidation[], next: readonly NotifyValidation[]): NotifyItem[] {
+  const seen = new Set(prev.map((v) => v.id));
   return next
-    .filter((v) => v.ended && wasEnded.get(v.id) !== true)
+    .filter((v) => !seen.has(v.id))
     .map((v) => ({
       category: 'validations',
       tag: `validation:${v.id}`,
-      title: `${v.verdict}: ${v.goal}`,
-      body: [v.where, v.summary].filter((p): p is string => p !== null && p !== '').join(' · '),
-      name: v.goal,
+      title: v.title,
+      body: v.summary ? `${v.where} · ${v.summary}` : v.where,
+      name: v.title,
     }));
 }
 
