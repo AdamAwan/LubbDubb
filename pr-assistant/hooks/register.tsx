@@ -21,6 +21,7 @@ import {
 } from './walk'
 
 const walk = atom({ plugin: 'pr-assistant', key: 'walk' } as const, null)
+const isPanelShut = atom({ plugin: 'pr-assistant', key: 'isPanelShut' } as const, false)
 
 const PANE = 'pr-walk'
 const TITLE = 'PR walkthrough'
@@ -145,10 +146,24 @@ const say = ($: EngineInterface, text: string) => () =>
   void $.prompt.submit({ text, asUser: true }).catch(failed($))
 const draft = ($: EngineInterface, text: string) => () => void $.prompt.fill({ text }).catch(failed($))
 
-async function apply($: EngineInterface, step: Step): Promise<{ result: string } | { deny: string }> {
+async function apply($: EngineInterface, step: Step, isStart = false): Promise<{ result: string } | { deny: string }> {
   if ('refusal' in step) return { deny: step.refusal }
   await update($, walk, () => step.walk)
+  if (isStart) await reopen($).catch(() => undefined)
+  else await keepOpen($)
   return { result: step.reply }
+}
+
+async function reopen($: EngineInterface) {
+  await update($, isPanelShut, () => false)
+  await $.ui.open({ id: PANE, title: TITLE })
+}
+
+async function keepOpen($: EngineInterface) {
+  if (await read($, isPanelShut)) return
+  const panes = await $.ui.panes().catch(() => null)
+  if (panes === null || panes.some(p => p.id === PANE)) return
+  await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
 }
 
 export const register: Register = on => {
@@ -161,8 +176,13 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'walk-panel' }, async $ => {
-    await $.ui.open({ id: PANE, title: TITLE })
+    await reopen($)
     return { text: 'PR walkthrough panel opened.' }
+  })
+
+  on('ui.close', async ($, e, next) => {
+    if (e.id === PANE && e.origin.kind === 'person') await update($, isPanelShut, () => true)
+    return next(e)
   })
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_start' }, async ($, e) => {
@@ -178,9 +198,7 @@ export const register: Register = on => {
         return { deny: `Could not use the map at ${path}: ${loaded} Leave \`map\` out to walk without it.` }
       map = loaded
     }
-    const out = await apply($, start(args, map))
-    if ('result' in out) await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
-    return out
+    return apply($, start(args, map), true)
   })
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_goto' }, async ($, e) =>

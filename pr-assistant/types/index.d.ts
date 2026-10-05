@@ -69,6 +69,6 @@ export type Walk = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'pr-assistant': { walk: Walk | null }
+    'pr-assistant': { walk: Walk | null; isPanelShut: boolean }
   }
 }

@@ -1825,6 +1825,12 @@ own digest.
   writes to GitHub, and the person confirms that with Enter.
 - The walk lives in `$.state`, so it survives a reload of the mod but not a new session. `/walk-panel`
   reopens the panel.
+- **A panel the engine dropped comes back on the next walk call.** The engine closes a pane whose
+  plugin reloads or whose drawing fails once (`ui.close` origin `unload`), and the desktop app shows
+  "pr-assistant has not drawn in this pane" as it goes; nothing reopens it, so mid-walk the panel
+  vanished for good. Every successful `walk_goto`, `walk_note` and `walk_end` now reopens it if it is
+  not among `$.ui.panes()` — unless the person closed it by hand (`ui.close` origin `person`,
+  remembered as `isPanelShut`). `walk_start` and `/walk-panel` clear that and always open it.
 
 ## The wire protocol
 
