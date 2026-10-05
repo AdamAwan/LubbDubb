@@ -229,3 +229,79 @@ test('a panel the engine dropped comes back on the next walk call', async ($, on
   await $.tool.call({ tool: 'mcp__pr-assistant__walk_goto', stop: 2 })
   expect(seen.opened).toEqual(['pr-walk', 'pr-walk'])
 })
+
+const DIFF = [
+  'diff --git a/src/store/prDescriptions.ts b/src/store/prDescriptions.ts',
+  '--- a/src/store/prDescriptions.ts',
+  '+++ b/src/store/prDescriptions.ts',
+  HUNK.trimEnd(),
+  '@@ -40,3 +40,4 @@ export function later() {',
+  '   const a = 1',
+  '+  const b = 2',
+  '   return a',
+  'diff --git a/src/old.ts b/src/old.ts',
+  '--- a/src/old.ts',
+  '+++ /dev/null',
+  '@@ -1,1 +0,0 @@',
+  '-gone',
+  '',
+].join('\n')
+
+test('with a saved diff, a goto needs only the stop number and draws the hunk in the chat too', async ($, on) => {
+  quiet(on)
+  on('fs.read', async (_$, e, next) => (e.path.endsWith('pr.diff') ? { value: DIFF } : next(e)))
+  const started = await $.tool.call({
+    ...START,
+    diff: 'pr.diff',
+    stops: [
+      { ...START.stops[0]!, hunks: ['src/old.ts'] },
+      { ...START.stops[1]!, hunks: ['src/store/prDescriptions.ts:2'] },
+      START.stops[2]!,
+    ],
+  })
+  expect(started.deny).toBeUndefined()
+
+  const done = await $.tool.call({ tool: 'mcp__pr-assistant__walk_goto', stop: 2, tool_use_id: 'call-2' })
+  expect(done.result).toBe('Panel on stop 2 of 3.')
+
+  const pane = await $.ui.mount({
+    plugin: 'pr-assistant',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'pr-walk',
+    props: PANE,
+  })
+  expect((await pane.find({ type: 'Code' }))?.props).toMatchObject({
+    format: 'diff',
+    source: HUNK,
+    path: 'src/store/prDescriptions.ts',
+  })
+  await pane.unmount()
+  const chat = await $.ui.mount({
+    plugin: 'pr-assistant',
+    surface: 'terminal',
+    component: 'ToolResult',
+    requestId: 'call-2',
+    props: { tool_use_id: 'call-2', tool: 'mcp__pr-assistant__walk_goto', output: done.result, isErrored: false },
+  })
+  expect(await chat.find({ type: 'Text', text: /^Stop 2: Store returns authoredAt/ })).toBeDefined()
+  expect((await chat.find({ type: 'Code' }))?.props).toMatchObject({ source: HUNK })
+  await chat.unmount()
+})
+
+test('hunks the diff does not hold, or hunks without a diff, are refused', async ($, on) => {
+  quiet(on)
+  on('fs.read', async (_$, e, next) => (e.path.endsWith('pr.diff') ? { value: DIFF } : next(e)))
+
+  const missing = await $.tool.call({
+    ...START,
+    diff: 'pr.diff',
+    stops: [{ title: 'A', kind: 'changed', hunks: ['src/store/prDescriptions.ts:20'] }],
+  })
+  const loose = await $.tool.call({ ...START, stops: [{ title: 'A', kind: 'changed', hunks: ['src/old.ts'] }] })
+  const empty = await $.tool.call({ ...START, diff: 'nowhere.diff' })
+
+  expect(missing.deny).toContain('is in no hunk of the diff')
+  expect(loose.deny).toContain('no `diff` was given')
+  expect(empty.deny).toContain('Could not use the diff at nowhere.diff')
+})

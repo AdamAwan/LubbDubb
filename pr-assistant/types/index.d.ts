@@ -1,6 +1,6 @@
 export type StopKind = 'changed' | 'new' | 'removed' | 'unchanged'
 
-export type Stop = { title: string; kind: StopKind; files: string[]; steps: number[] }
+export type Stop = { title: string; kind: StopKind; files: string[]; steps: number[]; hunks: Hunk[] }
 
 export type MapStatus = 'changed' | 'new' | 'removed' | 'path' | 'outside' | 'test' | 'doc'
 
@@ -54,17 +54,19 @@ export type Note = {
 
 export type Hunk = { source: string; path: string | null }
 
+export type View = { stop: number; hunks: Hunk[] }
+
 export type Walk = {
   pr: { number: number; title: string; url: string | null }
   summary: string | null
   stops: Stop[]
   current: number | null
   seen: number[]
-  hunk: Hunk | null
+  hunks: Hunk[]
   notes: Note[]
   isDone: boolean
   map: PrMap | null
-  views: Record<string, number>
+  views: Record<string, View>
 }
 
 declare module 'claude-code' {

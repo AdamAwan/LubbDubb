@@ -17,7 +17,63 @@ const whole = (v: unknown): number | null => (typeof v === 'number' && Number.is
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
 const oneOf = <T,>(list: readonly T[], v: unknown): T | null => ((list as unknown[]).includes(v) ? (v as T) : null)
 
-export function start(args: Args, map: PrMap | null = null): Step {
+type DiffHunk = { path: string; old: [number, number]; new: [number, number]; source: string }
+
+export function readDiff(raw: string): DiffHunk[] {
+  const out: DiffHunk[] = []
+  let from: string | null = null
+  let to: string | null = null
+  let at: DiffHunk | null = null
+  const side = (l: string) => {
+    const p = l.slice(4).replace(/\t.*$/, '').trim()
+    return p === '/dev/null' ? null : p.replace(/^[ab]\//, '')
+  }
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      at = null
+      from = to = null
+    } else if (at === null && line.startsWith('--- ')) from = side(line)
+    else if (at === null && line.startsWith('+++ ')) to = side(line)
+    else if (line.startsWith('@@')) {
+      const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line)
+      const path = to ?? from
+      at = null
+      if (m === null || path === null) continue
+      const span = (a?: string, b?: string): [number, number] => [Number(a), b === undefined ? 1 : Number(b)]
+      at = { path, old: span(m[1], m[2]), new: span(m[3], m[4]), source: `${line}\n` }
+      out.push(at)
+    } else if (at !== null && /^[ +\-\\]/.test(line)) at.source += `${line}\n`
+    else at = null
+  }
+  return out
+}
+
+const covers = ([start, length]: [number, number], line: number) => line >= start && line < start + Math.max(1, length)
+
+function cut(diff: DiffHunk[], refs: string[]): Hunk[] | string {
+  const chosen = new Set<DiffHunk>()
+  for (const ref of refs) {
+    const m = /^(.*?)(?::(\d+))?$/.exec(ref.trim())!
+    const line = m[2] === undefined ? null : Number(m[2])
+    const inFile = diff.filter(h => h.path === m[1] || h.path.endsWith(`/${m[1]}`))
+    const onNew = line === null ? inFile : inFile.filter(h => covers(h.new, line))
+    const found = onNew.length > 0 || line === null ? onNew : inFile.filter(h => covers(h.old, line))
+    if (found.length === 0) return `\`${ref}\` is in no hunk of the diff`
+    for (const h of found) chosen.add(h)
+  }
+  const hunks: Hunk[] = []
+  for (const h of diff.filter(d => chosen.has(d))) {
+    const last = hunks[hunks.length - 1]
+    if (last !== undefined && last.path === h.path) last.source += h.source
+    else hunks.push({ source: h.source, path: h.path })
+  }
+  const big = hunks.find(h => h.source.length > MAX_HUNK)
+  if (big !== undefined)
+    return `its hunks in ${big.path} come to ${big.source.length} characters; the panel shows at most ${MAX_HUNK}. Name single lines instead`
+  return hunks
+}
+
+export function start(args: Args, map: PrMap | null = null, diff: DiffHunk[] | null = null): Step {
   const pr = (args.pr ?? {}) as Args
   const number = whole(pr.number)
   const title = text(pr.title)
@@ -35,7 +91,11 @@ export function start(args: Args, map: PrMap | null = null): Step {
     if (steps.length > 0 && map === null) return { refusal: `Stop ${i + 1} names map \`steps\` but no \`map\` was given.` }
     if (map !== null && steps.some(n => n === null || n < 1 || n > map.steps.length))
       return { refusal: `Stop ${i + 1}: \`steps\` are map step numbers from 1 to ${map.steps.length}.` }
-    stops.push({ title, kind, files, steps: steps as number[] })
+    const refs = strings(s.hunks)
+    if (refs.length > 0 && diff === null) return { refusal: `Stop ${i + 1} names \`hunks\` but no \`diff\` was given.` }
+    const hunks = diff === null ? [] : cut(diff, refs)
+    if (typeof hunks === 'string') return { refusal: `Stop ${i + 1}: ${hunks}.` }
+    stops.push({ title, kind, files, steps: steps as number[], hunks })
   }
   const url = text(pr.url)
   return {
@@ -45,7 +105,7 @@ export function start(args: Args, map: PrMap | null = null): Step {
       stops,
       current: null,
       seen: [],
-      hunk: null,
+      hunks: [],
       notes: [],
       isDone: false,
       map,
@@ -63,16 +123,16 @@ export function goto(walk: Walk | null, args: Args, call?: string): Step {
   const source = typeof args.diff === 'string' && args.diff.trim() !== '' ? args.diff : null
   if (source !== null && source.length > MAX_HUNK)
     return { refusal: `The diff is ${source.length} characters; the panel shows at most ${MAX_HUNK}. Send the one hunk that matters.` }
-  const hunk: Hunk | null = source === null ? null : { source, path: text(args.path) }
   const index = stop - 1
+  const hunks: Hunk[] = source === null ? walk.stops[index]!.hunks : [{ source, path: text(args.path) }]
   return {
     walk: {
       ...walk,
       current: index,
       seen: walk.seen.includes(index) ? walk.seen : [...walk.seen, index],
-      hunk,
+      hunks,
       isDone: false,
-      views: call === undefined ? walk.views : { ...walk.views, [call]: index },
+      views: call === undefined ? walk.views : { ...walk.views, [call]: { stop: index, hunks } },
     },
     reply: `Panel on stop ${stop} of ${walk.stops.length}.`,
   }
@@ -113,7 +173,7 @@ export function finish(walk: Walk | null): Step {
   if (walk === null) return { refusal: 'No walkthrough is running.' }
   const open = walk.notes.filter(n => !n.isCleared).length
   return {
-    walk: { ...walk, current: null, hunk: null, isDone: true },
+    walk: { ...walk, current: null, hunks: [], isDone: true },
     reply: `Walkthrough marked done; ${open} open note${open === 1 ? '' : 's'} left on the panel.`,
   }
 }

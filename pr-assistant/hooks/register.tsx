@@ -11,6 +11,7 @@ import {
   note,
   NOTE_KINDS,
   plain,
+  readDiff,
   readMap,
   slice,
   text,
@@ -77,6 +78,11 @@ const TOOLS = [
           description:
             "Path to the PR map's JSON (the file the map job built from). With it, each walk_goto draws that stop's part of the map in the chat.",
         },
+        diff: {
+          type: 'string',
+          description:
+            "Path to the PR's whole unified diff, saved to a file (`gh pr diff <n> > file`). With it, each stop names its `hunks` and walk_goto needs only the stop number.",
+        },
         stops: {
           type: 'array',
           minItems: 1,
@@ -92,6 +98,12 @@ const TOOLS = [
                 items: { type: 'integer', minimum: 1 },
                 description: 'The map step numbers (1-based) this stop covers. Needs `map`.',
               },
+              hunks: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'The hunks that matter at this stop, as `path:line` (a head-version line inside the hunk) or `path` for all of a file. Needs `diff`.',
+              },
             },
             required: ['title', 'kind'],
           },
@@ -103,14 +115,14 @@ const TOOLS = [
   {
     name: 'walk_goto',
     description:
-      'Move the panel to a stop (1-based) as you present it, with the one diff hunk that matters there. Call each time you present a stop, including when going back.',
+      "Move the panel to a stop (1-based) as you present it. The stop's hunks, named at walk_start, are drawn on the panel and in the chat under this call. Call each time you present a stop, including when going back.",
     inputSchema: {
       type: 'object',
       properties: {
         stop: { type: 'integer', minimum: 1 },
         diff: {
           type: 'string',
-          description: `Unified-diff hunks (each starting with an @@ header) for this stop, at most ${MAX_HUNK} characters. Leave out for an unchanged stop.`,
+          description: `Only when walk_start had no \`diff\`: unified-diff hunks (each starting with an @@ header) for this stop, at most ${MAX_HUNK} characters. Replaces the stop's own hunks.`,
         },
         path: { type: 'string', description: 'The file the hunk is from, for highlighting.' },
       },
@@ -187,6 +199,18 @@ export const register: Register = on => {
   on('tool.call', { tool: 'mcp__pr-assistant__walk_start' }, async ($, e) => {
     const args = e as Record<string, unknown>
     const path = text(args.map)
+    const diffPath = text(args.diff)
+    let diff = null
+    if (diffPath !== null) {
+      const loaded = await $.fs
+        .read(diffPath)
+        .then(readDiff, (err: unknown) => (err instanceof Error ? err.message : String(err)))
+      if (typeof loaded === 'string' || loaded.length === 0)
+        return {
+          deny: `Could not use the diff at ${diffPath}: ${typeof loaded === 'string' ? loaded : 'it holds no hunks.'} Leave \`diff\` out to send each hunk with walk_goto.`,
+        }
+      diff = loaded
+    }
     let map = null
     if (path !== null) {
       const loaded = await $.fs
@@ -197,7 +221,7 @@ export const register: Register = on => {
         return { deny: `Could not use the map at ${path}: ${loaded} Leave \`map\` out to walk without it.` }
       map = loaded
     }
-    return apply($, start(args, map), true)
+    return apply($, start(args, map, diff), true)
   })
 
   on('tool.call', { tool: 'mcp__pr-assistant__walk_goto' }, async ($, e) =>
@@ -212,13 +236,14 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'ToolResult', props: { tool: 'mcp__pr-assistant__walk_goto' } }, async ($, e, next) => {
     const now = await read($, walk)
-    if (e.props.isErrored || now?.map == null) return next(e)
-    const at = now.views[e.props.tool_use_id]
-    const stop = at === undefined ? undefined : now.stops[at]
-    if (at === undefined || stop === undefined) return next(e)
-    const part = slice(now.map, stop.steps)
-    if (part === null) return next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    if (e.props.isErrored || now === null) return next(e)
+    const view = now.views[e.props.tool_use_id]
+    const stop = view === undefined ? undefined : now.stops[view.stop]
+    if (view === undefined || stop === undefined) return next(e)
+    const at = view.stop
+    const part = now.map === null ? null : slice(now.map, stop.steps)
+    if (part === null && view.hunks.length === 0) return next(e)
+    const { Box, Text, Code } = $.ui.resolve(e)
     const width = Math.max(24, (e.viewport?.columns ?? 80) - 8)
 
     const card = (n: MapNode) => (
@@ -236,7 +261,7 @@ export const register: Register = on => {
       </Box>
     )
 
-    const shown = part.edges.filter(x => x.before !== x.after || x.label !== null)
+    const shown = (part?.edges ?? []).filter(x => x.before !== x.after || x.label !== null)
 
     const link = (mode: 'before' | 'after', state: EdgeState) => (
       <Text key={mode} color={ARROW[state].color} dimColor={ARROW[state].color === undefined}>
@@ -246,8 +271,8 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
-        <Text dimColor>{clip(`Map · stop ${at + 1}: ${stop.title}`, width)}</Text>
-        {part.columns.map((c, i) => (
+        <Text dimColor>{clip(`${part === null ? 'Stop' : 'Map · stop'} ${at + 1}: ${stop.title}`, width)}</Text>
+        {(part?.columns ?? []).map((c, i) => (
           <Box key={`col-${i}`} flexDirection="column">
             {i > 0 && <Text dimColor>  ↓</Text>}
             <Text dimColor>{c.label.toUpperCase()}</Text>
@@ -265,12 +290,18 @@ export const register: Register = on => {
               ))}
           </Box>
         )}
-        {part.steps.map(s => (
+        {(part?.steps ?? []).map(s => (
           <Box key={`step-${s.n}`} flexDirection="column" marginTop={1}>
             <Text bold>{`${s.n}. ${plain(s.title)}`}</Text>
             {s.text !== null && <Text dimColor>{plain(s.text)}</Text>}
             {s.before !== null && <Text color="red">{`Before: ${plain(s.before)}`}</Text>}
             {s.after !== null && <Text color="green">{`After:  ${plain(s.after)}`}</Text>}
+          </Box>
+        ))}
+        {view.hunks.map((x, i) => (
+          <Box key={`hunk-${i}`} flexDirection="column" marginTop={1}>
+            {x.path !== null && <Text dimColor>{clip(x.path, width)}</Text>}
+            <Code source={x.source} format="diff" {...(x.path !== null ? { path: x.path } : {})} />
           </Box>
         ))}
       </Box>
@@ -389,13 +420,9 @@ async function drawPane($: EngineInterface, e: RenderInput<'Pane'>) {
               {clip(f, width)}
             </Text>
           ))}
-          {now.hunk !== null && (
-            <Code
-              source={now.hunk.source}
-              format="diff"
-              {...(now.hunk.path !== null ? { path: now.hunk.path } : {})}
-            />
-          )}
+          {now.hunks.map((x, i) => (
+            <Code key={`hunk-${i}`} source={x.source} format="diff" {...(x.path !== null ? { path: x.path } : {})} />
+          ))}
         </Box>
       )}
 
