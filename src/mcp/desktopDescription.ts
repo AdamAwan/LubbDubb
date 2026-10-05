@@ -225,31 +225,22 @@ export const descriptionWrite: DesktopToolFactory = (deps) => ({
       id: version.id,
       version: version.version,
       means:
-        'saved as the operator’s, and it replaces whatever the pull request carries on the next pulse. Check ' +
-        'it now rather than leaving it for the fleet: a check reported here is the one the fleet would have ' +
-        'made, and no agent is dispatched for a version already checked.',
-      checkNow: checkNow(deps, args.pr, version.id),
+        'saved as the operator’s, and it replaces whatever the pull request carries on the next pulse. A check ' +
+        'reported here is the one the fleet would have made, so no agent is dispatched for it.',
+      checkNow: checkNow(deps, args.pr),
     });
   },
 });
 
-/**
- * What the session needs to read the version it just saved against the diff, on the spot —
- * the same reading `pr-description-check` would dispatch an agent for on a later pulse.
- * → docs/spec/07-pull-requests.md#relayed-through-claude-code
- */
-function checkNow(deps: DesktopToolDeps, pr: number, id: string): Record<string, unknown> {
+// → docs/spec/07-pull-requests.md#relayed-through-claude-code
+function checkNow(deps: DesktopToolDeps, pr: number): { diff: string | null; then: string } {
   const open = deps.store.world.getWorldBaseline()?.pullRequests.find((p) => p.number === pr);
   const base = open?.baseBranch ?? deps.briefConfig().defaultBranch;
-  const diff =
-    open === undefined
-      ? null
-      : `git fetch origin ${open.branch} ${base} && git diff origin/${base}...origin/${open.branch}`;
   return {
-    id,
-    branch: open?.branch ?? null,
-    base,
-    diff,
+    diff:
+      open === undefined
+        ? null
+        : `git fetch origin ${open.branch} ${base} && git diff origin/${base}...origin/${open.branch}`,
     then:
       'Read the diff, then call description_check with this id — contradicted findings first, an empty list ' +
       'if it stands up — and tell the operator what you found. Findings, never a rewrite.',

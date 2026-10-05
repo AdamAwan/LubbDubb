@@ -21,7 +21,7 @@ an agent's. There is no argument on `description_check` that could carry a
 rewritten description, and that is deliberate. **Never offer one, even if asked.**
 Say what is wrong and let them fix it. If they type a rewrite here, save exactly what
 they typed with `description_write` — their words, not a version of them — and
-**check it straight away**: its `checkNow` hands back the new version's id and the
+**check it straight away**: it returns the new version's id and, in `checkNow`, the
 diff to read, so run `description_check` on it in this conversation rather than
 leaving it for the fleet's next pulse.
 
