@@ -171,14 +171,13 @@ export class RecoveryDesk {
   private restore(item: OrphanedWork, agent: Agent | null, task: Task): RecoveryResult {
     const agentId = item.agentId;
     if (!item.restorable || !agent) return { ok: false, error: item.restoreBlocked ?? 'this work cannot be restored' };
-    let resumed: boolean;
     try {
-      resumed = this.deps.agents.resume(agent, task);
+      if (!this.deps.agents.resume(agent, task))
+        return { ok: false, error: 'the runtime refused to resume this session' };
     } catch (err) {
       this.deps.errors?.record({ source: 'boot', message: `Crash restore failed: ${(err as Error).message}` });
       return { ok: false, error: `restore failed: ${(err as Error).message}` };
     }
-    if (!resumed) return { ok: false, error: 'the runtime refused to resume this session' };
     return this.settled({
       verdict: 'restore',
       agentId,

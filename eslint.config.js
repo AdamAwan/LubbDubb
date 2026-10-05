@@ -4,6 +4,11 @@ import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
+import { createRequire } from 'node:module';
+
+// eslint-plugin-react's `detect` calls context.getFilename(), gone in ESLint 10; restore it (and drop the
+// package.json override) once the plugin supports ESLint 10.
+const REACT_VERSION = createRequire(import.meta.url)('react/package.json').version;
 
 const SPEC = '→ docs/spec/34-usage-metrics.md#a-control-that-is-not-a-button';
 
@@ -87,10 +92,11 @@ export default tseslint.config(
       'react-hooks': reactHooks,
     },
     settings: {
-      react: { version: '19.2' },
+      react: { version: REACT_VERSION },
     },
     rules: {
       ...react.configs.flat.recommended.rules,
+      // v7's `recommended` adds the React Compiler rules; adopting them is its own change.
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       // The SPA uses the automatic JSX runtime — no need to import React in scope.
