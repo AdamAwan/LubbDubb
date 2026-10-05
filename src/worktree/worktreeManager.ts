@@ -555,7 +555,7 @@ export class WorktreeManager implements Worktrees {
     try {
       rmSync(dir, { recursive: true, force: true, maxRetries: RMDIR_RETRIES, retryDelay: RMDIR_RETRY_DELAY_MS });
     } catch (err) {
-      throw new Error(reclaimFailure(dir, err as NodeJS.ErrnoException));
+      throw new Error(reclaimFailure(dir, err as NodeJS.ErrnoException), { cause: err });
     }
   }
 

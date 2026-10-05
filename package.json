@@ -49,7 +49,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.20.5",
     "@types/react": "^19.2.0",
@@ -57,11 +57,11 @@
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.1.1",
     "c8": "^12.0.0",
-    "eslint": "^9.39.5",
-    "eslint-config-prettier": "9.1.0",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "5.1.0",
-    "globals": "15.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
     "knip": "6.39.0",
     "prettier": "3.9.9",
     "react": "^19.2.0",
@@ -76,5 +76,10 @@
     "better-sqlite3": true,
     "esbuild": true,
     "node-pty": true
+  },
+  "overrides": {
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
   }
 }

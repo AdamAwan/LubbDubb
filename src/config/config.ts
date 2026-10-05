@@ -491,7 +491,7 @@ function readFileLayer(text: string, filePath: string): Partial<Config> {
   try {
     parsed = JSON.parse(text);
   } catch (err) {
-    throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`);
+    throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`, { cause: err });
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error(`Failed to parse ${filePath}: the config file must hold a JSON object`);

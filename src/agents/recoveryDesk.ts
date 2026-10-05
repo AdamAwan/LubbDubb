@@ -171,7 +171,7 @@ export class RecoveryDesk {
   private restore(item: OrphanedWork, agent: Agent | null, task: Task): RecoveryResult {
     const agentId = item.agentId;
     if (!item.restorable || !agent) return { ok: false, error: item.restoreBlocked ?? 'this work cannot be restored' };
-    let resumed = false;
+    let resumed: boolean;
     try {
       resumed = this.deps.agents.resume(agent, task);
     } catch (err) {

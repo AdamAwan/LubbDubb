@@ -87,11 +87,12 @@ export default tseslint.config(
       'react-hooks': reactHooks,
     },
     settings: {
-      react: { version: 'detect' },
+      react: { version: '19.2' },
     },
     rules: {
       ...react.configs.flat.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       // The SPA uses the automatic JSX runtime — no need to import React in scope.
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
