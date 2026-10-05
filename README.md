@@ -224,7 +224,7 @@ native build, so it is not instant (on npm 12+ it builds because `package.json`
 lists it in `allowScripts`).
 
 ```bash
-npm ci                                               # native deps: better-sqlite3, node-pty
+npm ci                                               # native dep: node-pty
 cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored)
 npm start                                            # builds the cockpit, serves on 127.0.0.1:4300
 ```
