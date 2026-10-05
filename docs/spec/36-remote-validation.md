@@ -2445,6 +2445,13 @@ throw**.
 | `POST /api/issues/:number/remote-validation/:environment/reseed`           | **built.** Invoke the environment's `ensureTenant` where it provisions on demand and its `reseed` where it declares one, and stamp the tenant. |
 | `PUT`/`DELETE /api/issues/:number/state-queries/:queryId`                  | **built.** The operator's own writer, `watch/checks/:checkId`'s shape exactly, and `authored: 'operator'`.                                     |
 
+**The operator's own Claude Code reaches the same desks.** `remote_validation_read` and
+`remote_validation_run` on the desktop channel are the sheet's read and its `ok`, `run`, `cancel` and
+`reseed` controls, through `RemoteIntentDesk` and `RemoteRunDesk` exactly as these routes are — so a
+session asked to validate on an environment hands it to the harness rather than running the
+project's runner against the tenant itself. A reseed there is refused until the tenant it destroys is
+named back. → [11](11-mcp-tools.md#remote-validation-from-the-desktop)
+
 **Waiving is not here.** A check the product has moved past is waived through
 `POST /api/issues/:number/validation/:checkId/waive` ([20](20-validation.md#routes)), which already
 requires a reason and already counts as clear at close-out. A second waive route on the sheet would be

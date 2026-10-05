@@ -37,6 +37,30 @@ which check if more than one is outstanding.
    anything yourself and do not guess at a start command.
 4. **Report it.** `validation_report` once, with what you saw.
 
+### A check on a deployed environment is the harness's
+
+Some of a goal's validation runs against a deployed environment's **tenant** —
+`acceptance`, `staging` — rather than on this machine. That is remote
+validation, and **the harness runs it, not you**: it holds the lock on the
+tenant, spawns the project's own runner and records the readings on the sheet
+the cockpit draws.
+
+- `remote_validation_read` with the goal shows each environment's sheet, where
+  it stands, which tenant it is put to, and the latest reading on every row.
+- `remote_validation_run` asks the harness to run it. `"action": "ok"` is the
+  usual answer to a sheet that needs you; `press` runs the selected rows now;
+  `cancel` calls off a live run; `prepare_tenant` runs the environment's own
+  tenant commands.
+- **Never run a suite, a state query or a tenant command yourself** against a
+  deployed environment — not with a script from the repo, not by hand. A reading
+  taken here is one no sheet sees, against a tenant the harness does not know is
+  in use.
+- **A reseed wipes the tenant**, and the harness will not start one until you
+  pass `confirmTenant` with the tenant's name. Ask the operator first, naming
+  the tenant.
+- **Queued or running is not a result.** Read it again later and report what the
+  sheet says.
+
 ### The three answers
 
 - **passed** — you followed the procedure and saw what it expects.

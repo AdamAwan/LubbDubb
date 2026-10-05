@@ -4,10 +4,15 @@ import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import type { LocalRunWatch } from '../localRun/watch.js';
 import { McpDesktopServer } from '../mcp/desktop.js';
+import type { DesktopRemoteValidation } from '../mcp/desktopContext.js';
+import type { Store } from '../store/store.js';
+import type { RemoteIntentDesk } from '../validation/remote/intent.js';
+import type { RemoteRunDesk } from '../validation/remote/run.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { prRefStyle } from '../pr/prRef.js';
 import { planIsWithheld } from '../server/planReveal.js';
 import { apiUrl } from '../server/apiUrl.js';
+import { buildRemoteSheets } from '../server/stateEnvironmentViews.js';
 import type { Foundation, LateBinding } from './systemFoundation.js';
 
 // → docs/spec/11-mcp-tools.md#the-desktop-channel
@@ -56,9 +61,32 @@ export function buildDesktop(
         .get()
         .harness.runCycle('manual')
         .then(() => undefined),
+    remoteValidation: () => desktopRemoteValidation(config, store, late.get()),
     now: () => new Date().toISOString(),
     socketPath: config.validation.desktopSocketPath,
     credentialPath: config.validation.desktopCredentialPath,
     errors,
   });
+}
+
+export function desktopRemoteValidation(
+  config: Config,
+  store: Store,
+  { remoteRuns, remoteIntents }: { remoteRuns: RemoteRunDesk; remoteIntents: RemoteIntentDesk },
+): DesktopRemoteValidation {
+  return {
+    sheets: (goalRef) =>
+      buildRemoteSheets(
+        store,
+        config.environments,
+        [],
+        undefined,
+        config.remoteValidation.tenants,
+        store.validation.listAllValidationChecks(),
+      ).filter((sheet) => sheet.goalRef === goalRef),
+    give: (goalRef, environment) => remoteIntents.give(goalRef, environment),
+    press: (goalRef, environment) => remoteRuns.press(goalRef, environment),
+    cancel: (environment) => remoteRuns.cancel(environment, null),
+    prepareTenant: (environment) => remoteRuns.beginPrepareTenant(environment),
+  };
 }
