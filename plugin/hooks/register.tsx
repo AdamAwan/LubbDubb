@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Feature, PrTone } from '../types'
+import type { Board, Feature, PrTone } from '../types'
 import { bandParts, clip, fresh, summary, toBoard, type FeaturesReply, type StateReply } from './board'
 import { LOGO_COLUMNS, LOGO_FRAMES, LOGO_ROWS, logoCells, logoSvg } from './logo'
 
@@ -9,7 +9,11 @@ const board = atom({ plugin: 'lubbdubb', key: 'board' } as const, null)
 const isHidden = atom({ plugin: 'lubbdubb', key: 'isHidden' } as const, false)
 const isPaneOpen = atom({ plugin: 'lubbdubb', key: 'isPaneOpen' } as const, false)
 
-const POLL_MS = 15_000
+const POLL_MS = 30_000
+const TICK_MS = 5_000
+const LEASE_MS = 3 * POLL_MS
+const LEASE_KEY = 'leader'
+const SNAPSHOT_KEY = 'snapshot'
 const PANE = 'lubbdubb'
 const TITLE = 'LubbDubb'
 const BAR = 10
@@ -17,7 +21,13 @@ const LOGO_KEY = 'logo'
 const BEAT_MS = 100
 const LOGO_MIN_WIDTH = 40
 
+type Lease = { owner: string; until: number }
+type Snapshot = { at: number; board: Board | null }
+
 let beat = 0
+let inFlight: Promise<void> | null = null
+let ticking = false
+let seen = 0
 
 const TONE: Record<PrTone, { mark: string; color?: string }> = {
   good: { mark: '●', color: 'green' },
@@ -38,24 +48,64 @@ async function token($: EngineInterface, where: Where): Promise<string | undefin
   }
 }
 
-async function poll($: EngineInterface, where: Where): Promise<void> {
+async function fetchBoard($: EngineInterface, where: Where): Promise<Board | null> {
   const bearer = await token($, where)
   const headers = bearer ? { authorization: `Bearer ${bearer}` } : {}
   const [reply, features] = await Promise.all([
     $.http.fetch(`${where.url}/api/state?sections=asks,control,fleet,queue,goals`, { headers }).catch(() => null),
     $.http.fetch(`${where.url}/api/features`, { headers }).catch(() => null),
   ])
-  if (reply === null || !reply.ok) {
-    await update($, board, () => null)
-    return
-  }
-  const after = toBoard(
+  if (reply === null || !reply.ok) return null
+  return toBoard(
     JSON.parse(reply.text) as StateReply,
     features?.ok ? (JSON.parse(features.text) as FeaturesReply) : null,
   )
-  const before = await read($, board)
-  for (const notice of fresh(before, after)) $.ui.toast(`LubbDubb: ${notice.title}`)
+}
+
+async function adopt($: EngineInterface, after: Board | null): Promise<void> {
+  if (after !== null) {
+    const before = await read($, board)
+    for (const notice of fresh(before, after)) $.ui.toast(`LubbDubb: ${notice.title}`)
+  }
   await update($, board, () => after)
+}
+
+function poll($: EngineInterface, where: Where): Promise<void> {
+  inFlight ??= (async () => {
+    const after = await fetchBoard($, where)
+    const at = await $.clock.now()
+    await $.store.set(SNAPSHOT_KEY, { at, board: after } satisfies Snapshot)
+    seen = at
+    await adopt($, after)
+  })().finally(() => {
+    inFlight = null
+  })
+  return inFlight
+}
+
+async function tick($: EngineInterface, where: Where): Promise<void> {
+  if (ticking || inFlight !== null) return
+  ticking = true
+  try {
+    const me = await $.session.id()
+    const now = await $.clock.now()
+    const lease = (await $.store.get(LEASE_KEY)) as Lease | undefined
+    const snapshot = (await $.store.get(SNAPSHOT_KEY)) as Snapshot | undefined
+    const leader = lease !== undefined && lease.until > now ? lease.owner : null
+    if (leader === null || leader === me) {
+      await $.store.set(LEASE_KEY, { owner: me, until: now + LEASE_MS } satisfies Lease)
+    }
+    if (leader === me && (snapshot === undefined || now - snapshot.at >= POLL_MS)) {
+      await poll($, where)
+      return
+    }
+    if (snapshot !== undefined && snapshot.at > seen) {
+      seen = snapshot.at
+      await adopt($, snapshot.board)
+    }
+  } finally {
+    ticking = false
+  }
 }
 
 async function setPaused($: EngineInterface, where: Where, paused: boolean): Promise<void> {
@@ -66,6 +116,7 @@ async function setPaused($: EngineInterface, where: Where, paused: boolean): Pro
     body: JSON.stringify({ paused }),
   })
   if (!reply.ok) throw new Error(`LubbDubb refused (${reply.status})`)
+  await inFlight
   await poll($, where)
 }
 
@@ -114,11 +165,17 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'board', description: 'List what LubbDubb is waiting on you for' })
     await $.command.register({ name: 'panel', description: 'Open the LubbDubb panel' })
-    void poll($, where)
-    $.clock.every(POLL_MS, () => void poll($, where))
+    void tick($, where)
+    $.clock.every(TICK_MS, () => void tick($, where))
     $.clock.every(BEAT_MS, () => void heartbeat($))
     const panes = await $.ui.panes()
     await update($, isPaneOpen, () => panes.some(pane => pane.id === PANE))
+    return next(e)
+  })
+
+  on('session.end', async ($, e, next) => {
+    const lease = (await $.store.get(LEASE_KEY)) as Lease | undefined
+    if (lease?.owner === e.sessionId) await $.store.delete(LEASE_KEY)
     return next(e)
   })
 

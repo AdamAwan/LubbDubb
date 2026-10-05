@@ -93,7 +93,15 @@ const FEATURES = {
 type Reply = { status: number; ok: boolean; headers: Record<string, string>; text: string }
 const ok = (body: unknown): { value: Reply } => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(body) } })
 
-function harness(on: Parameters<Parameters<typeof test>[1]>[1], state: () => unknown = () => STATE) {
+type On = Parameters<Parameters<typeof test>[1]>[1]
+
+function world(on: On) {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  mock.clock(on)
+  mock.store(on)
+}
+
+function harness(on: On, state: () => unknown = () => STATE) {
   const asked: { url: string; method?: string; body?: string; auth?: string }[] = []
   on('http.fetch', async (_$, e) => {
     asked.push({ url: e.url, method: e.init?.method, body: e.init?.body as string | undefined, auth: e.init?.headers?.authorization })
@@ -106,7 +114,7 @@ function harness(on: Parameters<Parameters<typeof test>[1]>[1], state: () => unk
 }
 
 test('reads the state and the feature board, with the token from the environment', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   const asked = harness(on)
 
   const out = await $.command.run(BOARD)
@@ -124,7 +132,7 @@ test('reads the state and the feature board, with the token from the environment
 })
 
 test('says so when the harness does not answer', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   on('http.fetch', async () => ({ value: { status: 401, ok: false, headers: {}, text: '' } }))
 
   const out = await $.command.run(BOARD)
@@ -133,7 +141,7 @@ test('says so when the harness does not answer', async ($, on) => {
 })
 
 test('draws the boxed band, and nothing once hidden', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   harness(on)
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
@@ -157,7 +165,7 @@ test('draws the boxed band, and nothing once hidden', async ($, on) => {
 })
 
 test('leaves room for a band drawn beneath it, outside its box, and hides only its own row', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   harness(on)
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -178,7 +186,7 @@ test('leaves room for a band drawn beneath it, outside its box, and hides only i
 })
 
 test('Next on the band drafts /lubbdubb:next; it does not run it', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   harness(on)
   const filled: string[] = []
   const started: string[] = []
@@ -205,7 +213,7 @@ test('Next on the band drafts /lubbdubb:next; it does not run it', async ($, on)
 })
 
 test('toasts only what is new since the last look', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   let state: unknown = STATE
   harness(on, () => state)
   const toasts: string[] = []
@@ -222,7 +230,7 @@ test('toasts only what is new since the last look', async ($, on) => {
 })
 
 test('the panel draws asks, unfinished features, open pull requests, live agents and the queue', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   harness(on)
   await $.command.run(PANEL)
 
@@ -248,7 +256,7 @@ test('the panel draws asks, unfinished features, open pull requests, live agents
 })
 
 test('the panel only drafts a skill into the prompt box; it never sends', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   harness(on)
   const filled: string[] = []
   const sent: string[] = []
@@ -279,7 +287,7 @@ test('the panel only drafts a skill into the prompt box; it never sends', async 
 })
 
 test('pause and resume go through the cockpit\'s own control route', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   const asked = harness(on)
   await $.command.run(PANEL)
 
@@ -293,7 +301,7 @@ test('pause and resume go through the cockpit\'s own control route', async ($, o
 })
 
 test('the panel says so when the harness does not answer', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   on('http.fetch', async () => ({ value: { status: 503, ok: false, headers: {}, text: '' } }))
   on('ui.open', async () => ({ value: { isPlaced: true } }))
   await $.command.run(PANEL)
@@ -309,7 +317,7 @@ test('the panel says so when the harness does not answer', async ($, on) => {
 })
 
 test('the panel heads with the robot: cells in the terminal, SVG elsewhere', async ($, on) => {
-  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  world(on)
   harness(on)
   await $.command.run(PANEL)
 
@@ -323,4 +331,85 @@ test('the panel heads with the robot: cells in the terminal, SVG elsewhere', asy
   expect(svg?.props).toMatchObject({ alt: 'LubbDubb', isInteractive: true })
   expect(String(svg?.props.source)).toContain('class="p"')
   await desk.unmount()
+})
+
+const START = { cwd: '.', surface: null, isInteractive: true }
+
+function session(on: On, id: string) {
+  on('session.id', async () => ({ value: id }))
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', async () => ({ value: undefined }))
+  on('ui.panes', async () => ({ value: [] }))
+}
+const LEADERS_BOARD = {
+  notices: [{ id: 'e1', kind: 'merge', title: 'Merge #9', urgent: false }],
+  features: [],
+  prs: [],
+  agents: [],
+  upNext: [],
+  paused: false,
+  cap: 4,
+}
+
+test("a session that does not hold the lease reads the leader's snapshot and never calls the harness", async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  const clock = mock.clock(on, { now: 1_000 })
+  mock.store(on, {
+    leader: { owner: 'other', until: 1_000_000 },
+    snapshot: { at: 900, board: LEADERS_BOARD },
+  })
+  session(on, 'me')
+  const asked = harness(on)
+
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return h(Box, {}) as RenderElement
+  })
+
+  await $.session.start(START)
+  await clock.advance(120_000)
+
+  expect(asked).toEqual([])
+  const band = await $.ui.mount({ plugin: 'lubbdubb', surface: 'terminal', component: 'AbovePrompt', props: BAND })
+  expect(await band.find({ type: 'Button', key: 'next' })).toBeDefined()
+  await band.unmount()
+})
+
+test('the leader polls every 30 seconds, and never while its last call is still out', async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  const clock = mock.clock(on)
+  mock.store(on)
+  session(on, 'me')
+  const asked = harness(on)
+
+  await $.session.start(START)
+  await clock.advance(5_000)
+  expect(asked).toHaveLength(2)
+  await clock.advance(25_000)
+  expect(asked).toHaveLength(2)
+  await clock.advance(5_000)
+  expect(asked).toHaveLength(4)
+})
+
+test('a slow harness is not asked again until it answers', async ($, on) => {
+  mock.env(on, { LUBBDUBB_TOKEN: 'secret' })
+  const clock = mock.clock(on)
+  mock.store(on)
+  session(on, 'me')
+  let calls = 0
+  on('http.fetch', async () => {
+    calls += 1
+    await clock.sleep(60_000)
+    return ok(STATE)
+  })
+  on('ui.open', async () => ({ value: { isPlaced: true } }))
+
+  await $.session.start(START)
+  await clock.advance(5_000)
+  expect(calls).toBe(2)
+  await clock.advance(50_000)
+  expect(calls).toBe(2)
+  await clock.advance(10_000)
+  await clock.advance(30_000)
+  expect(calls).toBe(4)
 })
