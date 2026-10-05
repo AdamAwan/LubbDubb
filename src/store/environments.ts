@@ -55,9 +55,23 @@ export class EnvironmentStore {
   }
 
   markLandingIntegration(prNumber: number, onIntegration: boolean): void {
+    this.ctx.prep(`UPDATE goal_landings SET on_integration=? WHERE pr_number=?`).run(yesNo(onIntegration), prNumber);
+  }
+
+  carryLanding(input: { prNumber: number; goalRef: string; sha: string; onIntegration: boolean | null }): void {
     this.ctx
-      .prep(`UPDATE goal_landings SET on_integration=? WHERE pr_number=?`)
-      .run(onIntegration ? 'yes' : 'no', prNumber);
+      .prep(
+        `INSERT INTO goal_landings (pr_number, goal_ref, sha, recorded_at, on_integration)
+         VALUES (@prNumber, @goalRef, @sha, @recordedAt, @onIntegration)
+         ON CONFLICT(pr_number) DO UPDATE SET sha = excluded.sha, on_integration = excluded.on_integration`,
+      )
+      .run({
+        prNumber: input.prNumber,
+        goalRef: input.goalRef,
+        sha: input.sha,
+        recordedAt: this.ctx.now(),
+        onIntegration: input.onIntegration === null ? null : yesNo(input.onIntegration),
+      });
   }
 
   landedPrs(): ReadonlySet<number> {
@@ -250,4 +264,8 @@ interface ReachRow {
   status: string;
   detail: string | null;
   observed_at: string;
+}
+
+function yesNo(value: boolean): 'yes' | 'no' {
+  return value ? 'yes' : 'no';
 }

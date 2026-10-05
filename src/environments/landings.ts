@@ -1,5 +1,5 @@
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
-import type { PullRequest, WorkNode, WorldSnapshot } from '../types.js';
+import type { GoalLanding, PullRequest, WorkNode, WorldSnapshot } from '../types.js';
 import { issueForPr } from '../pr/prIssue.js';
 import { prState } from '../pr/prHealth.js';
 import { prNumberOf } from '../primitives.js';
@@ -33,6 +33,93 @@ export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] 
   return out;
 }
 
+interface CarrySweepInput {
+  world: WorldSnapshot;
+  nodes: WorkNode[];
+  landings: GoalLanding[];
+  integrationBranch: string;
+}
+
+interface CarriedLanding extends LandingToRecord {
+  onIntegration: boolean | null;
+}
+
+export function carriedLandings(input: CarrySweepInput): CarriedLanding[] {
+  const goals = goalOfPr(input.nodes);
+  const landings = new Map(input.landings.map((l) => [l.prNumber, l]));
+  const pulls = pullsByNumber(input.world);
+  const stack = stackOf(input, pulls);
+  const out: CarriedLanding[] = [];
+  for (const number of stack.merged) {
+    const own = landings.get(number);
+    if (own !== undefined && own.onIntegration !== false) continue;
+    const first = stack.carrierOf(number);
+    if (first === null || mergedAfter(pulls.get(number), pulls.get(first))) continue;
+    const carrier = carrierLanding(first, landings, stack.carrierOf, stack.merged.size);
+    if (carrier === undefined || carrier.sha === own?.sha) continue;
+    const pr = pulls.get(number);
+    const goalRef = own?.goalRef ?? goals.get(number) ?? (pr === undefined ? null : issueRefFor(pr, input.world));
+    if (goalRef === null) continue;
+    out.push({ prNumber: number, goalRef, sha: carrier.sha, onIntegration: carrier.onIntegration });
+  }
+  return out;
+}
+
+function pullsByNumber(world: WorldSnapshot): Map<number, PullRequest> {
+  const out = new Map<number, PullRequest>();
+  for (const pr of allPulls(world)) if (!out.has(pr.number)) out.set(pr.number, pr);
+  return out;
+}
+
+function stackOf(
+  input: CarrySweepInput,
+  pulls: ReadonlyMap<number, PullRequest>,
+): { merged: Set<number>; carrierOf: (number: number) => number | null } {
+  const byBranch = new Map<string, PullRequest>();
+  for (const pr of pulls.values()) {
+    if (prState(pr) === 'closed') continue;
+    const held = byBranch.get(pr.branch);
+    if (held === undefined || prState(pr) === 'merged') byBranch.set(pr.branch, pr);
+  }
+  const graphBase = new Map<number, number>();
+  const merged = new Set<number>();
+  for (const pr of pulls.values()) if (prState(pr) === 'merged') merged.add(pr.number);
+  for (const node of input.nodes) {
+    const number = node.kind === 'pr' ? prNumberOf(node.ref) : null;
+    if (number === null) continue;
+    if (node.status === 'merged') merged.add(number);
+    const base = node.baseRef === null ? null : prNumberOf(node.baseRef);
+    if (base !== null) graphBase.set(number, base);
+  }
+  const carrierOf = (number: number): number | null => {
+    const base = pulls.get(number)?.baseBranch;
+    if (base === input.integrationBranch) return null;
+    const viaWorld = base === undefined ? undefined : byBranch.get(base)?.number;
+    return viaWorld ?? graphBase.get(number) ?? null;
+  };
+  return { merged, carrierOf };
+}
+
+function carrierLanding(
+  first: number,
+  landings: ReadonlyMap<number, GoalLanding>,
+  carrierOf: (number: number) => number | null,
+  limit: number,
+): GoalLanding | undefined {
+  let current: number | null = first;
+  for (let hops = 0; current !== null && hops <= limit; hops += 1) {
+    const held = landings.get(current);
+    if (held !== undefined && held.onIntegration !== false) return held;
+    current = carrierOf(current);
+  }
+  return undefined;
+}
+
+function mergedAfter(pr: PullRequest | undefined, carrier: PullRequest | undefined): boolean {
+  if (pr?.closedAt === undefined || carrier?.closedAt === undefined || prState(carrier) !== 'merged') return false;
+  return pr.closedAt > carrier.closedAt;
+}
+
 export function unattributedMerges(goalRef: string, nodes: WorkNode[], landed: ReadonlySet<number>): number {
   const goals = goalOfPr(nodes);
   let n = 0;
@@ -47,7 +134,11 @@ export function unattributedMerges(goalRef: string, nodes: WorkNode[], landed: R
 }
 
 function mergedPulls(world: WorldSnapshot): PullRequest[] {
-  return [...world.pullRequests, ...(world.closedPullRequests ?? [])].filter((pr) => prState(pr) === 'merged');
+  return allPulls(world).filter((pr) => prState(pr) === 'merged');
+}
+
+function allPulls(world: WorldSnapshot): PullRequest[] {
+  return [...world.pullRequests, ...(world.closedPullRequests ?? [])];
 }
 
 function goalOfPr(nodes: WorkNode[]): Map<number, string> {

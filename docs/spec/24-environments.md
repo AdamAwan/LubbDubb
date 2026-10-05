@@ -229,6 +229,37 @@ The behaviour this changes, deliberately: a goal whose work all merges onto a lo
 branch reads `absent` with `total: 0` until that branch's own pull request merges. That is a fraction
 of nothing rather than a permanent false `partial`, and the second is the reading that holds gates.
 
+Dropped from the count is not dropped from the record: the stacked pull request is recorded again on
+the commit that carried it down → [A stacked pull request rides its carrier](#a-stacked-pull-request-rides-its-carrier).
+
+### A stacked pull request rides its carrier
+
+Dropping the stacked squash from the denominator stops it holding the goal short, but on its own it
+leaves the stacked pull request with **no landing at all**: its part reads `pending` in every
+environment for ever, and a goal whose only merge was stacked onto another goal's branch has nothing
+to count, so it never gets a row and never arrives. Its work did ship — inside the squash of the pull
+request it merged into.
+
+So `carriedLandings` (`src/environments/landings.ts`) records the stacked pull request as a landing
+whose `sha` is its **carrier's**: the merge commit of the pull request whose head branch it merged
+into, followed down the stack until a rung that landed on the integration branch. The carrier is found
+from the world (the pull request whose `branch` is this one's `baseBranch`) and, when the closed
+window has forgotten both, from the work graph's `baseRef`, which persists. It runs on the desk
+**after** `reconcile`, and takes the carrier's `on_integration` with the commit, since it is the same
+commit. A carrier the clone places off the integration branch carries nothing.
+
+- **Nothing to carry yet is not a landing.** A stacked merge whose carrier has not landed is skipped
+  and asked about again next pulse; the graph keeps the edge after the closed window lets it go.
+- **A row already written as its own squash is re-pointed** — `on_integration` is `no` there, so the
+  desk rewrites `sha` to the carrier's (`carryLanding`) and the next pulse probes it. This is the
+  only path that moves a landing's `sha`, and it heals the rows from before this shipped.
+- **A merge after the carrier merged is not carried.** When the world still holds both closing times
+  and the stacked pull request merged later, the carrier's squash had already gone; it is left out
+  rather than credited with work the environment cannot hold.
+
+Two landings sharing one `sha` is the correct shape here: each part gets its own row in the
+[reach matrix](#every-part-every-environment), with the same verdicts as the rung that carried it.
+
 ### When a held goal is going nowhere
 
 `src/environments/stuck.ts`. A goal that is **delivered**, unshortfalled, holds an open `validate` or
@@ -1038,13 +1069,13 @@ Stated so a later change does not discover them as bugs:
 
 Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
 
-| Table                       | One row per               | Written                                                                    |
-| --------------------------- | ------------------------- | -------------------------------------------------------------------------- |
-| `goal_landings`             | merged pull request       | `OR IGNORE` — a merge is a settled fact; `on_integration` updated in place |
-| `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves                      |
-| `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals                           |
-| `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                                             |
-| `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one           |
+| Table                       | One row per               | Written                                                                                                                                                                  |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `goal_landings`             | merged pull request       | `OR IGNORE` — a merge is a settled fact; `on_integration` updated in place, and `sha` re-pointed only for a [carried](#a-stacked-pull-request-rides-its-carrier) landing |
+| `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves                                                                                                                    |
+| `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals                                                                                                                         |
+| `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                                                                                                                                           |
+| `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one                                                                                                         |
 
 `goal_landings` is keyed on the pull request for `branch_reaps`' reason — a branch name is reusable,
 and a goal can land more than once.
