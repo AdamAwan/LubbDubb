@@ -242,7 +242,7 @@ function checkNow(deps: DesktopToolDeps, pr: number): { diff: string | null; the
         ? null
         : `git fetch origin ${open.branch} ${base} && git diff origin/${base}...origin/${open.branch}`,
     then:
-      'Read the diff, then call description_check with this id — contradicted findings first, an empty list ' +
+      'Read the diff, then call description_check with the id above — contradicted findings first, an empty list ' +
       'if it stands up — and tell the operator what you found. Findings, never a rewrite.',
   };
 }
