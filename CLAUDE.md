@@ -330,7 +330,8 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   environment for good; `newArrivals` only ever reads `reached`, so no arrival is written and every gate the arrival
   opens stays shut, with nothing red. `unrecordedLandings` cuts on `baseBranch`, `unattributedMerges` on the node's
   `baseRef`, and `EnvironmentDesk` reconciles what neither can see against the clone into
-  `goal_landings.on_integration`. → [24](docs/spec/24-environments.md#what-counts-as-a-landing)
+  `goal_landings.on_integration`. The stacked pull request is instead recorded on its _carrier's_ commit
+  (`carriedLandings`). → [24](docs/spec/24-environments.md#what-counts-as-a-landing)
 - **A `RemoteValidationDesk` pass that stamps an arrival it did not assemble burns the guard that makes turning remote
   validation on next month safe.** `goal_arrivals.sheeted_at` null means _not considered yet_, and the freshness guard
   does a backfill's job — so the early return where no environment declares a `validate` block stamps **nothing**, and

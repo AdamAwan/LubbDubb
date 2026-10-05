@@ -6,7 +6,7 @@ import type { Store } from '../store/store.js';
 import type { EnvironmentReachStatus, GoalLanding, WorldSnapshot } from '../types.js';
 import { announceableArrivals, arrivalComment, newArrivals } from './arrival.js';
 import type { EnvironmentHealthProber } from './healthProber.js';
-import { unrecordedLandings } from './landings.js';
+import { carriedLandings, unrecordedLandings } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentProber } from './prober.js';
 import { allGoalReach } from './reach.js';
@@ -57,6 +57,7 @@ export class EnvironmentDesk {
     if (this.deps.environments.length === 0) return;
     for (const environment of this.deps.environments) await this.checkHealth(environment);
     await this.reconcile();
+    this.carry(world);
     for (const environment of this.deps.environments) await this.probe(environment);
     this.recordArrivals();
     this.reportStuck();
@@ -105,6 +106,21 @@ export class EnvironmentDesk {
         source: 'cycle',
         message: `placing landings on ${this.deps.integrationBranch} failed: ${(err as Error).message}`,
       });
+    }
+  }
+
+  private carry(world: WorldSnapshot): void {
+    const { store, errors } = this.deps;
+    try {
+      for (const landing of carriedLandings({
+        world,
+        nodes: store.graph.listWorkNodes(),
+        landings: store.environments.listGoalLandings(),
+        integrationBranch: this.deps.integrationBranch,
+      }))
+        store.environments.carryLanding(landing);
+    } catch (err) {
+      errors?.record({ source: 'cycle', message: `carrying stacked landings failed: ${(err as Error).message}` });
     }
   }
 

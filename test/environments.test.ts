@@ -13,7 +13,7 @@ import { FakeEnvironmentHealthProber } from '../src/environments/fakeHealthProbe
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { CommandEnvironmentProber } from '../src/environments/prober.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
-import { unattributedMerges, unrecordedLandings } from '../src/environments/landings.js';
+import { carriedLandings, unattributedMerges, unrecordedLandings } from '../src/environments/landings.js';
 import { allGoalReach, goalReach } from '../src/environments/reach.js';
 import { environmentGateHold, openedGoals } from '../src/environments/arrival.js';
 import { stuckGoals } from '../src/environments/stuck.js';
@@ -175,6 +175,55 @@ test('a merge onto another pull request’s branch is not a landing', () => {
     [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }],
     'a stacked squash lands on a branch that is deleted and is an ancestor of nothing',
   );
+});
+
+test('a stacked merge rides its carrier’s landing once that is placed on the integration branch', () => {
+  const nodes = [
+    node({ ref: 'issue:12', kind: 'issue' }),
+    node({ ref: 'pr:1', kind: 'pr', parentRef: 'issue:12', status: 'merged', terminal: true }),
+    node({ ref: 'pr:2', kind: 'pr', parentRef: 'issue:12', baseRef: 'pr:1', status: 'merged', terminal: true }),
+    node({ ref: 'pr:3', kind: 'pr', parentRef: 'issue:12', baseRef: 'pr:2', status: 'merged', terminal: true }),
+  ];
+  const carried = (landings: GoalLanding[]) =>
+    carriedLandings({ world: world({}), nodes, landings, integrationBranch: 'main' });
+
+  assert.deepEqual(
+    carried([landing({ prNumber: 1, sha: 'sha1', onIntegration: false })]),
+    [],
+    'a carrier the clone places off the integration branch carries nothing',
+  );
+  assert.deepEqual(
+    carried([landing({ prNumber: 1, sha: 'sha1', onIntegration: true })]),
+    [
+      { prNumber: 2, goalRef: 'issue:12', sha: 'sha1', onIntegration: true },
+      { prNumber: 3, goalRef: 'issue:12', sha: 'sha1', onIntegration: true },
+    ],
+    'the graph keeps the stack after the closed window forgets it, however tall',
+  );
+  assert.deepEqual(
+    carried([
+      landing({ prNumber: 1, sha: 'sha1', onIntegration: true }),
+      landing({ prNumber: 2, sha: 'sha2', onIntegration: false }),
+      landing({ prNumber: 3, sha: 'sha1', onIntegration: true }),
+    ]),
+    [{ prNumber: 2, goalRef: 'issue:12', sha: 'sha1', onIntegration: true }],
+    'a row recorded as its own squash is re-pointed; one already carried is left alone',
+  );
+});
+
+test('a merge onto a branch after that branch’s own pull request merged is not carried', () => {
+  const found = carriedLandings({
+    world: world({
+      closedPullRequests: [
+        mergedPr({ number: 1, baseBranch: 'main', branch: 'issue/12/part-1', closedAt: '2026-01-01T00:00:00.000Z' }),
+        mergedPr({ number: 2, baseBranch: 'issue/12/part-1', closedAt: '2026-01-02T00:00:00.000Z' }),
+      ],
+    }),
+    nodes: twoPartGoal(),
+    landings: [landing({ prNumber: 1, sha: 'sha1', onIntegration: true })],
+    integrationBranch: 'main',
+  });
+  assert.deepEqual(found, [], 'the squash had already gone, so it carried none of this');
 });
 
 test('a merge whose provider reported no base branch is still a landing', () => {
@@ -768,7 +817,7 @@ test('a merge is recorded against its goal and answered from where the environme
   assert.equal(rows.find((r) => r.environment === 'prod')?.status, 'absent');
 });
 
-test('a stacked pull request’s squash is not a landing, and the goal still arrives', async () => {
+test('a stacked pull request rides the merge that carried it, and the goal still arrives', async () => {
   const { prober, git } = twoEnvironments(true, false);
   const system = build(TWO_ENVS, prober, git);
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'the goal' });
@@ -782,24 +831,63 @@ test('a stacked pull request’s squash is not a landing, and the goal still arr
   });
 
   await system.harness.runCycle();
-  system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
   system.connector.inject({ kind: 'pr_closed', prNumber: 8, merged: true });
+  system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
   await system.harness.runCycle();
 
   assert.deepEqual(
-    system.store.environments.listGoalLandings().map((l) => l.prNumber),
-    [7],
-    'the stacked squash sits on a branch that is deleted and is an ancestor of nothing',
+    system.store.environments.listGoalLandings().map((l) => [l.prNumber, l.sha, l.onIntegration]),
+    [
+      [7, mergeShaFor(7), null],
+      [8, mergeShaFor(7), null],
+    ],
+    'its own squash is an ancestor of nothing, so it lands as the commit that carried it down',
   );
-  const staging = buildStateSnapshot(system)
-    .environmentReach.find((g) => g.goalRef === 'issue:7')
-    ?.environments.find((e) => e.environment === 'staging');
-  assert.equal(staging?.total, 1);
+  const goal = buildStateSnapshot(system).environmentReach.find((g) => g.goalRef === 'issue:7');
+  const staging = goal?.environments.find((e) => e.environment === 'staging');
+  assert.equal(staging?.total, 2);
   assert.equal(staging?.status, 'reached');
+  assert.deepEqual(
+    goal?.landings.map((l) => [l.prNumber, l.reach.staging]),
+    [
+      [7, 'reached'],
+      [8, 'reached'],
+    ],
+    'the stacked pull request’s row says where it is, rather than pending for ever',
+  );
   assert.deepEqual(
     system.store.environments.listGoalArrivals().map((a) => `${a.goalRef} ${a.environment}`),
     ['issue:7 staging'],
-    'the arrival fires rather than the goal reading partial 1/2 for ever',
+  );
+});
+
+test('a stacked pull request for another goal arrives with the merge that carried it', async () => {
+  const { prober, git } = twoEnvironments(true, false);
+  const system = build(TWO_ENVS, prober, git);
+  system.connector.inject({ kind: 'new_issue', number: 7, title: 'the first goal' });
+  system.connector.inject({ kind: 'new_issue', number: 9, title: 'the second goal' });
+  system.connector.inject({ kind: 'new_pr', number: 7, title: 'PR 7', branch: 'issue/7' });
+  system.connector.inject({ kind: 'new_pr', number: 9, title: 'PR 9', branch: 'issue/9', baseBranch: 'issue/7' });
+
+  await system.harness.runCycle();
+  system.connector.inject({ kind: 'pr_closed', prNumber: 9, merged: true });
+  await system.harness.runCycle();
+  assert.deepEqual(
+    system.store.environments.listGoalLandings().map((l) => l.prNumber),
+    [],
+    'nothing carries it yet, so nothing is recorded',
+  );
+
+  system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: true });
+  await system.harness.runCycle();
+
+  assert.deepEqual(
+    system.store.environments
+      .listGoalArrivals()
+      .map((a) => `${a.goalRef} ${a.environment}`)
+      .sort(),
+    ['issue:7 staging', 'issue:9 staging'],
+    'the goal whose only merge was stacked arrives, rather than reading as never shipped',
   );
 });
 
