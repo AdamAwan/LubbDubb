@@ -32,7 +32,7 @@ with every rule at `error`** — the fix for an unused type or helper is to **dr
 never an ignore list (unused class members are not checked). And there
 are **two typecheckers**: `typecheck` (server) and `typecheck:web` (cockpit) are separate passes.
 
-A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are native builds.
+A fresh clone needs `npm ci` first — `node-pty` is a native build.
 
 ## Conventions
 
