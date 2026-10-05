@@ -1855,11 +1855,22 @@ own digest.
   person never toggles to compare. It finds the stop by the call's `tool_use_id`, recorded at the call,
   so an earlier stop's widget keeps showing that stop. An unreadable map, or `steps` with no map, is a
   `deny`; with no map the row is the engine's own.
+- **The mod cuts each stop's hunks; the model never types a diff.** A "Next" was slow because each
+  stop had the model write its hunk twice — into `walk_goto`'s `diff` and again as a block in the
+  chat — and that output, not the mod, is what the person waits on. So `walk_start` takes `diff`, the
+  path of the PR's whole unified diff saved to a file, and each stop's `hunks` as `path:line` (the
+  hunk holding that head line, the old side if none does) or `path` (every hunk in the file). They
+  are resolved once, at the start, and kept on the stop; `walk_goto` then needs only the stop number,
+  and the same `ToolResult` hook draws the hunks in the chat under the call, with or without a map.
+  A ref the diff holds no hunk for, `hunks` with no `diff`, an unreadable diff and a file's hunks over
+  the 10,000 characters are each a `deny`. `walk_goto`'s own `diff` stays, for a walk started without
+  one, and replaces the stop's hunks for that call. `walk.md` also has the model settle every stop
+  before its first reply, so a move between stops needs no reading.
 - **The map page's Before/After toggle stays in view**: its bar is sticky, and the `b` and `a` keys
   switch modes from anywhere on the page.
 
 - **The model drives it through four tools the mod registers**: `walk_start` (the PR and its stops;
-  opens the panel), `walk_goto` (the current stop and its hunk), `walk_note` (add a `likely` or
+  opens the panel), `walk_goto` (the current stop; its hunks come from `walk_start`, or from its own `diff`), `walk_note` (add a `likely` or
   `check` note, or `clear` / `reopen` one) and `walk_end`. They are `mcp__pr-assistant__walk_*` to
   the model, and `walk/walk.md` names them — rename one and the skill silently falls back to chat.
 - **A refusal is a `deny`, never a quiet success**: a call before `walk_start`, a stop out of range,

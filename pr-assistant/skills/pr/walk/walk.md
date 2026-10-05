@@ -16,8 +16,9 @@ exactly as if they had typed them.
 
 ### 1. Read the PR before you say anything
 
-- Get the diff: the GitHub MCP `pull_request_read` (`get`, `get_diff`, `get_files`),
-  `gh pr diff <n>`, or `git diff <base>...HEAD` for a branch.
+- Save the whole diff to a file in your scratchpad: `gh pr diff <n> > <scratchpad>/pr-<n>.diff`, or
+  `git diff <base>...HEAD > …` for a branch. (Without a shell, the GitHub MCP `pull_request_read`
+  `get_diff`.) The panel cuts each stop's hunks from that file, so you never retype a diff.
 - Read the **old** code too (`git show <base>:<path>`), and one step out from each changed function:
   what calls it and what it calls. The PR's new tests usually spell out the scenario it is for.
 - Read the spec that owns the behaviour (`docs/spec/`, through `docs/README.md`) when the repo has
@@ -41,18 +42,28 @@ but the PR doesn't touch.
 Reply with the map's link, the PR in two sentences and the numbered stops, the main stop marked
 as such. Then ask where to start. Call `walk_start` with the PR (`number`, `title`, `url`), the
 two-sentence `summary`, `map` (the path of the map's JSON file) and the stops, each with its
-`files` and `steps`: the map step numbers it covers. Each `walk_goto` then draws that part of the
-map in the chat under the call — the cards, their Before/After notes and the step's Before/After —
-so don't repeat those in your reply. Without a map, leave `map` and `steps` out.
+`files` and `steps`: the map step numbers it covers. Pass `diff` (the saved diff's path) and give
+each stop its `hunks`: the one hunk that matters as `path:line` (a head-version line inside it), or
+`path` for a whole small file. Each `walk_goto` then draws that stop's part of the map **and its
+hunks** in the chat under the call, so don't repeat either in your reply. Without a map, leave `map`
+and `steps` out.
+
+### Get every stop ready now
+
+Before your first reply, settle each stop: its hunk, what changed and why, and its possible
+problems. Then a move between stops (`next`, `back`, a number) needs **no reading and no other tool
+call** — just `walk_goto` (and `walk_note` for that stop's problems, in the same turn) and a short
+reply. That is what keeps "Next" fast. Read again only when they ask something you haven't read.
 
 ### 4. One stop at a time
 
 When you present a stop:
 
-- Call `walk_goto` with the stop number and the **one hunk that matters** as `diff` (a unified diff
-  starting at its `@@` line), plus `path`. Leave `diff` out for an `unchanged` stop.
-- In the chat: the stop's number and title, the same hunk in a ```diff block (or a short quote of
-  the unchanged code), **what changed** and **why**. One or two sentences each, in plain words.
+- Call `walk_goto` with the stop number alone. Only if `walk_start` had no `diff`, also send the one
+  hunk that matters as `diff` (a unified diff starting at its `@@` line) plus `path`.
+- In the chat: the stop's number and title, **what changed** and **why**. One or two sentences each,
+  in plain words. The hunk is already drawn under the call; show one in a ```diff block only when
+  running without the panel's tools (or a short quote for an `unchanged` stop).
 - Then the possible problems at this stop, if there are any. Each one is either
   - **likely**: you checked and believe it is real, or
   - **check me**: you could not confirm it from what you have read.
