@@ -6,7 +6,7 @@
   "description": "Self-hosted orchestration harness — a cockpit that watches your work inputs, decides what to do, and dispatches AI agents autonomously.",
   "type": "module",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || exit 0",
@@ -42,7 +42,7 @@
     "@octokit/plugin-retry": "^8.1.1",
     "@octokit/plugin-throttling": "^11.0.5",
     "@octokit/rest": "^22.0.1",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.5",
     "nanoid": "^5.1.16",
     "node-pty": "^1.1.0",

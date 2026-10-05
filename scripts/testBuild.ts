@@ -30,7 +30,7 @@ execFileSync(
     '--outbase=.',
     '--format=esm',
     '--platform=node',
-    '--target=node20',
+    '--target=node22',
     '--jsx=automatic',
     '--sourcemap',
     '--log-level=warning',
