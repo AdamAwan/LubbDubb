@@ -1,11 +1,11 @@
-import type { AppState, EnvironmentHealthReading } from '../types.js';
+import type { AppState, EnvironmentHealthReading, LocalValidationStatus } from '../types.js';
 import { refLabel } from '../components/refs.js';
 import { standsFor } from '../view/goalRefs.js';
 import { needsYouOf, type NeedKind } from '../view/needsYou.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 
-type NotifyCategory = 'needsYou' | 'errors' | 'agents' | 'environments';
+type NotifyCategory = 'needsYou' | 'errors' | 'agents' | 'validations' | 'environments';
 
 export interface NotifyPrefs {
   enabled: boolean;
@@ -17,6 +17,11 @@ export const NOTIFY_CATEGORIES: readonly { id: NotifyCategory; label: string; bl
   { id: 'errors', label: 'Errors', blurb: 'A failure recorded by the harness' },
   { id: 'agents', label: 'Agent finished', blurb: 'A run reached an end — frequent on a busy fleet' },
   {
+    id: 'validations',
+    label: 'Validation finished',
+    blurb: 'A validation run on your machine or an environment ended, and its results are ready to review',
+  },
+  {
     id: 'environments',
     label: 'Environments',
     blurb: 'An environment stopped being well, got worse or better, or recovered',
@@ -27,7 +32,7 @@ const PREFS_KEY = 'lubbdubb.notify';
 
 const DEFAULT_PREFS: NotifyPrefs = {
   enabled: false,
-  categories: { needsYou: true, errors: true, agents: true, environments: true },
+  categories: { needsYou: true, errors: true, agents: true, validations: true, environments: true },
 };
 
 export function loadNotifyPrefs(): NotifyPrefs {
@@ -79,10 +84,20 @@ interface NotifyAgent {
   numTurns: number | null;
 }
 
+interface NotifyValidation {
+  id: string;
+  ended: boolean;
+  verdict: string;
+  goal: string;
+  where: string;
+  summary: string | null;
+}
+
 interface NotifySnapshot {
   needsYou: { id: string; kind: NeedKind; title: string }[];
   errors: { id: string; message: string }[];
   agents: NotifyAgent[];
+  validations: NotifyValidation[];
   environments: EnvironmentHealthReading[];
 }
 
@@ -95,6 +110,12 @@ const ENDING_WORD: Record<string, string> = {
 };
 
 const AGENT_ENDINGS = new Set(Object.keys(ENDING_WORD));
+
+const LOCAL_VERDICT_WORD: Partial<Record<LocalValidationStatus, string>> = {
+  passed: 'Validation passed',
+  failed: 'Validation failed',
+  blocked: 'Validation blocked',
+};
 
 const NEED_KIND_LABEL: Record<NeedKind, string> = {
   config: "This harness's own configuration is stopping it",
@@ -145,8 +166,39 @@ export function notifySnapshot(state: AppState): NotifySnapshot {
         numTurns: a.numTurns,
       };
     }),
+    validations: validationsOf(state),
     environments: state.environmentHealth ?? [],
   };
+}
+
+function validationsOf(state: AppState): NotifyValidation[] {
+  const out: NotifyValidation[] = [];
+  for (const issue of state.world.issues) {
+    const lv = issue.localValidation;
+    if (!lv) continue;
+    const word = LOCAL_VERDICT_WORD[lv.status];
+    out.push({
+      id: `local:${lv.id}`,
+      ended: word !== undefined,
+      verdict: word ?? lv.status,
+      goal: `${refLabel(lv.originRef)} ${issue.title}`,
+      where: 'your machine',
+      summary: lv.summary,
+    });
+  }
+  for (const sheet of state.remoteSheets ?? []) {
+    const run = sheet.run;
+    if (!run) continue;
+    out.push({
+      id: `remote:${run.id}`,
+      ended: run.status === 'ended',
+      verdict: 'Validation finished',
+      goal: refLabel(run.goalRef),
+      where: run.environment,
+      summary: run.note,
+    });
+  }
+  return out;
 }
 
 export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnapshot): NotifyItem[] {
@@ -191,6 +243,8 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
     });
   }
 
+  items.push(...endedValidations(prev.validations, next.validations));
+
   const wasRead = new Map(prev.environments.map((e) => [e.environment, e]));
   for (const env of next.environments) {
     const was = wasRead.get(env.environment);
@@ -206,6 +260,19 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
   }
 
   return coalesce(items);
+}
+
+function endedValidations(prev: readonly NotifyValidation[], next: readonly NotifyValidation[]): NotifyItem[] {
+  const wasEnded = new Map(prev.map((v) => [v.id, v.ended]));
+  return next
+    .filter((v) => v.ended && wasEnded.get(v.id) !== true)
+    .map((v) => ({
+      category: 'validations',
+      tag: `validation:${v.id}`,
+      title: `${v.verdict}: ${v.goal}`,
+      body: [v.where, v.summary].filter((p): p is string => p !== null && p !== '').join(' · '),
+      name: v.goal,
+    }));
 }
 
 function agentTitle(agent: NotifyAgent): string {
@@ -258,6 +325,7 @@ const SUMMARY_TITLE: Record<NotifyCategory, (n: number) => string> = {
   needsYou: (n) => `${n} things need you`,
   errors: (n) => `${n} errors recorded`,
   agents: (n) => `${n} runs ended`,
+  validations: (n) => `${n} validations finished`,
   environments: (n) => `${n} environments changed`,
 };
 
