@@ -404,15 +404,34 @@ function partInput(
   };
 }
 
-test("ask_next carries a card like Focus mode's: kind, queue, and the goal plan with the asked part marked", async () => {
+test("ask_next carries a card like Focus mode's: kind, queue, the goal plan with the asked part marked, and the links", async () => {
   const d = await deck();
   try {
     const { store } = d.system;
     store.world.setWorldBaseline({
       takenAt: NOW,
-      pullRequests: [],
+      pullRequests: [
+        {
+          id: 'p30',
+          number: 30,
+          title: 'Schema',
+          branch: 'issue/12/schema',
+          ciStatus: 'pending',
+          unresolvedComments: [],
+          url: 'https://github.com/o/r/pull/30',
+        },
+      ],
       issues: [
-        { id: 'i12', number: 12, title: 'Ship the export', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        {
+          id: 'i12',
+          number: 12,
+          title: 'Ship the export',
+          body: '',
+          labels: [],
+          state: 'open',
+          linkedPrNumber: null,
+          url: 'https://github.com/o/r/issues/12',
+        },
       ],
     });
     const plan = store.plans.upsertPlan({ originRef: 'issue:12', title: 'Two parts', status: 'active' });
@@ -422,6 +441,7 @@ test("ask_next carries a card like Focus mode's: kind, queue, and the goal plan 
     ]);
     assert.ok(schema);
     store.plans.markPartDispatched(schema.id, 't1', 'issue/12/schema');
+    store.plans.updatePlanPart(schema.id, { prNumber: 30 });
     const bench = store.humanTasks.recordHumanTask({
       title: 'Check the export opens in Excel',
       detail: null,
@@ -435,7 +455,13 @@ test("ask_next carries a card like Focus mode's: kind, queue, and the goal plan 
     const next = await d.call('ask_next', { id: bench.id });
     assert.equal(next.isError, false, next.text);
     const queue = askQueue(d.system);
-    const card = next.json.card as { kind: unknown; queue: { here: boolean }[]; goal: unknown };
+    const card = next.json.card as {
+      kind: unknown;
+      queue: { here: boolean }[];
+      goal: unknown;
+      pr: unknown;
+      cockpit: unknown;
+    };
     assert.deepEqual(card.kind, { label: 'Bench', symbol: '\u25c6', tone: 'blue' });
     assert.equal(card.queue.length, queue.length, 'a pip for every standing ask');
     assert.equal(
@@ -444,17 +470,32 @@ test("ask_next carries a card like Focus mode's: kind, queue, and the goal plan 
     );
     assert.deepEqual(card.goal, {
       title: 'Ship the export',
+      url: 'https://github.com/o/r/issues/12',
       plan: {
         withheld: false,
         parts: [
-          { seq: 1, title: 'Schema', state: 'being worked', here: false },
-          { seq: 2, title: 'Export', state: 'not started', here: true },
+          {
+            seq: 1,
+            title: 'Schema',
+            state: 'being worked',
+            here: false,
+            pr: { number: 30, url: 'https://github.com/o/r/pull/30' },
+          },
+          { seq: 2, title: 'Export', state: 'not started', here: true, pr: null },
         ],
       },
     });
+    assert.equal(card.pr, null, 'a bench row names no pull request of its own');
+    assert.equal(card.cockpit, `http://127.0.0.1:4300/?ask=${encodeURIComponent(bench.id)}`);
 
     const merge = await d.call('ask_next', { id: ids.merge });
-    assert.equal((merge.json.card as { goal: unknown }).goal, null, 'an ask on no goal draws no goal column');
+    const mergeCard = merge.json.card as { goal: unknown; pr: unknown };
+    assert.equal(mergeCard.goal, null, 'an ask on no goal draws no goal column');
+    assert.deepEqual(
+      mergeCard.pr,
+      { number: 7, url: null },
+      'a pull request the world does not hold has no url to give',
+    );
   } finally {
     await d.close();
   }
