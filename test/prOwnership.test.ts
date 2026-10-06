@@ -13,6 +13,9 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { renamablePrs } from '../src/pr/prRename.js';
 import type { PullRequest } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { GitHubSourceControlIntegration } from '../src/integrations/github/sourceControl.js';
+import type { GitHubApi, GhPullSummary } from '../src/integrations/github/githubApi.js';
 
 const pr = (over: Partial<PullRequest> = {}): PullRequest => ({
   id: 'p',
@@ -71,6 +74,11 @@ test('isSomeoneElsesPr: only a positive answer hides a pull request', () => {
   assert.equal(isSomeoneElsesPr(pr({ viewerAuthored: false })), true);
   assert.equal(isSomeoneElsesPr(pr({ viewerAuthored: true })), false);
   assert.equal(isSomeoneElsesPr(pr({})), false);
+  assert.equal(
+    isSomeoneElsesPr(pr({ viewerAuthored: false, botAuthored: true })),
+    false,
+    'a bot’s is worked once watched',
+  );
 });
 
 test('a colleague’s pull request is neither renamed nor seeded for watching', () => {
@@ -156,4 +164,82 @@ test('the same pull request is worked once it is the harness’s own', async () 
     true,
   );
   system.store.close();
+});
+
+test('a watched bot pull request is worked as the fleet’s own', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    repoRoot: gitRepo(),
+    heartbeatIntervalMs: 999_999,
+    maxConcurrentAgents: 3,
+  });
+  const system = buildSystem(config, { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager() });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 42,
+    title: 'Update dependency axios to v1.7.4',
+    branch: 'renovate/axios',
+    labels: ['lubbdubb-watch'],
+    author: 'renovate[bot]',
+    viewerAuthored: false,
+    botAuthored: true,
+  });
+  system.connector.inject({ kind: 'ci_failed', prNumber: 42 });
+  await system.harness.runCycle('manual');
+
+  assert.equal(
+    system.store.tasks.listTasks().some((t) => t.originRef === 'pr:42:ci'),
+    true,
+  );
+  system.store.close();
+});
+
+test('GitHub’s viewer filter admits a bot’s pull request only once it carries the watch label', async () => {
+  const summary = (number: number, authorLogin: string, labels: string[]): GhPullSummary => ({
+    number,
+    title: 'Update dependency axios to v1.7.4',
+    branch: `renovate/axios-${number}`,
+    baseBranch: 'main',
+    headSha: `sha${number}`,
+    authorLogin,
+    url: `https://github.com/o/r/pull/${number}`,
+    labels,
+    assigneeLogins: [],
+  });
+  const api = {
+    viewerLogin: async () => 'me',
+    listOpenPulls: async () => [
+      summary(1, 'renovate[bot]', ['lubbdubb-watch']),
+      summary(2, 'renovate[bot]', []),
+      summary(3, 'someone', ['lubbdubb-watch']),
+      summary(4, 'me', []),
+    ],
+    getPull: async () => ({ mergeable: true, mergeableState: 'clean', merged: false, changedFiles: 1 }),
+    listPullReviews: async () => [],
+    listPullReviewComments: async () => [],
+    listPullReviewThreads: async () => [],
+    getCombinedStatus: async () => ({ state: 'success', totalCount: 0, statuses: [] }),
+    listCheckRuns: async () => [],
+  } as unknown as GitHubApi;
+  const sc = new GitHubSourceControlIntegration({
+    api,
+    prAuthor: 'me',
+    botAuthors: () => [/\[bot\]$/],
+    watchLabel: 'lubbdubb-watch',
+  });
+
+  const { pullRequests } = await sc.snapshot();
+  assert.deepEqual(
+    pullRequests!.map((p) => [p.number, p.botAuthored ?? false]),
+    [
+      [1, true],
+      [4, false],
+    ],
+  );
 });

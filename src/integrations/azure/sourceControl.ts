@@ -44,6 +44,8 @@ import type {
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
+import { watchedBots, type WatchedBotOpts } from '../watchedBots.js';
+import { isAzBot, scopeToViewer } from './viewerScope.js';
 import { closedReadSince, type ClosedPrSweep } from '../closedWindow.js';
 import type { AzClosedPull, AzPolicyEvaluation, AzPull, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
@@ -53,7 +55,7 @@ import { hydrationMaxAgeMs, prReadRef, type ReadPlan } from '../../world/readPla
 
 // → docs/spec/15-integrations.md
 
-interface AzureSourceControlOpts {
+interface AzureSourceControlOpts extends WatchedBotOpts {
   api: AzureDevOpsApi;
   errors?: ErrorRecorder;
   organization?: string;
@@ -108,19 +110,15 @@ export class AzureDevOpsSourceControlIntegration
   async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, prAuthor } = this.opts;
+      const bots = watchedBots(this.opts);
       const viewer = await api.viewerUniqueName();
       const [active, closedPullRequests] = await Promise.all([
         api.listActivePullRequests(),
         this.recentlyClosed(viewer),
       ]);
-      let pulls = active;
-      if (prAuthor) {
-        pulls = pulls.filter(
-          (p) => sameIdentity(p.authorUniqueName, prAuthor) || viewerAssignment(p.reviewers, prAuthor) !== undefined,
-        );
-      }
+      const { pulls, botOnly } = scopeToViewer(active, prAuthor, bots);
 
-      const pullRequests = await Promise.all(
+      const hydrated = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
           const [threads, labels, body] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
@@ -158,6 +156,7 @@ export class AzureDevOpsSourceControlIntegration
           const author = azAuthorName(p);
           if (author !== '') pr.author = author;
           if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
+          if (isAzBot(p, bots)) pr.botAuthored = true;
           const assignment = viewerAssignment(p.reviewers, viewer);
           if (assignment !== undefined) pr.viewerAssignment = assignment;
           if (viewerApproved(p.reviewers, viewer)) pr.viewerApproved = true;
@@ -167,6 +166,7 @@ export class AzureDevOpsSourceControlIntegration
           return pr;
         }),
       );
+      const pullRequests = hydrated.filter((pr) => !botOnly.has(pr.number) || bots.watched(pr.labels));
 
       this.policyReadings.retain(pulls.map((p) => p.pullRequestId));
       this.bodyReadings.retain(pulls.map((p) => p.pullRequestId));

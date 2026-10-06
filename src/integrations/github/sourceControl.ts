@@ -50,6 +50,7 @@ import type {
   ReleaseNotesReadable,
   WorldSlice,
 } from '../integration.js';
+import { watchedBots, type WatchedBotOpts } from '../watchedBots.js';
 import { closedReadSince, type ClosedPrSweep } from '../closedWindow.js';
 import type {
   GhAnnotation,
@@ -90,7 +91,7 @@ function ciSettled(status: CiStatus): boolean {
   return status === 'passing' || status === 'failing';
 }
 
-interface GitHubSourceControlOpts {
+interface GitHubSourceControlOpts extends WatchedBotOpts {
   api: GitHubApi;
   errors?: ErrorRecorder;
   prAuthor?: string;
@@ -142,9 +143,17 @@ export class GitHubSourceControlIntegration
   async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, prAuthor } = this.opts;
+      const bots = watchedBots(this.opts);
       const viewer = await api.viewerLogin();
       let pulls = await api.listOpenPulls();
-      if (prAuthor) pulls = pulls.filter((p) => p.authorLogin === prAuthor || p.assigneeLogins.includes(prAuthor));
+      if (prAuthor) {
+        pulls = pulls.filter(
+          (p) =>
+            p.authorLogin === prAuthor ||
+            p.assigneeLogins.includes(prAuthor) ||
+            (bots.isBot(p.authorLogin) && bots.watched(p.labels)),
+        );
+      }
       const closedPullRequests = await this.recentlyClosed(viewer);
 
       const pullRequests = await Promise.all(
@@ -172,6 +181,7 @@ export class GitHubSourceControlIntegration
           };
           if (p.authorLogin !== '') pr.author = p.authorLogin;
           if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
+          if (bots.isBot(p.authorLogin)) pr.botAuthored = true;
           if (detail.viewerApproved) pr.viewerApproved = true;
           if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
           pr.assignees = loginPeople(p.assigneeLogins);

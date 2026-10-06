@@ -44,6 +44,8 @@ export interface PullRequest {
   viewerAssignment?: ViewerAssignment;
   author?: string;
   viewerAuthored?: boolean;
+  /** The author matches `botPrs.authors`: a dependency bot's, worked as the fleet's own once watched. */
+  botAuthored?: boolean;
   viewerApproved?: boolean;
   /**
    * Who the tracker says is on this pull request: GitHub's assignees, Azure's individually named
