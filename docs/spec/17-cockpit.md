@@ -2661,8 +2661,9 @@ claim something is waiting while offering no way to answer it.
 
 #### A goal with no parent Feature
 
-Above every band and every card, between the header and the track, a goal that hangs off nothing gets
-an amber warning of its own, wherever the tracker could be handed a parent — the feature board's flag
+At the top of the **Ask** pane, first among that pane's asks, a goal that hangs off nothing gets
+an amber warning of its own — the goal's place on the board is a question about the ticket, not about
+any later stage, so the other panes do not draw it. It is drawn wherever the tracker could be handed a parent — the feature board's flag
 is not part of this. It is not one of the bands above and wears no tone class: the tone
 families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
 about it.

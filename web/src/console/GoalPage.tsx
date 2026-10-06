@@ -90,6 +90,10 @@ export function GoalPage({
         onSelect={(id) => actions.openGoalTab(id as GoalTab)}
         label="This goal"
       >
+        {/* The goal's place on the board is a question about the ticket, so it is
+            the Ask pane's, drawn first like the pane's other asks.
+            → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature */}
+        {tab === 'ask' && <OrphanBand issue={page.issue} view={view} actions={actions} />}
         {/* The pane's own asks, in full and first: this is the pane the ask is
             about, and one line of small print above the navigation is not what a
             filled primary button inside the pane is competing with.
@@ -105,10 +109,6 @@ export function GoalPage({
         {tab === 'close' && <ClosePane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'watch' && <WatchPane page={page} view={view} actions={actions} folds={folds} />}
       </TabbedPanel>
-      {/* Below the panel, because what it asks is about the goal's place on the
-          board rather than about any stage of the work — and because the ask
-          itself is already announced as a row at the top. */}
-      <OrphanBand issue={page.issue} view={view} actions={actions} />
     </div>
   );
 }

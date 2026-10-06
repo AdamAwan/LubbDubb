@@ -6,6 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
+import type { GoalTab } from '../web/src/view/goalPage.js';
 import type { AppState, Issue } from '../web/src/types.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import { orphanCount, orphanGoal } from '../web/src/view/orphanGoal.js';
@@ -38,7 +39,7 @@ function firstGoal(state: AppState): Issue {
   return goal;
 }
 
-function view(state: AppState, selectedGoal: string | null = null): CockpitView {
+function view(state: AppState, selectedGoal: string | null = null, goalTab: GoalTab | null = null): CockpitView {
   return buildViewModel({
     state,
     now: Date.now(),
@@ -58,6 +59,7 @@ function view(state: AppState, selectedGoal: string | null = null): CockpitView 
     selectedGoal,
     consolePanel: null,
     tab: 'overview',
+    goalTab,
   });
 }
 
@@ -166,7 +168,7 @@ test('the count is a fold of the same predicate', () => {
 test('a goal page states in words that the goal hangs off no Feature', () => {
   const state = stateWith();
   const goal = firstGoal(state);
-  const html = decode(render(view(state, `issue:${goal.number}`)));
+  const html = decode(render(view(state, `issue:${goal.number}`, 'ask')));
 
   assert.ok(html.includes('No parent Feature'), 'the page must name the gap');
   assert.ok(html.includes('it is on no team’s board'), 'and say what it costs, not only that it is true');
@@ -190,7 +192,7 @@ test('an answered orphan keeps a quiet note and a way back', () => {
     };
   });
   const goal = firstGoal(state);
-  const html = decode(render(view(state, `issue:${goal.number}`)));
+  const html = decode(render(view(state, `issue:${goal.number}`, 'ask')));
 
   assert.ok(html.includes('you said this goal wants none'), 'the page must say the decision was made');
   assert.ok(html.includes('cn-orphan-quiet'), 'and draw it in the answered weight');
