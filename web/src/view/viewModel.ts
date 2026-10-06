@@ -71,6 +71,7 @@ export interface CockpitView {
   featureCard: number | null;
   featureSort: FeatureSort;
   featureDensity: FeatureDensity;
+  featureClosed: boolean;
   petsBlended: boolean;
   overviewShape: OverviewShape;
   featureMode: FeatureMode;
@@ -180,6 +181,7 @@ interface ViewInputs {
   featureCard?: number | null;
   featureSort?: FeatureSort;
   featureDensity?: FeatureDensity;
+  featureClosed?: boolean;
   petsBlended?: boolean;
   overviewShape?: OverviewShape;
   featureMode?: FeatureMode;
@@ -312,6 +314,7 @@ function featuresView(input: ViewInputs) {
     featureCard: input.featureCard ?? null,
     featureSort: input.featureSort ?? 'wants-you',
     featureDensity: input.featureDensity ?? 'auto',
+    featureClosed: input.featureClosed ?? false,
     petsBlended: input.petsBlended ?? false,
     overviewShape: input.overviewShape ?? 'cards',
     featureMode: input.featureMode ?? 'board',
