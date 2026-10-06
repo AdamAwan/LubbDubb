@@ -10,8 +10,8 @@ default `ownWorkOnly` a bot's pull requests never reach the world at all
 see them hands the fleet every other author's work besides. So this is a **second, separate read**,
 scoped to the authors a project names and to nothing else.
 
-**A reading, one write a person presses, and a paragraph of advice.** The one thing written to the
-provider is [a claim](#taking-one-on), and only from the button. The one thing the fleet does is
+**A reading, two writes a person presses, and a paragraph of advice.** The things written to the
+provider are [a claim](#taking-one-on) and [a close](#closing-one), and only from their buttons. The one thing the fleet does is
 [read them for risk](#the-risk-summary): one desk agent over a batch, whose verdict is drawn beside each
 row and read by no rule. Nothing is approved, merged or posted to a pull request from it — unless a person
 [tags it for watching](#working-one-as-the-fleets-own), which hands it to the fleet like its own. The three
@@ -96,6 +96,73 @@ fixes, base updates, review replies and the merge path all fire on it. Two thing
 It is still **not** `isOurPr`: the harness does not rename it, reap its branch or link it to a work item,
 because the bot owns those. The watch label is the only opt-in, and nothing seeds it — a person adds it.
 
+## When CI fails on one
+
+A red build on a dependency bump is a different question from a red build on the fleet's own work. On
+its own work the fleet broke something and should fix it. On a bump, the thing that changed is the
+dependency, and there are four answers, only one of which is a fix on this branch:
+
+- **`adapted`**: our code relied on behaviour the update changed on purpose, and adapting is a fix here.
+- **`upstream-bug`**: the dependency regressed. Patching around it is the wrong move: the next bump
+  carries the fix, and a workaround outlives the bug.
+- **`intended-break`**: the change is deliberate, but adapting is a migration rather than a fix, and is
+  not something to start unasked on a bot's branch.
+- **`unclear`**: the agent could not tell.
+
+### The brief
+
+`pr-ci-failing` on a pull request with `botAuthored` set appends `dependencyCiBrief`
+(`src/botPrs/ciBrief.ts`) to the CI-fix prompt. It is appended, never interpolated, so a deployment that
+overrides `pr-ci-fix` still gets it ([05](05-dispatcher.md#what-a-ci-fix-dispatch-carries)). It carries:
+
+- the package and the versions it moves between, read from the title and body by
+  [`readDependencyUpdate`](#reading-the-update);
+- the four answers above, and the instruction to work out which one it is **before** changing anything.
+  For a suspected regression, the agent is pointed at the dependency's own repository (the first
+  `github.com` link in the body that is no bot's), to search its issues and releases itself;
+- the release notes from the pull request's body, where Renovate or Dependabot put them, capped;
+- the [risk verdict](#the-risk-summary) on this head, where one exists.
+
+Everything here is read synchronously from the world and the store at dispatch. The harness fetches no
+release from the provider for it, as the risk desk does, because a rule cannot wait on the network.
+
+### The outcome — `dependency_outcome`
+
+The agent records which answer it reached with `dependency_outcome` ([11](11-mcp-tools.md)), and for
+anything but `adapted` then **escalates**: whether to close the pull request and wait for the next bump,
+or take on the migration, is a person's call. The tool:
+
+- is advertised on `pr-ci-failing` only, and refused unless the task's origin is `pr:<n>:ci` and the
+  world's pull request `n` has `botAuthored` set;
+- writes against the head **the world holds** at the call, never one the agent names;
+- refuses `upstream-bug` without `upstream_url`: a regression nobody can point at is `unclear`;
+- replaces an earlier outcome on the same head.
+
+It is stored in `bot_pr_outcomes`, one row per (pull request, head) ([14](14-persistence.md)).
+
+### The hold
+
+**An outcome other than `adapted` holds further CI dispatches on that pull request's current head**
+(`ciHeldByOutcome`, `src/botPrs/outcome.ts`). Without it, the fleet re-dispatches the same red build
+every cooldown, and each agent either re-discovers the upstream bug or, worse, patches around it. The
+hold is the narrowest thing that stops that, and it fails open on every arm: a pull request that is not
+a bot's, a head the provider did not report, and an outcome on any other head all hold nothing. The bot
+rebasing or bumping again produces a new head, which nobody has looked at, so the fleet tries again.
+
+`adapted` holds nothing: the agent pushed, so the head moved anyway.
+
+The hold is read from `DispatchContext.botPrOutcomes`, which `buildDispatchInputs` fills with the
+outcomes on the current heads of the world's bot pull requests.
+
+## Closing one
+
+`BotPrReader.close(prNumber)` closes the pull request through the connector's `closePr`: closed on
+GitHub, abandoned on Azure DevOps. Both Renovate and Dependabot read a closed pull request as _leave this
+version alone_ and raise the next version when it ships, which is what "wait for the next one" means.
+Like a claim, it refuses a number that is not in the current bot reading (404), so the route is not a
+general way to close any pull request, and drops the cached reading. It is pressed from the tab, never
+by the fleet.
+
 ## Reading the update
 
 `readDependencyUpdate(title, body)` (`src/botPrs/dependencyUpdate.ts`) is pure, and turns a row into a
@@ -126,6 +193,11 @@ minor, patch, unclassified, each with its package versions, age and CI state, it
 strip also counts the rows nobody has taken and the ones that are yours. Each row links to the pull
 request on the provider. Links go **out**, not through `<Ref>`: a bot pull request is in no world
 snapshot, so a harness page for one would open on nothing. It re-reads once a minute.
+
+A row with an [outcome](#when-ci-fails-on-one) draws it under the risk: what the agent found, the
+version the fix ships in, and a link upstream. One on an earlier head is drawn greyed and says so. One
+other than `adapted`, on the current head, also draws **Close and wait for the next**, which is
+[the close](#closing-one), and is counted in the strip as _to close or take on_.
 
 ## The risk summary
 

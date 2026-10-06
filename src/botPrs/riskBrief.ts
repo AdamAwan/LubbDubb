@@ -101,7 +101,7 @@ function filesSection(files: BotPrFile[] | null): string {
   return out.join('\n');
 }
 
-function capped(text: string, max: number): string {
+export function capped(text: string, max: number): string {
   if (text.length <= max) return text;
   const line = text.lastIndexOf('\n', max);
   return `${text.slice(0, line > 0 ? line : max)}\n… (cut at ${String(max)} characters)`;

@@ -238,6 +238,7 @@ test('the reader reuses a fresh reading, and a failed read keeps the last good r
         ];
       },
       claimBotPr: async () => ({ ok: true }),
+      closePr: async () => ({ ok: true }),
     },
     authors: () => ['bot', '(unclosed'],
     errors,

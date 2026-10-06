@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import type { AssessedBotPr, BotPrRiskLevel, BotPrRiskStanding, BotPrsPayload, UpdateKind } from '../types.js';
+import type {
+  AssessedBotPr,
+  BotPrOutcome,
+  BotPrOutcomeKind,
+  BotPrRiskLevel,
+  BotPrRiskStanding,
+  BotPrsPayload,
+  UpdateKind,
+} from '../types.js';
 import { api } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ExtLink, relTime, timeLeft } from './util.js';
@@ -19,6 +27,13 @@ const GROUPS: readonly { kind: UpdateKind; label: string; note: string }[] = [
 const KIND_TONE: Record<UpdateKind, TagTone> = { major: 'red', minor: 'amber', patch: 'green', unknown: 'grey' };
 
 const RISK_TONE: Record<BotPrRiskLevel, TagTone> = { low: 'green', medium: 'amber', high: 'red' };
+
+const OUTCOME: Record<BotPrOutcomeKind, { label: string; tone: TagTone }> = {
+  adapted: { label: 'adapted to it', tone: 'green' },
+  'upstream-bug': { label: 'upstream bug', tone: 'red' },
+  'intended-break': { label: 'needs a migration', tone: 'amber' },
+  unclear: { label: 'unclear', tone: 'grey' },
+};
 
 const CI_TONE: Record<AssessedBotPr['ciStatus'], TagTone> = {
   passing: 'green',
@@ -151,6 +166,7 @@ function Strip({ prs, now }: { prs: AssessedBotPr[]; now: number }): JSX.Element
   const failing = prs.filter((pr) => pr.ciStatus === 'failing').length;
   const majors = prs.filter((pr) => pr.update.kind === 'major').length;
   const unclaimed = prs.filter((pr) => pr.reviewers.length === 0).length;
+  const decide = prs.filter((pr) => awaitsDecision(pr)).length;
   const mine = prs.filter((pr) => pr.viewerReviewing).length;
   const oldest = prs
     .map((pr) => pr.createdAt)
@@ -163,6 +179,7 @@ function Strip({ prs, now }: { prs: AssessedBotPr[]; now: number }): JSX.Element
       </span>
       {failing > 0 && <Tag tone="red">{failing} failing CI</Tag>}
       {majors > 0 && <Tag tone="amber">{majors} major</Tag>}
+      {decide > 0 && <Tag tone="red">{decide} to close or take on</Tag>}
       {unclaimed > 0 && <Tag tone="grey">{unclaimed} nobody has taken</Tag>}
       {mine > 0 && <Tag tone="accent">{mine} yours</Tag>}
       {failing === 0 && majors === 0 && prs.length > 0 && <Tag tone="green">nothing needs you</Tag>}
@@ -224,10 +241,60 @@ function Row({ pr, now, reload }: { pr: AssessedBotPr; now: number; reload: () =
             <span className="bp-risk-why">{pr.risk.summary}</span>
           </div>
         )}
+        {pr.outcome !== null && <Outcome pr={pr} outcome={pr.outcome} reload={reload} />}
       </div>
       <Tag tone={CI_TONE[pr.ciStatus]} lower title="CI on the pull request's head">
         CI {pr.ciStatus}
       </Tag>
+    </div>
+  );
+}
+
+function awaitsDecision(pr: AssessedBotPr): boolean {
+  return pr.outcome !== null && pr.outcome.outcome !== 'adapted' && pr.outcome.headSha === pr.headSha;
+}
+
+function Outcome({
+  pr,
+  outcome,
+  reload,
+}: {
+  pr: AssessedBotPr;
+  outcome: BotPrOutcome;
+  reload: () => void;
+}): JSX.Element {
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const { label, tone } = OUTCOME[outcome.outcome];
+  const current = outcome.headSha === pr.headSha;
+  return (
+    <div className="bp-outcome">
+      <Tag tone={current ? tone : 'grey'} lower title="What the agent fixing CI on this pull request found">
+        {label}
+      </Tag>
+      <span className="bp-outcome-why">
+        {outcome.summary}
+        {outcome.fixedIn !== null && ` Fixed in ${outcome.fixedIn}.`}
+        {!current && ' (on an earlier head)'}
+      </span>
+      {outcome.upstreamUrl !== null && <ExtLink href={outcome.upstreamUrl}>upstream</ExtLink>}
+      {awaitsDecision(pr) && (
+        <AsyncButton
+          size="small"
+          ghost
+          usage="pr.edit"
+          title="Close this pull request (abandon it on Azure DevOps). The bot leaves this version alone and raises the next one"
+          pendingLabel="Closing…"
+          onRefused={setRefusal}
+          onClick={async () => {
+            setRefusal(null);
+            await api.closeBotPr(pr.number);
+            reload();
+          }}
+        >
+          Close and wait for the next
+        </AsyncButton>
+      )}
+      {refusal !== null && <span className="bp-refusal">{refusal}</span>}
     </div>
   );
 }

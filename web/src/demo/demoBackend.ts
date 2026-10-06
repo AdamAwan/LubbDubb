@@ -62,6 +62,7 @@ import type {
   PetCatalogue,
   CiPolicyDescription,
   BotPrsPayload,
+  BotPrOutcome,
   BotPrRisk,
   CiSubject,
   PromptTemplateView,
@@ -4996,6 +4997,10 @@ export const demoApi = {
     demoClaimed.add(number);
     return Promise.resolve({ ok: true as const });
   },
+  closeBotPr: (number: number) => {
+    demoClosed.add(number);
+    return Promise.resolve({ ok: true as const });
+  },
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
   raiseBug: (_issueNumber: number, _summary: string, _title?: string) => Promise.resolve({ ok: false }),
   probeFilingTarget: (): Promise<FilingTargetProbe> =>
@@ -5756,6 +5761,7 @@ function demoBotPrs(now: number): BotPrsPayload {
     headSha: `demo${number}`,
     update: { kind, packageName, from, to },
     risk: demoRisk(number, now),
+    outcome: demoOutcome(number, now),
   });
   return {
     configured: true,
@@ -5782,9 +5788,25 @@ function demoBotPrs(now: number): BotPrsPayload {
         'Priya Shah',
         ...claimedBy(33502),
       ]),
-    ],
+    ].filter((p) => !demoClosed.has(p.number)),
   };
 }
+
+function demoOutcome(number: number, now: number): BotPrOutcome | null {
+  if (number !== 33473) return null;
+  return {
+    prNumber: number,
+    headSha: `demo${number}`,
+    outcome: 'upstream-bug',
+    summary:
+      'config() now throws on a missing .env instead of returning an error, which breaks our test bootstrap. Upstream calls it a regression.',
+    upstreamUrl: 'https://github.com/motdotla/dotenv/issues/0000',
+    fixedIn: '17.0.2',
+    recordedAt: new Date(now - 40 * 60_000).toISOString(),
+  };
+}
+
+const demoClosed = new Set<number>();
 
 const DEMO_RISKS: Partial<Record<number, Pick<BotPrRisk, 'risk' | 'summary'>>> = {
   33473: {

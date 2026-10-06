@@ -1,5 +1,5 @@
 import type { ErrorRecorder } from '../errorLog.js';
-import type { SendResult } from '../sink/actionSink.js';
+import type { PrCloseInput, SendResult } from '../sink/actionSink.js';
 import type { BotPr, BotPrsReading, BotPullRequest } from '../types.js';
 import { readDependencyUpdate } from './dependencyUpdate.js';
 
@@ -8,9 +8,12 @@ import { readDependencyUpdate } from './dependencyUpdate.js';
 export interface BotPrSource {
   listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]>;
   claimBotPr(prNumber: number): Promise<SendResult>;
+  closePr(input: PrCloseInput): Promise<SendResult>;
 }
 
 type ClaimOutcome = { ok: true } | { ok: false; status: 404 | 409 | 502; refusal: string };
+
+type CloseOutcome = { ok: true } | { ok: false; status: 404 | 502; refusal: string };
 
 interface BotPrReaderDeps {
   source: BotPrSource;
@@ -53,6 +56,22 @@ export class BotPrReader {
     } catch (err) {
       const message = (err as Error).message;
       this.deps.errors.record({ source: 'provider', message: `Claiming bot PR ${prNumber} failed: ${message}` });
+      return { ok: false, status: 502, refusal: message };
+    }
+    this.last = null;
+    return { ok: true };
+  }
+
+  /** Closes, on Azure abandons, a bot's pull request; both bots then leave that version alone. */
+  async close(prNumber: number): Promise<CloseOutcome> {
+    const reading = await this.read();
+    if (!reading.pullRequests.some((p) => p.number === prNumber))
+      return { ok: false, status: 404, refusal: 'no open bot pull request with that number' };
+    try {
+      await this.deps.source.closePr({ prNumber });
+    } catch (err) {
+      const message = (err as Error).message;
+      this.deps.errors.record({ source: 'provider', message: `Closing bot PR ${prNumber} failed: ${message}` });
       return { ok: false, status: 502, refusal: message };
     }
     this.last = null;

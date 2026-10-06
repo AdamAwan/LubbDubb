@@ -5611,6 +5611,17 @@ button.cn-grow {
 .bp-risk-why {
   color: var(--cn-fg-dim);
 }
+.bp-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+.bp-outcome-why {
+  color: var(--cn-fg-dim);
+}
 .bp-summarise {
   display: flex;
   flex-wrap: wrap;

@@ -1608,7 +1608,8 @@ The open pull requests `botPrs.authors` names, as a `BotPrsReading`:
 `System.botPrs.read()`, which reuses a reading for a minute and keeps the last good rows beside `error`
 when a read fails. `configured: false` reads nothing from the provider. → [37](37-bot-prs.md)
 
-Each row also carries `risk` — the verdict an agent wrote on **this head**, or null — and the payload
+Each row also carries `risk` — the verdict an agent wrote on **this head**, or null — and `outcome`,
+the latest [CI outcome](37-bot-prs.md#when-ci-fails-on-one) on whatever head it was written. The payload
 carries `risk` as a `BotPrRiskStanding`: the schedule, when it next fires, and the latest run.
 → [37](37-bot-prs.md#the-risk-summary)
 
@@ -1625,6 +1626,12 @@ Puts the credential's own identity on that bot pull request — an optional revi
 assignee on GitHub — and drops the cached reading. 404 for a number not in the current bot reading, 409
 when you are already on it or the provider cannot name you, 502 when the provider refuses. →
 [37](37-bot-prs.md#taking-one-on)
+
+### `POST /api/bot-prs/:number/close`
+
+Closes that bot pull request — abandons it on Azure — and drops the cached reading. Both bots then
+leave that version alone and raise the next one. 404 for a number not in the current bot reading, 502
+when the provider refuses. → [37](37-bot-prs.md#closing-one)
 
 ### `GET /api/ci-policy`
 

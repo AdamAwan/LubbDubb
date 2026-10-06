@@ -32,4 +32,20 @@ CREATE TABLE IF NOT EXISTS bot_pr_risks (
   assessed_at TEXT NOT NULL,
   PRIMARY KEY (pr_number, head_sha)
 );
+
+-- What a CI-fix agent on a watched bot pull request found its failure to be
+-- (see BotPrOutcomeStore). Keyed on the head, because an outcome other than
+-- 'adapted' holds further CI dispatches on that head only: a bot that rebases or
+-- bumps again has produced something nobody has looked at.
+CREATE TABLE IF NOT EXISTS bot_pr_outcomes (
+  pr_number    INTEGER NOT NULL,
+  head_sha     TEXT NOT NULL,       -- '' where the provider reported no head
+  outcome      TEXT NOT NULL,       -- 'adapted' | 'upstream-bug' | 'intended-break' | 'unclear'
+  summary      TEXT NOT NULL,
+  upstream_url TEXT,
+  fixed_in     TEXT,
+  task_id      TEXT NOT NULL,
+  recorded_at  TEXT NOT NULL,
+  PRIMARY KEY (pr_number, head_sha)
+);
 `;

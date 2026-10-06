@@ -23,6 +23,7 @@ import {
 } from '../featureSummaries/featureSummary.js';
 import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import { recordBotPrRisk, type BotPrRiskInput, type BotPrRiskRecorded } from '../botPrs/riskRecord.js';
+import { recordBotPrOutcome, type BotPrOutcomeInput, type BotPrOutcomeRecorded } from '../botPrs/outcome.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../review/threadLabels.js';
 import { threadStamped } from '../review/prReviewState.js';
@@ -255,6 +256,10 @@ export class AgentToolDesk implements AgentToolTarget {
 
   recordBotPrRisk(agentId: string, input: BotPrRiskInput): BotPrRiskRecorded {
     return this.withCaller(agentId, ({ task }) => recordBotPrRisk(this.store, task.originRef, input));
+  }
+
+  recordBotPrOutcome(agentId: string, input: BotPrOutcomeInput): BotPrOutcomeRecorded {
+    return this.withCaller(agentId, ({ task }) => recordBotPrOutcome(this.store, task, input));
   }
 
   recordFeatureSequence(

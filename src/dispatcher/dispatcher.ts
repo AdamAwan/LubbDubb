@@ -1,4 +1,6 @@
 import type {
+  BotPrOutcome,
+  BotPrRisk,
   FeatureSummary,
   Agent,
   Decision,
@@ -54,6 +56,9 @@ export interface DispatchContext {
   retainedIssues?: number[];
   modelPins?: { labelPrefix: string; models: AgentModels };
   priorRemedies?: Remedy[];
+  /** Outcomes on the current heads of watched bot pull requests. → docs/spec/37-bot-prs.md#when-ci-fails-on-one */
+  botPrOutcomes?: BotPrOutcome[];
+  botPrRisks?: BotPrRisk[];
   prReviews?: PrReview[];
   prReviewRoutes?: PrReviewRoute[];
   prSplits?: PrSplitVerdict[];
