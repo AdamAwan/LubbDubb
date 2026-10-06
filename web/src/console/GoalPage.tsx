@@ -175,8 +175,8 @@ function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
 /**
  * The goal's stages as tabs. A stage carries a reading and a meter as well as a
  * name, because the row is where the goal *is* as much as where you can go — and
- * a dot where an ask is waiting in that pane, which is the whole of what a band
- * above the navigation used to say.
+ * a dot where something in that pane waits on the operator, which is the whole of
+ * what a band above the navigation used to say.
  */
 function goalTabs(page: GoalPageView, tab: GoalTab, chosen: GoalTab | null, opening: GoalTabOpening): PanelTab[] {
   return buildGoalNav(page).map((entry) => ({
