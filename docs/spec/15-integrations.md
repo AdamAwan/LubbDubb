@@ -66,7 +66,9 @@ rows never enter the world snapshot, so nothing the fleet reasons over widens. �
 **A watched bot pull request is in the slice.** The snapshot's own filter also admits a pull request whose
 author matches `botPrs.authors` **and** that carries the watch label, and marks it `botAuthored`. Azure
 lists no labels, so it reads them for a bot-authored pull request first and hydrates only the watched
-ones. → [37](37-bot-prs.md#working-one-as-the-fleets-own)
+ones. A failed label read is recorded and falls back to the labels last read for that pull request, so a
+provider blip never makes a watched bot pull request look closed; one never read successfully stays out
+until it is. → [37](37-bot-prs.md#working-one-as-the-fleets-own)
 
 ## The closed pull request read
 

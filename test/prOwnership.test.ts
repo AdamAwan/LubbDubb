@@ -273,14 +273,12 @@ test('Azure’s viewer filter reads a bot’s labels once, and a failed read dro
   const recorded: string[] = [];
   const bots = watchedBots({ botAuthors: () => [/^Renovate/], watchLabel: 'lubbdubb-watch' });
 
-  const { pulls, labelsRead } = await scopeToViewer(
-    api,
-    [pull(1, 'Renovate Bot'), pull(2, 'Renovate Bot'), pull(3, 'Renovate Bot'), pull(4, 'me@acme.com')],
-    'me@acme.com',
-    bots,
-    { record: (e: { message: string }) => void recorded.push(e.message) } as never,
-  );
+  const errors = { record: (e: { message: string }) => void recorded.push(e.message) } as never;
+  const knownLabels = new Map<number, string[]>();
+  const active = [pull(1, 'Renovate Bot'), pull(2, 'Renovate Bot'), pull(3, 'Renovate Bot'), pull(4, 'me@acme.com')];
+  const scope = () => scopeToViewer(active, { api, prAuthor: 'me@acme.com', bots, knownLabels, errors });
 
+  const { pulls, labelsRead } = await scope();
   assert.deepEqual(
     pulls.map((p) => p.pullRequestId),
     [1, 4],
@@ -288,4 +286,12 @@ test('Azure’s viewer filter reads a bot’s labels once, and a failed read dro
   assert.deepEqual(labelsRead.get(1), ['lubbdubb-watch'], 'hydration reuses the read');
   assert.deepEqual(asked.sort(), [1, 2, 3], 'the viewer’s own pull request costs no label read here');
   assert.equal(recorded.length, 1);
+
+  delete labels[1];
+  const blip = await scope();
+  assert.deepEqual(
+    blip.pulls.map((p) => p.pullRequestId),
+    [1, 4],
+    'a failed read on a watched bot PR keeps it open on its last known labels',
+  );
 });

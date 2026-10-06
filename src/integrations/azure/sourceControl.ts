@@ -96,6 +96,7 @@ export class AzureDevOpsSourceControlIntegration
 
   private lastGood: PullRequest[] | null = null;
   private lastGoodClosed: PullRequest[] | null = null;
+  private readonly botLabels = new Map<number, string[]>();
   private mergeCommits = new Map<number, string>();
   private readonly policyReadings = new HydrationCache<{ token: string; evals: AzPolicyEvaluation[] }>();
   private readonly bodyReadings = new HydrationCache<{ listed: string; body: string }>();
@@ -109,14 +110,14 @@ export class AzureDevOpsSourceControlIntegration
 
   async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
-      const { api, prAuthor } = this.opts;
+      const { api } = this.opts;
       const bots = watchedBots(this.opts);
       const viewer = await api.viewerUniqueName();
       const [active, closedPullRequests] = await Promise.all([
         api.listActivePullRequests(),
         this.recentlyClosed(viewer),
       ]);
-      const { pulls, labelsRead } = await scopeToViewer(api, active, prAuthor, bots, this.opts.errors);
+      const { pulls, labelsRead } = await scopeToViewer(active, { ...this.opts, bots, knownLabels: this.botLabels });
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {

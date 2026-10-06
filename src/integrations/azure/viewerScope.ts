@@ -6,39 +6,46 @@ import { viewerAssignment } from './reviewers.js';
 
 // → docs/spec/15-integrations.md#what-a-snapshot-is-scoped-to
 
-export interface ViewerScope {
-  pulls: AzPull[];
-  labelsRead: Map<number, string[]>;
+export interface ViewerScopeDeps {
+  api: AzureDevOpsApi;
+  prAuthor?: string;
+  bots: WatchedBots;
+  /** Last labels read per bot PR, kept across snapshots so a failed read falls back rather than drops. */
+  knownLabels: Map<number, string[]>;
+  errors?: ErrorRecorder;
 }
 
 export async function scopeToViewer(
-  api: AzureDevOpsApi,
   active: AzPull[],
-  prAuthor: string | undefined,
-  bots: WatchedBots,
-  errors?: ErrorRecorder,
-): Promise<ViewerScope> {
+  deps: ViewerScopeDeps,
+): Promise<{ pulls: AzPull[]; labelsRead: Map<number, string[]> }> {
+  const { api, prAuthor, bots, knownLabels, errors } = deps;
   const labelsRead = new Map<number, string[]>();
   if (!prAuthor) return { pulls: active, labelsRead };
   const own = (p: AzPull): boolean =>
     sameIdentity(p.authorUniqueName, prAuthor) || viewerAssignment(p.reviewers, prAuthor) !== undefined;
+  const candidates = active.filter((p) => !own(p) && isAzBot(p, bots));
   await Promise.all(
-    active
-      .filter((p) => !own(p) && isAzBot(p, bots))
-      .map(async (p) => {
-        try {
-          labelsRead.set(p.pullRequestId, await api.listPullLabels(p.pullRequestId));
-        } catch (err) {
-          errors?.record({
-            source: 'provider',
-            message: `could not read the labels of bot PR !${p.pullRequestId}: ${(err as Error).message}`,
-          });
-        }
-      }),
+    candidates.map(async ({ pullRequestId: id }) => {
+      try {
+        knownLabels.set(id, await api.listPullLabels(id));
+      } catch (err) {
+        errors?.record({
+          source: 'provider',
+          message: `could not read the labels of bot PR !${id}: ${(err as Error).message}`,
+        });
+      }
+      const labels = knownLabels.get(id);
+      if (labels !== undefined) labelsRead.set(id, labels);
+    }),
   );
-  const pulls = active.filter(
-    (p) => own(p) || (labelsRead.has(p.pullRequestId) && bots.watched(labelsRead.get(p.pullRequestId))),
-  );
+  const candidateIds = new Set(candidates.map((p) => p.pullRequestId));
+  for (const id of knownLabels.keys()) if (!candidateIds.has(id)) knownLabels.delete(id);
+  const pulls = active.filter((p) => {
+    if (own(p)) return true;
+    const labels = labelsRead.get(p.pullRequestId);
+    return labels !== undefined && bots.watched(labels);
+  });
   return { pulls, labelsRead };
 }
 
