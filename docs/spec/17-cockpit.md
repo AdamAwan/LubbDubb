@@ -1378,10 +1378,8 @@ Order on the page, top to bottom:
    same. **A goal with no ask draws no row at all** — a strip that is sometimes furniture stops being
    read as a demand.
 3. **The tabbed panel** — the five panes, the one the goal's own state opens, and the tabs that select
-   them ([The panes](#the-panes)).
-4. **The parent band**, where the goal hangs off no Feature ([A goal with no parent
-   Feature](#a-goal-with-no-parent-feature)). It is below the panel because what it asks is about the
-   goal's place on the board rather than about any stage of the work.
+   them ([The panes](#the-panes)). The Ask pane leads with the parent band, where the goal hangs off
+   no Feature ([A goal with no parent Feature](#a-goal-with-no-parent-feature)).
 
 **An ask is drawn where the operator will look, and the whole of it one press away.** Both halves are
 load-bearing and the second was learned the hard way. A band behind a tab is an ask nobody answers, so
@@ -2492,7 +2490,7 @@ operator was chasing the control they had just used. `splitGoalAsks` returns eve
 names the ones drawn below in `below`, with the anchor each scrolls to: `PANE_ASKS_ANCHOR` for the
 pane's own card, `GOAL_ANCHOR.plan` for the plan card's ask.
 
-**Two rows are never in the pane's set.** The parent ask is drawn by the band at the foot. And the
+**Two rows are never in the pane's set.** The parent ask is drawn by the band that leads the Ask pane. And the
 plan's own ask belongs to the plan card in **both** of its states — the gate while the plan is
 withheld, the verdict card once it is revealed
 ([the verdict, where the plan was read](#the-verdict-where-the-plan-was-read)) — so `planCardAsk`,
@@ -2547,8 +2545,8 @@ So on the goal page's row form (`NeedsBand` with `line`), `quickAnswer`
 The assign ask is answered on its row too, with no proposal: every shortlisted name and **Nah**,
 the same buttons as its body (`AssignButtons`). Both go through one row shell, `AnswerLine`.
 
-The parent ask is not among them: it is never a row on the goal page (the band at the foot draws
-it). The answers the panel alone offers ("Leave it unpinned", "Not applicable") stay in the panel:
+The parent ask is not among them: it is never a row on the goal page (the band leading the Ask
+pane draws it). The answers the panel alone offers ("Leave it unpinned", "Not applicable") stay in the panel:
 the row covers the common answer, never every answer.
 
 A placement row carries the field it is about as `placementField`, set where `placementRows` mints
@@ -2661,11 +2659,12 @@ claim something is waiting while offering no way to answer it.
 
 #### A goal with no parent Feature
 
-At the top of the **Ask** pane, first among that pane's asks, a goal that hangs off nothing gets
-an amber warning of its own — the goal's place on the board is a question about the ticket, not about
-any later stage, so the other panes do not draw it. It is drawn wherever the tracker could be handed a parent — the feature board's flag
-is not part of this. It is not one of the bands above and wears no tone class: the tone
-families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
+First in the **Ask** pane — the goal's place on the board is a question about the ticket, not about
+any later stage — a goal that hangs off nothing gets an amber warning of its own, wherever the
+tracker could be handed a parent; the feature board's flag is not part of this. The parent ask is no
+row above the navigation, so while it is unanswered the **Ask tab carries the dot** — on a goal that
+landed on Plan or later, the dot is the only thing on the page that says the band is there. It is not one of the
+bands above and wears no tone class: the tone families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
 about it.
 
 The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
@@ -2692,7 +2691,7 @@ draw:
   world read — no timer, no world event to have missed. Same derivation `placementAsks` takes, pointed
   at the item rather than at the question ([06](06-issue-pickup.md), `src/intake/placement.ts`).
 
-**Why it is louder than the ask it sits above.** The warning is the **fact** and never the question:
+**Why it is louder than the rail's ask.** The warning is the **fact** and never the question:
 a goal that hangs off nothing merges, closes and disappears from the backlog whether or not anybody
 proposed a container for it, so the proposal — where there is one — is what the band _offers_ rather
 than what makes it appear. The rail's `placement` row was gated on the appraiser having _proposed_ one

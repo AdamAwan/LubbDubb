@@ -219,3 +219,15 @@ test('goals in flight name the ones missing a Feature', () => {
   assert.ok(html.includes('no Feature'), 'and the row must wear the word');
   assert.ok(html.includes('cn-row-orphan'), 'and the tint that makes it stop the eye');
 });
+
+test('off the Ask pane the band is not drawn, and the Ask tab carries the dot instead', () => {
+  const state = stateWith();
+  const goal = firstGoal(state);
+  const dots = (html: string): number => html.split('cn-tabp-dot').length - 1;
+  const onPlan = decode(render(view(state, `issue:${goal.number}`, 'plan')));
+  assert.ok(!onPlan.includes('No parent Feature'), 'the band belongs to the Ask pane alone');
+
+  state.config = { ...state.config, canPlaceWorkItem: false };
+  const placed = decode(render(view(state, `issue:${goal.number}`, 'plan')));
+  assert.equal(dots(onPlan), dots(placed) + 1, 'the unanswered parent ask must put a dot on the Ask tab');
+});

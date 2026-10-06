@@ -1711,14 +1711,14 @@ a.cn-qbody {
   grid-column: 1 / -1;
 }
 
-/* The orphan warning — a goal hanging off no Feature, said above every card on
-   its page. → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature
+/* The orphan warning — a goal hanging off no Feature, said first in the Ask
+   pane. → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature
 
    Amber and not a tone class, deliberately: the tone families are the *needs-you*
    palette, and wearing `cn-t-amber` here would say this is an ask the rail is
    holding, which it is not — the band draws on a fact about the work item and on
    no queued row at all. The left rule is the weight the four properties alone
-   could not carry at the top of a page that is already all bordered cards. */
+   could not carry above a pane that is already all bordered cards. */
 .cn-orphan {
   border: 1px solid var(--cn-amber-line-hi);
   border-left: 3px solid var(--cn-amber);

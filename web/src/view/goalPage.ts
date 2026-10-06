@@ -374,10 +374,11 @@ function planCardAsk(page: GoalPageView, escalations: readonly Escalation[]): Ne
  * first.
  *
  * Three rows are never in that set. The parent ask is drawn by the band at the
- * foot; the plan's verdict is drawn by the plan card, under the prediction; and an
+ * top of the Ask pane; the plan's verdict is drawn by the plan card, under the prediction; and an
  * ask about the goal as a whole — a profile answer, an intake, the fleet's own
- * config — belongs to no pane at all and can only be a row. Those keep the line,
- * which is why the line has to carry its own weight wherever it is drawn.
+ * config — belongs to no pane at all and can only be a row. The last two keep the
+ * line, which is why the line has to carry its own weight wherever it is drawn;
+ * the parent ask is no line at all, and the Ask tab's dot is what announces it.
  * → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page
  *
  * @public the seam the goal page draws both sets from
