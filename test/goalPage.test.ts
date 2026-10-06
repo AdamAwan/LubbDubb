@@ -1018,6 +1018,14 @@ test('the Ask tab meters readiness: workable, and on a placing tracker a feature
   const declined = ask({ parent: null, appraisal: { ...appraisal, parentSettledAt: '2026-01-02T00:00:00Z' } }, true);
   assert.equal(declined.done, 100, 'a feature the operator said no to counts as met');
   assert.equal(declined.tone, 'green');
+  assert.equal(orphan.needsYou, true, 'an unanswered parent ask is no row, so the Ask tab carries its dot');
+  assert.equal(declined.needsYou, false, 'and an answered one does not');
+  assert.equal(
+    ask({ parent: null, state: 'closed', appraisal }, true).needsYou,
+    false,
+    'nor one on a goal that is finished',
+  );
+  assert.equal(ask({ parent: null, appraisal }, false).needsYou, false, 'nor one a tracker cannot place');
 
   const rootPath = ask({ appraisal: { ...appraisal, areaPathUnset: true } }, true);
   assert.equal(rootPath.reading, 'no path', 'an item left on the root reads unplaced even with no path proposed');

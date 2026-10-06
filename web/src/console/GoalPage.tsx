@@ -36,7 +36,6 @@ import { BelowLine, NeedsBand } from './NeedsBand.js';
 import { AssignGroup } from './assignAsks.js';
 import { groupAsks } from '../view/askGroups.js';
 import { OrphanBand } from './OrphanBand.js';
-import { orphanGoal } from '../view/orphanGoal.js';
 import { BareButton, Button } from '../components/button.js';
 import { TabbedPanel, type PanelTab } from './TabbedPanel.js';
 import { buildFolds, Disclosure, type Fold } from './goalFold.js';
@@ -85,14 +84,13 @@ export function GoalPage({
           select: one object, so the row cannot read as a strip that merely sits
           above the pane. → docs/spec/17-cockpit.md#the-panes */}
       <TabbedPanel
-        tabs={goalTabs(page, tab, picked, opening, orphanGoal(view.state, page.issue)?.settledAt === null)}
+        tabs={goalTabs(page, tab, picked, opening)}
         selected={tab}
         usage="goal.expand"
         onSelect={(id) => actions.openGoalTab(id as GoalTab)}
         label="This goal"
       >
-        {/* The parent band leads the Ask pane, and the Ask tab carries the dot
-            while it is unanswered. → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature */}
+        {/* → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature */}
         {tab === 'ask' && <OrphanBand issue={page.issue} view={view} actions={actions} />}
         {/* The pane's own asks, in full and first: this is the pane the ask is
             about, and one line of small print above the navigation is not what a
@@ -180,13 +178,7 @@ function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
  * a dot where an ask is waiting in that pane, which is the whole of what a band
  * above the navigation used to say.
  */
-function goalTabs(
-  page: GoalPageView,
-  tab: GoalTab,
-  chosen: GoalTab | null,
-  opening: GoalTabOpening,
-  parentAsked: boolean,
-): PanelTab[] {
+function goalTabs(page: GoalPageView, tab: GoalTab, chosen: GoalTab | null, opening: GoalTabOpening): PanelTab[] {
   return buildGoalNav(page).map((entry) => ({
     id: entry.tab,
     tone: `cn-t-${entry.tone}`,
@@ -209,9 +201,7 @@ function goalTabs(
             {entry.on.length === 1 ? entry.on[0] : `${String(entry.on.length)} environments`}
           </i>
         )}
-        {(entry.needsYou || (entry.tab === 'ask' && parentAsked)) && (
-          <i className="cn-tabp-dot" title="Something here needs you" />
-        )}
+        {entry.needsYou && <i className="cn-tabp-dot" title="Something here needs you" />}
       </>
     ),
   }));

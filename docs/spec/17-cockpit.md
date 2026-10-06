@@ -1573,7 +1573,9 @@ instead — `no signals`, `not opened`, or `2 awaiting you` where the operator o
 **One dot, where an ask is waiting in that pane.** `GOAL_ASK_TAB` maps every `NeedKind` to the pane it
 belongs to, total over the type so a new kind is placed deliberately, and an ask about the goal as a
 whole — a config gap, a recovery, the fleet parked on a rate limit — maps to null and puts a dot
-nowhere. The dot is the whole of what a band above the navigation used to say, said by the control the
+nowhere. One fact that is no `NeedKind` puts a dot too: an unanswered parent ask, on the Ask tab
+([A goal with no parent Feature](#a-goal-with-no-parent-feature)). The dot is the whole of what a band
+above the navigation used to say, said by the control the
 operator would press anyway.
 
 **And the same map is what a press on the ask carries with it**, through `openGoalForAsk`
@@ -2659,15 +2661,16 @@ claim something is waiting while offering no way to answer it.
 
 #### A goal with no parent Feature
 
-First in the **Ask** pane — the goal's place on the board is a question about the ticket, not about
-any later stage — a goal that hangs off nothing gets an amber warning of its own, wherever the
-tracker could be handed a parent; the feature board's flag is not part of this. The parent ask is no
-row above the navigation, so while it is unanswered the **Ask tab carries the dot** — on a goal that
-landed on Plan or later, the dot is the only thing on the page that says the band is there. It is not one of the
-bands above and wears no tone class: the tone families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
-about it.
+A goal that hangs off nothing gets an amber warning of its own, first in the **Ask** pane — its place
+on the board is a question about the ticket, not about any later stage — wherever the tracker could
+be handed a parent; the feature board's flag is not part of this. The parent ask is no row above the
+navigation, so while it is unanswered on an open goal the **Ask tab carries the dot** — on a goal that
+landed on Plan or later, the dot is the only thing on the page that says the band is there. It is not
+one of the bands above and wears no tone class: the tone families are the _needs-you_ palette, and a
+goal is an orphan whether or not the rail is holding a row about it.
 
-The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
+The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`) — `orphanOf` over the goal page's
+`placesWorkItems` for the Ask tab's dot, the same predicate — and it is three facts read fresh on every
 draw:
 
 - **`config.canPlaceWorkItem`** — the connector's own answer to whether one item can be hung off
