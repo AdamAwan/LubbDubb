@@ -17,6 +17,7 @@ import { BareButton, Button, ButtonRow } from '../components/button.js';
 import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
 import { AssignButtons, assignBody } from './assignAsks.js';
+import { botPrBody } from './botPrAsks.js';
 import { intakeBody, Lines, profileBody } from './appraisalAsks.js';
 import { assignAskOf } from '../view/askGroups.js';
 import { quickAnswer } from '../view/quickAnswer.js';
@@ -248,6 +249,7 @@ const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
   limit: limitBody,
   assigned: assignedBody,
   assign: assignBody,
+  bot_pr: botPrBody,
   describe: describeBody,
   description_wrong: descriptionFeedbackBody,
   description_note: descriptionFeedbackBody,

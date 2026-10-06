@@ -122,6 +122,8 @@ export interface CockpitActions {
   reopenThread(prNumber: number, threadId: string, reopened: boolean): Promise<void>;
   assignPr(prNumber: number, personId: string): Promise<void>;
   declineAssignPr(prNumber: number): Promise<void>;
+  closeBotPr(prNumber: number): Promise<void>;
+  unclaimBotPr(prNumber: number): Promise<void>;
   openPanel(panel: ConsolePanel): void;
   applyConfigFix(checkId: string, set: Record<string, unknown>): Promise<void>;
   undoConfigFix(checkId: string): Promise<void>;

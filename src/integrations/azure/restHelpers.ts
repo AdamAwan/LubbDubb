@@ -7,6 +7,10 @@ export function headsRef(branch: string): string {
   return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
 }
 
+export function pullReviewerUrl(repoUrl: string, pullRequestId: number, reviewerId: string): string {
+  return withApiVersion(`${repoUrl}/pullrequests/${pullRequestId}/reviewers/${encodeURIComponent(reviewerId)}`);
+}
+
 export function chunkIds(ids: number[], size: number): number[][] {
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));

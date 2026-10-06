@@ -44,10 +44,10 @@ export async function listAzureBotPulls(
   );
 }
 
-export async function claimAzureBotPr(api: AzureDevOpsApi, prNumber: number): Promise<SendResult> {
+export async function claimAzureBotPr(api: AzureDevOpsApi, prNumber: number, on = true): Promise<SendResult> {
   const id = await api.viewerId();
   if (id === '') return { ok: false };
-  await api.addPullReviewer(prNumber, id);
+  await (on ? api.addPullReviewer(prNumber, id) : api.removePullReviewer(prNumber, id));
   return { ok: true, ref: id };
 }
 

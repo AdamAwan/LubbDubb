@@ -185,7 +185,7 @@ export class AzureDevOpsSourceControlIntegration
 
   listBotPullRequests = (authors: readonly RegExp[]) =>
     listAzureBotPulls(this.opts.api, authors, aggregatePolicyCiStatus);
-  claimBotPr = (prNumber: number) => claimAzureBotPr(this.opts.api, prNumber);
+  claimBotPr = (prNumber: number, on?: boolean) => claimAzureBotPr(this.opts.api, prNumber, on);
   readBotPrDetail = (prNumber: number) => readAzureBotPrDetail(this.opts.api, prNumber, this.opts.errors);
 
   private async pullBody(p: AzPull, maxAgeMs: number): Promise<string | undefined> {

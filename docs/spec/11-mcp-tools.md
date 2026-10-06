@@ -1440,6 +1440,8 @@ a stated reason it does not:
 - **`assigned`, `dispatch`** — not decisions. Somebody put a pull request on the operator where the
   fleet cannot see it, or a dispatch is being refused for a reason the row names; nothing in the
   harness acts on either, and the answer is the work itself.
+- **`bot_pr`** — a failing bot pull request on the operator. Its three answers — watch it, close it,
+  step off it ([37](37-bot-prs.md#one-put-on-you-that-is-in-trouble)) — have no desktop tool.
 - **A close-out's `close_ticket`** — see [above](#a-bench-row-is-not-an-escalation-and-does-not-answer-to-one).
 
 **`pr_assign` writes to the tracker, and that is inside the fence**, by the argument `goal_placement`

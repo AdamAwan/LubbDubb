@@ -10,8 +10,10 @@ default `ownWorkOnly` a bot's pull requests never reach the world at all
 see them hands the fleet every other author's work besides. So this is a **second, separate read**,
 scoped to the authors a project names and to nothing else.
 
-**A reading, two writes a person presses, and a paragraph of advice.** The things written to the
-provider are [a claim](#taking-one-on) and [a close](#closing-one), and only from their buttons. The one thing the fleet does is
+**A reading, three writes a person presses, and a paragraph of advice.** The things written to the
+provider are [a claim](#taking-one-on), [stepping off](#stepping-off-one) and [a close](#closing-one),
+and only from their buttons — on the tab, or on the [ask](#one-put-on-you-that-is-in-trouble) a failing
+one on the operator raises. The one thing the fleet does is
 [read them for risk](#the-risk-summary): one desk agent over a batch, whose verdict is drawn beside each
 row and read by no rule. Nothing is approved, merged or posted to a pull request from it — unless a person
 [tags it for watching](#working-one-as-the-fleets-own), which hands it to the fleet like its own. The three
@@ -88,7 +90,8 @@ fixes, base updates, review replies and the merge path all fire on it. Two thing
 - **The snapshot admits it.** Under `ownWorkOnly` the provider's author-or-assignee filter also lets
   through a pull request whose author matches `botPrs.authors` and that carries the watch label
   ([15](15-integrations.md#what-a-snapshot-is-scoped-to)). An unwatched bot pull request stays out of the
-  world, as before.
+  world — unless it is **assigned to the operator**, which the same filter admits as it would anybody's,
+  and which is what lets the rail [ask about one in trouble](#one-put-on-you-that-is-in-trouble).
 - **It is not somebody else's.** The provider sets `PullRequest.botAuthored`, and `isSomeoneElsesPr`
   answers no for it, so `Harness.runCycle` does not hide it
   ([07](07-pull-requests.md#whose-pull-request-is-it)).
@@ -160,8 +163,47 @@ outcomes on the current heads of the world's bot pull requests.
 GitHub, abandoned on Azure DevOps. Both Renovate and Dependabot read a closed pull request as _leave this
 version alone_ and raise the next version when it ships, which is what "wait for the next one" means.
 Like a claim, it refuses a number that is not in the current bot reading (404), so the route is not a
-general way to close any pull request, and drops the cached reading. It is pressed from the tab, never
-by the fleet.
+general way to close any pull request, and drops the cached reading. It is pressed from the tab or the
+[ask](#one-put-on-you-that-is-in-trouble), never by the fleet. Pressed from the route, it also runs a
+manual cycle, so the world drops the pull request at once rather than on the next poll.
+
+## Stepping off one
+
+The claim's undoing, for the bump somebody put on you that you will not be the one to tend.
+`BotPrReader.unclaim(prNumber)` calls `claimBotPr(prNumber, false)`, which takes the credential's own
+identity off — `removePullAssignee` with the viewer's login on GitHub, `removePullReviewer` with
+`viewerId()` on Azure. One method with a direction rather than a second capability, so a provider cannot
+implement half of it. It refuses a number not in the bot reading (404) and a provider that cannot name
+the viewer (409), exactly as the claim does, but **not** a pull request the reading says you are not on:
+`viewerReviewing` lists only Azure's _optional_ reviewers, and a required reviewer is who most needs the
+press. Azure may still refuse to drop a reviewer a branch policy added; that is the provider's 502, said
+back verbatim. Like the close, it drops the cached reading and runs a manual cycle.
+
+## One put on you that is in trouble
+
+A bot's pull request assigned to the operator is, while nobody watches it, an ordinary
+[`assigned`](17-cockpit.md#the-queue-rail--needs-you) row: a review is waiting on them, and the rail
+already says so. Once it is **failing** it is a different question, and one only they can answer — so
+the rail asks it as its own kind, `bot_pr` (`botPrRows`, `src/asks/prAsks.ts`), and the `assigned` row
+for that pull request is not drawn; the same pull request is never asked about twice.
+
+`botPrTroubles(pr)` decides it, off the world alone: the pull request is `botAuthored`, carries
+`attention.assignedToYou`, and either `ciNeedsAttention` (a failing, non-advisory check) or `isConflicted`.
+`assignedToYou` is what makes the cut "nobody is working it": the verdict sets it only when the
+assignment is the court ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)), which a watched
+bot pull request with a concern never is — the fleet is on it. One merely behind its base, or waiting on
+review with green CI, is not in trouble and stays the `assigned` row.
+
+The ask is `next` — the operator's obligation, gating nothing in the fleet — and opens its panel, where
+three buttons answer it:
+
+- **Watch it** — `POST /api/prs/:number/watch`, the ordinary watch label, which
+  [hands it to the fleet](#working-one-as-the-fleets-own) to fix with the [CI brief](#when-ci-fails-on-one).
+- **Abandon** — [the close](#closing-one).
+- **Unassign me** — [stepping off](#stepping-off-one).
+
+Each re-reads the world, so the row goes on the press. `ask_next` routes it to the cockpit: none of the
+three has a desktop tool.
 
 ## Reading the update
 

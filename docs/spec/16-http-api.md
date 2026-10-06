@@ -1629,9 +1629,16 @@ when you are already on it or the provider cannot name you, 502 when the provide
 
 ### `POST /api/bot-prs/:number/close`
 
-Closes that bot pull request — abandons it on Azure — and drops the cached reading. Both bots then
-leave that version alone and raise the next one. 404 for a number not in the current bot reading, 502
-when the provider refuses. → [37](37-bot-prs.md#closing-one)
+Closes that bot pull request — abandons it on Azure — drops the cached reading and runs a manual cycle,
+so the world drops it too. Both bots then leave that version alone and raise the next one. 404 for a
+number not in the current bot reading, 502 when the provider refuses. → [37](37-bot-prs.md#closing-one)
+
+### `POST /api/bot-prs/:number/unclaim`
+
+Takes the credential's own identity off that bot pull request — the assignee on GitHub, the reviewer on
+Azure — drops the cached reading and runs a manual cycle. 404 for a number not in the current bot
+reading, 409 when the provider cannot name you, 502 when the provider refuses. Being off it already is
+not refused. → [37](37-bot-prs.md#stepping-off-one)
 
 ### `GET /api/ci-policy`
 

@@ -113,8 +113,15 @@ export class FakeGitHubIntegration
     return { body: null, files: [] };
   }
 
-  async claimBotPr(prNumber: number): Promise<SendResult> {
-    return this.assignPr({ prNumber, personId: FAKE_VIEWER });
+  async claimBotPr(prNumber: number, on = true): Promise<SendResult> {
+    if (on) return this.assignPr({ prNumber, personId: FAKE_VIEWER });
+    this.world.mutate((world) =>
+      mutatePr(world, prNumber, (pr) => {
+        pr.assignees = (pr.assignees ?? []).filter((p) => p.id !== FAKE_VIEWER);
+        delete pr.viewerAssignment;
+      }),
+    );
+    return { ok: true, ref: FAKE_VIEWER };
   }
 
   handles(kind: InjectableEvent['kind']): boolean {

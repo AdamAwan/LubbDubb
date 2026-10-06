@@ -37,6 +37,7 @@ import {
   type RawWorkItemUpdate,
 } from './restShapes.js';
 import { chunkIds, headsRef, readFileAtCommit, readPullChanges, sameTag, tagWriteOp } from './restHelpers.js';
+import { pullReviewerUrl } from './restHelpers.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
@@ -537,10 +538,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void> {
-    await this.http.request(
-      withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}/reviewers/${encodeURIComponent(reviewerId)}`),
-      { method: 'PUT', body: JSON.stringify({ id: reviewerId, vote: 0 }) },
-    );
+    const body = JSON.stringify({ id: reviewerId, vote: 0 });
+    await this.http.request(pullReviewerUrl(this.repoUrl, pullRequestId, reviewerId), { method: 'PUT', body });
+  }
+
+  async removePullReviewer(pullRequestId: number, reviewerId: string): Promise<void> {
+    await this.http.request(pullReviewerUrl(this.repoUrl, pullRequestId, reviewerId), { method: 'DELETE' });
   }
 
   async deleteBranch(branch: string): Promise<boolean> {
