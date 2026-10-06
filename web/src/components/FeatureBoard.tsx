@@ -40,11 +40,16 @@ function useFeatureBoard(): { board: FeatureBoardPayload | null; failed: boolean
   return { board, failed, read };
 }
 
+/** A closed Feature is off the board unless the operator asks for it back. → docs/spec/17-cockpit.md#closed-features */
+export function shownFeatures(board: FeatureBoardPayload, showClosed: boolean): FeatureBoardPayload {
+  return showClosed ? board : { ...board, features: board.features.filter((f) => f.state !== 'closed') };
+}
+
 export function FeatureBoard({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const { board, failed, read } = useFeatureBoard();
+  const { board: all, failed, read } = useFeatureBoard();
 
   if (failed) return <p className="muted">This deployment has no feature board.</p>;
-  if (board === null) return <p className="muted">Reading the tracker’s hierarchy…</p>;
+  if (all === null) return <p className="muted">Reading the tracker’s hierarchy…</p>;
 
   /* A card opened is a page of its own, on `?card=` — the board draws briefs and
      nothing more. → docs/spec/17-cockpit.md#the-feature-page */
@@ -52,7 +57,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
     return (
       <FeatureDetail
         number={view.featureCard}
-        board={board}
+        board={all}
         back={{
           label: 'Features',
           usage: { counted: 'feature.view' },
@@ -65,8 +70,24 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
     );
   }
 
+  return <BoardBody all={all} view={view} actions={actions} read={read} />;
+}
+
+function BoardBody({
+  all,
+  view,
+  actions,
+  read,
+}: {
+  all: FeatureBoardPayload;
+  view: CockpitView;
+  actions: CockpitActions;
+  read: () => Promise<void>;
+}): JSX.Element {
+  const board = shownFeatures(all, view.featureClosed);
+  const closed = all.features.filter((f) => f.state === 'closed').length;
   const { features, unresolved } = board;
-  if (features.length === 0) {
+  if (all.features.length === 0) {
     return (
       <p className="muted">
         {board.backfilling
@@ -82,11 +103,13 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
   return (
     <RefLinksExtended refUrls={board.refUrls}>
       <div className="cn-fb">
-        <BoardHead board={board} cards={cards.length} view={view} actions={actions} />
+        <BoardHead board={board} cards={cards.length} closed={closed} view={view} actions={actions} />
+
+        {features.length === 0 && <p className="muted">Every Feature on the board is closed.</p>}
 
         {!view.state.config.featureSummaries && <FeatureSummariesAd actions={actions} onTurnedOn={() => void read()} />}
 
-        {view.featureMode === 'focus' && (
+        {view.featureMode === 'focus' && features.length > 0 && (
           <FeatureFocus board={board} view={view} actions={actions} onAnswered={() => void read()} />
         )}
 
@@ -116,11 +139,13 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
 function BoardHead({
   board,
   cards,
+  closed,
   view,
   actions,
 }: {
   board: FeatureBoardPayload;
   cards: number;
+  closed: number;
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
@@ -141,6 +166,7 @@ function BoardHead({
         {board.backfilling ? ' · still filling' : ''}
       </span>
       <ModeControl mode={view.featureMode} actions={actions} />
+      {closed > 0 && <ClosedControl closed={closed} shown={view.featureClosed} actions={actions} />}
       {view.featureMode === 'board' && (
         <>
           <DensityControl density={view.featureDensity} cards={cards} actions={actions} />
@@ -286,6 +312,29 @@ function DensityControl({
         Rows
       </Button>
     </span>
+  );
+}
+
+function ClosedControl({
+  closed,
+  shown,
+  actions,
+}: {
+  closed: number;
+  shown: boolean;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <Button
+      size="small"
+      usage="feature.filter"
+      ghost={!shown}
+      aria-pressed={shown}
+      title={shown ? 'Hide the Features that are closed' : 'Bring the closed Features back onto the board'}
+      onClick={() => actions.setFeatureQuery({ featureClosed: !shown })}
+    >
+      {shown ? `Hide ${closed} closed` : `Show ${closed} closed`}
+    </Button>
   );
 }
 

@@ -5680,6 +5680,7 @@ function buildDemoFeatureBoard(): FeatureBoardPayload {
       number,
       title: feature.title,
       slot: demoFeatureSlotOf(feature) ?? 0,
+      state: number === 300 ? 'closed' : 'open',
       workItemState: extra.workItemState ?? null,
       issueType: extra.issueType ?? null,
       counts: counts(rows),

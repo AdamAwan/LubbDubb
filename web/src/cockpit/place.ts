@@ -53,6 +53,8 @@ export interface Place {
   featureCard: number | null;
   featureSort: FeatureSort;
   featureDensity: FeatureDensity;
+  /** Whether the feature board draws closed Features. */
+  featureClosed: boolean;
   featurePrs: FeaturePrFilter;
   /** Whether the Pets page draws the pets that have been blended. */
   petsBlended: boolean;
@@ -194,6 +196,7 @@ export const NOWHERE: Place = {
   featureCard: null,
   featureSort: 'wants-you',
   featureDensity: 'auto',
+  featureClosed: false,
   featurePrs: 'open',
   petsBlended: false,
   overview: 'cards',
@@ -323,12 +326,20 @@ function readFeatureBoard(
   query: URLSearchParams,
 ): Pick<
   Place,
-  'featureCard' | 'featureSort' | 'featureDensity' | 'featurePrs' | 'petsBlended' | 'overview' | 'featureMode'
+  | 'featureCard'
+  | 'featureSort'
+  | 'featureDensity'
+  | 'featureClosed'
+  | 'featurePrs'
+  | 'petsBlended'
+  | 'overview'
+  | 'featureMode'
 > {
   return {
     featureCard: readPrNumber(param(query, 'card')),
     featureSort: FEATURE_SORTS.find((s) => s === param(query, 'sort')) ?? 'wants-you',
     featureDensity: FEATURE_DENSITIES.find((d) => d === param(query, 'density')) ?? 'auto',
+    featureClosed: query.has('closed'),
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
     petsBlended: query.has('blended'),
     overview: readOverview(param(query, 'overview')),
@@ -487,6 +498,7 @@ function writeFeatureBoard(query: URLSearchParams, place: Place): void {
   if (place.featureCard !== null) query.set('card', String(place.featureCard));
   if (place.featureSort !== 'wants-you') query.set('sort', place.featureSort);
   if (place.featureDensity !== 'auto') query.set('density', place.featureDensity);
+  if (place.featureClosed) query.set('closed', '1');
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
   if (place.petsBlended) query.set('blended', '1');
   if (place.overview !== 'cards') query.set('overview', place.overview);

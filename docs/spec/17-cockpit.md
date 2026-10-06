@@ -6226,6 +6226,19 @@ board rather than a preference — an operator should not have to discover a set
 shown a page they can read — and overridable in **both** directions because the
 threshold is a guess about a reader and the reader is right there.
 
+### Closed Features
+
+**A closed Feature is off the board by default.** Its work is over, and a board that
+keeps drawing it buries the Features still moving. `FeatureRollup.state` carries the
+Feature's own tracker state (null when the Feature itself is not mirrored, which never
+hides it), and `shownFeatures` (`web/src/components/FeatureBoard.tsx`) drops `closed`
+ones before the board or focus draws anything.
+
+**Hidden is never silent.** When any are hidden, the head carries a **Show N closed**
+button, and pressed it reads **Hide N closed**. The choice is `?closed=1` on `Place`
+(`featureClosed`), so it survives reload and the back button. An opened card
+(`?card=`) is drawn whether or not its Feature is closed — a link to it never dead-ends.
+
 ### In the way, grouped by who clears it
 
 Three lists, in the order somebody with twenty minutes reads them: **you**, **fleet**, **world**.

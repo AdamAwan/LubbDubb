@@ -837,6 +837,8 @@ export interface FeatureRollup {
   number: number;
   title: string;
   slot: number;
+  /** Null when the Feature itself is not mirrored. */
+  state: IssueState | null;
   workItemState: string | null;
   issueType: string | null;
   counts: FeatureCounts;
@@ -868,6 +870,7 @@ export interface FeatureBoardPayload {
     | 'number'
     | 'title'
     | 'slot'
+    | 'state'
     | 'workItemState'
     | 'issueType'
     | 'reach'

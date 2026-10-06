@@ -215,7 +215,14 @@ test('every ticket filter on the place is forwarded into the view model', () => 
 test('every feature field on the place is forwarded into the view model', () => {
   const place = readFileSync('web/src/cockpit/place.ts', 'utf8');
   const fields = [...new Set([...place.matchAll(/^ {2}(feature[A-Za-z]+):/gm)].map((m) => m[1]!))];
-  assert.deepEqual(fields, ['featureCard', 'featureSort', 'featureDensity', 'featurePrs', 'featureMode']);
+  assert.deepEqual(fields, [
+    'featureCard',
+    'featureSort',
+    'featureDensity',
+    'featureClosed',
+    'featurePrs',
+    'featureMode',
+  ]);
   const hook = readFileSync('web/src/cockpit/useCockpit.ts', 'utf8');
   for (const field of fields) {
     assert.ok(hook.includes(`${field}: place.${field},`), `${field} never reaches buildViewModel`);

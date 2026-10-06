@@ -142,6 +142,7 @@ function featureRollup(
     number,
     title: group.title,
     slot: input.featureSlots.get(number) ?? 0,
+    state: self?.state ?? null,
     workItemState: self?.workItemState ?? null,
     issueType: self?.issueType ?? null,
     counts: countStandings(group.rows),

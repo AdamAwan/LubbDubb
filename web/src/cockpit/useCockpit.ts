@@ -285,6 +285,7 @@ export function useCockpit(): CockpitStatus {
       featureCard: place.featureCard,
       featureSort: place.featureSort,
       featureDensity: place.featureDensity,
+      featureClosed: place.featureClosed,
       petsBlended: place.petsBlended,
       overviewShape: place.overview,
       featureMode: place.featureMode,
