@@ -65,8 +65,8 @@ rows never enter the world snapshot, so nothing the fleet reasons over widens. �
 
 **A watched bot pull request is in the slice.** The snapshot's own filter also admits a pull request whose
 author matches `botPrs.authors` **and** that carries the watch label, and marks it `botAuthored`. Azure
-reads labels per pull request, so it admits every bot-authored one to the hydration and drops the unwatched
-after. → [37](37-bot-prs.md#working-one-as-the-fleets-own)
+lists no labels, so it reads them for a bot-authored pull request first and hydrates only the watched
+ones. → [37](37-bot-prs.md#working-one-as-the-fleets-own)
 
 ## The closed pull request read
 

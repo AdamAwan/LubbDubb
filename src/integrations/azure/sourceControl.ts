@@ -116,13 +116,13 @@ export class AzureDevOpsSourceControlIntegration
         api.listActivePullRequests(),
         this.recentlyClosed(viewer),
       ]);
-      const { pulls, botOnly } = scopeToViewer(active, prAuthor, bots);
+      const { pulls, labelsRead } = await scopeToViewer(api, active, prAuthor, bots, this.opts.errors);
 
-      const hydrated = await Promise.all(
+      const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
           const [threads, labels, body] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
-            api.listPullLabels(p.pullRequestId),
+            labelsRead.get(p.pullRequestId) ?? api.listPullLabels(p.pullRequestId),
             this.pullBody(p, hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId))),
           ]);
           const policyEvals = await this.policyEvaluations(
@@ -166,7 +166,6 @@ export class AzureDevOpsSourceControlIntegration
           return pr;
         }),
       );
-      const pullRequests = hydrated.filter((pr) => !botOnly.has(pr.number) || bots.watched(pr.labels));
 
       this.policyReadings.retain(pulls.map((p) => p.pullRequestId));
       this.bodyReadings.retain(pulls.map((p) => p.pullRequestId));
