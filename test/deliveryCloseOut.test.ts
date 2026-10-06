@@ -1,4 +1,4 @@
-import { deskSettled } from '../src/benchSettlement.js';
+import { DESK_SETTLED, deskSettled } from '../src/benchSettlement.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -243,6 +243,29 @@ test('a re-delivered goal is asked to close again — the retraction was the har
     }),
     [],
   );
+});
+
+test('a re-delivered goal waits on the same holds as a first filing, then reopens', () => {
+  const resolution = DESK_SETTLED + 'the goal went back into production';
+  const world = {
+    issues: [issue(12)],
+    deliveries: [delivery(12)],
+    existing: [task({ status: 'declined', resolution })],
+  };
+  const holds = [
+    { opened: new Set<string>() },
+    { validating: new Set(['issue:12']) },
+    { watchCleared: new Set<string>() },
+  ];
+  for (const hold of holds) assert.deepEqual(pass({ ...world, ...hold }), [], JSON.stringify(hold));
+
+  const released = pass({
+    ...world,
+    opened: new Set(['issue:12']),
+    watchCleared: new Set(['issue:12']),
+  });
+  assert.equal(released.length, 1);
+  assert.equal(released[0]!.kind, 'reopen');
 });
 
 test('an operator’s own answer on a re-delivered goal still stands', () => {
