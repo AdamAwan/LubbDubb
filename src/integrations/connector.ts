@@ -21,6 +21,7 @@ export type InjectableEvent =
       headSha?: string;
       author?: string;
       viewerAuthored?: boolean;
+      botAuthored?: boolean;
       viewerAssignment?: ViewerAssignment;
       viewerApproved?: boolean;
     }

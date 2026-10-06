@@ -356,6 +356,7 @@ function openFromEvent(
     ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
     ...(event.author === undefined ? {} : { author: event.author }),
     ...(event.viewerAuthored === undefined ? {} : { viewerAuthored: event.viewerAuthored }),
+    ...(event.botAuthored === undefined ? {} : { botAuthored: event.botAuthored }),
     ...(event.viewerAssignment === undefined ? {} : { viewerAssignment: event.viewerAssignment }),
     ...(event.viewerApproved === undefined ? {} : { viewerApproved: event.viewerApproved }),
   });

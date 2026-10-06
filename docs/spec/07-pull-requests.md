@@ -447,17 +447,22 @@ operator's own account, so it reads to the other team as the operator talking.
 
 So the filter survives only as the fallback where authorship is unknown:
 
-| `viewerAuthored` | `isOurPr`                                         | `isSomeoneElsesPr` |
-| ---------------- | ------------------------------------------------- | ------------------ |
-| `true`           | yes                                               | no                 |
-| `false`          | no — under every arm, dispatch branch included    | **yes**            |
-| absent           | `prAuthor` configured, or a dispatch branch shape | no                 |
+| `viewerAuthored` | `isOurPr`                                         | `isSomeoneElsesPr`            |
+| ---------------- | ------------------------------------------------- | ----------------------------- |
+| `true`           | yes                                               | no                            |
+| `false`          | no — under every arm, dispatch branch included    | **yes**, unless `botAuthored` |
+| absent           | `prAuthor` configured, or a dispatch branch shape | no                            |
 
 **The two predicates are not each other's inverse, and must not be folded into one.** "Is this ours,
 so we may rename it" fails safe by saying no; "is this somebody else's, so hide it from every rule"
 has to fail safe by saying no as well — a provider that cannot name an author would otherwise take
 every watched pull request out of the dispatch world and stop the fleet with nothing red. That is why
 the absent row above answers `no` to both.
+
+**A bot's pull request is the one exception to `isSomeoneElsesPr`.** `botAuthored` (its author matches
+`botPrs.authors`) answers no, so a bot pull request a person tagged for watching is worked by the fleet.
+It stays out of `isOurPr` — nothing renames or reaps a bot's branch. →
+[37](37-bot-prs.md#working-one-as-the-fleets-own)
 
 `isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>` or
 `job/<id>`, the branch shapes only a dispatch cuts. Derived rather than stored — recording every

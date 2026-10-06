@@ -13,7 +13,8 @@ scoped to the authors a project names and to nothing else.
 **A reading, one write a person presses, and a paragraph of advice.** The one thing written to the
 provider is [a claim](#taking-one-on), and only from the button. The one thing the fleet does is
 [read them for risk](#the-risk-summary): one desk agent over a batch, whose verdict is drawn beside each
-row and read by no rule. Nothing is approved, merged or posted to a pull request from it. The three
+row and read by no rule. Nothing is approved, merged or posted to a pull request from it — unless a person
+[tags it for watching](#working-one-as-the-fleets-own), which hands it to the fleet like its own. The three
 states a row is meant to carry — _manual_ (leave it alone, the default), _merge_ (set autocomplete and
 see it through) and _test_ (exercise the update locally before it goes in) — are **not yet built**.
 
@@ -78,6 +79,22 @@ way to everyone, and there is no second list to drift from the first.
 a general way to put yourself on any pull request — and one you are already on (409). A provider that
 cannot name the viewer adds nobody and says so, rather than guessing an identity. A claim that lands
 drops the cached reading, so the next read shows it.
+
+## Working one as the fleet's own
+
+**Tagging a bot pull request with the watch label hands it to the fleet**, exactly like one of its own: CI
+fixes, base updates, review replies and the merge path all fire on it. Two things make that true:
+
+- **The snapshot admits it.** Under `ownWorkOnly` the provider's author-or-assignee filter also lets
+  through a pull request whose author matches `botPrs.authors` and that carries the watch label
+  ([15](15-integrations.md#what-a-snapshot-is-scoped-to)). An unwatched bot pull request stays out of the
+  world, as before.
+- **It is not somebody else's.** The provider sets `PullRequest.botAuthored`, and `isSomeoneElsesPr`
+  answers no for it, so `Harness.runCycle` does not hide it
+  ([07](07-pull-requests.md#whose-pull-request-is-it)).
+
+It is still **not** `isOurPr`: the harness does not rename it, reap its branch or link it to a work item,
+because the bot owns those. The watch label is the only opt-in, and nothing seeds it — a person adds it.
 
 ## Reading the update
 

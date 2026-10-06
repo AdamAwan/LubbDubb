@@ -15,6 +15,7 @@ import { RestAzureDevOpsApi } from './azure/restAzureDevOpsApi.js';
 import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
 import { watchLabelFor } from '../watchLabels.js';
+import { compile } from '../botPrs/reader.js';
 
 // → docs/spec/15-integrations.md
 
@@ -33,6 +34,8 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         api,
         errors: ctx.errors,
         prAuthor: filterToViewer(ctx),
+        botAuthors: () => compile(ctx.config.botPrs.authors),
+        watchLabel: watchLabelFor(ctx.config.labelPrefix),
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
@@ -47,6 +50,8 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         api,
         errors: ctx.errors,
         prAuthor: filterToViewer(ctx),
+        botAuthors: () => compile(ctx.config.botPrs.authors),
+        watchLabel: watchLabelFor(ctx.config.labelPrefix),
         organization: az.organization,
         project: az.project,
         repository: az.repository,

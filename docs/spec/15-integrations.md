@@ -41,8 +41,8 @@ that pass the filter in.
 
 | Provider | Pull requests                                                  | Issues / work items                                         |
 | -------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
-| `github` | filtered: author **or** assignee is `userId`                   | **not filtered** — `listOpenIssues()`, the whole repository |
-| `azure`  | filtered: author **or** reviewer is `userId`                   | filtered: `assignedTo` is `userId`                          |
+| `github` | filtered: author **or** assignee is `userId`, or a watched bot | **not filtered** — `listOpenIssues()`, the whole repository |
+| `azure`  | filtered: author **or** reviewer is `userId`, or a watched bot | filtered: `assignedTo` is `userId`                          |
 | `fake`   | not filtered — the scripted world is whatever a test put in it | not filtered                                                |
 
 **GitHub's issue sweep being unfiltered is the surprising one.** The ownership label
@@ -62,6 +62,11 @@ pool with nothing red.
 requests without `prAuthor` and keeps only the authors `botPrs.authors` names, for the Bot PRs tab. Its
 rows never enter the world snapshot, so nothing the fleet reasons over widens. →
 [37](37-bot-prs.md#the-read)
+
+**A watched bot pull request is in the slice.** The snapshot's own filter also admits a pull request whose
+author matches `botPrs.authors` **and** that carries the watch label, and marks it `botAuthored`. Azure
+reads labels per pull request, so it admits every bot-authored one to the hydration and drops the unwatched
+after. → [37](37-bot-prs.md#working-one-as-the-fleets-own)
 
 ## The closed pull request read
 

@@ -7,7 +7,7 @@ export function isOurPr(pr: PullRequest, prAuthorConfigured: boolean): boolean {
 }
 
 export function isSomeoneElsesPr(pr: PullRequest): boolean {
-  return pr.viewerAuthored === false;
+  return pr.viewerAuthored === false && pr.botAuthored !== true;
 }
 
 export function sameIdentity(a: string, b: string): boolean {
