@@ -60,6 +60,7 @@ export function TaskAnswers({
       onDone={(id, note) => actions.completeHumanTask(id, note)}
       onDecline={(id, note) => actions.declineHumanTask(id, note)}
       onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+      tracker={view.state.config.trackerName}
       extra={extra}
     />
   );
@@ -93,6 +94,7 @@ export function TalkAnswers({
       onDone={null}
       onDecline={null}
       onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
+      tracker={view.state.config.trackerName}
       extra={
         <DesktopLink
           usage="goal.open"

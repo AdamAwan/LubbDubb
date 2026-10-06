@@ -113,16 +113,16 @@ function goalWith(verdict: ValidationVerdict | null): CockpitView {
 test('a close-out on a flagged goal asks for the note before posting, not after the 400', () => {
   const flagged = closeOutAsk(goalWith(FLAGGED));
   assert.ok(
-    flagged.includes('Mark as closed…'),
+    flagged.includes('Close on GitHub…'),
     'the close press must offer the box the route requires, not a bare close the route refuses',
   );
 
   const clear = closeOutAsk(goalWith(CLEAR));
-  assert.ok(!clear.includes('Mark as closed…'), 'a clear plan costs nothing to say, so it stays one click');
-  assert.ok(clear.includes('>Mark as closed<'), 'and the one click is still there');
+  assert.ok(!clear.includes('Close on GitHub…'), 'a clear plan costs nothing to say, so it stays one click');
+  assert.ok(clear.includes('>Close on GitHub<'), 'and the one click is still there');
 
   const none = closeOutAsk(goalWith(null));
-  assert.ok(!none.includes('Mark as closed…'), 'no plan is not a flagged plan');
+  assert.ok(!none.includes('Close on GitHub…'), 'no plan is not a flagged plan');
 });
 
 test('ending the run is one destructive control that confirms on every goal', () => {

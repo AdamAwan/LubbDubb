@@ -145,10 +145,10 @@ test('the close-out ask is a summary: the goal, where it is, its checks and its 
   assert.ok(html.includes(`title="${arrival.arrivedAt}"`), 'how long ago it arrived is read off the arrival');
 });
 
-test('the close-out ask offers Mark as closed and a conversation, not Done or Decline', () => {
+test('the close-out ask offers Close on GitHub and a conversation, not Done or Decline', () => {
   const v = view();
   const html = decode(askBody(v, rowOfKind(v, 'close_out')));
-  assert.match(html, />Mark as closed</);
+  assert.match(html, />Close on GitHub</);
   assert.match(html, /Not ready\? Talk it through/);
   assert.doesNotMatch(html, />Done</);
   assert.doesNotMatch(html, />Decline</);

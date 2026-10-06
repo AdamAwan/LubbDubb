@@ -24,12 +24,16 @@ const CONFIRM_TITLE: Record<Verb, string> = {
 
 type PressWords = { label: string; actTitle: string; askTitle: string };
 
-const PRESS_WORDS: Record<'close' | 'done', PressWords> = {
-  close: {
-    label: 'Mark as closed',
-    actTitle: 'Close the item in the tracker and settle this row with it',
-    askTitle: 'Close the item in the tracker — and say what you are doing about what is outstanding',
-  },
+function closeWords(tracker: string | null): PressWords {
+  const where = tracker ?? 'the tracker';
+  return {
+    label: `Close on ${where}`,
+    actTitle: `Close the item on ${where} and settle this row with it`,
+    askTitle: `Close the item on ${where} — and say what you are doing about what is outstanding`,
+  };
+}
+
+const PRESS_WORDS: Record<'done', PressWords> = {
   done: {
     label: 'Done',
     actTitle: 'You did it — release anything waiting on it',
@@ -46,6 +50,7 @@ type HumanTaskActionsProps = {
   onDone: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
   onDecline: ((id: string, note: string) => Promise<unknown> | unknown) | null;
   onCloseTicket?: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
+  tracker?: string | null;
   extra?: ReactNode;
 };
 
@@ -56,6 +61,7 @@ export function HumanTaskActions({
   onDone,
   onDecline,
   onCloseTicket = null,
+  tracker = null,
   extra = null,
 }: HumanTaskActionsProps) {
   useEffect(() => {
@@ -80,6 +86,7 @@ export function HumanTaskActions({
         look={look}
         asks={noteOnDone !== null}
         onClose={onCloseTicket === null ? null : act(onCloseTicket)}
+        tracker={tracker}
         onDone={onDone === null ? null : act(onDone)}
         onDecline={onDecline !== null}
         open={open}
@@ -122,6 +129,7 @@ function Verbs({
   look,
   asks,
   onClose,
+  tracker,
   onDone,
   onDecline,
   open,
@@ -131,6 +139,7 @@ function Verbs({
   look: ButtonLook;
   asks: boolean;
   onClose: (() => unknown) | null;
+  tracker: string | null;
   onDone: (() => unknown) | null;
   onDecline: boolean;
   open: (verb: Verb) => void;
@@ -145,7 +154,7 @@ function Verbs({
         <Press
           look={expected(look)}
           asks={asks}
-          words={PRESS_WORDS.close}
+          words={closeWords(tracker)}
           onRefused={onRefused}
           onAct={onClose}
           onAsk={() => open('close')}
