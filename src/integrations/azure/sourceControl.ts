@@ -96,6 +96,7 @@ export class AzureDevOpsSourceControlIntegration
 
   private lastGood: PullRequest[] | null = null;
   private lastGoodClosed: PullRequest[] | null = null;
+  private readonly botLabels = new Map<number, string[]>();
   private mergeCommits = new Map<number, string>();
   private readonly policyReadings = new HydrationCache<{ token: string; evals: AzPolicyEvaluation[] }>();
   private readonly bodyReadings = new HydrationCache<{ listed: string; body: string }>();
@@ -109,20 +110,20 @@ export class AzureDevOpsSourceControlIntegration
 
   async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
-      const { api, prAuthor } = this.opts;
+      const { api } = this.opts;
       const bots = watchedBots(this.opts);
       const viewer = await api.viewerUniqueName();
       const [active, closedPullRequests] = await Promise.all([
         api.listActivePullRequests(),
         this.recentlyClosed(viewer),
       ]);
-      const { pulls, botOnly } = scopeToViewer(active, prAuthor, bots);
+      const { pulls, labelsRead } = await scopeToViewer(active, { ...this.opts, bots, knownLabels: this.botLabels });
 
-      const hydrated = await Promise.all(
+      const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
           const [threads, labels, body] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
-            api.listPullLabels(p.pullRequestId),
+            labelsRead.get(p.pullRequestId) ?? api.listPullLabels(p.pullRequestId),
             this.pullBody(p, hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId))),
           ]);
           const policyEvals = await this.policyEvaluations(
@@ -166,7 +167,6 @@ export class AzureDevOpsSourceControlIntegration
           return pr;
         }),
       );
-      const pullRequests = hydrated.filter((pr) => !botOnly.has(pr.number) || bots.watched(pr.labels));
 
       this.policyReadings.retain(pulls.map((p) => p.pullRequestId));
       this.bodyReadings.retain(pulls.map((p) => p.pullRequestId));

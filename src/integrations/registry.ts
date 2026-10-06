@@ -16,6 +16,7 @@ import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
 import { watchLabelFor } from '../watchLabels.js';
 import { compile } from '../botPrs/reader.js';
+import type { WatchedBotOpts } from './watchedBots.js';
 
 // → docs/spec/15-integrations.md
 
@@ -34,8 +35,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         api,
         errors: ctx.errors,
         prAuthor: filterToViewer(ctx),
-        botAuthors: () => compile(ctx.config.botPrs.authors),
-        watchLabel: watchLabelFor(ctx.config.labelPrefix),
+        ...watchedBotOpts(ctx),
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
@@ -50,8 +50,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         api,
         errors: ctx.errors,
         prAuthor: filterToViewer(ctx),
-        botAuthors: () => compile(ctx.config.botPrs.authors),
-        watchLabel: watchLabelFor(ctx.config.labelPrefix),
+        ...watchedBotOpts(ctx),
         organization: az.organization,
         project: az.project,
         repository: az.repository,
@@ -128,6 +127,10 @@ const CAPABILITIES = Object.keys(REGISTRY) as WorldCapability[];
 
 function filterToViewer(ctx: IntegrationContext): string | undefined {
   return ctx.config.ownWorkOnly ? ctx.config.userId : undefined;
+}
+
+function watchedBotOpts(ctx: IntegrationContext): WatchedBotOpts {
+  return { botAuthors: () => compile(ctx.config.botPrs.authors), watchLabel: watchLabelFor(ctx.config.labelPrefix) };
 }
 
 function ownershipLabel(ctx: IntegrationContext): string | undefined {

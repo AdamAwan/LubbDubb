@@ -16,6 +16,9 @@ import { gitRepo } from './support/gitRepo.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { GitHubSourceControlIntegration } from '../src/integrations/github/sourceControl.js';
 import type { GitHubApi, GhPullSummary } from '../src/integrations/github/githubApi.js';
+import type { AzPull, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
+import { scopeToViewer } from '../src/integrations/azure/viewerScope.js';
+import { watchedBots } from '../src/integrations/watchedBots.js';
 
 const pr = (over: Partial<PullRequest> = {}): PullRequest => ({
   id: 'p',
@@ -241,5 +244,54 @@ test('GitHub’s viewer filter admits a bot’s pull request only once it carrie
       [1, true],
       [4, false],
     ],
+  );
+});
+
+test('Azure’s viewer filter reads a bot’s labels once, and a failed read drops only that pull request', async () => {
+  const pull = (pullRequestId: number, authorUniqueName: string): AzPull => ({
+    pullRequestId,
+    title: 'Update dependency axios',
+    branch: `renovate/axios-${pullRequestId}`,
+    baseBranch: 'main',
+    lastMergeSourceCommit: `sha${pullRequestId}`,
+    authorUniqueName,
+    authorDisplayName: authorUniqueName,
+    url: '',
+    isDraft: false,
+    mergeStatus: 'succeeded',
+    reviewers: [],
+  });
+  const labels: Record<number, string[]> = { 1: ['lubbdubb-watch'], 2: [] };
+  const asked: number[] = [];
+  const api = {
+    listPullLabels: async (id: number) => {
+      asked.push(id);
+      if (!(id in labels)) throw new Error('503');
+      return labels[id]!;
+    },
+  } as unknown as AzureDevOpsApi;
+  const recorded: string[] = [];
+  const bots = watchedBots({ botAuthors: () => [/^Renovate/], watchLabel: 'lubbdubb-watch' });
+
+  const errors = { record: (e: { message: string }) => void recorded.push(e.message) } as never;
+  const knownLabels = new Map<number, string[]>();
+  const active = [pull(1, 'Renovate Bot'), pull(2, 'Renovate Bot'), pull(3, 'Renovate Bot'), pull(4, 'me@acme.com')];
+  const scope = () => scopeToViewer(active, { api, prAuthor: 'me@acme.com', bots, knownLabels, errors });
+
+  const { pulls, labelsRead } = await scope();
+  assert.deepEqual(
+    pulls.map((p) => p.pullRequestId),
+    [1, 4],
+  );
+  assert.deepEqual(labelsRead.get(1), ['lubbdubb-watch'], 'hydration reuses the read');
+  assert.deepEqual(asked.sort(), [1, 2, 3], 'the viewer’s own pull request costs no label read here');
+  assert.equal(recorded.length, 1);
+
+  delete labels[1];
+  const blip = await scope();
+  assert.deepEqual(
+    blip.pulls.map((p) => p.pullRequestId),
+    [1, 4],
+    'a failed read on a watched bot PR keeps it open on its last known labels',
   );
 });
