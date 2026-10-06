@@ -2523,7 +2523,7 @@ So **Done** and **Decline** on them were two ways to make the ask go away with t
 state it was in. The only reason not to close a delivered goal, or not to finish its checks, is that
 the work is not done or a check is not good enough — and that is a conversation, not a button.
 
-So both draw `TalkAnswers` (`web/src/console/taskAsks.tsx`): the one act there is — **Mark as closed**
+So both draw `TalkAnswers` (`web/src/console/taskAsks.tsx`): the one act there is — **Close on GitHub** / **Close on ADO**
 on a close-out, where the sink can close the item — and a `DesktopLink` that opens the operator's own
 Claude Code on `/lubbdubb:ask <n>` with the question already in the box: _Not ready? Talk it through_
 on a close-out, _Stuck? Talk it through_ on a validate row. `HumanTaskActions` takes `onDone` and
@@ -2627,7 +2627,7 @@ one thing wherever it lands.
 ([20](20-validation.md#where-it-lands)) posted no note and offered no box to type one in, so the
 refusal was not merely invisible — it was unsatisfiable, and the control could not work at all. The
 bench verdict's Done reads `Done…` on a `close_out` whose goal is flagged and opens the note box
-Decline already had — as does **Mark as closed…**, since the flag is about the goal rather than
+Decline already had — as does **Close on GitHub…**, since the flag is about the goal rather than
 about which verb settles the row, and one box serves all three. `EndRunModal` mirrors the same condition **inside itself** rather than in whether
 it opens: on a flagged goal the box is required and the confirm stays disabled until it is filled; on
 every other goal it is offered and optional, since an operator with a reason should not need a flagged
@@ -2638,8 +2638,12 @@ The header no longer draws a `.launch-error` of its own for this control. It had
 run was a one-click post with nowhere else to put a refusal; the refusal now lands in the modal that
 sent it, which is where the text that was refused still is.
 
-**A `close_out` row carries a third verb: Mark as closed.** The obligation the row states is a close
-in the tracker, so the button that takes it sits beside the two that record it and leads them —
+**A `close_out` row carries a third verb: Close on GitHub / Close on ADO.** The obligation the row
+states is a close in the tracker, so the button that takes it sits beside the two that record it and
+leads them. It names the tracker — `config.trackerName`, from `integrations.issues`, falling back to
+"the tracker" for any other provider — because the press writes to a system outside the cockpit, and
+a generic "Mark as closed" read as a local bookkeeping tick rather than a change on the board.
+`HumanTaskActions` draws Done as the secondary where it is on offer —
 `HumanTaskActions` draws Done as the secondary where it is on offer, because Done is what an operator
 presses having already closed the item somewhere else. It posts
 `POST /api/human-tasks/:id/close-ticket` ([16](16-http-api.md)), which closes the item and settles the

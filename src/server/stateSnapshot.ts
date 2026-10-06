@@ -214,6 +214,7 @@ function harnessSection(
       boardStates: [...config.issueBoardStates],
       canSetWorkItemState: connector.canSetWorkItemState(),
       canCloseIssue: connector.canCloseIssue(),
+      trackerName: trackerName(config.integrations.issues),
       canClosePr: connector.canClosePr(),
       canPlaceWorkItem: connector.canPlaceWorkItem(),
       featureBoard: featureBoardOn(connector),
@@ -525,4 +526,10 @@ function checkSets(
 ): (goalRef: string) => CheckSetStanding {
   const byGoal = new Map(records.map((r) => [r.originRef, r]));
   return (goalRef) => checkSetStanding(byGoal.get(goalRef) ?? null, () => checksByGoal.get(goalRef) ?? []);
+}
+
+function trackerName(provider: string): CockpitState['config']['trackerName'] {
+  if (provider === 'github') return 'GitHub';
+  if (provider === 'azure') return 'ADO';
+  return null;
 }

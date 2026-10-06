@@ -669,7 +669,7 @@ close**, and which of them means _done_ and which means _we are not doing this_ 
 project's process template — so the harness will not guess one
 ([15](15-integrations.md#the-capabilities)). `issueCompletedState` and `issueNotPlannedState` are
 where a deployment says the two words, and naming them is what makes Azure `IssueCloseCapable`:
-`ActionSink.canCloseIssue()` answers true, the close-out row draws **Mark as closed**
+`ActionSink.canCloseIssue()` answers true, the close-out row draws **Close on ADO**
 ([13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)), and the plan back-out closes
 the ticket it comments on ([08](08-planning.md#backing-out-of-a-plan)). Name neither and every one of
 those surfaces reads exactly as it did before the keys existed.

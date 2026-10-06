@@ -403,6 +403,8 @@ interface CockpitConfig {
   boardStates: string[];
   canSetWorkItemState: boolean;
   canCloseIssue: boolean;
+  /** What the tracker is called on a button that writes to it — `null` where it is neither. */
+  trackerName: 'GitHub' | 'ADO' | null;
   canClosePr: boolean;
   canPlaceWorkItem: boolean;
   featureBoard: boolean;

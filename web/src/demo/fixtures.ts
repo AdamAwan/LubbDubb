@@ -240,6 +240,7 @@ export function buildDemoState(): DemoSeed {
       boardStates: ['New', 'Ready', 'Active', 'Closed'],
       canSetWorkItemState: true,
       canCloseIssue: true,
+      trackerName: 'GitHub',
       canClosePr: true,
       stateRules: { pickup: ['Ready', 'Active'], inProgress: 'Active', inReview: null, returnsTo: 'Ready' },
       profiles: [
@@ -3853,7 +3854,7 @@ export function buildDemoState(): DemoSeed {
           'The assessor marked **Halve the book page’s image weight** delivered — "a book page now ships ' +
           '380KB of cover art on a phone and 1.1MB on a desktop, down from 4.1MB." Both its checks passed and ' +
           'it has reached staging and prod.\n\n' +
-          'The item is still open in the tracker. **Mark as closed** here does it and settles this ' +
+          'The item is still open in the tracker. The **close** button below does it and settles this ' +
           'row with it — or close it in the tracker yourself and this settles itself on the next ' +
           'pulse, or mark it done here, or decline it and say why.',
         originRef: 'issue:398',
