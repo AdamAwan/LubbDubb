@@ -85,7 +85,7 @@ function BoardBody({
   read: () => Promise<void>;
 }): JSX.Element {
   const board = shownFeatures(all, view.featureClosed);
-  const closed = all.features.length - shownFeatures(all, false).features.length;
+  const closed = all.features.filter((f) => f.state === 'closed').length;
   const { features, unresolved } = board;
   if (all.features.length === 0) {
     return (
