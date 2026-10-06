@@ -26,6 +26,7 @@ import type {
 import type { PartGroup } from '../types.js';
 import { PART_GROUP } from './partGroups.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
+import { orphanOf } from './orphanGoal.js';
 import { belongsToGoal, closedPrs, goalIssue, ownsPr, reachesGoal } from './goalRefs.js';
 import {
   closeStage,
@@ -374,10 +375,11 @@ function planCardAsk(page: GoalPageView, escalations: readonly Escalation[]): Ne
  * first.
  *
  * Three rows are never in that set. The parent ask is drawn by the band at the
- * foot; the plan's verdict is drawn by the plan card, under the prediction; and an
+ * top of the Ask pane; the plan's verdict is drawn by the plan card, under the prediction; and an
  * ask about the goal as a whole — a profile answer, an intake, the fleet's own
- * config — belongs to no pane at all and can only be a row. Those keep the line,
- * which is why the line has to carry its own weight wherever it is drawn.
+ * config — belongs to no pane at all and can only be a row. The last two keep the
+ * line, which is why the line has to carry its own weight wherever it is drawn;
+ * the parent ask is no line at all, and the Ask tab's dot is what announces it.
  * → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page
  *
  * @public the seam the goal page draws both sets from
@@ -705,10 +707,15 @@ export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
     watch: watchStage(page),
   };
   return goalPanes(page).map((tab) => {
-    const needsYou = goalPaneAsks(page, tab).length > 0;
+    const needsYou = goalPaneAsks(page, tab).length > 0 || (tab === 'ask' && parentAsked(page));
     const on = tab === 'ask' || tab === 'plan' ? [] : page.obligations[tab];
     return { tab, label: GOAL_TAB_LABEL[tab], ...stages[tab], needsYou, on };
   });
+}
+
+/** → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature */
+function parentAsked(page: GoalPageView): boolean {
+  return page.issue.state === 'open' && orphanOf(page.placesWorkItems, page.issue)?.settledAt === null;
 }
 
 function settled(page: GoalPageView): boolean {

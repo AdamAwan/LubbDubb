@@ -8,7 +8,11 @@ interface OrphanGoal {
 }
 
 export function orphanGoal(state: AppState, issue: Issue): OrphanGoal | null {
-  if (!state.config.canPlaceWorkItem) return null;
+  return orphanOf(state.config.canPlaceWorkItem, issue);
+}
+
+export function orphanOf(placesWorkItems: boolean, issue: Issue): OrphanGoal | null {
+  if (!placesWorkItems) return null;
   if (issue.parent !== null) return null;
   const appraisal = issue.appraisal;
   return {

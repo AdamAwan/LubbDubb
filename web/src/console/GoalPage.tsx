@@ -90,6 +90,8 @@ export function GoalPage({
         onSelect={(id) => actions.openGoalTab(id as GoalTab)}
         label="This goal"
       >
+        {/* → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature */}
+        {tab === 'ask' && <OrphanBand issue={page.issue} view={view} actions={actions} />}
         {/* The pane's own asks, in full and first: this is the pane the ask is
             about, and one line of small print above the navigation is not what a
             filled primary button inside the pane is competing with.
@@ -105,10 +107,6 @@ export function GoalPage({
         {tab === 'close' && <ClosePane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'watch' && <WatchPane page={page} view={view} actions={actions} folds={folds} />}
       </TabbedPanel>
-      {/* Below the panel, because what it asks is about the goal's place on the
-          board rather than about any stage of the work — and because the ask
-          itself is already announced as a row at the top. */}
-      <OrphanBand issue={page.issue} view={view} actions={actions} />
     </div>
   );
 }
@@ -177,8 +175,8 @@ function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
 /**
  * The goal's stages as tabs. A stage carries a reading and a meter as well as a
  * name, because the row is where the goal *is* as much as where you can go — and
- * a dot where an ask is waiting in that pane, which is the whole of what a band
- * above the navigation used to say.
+ * a dot where something in that pane waits on the operator, which is the whole of
+ * what a band above the navigation used to say.
  */
 function goalTabs(page: GoalPageView, tab: GoalTab, chosen: GoalTab | null, opening: GoalTabOpening): PanelTab[] {
   return buildGoalNav(page).map((entry) => ({
