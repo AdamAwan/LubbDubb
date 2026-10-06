@@ -105,10 +105,13 @@ export class BotPrRiskDesk {
   }
 
   assessed(prs: readonly BotPr[]): AssessedBotPr[] {
-    const risks = this.deps.store.botPrRisks.risksFor(prs.map((pr) => pr.number));
+    const numbers = prs.map((pr) => pr.number);
+    const risks = this.deps.store.botPrRisks.risksFor(numbers);
+    const outcomes = this.deps.store.botPrOutcomes.latestFor(numbers);
     return prs.map((pr) => ({
       ...pr,
       risk: risks.find((r) => r.prNumber === pr.number && r.headSha === pr.headSha) ?? null,
+      outcome: outcomes.find((o) => o.prNumber === pr.number) ?? null,
     }));
   }
 

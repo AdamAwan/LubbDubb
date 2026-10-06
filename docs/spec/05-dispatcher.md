@@ -1665,7 +1665,7 @@ asked of the built-in pair.
 ### What a CI-fix dispatch carries
 
 `pr-ci-fix` renders five lines naming the pull request and its branch. Appended after it, never
-interpolated into it, are four things:
+interpolated into it, are five things:
 
 - **`ciFailureNote`** — the operator's per-check `guidance`, which checks are non-blocking, and which
   are failing but held (`src/ci/ciPolicy.ts`).
@@ -1679,6 +1679,10 @@ interpolated into it, are four things:
   yet is the one that most needs the ask. It is here rather than only in the tool description because
   `report_remedy` is named nowhere in the protocol addendum — a tool discoverable from `tools/list`
   alone is a tool an agent finishes without.
+- **`dependencyCiBrief`** — on a watched dependency-bot pull request only: what the update is, the four
+  things a red build on one can be, and the ask to say which through `dependency_outcome`. Empty on
+  every other pull request. An outcome other than `adapted` on the current head also **holds** the
+  rule on that pull request until its head moves. → [37](37-bot-prs.md#when-ci-fails-on-one)
 - **`ciEvidenceNote`** — what those checks actually reported: the check-run annotations or build-
   timeline errors where the provider extracted any, otherwise the tail of the failing job's log
   (`src/ci/ciEvidence.ts`, [15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).

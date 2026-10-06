@@ -272,6 +272,7 @@ const realApi = {
   getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
   getBotPrs: () => authFetch('/api/bot-prs').then((r) => json<BotPrsPayload>(r)),
   claimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/claim`, {}),
+  closeBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/close`, {}),
   summariseBotPrs: () => post<{ ok: true; prs: number }>('/api/bot-prs/risk', {}),
   getMcp: () => authFetch('/api/mcp').then((r) => json<McpChannelPayload>(r)),
   getPlugin: () => authFetch('/api/plugin').then((r) => json<PluginStatusPayload>(r)),

@@ -161,9 +161,25 @@ export interface BotPrRiskStanding {
   run: (Pick<BotPrRiskRun, 'id' | 'status' | 'trigger' | 'createdAt' | 'settledAt'> & { prs: number }) | null;
 }
 
+/** What a CI-fix agent on a watched bot pull request found the failure to be. → docs/spec/37-bot-prs.md#when-ci-fails-on-one */
+export type BotPrOutcomeKind = 'adapted' | 'upstream-bug' | 'intended-break' | 'unclear';
+
+export interface BotPrOutcome {
+  prNumber: number;
+  /** The head the world held when it was recorded; empty where the provider did not report one. */
+  headSha: string;
+  outcome: BotPrOutcomeKind;
+  summary: string;
+  upstreamUrl: string | null;
+  fixedIn: string | null;
+  recordedAt: string;
+}
+
 /** `risk` is the verdict on this head only: a push to the pull request leaves it null until re-read. */
 export interface AssessedBotPr extends BotPr {
   risk: BotPrRisk | null;
+  /** The latest outcome on this pull request, on whatever head it was recorded. */
+  outcome: BotPrOutcome | null;
 }
 
 export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';

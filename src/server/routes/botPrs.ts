@@ -24,6 +24,15 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     }),
   );
 
+  app.post(
+    '/api/bot-prs/:number/close',
+    checked({ params: PrNumberParams }, async ({ params, reply }) => {
+      const outcome = await system.botPrs.close(params.number);
+      if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.refusal });
+      return { ok: true };
+    }),
+  );
+
   app.post('/api/bot-prs/risk', async (_req, reply) => {
     const outcome = await system.botPrRisks.request('operator');
     if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.refusal });

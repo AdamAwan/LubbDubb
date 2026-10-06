@@ -462,7 +462,8 @@ the absent row above answers `no` to both.
 **A bot's pull request is the one exception to `isSomeoneElsesPr`.** `botAuthored` (its author matches
 `botPrs.authors`) answers no, so a bot pull request a person tagged for watching is worked by the fleet.
 It stays out of `isOurPr` — nothing renames or reaps a bot's branch. →
-[37](37-bot-prs.md#working-one-as-the-fleets-own)
+[37](37-bot-prs.md#working-one-as-the-fleets-own). Its CI fix is briefed as a dependency question, not a
+bug of the fleet's own. → [37](37-bot-prs.md#when-ci-fails-on-one)
 
 `isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>` or
 `job/<id>`, the branch shapes only a dispatch cuts. Derived rather than stored — recording every

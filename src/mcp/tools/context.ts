@@ -36,6 +36,7 @@ import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../../review/threadLabels.js';
 import type { FeatureSummaryInput } from '../../featureSummaries/featureSummary.js';
 import type { BotPrRiskInput, BotPrRiskRecorded } from '../../botPrs/riskRecord.js';
+import type { BotPrOutcomeInput, BotPrOutcomeRecorded } from '../../botPrs/outcome.js';
 import type { LocalValidationDesk } from '../../validation/local/desk.js';
 import type { LocalRunner } from '../../localRun/runner.js';
 import type { LocalRunWatch } from '../../localRun/watch.js';
@@ -110,6 +111,7 @@ export interface AgentToolTarget {
     input: FeatureSummaryInput,
   ): { ok: true; featureOrigin: string } | { ok: false; error: string };
   recordBotPrRisk(agentId: string, input: BotPrRiskInput): BotPrRiskRecorded;
+  recordBotPrOutcome(agentId: string, input: BotPrOutcomeInput): BotPrOutcomeRecorded;
   recordFeatureSequence(
     agentId: string,
     input: { reason: string; unsure: string | null; edges: FeatureSequenceEdge[] },

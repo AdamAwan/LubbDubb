@@ -245,6 +245,8 @@ export type {
   WorldEvent,
   WorldEventKind,
   AssessedBotPr,
+  BotPrOutcome,
+  BotPrOutcomeKind,
   BotPrRisk,
   BotPrRiskLevel,
   BotPrRiskStanding,

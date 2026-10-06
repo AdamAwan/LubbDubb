@@ -38,6 +38,9 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
   const proposals = store.escalations.listProposals();
   const signals = rejectionSignalQuery(proposals);
   const featureStandings = pulse.featureStandings ?? [];
+  const botHeads = pulse.world.pullRequests
+    .filter((pr) => pr.botAuthored === true && pr.headSha)
+    .map((pr) => ({ prNumber: pr.number, headSha: pr.headSha! }));
   return {
     ...pulse,
     openEscalations: store.escalations.listOpenEscalations(),
@@ -74,6 +77,10 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
       ...store.remedies.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
       ...store.remedies.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
     ],
+    botPrOutcomes: store.botPrOutcomes.onHeads(botHeads),
+    botPrRisks: store.botPrRisks
+      .risksFor(botHeads.map((h) => h.prNumber))
+      .filter((r) => botHeads.some((h) => h.prNumber === r.prNumber && h.headSha === r.headSha)),
     prSplits: store.prSplits.listPrSplitVerdicts(),
     descriptionDrafts: store.prDescriptions.pendingDrafts(),
     uncheckedDescriptions: store.prDescriptions.uncheckedDescriptions(),

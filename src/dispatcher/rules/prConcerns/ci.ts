@@ -4,6 +4,8 @@ import { askedAlready } from '../../admission.js';
 import { ciFailureNote, ciNeedsHuman, classifyCiFailures, type CiVerdict } from '../../../ci/ciPolicy.js';
 import { priorCiRemediesNote } from '../../../remedies/priorRemedies.js';
 import { remedyAskNote } from '../../../remedies/remedies.js';
+import { dependencyCiBrief } from '../../../botPrs/ciBrief.js';
+import { ciHeldByOutcome } from '../../../botPrs/outcome.js';
 import type { RawAction, StageContext } from '../context.js';
 import type { PrConcern } from './concern.js';
 
@@ -18,6 +20,7 @@ export function ciFailingConcern(
   const ciVerdict = classifyCiFailures(pr.ciChecks, s.ci, pr.ciChecksWithheld);
   const ciFailing = ciNeedsAttention(pr) && !inherited;
   const ciOrigin = `pr:${pr.number}:ci`;
+  if (ciFailing && ciHeldByOutcome(pr, ctx.botPrOutcomes ?? []) !== null) return { concern: null, escalation: null };
   if (ciFailing && ciVerdict.actionable) {
     return {
       escalation: null,
@@ -32,7 +35,8 @@ export function ciFailingConcern(
             ctx.priorRemedies ?? [],
             ciVerdict.dispatch.map((m) => m.name),
           ) +
-          remedyAskNote('ci'),
+          remedyAskNote('ci') +
+          dependencyCiBrief(pr, ctx.botPrRisks?.find((r) => r.prNumber === pr.number) ?? null),
         dispatchReason: ciDispatchReason(pr.number, ciVerdict),
         note: `CI is now failing on PR #${pr.number} — investigate and push a fix.${ciFailureNote(ciVerdict)}`,
         originTitle: pr.title,

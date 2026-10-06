@@ -67,6 +67,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   readonly recordFeatureSummary: AgentToolTarget['recordFeatureSummary'] = (...args) =>
     this.tools.recordFeatureSummary(...args);
   readonly recordBotPrRisk: AgentToolTarget['recordBotPrRisk'] = (...args) => this.tools.recordBotPrRisk(...args);
+  readonly recordBotPrOutcome: AgentToolTarget['recordBotPrOutcome'] = (...args) =>
+    this.tools.recordBotPrOutcome(...args);
   readonly recordFeatureSequence: AgentToolTarget['recordFeatureSequence'] = (...args) =>
     this.tools.recordFeatureSequence(...args);
   readonly recordRetrospective: AgentToolTarget['recordRetrospective'] = (...args) =>

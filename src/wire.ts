@@ -1109,7 +1109,15 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { RemedyCause } from './types.js';
-export type { AssessedBotPr, BotPrRisk, BotPrRiskLevel, BotPrRiskStanding, UpdateKind } from './types.js';
+export type {
+  AssessedBotPr,
+  BotPrOutcome,
+  BotPrOutcomeKind,
+  BotPrRisk,
+  BotPrRiskLevel,
+  BotPrRiskStanding,
+  UpdateKind,
+} from './types.js';
 export type { CiCheck } from './types.js';
 export type { PrComment } from './types.js';
 export type { PoolFleetReading } from './types.js';
