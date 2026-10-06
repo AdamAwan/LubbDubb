@@ -78,6 +78,7 @@ export interface AzureDevOpsApi {
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
+  removePullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;
 }
 

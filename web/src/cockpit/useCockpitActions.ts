@@ -118,6 +118,8 @@ function prActions(then: Then) {
     reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
     assignPr: (prNumber, personId) => then(api.assignPr(prNumber, personId)),
     declineAssignPr: (prNumber) => then(api.declineAssignPr(prNumber)),
+    closeBotPr: (prNumber) => then(api.closeBotPr(prNumber)),
+    unclaimBotPr: (prNumber) => then(api.unclaimBotPr(prNumber)),
   } satisfies Partial<CockpitActions>;
 }
 

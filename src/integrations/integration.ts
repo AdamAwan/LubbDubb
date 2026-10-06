@@ -118,9 +118,9 @@ export function isReleaseNotesReadable(x: Integration): x is Integration & Relea
   return typeof (x as Partial<ReleaseNotesReadable>).readReleaseNotes === 'function';
 }
 
-/** Puts the credential's own identity on a bot's pull request: an optional reviewer, a GitHub assignee. */
+/** Puts the credential's own identity on a bot's pull request, or with `on` false takes it off. */
 export interface BotPrClaimable {
-  claimBotPr(prNumber: number): Promise<SendResult>;
+  claimBotPr(prNumber: number, on?: boolean): Promise<SendResult>;
 }
 
 export function isBotPrClaimable(x: Integration): x is Integration & BotPrClaimable {

@@ -171,6 +171,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async addPullReviewer(id, reviewerId) {
       recorded.reviewersAdded.push({ id, reviewerId });
     },
+    async removePullReviewer() {},
     async listPullChanges() {
       return { base: null, head: null, files: [] };
     },

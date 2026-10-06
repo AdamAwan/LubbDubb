@@ -31,6 +31,7 @@ export type AskKind =
   | 'dispatch'
   | 'assigned'
   | 'assign'
+  | 'bot_pr'
   | 'upgrade'
   | 'project_pull';
 

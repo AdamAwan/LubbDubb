@@ -1,6 +1,7 @@
 import type { OpenPullRequest, ViewerAssignment } from '../wire.js';
 import type { AskDraft, AskInputs } from './queue.js';
 import { askLine, goalOf, goalOfPr, oneLine, opensAt, prAddress } from './lines.js';
+import { ciNeedsAttention, isConflicted } from '../pr/prHealth.js';
 
 // → docs/spec/07-pull-requests.md
 
@@ -18,11 +19,23 @@ function assignedLine(pr: OpenPullRequest): string {
   return oneLine(title === '' ? sentence : `${sentence} on “${title}”`);
 }
 
+/**
+ * What is wrong with a bot's pull request the operator is on and the fleet is not.
+ * → docs/spec/37-bot-prs.md#one-put-on-you-that-is-in-trouble
+ */
+export function botPrTroubles(pr: OpenPullRequest): string[] {
+  if (pr.botAuthored !== true || pr.attention?.assignedToYou === undefined) return [];
+  const troubles: string[] = [];
+  if (ciNeedsAttention(pr)) troubles.push('CI is failing');
+  if (isConflicted(pr)) troubles.push(`it conflicts with ${pr.baseBranch ?? 'its base'}`);
+  return troubles;
+}
+
 export function assignedPrRows(state: AskInputs): AskDraft[] {
   const rows: AskDraft[] = [];
   for (const pr of state.world.pullRequests) {
     const assignment = pr.attention?.assignedToYou;
-    if (assignment === undefined) continue;
+    if (assignment === undefined || botPrTroubles(pr).length > 0) continue;
     const goalRef = goalOfPr(state, pr.number);
     const note = REVIEWER_NOTE[assignment];
     rows.push({
@@ -37,6 +50,39 @@ export function assignedPrRows(state: AskInputs): AskDraft[] {
       opens: prAddress(state, pr.number) === undefined ? opensAt(goalRef, state) : 'provider',
       details: opensAt(goalRef, state),
       raisedAt: pr.attention?.reviewWaitingSince ?? '',
+    });
+  }
+  return rows;
+}
+
+/** → docs/spec/37-bot-prs.md#one-put-on-you-that-is-in-trouble */
+export function botPrRows(state: AskInputs): AskDraft[] {
+  const rows: AskDraft[] = [];
+  for (const pr of state.world.pullRequests) {
+    const troubles = botPrTroubles(pr);
+    if (troubles.length === 0) continue;
+    const said = troubles.join(' and ');
+    const title = pr.title.trim();
+    const goalRef = goalOfPr(state, pr.number);
+    const author = pr.author?.trim() ?? '';
+    rows.push({
+      ...NOBODY,
+      id: `bot_pr:pr:${pr.number}`,
+      kind: 'bot_pr',
+      subject: { type: 'pull_request', prNumber: pr.number },
+      title: askLine(
+        oneLine(
+          `${said[0]?.toUpperCase() ?? ''}${said.slice(1)} on ${title === '' ? `PR #${pr.number}` : `“${title}”`}`,
+        ),
+        goalRef,
+        state,
+      ),
+      ...(author === '' ? {} : { note: author }),
+      goalRef,
+      originRef: `pr:${pr.number}`,
+      opens: opensAt(goalRef, state),
+      prNumber: pr.number,
+      raisedAt: '',
     });
   }
   return rows;

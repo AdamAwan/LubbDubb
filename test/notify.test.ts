@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AppState, EnvironmentHealthReading } from '../web/src/types.js';
+import { botPrTroubles } from '../src/asks/prAsks.js';
 import {
   fireNotifications,
   notifiableChanges,
@@ -422,7 +423,7 @@ test('notifySnapshot reduces a whole AppState to the four lists', () => {
       .concat(
         state.world.pullRequests
           .filter((pr) => pr.attention.assignedToYou !== undefined)
-          .map((pr) => `assigned:pr:${pr.number}`),
+          .map((pr) => `${botPrTroubles(pr).length > 0 ? 'bot_pr' : 'assigned'}:pr:${pr.number}`),
       )
       .concat((state.undescribedParts ?? []).map((w) => `describe:${w.originRef}`))
       .concat(

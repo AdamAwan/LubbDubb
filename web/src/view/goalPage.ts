@@ -622,6 +622,7 @@ export function goalLanding(held: GoalLanding | null, ref: string, page: GoalPag
 export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   assigned: 'plan',
   assign: 'plan',
+  bot_pr: 'plan',
   bench: 'plan',
   burn: 'plan',
   escalation: 'plan',

@@ -32,6 +32,7 @@ export const KIND_LABEL: Record<AskKind, string> = {
   dispatch: 'Refused',
   assigned: 'Assigned',
   assign: 'Assign',
+  bot_pr: 'Bot PR',
   upgrade: 'Upgrade',
   project_pull: 'Auto-pull off',
 };
@@ -87,6 +88,7 @@ export const KIND_TONE: Record<AskKind, 'red' | 'amber' | 'blue' | 'green'> = {
   dispatch: 'red',
   assigned: 'blue',
   assign: 'blue',
+  bot_pr: 'amber',
   upgrade: 'amber',
   project_pull: 'amber',
 };
@@ -132,6 +134,7 @@ export const KIND_SYMBOL: Record<AskKind, string> = {
   dispatch: '\u22a0',
   assigned: '\u2913',
   assign: '\u2192',
+  bot_pr: '⇡',
   upgrade: '\u2191',
   project_pull: '\u21a5',
 };

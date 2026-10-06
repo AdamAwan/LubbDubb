@@ -7,13 +7,15 @@ import { readDependencyUpdate } from './dependencyUpdate.js';
 
 export interface BotPrSource {
   listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]>;
-  claimBotPr(prNumber: number): Promise<SendResult>;
+  claimBotPr(prNumber: number, on?: boolean): Promise<SendResult>;
   closePr(input: PrCloseInput): Promise<SendResult>;
 }
 
 type ClaimOutcome = { ok: true } | { ok: false; status: 404 | 409 | 502; refusal: string };
 
 type CloseOutcome = { ok: true } | { ok: false; status: 404 | 502; refusal: string };
+
+type UnclaimOutcome = { ok: true } | { ok: false; status: 404 | 409 | 502; refusal: string };
 
 interface BotPrReaderDeps {
   source: BotPrSource;
@@ -56,6 +58,24 @@ export class BotPrReader {
     } catch (err) {
       const message = (err as Error).message;
       this.deps.errors.record({ source: 'provider', message: `Claiming bot PR ${prNumber} failed: ${message}` });
+      return { ok: false, status: 502, refusal: message };
+    }
+    this.last = null;
+    return { ok: true };
+  }
+
+  /** Takes the credential's own identity off a bot's pull request. → docs/spec/37-bot-prs.md#stepping-off-one */
+  async unclaim(prNumber: number): Promise<UnclaimOutcome> {
+    const reading = await this.read();
+    if (!reading.pullRequests.some((p) => p.number === prNumber))
+      return { ok: false, status: 404, refusal: 'no open bot pull request with that number' };
+    try {
+      const sent = await this.deps.source.claimBotPr(prNumber, false);
+      if (!sent.ok)
+        return { ok: false, status: 409, refusal: 'the provider could not say who you are, so nobody was removed' };
+    } catch (err) {
+      const message = (err as Error).message;
+      this.deps.errors.record({ source: 'provider', message: `Stepping off bot PR ${prNumber} failed: ${message}` });
       return { ok: false, status: 502, refusal: message };
     }
     this.last = null;

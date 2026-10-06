@@ -143,6 +143,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async addPullAssignee(number, login) {
       recorded.assigned.push({ number, login });
     },
+    async removePullAssignee() {},
     async listPullFiles() {
       return [];
     },

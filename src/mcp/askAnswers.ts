@@ -353,6 +353,10 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
     'Somebody put this pull request on the operator where the fleet cannot see it. Nothing in the harness acts ' +
       'on it; the answer is the review itself.',
   ),
+  bot_pr: cockpit(
+    'A bot’s pull request on the operator that is failing. Watching it, closing it or stepping off it is pressed ' +
+      'from its panel in the cockpit.',
+  ),
   dispatch: nowhere(
     'A dispatch the harness keeps refusing, for the reason the row names. There is no verdict to give: the ' +
       'answer is fixing what the refusal says.',

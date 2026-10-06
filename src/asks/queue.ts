@@ -4,7 +4,7 @@ import type { AskGroup, AskKind, AskRow, AskUrgency } from './askRow.js';
 import { updateAskRows } from './updateAsks.js';
 import { intakeRows, placementRows, profileRows, sittingRows } from './issueAsks.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
-import { assignAskRows, assignedPrRows, descriptionFeedbackRows, undescribedPartRows } from './prAsks.js';
+import { assignAskRows, assignedPrRows, botPrRows, descriptionFeedbackRows, undescribedPartRows } from './prAsks.js';
 import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } from './inboxAsks.js';
 
 // → docs/spec/17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code
@@ -76,6 +76,8 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   assigned: 'later',
   // → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
   assign: 'next',
+  // → docs/spec/37-bot-prs.md#one-put-on-you-that-is-in-trouble
+  bot_pr: 'next',
   upgrade: 'later',
   project_pull: 'later',
 };
@@ -98,6 +100,7 @@ const STAGE_RANK: Record<AskKind, number> = {
   reply: 1,
   assigned: 1,
   assign: 1,
+  bot_pr: 1,
   validate: 2,
   validation_plan: 2,
   bench: 2,
@@ -160,6 +163,7 @@ export function buildAskQueue(
     ...updateAskRows(state, nowIso),
     ...refusedDispatchRows(state),
     ...assignedPrRows(state),
+    ...botPrRows(state),
     ...assignAskRows(state),
     ...undescribedPartRows(state),
     ...descriptionFeedbackRows(state),

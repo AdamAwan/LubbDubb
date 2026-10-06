@@ -139,6 +139,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   dispatch: 'A dispatch is being refused every pulse',
   assigned: 'A pull request is assigned to you',
   assign: 'A pull request is ready for somebody to look at',
+  bot_pr: 'A bot pull request on you is failing',
   upgrade: 'An update to the harness is waiting',
   project_pull: 'The project checkout cannot be pulled',
 };

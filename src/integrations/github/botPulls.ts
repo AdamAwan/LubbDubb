@@ -31,10 +31,10 @@ export async function listGitHubBotPulls(
   );
 }
 
-export async function claimGitHubBotPr(api: GitHubApi, prNumber: number): Promise<SendResult> {
+export async function claimGitHubBotPr(api: GitHubApi, prNumber: number, on = true): Promise<SendResult> {
   const login = await api.viewerLogin();
   if (login === '') return { ok: false };
-  await api.addPullAssignee(prNumber, login);
+  await (on ? api.addPullAssignee(prNumber, login) : api.removePullAssignee(prNumber, login));
   return { ok: true, ref: login };
 }
 

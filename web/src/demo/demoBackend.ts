@@ -804,6 +804,8 @@ class DemoServer {
       if (watched) labels.add(tag);
       else labels.delete(tag);
       pr.labels = [...labels];
+      if (watched && pr.botAuthored === true)
+        pr.attention = { status: 'harness', reasons: ['CI is failing — an agent will be dispatched'] };
       this.addDecision(
         'no_op',
         'executed',
@@ -936,6 +938,21 @@ class DemoServer {
     if (pr && person) {
       pr.assignees = [...(pr.assignees ?? []), person];
       delete pr.assignAsk;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /** The world's half of a bot pull request closed or stepped off; the tab's half is `demoClosed` / `demoClaimed`. */
+  async settleBotPr(prNumber: number, how: 'closed' | 'unclaimed'): Promise<{ ok: true }> {
+    const world = this.state.world;
+    const pr = world.pullRequests.find((p) => p.number === prNumber);
+    if (pr) {
+      if (how === 'closed') world.pullRequests = world.pullRequests.filter((p) => p !== pr);
+      else {
+        delete pr.viewerAssignment;
+        pr.attention = { status: 'unwatched', reasons: [`not tagged "${this.state.config.watchLabel}"`] };
+      }
       this.dirty();
     }
     return { ok: true };
@@ -4999,7 +5016,11 @@ export const demoApi = {
   },
   closeBotPr: (number: number) => {
     demoClosed.add(number);
-    return Promise.resolve({ ok: true as const });
+    return getServer().settleBotPr(number, 'closed');
+  },
+  unclaimBotPr: (number: number) => {
+    demoClaimed.delete(number);
+    return getServer().settleBotPr(number, 'unclaimed');
   },
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
   raiseBug: (_issueNumber: number, _summary: string, _title?: string) => Promise.resolve({ ok: false }),

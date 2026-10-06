@@ -237,7 +237,7 @@ export class GitHubSourceControlIntegration
 
   listBotPullRequests = (authors: readonly RegExp[]) =>
     listGitHubBotPulls(this.opts.api, authors, async (p) => (await this.pullCi(p, 0)).ciStatus);
-  claimBotPr = (prNumber: number) => claimGitHubBotPr(this.opts.api, prNumber);
+  claimBotPr = (prNumber: number, on?: boolean) => claimGitHubBotPr(this.opts.api, prNumber, on);
   readBotPrDetail = (prNumber: number) => readGitHubBotPrDetail(this.opts.api, prNumber);
   readReleaseNotes: ReleaseNotesReadable['readReleaseNotes'] = (s, t) => readGitHubReleaseNotes(this.opts.api, s, t);
 

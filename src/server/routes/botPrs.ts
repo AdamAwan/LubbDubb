@@ -5,7 +5,12 @@ import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
 
-export function register(app: FastifyInstance, { system }: RouteContext): void {
+export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const rereadWorld = async (): Promise<void> => {
+    await system.harness.runCycle('manual');
+    hub.broadcast({ type: 'world:changed' });
+  };
+
   app.get('/api/bot-prs', async () => {
     const reading = await system.botPrs.read();
     return {
@@ -25,10 +30,21 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   );
 
   app.post(
+    '/api/bot-prs/:number/unclaim',
+    checked({ params: PrNumberParams }, async ({ params, reply }) => {
+      const outcome = await system.botPrs.unclaim(params.number);
+      if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.refusal });
+      await rereadWorld();
+      return { ok: true };
+    }),
+  );
+
+  app.post(
     '/api/bot-prs/:number/close',
     checked({ params: PrNumberParams }, async ({ params, reply }) => {
       const outcome = await system.botPrs.close(params.number);
       if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.refusal });
+      await rereadWorld();
       return { ok: true };
     }),
   );

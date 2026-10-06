@@ -854,7 +854,10 @@ fleet does not know exists and will never act on. It is read off `attention.assi
 ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)) — the field the verdict sets **only**
 when the assignment is what makes the pull request the operator's court, so a PR assigned to them with
 an agent already on its branch, or one whose merge is waiting on their verdict, draws nothing here.
-Both would be the same ask twice, which is how a queue teaches an operator to skim it.
+Both would be the same ask twice, which is how a queue teaches an operator to skim it. For the same
+reason a **bot's** pull request on them that is failing or conflicted draws no `assigned` row: it is
+the [`bot_pr`](37-bot-prs.md#one-put-on-you-that-is-in-trouble) ask instead, whose panel carries the
+three answers — watch it, close it, step off it — that a review request does not have.
 
 Keyed on that field and never on the assignment itself, for the reason `dispatch` keys on an outcome
 rather than a sentence: a surface matching the leading reason's wording would file every future
@@ -924,7 +927,7 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
 `dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
-`close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`. `later` is an ask holding nothing at all —
+`close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
 `description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
 
 **`limit` is `later` and `blocking` at once, which is the point of having both readings.** An agent is
@@ -992,6 +995,7 @@ within it.
 | `watch`             | Watch            | amber | `◎`   | The running system is answering outside what a goal declared.   |
 | `unwatched`         | Unseen stories   | amber | `○`   | A watched Feature has stories no agent has ever read.           |
 | `dispatch`          | Refused          | red   | `⊠`   | The harness keeps trying this and keeps being told no.          |
+| `bot_pr`            | Bot PR           | amber | `⇡`   | A bot's bump on you is failing; watch, close or step off it.    |
 | `upgrade`           | Upgrade          | amber | `↑`   | A newer build exists; nothing broke and nothing is parked.      |
 | `project_pull`      | Auto-pull off    | amber | `↥`   | Something is stopping a pull the harness would have done.       |
 

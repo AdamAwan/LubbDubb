@@ -457,6 +457,10 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.octokit.issues.addAssignees({ ...this.base, issue_number: number, assignees: [login] });
   }
 
+  async removePullAssignee(number: number, login: string): Promise<void> {
+    await this.octokit.issues.removeAssignees({ ...this.base, issue_number: number, assignees: [login] });
+  }
+
   async listPullFiles(number: number): Promise<GhPullFile[]> {
     const files = await this.octokit.paginate(this.octokit.pulls.listFiles, {
       ...this.base,

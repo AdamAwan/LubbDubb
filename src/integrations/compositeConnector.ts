@@ -340,10 +340,10 @@ export class CompositeConnector
     return lists.flat();
   }
 
-  async claimBotPr(prNumber: number): Promise<SendResult> {
+  async claimBotPr(prNumber: number, on = true): Promise<SendResult> {
     const handler = this.integrations.find(isBotPrClaimable);
     if (!handler) return { ok: false };
-    return handler.claimBotPr(prNumber);
+    return handler.claimBotPr(prNumber, on);
   }
 
   async readBotPrDetail(prNumber: number): Promise<BotPrDetail> {

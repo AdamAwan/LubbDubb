@@ -60,6 +60,7 @@ export const KIND_VERB: Record<NeedKind, string> = {
   dispatch: 'Look',
   assigned: 'Look',
   assign: 'Pick someone',
+  bot_pr: 'Decide',
   upgrade: 'Upgrade',
   project_pull: 'Turn it on',
 };
