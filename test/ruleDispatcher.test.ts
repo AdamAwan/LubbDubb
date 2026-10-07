@@ -1126,44 +1126,46 @@ function conclusion(number: number, verdict: 'done' | 'more_work', by: 'agent' |
   };
 }
 
+function acted(actions: readonly { type: string }[]): boolean {
+  return actions.some((a) => a.type === 'set_work_item_state' || a.type === 'escalate_to_human');
+}
+
 test('return-from-review: an undeclared item whose PR merged stays parked in review', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94)));
-  assert.ok(
-    !actions.some((a) => a.type === 'set_work_item_state'),
-    'nobody said there is more to do, so the item is left for a human rather than re-picked',
-  );
+  assert.ok(!acted(actions), 'nobody said there is more to do, so the item is left for a human rather than re-picked');
 });
 
 test('return-from-review: a concluded-done item stays parked in review', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'done')] }));
-  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+  assert.ok(!acted(actions));
 });
 
-test('return-from-review: a more_work verdict moves the item back to the first pickup state', async () => {
+test('return-from-review: a more_work verdict asks a human to move the item back, and moves nothing', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work')] }));
-  const transition = actions.find((a) => a.type === 'set_work_item_state');
-  assert.ok(transition, 'the agent said work is outstanding, so the item returns to pickup');
-  assert.equal((transition as { number: number }).number, 9);
-  assert.equal((transition as { state: string }).state, 'Ready');
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), 'the harness never moves a work item backwards');
+  const ask = actions.find((a) => a.type === 'escalate_to_human');
+  assert.ok(ask, 'the agent said work is outstanding, so a human is told the item is stranded in review');
+  assert.equal((ask as { context: Record<string, unknown> }).context.originRef, 'issue:9:review-stranded');
+  assert.match((ask as { prompt: string }).prompt, /Move it back to "Ready"/);
 });
 
-test("return-from-review: an operator's more_work verdict moves it back too", async () => {
+test("return-from-review: an operator's more_work verdict is asked about too", async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
     ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work', 'operator')] }),
   );
-  const transition = actions.find((a) => a.type === 'set_work_item_state');
-  assert.ok(transition);
-  assert.match((transition as { reason: string }).reason, /you reported work outstanding/);
+  const ask = actions.find((a) => a.type === 'escalate_to_human');
+  assert.ok(ask);
+  assert.match((ask as { prompt: string }).prompt, /you reported work outstanding/);
 });
 
 test('return-from-review: a verdict on another issue does not release this one', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(11, 'more_work')] }));
-  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+  assert.ok(!acted(actions));
 });
 
 test('return-from-review: an item whose PR is still open stays in review', async () => {
@@ -1187,7 +1189,7 @@ test('return-from-review: an item whose PR is still open stays in review', async
       ],
     }),
   );
-  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+  assert.ok(!acted(actions));
 });
 
 test('return-from-review: a closed item is left in the review state', async () => {
@@ -1208,7 +1210,7 @@ test('return-from-review: a closed item is left in the review state', async () =
       ],
     }),
   );
-  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+  assert.ok(!acted(actions));
 });
 
 test('return-from-review: an ignore-tagged open PR keeps the item in review', async () => {
@@ -1244,7 +1246,7 @@ test('return-from-review: an ignore-tagged open PR keeps the item in review', as
       },
     ),
   );
-  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+  assert.ok(!acted(actions));
 });
 
 test('return-from-review is off unless both pickupStates and inReviewState are set', async () => {
@@ -1265,7 +1267,7 @@ test('return-from-review is off unless both pickupStates and inReviewState are s
       ],
     }),
   );
-  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+  assert.ok(!acted(actions));
 });
 
 function tracked(number: number, workItemState: string): Partial<WorldSnapshot> {

@@ -61,7 +61,7 @@ export class EnvironmentDesk {
     for (const environment of this.deps.environments) await this.probe(environment);
     this.recordArrivals();
     this.reportStuck();
-    await this.announce();
+    await this.announce(world);
     await this.deps.watch?.run();
   }
 
@@ -222,8 +222,9 @@ export class EnvironmentDesk {
     }
   }
 
-  private async announce(): Promise<void> {
+  private async announce(world: WorldSnapshot): Promise<void> {
     const { store, errors } = this.deps;
+    const closed = new Set(world.issues.filter((i) => i.state === 'closed').map((i) => i.number));
     const landings = store.environments.listGoalLandings();
     for (const { arrival, comment, workItemState, said } of announceableArrivals({
       arrivals: store.environments.listGoalArrivals(),
@@ -253,7 +254,7 @@ export class EnvironmentDesk {
           continue;
         }
       }
-      if (workItemState !== null && number !== null) {
+      if (workItemState !== null && number !== null && !closed.has(number)) {
         try {
           await this.deps.sink.setWorkItemState({ number, state: workItemState });
         } catch (err) {

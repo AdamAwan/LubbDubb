@@ -1,4 +1,6 @@
+import { askedAlready } from '../admission.js';
 import type { resolveIssueConclusion } from '../../issueConclusion.js';
+import { issueOriginRef } from '../../issueOrigins.js';
 import type { RawAction, StageContext } from './context.js';
 import { workItemRelease } from './workItemRelease.js';
 
@@ -14,15 +16,21 @@ export function workItemBackToPickup(s: StageContext): void {
     if (issue.state !== 'open' || issue.workItemState !== inReviewState) continue;
     const conclusion = workItemRelease(s, issue);
     if (!conclusion) continue;
+    const ref = issueOriginRef('reviewStranded', issue.number);
+    if (askedAlready(ref, s.ctx.openEscalations, s.ctx.recentDecisions)) continue;
     s.raw.push({
-      type: 'set_work_item_state',
-      number: issue.number,
-      state: returnState,
+      type: 'escalate_to_human',
+      escalationType: 'resolve_ambiguity',
+      prompt:
+        `Work item #${issue.number} ("${issue.title}") is in "${inReviewState}" with no open PR, and ` +
+        `${outstandingBy(conclusion)}. The harness never moves a work item backwards, so nothing will pick ` +
+        `it up while it sits there. Move it back to "${returnState}" if the fleet should do the rest, or ` +
+        `mark the issue done if no more work is expected.`,
+      context: { originRef: ref, issueNumber: issue.number, taskTitle: issue.title },
       rule: 'work-item-back-to-pickup',
       reason:
-        `Work item #${issue.number} is open in "${inReviewState}" with no open PR, and ` +
-        outstandingBy(conclusion) +
-        `; move it back to "${returnState}" so the rest can be picked up.`,
+        `Work item #${issue.number} is open in "${inReviewState}" with no open PR and work reported outstanding; ` +
+        `ask a human whether to move it back rather than moving it.`,
     } satisfies RawAction);
   }
 }

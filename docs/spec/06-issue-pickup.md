@@ -239,8 +239,8 @@ the Feature/Epic gate fully on for dispatch while the cockpit showed it off.
 `effectivePickupStates(policy)` is the pickup list as every gate must actually read it: the
 operator's `pickupStates`, plus `inProgressState` appended when one is set and not already listed. An
 unset or empty list stays unset or empty — an in-progress state alone never switches the state gate
-on — and the fold appends, so the first entry (where rule `work-item-back-to-pickup` returns an item)
-stays the operator's own "start here".
+on — and the fold appends, so the first entry (where rule `work-item-back-to-pickup` asks the operator
+to return an item) stays the operator's own "start here".
 
 The fold is load-bearing, not tidiness. Two readers key on the pickup list: the state gate below, and
 rule `work-item-in-review`, whose first guard is "the item is still in a pickup state". An item moved
@@ -510,10 +510,9 @@ An operator who did by mistake has arm 1, which outranks every derivation.
 
 **`undeclared` is a distinct answer, not a synonym for `more_work`.** It is what a missing row
 resolves to, it is never stored, and rule `work-item-back-to-pickup` acts only on an explicit `more_work` — so an issue
-nobody has vouched for stays parked and is surfaced rather than re-picked. Folding the two would
-re-open the failure this exists to close: a merged PR leaves the open list, `openPrForIssue` cannot
-tell that from "there was never a PR", and the item would bounce back to a pickup state for rule `issue-pickup` to
-put a fresh agent on work already on the default branch.
+nobody has vouched for stays parked and raises nothing. Folding the two would put a card in front of
+the operator for every merged ticket: a merged PR leaves the open list, and `openPrForIssue` cannot
+tell that from "there was never a PR".
 
 Only a **whole-issue origin** may declare (`conclusionOrigin`). `issue:<n>:part:<slug>`,
 `issue:<n>:plan`, `pr:<n>:*` and `job:<id>` are refused, each with its own reason. That is
@@ -655,7 +654,7 @@ argument [proposals](../../CLAUDE.md) made for a fresh table over columns on `es
 
 The two are **mutually exclusive**: writing either clears the other, enforced in the store rather
 than in a caller, because a caller that remembered one and forgot the other would leave rule `work-item-back-to-pickup`
-returning an item to pickup while this gate held it. That exclusion, and every other one among the
+asking the operator to return an item to pickup while this gate held it. That exclusion, and every other one among the
 four issue-verdict tables, is declared as data in `src/store/verdicts.ts` and applied by one internal
 writer — see [14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix).
 

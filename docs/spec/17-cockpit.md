@@ -5219,10 +5219,10 @@ counter-intuitive and each is checked against the rule rather than against the c
 
 - **The in-progress state reads as a pickup state.** `effectivePickupStates` folds it in, so a warning
   built from the raw `issuePickupStates` would say the fleet stops on exactly the column work is _in_.
-- **The review state names the condition on its bounce and never promises one.**
-  `work-item-back-to-pickup` fires only on an explicit `more_work` verdict — never on a missing PR,
-  which was changed deliberately after a merged PR bounced its ticket back to "Ready" and put a fresh
-  agent on merged work.
+- **The review state names the condition on its ask and never promises a move.**
+  `work-item-back-to-pickup` fires only on an explicit `more_work` verdict — never on a missing PR —
+  and it asks the operator to move the item back rather than moving it: the harness never moves a
+  work item backwards.
 - **A column with nothing live claims nothing about closing.** Whether a state maps to closed is the
   tracker's workflow, which the harness has no reading of, so the clause states only what the State
   tier already states.

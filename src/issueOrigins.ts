@@ -12,6 +12,7 @@ export type IssueOriginFamily =
   | 'split'
   | 'summary'
   | 'shortfall'
+  | 'reviewStranded'
   | 'part'
   | 'describe'
   | 'describeCheck'
@@ -53,6 +54,7 @@ const FAMILIES = {
   split: { suffix: 'split', id: '\\d+', role: 'deliberation' },
   summary: { suffix: 'summary', id: null, role: 'unrecognised' },
   shortfall: { suffix: 'shortfall', id: null, role: 'unrecognised' },
+  reviewStranded: { suffix: 'review-stranded', id: null, role: 'unrecognised' },
 } as const satisfies Record<IssueOriginFamily, IssueOriginDeclaration>;
 
 type PlainFamily = {

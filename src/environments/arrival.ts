@@ -53,6 +53,7 @@ export function announceableArrivals(input: {
   const startedAsking = earliestReadings(input.readings);
   const landedAt = latestLandings(input.landings);
   const speaker = speakers(input.arrivals, bands);
+  const overtaken = overtakenBy(input.arrivals, input.environments, bands);
   const out: Announcement[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
@@ -67,7 +68,7 @@ export function announceableArrivals(input: {
     const whole = band === undefined || band.environments.every((n) => arrivedAt.get(arrival.goalRef)?.has(n) === true);
     const speaks = band?.declared !== true || speaker.get(`${arrival.goalRef} ${band.name}`) === arrival.environment;
     const watched = fresh && whole && speaks && (established || justLanded);
-    out.push(announcement(arrival, watched, byName.get(arrival.environment), band));
+    out.push(announcement(arrival, watched, overtaken(arrival), byName.get(arrival.environment), band));
   }
   return out;
 }
@@ -87,6 +88,20 @@ function environmentsByGoal(arrivals: readonly GoalArrival[]): Map<string, Set<s
     else held.add(a.environment);
   }
   return arrivedAt;
+}
+
+/* An arrival on a band declared before one the goal already holds: the list is the order the work
+   travels in, so its state would move the item backwards. */
+function overtakenBy(
+  arrivals: readonly GoalArrival[],
+  environments: readonly EnvironmentConfig[],
+  bands: Map<string, EnvironmentGroup>,
+): (arrival: GoalArrival) => boolean {
+  const position = new Map(environmentGroups(environments).map((b, i) => [b.name, i]));
+  const at = (environment: string): number => position.get(bands.get(environment)?.name ?? '') ?? -1;
+  const furthest = new Map<string, number>();
+  for (const a of arrivals) furthest.set(a.goalRef, Math.max(furthest.get(a.goalRef) ?? -1, at(a.environment)));
+  return (a) => at(a.environment) < furthest.get(a.goalRef)!;
 }
 
 function earliestReadings(readings: readonly { environment: string; observedAt: string }[]): Map<string, number> {
@@ -131,13 +146,14 @@ function speakers(arrivals: readonly GoalArrival[], bands: Map<string, Environme
 function announcement(
   arrival: GoalArrival,
   watched: boolean,
+  overtaken: boolean,
   environment: EnvironmentConfig | undefined,
   band: EnvironmentGroup | undefined,
 ): Announcement {
   return {
     arrival,
     comment: watched && environment?.arrival?.comment === true,
-    workItemState: watched ? (environment?.arrival?.workItemState ?? null) : null,
+    workItemState: watched && !overtaken ? (environment?.arrival?.workItemState ?? null) : null,
     said: band?.declared === true ? band.name : arrival.environment,
   };
 }

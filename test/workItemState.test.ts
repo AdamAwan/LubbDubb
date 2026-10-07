@@ -383,7 +383,7 @@ test('a work item moved too often in an hour is held and logged once', async () 
   system.store.close();
 });
 
-test('a shortfall on a decomposed item returns it to pickup once, and it stays there', async () => {
+test('a shortfall on an item in the review state asks a human once and never moves it back', async () => {
   const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
   await trackedIssue(system, 27, 'In Review');
   planWithOnePart(system.store, 27);
@@ -395,10 +395,11 @@ test('a shortfall on a decomposed item returns it to pickup once, and it stays t
   });
 
   for (let i = 0; i < 4; i++) await system.harness.runCycle('manual');
-  assert.deepEqual(
-    transitions(system).map((m) => `${m.rule}:${m.state}`),
-    ['work-item-back-to-pickup:Ready'],
-    'an explicit shortfall releases the item, and the review rule does not park it again',
-  );
+  assert.deepEqual(transitions(system), [], 'the harness never moves a work item backwards');
+  const asked = system.store.escalations
+    .listEscalations()
+    .filter((e) => e.context.originRef === 'issue:27:review-stranded');
+  assert.equal(asked.length, 1, 'the operator is told once, not every pulse');
+  assert.match(asked[0]!.prompt, /Move it back to "Ready"/);
   system.store.close();
 });

@@ -112,7 +112,7 @@ export function dropWarning(
   }
   if (column.state === rules.inReview && rules.returnsTo !== null) {
     tone = 'warn';
-    parts.push(`work-item-back-to-pickup returns it to "${rules.returnsTo}" if a verdict reports work outstanding`);
+    parts.push(`if a verdict reports work outstanding you are asked to move it back to "${rules.returnsTo}"`);
   }
   if (column.live === 0 && column.count > 0) {
     if (tone !== 'stop') tone = 'warn';
