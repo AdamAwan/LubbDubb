@@ -115,10 +115,27 @@ export async function setWorkItemState(
   action: ValidatedAction & { type: 'set_work_item_state' },
   record: RecordOutcome,
 ): Promise<void> {
+  const thrash = workItemThrash(deps.store, action.number);
+  if (thrash) {
+    const detail =
+      `Held: work item #${action.number} has been moved ${thrash.moves} times in the last hour; ` +
+      `refusing to move it to "${action.state}" (rule ${action.rule ?? 'unknown'}) until it settles.`;
+    record('skipped', detail);
+    if (!thrash.alreadyHeld) deps.errors.record({ source: 'cycle', message: detail });
+    return;
+  }
   try {
     const res = await deps.sink.setWorkItemState({ number: action.number, state: action.state });
     record('executed', `Set work item #${action.number} to "${action.state}".${res.ref ? ` ref=${res.ref}` : ''}`);
   } catch (err) {
     record('rejected', `Failed to set work item #${action.number} state: ${(err as Error).message}`);
   }
+}
+
+const THRASH_WINDOW_MS = 60 * 60 * 1000;
+const WORK_ITEM_THRASH_LIMIT = 6;
+
+function workItemThrash(store: Store, number: number): { moves: number; alreadyHeld: boolean } | null {
+  const { executed, lastHeld } = store.decisions.workItemStateMovesWithin(number, THRASH_WINDOW_MS);
+  return executed < WORK_ITEM_THRASH_LIMIT ? null : { moves: executed, alreadyHeld: lastHeld };
 }

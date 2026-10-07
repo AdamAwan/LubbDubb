@@ -1,29 +1,19 @@
-import { openPrForIssue } from '../issuePickup.js';
-import { resolveIssueConclusion } from '../../issueConclusion.js';
-import { issueOrigin } from '../../plans/planning.js';
+import type { resolveIssueConclusion } from '../../issueConclusion.js';
 import type { RawAction, StageContext } from './context.js';
+import { workItemRelease } from './workItemRelease.js';
 
 // → docs/spec/05-dispatcher.md (rule `work-item-back-to-pickup`)
 
 export function workItemBackToPickup(s: StageContext): void {
   if (!s.workItemStates) return;
   const { inReviewState, pickupStates } = s.workItemStates;
+  if (pickupStates.includes(inReviewState)) return;
   const returnState = pickupStates[0]!;
   for (const issue of s.ctx.world.issues) {
     if (s.retained.has(issue.number)) continue;
-    const state = issue.workItemState;
-    if (state === undefined || issue.state !== 'open') continue;
-    if (pickupStates.includes(state)) continue;
-    if (state !== inReviewState) continue;
-    if (openPrForIssue(issue, s.openPrs)) continue;
-    const plan = s.plansByOrigin.get(issueOrigin(issue.number)) ?? null;
-    const conclusion = resolveIssueConclusion(
-      s.conclusions.get(issueOrigin(issue.number)) ?? null,
-      plan,
-      plan ? (s.ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [],
-      s.shortfallsByOrigin.get(issueOrigin(issue.number)) ?? null,
-    );
-    if (conclusion.verdict !== 'more_work') continue;
+    if (issue.state !== 'open' || issue.workItemState !== inReviewState) continue;
+    const conclusion = workItemRelease(s, issue);
+    if (!conclusion) continue;
     s.raw.push({
       type: 'set_work_item_state',
       number: issue.number,

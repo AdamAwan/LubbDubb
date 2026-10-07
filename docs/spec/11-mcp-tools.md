@@ -470,7 +470,8 @@ everything is delivered and it is waiting on test. See
   instruction that also survived would arrive twice, in two voices, with no way to tell whether it had
   already been acted on. Which is why the appended block tells the agent to say what it did with each
   one: an instruction it decided against is one nobody hears about otherwise.
-- **It schedules nothing.** `more_work` returns the issue to pickup on a later cycle through rule `work-item-back-to-pickup`;
+- **It schedules nothing.** `more_work` returns the issue to pickup on a later cycle through rule `work-item-back-to-pickup`
+  (unless a PR for it is still open);
   it does not dispatch. The response says so, so an agent does not assume a follow-up is queued — and
   `done` does not close the ticket in the tracker, which the response also says.
 

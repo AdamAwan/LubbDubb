@@ -45,6 +45,23 @@ export class DecisionStore {
     return rows.map(rowToDecision);
   }
 
+  workItemStateMovesWithin(number: number, windowMs: number): { executed: number; lastHeld: boolean } {
+    const since = new Date(Date.parse(this.ctx.now()) - windowMs).toISOString();
+    const rows = this.ctx
+      .prep(
+        `SELECT outcome FROM decisions
+         WHERE created_at >= ?
+           AND json_extract(action, '$.type') = 'set_work_item_state'
+           AND json_extract(action, '$.number') = ?
+         ORDER BY created_at DESC`,
+      )
+      .all(since, number) as { outcome: string }[];
+    return {
+      executed: rows.filter((r) => r.outcome === 'executed').length,
+      lastHeld: rows[0]?.outcome === 'skipped',
+    };
+  }
+
   listDecisionsForGoal(goalRef: string, limit = 200): Decision[] {
     const rows = this.ctx
       .prep(

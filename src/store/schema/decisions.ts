@@ -18,4 +18,5 @@ CREATE TABLE IF NOT EXISTS decisions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
+CREATE INDEX IF NOT EXISTS idx_decisions_created ON decisions(created_at);
 `;
