@@ -79,7 +79,7 @@ shape silently orphans every row already written in the old one.
 `src/issueOrigins.ts` is the one place the vocabulary is stated. Each **family** is one entry —
 `issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `describe:<pr>`, `describe-check:<pr>`, `assess`, `retro`,
 `validate-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
-`validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall` — and the entry carries
+`validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall`, `review-stranded` — and the entry carries
 three things and nothing else: the **suffix**, how its **id** is shaped (a pattern, or `null` for a
 family whose suffix is the whole of it), and its **role**.
 
@@ -189,7 +189,7 @@ unconditional.
 | `pr-merge-ready`           | Merge-ready PR                           | —                    | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                                                                                                                                                                                                                                                                                  |
 | `work-item-in-progress`    | Advance to in-progress state             | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                                                                                                                                                                                                                                                                          |
 | `work-item-in-review`      | Back off to review state                 | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                                                                                                                                                                                                                                                                |
-| `work-item-back-to-pickup` | Return from review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan.                                                                                                                                                                                                                                                                      |
+| `work-item-back-to-pickup` | Stranded in review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan. Asks a human once; moves nothing.                                                                                                                                                                                                                                    |
 | `issue-appraisal`          | Issue goal needs checking                | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
 | `criteria-alignment`       | Your criteria against the ticket         | —                    | While a goal's intake sitting is open, the operator's criteria and the ticket's own are compared by one desk agent on `issue:<n>:criteria-alignment`. Holds nothing. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                 |
 | `issue-plan`               | Issue needs a plan                       | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
@@ -488,10 +488,12 @@ covers, which is a finer answer than a rule id.
 `admission` NULL, and which rule was throttled on one is not recoverable — history is not rewritten.
 
 `askedAlready(origin, openEscalations, recentDecisions)` is the shared "has this already been put to a
-human" predicate the three escalating rules (`pr-ci-blocked`, `plan-blocked`, `issue-shortfall`'s
+human" predicate the escalating rules (`pr-ci-blocked`, `plan-blocked`, `issue-shortfall`'s
 escalate arm) use. Both readings are needed: an **open inbox item** is the visible state but outlives
 the recent-decision window, and a **recent executed escalation** covers the case where the item has
-been answered while the world has not moved.
+been answered while the world has not moved. `work-item-back-to-pickup` uses it too, on
+`issue:<n>:review-stranded` — an escalation-only origin like `shortfall`'s, declared `unrecognised`
+because nothing is ever dispatched on it.
 
 ## Rank-then-slice
 
@@ -937,11 +939,21 @@ issues have none, so it is a no-op for them). It never fires on a closed item.
   none and was scheduled by rule `issue-pickup`: `active` did not then mean the plan was working the
   issue, and reading it as one parked the work item in the review state for the life of a plan with
   no parts to finish.
-- Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → move it
-  back to the **first** entry of `issuePickupStates`. There is no separate config for the return
-  state: the first pickup state is the operator's own "start here".
+- Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → **ask a
+  human**, once, on origin `issue:<n>:review-stranded`: move it back to the **first** entry of
+  `issuePickupStates`, or mark the issue done. Nothing is moved.
 
-Both directions are idempotent — after either move the item no longer matches.
+**The harness never moves a work item backwards.** Every state it writes is a step forward along the
+walk Ready → Doing → In Review → an environment's arrival state; the only backward move is a person's
+(the cockpit's state control, [16](16-http-api.md#post-apiissuesnumberstate)). This arm used to make the move itself, and that
+hid a problem: an item in review with nothing open for it and work outstanding means something has gone
+wrong — a PR closed unmerged, a replan, a shortfall — and quietly re-filing it to "Ready" meant nobody
+saw it. Now it is put to the operator, who moves it back or settles it (a `done` conclusion clears the
+condition, so the question does not come back). `askedAlready` keeps it to one ask while the
+escalation is open or recent. The cost is deliberate: until somebody moves it, nothing picks the
+item up, because the review state is outside the pickup gate.
+
+The forward arm is idempotent — after the move the item no longer matches.
 
 The pickup states these two read are the **effective** ones (`effectivePickupStates`, see
 [06](06-issue-pickup.md#the-effective-pickup-states)), so an item `work-item-in-progress` moved to
@@ -950,23 +962,25 @@ would be stranded there: outside the pickup list, so never picked up again and n
 
 The inverse arm's gate is the conclusion, **not** the absence of a PR, and that is load-bearing.
 `openPrForIssue` reads only the open list, so "this PR merged" and "there was never a PR" are one
-observation; releasing on absence therefore bounced a merged ticket back to "Ready" and had rule `issue-pickup`
-put a fresh agent on work already sitting on the default branch. `done` and `undeclared` both leave
+observation; asking on absence would raise a card for every merged ticket waiting on test (and, when
+this arm still moved items, bounced a merged ticket back to "Ready" and had rule `issue-pickup` put a
+fresh agent on work already sitting on the default branch). `done` and `undeclared` both leave
 the item where it is — see [the conclusion verdict](06-issue-pickup.md#concluding-an-issue) for why
 silence stops the harness rather than releasing it.
 
 Both arms read **one predicate**, `workItemRelease` (`src/dispatcher/rules/workItemRelease.ts`): no
 open PR, an explicit `more_work` conclusion, and that conclusion is **not** the in-flight roll-up of the
 item's own parts plan. Back-to-pickup acts only when it holds; in-review refuses to park when it holds.
-One answer per world snapshot, so the two cannot ping-pong.
+One answer per world snapshot, so the two cannot disagree.
 
 The plan carve-out is the bug this replaced. An in-flight plan resolves to `more_work` through the
 roll-up, and the arm once took that as a release — while `work-item-in-review` parks a decomposed item
 precisely _because_ it has a plan. Every decomposed item with no part PR open was moved to the pickup
 state by one rule and straight back by the other on the next pulse, forever (a tracker history of
 hundreds of New ⇄ Reviewing flips). Now a decomposed item stays in the review state for the life of its
-plan. An explicit verdict — a shortfall, an operator's or agent's `more_work` — still releases it, and
-in-review then leaves it in the pickup state rather than parking it again.
+plan. An explicit verdict — a shortfall, an operator's or agent's `more_work` — still releases it: the
+operator is asked to move it back, and once they have, in-review leaves it in the pickup state rather
+than parking it again.
 
 ### The thrash guard
 
@@ -976,7 +990,7 @@ Every `set_work_item_state` passes a backstop in the executor (`setWorkItemState
 and nothing is sent. The first hold in the window is also written to the error log, so a ping-pong
 between rules shows up red instead of as a tracker history. It counts only `executed` moves, so it
 lifts on its own once the window passes, and the error is written again on the first hold after any move that got through; the limit sits well above any legitimate walk
-(Ready → Doing → In Review → Ready → Doing is four). It is a backstop, not the fix: two rules that
+(Ready → Doing → In Review is two, and a person's move back adds no harness move). It is a backstop, not the fix: two rules that
 disagree are still a bug in the rules.
 
 ## `issue-appraisal` — the goal appraisal
@@ -1106,7 +1120,7 @@ that has a plan and no check set — the two gates `validation-plan` itself refu
 The other end of the loop the assessor opens. Plan → Work → is the goal achieved? → No → re-plan:
 the check was rule `issue-assess`, the replan was `POST /api/plans/:id/replan`, and **nothing joined them**. A
 negative verdict was written into `issue_conclusions`, whose only consumer is rule `work-item-back-to-pickup`
-— which emits a _tracker_ move, so it fires only where `issueInReviewState` is configured. On GitHub
+— which then emitted a _tracker_ move, so it fired only where `issueInReviewState` is configured. On GitHub
 it changed no dispatch at all; and on either provider, for an issue with a plan, rule `issue-pickup` is gated on
 the unplanned route and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
 harness scheduled nothing, anywhere.

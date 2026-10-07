@@ -687,8 +687,9 @@ whatever its plan derives or to `undeclared`.
 
 It writes the harness's own record and **does not touch the tracker**: concluding an issue here is
 what stops the re-pickup, while moving the work item to a done state stays a human act. Broadcasts
-`world:changed`, and runs a cycle only for `more_work`, so an operator's "there's more here" bounces
-the item back to pickup immediately rather than on the next heartbeat. 400 on a non-integer issue
+`world:changed`, and runs a cycle only for `more_work`, so an operator's "there's more here" on an
+item parked in the review state is asked about immediately rather than on the next heartbeat — the
+harness never moves the item back itself ([05](05-dispatcher.md#work-item-in-review--work-item-back-to-pickup--work-item-state)). 400 on a non-integer issue
 number or a verdict that is not one of the three. The cockpit writes `more_work` through
 [`/instruction`](#post-apiissuesnumberinstruction) rather than here — a bounce-back carrying none of
 what the operator wants is the weaker half of what they were doing — and this arm stays as the API's
@@ -754,7 +755,7 @@ null.
 
 Take one back — the escape hatch free text sent to an agent has to have, and the only way an
 instruction stops standing other than an agent concluding the goal. Withdrawing the **last** one clears
-the operator's `more_work` with it, so the item is not bounced back to pickup for words nobody is going
+the operator's `more_work` with it, so nobody is asked to move the item back to pickup for words nobody is going
 to read; an **agent's** own declaration is left exactly where it was found, because it is about the
 work rather than about the instruction.
 

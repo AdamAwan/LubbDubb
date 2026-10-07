@@ -157,9 +157,9 @@ const RULES = [
   {
     id: 'work-item-back-to-pickup',
     kind: 'rule',
-    name: 'Return from review state',
+    name: 'Stranded in review state',
     description:
-      'The inverse of the back-off: a still-open work item parked in the review state whose PR is no longer open is moved back to the first configured pickup state, so work left over after that PR merged can be picked up instead of the item staying parked forever.',
+      'A still-open work item parked in the review state with no open PR and an explicit verdict that work is outstanding is put to a human, once: move it back to the first pickup state, or mark the issue done. The harness never moves a work item backwards itself — an item in review with nothing open for it is a problem somebody should see, not one to hide by quietly re-filing it.',
     enabled: (c) => c.workItemStates,
   },
 

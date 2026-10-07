@@ -1169,6 +1169,52 @@ test('an arrival the harness merely discovered moves nothing', async () => {
   assert.notEqual(store.environments.listGoalArrivals()[0]?.announcedAt, null);
 });
 
+const STAGED: EnvironmentConfig[] = [
+  { name: 'staging', at: 'unused', arrival: { workItemState: 'In Test' } },
+  { name: 'prod', at: 'unused', arrival: { workItemState: 'Live' } },
+];
+
+test('an environment never moves a work item back behind one further down the line', async () => {
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, desk, moves } = announcingDesk(STAGED, () => now);
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'prod',
+    arrivedAt: '2026-08-20T11:59:00.000Z',
+  });
+  await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'staging',
+    arrivedAt: '2026-08-20T11:59:30.000Z',
+  });
+  await desk.run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+
+  assert.deepEqual(moves, [{ number: 12, state: 'Live' }], 'staging read late does not drag the item back from Live');
+  assert.ok(store.environments.listGoalArrivals().every((a) => a.announcedAt !== null));
+});
+
+test('an arrival never moves a work item that is already closed', async () => {
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalArrival({
+    goalRef: 'issue:12',
+    environment: 'hallway',
+    arrivedAt: '2026-08-20T11:59:30.000Z',
+  });
+
+  await desk.run({
+    issues: [{ number: 12, state: 'closed' }],
+    pullRequests: [],
+    closedPullRequests: [],
+  } as unknown as WorldSnapshot);
+
+  assert.deepEqual(moves, [], 'a closed item is past every environment, so an arrival would reopen it');
+  assert.notEqual(store.environments.listGoalArrivals()[0]?.announcedAt, null);
+});
+
 test('a work item the provider refuses to move is left for the next pulse', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk } = announcingDesk(HALLWAY, () => now);

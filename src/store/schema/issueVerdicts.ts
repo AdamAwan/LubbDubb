@@ -5,7 +5,7 @@ export const ISSUE_VERDICTS_SCHEMA = `
 -- touched it, including across a replan. One row per issue, overwritten per
 -- declaration — the standing verdict is a lookup, not a fold over history. A
 -- missing row is 'undeclared', which is a distinct answer from 'more_work' and
--- is why rule work-item-back-to-pickup stops bouncing a reviewed item back to pickup on silence.
+-- is why rule work-item-back-to-pickup asks nobody about a reviewed item on silence.
 CREATE TABLE IF NOT EXISTS issue_conclusions (
   origin_ref TEXT PRIMARY KEY,      -- "issue:12"
   verdict    TEXT NOT NULL,         -- done | more_work

@@ -657,8 +657,14 @@ moment the pull request merges and says nothing about whether the thing shipped.
 It is the arrival's business rather than a dispatcher rule's because the dispatcher does not read
 arrivals: the fact is written here, once, by the desk that recorded it, on the same guard and the same
 stamp as the comment (below). One environment's arrival is one state move — two environments naming
-the same state is idempotent from the tracker's side, and two naming different ones is a board that
-follows whichever arrives second, which is what "the item is here now" means.
+the same state is idempotent from the tracker's side, and two naming different ones move the item
+only **forward**: the operator's list is the order the work travels in, so an arrival on an
+environment declared _before_ one the goal has already reached writes no state (`announceableArrivals`
+reads the furthest band each goal holds). Reading staging after production would otherwise drag the
+item back from "Live" to "In Test". The same holds for an item the world already reports **closed**:
+it is past every environment, and moving it would reopen it. The comment is still posted in both
+cases; only the state move is withheld, and the arrival is stamped either way. The harness never
+moves a work item backwards ([05](05-dispatcher.md#work-item-in-review--work-item-back-to-pickup--work-item-state)).
 
 **A provider that cannot write states leaves the arrival unstamped**, the failure on the error log,
 and the move retried on the next pulse — the same shape as a failed comment. GitHub issues carry no

@@ -31,6 +31,7 @@ const ROLES: Record<string, 'work' | 'evidence' | 'deliberation' | 'unrecognised
   'issue:12:split:44': 'deliberation',
   'issue:12:summary': 'unrecognised',
   'issue:12:shortfall': 'unrecognised',
+  'issue:12:review-stranded': 'unrecognised',
 };
 
 const MINTED: Record<string, string> = {
@@ -42,6 +43,7 @@ const MINTED: Record<string, string> = {
   sequence: issueOriginRef('sequence', 12),
   summary: issueOriginRef('summary', 12),
   shortfall: issueOriginRef('shortfall', 12),
+  reviewStranded: issueOriginRef('reviewStranded', 12),
   assess: issueOriginRef('assess', 12),
   retro: issueOriginRef('retro', 12),
   validationPlan: issueOriginRef('validationPlan', 12),
@@ -66,6 +68,7 @@ test('each origin family mints exactly the string it has always minted', async (
     sequence: 'issue:12:sequence',
     summary: 'issue:12:summary',
     shortfall: 'issue:12:shortfall',
+    reviewStranded: 'issue:12:review-stranded',
     assess: 'issue:12:assess',
     retro: 'issue:12:retro',
     validationPlan: 'issue:12:validate-plan',
