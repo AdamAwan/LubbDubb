@@ -1,5 +1,6 @@
 import { openPrForIssue } from '../issuePickup.js';
 import type { RawAction, StageContext } from './context.js';
+import { workItemRelease } from './workItemRelease.js';
 
 // → docs/spec/05-dispatcher.md (rule `work-item-in-review`)
 
@@ -14,6 +15,7 @@ export function workItemInReview(s: StageContext): void {
     const pr = openPrForIssue(issue, s.openPrs);
     const decomposed = s.partsPlanFor(issue.number) !== null;
     if (!pr && !decomposed) continue;
+    if (workItemRelease(s, issue)) continue;
     s.raw.push({
       type: 'set_work_item_state',
       number: issue.number,

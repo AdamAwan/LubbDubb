@@ -346,3 +346,59 @@ test('in-progress: nothing is emitted at all when the key is unset', async () =>
   assert.deepEqual(transitions(system), [], 'the rule is off without an in-progress state');
   system.store.close();
 });
+
+test('a decomposed item parked in the review state stays there for the life of its plan', async () => {
+  const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
+  await trackedIssue(system, 26, 'Ready');
+  planWithOnePart(system.store, 26);
+
+  for (let i = 0; i < 5; i++) await system.harness.runCycle('manual');
+  assert.deepEqual(
+    transitions(system).map((m) => `${m.rule}:${m.state}`),
+    ['work-item-in-review:In Review'],
+    'an in-flight plan reads as more_work, which must not send a decomposed item back to pickup',
+  );
+  system.store.close();
+});
+
+test('a work item moved too often in an hour is held and logged once', async () => {
+  const { sink, states } = recordingSink();
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    gitObserver: new FakeGitObserver(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+    sink,
+  });
+  for (let i = 0; i < 8; i++) await system.executor.execute(`cyc${i}`, statePlan(9, i % 2 ? 'New' : 'Reviewing'));
+
+  assert.equal(states.length, 6, 'the sixth move is the last one sent');
+  const held = system.store.decisions
+    .listDecisions()
+    .filter((d) => d.action.type === 'set_work_item_state' && d.outcome === 'skipped');
+  assert.equal(held.length, 2);
+  assert.match(held[0]!.detail, /moved 6 times in the last hour/);
+  const logged = system.store.errors.listErrors().filter((e) => /work item #9/.test(e.message));
+  assert.equal(logged.length, 1, 'the hold is logged once, not every pulse');
+  system.store.close();
+});
+
+test('a shortfall on a decomposed item returns it to pickup once, and it stays there', async () => {
+  const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
+  await trackedIssue(system, 27, 'In Review');
+  planWithOnePart(system.store, 27);
+  system.store.verdicts.recordShortfall({
+    originRef: 'issue:27',
+    cause: 'goal',
+    summary: 'the metric the ticket asks for is missing',
+    by: 'assessor',
+  });
+
+  for (let i = 0; i < 4; i++) await system.harness.runCycle('manual');
+  assert.deepEqual(
+    transitions(system).map((m) => `${m.rule}:${m.state}`),
+    ['work-item-back-to-pickup:Ready'],
+    'an explicit shortfall releases the item, and the review rule does not park it again',
+  );
+  system.store.close();
+});

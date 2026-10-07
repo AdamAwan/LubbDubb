@@ -189,7 +189,7 @@ unconditional.
 | `pr-merge-ready`           | Merge-ready PR                           | —                    | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                                                                                                                                                                                                                                                                                  |
 | `work-item-in-progress`    | Advance to in-progress state             | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                                                                                                                                                                                                                                                                          |
 | `work-item-in-review`      | Back off to review state                 | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                                                                                                                                                                                                                                                                |
-| `work-item-back-to-pickup` | Return from review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                                                                                                                                                                                                                                                                        |
+| `work-item-back-to-pickup` | Return from review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan.                                                                                                                                                                                                                                                                      |
 | `issue-appraisal`          | Issue goal needs checking                | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
 | `criteria-alignment`       | Your criteria against the ticket         | —                    | While a goal's intake sitting is open, the operator's criteria and the ticket's own are compared by one desk agent on `issue:<n>:criteria-alignment`. Holds nothing. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                 |
 | `issue-plan`               | Issue needs a plan                       | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
@@ -955,10 +955,29 @@ put a fresh agent on work already sitting on the default branch. `done` and `und
 the item where it is — see [the conclusion verdict](06-issue-pickup.md#concluding-an-issue) for why
 silence stops the harness rather than releasing it.
 
-A decomposed item needs no special case here: an in-flight plan resolves to `more_work` through the
-roll-up and a `complete` one to `done`, which is exactly what the old explicit `decomposed` check
-gave it — the item stays in the review state for the whole life of its plan rather than bouncing back
-to "Ready" in every gap between parts.
+Both arms read **one predicate**, `workItemRelease` (`src/dispatcher/rules/workItemRelease.ts`): no
+open PR, an explicit `more_work` conclusion, and that conclusion is **not** the in-flight roll-up of the
+item's own parts plan. Back-to-pickup acts only when it holds; in-review refuses to park when it holds.
+One answer per world snapshot, so the two cannot ping-pong.
+
+The plan carve-out is the bug this replaced. An in-flight plan resolves to `more_work` through the
+roll-up, and the arm once took that as a release — while `work-item-in-review` parks a decomposed item
+precisely _because_ it has a plan. Every decomposed item with no part PR open was moved to the pickup
+state by one rule and straight back by the other on the next pulse, forever (a tracker history of
+hundreds of New ⇄ Reviewing flips). Now a decomposed item stays in the review state for the life of its
+plan. An explicit verdict — a shortfall, an operator's or agent's `more_work` — still releases it, and
+in-review then leaves it in the pickup state rather than parking it again.
+
+### The thrash guard
+
+Every `set_work_item_state` passes a backstop in the executor (`setWorkItemState`,
+`src/executor/providerActs.ts`) whatever rule emitted it: an item already moved
+`WORK_ITEM_THRASH_LIMIT` (6) times in the last hour is **held** — the decision is recorded `skipped`
+and nothing is sent. The first hold in the window is also written to the error log, so a ping-pong
+between rules shows up red instead of as a tracker history. It counts only `executed` moves, so it
+lifts on its own once the window passes, and the error is written again on the first hold after any move that got through; the limit sits well above any legitimate walk
+(Ready → Doing → In Review → Ready → Doing is four). It is a backstop, not the fix: two rules that
+disagree are still a bug in the rules.
 
 ## `issue-appraisal` — the goal appraisal
 
