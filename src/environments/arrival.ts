@@ -53,7 +53,7 @@ export function announceableArrivals(input: {
   const startedAsking = earliestReadings(input.readings);
   const landedAt = latestLandings(input.landings);
   const speaker = speakers(input.arrivals, bands);
-  const overtaken = overtakenArrivals(input.arrivals, input.environments, bands);
+  const overtaken = overtakenBy(input.arrivals, input.environments, bands);
   const out: Announcement[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
@@ -68,8 +68,7 @@ export function announceableArrivals(input: {
     const whole = band === undefined || band.environments.every((n) => arrivedAt.get(arrival.goalRef)?.has(n) === true);
     const speaks = band?.declared !== true || speaker.get(`${arrival.goalRef} ${band.name}`) === arrival.environment;
     const watched = fresh && whole && speaks && (established || justLanded);
-    const behind = overtaken.has(`${arrival.goalRef} ${arrival.environment}`);
-    out.push(announcement(arrival, watched, behind, byName.get(arrival.environment), band));
+    out.push(announcement(arrival, watched, overtaken(arrival), byName.get(arrival.environment), band));
   }
   return out;
 }
@@ -93,20 +92,16 @@ function environmentsByGoal(arrivals: readonly GoalArrival[]): Map<string, Set<s
 
 /* An arrival on a band declared before one the goal already holds: the list is the order the work
    travels in, so its state would move the item backwards. */
-function overtakenArrivals(
+function overtakenBy(
   arrivals: readonly GoalArrival[],
   environments: readonly EnvironmentConfig[],
   bands: Map<string, EnvironmentGroup>,
-): Set<string> {
+): (arrival: GoalArrival) => boolean {
   const position = new Map(environmentGroups(environments).map((b, i) => [b.name, i]));
   const at = (environment: string): number => position.get(bands.get(environment)?.name ?? '') ?? -1;
   const furthest = new Map<string, number>();
   for (const a of arrivals) furthest.set(a.goalRef, Math.max(furthest.get(a.goalRef) ?? -1, at(a.environment)));
-  return new Set(
-    arrivals
-      .filter((a) => at(a.environment) < (furthest.get(a.goalRef) ?? -1))
-      .map((a) => `${a.goalRef} ${a.environment}`),
-  );
+  return (a) => at(a.environment) < furthest.get(a.goalRef)!;
 }
 
 function earliestReadings(readings: readonly { environment: string; observedAt: string }[]): Map<string, number> {
