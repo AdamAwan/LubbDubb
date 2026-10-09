@@ -4,22 +4,28 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path';
 // → docs/spec/10-agent-runtimes.md
 
 export function resolveExecutable(command: string, env: NodeJS.ProcessEnv = process.env): string {
-  if (isAbsolute(command) || command.includes('/') || command.includes('\\')) {
-    for (const candidate of withExecExtensions(command, env)) {
-      if (isExecutableFile(candidate)) return unwrapShim(candidate);
-    }
-    throw new Error(`Agent command not found or not executable: ${command}`);
-  }
-  for (const dir of (envValue(env, 'PATH') ?? '').split(delimiter)) {
-    if (!dir) continue;
-    for (const candidate of withExecExtensions(join(dir, command), env)) {
-      if (isExecutableFile(candidate)) return unwrapShim(candidate);
-    }
-  }
+  const explicit = isAbsolute(command) || command.includes('/') || command.includes('\\');
+  const found = findCandidate(command, explicit, env);
+  if (found) return unwrapShim(found);
+  if (explicit) throw new Error(`Agent command not found or not executable: ${command}`);
   throw new Error(
     `Agent command '${command}' was not found on PATH. ` +
       `Install it, or set "claudeCommand" in the config to its absolute path.`,
   );
+}
+
+function findCandidate(command: string, explicit: boolean, env: NodeJS.ProcessEnv): string | undefined {
+  const bases = explicit
+    ? [command]
+    : (envValue(env, 'PATH') ?? '')
+        .split(delimiter)
+        .filter(Boolean)
+        .map((dir) => join(dir, command));
+  for (const base of bases) {
+    const hit = withExecExtensions(base, env).find(isExecutableFile);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 function withExecExtensions(base: string, env: NodeJS.ProcessEnv): string[] {

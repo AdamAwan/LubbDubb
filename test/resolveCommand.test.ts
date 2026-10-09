@@ -47,7 +47,7 @@ test('a non-executable file on PATH is skipped', posixOnly, () => {
   assert.throws(() => resolveExecutable('plain', { PATH: dir }), /was not found on PATH/);
 });
 
-test('resolves a bare command via PATHEXT on Windows', { skip: process.platform !== 'win32' }, () => {
+test('resolves a bare command via PATHEXT on Windows', windowsOnly, () => {
   const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
   const bin = join(dir, 'my-agent.exe');
   writeFileSync(bin, 'MZ');
@@ -55,7 +55,7 @@ test('resolves a bare command via PATHEXT on Windows', { skip: process.platform 
   assert.equal(got.toLowerCase(), bin.toLowerCase());
 });
 
-test('resolves against a Windows-cased `Path` entry', { skip: process.platform !== 'win32' }, () => {
+test('resolves against a Windows-cased `Path` entry', windowsOnly, () => {
   const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
   const bin = join(dir, 'my-agent.exe');
   writeFileSync(bin, 'MZ');
@@ -63,7 +63,7 @@ test('resolves against a Windows-cased `Path` entry', { skip: process.platform !
   assert.equal(got.toLowerCase(), bin.toLowerCase());
 });
 
-test('reads a Windows-cased `Pathext` for the extension list', { skip: process.platform !== 'win32' }, () => {
+test('reads a Windows-cased `Pathext` for the extension list', windowsOnly, () => {
   const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
   const bin = join(dir, 'my-agent.zzz');
   writeFileSync(bin, 'MZ');
@@ -102,7 +102,7 @@ test('a cmd that does not launch an existing exe is returned as found', windowsO
   assert.equal(resolveExecutable('my-agent', { PATH: dir, PATHEXT: '.EXE;.CMD' }).toLowerCase(), shim.toLowerCase());
 });
 
-test('ignores a lower-cased `path` on POSIX', { skip: process.platform === 'win32' }, () => {
+test('ignores a lower-cased `path` on POSIX', posixOnly, () => {
   const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
   makeExecutable(dir, 'my-agent');
   assert.throws(() => resolveExecutable('my-agent', { path: dir }), /was not found on PATH/);

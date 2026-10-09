@@ -220,3 +220,15 @@ test('a launch error from the child is a failure carrying the reason, not an unh
   assert.deepEqual(exits, [1]);
   assert.match(out.join(''), /Failed to launch claude: spawn claude ENOENT/);
 });
+
+test('an error from a child that has already exited announces nothing further', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  const exits: number[] = [];
+  s.on('exit', (code: number) => exits.push(code));
+  s.start();
+  child.emit('exit', 0);
+  child.emit('error', new Error('kill EPERM'));
+  assert.equal(s.status, 'done');
+  assert.deepEqual(exits, [0]);
+});

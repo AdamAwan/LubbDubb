@@ -211,12 +211,13 @@ resolving up front exists to prevent.
 `.bat` without a shell, so the npm install's `claude.cmd` is no more launchable by the stream
 runtime than its sh sibling. When a resolved `.cmd`/`.bat` names a `"%dp0%\….exe"` that exists, that
 exe is the answer, which makes a default `claudeCommand` of `claude` work on an npm install. A batch
-file naming no exe is returned as found: `node-pty` can launch one, and the stream runtime's failure
-on it is caught below.
+file naming no exe is returned as found: `node-pty` can launch one, and on the stream runtime `spawn`
+throws `EINVAL` synchronously, which `AgentManager`'s start-failure path already reports.
 
 **A child that fails after `spawn` returns fails its agent, never the server.** `StreamJsonSession`
 listens for the child's `error` event and turns it into the ordinary failure path: the reason goes on
-the transcript as output, then an exit with code 1. Unlistened, that event is thrown by
+the transcript as output, then an exit with code 1. An `error` arriving once the session has already
+ended — a failed signal on a child that exited — is ignored, so it cannot announce a second exit. Unlistened, that event is thrown by
 `EventEmitter`, and one agent's bad launch took down the whole harness with every other agent in it.
 
 **The env it reads is a spread copy, so both variables are looked up case-insensitively on Windows.**

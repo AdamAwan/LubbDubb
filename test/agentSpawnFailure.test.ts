@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { Store } from '../src/store/store.js';
 import { AgentManager } from '../src/agents/agentManager.js';
-import type { AgentSession, AgentSessionStatus } from '../src/agents/session.js';
+import type { AgentSession, AgentSessionStatus, SessionFactory } from '../src/agents/session.js';
 import { StreamJsonSession, type StreamChild } from '../src/agents/streamJsonSession.js';
 
 class ThrowingSession extends EventEmitter implements AgentSession {
@@ -28,12 +28,17 @@ function tokenLedger() {
   };
 }
 
-function manager(store: Store, mcp = tokenLedger(), resumable = false): AgentManager {
+function manager(
+  store: Store,
+  mcp = tokenLedger(),
+  resumable = false,
+  createSession: SessionFactory = () => new ThrowingSession(),
+): AgentManager {
   return new AgentManager(store, {
     command: 'claude',
     buildArgs: () => [],
     whitelistedApprovals: [],
-    createSession: () => new ThrowingSession(),
+    createSession,
     resumable,
     mcp,
   });
@@ -111,13 +116,12 @@ class UnlaunchableChild extends EventEmitter implements StreamChild {
 
 test('a child that fails to launch after spawn returns fails the agent instead of crashing the server', async () => {
   const store = new Store(':memory:');
-  const agents = new AgentManager(store, {
-    command: 'claude',
-    buildArgs: () => [],
-    whitelistedApprovals: [],
-    createSession: (spec) => new StreamJsonSession(spec, () => new UnlaunchableChild()),
-    mcp: tokenLedger(),
-  });
+  const agents = manager(
+    store,
+    tokenLedger(),
+    false,
+    (spec) => new StreamJsonSession(spec, () => new UnlaunchableChild()),
+  );
   const task = store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: null });
 
   const agent = agents.spawn(task, '/tmp');

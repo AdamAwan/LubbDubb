@@ -198,6 +198,7 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   }
 
   private onSpawnError(err: Error): void {
+    if (!['starting', 'running', 'waiting'].includes(this._status)) return;
     this.emit('output', `Failed to launch ${this.spec.command}: ${err.message}\n`);
     this.onExit(1);
   }
