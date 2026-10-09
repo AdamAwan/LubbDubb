@@ -40,7 +40,7 @@ function withExecExtensions(base: string, env: NodeJS.ProcessEnv): string[] {
 
 function unwrapShim(candidate: string): string {
   if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(candidate)) return candidate;
-  const target = /"%dp0%\\([^"%]+\.exe)"/i.exec(readFileSync(candidate, 'utf8'))?.[1];
+  const target = /"%dp0%\\([^"%]+\.exe)"[ \t]+%\*/i.exec(readFileSync(candidate, 'utf8'))?.[1];
   if (!target) return candidate;
   const exe = join(dirname(candidate), target);
   return isExecutableFile(exe) ? exe : candidate;

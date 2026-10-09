@@ -102,6 +102,18 @@ test('a cmd that does not launch an existing exe is returned as found', windowsO
   assert.equal(resolveExecutable('my-agent', { PATH: dir, PATHEXT: '.EXE;.CMD' }).toLowerCase(), shim.toLowerCase());
 });
 
+test('a node-script shim is not followed to the node.exe beside it', windowsOnly, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
+  const shim = join(dir, 'my-agent.cmd');
+  writeFileSync(
+    shim,
+    '@ECHO off\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n)\r\n' +
+      '"%_prog%"  "%dp0%\\node_modules\\pkg\\cli.js" %*\r\n',
+  );
+  writeFileSync(join(dir, 'node.exe'), 'MZ');
+  assert.equal(resolveExecutable('my-agent', { PATH: dir, PATHEXT: '.EXE;.CMD' }).toLowerCase(), shim.toLowerCase());
+});
+
 test('ignores a lower-cased `path` on POSIX', posixOnly, () => {
   const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
   makeExecutable(dir, 'my-agent');

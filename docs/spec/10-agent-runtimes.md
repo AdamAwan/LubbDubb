@@ -209,8 +209,9 @@ resolving up front exists to prevent.
 
 **An npm `.cmd` shim is followed to the `.exe` it launches.** Node refuses to spawn a `.cmd` or
 `.bat` without a shell, so the npm install's `claude.cmd` is no more launchable by the stream
-runtime than its sh sibling. When a resolved `.cmd`/`.bat` names a `"%dp0%\….exe"` that exists, that
-exe is the answer, which makes a default `claudeCommand` of `claude` work on an npm install. A batch
+runtime than its sh sibling. When a resolved `.cmd`/`.bat` launches a `"%dp0%\….exe" %*` that exists,
+that exe is the answer — only the exe it hands its arguments to, never the `IF EXIST "%dp0%\node.exe"`
+probe a node-script shim carries, which would answer `node.exe` wherever globals sit beside node. This makes a default `claudeCommand` of `claude` work on an npm install. A batch
 file naming no exe is returned as found: `node-pty` can launch one, and on the stream runtime `spawn`
 throws `EINVAL` synchronously, which `AgentManager`'s start-failure path already reports.
 
