@@ -206,3 +206,17 @@ test('a second usage limit after a resume parks the session again', () => {
   assert.equal(limited, 2);
   assert.equal(s.status, 'waiting');
 });
+
+test('a launch error from the child is a failure carrying the reason, not an unhandled throw', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  const out: string[] = [];
+  const exits: number[] = [];
+  s.on('output', (d: string) => out.push(d));
+  s.on('exit', (code: number) => exits.push(code));
+  s.start();
+  child.emit('error', new Error('spawn claude ENOENT'));
+  assert.equal(s.status, 'failed');
+  assert.deepEqual(exits, [1]);
+  assert.match(out.join(''), /Failed to launch claude: spawn claude ENOENT/);
+});

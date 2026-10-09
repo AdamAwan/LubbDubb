@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { Store } from '../src/store/store.js';
 import { AgentManager } from '../src/agents/agentManager.js';
 import type { AgentSession, AgentSessionStatus } from '../src/agents/session.js';
+import { StreamJsonSession, type StreamChild } from '../src/agents/streamJsonSession.js';
 
 class ThrowingSession extends EventEmitter implements AgentSession {
   status: AgentSessionStatus = 'starting';
@@ -91,4 +92,39 @@ test('a resume that throws puts the agent back as it was and releases its token'
   assert.equal(store.agents.getAgent(agent.id)?.endedAt, '2026-01-01T00:00:00.000Z');
   assert.equal(store.tasks.getTask(task.id)?.status, 'failed');
   assert.equal(mcp.live.size, 0);
+});
+
+class UnlaunchableChild extends EventEmitter implements StreamChild {
+  pid = undefined;
+  stdout = new EventEmitter() as unknown as NodeJS.ReadableStream;
+  stderr = null;
+  stdin = { write: () => true, end: () => {} } as unknown as NodeJS.WritableStream;
+  constructor() {
+    super();
+    setImmediate(() => this.emit('error', new Error('spawn /npm/claude ENOENT')));
+  }
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  kill(): void {}
+}
+
+test('a child that fails to launch after spawn returns fails the agent instead of crashing the server', async () => {
+  const store = new Store(':memory:');
+  const agents = new AgentManager(store, {
+    command: 'claude',
+    buildArgs: () => [],
+    whitelistedApprovals: [],
+    createSession: (spec) => new StreamJsonSession(spec, () => new UnlaunchableChild()),
+    mcp: tokenLedger(),
+  });
+  const task = store.tasks.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: null });
+
+  const agent = agents.spawn(task, '/tmp');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(store.agents.getAgent(agent.id)?.status, 'failed');
+  assert.equal(store.tasks.getTask(task.id)?.status, 'failed');
+  assert.equal(agents.isLive(agent.id), false);
+  assert.match(store.transcripts.getTranscript(agent.id), /Failed to launch claude: spawn \/npm\/claude ENOENT/);
 });

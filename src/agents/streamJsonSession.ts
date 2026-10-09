@@ -78,6 +78,7 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     this.setStatus('running');
     this.child.stdout.on('data', (d: Buffer | string) => this.onStdout(d.toString()));
     this.child.on('exit', (code) => this.onExit(code));
+    if (this.child instanceof EventEmitter) this.child.on('error', (err: Error) => this.onSpawnError(err));
   }
 
   send(text: string): void {
@@ -194,6 +195,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     this.limitParked = true;
     this.setStatus('waiting');
     this.emit('limited', this.limit);
+  }
+
+  private onSpawnError(err: Error): void {
+    this.emit('output', `Failed to launch ${this.spec.command}: ${err.message}\n`);
+    this.onExit(1);
   }
 
   private onExit(code: number | null): void {
