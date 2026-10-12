@@ -1740,17 +1740,21 @@ routes; the MCP tab and the band ([17](17-cockpit.md#the-plugin)) are their call
 only when asked; the board answers without being asked. It draws in two places:
 
 - **A status line above the prompt**, in a box of its own:
-  `● LubbDubb 2/4 agents · 3 asks (1 blocking) · 1 PR needs attention  Work through asks  Show panel
-Hide`. It stays short enough to sit on one line: the head ask, the feature count and the PRs ready to
-  merge are left to the panel. The dot is yellow and `fleet paused`
-  leads while the fleet is paused; a count with nothing in it is left out, except the agents and the
-  asks. Work through asks is drawn only while there is an ask. Show panel reads Hide panel while the
+  `● LubbDubb 🤖 2/4 🙋 3 asks · 1 blocking 🔀 1 PR` with Work through, Panel and ✕ pushed to the
+  right. It stays short enough to sit on one line: the head ask, the feature count and the PRs ready
+  to merge are left to the panel, an icon stands in for each count's noun (the colour already says a
+  PR wants attention), and every segment truncates rather than wraps, because a squeezed segment
+  that wraps breaks each one over two rows. While the fleet is paused a yellow `⏸` replaces the dot
+  and says it on its own. `/board` keeps the full words (`fleet paused · 2/4 agents · 3 asks (1
+blocking) · 1 PR needs attention`): `bandParts` carries both spellings. A count with nothing in it
+  is left out, except the agents and the asks. Work through is drawn only while there is an ask.
+  Panel reads Hide panel while the
   panel is open and closes it; the band knows which from a `$.state` flag set on its own open and
   cleared by its `ui.close` hook, so a panel the operator closes with the pane's own mark flips the
   button back too. `session.start` seeds the flag from `$.ui.panes()`, because a reload keeps a pane
   the engine still holds open.
 - **A panel** (`$.ui.open`, docked beside the transcript where the surface docks, inline above the
-  prompt where it does not), **closed by default** — opened from the band's Show panel and by
+  prompt where it does not), **closed by default** — opened from the band's Panel and by
   `/panel`, never at session start: unasked, it took a column of every session whether the operator
   wanted the fleet in view or not. It
   carries five sections: **Needs you** (the asks, the blocking ones marked), **Features** (each
@@ -1799,7 +1803,7 @@ asks in order and points at `/lubbdubb:next`.
   drawn as text instead — one bad URL never blanks the panel.
 - **Every press drafts a skill; nothing is sent for the operator.** An ask fills the prompt box
   with `/lubbdubb:next <id>`, a feature with `/lubbdubb:feature <n>`, a PR's Review With Me with
-  `/pr-assistant:pr walk <n>` (the PR assistant's skill, which the desk installs beside the board), and Work through asks, on the band and on the panel, with `/lubbdubb:next`;
+  `/pr-assistant:pr walk <n>` (the PR assistant's skill, which the desk installs beside the board), and Work through (Work through asks on the panel) with `/lubbdubb:next`;
   the operator presses Enter. A plain sentence would
   leave whether a skill loads to description matching, and the skill is where the rules for the
   conversation live. A `$.prompt.submit` or `$.command.run` from a press waits until the session is idle
@@ -1821,7 +1825,7 @@ asks in order and points at `/lubbdubb:next`.
   every plugin beneath it — another plugin's PR watcher, say — for as long as the board has something
   to say, with nothing red. So when the board draws, it awaits `next(e)` and stacks that result under
   its own boxed row, outside the box: unboxed, two plugins' lines ran together into one block nobody
-  could tell apart. Hide hides the board's row only; `/board` or `/panel` brings it back.
+  could tell apart. The band's ✕ hides the board's row only; `/board` or `/panel` brings it back.
 - **The panel heads with the robot logo, and it is the panel's link lamp.** In the terminal it is a
   16×8 `Raster` of half-block cells (`plugin/hooks/logo.ts`), its heartbeat repainted by `$.ui.blit`
   every 100ms from a `$.clock` timer rather than by redrawing the pane; on desktop, VS Code and mobile

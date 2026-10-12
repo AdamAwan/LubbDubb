@@ -214,31 +214,36 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Box key="band" borderStyle="round" borderDimColor paddingX={1} gap={1}>
-          <Text color={now.paused ? 'yellow' : 'green'}>{now.paused ? '■' : '●'}</Text>
-          <Text bold>LubbDubb</Text>
-          {bandParts(now).map((part, i) => {
-            const color = part.tone === undefined ? undefined : TONE[part.tone].color
-            return (
-              <Text key={`part-${i}`} color={color} dimColor={color === undefined}>
-                {`${i === 0 ? '' : '· '}${part.text}`}
-              </Text>
-            )
-          })}
+          <Text color={now.paused ? 'yellow' : 'green'}>{now.paused ? '⏸' : '●'}</Text>
+          <Text bold wrap="truncate">
+            LubbDubb
+          </Text>
+          {bandParts(now)
+            .filter(part => part.short !== '')
+            .map((part, i) => {
+              const color = part.tone === undefined ? undefined : TONE[part.tone].color
+              return (
+                <Text key={`part-${i}`} color={color} dimColor={color === undefined} wrap="truncate">
+                  {part.short}
+                </Text>
+              )
+            })}
+          <Box key="spacer" flexGrow={1} />
           {now.notices.length > 0 && (
-            <Button key="next" plain label="Work through asks" onPress={draft($, '/lubbdubb:next')} />
+            <Button key="next" plain label="Work through" onPress={draft($, '/lubbdubb:next')} />
           )}
           <Button
             key="toggle-panel"
             plain
             dimColor
-            label={paneOpen ? 'Hide panel' : 'Show panel'}
+            label={paneOpen ? 'Hide panel' : 'Panel'}
             onPress={() =>
               void act($, paneOpen ? 'LubbDubb panel hidden' : 'LubbDubb panel opened', () =>
                 paneOpen ? closePane($) : openPane($),
               )
             }
           />
-          <Button key="hide" plain dimColor label="Hide" onPress={() => update($, isHidden, () => true)} />
+          <Button key="hide" plain dimColor label="✕"onPress={() => update($, isHidden, () => true)} />
         </Box>
         {theirs}
       </Box>
