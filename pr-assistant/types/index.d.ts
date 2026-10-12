@@ -54,11 +54,15 @@ export type Note = {
 
 export type Hunk = { source: string; path: string | null }
 
+export type Term = { term: string; meaning: string }
+
 export type View = { stop: number; hunks: Hunk[] }
 
 export type Walk = {
   pr: { number: number; title: string; url: string | null }
   summary: string | null
+  background: string | null
+  glossary: Term[]
   stops: Stop[]
   current: number | null
   seen: number[]

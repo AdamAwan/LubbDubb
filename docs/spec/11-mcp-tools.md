@@ -1863,6 +1863,14 @@ own digest.
   repository's own `.claude/skills/pr-map`; it moved here because nothing in it needs the harness.
 - **The panel follows the walk**: the stops, which one is current, the diff hunk for it, and the notes
   raised. The walk runs in chat alone when the mod's tools are not in the session.
+- **A walk opens on the area, not the diff.** The first reply gives background on the part of the
+  system the PR is in, as it stands before the PR, and a glossary of the terms the walk will use.
+  Then come the summary and the stops. A stop names
+  things and explains a change to them, and a reader who does not know what those things are follows
+  neither. So the ground is laid once, up front, rather than in passing at whichever stop first leans
+  on it. `walk_start` takes both (`background`, and `glossary` as up to 12 `{term, meaning}`) and the
+  panel keeps them above the stops for the whole walk. Both are optional, and a glossary entry
+  missing either half is a `deny`. A walk saved before the fields existed draws without them.
 - **Each stop's part of the map is drawn in the chat**, under its `walk_goto` call. `walk_start` takes
   `map`, the path of the map's JSON, and each stop's `steps`, the map steps it covers; the mod reads the
   map once and keeps it in the walk. A `ToolResult` hook on `walk_goto` draws those steps' cards by

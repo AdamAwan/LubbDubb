@@ -89,6 +89,25 @@ test('a walk start lays out the stops and opens the panel', async ($, on) => {
   }
 })
 
+test('the panel opens on the background and the glossary, and a term without a meaning is refused', async ($, on) => {
+  quiet(on)
+
+  const bad = await $.tool.call({ ...START, glossary: [{ term: 'version' }] })
+  const out = await $.tool.call({
+    ...START,
+    background: 'An operator writes a PR description, and an agent checks it against the diff.',
+    glossary: [{ term: 'version', meaning: 'One saved edit of a description.' }],
+  })
+
+  expect(bad.deny).toContain('Glossary entry 1 needs a `term` and a `meaning`')
+  expect(out.deny).toBeUndefined()
+  const ui = await $.ui.mount({ plugin: 'pr-assistant', surface: 'desktop', component: 'Pane', requestId: 'pr-walk', props: PANE })
+  expect(await ui.find({ type: 'Text', text: 'Background' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /agent checks it against the diff/ })).toBeDefined()
+  expect(await ui.find({ key: 'term-1', text: /version.*One saved edit/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('going to a stop shows its hunk, and the stop buttons ask for it in the chat', async ($, on) => {
   const seen = quiet(on)
   await $.tool.call(START)
