@@ -100,6 +100,7 @@ export interface CockpitActions {
     insightsScope?: InsightsScope;
     insightsWindow?: InsightsWindow;
     poolProject?: string | null;
+    poolStep?: string | null;
   }): void;
   selectGoal(ref: string | null): void;
   /**

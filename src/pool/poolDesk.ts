@@ -3,7 +3,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { WorldScope } from '../integrations/registry.js';
 import type { Store } from '../store/store.js';
 import type { PoolClockDocument, PoolClockKind } from '../types.js';
-import { buildDigestDocument } from './digestArm.js';
+import { buildDigestDocument, POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 import { parsePoolDocument, poolContentHash, poolStaleBefore } from './document.js';
 import type { PoolTransport } from './transport.js';
 
@@ -14,6 +14,8 @@ export class PoolDesk {
 
   private firstPass = true;
 
+  private build: string | null = null;
+
   constructor(
     private readonly deps: {
       store: Store;
@@ -21,6 +23,7 @@ export class PoolDesk {
       fleetId: string;
       project: string;
       harnessVersion: string;
+      harnessBuild?: () => Promise<string>;
       now: () => string;
       digestIntervalMs: number;
       worldScope: WorldScope;
@@ -32,6 +35,7 @@ export class PoolDesk {
   async run(): Promise<void> {
     const boot = this.firstPass;
     this.firstPass = false;
+    await this.recordHarnessDay();
     if (this.deps.transport.canRead) await this.poll();
     await this.publishKind('digest', boot);
   }
@@ -97,6 +101,22 @@ export class PoolDesk {
       });
     } catch (error) {
       this.record(`Could not land ${document.fleetId}'s ${document.kind} document`, error);
+    }
+  }
+
+  private async recordHarnessDay(): Promise<void> {
+    if (this.build === null) {
+      try {
+        this.build = (await this.deps.harnessBuild?.()) ?? this.deps.harnessVersion;
+      } catch (error) {
+        this.record('Could not read which commit this harness is running', error);
+        this.build = this.deps.harnessVersion;
+      }
+    }
+    try {
+      this.deps.store.pool.recordHarnessDay(utcDay(this.deps.now()), this.build, POOL_RETENTION_DAYS);
+    } catch (error) {
+      this.record('Could not record which harness build ran today', error);
     }
   }
 

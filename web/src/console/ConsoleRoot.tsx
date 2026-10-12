@@ -163,6 +163,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             scope={view.insightsScope}
             window={view.insightsWindow}
             poolProject={view.poolProject}
+            poolStep={view.poolStep}
             actions={actions}
           />
         </>

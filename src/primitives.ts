@@ -11,6 +11,15 @@ export function median(samples: readonly number[]): number | null {
   return sorted[Math.floor(sorted.length / 2)] ?? null;
 }
 
+/* Linear interpolation between the two nearest ranks of an already-sorted list. */
+export function quantile(sorted: readonly number[], q: number): number | null {
+  if (sorted.length === 0) return null;
+  const at = (sorted.length - 1) * q;
+  const lo = Math.floor(at);
+  const hi = Math.ceil(at);
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (at - lo);
+}
+
 export function prNumberOf(ref: string): number | null {
   const found = /^pr:(\d+)$/.exec(ref)?.[1];
   return found === undefined ? null : Number(found);

@@ -2252,6 +2252,8 @@ export interface PoolDigestDocument extends PoolEnvelope {
   poolableThroughput: string[];
   byFault: PoolDigestRow[];
   byChoice: PoolDigestRow[];
+  byRule: PoolDigestRow[];
+  byVersion: PoolDigestRow[];
 }
 
 export type PoolClockDocument = PoolDigestDocument;

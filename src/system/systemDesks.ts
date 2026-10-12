@@ -2,7 +2,7 @@ import { prRefStyle } from '../pr/prRef.js';
 import type { Config } from '../config/config.js';
 import { buildPoolTransport, worldScope } from '../integrations/registry.js';
 import { PoolDesk } from '../pool/poolDesk.js';
-import { harnessVersion } from '../pool/harnessVersion.js';
+import { harnessBuild, harnessVersion } from '../pool/harnessVersion.js';
 import { ticketFiler } from '../tickets/filing.js';
 import { ghCliUpstreamIssues } from '../tickets/upstream.js';
 import { fetchRemote } from '../git/gitCli.js';
@@ -321,6 +321,7 @@ function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: F
           fleetId,
           project: config.pool?.project ?? '',
           harnessVersion: harnessVersion(),
+          harnessBuild: () => harnessBuild(),
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
           worldScope: worldScope(config.integrations, { store, config, now, errors }),

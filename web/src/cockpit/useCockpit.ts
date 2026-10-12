@@ -262,6 +262,7 @@ export function useCockpit(): CockpitStatus {
       insightsScope: place.insightsScope,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,
+      poolStep: place.poolStep,
       sheetEnvironment: place.sheetEnvironment,
       selectedGoal: place.goal,
       selectedPr: place.pr,

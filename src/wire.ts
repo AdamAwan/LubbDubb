@@ -20,7 +20,7 @@ import type { FileOverlap } from './fileOverlap.js';
 import type { UnrecordedWork } from './graph/unrecorded.js';
 import type { PrAttention } from './pr/prAttention.js';
 import type { PoolStatus } from './pool/poolDesk.js';
-import type { PoolRollup } from './pool/aggregate.js';
+import type { PoolRollup, PoolTrends } from './pool/aggregate.js';
 import type { PrHealth } from './pr/prHealth.js';
 import type { PrReviewState } from './review/prReviewState.js';
 import type { ControlState } from './runtimeControl.js';
@@ -1125,7 +1125,7 @@ export type { CiCheck } from './types.js';
 export type { PrComment } from './types.js';
 export type { PoolFleetReading } from './types.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
-export type { PoolRollupRow } from './pool/aggregate.js';
+export type { PoolRollupRow, PoolTrends } from './pool/aggregate.js';
 export type { RunClearOut } from './runs/endRun.js';
 export type {
   AllowanceApportionment,
@@ -1241,6 +1241,7 @@ export interface PoolStatePayload {
 
 export interface PoolInsightsPayload {
   rollup: PoolRollup;
+  trends: PoolTrends;
   projects: string[];
   fleets: PoolFleetReading[];
 }

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { foldPoolDigest } from '../../pool/aggregate.js';
+import { foldPoolDigest, foldPoolTrends } from '../../pool/aggregate.js';
 import type { PoolInsightsPayload, PoolStatePayload } from '../../wire.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -29,8 +29,10 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/pool/insights',
     checked({ query: PoolInsightsQuery }, async ({ query }) => {
       const project = query.project ?? null;
+      const rows = store.pool.listDigestRows(project);
       return {
-        rollup: foldPoolDigest(store.pool.listDigestRows(project), { project, since: query.since ?? null }),
+        rollup: foldPoolDigest(rows, { project, since: query.since ?? null }),
+        trends: foldPoolTrends(rows),
         projects: [
           ...new Set(store.pool.listPoolFleets().flatMap((f) => (f.project === null ? [] : [f.project]))),
         ].sort(),

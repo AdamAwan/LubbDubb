@@ -106,6 +106,7 @@ export interface CockpitView {
   insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject: string | null;
+  poolStep: string | null;
   sheetEnvironment: string | null;
 }
 
@@ -159,6 +160,7 @@ interface ViewInputs {
   insightsScope?: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject?: string | null;
+  poolStep?: string | null;
   sheetEnvironment?: string | null;
   selectedGoal: string | null;
   selectedPr?: number | null;
@@ -286,6 +288,7 @@ function placeView(input: ViewInputs) {
     insightsScope: input.insightsScope ?? 'mine',
     insightsWindow: input.insightsWindow,
     poolProject: input.poolProject ?? null,
+    poolStep: input.poolStep ?? null,
     sheetEnvironment: input.sheetEnvironment ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),
     goalTab: input.goalTab ?? null,

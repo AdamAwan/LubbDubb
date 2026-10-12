@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS pool_digest_rows (
   fleet_id TEXT NOT NULL,
   project  TEXT NOT NULL,
   day      TEXT NOT NULL,            -- a UTC day, YYYY-MM-DD. Never local midnight.
-  section  TEXT NOT NULL,            -- phase | cause | check | unaccounted | unmeasured | usage | throughput | choice
+  section  TEXT NOT NULL,            -- phase | cause | check | unaccounted | unmeasured | usage | throughput | choice | rule | version
   key      TEXT NOT NULL,            -- the section's own key; empty for the two totals
   count    INTEGER NOT NULL,         -- runs, or accounts, or dispatches — the section says which
   cost_usd REAL,                     -- null where a window measured nothing; never 0.00 for it
@@ -51,6 +51,16 @@ CREATE TABLE IF NOT EXISTS pool_publications (
   published_at  TEXT,
   dirty         INTEGER NOT NULL,
   checked_at    TEXT                 -- when the backstop last re-derived and compared
+);
+
+-- Which harness version this fleet ran on each UTC day — this fleet's own record,
+-- not the mirror's, and the only place one exists: the envelope's harnessVersion
+-- is today's alone. Written by the pool desk, so a day the pool was off is a day
+-- with no row. → docs/spec/28-cross-fleet-pool.md#the-version-section
+CREATE TABLE IF NOT EXISTS pool_harness_days (
+  day      TEXT NOT NULL,            -- a UTC day, YYYY-MM-DD
+  version  TEXT NOT NULL,
+  PRIMARY KEY (day, version)
 );
 
 CREATE INDEX IF NOT EXISTS idx_pool_digest_project ON pool_digest_rows(project, day);

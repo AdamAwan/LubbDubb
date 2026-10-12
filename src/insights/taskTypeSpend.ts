@@ -36,14 +36,21 @@ interface TaskTypeInput {
   tasks: readonly TaskSummary[];
 }
 
+export function isDispatchRule(rule: string): rule is DispatchRuleId {
+  return Object.hasOwn(DISPATCH_RULES, rule);
+}
+
+export function ruleName(rule: string): string {
+  return isDispatchRule(rule) ? DISPATCH_RULES[rule].name : rule;
+}
+
 function copyOf(rule: string | null): { label: string; description: string | null } {
   if (rule === null) {
     return { label: 'No rule', description: 'Dispatched outside the pulse — an accepted proposal, or agent lifecycle' };
   }
-  const known = DISPATCH_RULES[rule as DispatchRuleId] as { name: string; description: string } | undefined;
-  return known === undefined
-    ? { label: rule, description: null }
-    : { label: known.name, description: known.description };
+  return isDispatchRule(rule)
+    ? { label: DISPATCH_RULES[rule].name, description: DISPATCH_RULES[rule].description }
+    : { label: rule, description: null };
 }
 
 export function rollUpTaskTypes(input: TaskTypeInput): TaskTypeSpend[] {

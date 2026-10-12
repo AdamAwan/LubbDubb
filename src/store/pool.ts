@@ -101,6 +101,21 @@ export class PoolStore {
     }));
   }
 
+  recordHarnessDay(day: string, version: string, retentionDays: number): void {
+    const keepFrom = new Date(Date.parse(`${day}T00:00:00Z`) - retentionDays * 86_400_000).toISOString().slice(0, 10);
+    const write = this.ctx.db.transaction(() => {
+      this.ctx.prep(`INSERT OR IGNORE INTO pool_harness_days (day, version) VALUES (?, ?)`).run(day, version);
+      this.ctx.prep(`DELETE FROM pool_harness_days WHERE day < ?`).run(keepFrom);
+    });
+    write();
+  }
+
+  listHarnessDaysSince(day: string): { day: string; version: string }[] {
+    return this.ctx
+      .prep(`SELECT day, version FROM pool_harness_days WHERE day >= ? ORDER BY day ASC, version ASC`)
+      .all(day) as { day: string; version: string }[];
+  }
+
   getPublication(kind: PoolClockKind): PoolPublication {
     const row = this.ctx.prep(`SELECT * FROM pool_publications WHERE kind=?`).get(kind) as PublicationRow | undefined;
     if (!row) return { kind, contentHash: null, publishedAt: null, dirty: false, checkedAt: null };
@@ -149,7 +164,8 @@ export class PoolStore {
   }
 }
 
-type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage' | 'throughput' | 'choice';
+type PoolDigestSection =
+  'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage' | 'throughput' | 'choice' | 'rule' | 'version';
 
 export interface PoolDigestMirrorRow {
   fleetId: string;
@@ -199,6 +215,8 @@ function digestSections(document: PoolDigestDocument): [PoolDigestSection, reado
     ['unmeasured', document.unmeasured],
     ['usage', document.byUsage],
     ['choice', document.byChoice],
+    ['rule', document.byRule],
+    ['version', document.byVersion],
     // Only the measures the publishing fleet declared its own reach the mirror: a
     // slice its provider did not filter to it is the repository's, seen by every
     // fleet watching that repository, and summed it would count watchers rather than

@@ -361,6 +361,8 @@ Every dimension is a closed vocabulary that already exists, and none of them is 
 | `byThroughput` | `ThroughputMeasure` (`src/insights/throughputInsights.ts`)             | times it happened (no cost)                                         |
 | `byFault`      | `ErrorLogEntry['source']`                                              | faults recorded (no cost)                                           |
 | `byChoice`     | `DecisionChoice` × `person`/`agent` (`src/insights/choiceInsights.ts`) | whose answer stood (no cost), [34](34-usage-metrics.md#who-decided) |
+| `byRule`       | `Task.rule`, a `DISPATCH_RULES` id (`src/dispatcher/rules.ts`)         | costUsd, runs — [the trend sections](#the-trend-sections)           |
+| `byVersion`    | the harness build that ran that day                                    | 1 per day per build — [the trend sections](#the-trend-sections)     |
 
 `byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
 every rule stated here. Both halves of its key are closed vocabularies the harness owns
@@ -595,6 +597,76 @@ readers answer empty for a field that is absent, so a fleet on the older build r
 newer document and sees a digest without throughput rather than one it must refuse. A
 version bump is for a change that would make an older reader _wrong_, and this one makes
 it only less informed.
+
+### The trend sections
+
+`byRule` and `byVersion` exist for one reading: **did a change to a step make it cheaper for
+everyone?** A phase is too coarse for that — review comments are a slice of `landing` — and a
+dispatch rule is the grain the fleet's own Economics tab already prices a step at
+([18](18-observability.md#by-task-type-and-by-check)). Both halves are vocabularies the harness owns,
+so like everything but `byCheck` they sum across projects.
+
+**`byRule` is `byPhase`'s fold keyed differently**, and is one function with it (`perRun` in
+`src/pool/digestArm.ts`): dollars on the UTC day they were spent, runs on the day they ended, unmeasured
+runs out of the count. Two folds would be two opinions about which day a run's money belongs to. A run
+no rule proposed, and a rule id this build does not know, are **left out** rather than published under
+a key nothing can label — so the section is not a partition of spend, and is never drawn as one. The
+phases still are.
+
+**`byVersion` is the only per-day build record there is.** The envelope's `harnessVersion` is
+_today's_, and a document is a whole replace, so yesterday's build is gone the moment the fleet
+upgrades. `PoolDesk.run` writes `(today, build)` to `pool_harness_days` on every pass, before it
+publishes, and drops rows past the ninety-day retention in the same write; the digest sends what is
+left. A day the pool was off is a day with no row, so a fleet that turns the pool on next month has no
+history before then — which reads as no release, never as a wrong one.
+
+**The build is the install's commit, not `package.json`'s version.** `harnessBuild`
+(`src/pool/harnessVersion.ts`) is `<version>+<HEAD, 12 characters>`, read once on the desk's first pass
+— the commit the process booted on, which is the code running. The package version never moves, and
+self-update moves fleets by commit ([21](21-self-update.md)), so keyed on the version alone every fleet
+reads as one release for ever and the tab never finds a change. A read that fails is recorded and falls
+back to the version. Every self-update is therefore a release, which is true: it is a change to the
+code the fleet runs.
+
+**A release is a version a fleet was seen moving to.** The fold (`foldPoolTrends`,
+`src/pool/aggregate.ts`) takes each fleet's first day on each version and drops the earliest one: the
+version a fleet's record starts on is where the record starts, not a change. A release is dated by
+the first fleet that adopted it **and ran the step** — a fleet that never ran review comments around its
+upgrade says nothing about review comments, and is not listed. A release whose before-window has slid
+out of the ninety days loses its marker with it: its comparison was already unreadable.
+
+**Each fleet is read around its own adoption day**, not the release's first one: a fleet that upgraded
+a week late spent that week on the old build, and reading it against the release's day would credit the
+release with the old build's cost. The fourteen whole days before it against the fourteen after it, per
+run, pooled. The adoption day itself is in neither, being half one build and half the other.
+
+**An after-window that has not fully elapsed reads as no verdict**, never as one from the few days there
+are — a release a day old would otherwise get a confident percentage from one quiet day. A fleet counts
+as cheaper or dearer past ±5%, and "about the same" inside it. Two releases inside a fortnight overlap
+their windows, and nothing pretends otherwise.
+
+**A partial day is out of every trend figure**, for the reason it is out of every average: a half-day
+reads as a cheap one, and a chart whose last point always dips is a chart that always says the
+newest release worked.
+
+**`POOL_SCHEMA_VERSION` did not move.** Both sections are additive: a document from before them parses
+with both empty, and a reader from before them ignores two keys it does not ask for.
+
+### The trend tab
+
+The pool's half of [the Trend tab](17-cockpit.md#just-me-or-the-pool): a step picker, the step's cost
+per run over the ninety days — the middle fleet, the middle half as a band, every fleet faintly, and a
+dashed line where each release arrived — then a card per release saying what it did to this step and
+how many fleets it moved, the latest release fleet by fleet, and every step's last thirty days against
+the thirty before. Seven-day trailing per-run figures, so a quiet Sunday is not a cheap one. The cards
+are the newest six, newest first, because every self-update is a release; every release is marked on
+the chart, labelled by its short commit.
+
+**The server does the arithmetic** (`foldPoolTrends`, shipped as `trends` on `PoolInsightsPayload`) and
+the cockpit draws it — the before/after split, the change in percent, the cheaper / dearer / about-the-same
+verdict, and the window lengths the copy names. A split or a threshold read off by the browser would be
+a second implementation of "which days are after" or "what is about the same", free to disagree with
+the one the tests hold, and a card's count of cheaper fleets could disagree with the table under it.
 
 ### The faults section
 
@@ -869,8 +941,9 @@ is no generated file, so there is nothing for two fleets to conflict on. It open
 **It is not a tab of its own.** The pool is a **scope** on the Insights page —
 [Just me or the pool](17-cockpit.md#just-me-or-the-pool) — because every rollup it carries is the
 cross-fleet half of a reading that already has a tab. `byPhase` and the two caveat counts are Economics,
-`byCause` is Causes, `byThroughput` is Throughput and `byUsage` is Usage; those four tabs are what the
-scope offers, and the six the pool cannot answer are withheld rather than drawn empty. A tab that
+`byCause` is Causes, `byThroughput` is Throughput, `byUsage` is Usage and `byRule` with `byVersion` is
+Trend; those five tabs are what the scope offers, and the four the pool cannot answer are withheld
+rather than drawn empty. A tab that
 answered "the whole fleet's phase split" beside a tab that answered "this fleet's phase split" was two
 names for one question, and the one an operator wanted was decided by which tab they were on.
 
@@ -914,8 +987,11 @@ publish from rows the fleet already holds, and the envelope carries the project 
 week, read at the moment the row is read — a stored flag would be a second copy of the clock that goes
 wrong the minute nothing polls. → [above](#a-mirrored-fleet-expires-after-a-week)
 
-`pool_digest_rows`, `pool_fleets` and this fleet's own `pool_publications` are the three that remain;
-`pool_claims` went with the arm that filled it. Each is created whole by `CREATE TABLE IF NOT EXISTS`
+`pool_digest_rows`, `pool_fleets` and this fleet's own `pool_publications` and `pool_harness_days` are
+the four that remain; `pool_claims` went with the arm that filled it. `pool_harness_days` is the odd one
+out: it is **not** derived. It is this fleet's own record of which version ran on which day, nothing else
+holds it, and dropping it loses the release markers it fed — so it is never retired the way
+`pool_claims` was. Each is created whole by `CREATE TABLE IF NOT EXISTS`
 on any database that lacks one — but being new **once** is what stops one staying exempt, and the first
 column added to any of them later belongs in `ColumnMigrations`.
 → [14](14-persistence.md#migrations)

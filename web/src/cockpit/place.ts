@@ -39,6 +39,8 @@ export interface Place {
   insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
   poolProject: string | null;
+  /** Which dispatch rule the pool's Trend tab charts, or null for the busiest. */
+  poolStep: string | null;
   /** Which environment's validation sheet is open on the goal page. → 36-remote-validation.md */
   sheetEnvironment: string | null;
   collapsed: number[];
@@ -157,7 +159,7 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
 const INSIGHTS_SCOPES: readonly InsightsScope[] = ['mine', 'pool'];
 /* The tabs the pool can answer. The rest are readings only a fleet holds about
    itself. → docs/spec/17-cockpit.md#just-me-or-the-pool */
-export const POOL_VIEWS: readonly InsightsView[] = ['economics', 'causes', 'throughput', 'usage'];
+export const POOL_VIEWS: readonly InsightsView[] = ['economics', 'causes', 'throughput', 'trend', 'usage'];
 const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['session', '6h', '24h', '7d', '30d', 'all'];
 const DEFAULT_INSIGHTS_WINDOW: InsightsWindow = '7d';
 
@@ -182,6 +184,7 @@ export const NOWHERE: Place = {
   insightsView: 'economics',
   insightsScope: 'mine',
   poolProject: null,
+  poolStep: null,
   sheetEnvironment: null,
   insightsWindow: DEFAULT_INSIGHTS_WINDOW,
   collapsed: [],
@@ -288,10 +291,14 @@ function readPagePicks(
 
 function readInsightsPage(
   query: URLSearchParams,
-): Pick<Place, 'insightsView' | 'insightsScope' | 'poolProject' | 'sheetEnvironment' | 'insightsWindow' | 'collapsed'> {
+): Pick<
+  Place,
+  'insightsView' | 'insightsScope' | 'poolProject' | 'poolStep' | 'sheetEnvironment' | 'insightsWindow' | 'collapsed'
+> {
   return {
     ...readInsights(param(query, 'view'), param(query, 'scope')),
     poolProject: param(query, 'project') ?? null,
+    poolStep: param(query, 'step') ?? null,
     sheetEnvironment: param(query, 'sheet'),
     insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
     collapsed: readNumbers(param(query, 'collapsed')),
@@ -474,6 +481,7 @@ function writeInsightsPage(query: URLSearchParams, place: Place): void {
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
   if (place.insightsScope !== 'mine') query.set('scope', place.insightsScope);
   if (place.poolProject !== null) query.set('project', place.poolProject);
+  if (place.poolStep !== null) query.set('step', place.poolStep);
   if (place.sheetEnvironment !== null) query.set('sheet', place.sheetEnvironment);
   if (place.insightsWindow !== DEFAULT_INSIGHTS_WINDOW) query.set('win', place.insightsWindow);
   if (place.collapsed.length > 0) {

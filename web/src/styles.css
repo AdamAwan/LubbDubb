@@ -8679,6 +8679,49 @@ select:disabled {
   gap: 14px;
   max-width: 1040px;
 }
+/* The pool's Trend tab. → docs/spec/28-cross-fleet-pool.md#the-trend-tab */
+.pt-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.pt-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pt-mark {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.pt-releases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+.pt-release {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.pt-ver {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--blue);
+}
+.pt-big {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.pool-table .pt-on td {
+  background: var(--fold-fill);
+}
+.pt-link {
+  text-align: left;
+  color: var(--link-ink);
+}
 .pool-section > h3 {
   margin: 0;
   font-size: 13px;

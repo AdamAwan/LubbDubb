@@ -26,6 +26,7 @@ import { SpendTrendTab } from './SpendTrendTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
+import { PoolTrend } from './PoolTrendTab.js';
 import { PredictionTab } from './PredictionTab.js';
 import { Label } from './label.js';
 import { BareButton } from './button.js';
@@ -60,7 +61,12 @@ const TABS: readonly { id: InsightsView; label: string; asks: string; poolAsks?:
     asks: 'What keeps sending the fleet back?',
     poolAsks: 'What keeps sending fleets back?',
   },
-  { id: 'trend', label: 'Trend', asks: 'Is what I changed working?' },
+  {
+    id: 'trend',
+    label: 'Trend',
+    asks: 'Is what I changed working?',
+    poolAsks: 'Is what changed working, for everyone?',
+  },
   { id: 'mcp', label: 'MCP', asks: 'Can the fleet reach its tools?' },
   { id: 'prediction', label: 'Prediction', asks: 'Did you see the plan coming, and was the plan right?' },
   {
@@ -90,12 +96,14 @@ export function InsightsPage({
   scope,
   window: chosen,
   poolProject,
+  poolStep,
   actions,
 }: {
   view: InsightsView;
   scope: InsightsScope;
   window: InsightsWindow;
   poolProject: string | null;
+  poolStep: string | null;
   actions: CockpitActions;
 }): JSX.Element {
   const page = useRef<HTMLDivElement>(null);
@@ -159,6 +167,8 @@ export function InsightsPage({
           prediction={prediction}
           usage={usage}
           pool={pool}
+          poolStep={poolStep}
+          actions={actions}
           windowLabel={resolved?.label ?? 'this window'}
         />
       </div>
@@ -296,8 +306,19 @@ function gated<T>(fetched: Fetched<T>, reading: string, failed: string, draw: (d
   return draw(fetched.data);
 }
 
-function PoolBody({ view, pool }: { view: InsightsView; pool: Fetched<PoolInsightsPayload> }): JSX.Element {
+function PoolBody({
+  view,
+  pool,
+  step,
+  actions,
+}: {
+  view: InsightsView;
+  pool: Fetched<PoolInsightsPayload>;
+  step: string | null;
+  actions: CockpitActions;
+}): JSX.Element {
   return gated(pool, 'Reading the pool…', 'Could not read the pool.', (data) => {
+    if (view === 'trend') return <PoolTrend payload={data} step={step} actions={actions} />;
     if (view === 'causes') return <PoolCauses payload={data} />;
     if (view === 'throughput') return <PoolThroughput payload={data} />;
     if (view === 'usage') return <PoolUsage payload={data} />;
@@ -319,6 +340,8 @@ function Body({
   prediction,
   usage,
   pool,
+  poolStep,
+  actions,
   windowLabel,
 }: {
   view: InsightsView;
@@ -334,9 +357,11 @@ function Body({
   prediction: Fetched<PredictionAggregate>;
   usage: Fetched<UsagePayload>;
   pool: Fetched<PoolInsightsPayload>;
+  poolStep: string | null;
+  actions: CockpitActions;
   windowLabel: string;
 }): JSX.Element {
-  if (scope === 'pool') return <PoolBody view={view} pool={pool} />;
+  if (scope === 'pool') return <PoolBody view={view} pool={pool} step={poolStep} actions={actions} />;
 
   if (view === 'economics')
     return gated(spend, 'Reading the meter…', 'Could not read the spend log.', (data) => (
