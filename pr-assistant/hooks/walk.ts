@@ -1,8 +1,9 @@
-import type { EdgeState, Hunk, MapNode, MapStatus, MapStep, Note, NoteKind, PrMap, Slice, Stop, StopKind, Walk } from '../types'
+import type { EdgeState, Hunk, MapNode, MapStatus, MapStep, Note, NoteKind, PrMap, Slice, Stop, StopKind, Term, Walk } from '../types'
 
 export const STOP_KINDS: StopKind[] = ['changed', 'new', 'removed', 'unchanged']
 export const NOTE_KINDS: NoteKind[] = ['likely', 'check']
 export const MAX_STOPS = 12
+export const MAX_TERMS = 12
 export const MAX_HUNK = 10_000
 
 const MAP_STATUSES: MapStatus[] = ['changed', 'new', 'removed', 'path', 'outside', 'test', 'doc']
@@ -97,11 +98,22 @@ export function start(args: Args, map: PrMap | null = null, diff: DiffHunk[] | n
     if (typeof hunks === 'string') return { refusal: `Stop ${i + 1}: ${hunks}.` }
     stops.push({ title, kind, files, steps: steps as number[], hunks })
   }
+  const rawTerms = Array.isArray(args.glossary) ? (args.glossary as Args[]) : []
+  if (rawTerms.length > MAX_TERMS) return { refusal: `Give at most ${MAX_TERMS} glossary terms.` }
+  const glossary: Term[] = []
+  for (const [i, t] of rawTerms.entries()) {
+    const term = text(t.term)
+    const meaning = text(t.meaning)
+    if (term === null || meaning === null) return { refusal: `Glossary entry ${i + 1} needs a \`term\` and a \`meaning\`.` }
+    glossary.push({ term, meaning })
+  }
   const url = text(pr.url)
   return {
     walk: {
       pr: { number, title, url: url !== null && /^https?:\/\//.test(url) ? url : null },
       summary: text(args.summary),
+      background: text(args.background),
+      glossary,
       stops,
       current: null,
       seen: [],

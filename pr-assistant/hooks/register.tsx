@@ -8,6 +8,7 @@ import {
   goto,
   MAX_HUNK,
   MAX_STOPS,
+  MAX_TERMS,
   note,
   NOTE_KINDS,
   plain,
@@ -73,6 +74,21 @@ const TOOLS = [
           required: ['number', 'title'],
         },
         summary: { type: 'string', description: 'One or two plain sentences: what the PR does.' },
+        background: {
+          type: 'string',
+          description:
+            'A few plain sentences on the area the PR is in, as it stands before the PR: what that part of the system is for and how it works.',
+        },
+        glossary: {
+          type: 'array',
+          maxItems: MAX_TERMS,
+          description: 'The terms a reader needs for this PR, each with a one-sentence meaning.',
+          items: {
+            type: 'object',
+            properties: { term: { type: 'string' }, meaning: { type: 'string' } },
+            required: ['term', 'meaning'],
+          },
+        },
         map: {
           type: 'string',
           description:
@@ -336,6 +352,8 @@ async function drawPane($: EngineInterface, e: RenderInput<'Pane'>) {
   const open = now.notes.filter(n => !n.isCleared)
   const stop = now.current === null ? null : now.stops[now.current]
   const at = now.current ?? -1
+  const background = now.background ?? null
+  const terms = now.glossary ?? []
 
   const header = (label: string, count?: string) => (
     <Box gap={1}>
@@ -387,6 +405,25 @@ async function drawPane($: EngineInterface, e: RenderInput<'Pane'>) {
         )}
         {now.summary !== null && <Text dimColor>{now.summary}</Text>}
       </Box>
+
+      {background !== null && (
+        <Box flexDirection="column">
+          {header('Background')}
+          <Text dimColor>{background}</Text>
+        </Box>
+      )}
+
+      {terms.length > 0 && (
+        <Box flexDirection="column">
+          {header('Terms', `${terms.length}`)}
+          {terms.map((t, i) => (
+            <Box key={`term-${i + 1}`} gap={1}>
+              <Text bold>{t.term}</Text>
+              <Text dimColor>{t.meaning}</Text>
+            </Box>
+          ))}
+        </Box>
+      )}
 
       <Box flexDirection="column">
         {header('Stops', now.isDone ? 'done' : now.current === null ? `${now.stops.length}` : `${at + 1} of ${now.stops.length}`)}

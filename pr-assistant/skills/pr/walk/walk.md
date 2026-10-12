@@ -23,6 +23,9 @@ exactly as if they had typed them.
   what calls it and what it calls. The PR's new tests usually spell out the scenario it is for.
 - Read the spec that owns the behaviour (`docs/spec/`, through `docs/README.md`) when the repo has
   one. A change the spec contradicts, or a spec the diff leaves wrong, is a note.
+- Read enough of the **area** around the change to explain it to someone new to it: what that part
+  of the system is for, how it works today, and where it sits among its neighbours. The spec's
+  opening, the module's callers and its tests are the usual places.
 
 ### 2. Draw the map
 
@@ -39,9 +42,19 @@ thing that happens ("the rule counts tries per version"), not one file. Things o
 Give each stop a `kind`: `changed`, `new`, `removed`, or `unchanged` for context the reader needs
 but the PR doesn't touch.
 
-Reply with the map's link, the PR in two sentences and the numbered stops, the main stop marked
-as such. Then ask where to start. Call `walk_start` with the PR (`number`, `title`, `url`), the
-two-sentence `summary`, `map` (the path of the map's JSON file) and the stops, each with its
+Your first reply opens with the ground the reader needs before any stop:
+
+- **Background**: three to five plain sentences on the area, as it stands **before** this PR. What
+  it is for, how it works, and the problem or gap the PR answers. No diff yet.
+- **Glossary**: the terms the walk will use that a newcomer to this area would not know, each as
+  **term**: a one-sentence meaning. Domain words, the area's own names for things, and any symbol
+  the stops lean on. Leave out everyday programming words. Aim for 3 to 8, at most 12. With nothing
+  worth defining, say so in one line.
+
+Then the map's link, the PR in two sentences and the numbered stops, the main stop marked as such.
+Then ask where to start. Call `walk_start` with the PR (`number`, `title`, `url`), the
+two-sentence `summary`, the `background` and the `glossary` (`term`, `meaning`) exactly as you
+wrote them, `map` (the path of the map's JSON file) and the stops, each with its
 `files` and `steps`: the map step numbers it covers. Pass `diff` (the saved diff's path) and give
 each stop its `hunks`: the one hunk that matters as `path:line` (a head-version line inside it), or
 `path` for a whole small file. Each `walk_goto` then draws that stop's part of the map **and its
@@ -99,6 +112,6 @@ On `done` (or after the last stop, when they say so):
 
 ### Write it plainly
 
-Short sentences, everyday words. Say what a person sees ("a checker is sent"), not internals
+Short sentences, everyday words. Once a term is in the glossary, use it the same way at every stop. Say what a person sees ("a checker is sent"), not internals
 ("dispatch_code_agent emitted"). Put symbols in backticks. Keep each reply short enough to read
 without scrolling. They asked for a walk, not an essay.
