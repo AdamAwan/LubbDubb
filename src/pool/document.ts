@@ -95,6 +95,8 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
     poolableThroughput: readMeasures(raw.poolableThroughput),
     byFault: readRows(raw.byFault),
     byChoice: readRows(raw.byChoice),
+    byRule: readRows(raw.byRule),
+    byVersion: readRows(raw.byVersion),
   };
   return { ok: true, document };
 }

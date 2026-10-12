@@ -30,6 +30,8 @@ function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
     poolableThroughput: ['reply-sent'],
     byFault: [],
     byChoice: [],
+    byRule: [],
+    byVersion: [],
     ...over,
   };
 }

@@ -4939,6 +4939,7 @@ export const demoApi = {
         byThroughput: [],
         byChoice: [],
       },
+      trends: { windows: { smoothingDays: 7, compareDays: 14, recentDays: 30 }, days: [], steps: [] },
       projects: [],
       fleets: [],
     }),

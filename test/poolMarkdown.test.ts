@@ -30,6 +30,8 @@ function digestDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument {
     poolableThroughput: ['reply-sent'],
     byFault: [],
     byChoice: [],
+    byRule: [],
+    byVersion: [],
     ...over,
   };
 }
@@ -76,7 +78,7 @@ test('an unmeasured cost is drawn as an absence, and the countless sections carr
 
 test('a section with nothing in it says so rather than drawing an empty table', () => {
   const markdown = renderPoolMarkdown(digestDoc());
-  assert.equal(markdown.match(/Nothing recorded in the last ninety days\./g)?.length, 9);
+  assert.equal(markdown.match(/Nothing recorded in the last ninety days\./g)?.length, 10);
   assert.doesNotMatch(markdown, /\|/);
 });
 

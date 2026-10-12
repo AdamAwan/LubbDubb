@@ -22,6 +22,7 @@ import {
 import { VERBS_BY_SUBJECT } from '../usage/events.js';
 import { choiceKey, choiceSightings, type DecisionChoice } from '../insights/choiceInsights.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
+import { isDispatchRule } from '../insights/taskTypeSpend.js';
 
 // → docs/spec/28-cross-fleet-pool.md
 
@@ -50,8 +51,13 @@ export function buildDigestDocument(
   const remedies = store.remedies.listRemediesSince(since);
 
   const phaseOfAgent = new Map<string, SpendPhase>();
-  const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
-  for (const agent of agents) phaseOfAgent.set(agent.id, phaseOf(originOfTask.get(agent.taskId) ?? null));
+  const ruleOfAgent = new Map<string, string>();
+  const taskOf = new Map(tasks.map((t) => [t.id, t]));
+  for (const agent of agents) {
+    const task = taskOf.get(agent.taskId);
+    phaseOfAgent.set(agent.id, phaseOf(task?.originRef ?? null));
+    if (task?.rule != null && isDispatchRule(task.rule)) ruleOfAgent.set(agent.id, task.rule);
+  }
 
   return {
     pool: POOL_SCHEMA_VERSION,
@@ -60,7 +66,9 @@ export function buildDigestDocument(
     project: context.project,
     publishedAt: context.now,
     harnessVersion: context.harnessVersion,
-    byPhase: byPhase(usage, agents, phaseOfAgent, since, today),
+    byPhase: perRun(usage, agents, phaseOfAgent, since, today).filter((row) =>
+      PHASE_ORDER.includes(row.key as SpendPhase),
+    ),
     byCause: byCause(remedies, usage, today),
     byCheck: byCheck(remedies, usage, today),
     unaccounted: unaccounted(tasks, remedies, since, today),
@@ -74,6 +82,8 @@ export function buildDigestDocument(
     ),
     byFault: byFault(store.errors.listErrorsSince(since), today),
     byChoice: byChoice(store, since, context.choicesOff ?? [], today),
+    byRule: perRun(usage, agents, ruleOfAgent, since, today),
+    byVersion: byVersion(store.pool.listHarnessDaysSince(utcDay(since)), today),
   };
 }
 
@@ -81,24 +91,32 @@ function retentionStart(now: string): string {
   return new Date(new Date(now).getTime() - POOL_RETENTION_DAYS * 86_400_000).toISOString();
 }
 
-function byPhase(
+function perRun(
   usage: readonly UsageEvent[],
   agents: readonly Agent[],
-  phaseOfAgent: ReadonlyMap<string, SpendPhase>,
+  keyOfAgent: ReadonlyMap<string, string>,
   since: string,
   today: string,
 ): PoolDigestRow[] {
   const rows = new Bucket();
   for (const event of usage) {
-    rows.add(utcDay(event.at), phaseOfAgent.get(event.agentId) ?? 'other', { costUsd: event.costUsd });
+    const key = keyOfAgent.get(event.agentId);
+    if (key !== undefined) rows.add(utcDay(event.at), key, { costUsd: event.costUsd });
   }
   for (const agent of agents) {
-    if (unmeasuredRun(agent)) continue;
+    const key = keyOfAgent.get(agent.id);
+    if (key === undefined || unmeasuredRun(agent)) continue;
     const at = agent.endedAt ?? agent.startedAt;
     if (at < since) continue;
-    rows.add(utcDay(at), phaseOfAgent.get(agent.id) ?? 'other', { count: 1 });
+    rows.add(utcDay(at), key, { count: 1 });
   }
-  return rows.rows(today).filter((row) => PHASE_ORDER.includes(row.key as SpendPhase));
+  return rows.rows(today);
+}
+
+function byVersion(days: readonly { day: string; version: string }[], today: string): PoolDigestRow[] {
+  const rows = new Bucket();
+  for (const { day, version } of days) rows.add(day, version, { count: 1 });
+  return rows.rows(today);
 }
 
 function byCause(remedies: readonly Remedy[], usage: readonly UsageEvent[], today: string): PoolDigestRow[] {

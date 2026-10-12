@@ -3,6 +3,7 @@ import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRo
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { choiceLabel } from '../insights/choiceInsights.js';
 import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
+import { ruleName } from '../insights/taskTypeSpend.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 
 // → docs/spec/28-cross-fleet-pool.md
@@ -50,6 +51,14 @@ const SECTIONS: readonly DigestSection[] = [
     title: 'Where the money went',
     column: 'Phase',
     label: (key) => poolPhaseLabel(key),
+    counts: 'Runs',
+    costed: true,
+  },
+  {
+    rows: (d) => d.byRule,
+    title: 'What each step costs',
+    column: 'Dispatch rule',
+    label: (key) => ruleName(key),
     counts: 'Runs',
     costed: true,
   },

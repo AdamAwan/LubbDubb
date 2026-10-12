@@ -31,6 +31,8 @@ function digest(fleetId: string, publishedAt: string): PoolDigestDocument {
     poolableThroughput: ['reply-sent'],
     byFault: [],
     byChoice: [],
+    byRule: [],
+    byVersion: [],
   };
 }
 

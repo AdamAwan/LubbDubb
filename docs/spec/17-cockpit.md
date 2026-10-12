@@ -573,6 +573,7 @@ once.
 | `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
 | `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                    |
 | `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                    |
+| `step`                               | which dispatch rule the pool's Trend tab charts; the busiest step is the absent value → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                                                                                                               |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -7136,12 +7137,12 @@ state in exactly the way the window is: switching tabs keeps it.
 The [cross-fleet pool](28-cross-fleet-pool.md) was an eleventh tab, and that was the wrong seam for the
 reason the three panels were: every rollup it carries is the cross-fleet half of a question that already
 has a tab. `byPhase` is Economics, `byCause` is Causes, `byThroughput` is Throughput, `byUsage` is
-Usage. Two tabs answering "the phase split" — one for this fleet, one for every fleet — leave the
+Usage, and `byRule` with `byVersion` is Trend. Two tabs answering "the phase split" — one for this fleet, one for every fleet — leave the
 operator's question decided by which tab they happened to be on, and the comparison between the two
 answers, which is the only reason the pool exists, taken by reading one and remembering the other.
 
-`POOL_VIEWS` (`web/src/cockpit/place.ts`) is the four the pool can answer, and it is the one list. The
-other five are readings a fleet only holds about **itself** — an account allowance, a run log, a tool
+`POOL_VIEWS` (`web/src/cockpit/place.ts`) is the five the pool can answer, and it is the one list. The
+other four are readings a fleet only holds about **itself** — an account allowance, a run log, a tool
 channel — and under the pool scope they are **withheld from the tab strip** rather than
 drawn as a refusal where a tab used to be. A scope move from one of them lands on Economics, and so does
 a hand-edited link naming one: `readInsights` narrows the pair on the way in, so `?scope=pool&view=mcp`
@@ -7154,6 +7155,12 @@ picker takes the bar's place — `poolProject` on `Place`, because `byCheck` is 
 pipeline and the tab draws the reason rather than an empty table when it is not narrowed — and the
 resolution line beside it says how many fleets and how many UTC days are behind what is drawn. The
 `5h session` anchor line goes with the window bar for the same reason.
+
+**The pool's Trend tab asks the same question as the fleet's, of every fleet**: is what changed
+working. It does not obey the window either: it charts the digest's ninety days whole. Which step it
+charts is `poolStep` on `Place` (`?step=`, a dispatch rule id), null meaning the busiest step, so a link
+to "what review comments cost everybody" survives the back button and a reload. What it draws, and why,
+is [28](28-cross-fleet-pool.md#the-trend-tab).
 
 The per-window fetches are gated on the scope, so the pool scope asks the server for the pool and
 nothing else, and moving back re-reads the fleet's own window from scratch.

@@ -74,6 +74,7 @@ export type {
   ObstacleState,
   PoolInsightsPayload,
   PoolRollupRow,
+  PoolTrends,
   PoolStatePayload,
   PluginInstallPayload,
   PluginStatusPayload,

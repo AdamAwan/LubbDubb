@@ -343,16 +343,23 @@ test('a hand-edited fold list drops a section that does not exist', () => {
 /* The pool is a scope rather than a tab, and six of the ten readings are ones a
    fleet only holds about itself. → docs/spec/17-cockpit.md#just-me-or-the-pool */
 test('the pool scope carries only the tabs the pool can answer', () => {
-  for (const view of ['economics', 'causes', 'throughput', 'usage']) {
+  for (const view of ['economics', 'causes', 'throughput', 'trend', 'usage']) {
     const place = readPlace(`?tab=insights&scope=pool&view=${view}`);
     assert.equal(place.insightsScope, 'pool');
     assert.equal(place.insightsView, view);
   }
-  for (const view of ['allowance', 'reliability', 'trend', 'mcp']) {
+  for (const view of ['allowance', 'reliability', 'mcp']) {
     const place = readPlace(`?tab=insights&scope=pool&view=${view}`);
     assert.equal(place.insightsScope, 'pool');
     assert.equal(place.insightsView, 'economics', `${view} is not a pool reading and must not be representable`);
   }
+});
+
+test('the pool trend’s step survives the address bar', () => {
+  const place = readPlace('?tab=insights&scope=pool&view=trend&step=pr-review-comment');
+  assert.equal(place.poolStep, 'pr-review-comment');
+  assert.match(placeQuery(place), /step=pr-review-comment/);
+  assert.equal(readPlace('?tab=insights&scope=pool&view=trend').poolStep, null);
 });
 
 test('a link to the retired Pool tab lands on the pool scope', () => {
