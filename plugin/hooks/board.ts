@@ -97,19 +97,29 @@ export function toBoard(state: StateReply, board: FeaturesReply | null): Board {
   }
 }
 
-export type Part = { text: string; tone?: PrTone }
+export type Part = { text: string; short: string; tone?: PrTone }
 
 export function bandParts(board: Board): Part[] {
   const count = board.notices.length
   const urgent = board.notices.filter(n => n.urgent).length
   const attention = board.prs.filter(pr => pr.tone === 'bad' || pr.tone === 'warn').length
+  const asks = `${count} ${count === 1 ? 'ask' : 'asks'}`
+  const agents = `${board.agents.length}/${board.cap}`
   const parts: (Part | false)[] = [
-    board.paused && { text: 'fleet paused', tone: 'warn' },
-    { text: `${board.agents.length}/${board.cap} agents` },
+    board.paused && { text: 'fleet paused', short: '', tone: 'warn' },
+    { text: `${agents} agents`, short: `🤖 ${agents}` },
     count > 0
-      ? { text: `${count} ${count === 1 ? 'ask' : 'asks'}${urgent > 0 ? ` (${urgent} blocking)` : ''}`, tone: urgent > 0 ? 'bad' : 'warn' }
-      : { text: 'no asks' },
-    attention > 0 && { text: `${attention} ${attention === 1 ? 'PR needs' : 'PRs need'} attention`, tone: 'warn' },
+      ? {
+          text: `${asks}${urgent > 0 ? ` (${urgent} blocking)` : ''}`,
+          short: `🙋 ${asks}${urgent > 0 ? ` · ${urgent} blocking` : ''}`,
+          tone: urgent > 0 ? 'bad' : 'warn',
+        }
+      : { text: 'no asks', short: '🙋 no asks' },
+    attention > 0 && {
+      text: `${attention} ${attention === 1 ? 'PR needs' : 'PRs need'} attention`,
+      short: `🔀 ${attention} ${attention === 1 ? 'PR' : 'PRs'}`,
+      tone: 'warn',
+    },
   ]
   return parts.filter((p): p is Part => p !== false)
 }
