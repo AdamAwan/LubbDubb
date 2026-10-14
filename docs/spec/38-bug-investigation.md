@@ -55,6 +55,13 @@ tool call is awaited. A write fired off after the verdict instead leaves a windo
 dispatches the planner; the plan row it writes then retires rule `issue-investigate` for good, and
 the investigation the appraiser asked for never happens, with nothing red.
 
+**The wait has a deadline**, 30 seconds (`LABEL_DEADLINE_MS` in `src/mcp/tools/appraiseIssue.ts`).
+Neither tracker client sets a request timeout, so a write the tracker accepts and never answers would
+otherwise hold the appraiser's tool call open for ever: no verdict, an issue `appraising` for good. Past
+the deadline the miss is recorded and the verdict lands anyway — the investigation fails open, as
+everything else here does. The write is not cancelled; if it lands later it is still recorded as the
+one application.
+
 **The label is applied once per issue, ever, and never by a sweep**, and that is what makes removing
 it stick. A label the harness put on is recorded in `issue_investigate_labels`; `applyInvestigateLabel`
 reads that first and writes nothing for an issue it has labelled before. An operator who takes the
@@ -246,7 +253,7 @@ when it is cast and not kept, which is also what keeps a sweep from having anyth
   appraisal never labels again; a failed write still records the verdict and is not the once;
 - with the label off, a _pickup_ resolution skips nothing and the note is empty;
 - the route resolves, clears, and refuses an unknown resolution with 400, a missing record with 404
-  and a record about an earlier text, or with the label off, with 409.
+  and a record about an earlier text, with the label off, or on an issue missing from the world snapshot, with 409.
 
 `test/investigationCockpit.test.ts` covers the cockpit half: the pickup verdict's investigation reasons
 and their fall-back once answered or unlabelled, and the `findings` ask — what it draws, that it stands

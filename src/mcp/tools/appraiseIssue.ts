@@ -8,6 +8,7 @@ import {
   validateGoalAppraisal,
 } from '../goalAppraisal.js';
 import { issueSubtreeNumber } from '../../issueOrigins.js';
+import { withDeadline } from '../../primitives.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import { toolSchema } from '../schema.js';
@@ -155,11 +156,21 @@ function recordedNote(
         'nothing is rejected — that stays a human decision.';
 }
 
+const LABEL_DEADLINE_MS = 30_000;
+
 async function labelForInvestigation(deps: McpToolDeps, originRef: string | null): Promise<void> {
   const origin = appraiserOrigin(originRef);
   const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
   if (issueNumber === null || deps.investigateLabel === undefined) return;
-  await deps.investigateLabel(issueNumber);
+  try {
+    await withDeadline(deps.investigateLabel(issueNumber), LABEL_DEADLINE_MS, `labelling #${issueNumber} timed out`);
+  } catch (err) {
+    deps.errors?.record({
+      source: 'provider',
+      message: `Investigate label for #${issueNumber} did not land before the verdict`,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {

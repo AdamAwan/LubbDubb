@@ -264,6 +264,10 @@ function registerInvestigation(app: FastifyInstance, { system, hub }: RouteConte
       if (recorded === null)
         return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
       const tickets = store.world.getWorldBaseline()?.issues.filter((i) => i.number === params.number) ?? [];
+      if (tickets.length === 0)
+        return reply.code(409).send({
+          error: `#${params.number} is not in the last world snapshot, so its findings hold nothing and cannot be resolved`,
+        });
       const standing = investigationStanding(
         investigationStandings(tickets, [recorded], system.issuePickup),
         params.number,

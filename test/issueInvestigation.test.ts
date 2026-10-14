@@ -450,6 +450,22 @@ test('the route refuses to resolve findings about an earlier text of the ticket'
   system.store.close?.();
 });
 
+test('the route refuses to resolve findings for an issue missing from the world snapshot', async () => {
+  const system = build();
+  system.store.investigations.record({ ...FINDINGS_ROW, goalRef: goalFingerprint(issue().title, issue().body) });
+  const { app } = await buildApp(system);
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/issues/12/investigation',
+    payload: { resolution: 'pickup' },
+  });
+  assert.equal(res.statusCode, 409, res.body);
+  assert.match(res.body, /world snapshot/);
+  assert.equal(system.store.investigations.get('issue:12')?.resolution, null);
+  await app.close();
+  system.store.close?.();
+});
+
 test('the route refuses to resolve current findings once the label is off', async () => {
   const system = build();
   system.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [], issues: [issue({ labels: [] })] });
