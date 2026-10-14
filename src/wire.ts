@@ -1007,6 +1007,8 @@ export type {
   GoalReachStatus,
   GoalReveal,
   HumanTask,
+  InvestigationResolution,
+  IssueInvestigation,
   IssueSpend,
   Job,
   JobAttachment,

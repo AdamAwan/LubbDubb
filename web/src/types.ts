@@ -40,6 +40,8 @@ export type {
   HumanTask,
   Issue,
   IssueFiled,
+  InvestigationResolution,
+  IssueInvestigation,
   IssueSpend,
   Job,
   JobAttachment,

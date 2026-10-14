@@ -20,15 +20,6 @@ export function currentInvestigation(
   return investigation.goalRef === goalFingerprint(issue.title, issue.body) ? investigation : null;
 }
 
-/** Why plan and pickup wait on a standing investigation, or null. The label is the only switch. */
-export function investigationHold(investigation: IssueInvestigation | null, labelled: boolean): string | null {
-  if (!labelled || investigation === null) return null;
-  if (investigation.resolution === null) return 'the investigation findings are waiting on you';
-  if (investigation.resolution === 'close') return 'you marked the investigation for closing';
-  if (investigation.resolution === 'ask') return 'you asked for more from the reporter after the investigation';
-  return null;
-}
-
 export function investigationSkipsPlanning(investigation: IssueInvestigation | null): boolean {
   return investigation?.resolution === 'pickup';
 }

@@ -1,5 +1,6 @@
 import type { AskDraft, AskInputs } from './queue.js';
 import { askLine, opensAt } from './lines.js';
+import { FINDINGS_WAITING_REASON } from '../intake/investigationHold.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
@@ -55,6 +56,28 @@ export function sittingRows(state: AskInputs): AskDraft[] {
       title: askLine('Planning waits on your prediction and criteria', base.goalRef, state),
       opens: opensAt(base.goalRef, state),
       raisedAt: issue.appraisal?.decidedAt ?? state.world.takenAt,
+    });
+  }
+  return rows;
+}
+
+// The findings hold planning and pickup, so the ask blocks. It stands exactly while the pickup
+// status says the findings are what it waits on. → docs/spec/06-issue-pickup.md
+export function findingsRows(state: AskInputs): AskDraft[] {
+  const rows: AskDraft[] = [];
+  for (const issue of state.world.issues) {
+    const investigation = issue.investigation;
+    if (issue.state !== 'open' || investigation === null || investigation.resolution !== null) continue;
+    if (!issue.pickup.reasons.includes(FINDINGS_WAITING_REASON)) continue;
+    const base = issueRow(issue.number);
+    rows.push({
+      ...base,
+      id: `findings:${base.goalRef}`,
+      kind: 'findings',
+      group: 'blocking',
+      title: askLine('Investigated — the findings wait on your call', base.goalRef, state),
+      opens: opensAt(base.goalRef, state),
+      raisedAt: investigation.decidedAt,
     });
   }
   return rows;

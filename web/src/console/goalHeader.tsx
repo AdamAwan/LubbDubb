@@ -125,6 +125,16 @@ function GoalIdent({ page, view }: { page: GoalPageView; view: CockpitView }): J
             Appraisal · {issue.appraisal.verdict}
           </Tag>
         )}
+        {issue.investigation !== null && (
+          <Tag
+            tone={issue.investigation.resolution === null ? 'amber' : 'green'}
+            fill
+            title={`${issue.investigation.confidence} confidence: ${issue.investigation.rootCause}`}
+          >
+            <Icon name="bug" size={12} />
+            Investigation · {issue.investigation.resolution ?? 'waiting on you'}
+          </Tag>
+        )}
         {/* Prefixed with *whose* verdict it is, because the two words this chip
           most often reads — "more work" — were also the name of a control an
           operator presses. One is a judgement the goal already carries and the

@@ -2,6 +2,7 @@ import type {
   PrDescriptionDraft,
   PrDescriptionVersion,
   RemoteSheetView,
+  InvestigationResolution,
   AgentFilesPayload,
   AllowanceInsights,
   Ejection,
@@ -1015,6 +1016,16 @@ class DemoServer {
         undefined,
         `issue:${issueNumber}`,
       );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  async resolveInvestigation(issueNumber: number, resolution: InvestigationResolution | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue?.investigation) {
+      issue.investigation =
+        resolution === null ? null : { ...issue.investigation, resolution, resolvedAt: new Date().toISOString() };
       this.dirty();
     }
     return { ok: true };
@@ -5065,6 +5076,8 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAppraisal(issueNumber, verdict),
+  resolveInvestigation: (issueNumber: number, resolution: InvestigationResolution | null) =>
+    getServer().resolveInvestigation(issueNumber, resolution),
   addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
   overruleShortfall: (issueNumber: number, text: string) => getServer().overruleShortfall(issueNumber, text),
   releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>

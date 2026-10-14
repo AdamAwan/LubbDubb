@@ -1,5 +1,6 @@
 import { hasWorkStarted } from '../../intake/appraisal.js';
-import { investigateBranch, investigateOrigin, investigationHold } from '../../intake/investigation.js';
+import { investigateBranch, investigateOrigin } from '../../intake/investigation.js';
+import { investigationHold } from '../../intake/investigationHold.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';

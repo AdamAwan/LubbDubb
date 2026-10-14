@@ -17,6 +17,7 @@ export type AskKind =
   | 'shortfall'
   | 'intake'
   | 'sitting'
+  | 'findings'
   | 'profile'
   | 'placement'
   | 'bench'

@@ -18,7 +18,9 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
-import { currentInvestigation, investigationSkipsPlanning } from '../intake/investigation.js';
+import { currentInvestigation, investigateOrigin, investigationSkipsPlanning } from '../intake/investigation.js';
+import { investigationHold } from '../intake/investigationHold.js';
+import { carriesInvestigateLabel, investigateLabelFor } from '../watchLabels.js';
 import { ALIGNING_REASON, SITTING_REASON, sittingHolds, type ClosedSittings } from '../intake/sitting.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
@@ -272,6 +274,33 @@ function planningRouteStatus(
   return { eligible: false, status: 'planning', reasons: [reason] };
 }
 
+function investigationOf(issue: Issue, ctx: IssuePickupContext): IssueInvestigation | null {
+  return currentInvestigation(
+    ctx.investigations?.find((i) => i.originRef === issueOrigin(issue.number)),
+    issue,
+  );
+}
+
+function investigationStatus(
+  issue: Issue,
+  ctx: IssuePickupContext,
+  investigation: IssueInvestigation | null,
+  plan: Plan | null,
+): HeldStatus {
+  const label = ctx.policy.investigateLabel ?? investigateLabelFor('');
+  if (!carriesInvestigateLabel(issue, label, ctx.policy.requireOwnLabel)) return null;
+  const hold = investigationHold(investigation, true);
+  if (hold !== null) return { eligible: false, status: 'planning', reasons: [hold] };
+  if (investigation !== null || plan !== null || hasWorkStarted(issue.number, ctx.tasks)) return null;
+  const running = ctx.tasks.find((t) => t.originRef === investigateOrigin(issue.number) && isActiveTask(t));
+  const reason = running
+    ? running.status === 'waiting'
+      ? 'investigation agent waiting on you'
+      : 'being investigated before it is planned'
+    : 'awaiting an investigation before it is planned';
+  return { eligible: false, status: 'planning', reasons: [reason] };
+}
+
 function attemptStatus(origin: string, ctx: IssuePickupContext): HeldStatus {
   const verdict = dispatchVerdict(origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
   if (verdict.kind === 'cooldown') {
@@ -298,17 +327,13 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   if (ended) return ended;
 
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
+  const investigation = investigationOf(issue, ctx);
   const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
   const planVerdict = resolvePlanRoute({
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
-    skipPlanning: investigationSkipsPlanning(
-      currentInvestigation(
-        ctx.investigations?.find((i) => i.originRef === issueOrigin(issue.number)),
-        issue,
-      ),
-    ),
+    skipPlanning: investigationSkipsPlanning(investigation),
   });
   const gated = planGateStatus(planVerdict, plan, parts);
   if (gated) return gated;
@@ -320,6 +345,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   const held =
     activeStatus(origin, ctx) ??
     standingHoldStatus(issue, origin, ctx) ??
+    investigationStatus(issue, ctx, investigation, plan) ??
     planningRouteStatus(issue, ctx, planVerdict, plan) ??
     attemptStatus(origin, ctx);
   if (held) return held;

@@ -96,6 +96,7 @@ function issueSettingActions(then: Then) {
     setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
     setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
     setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
+    resolveInvestigation: (n, resolution) => then(api.resolveInvestigation(n, resolution)),
     addInstruction: (n, text) => then(api.addInstruction(n, text)),
     withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
     dismissRun: (n, note) => then(api.dismissRun(n, note)),
