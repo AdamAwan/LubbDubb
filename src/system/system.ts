@@ -405,10 +405,15 @@ function wireAgentEvents(
   agents.on('appraisal', ({ issueOrigin, investigate }) => {
     const issueNumber = issueSubtreeNumber(issueOrigin);
     if (!investigate || issueNumber === null) return;
-    void applyInvestigateLabel(
+    applyInvestigateLabel(
       issueWatchContext({ store, connector: sink, errors, config }),
       issueNumber,
       'after the goal appraisal asked for an investigation',
+    ).catch((err: unknown) =>
+      errors.record({
+        source: 'server',
+        message: `Failed to label #${issueNumber} for investigation: ${(err as Error).message}`,
+      }),
     );
   });
 

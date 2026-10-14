@@ -386,24 +386,25 @@ checked in the same order rule `issue-pickup` applies them, so it predicts what 
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
-| Status      | Meaning                                                                              |
-| ----------- | ------------------------------------------------------------------------------------ |
-| `done`      | Closed, and the harness holds no run at it.                                          |
-| `retained`  | Closed, but its run lives until the operator dismisses it.                           |
-| `abandoned` | Open, but the operator abandoned its run — nothing is scheduled for it again.        |
-| `planning`  | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
-| `has_pr`    | An open PR resolves it; the PR rules own it now.                                     |
-| `active`    | A task on this origin is queued / running / waiting on you.                          |
-| `container` | A Feature/Epic — its children are the work, never it.                                |
-| `unwatched` | Not opted in, or parked by the state gate.                                           |
-| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                                 |
-| `escalated` | Attempt cap spent; parked on a human.                                                |
-| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
-| `appraisal` | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
-| `sitting`   | Nothing holds it but your prediction and criteria, which planning waits for.         |
-| `obstacle`  | An agent could not finish it and named what stopped it — parked until that clears.   |
-| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
-| `eligible`  | Would be picked up next cycle.                                                       |
+| Status          | Meaning                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `done`          | Closed, and the harness holds no run at it.                                          |
+| `retained`      | Closed, but its run lives until the operator dismisses it.                           |
+| `abandoned`     | Open, but the operator abandoned its run — nothing is scheduled for it again.        |
+| `planning`      | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
+| `has_pr`        | An open PR resolves it; the PR rules own it now.                                     |
+| `active`        | A task on this origin is queued / running / waiting on you.                          |
+| `container`     | A Feature/Epic — its children are the work, never it.                                |
+| `unwatched`     | Not opted in, or parked by the state gate.                                           |
+| `cooldown`      | Attempted recently; waiting out the re-dispatch gap.                                 |
+| `escalated`     | Attempt cap spent; parked on a human.                                                |
+| `delivered`     | Assessed as delivered — parked until the world or the operator says otherwise.       |
+| `appraisal`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
+| `investigation` | Held for a bug investigation: one is owed or running, or its findings wait on you.   |
+| `sitting`       | Nothing holds it but your prediction and criteria, which planning waits for.         |
+| `obstacle`      | An agent could not finish it and named what stopped it — parked until that clears.   |
+| `blocked`       | Eligible, but dispatch is paused or the cap is reached.                              |
+| `eligible`      | Would be picked up next cycle.                                                       |
 
 The closed arm splits on the run, not on the tracker. A close is the tracker's answer and a run
 outlives it (issue #234), so `done` is kept for the case it was always right about — a closed ticket
@@ -741,8 +742,8 @@ distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 ticket reports a bug whose symptom is clear and whose cause nobody has stated. The ticket's type and
 tags are not consulted — a `Bug` type is how the reporter filed it, not whether the cause is known — so
 the appraiser, which has just read the ticket against the repository, is who judges it. The flag is
-stored as `issue_appraisals.investigate` and, at record time and only then, puts the investigate label
-on the issue. Nothing re-applies it later, so an operator who takes it off has the last word until a
+not stored: it rides on the `appraisal` event and, at record time and only then, puts the investigate
+label on the issue. Nothing re-applies it later, so an operator who takes it off has the last word until a
 rewritten ticket is appraised again. With `unclear` it is dropped: a goal nobody can start from has its
 questions answered first. → [38](38-bug-investigation.md)
 
@@ -750,22 +751,30 @@ The investigation it asks for holds rule `issue-plan` and rule `issue-pickup` wh
 its findings wait on an operator — the hold is the investigation's, owned there, and lifted by removing
 the label.
 
-`issuePickupStatus` reports it as the `planning` arm, asked after the active and standing-hold arms and
-before the plan route, so the chip says why no planner is coming rather than promising one. Only while
-the label is on; its reasons, in the order they are tried:
+`issuePickupStatus` reports it as its own status, `investigation`, asked after the active and
+standing-hold arms and before the plan route, so the chip says why no planner is coming rather than
+promising one. Only while the label is on; its reasons, in the order they are tried:
 
 | Reason                                                         | When                                                                     |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `the investigation findings are waiting on you`                | A current record with no resolution — `FINDINGS_WAITING_REASON`.         |
+| `the investigation findings are waiting on you`                | A current record with no resolution.                                     |
 | `you marked the investigation for closing`                     | Resolved _close_.                                                        |
 | `you asked for more from the reporter after the investigation` | Resolved _ask_.                                                          |
 | `investigation agent waiting on you`                           | No record yet, the investigator is running and has parked on a question. |
 | `being investigated before it is planned`                      | No record yet, the investigator is running.                              |
+| `investigation on cooldown`                                    | No record yet, and the last investigator is inside its re-dispatch gap.  |
 | `awaiting an investigation before it is planned`               | No record, no plan, no work started, and no investigator live yet.       |
 
 The first three are `investigationHold`'s (`src/intake/investigationHold.ts`), the same strings the
-dispatcher quotes on the held `superseded` rows, so the chip and the queue cannot disagree. The cockpit's
-`findings` ask stands on the first ([17](17-cockpit.md)).
+dispatcher quotes on the held `superseded` rows, so the chip and the queue cannot disagree. The last
+four share `preplanAgentReason` with the appraisal arm, and so share its fail-open: once the
+investigator's attempt cap is spent (`escalate` or `hold`) the arm answers nothing and the issue falls
+through to the plan route, as the dispatcher does. Both sides read one `InvestigationStanding` per issue
+— the current record, whether the label is on, and the hold — built once by `investigationStandings`
+(`src/intake/investigation.ts`). `investigation` counts as in flight wherever `planning` does — the
+runway ([25](25-supply.md)), the Overview's goals in flight and a Feature's fleet holds — and the
+cockpit's word for it is _investigating_. The `findings` ask stands on the first reason's case
+([17](17-cockpit.md)).
 
 ### It is held behind a story's predecessors
 

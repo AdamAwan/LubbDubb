@@ -3,6 +3,7 @@ import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EscalationSpan, HumanTask, Issue, IssueRun } from '../types.js';
 import { issuePickupStatus, issueWatchGateReason, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { appraisalHold } from '../intake/appraisal.js';
+import { investigationStanding } from '../intake/investigation.js';
 import { liveParts } from '../plans/parts.js';
 
 // → docs/spec/25-supply.md
@@ -81,7 +82,7 @@ export interface RunwayInput {
   standing: boolean;
 }
 
-const INFLIGHT = new Set(['active', 'has_pr', 'planning', 'investigation']);
+const INFLIGHT = new Set(['active', 'has_pr', 'planning']);
 const QUEUED = new Set(['eligible', 'blocked', 'cooldown']);
 const HELD = new Set(['escalated', 'delivered', 'retained', 'sitting']);
 
@@ -100,7 +101,10 @@ function countStatuses(input: RunwayInput, appraisals: NonNullable<IssuePickupCo
     const { status } = issuePickupStatus(issue, input.pickup);
     if (INFLIGHT.has(status)) c.inflight += 1;
     else if (QUEUED.has(status)) c.queued += 1;
-    else if (status === 'appraisal') {
+    else if (status === 'investigation') {
+      if (investigationStanding(input.pickup.investigations, issue.number).hold === null) c.inflight += 1;
+      else c.held += 1;
+    } else if (status === 'appraisal') {
       const hold = appraisalHold(
         appraisals.find((a) => a.originRef === issueOriginRef('root', issue.number)) ?? null,
         issue,

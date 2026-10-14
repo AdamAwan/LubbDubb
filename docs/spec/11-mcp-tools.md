@@ -603,9 +603,9 @@ identity structural as everywhere else — no issue argument, the origin resolve
   → [02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)
 
 - **`investigate` is honoured only with `workable`** and dropped otherwise: true when the ticket reports
-  a bug whose cause is not known yet. It is stored on the appraisal row and carried on the `appraisal`
-  event, whose listener in the composition root puts the investigate label on the issue — once, at
-  record time, never by a later sweep. → [38](38-bug-investigation.md#the-label)
+  a bug whose cause is not known yet. It is not stored: it rides only on the `appraisal` event, whose
+  listener in the composition root puts the investigate label on the issue — once, at record time,
+  never by a later sweep. → [38](38-bug-investigation.md#the-label)
 
 It routes through `AgentManager.recordAppraisal` for the `appraisal` event, so the cockpit repaints on the
 verdict rather than on the next pulse.

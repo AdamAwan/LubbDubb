@@ -30,7 +30,8 @@ deployment. Unlike the watch tag an empty prefix does not switch it off — the 
 `investigate`. An empty watch label can mean "watch everything"; an empty investigate label has no
 reading at all, and a deployment without a prefix should still have the switch.
 
-`carriesInvestigateLabel` reads it **exactly as the watch gate is read**: under `requireOwnLabel`
+`pickupLabels` (`src/watchLabels.ts`) is the one rule for which labels pickup reads, shared with the
+watch gate, so the label is read **exactly as the watch tag is**: under `requireOwnLabel`
 (`userId` set) it reads `labelsAddedByViewer`, not `labels`, so a label somebody else put on the
 ticket does not send the fleet to investigate it — the same trust boundary as the watch tag, and the
 same failure if a provider cannot report authorship ([02](02-configuration.md#userid)). The label is
@@ -42,16 +43,16 @@ Two hands put it on:
 - **An operator, by hand**, on the tracker. That is the whole interface for "investigate this first".
 - **The goal appraisal, once.** `appraise_issue` takes an optional `investigate` flag, honoured only
   with `workable` — an `unclear` ticket gets its questions first, and a goal nobody can start from has
-  no cause to look for ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)). It is stored on the
-  appraisal row as `issue_appraisals.investigate`, and the `appraisal` event carries it. A listener in
+  no cause to look for ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)). It is not stored:
+  the `appraisal` event carries it, and nothing else does. A listener in
   `src/system/system.ts` applies the label through `applyInvestigateLabel` (`src/issueWatch.ts`) — the
   same `ActionSink.setIssueLabel` write the watch toggle makes — and folds it onto the stored world and
   the ticket mirror, so the pulse after the appraisal sees the label without waiting for a hydrate.
   Without that fold the planner, released when the appraiser exits, could start on the pulse between.
 
 **The label is applied at record time and never by a sweep**, and that is what makes removing it
-stick. `issue_appraisals.investigate` is a record of what the appraiser asked for, not a desired
-state: nothing reconciles the label against it. An operator who takes the label off a ticket the
+stick. The appraiser's request is not kept anywhere a later pass could read it back, so there is
+nothing to reconcile the label against. An operator who takes the label off a ticket the
 appraiser labelled has answered _no, plan it as it is_, and a reconciler that put it back would
 overrule them on every pulse with nothing red. The label returns only if a fresh appraisal asks
 again — and an appraisal runs again only on a rewritten ticket, since its verdict is keyed to the
@@ -127,20 +128,23 @@ keyed `issue:<n>` — one row per issue, overwritten by each new report, which r
 
 **It is fingerprinted to the ticket text.** `goal_ref` is `goalFingerprint` of the title and body the
 investigator was **dispatched with**, read off its task, so an edit made mid-run is not swallowed.
-`currentInvestigation` drops a record whose fingerprint no longer matches, and every reader goes
-through it: an edited ticket has no current findings, so its holds lift and — with the label still on
+`investigationStandings` (`src/intake/investigation.ts`) reads each issue once into an
+`InvestigationStanding` — the record for its current text, whether the label is on, and the hold —
+and every reader goes through it, the dispatcher's `StageContext.investigations` and the pickup
+verdict's `IssuePickupContext.investigations` alike, so the two cannot disagree. A record whose
+fingerprint no longer matches is not current: an edited ticket has no current findings, so its holds lift and — with the label still on
 — the rule re-arms and investigates the new text. A rewrite usually means the reporter said
 something new, and findings about the old text are about a different report.
 
 The issue's state snapshot carries the current record as `Issue.investigation`, null when there is
-none ([16](16-http-api.md#post-apiissuesnumberinvestigation)), and its pickup verdict reads `planning`
-with the investigation's reason while the label holds it ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)).
-`investigationHold` and `FINDINGS_WAITING_REASON` live in `src/intake/investigationHold.ts`, apart from
-the rest of `src/intake/investigation.ts`, because the cockpit's ask reads that reason and the fingerprint
-beside it imports `node:crypto`, which the web bundle cannot.
+none ([16](16-http-api.md#post-apiissuesnumberinvestigation)), and its pickup verdict reads
+`investigation`, with the reason, while the label holds it ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)).
+The four answers are declared once, `INVESTIGATION_RESOLUTIONS` in `src/intake/investigationResolutions.ts`:
+the type, the tool's `recommendation` enum, the route's body and the cockpit's buttons (through
+`src/wire.ts`) all read it, so the cockpit cannot offer an answer the route refuses.
 
-In the cockpit the findings are a **`findings` ask** on the rail, standing exactly while that reason
-holds the goal: the four fields drawn whole, the agent's recommendation marked on its button among the
+In the cockpit the findings are a **`findings` ask** on the rail, standing while the pickup verdict is
+`investigation` and the findings are unanswered: the four fields drawn whole, the agent's recommendation marked on its button among the
 four resolutions, and **Investigate again** beside them. The goal header carries an `Investigation ·`
 chip while a current record exists. → [17](17-cockpit.md#hue-is-the-kind-weight-is-the-group)
 
@@ -194,10 +198,9 @@ cause.
 
 ## Persistence
 
-`issue_investigations` is a new table and needs no `ColumnMigrations` entry.
-`issue_appraisals.investigate` is a column on an existing one and has one, `INTEGER NOT NULL DEFAULT
-0`; every row from before it reads `false`, which is the truth — no appraiser asked — so no backfill is
-owed. → [14](14-persistence.md#migrations)
+`issue_investigations` is a new table and needs no `ColumnMigrations` entry. Nothing is added to
+`issue_appraisals`: the appraiser's `investigate` flag is acted on when it is cast and not kept, which
+is also what keeps a sweep from having anything to re-apply. → [14](14-persistence.md#migrations)
 
 ## Tests
 

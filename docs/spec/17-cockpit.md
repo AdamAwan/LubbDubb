@@ -798,9 +798,9 @@ in, so a verdict on one is left over from before it was dropped, and the drop ou
 `world.issues` and never the retained runs, for the profile gate's reason.
 
 **`findings` is a bug investigation's findings waiting on the operator** ([38](38-bug-investigation.md)).
-`findingsRows` (`src/asks/issueAsks.ts`) raises one per open goal whose current investigation has no
-resolution **and** whose pickup verdict quotes `FINDINGS_WAITING_REASON` — the reason
-`investigationHold` gives — so the row stands exactly while the findings are what holds the goal. Take
+`findingsRows` (`src/asks/issueAsks.ts`) raises one per goal whose pickup status is `investigation`
+**and** whose current investigation has no resolution — keyed on the typed status, never on a reason
+string — so the row stands exactly while the findings are what holds the goal. Take
 the investigate label off and the hold goes, and the row with it: an ask for an answer that no longer
 gates anything would be a chore. It is `blocking` and `now` on the `sitting` row's terms — planning is
 waiting on the answer — and stage `plan` on the goal's track.
@@ -3959,7 +3959,7 @@ Three of them carry the rules that kept being forgotten:
   now wears the state column and the reasons stay behind it. The words are translated, because the
   kind is an identifier the dispatcher passes between its own rules and every one of them reached the
   glass unedited — `has_pr` is the shape of that, and it asks the operator to know the enum before the
-  row means anything: `in review`, `working`, `up next`, `no capacity`, `kept`, `a container`. A kind
+  row means anything: `in review`, `working`, `up next`, `no capacity`, `kept`, `a container`, `investigating`. A kind
   with no translation falls through as itself, so one added server-side degrades to the old reading
   rather than to a blank. `escalated` is the only `ask` — the one status parked on a person by design;
   `unwatched`, `blocked`, `cooldown` and `appraisal` are `hold`, the harness stopped and waiting on
@@ -6267,11 +6267,11 @@ Every row is its owner's wording — the rail row's own title, the pull request'
 (`PrAttention.reasons[0]`), the pickup gate's, the environment gate's. The mapping is a total table
 over unions that already name a party:
 
-| Bucket    | Reads                                                                                                                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **you**   | every needs-you row whose goal is one of the card's (or whose `pr:` origin belongs to one), and a pull request whose court is `you` that no such row already covers                         |
-| **fleet** | a goal whose pickup status is `cooldown`, `blocked` (the sequence hold), `planning`, `appraisal` or `obstacle`; an agent parked on the usage limit; a pull request whose court is `harness` |
-| **world** | a pull request whose court is `elsewhere` or `stalled`; a goal whose environment gate is holding (`gateHold`)                                                                               |
+| Bucket    | Reads                                                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **you**   | every needs-you row whose goal is one of the card's (or whose `pr:` origin belongs to one), and a pull request whose court is `you` that no such row already covers                                          |
+| **fleet** | a goal whose pickup status is `cooldown`, `blocked` (the sequence hold), `planning`, `appraisal`, `investigation` or `obstacle`; an agent parked on the usage limit; a pull request whose court is `harness` |
+| **world** | a pull request whose court is `elsewhere` or `stalled`; a goal whose environment gate is holding (`gateHold`)                                                                                                |
 
 `unwatched` is in none of them. An item nothing has read is neither queued nor held, and the brief's
 attention line already says so in the words that fit. `settled`, `done` and `unwatched` pull requests
