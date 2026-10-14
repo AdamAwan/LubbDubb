@@ -20,7 +20,8 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    `id`; if it is refused as no longer standing, say so and carry on from the
    head. Every later call is plain `ask_next`.
 2. **Read more only where it helps them decide.** `answerWith.readFirst` names the
-   read that matters for this kind — `proposal_read` before any proposal,
+   read that matters for this kind — `proposal_read` before any proposal, and
+   `plan_read` for a plan,
    `pr_assign` with just `pr` for the shortlist, `validation_read` for checks. Beyond
    that, `goal_read`, `agent_read` and the real diff or code in this checkout are
    there when the decision turns on them. Do not read everything for every ask; an
@@ -79,7 +80,6 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 
    > **Claude's view (not LubbDubb's):** Accept the merge — CI is green and the
    > one review thread is answered. (high)
-
    - **Header** — its kind (`card.kind.label`) and its urgency said plainly: `now`
      is "fleet is stuck on this"; `next` needs nothing.
    - **Title** in bold, then the `question` in full where one came back.
@@ -139,10 +139,16 @@ What they can say at any point:
 
 ### Kinds that need more care
 
+- **A plan is approved on what it says, never on its title.** Before asking,
+  show it from `plan_read`, in or under the card: the approach in a sentence or
+  two; the parts, numbered, one line each with scope, size and what it waits on;
+  out of scope and risks where not empty; how it will be checked; and the
+  caveats in full from `proposal_read`, in the planner's words, before their ids
+  go in `acknowledged`. Then ask "Release this plan — n parts, the fleet starts
+  work?". An amendment has no `plan_read`: show its changes from `proposal_read`.
+
 - **A proposal is an act.** `accept` on a `merge` merges; on a `reply` it posts
-  publicly. Ask "shall I merge #412?", never "shall I approve this?". A plan's
-  caveats go to the operator in their own words before their ids go in
-  `acknowledged`. → the `fleet` skill's _Deciding a proposed act_.
+  publicly. Ask "shall I merge #412?", never "shall I approve this?". → the `fleet` skill's _Deciding a proposed act_.
 - **Secrets never go through this chat.** An ask that wants a credential, a token,
   a login or a key — a `supply` row, a bench task to provision something — is done
   by the operator themselves, wherever it belongs. Tell them what to do; when they

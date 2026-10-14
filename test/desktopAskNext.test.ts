@@ -349,11 +349,24 @@ test('a plan amendment is offered only the verdicts an amendment takes', () => {
   const plan = answerWith(row({ kind: 'plan', subject }), CTX);
   assert.ok(plan.in === 'claude-code');
   assert.match(plan.choose.verdict ?? '', /close_ticket/, 'a plan has the ticket verdicts');
+  assert.deepEqual(
+    plan.readFirst,
+    [
+      { tool: 'proposal_read', args: { id: 'p1' } },
+      { tool: 'plan_read', args: { issue: 284 } },
+    ],
+    'a plan is put to the operator with its parts, not just its id',
+  );
 
   const amendment = answerWith(row({ kind: 'plan', subject }), { ...CTX, proposalKind: () => 'plan_amendment' });
   assert.ok(amendment.in === 'claude-code');
   assert.doesNotMatch(amendment.choose.verdict ?? '', /close_ticket|hold_ticket/, 'which the server refuses here');
   assert.match(amendment.choose.verdict ?? '', /"accept".*"reject"/);
+  assert.deepEqual(
+    amendment.readFirst,
+    [{ tool: 'proposal_read', args: { id: 'p1' } }],
+    'plan_read shows the running plan, not the amendment',
+  );
 });
 
 const SETUP: SetupReading = {
