@@ -44,15 +44,16 @@ placeholder is fine.
 
 ## Prompt ids
 
-| id                        | when it fires                                                         |
-| ------------------------- | --------------------------------------------------------------------- |
-| `issue-pickup`            | an open work item has no linked PR and no agent is on it              |
-| `issue-pickup-escalation` | issue pickup keeps failing to produce a linked PR (→ human)           |
-| `issue-appraisal`         | a watched issue nothing has started on: is there a goal to work from? |
-| `pr-ci-fix`               | a PR has failing CI and no agent is on its branch                     |
-| `pr-base-update-behind`   | a PR is behind its base branch (clean update)                         |
-| `pr-base-update-conflict` | a PR conflicts with its base branch                                   |
-| `pr-review-comment`       | a PR has an unhandled review comment                                  |
-| `pr-concern-escalation`   | a PR concern keeps failing to clear (→ human)                         |
-| `review-pack-author`      | retired — review packs were removed; never rendered                   |
-| `review-pack-check`       | retired — review packs were removed; never rendered                   |
+| id                        | when it fires                                                            |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `issue-pickup`            | an open work item has no linked PR and no agent is on it                 |
+| `issue-pickup-escalation` | issue pickup keeps failing to produce a linked PR (→ human)              |
+| `issue-appraisal`         | a watched issue nothing has started on: is there a goal to work from?    |
+| `issue-investigate`       | a watched issue carrying the investigate label: why does the bug happen? |
+| `pr-ci-fix`               | a PR has failing CI and no agent is on its branch                        |
+| `pr-base-update-behind`   | a PR is behind its base branch (clean update)                            |
+| `pr-base-update-conflict` | a PR conflicts with its base branch                                      |
+| `pr-review-comment`       | a PR has an unhandled review comment                                     |
+| `pr-concern-escalation`   | a PR concern keeps failing to clear (→ human)                            |
+| `review-pack-author`      | retired — review packs were removed; never rendered                      |
+| `review-pack-check`       | retired — review packs were removed; never rendered                      |

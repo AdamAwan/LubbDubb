@@ -202,9 +202,9 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   `dispatch_*` action bypasses both the headroom cut and the Up next queue. Adding a rule is a
   `DISPATCH_PIPELINE` entry in the position it should run, and a module under
   `src/dispatcher/rules/` registered in `STAGES` under that id. → [05](docs/spec/05-dispatcher.md#the-rule-book)
-- **Pipeline order is load-bearing state.** `issue-appraisal` and `issue-assess` write
-  `appraising` / `assessing` on the `StageContext` for later stages to read. Moving either below its
-  readers silently puts two agents on one issue.
+- **Pipeline order is load-bearing state.** `issue-appraisal`, `issue-investigate` and `issue-assess` write
+  `appraising` / `investigating` / `assessing` on the `StageContext` for later stages to read. Moving one below its readers silently puts two agents on one issue.
+- **The investigate label is applied once, when the appraisal asks, and never reconciled.** A sweep that re-applies it from `issue_appraisals.investigate` silently overrules the operator who took it off — removing the label is their _no_. → [38](docs/spec/38-bug-investigation.md#the-label)
 - **Lenses stay out of `src/dispatcher/`.** The work graph, `buildStacks`, `prAttentionStatus`,
   `overlaps` and `src/features/` are read-only views for the cockpit. Asserted
   structurally — if one of those tests fails, fix the file it names, not the assertion.

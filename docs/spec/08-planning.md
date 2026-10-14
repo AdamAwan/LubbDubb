@@ -184,7 +184,7 @@ count is refused, and no part or merge is blocked for one.
 ## The four arms
 
 `resolvePlanRoute(input)` in `src/plans/planning.ts` is **the one place** an issue's arm is decided.
-Pure over the plan row plus the plan origin's cooldown verdict. Both the dispatcher (rules `issue-plan` and `issue-pickup`)
+Pure over the plan row plus the plan origin's cooldown verdict, and one flag a resolved bug investigation sets. Both the dispatcher (rules `issue-plan` and `issue-pickup`)
 and `issuePickupStatus` read it, so the cockpit's chip can never disagree with what fires.
 
 | Verdict                                              | Meaning                                                                                                                                                           |
@@ -198,7 +198,10 @@ Resolution order:
 
 1. A plan row with status `awaiting_approval` → `awaiting_approval`.
 2. A plan row with any status other than `planning` (`active`, `complete`, `abandoned`) → `parts`.
-3. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
+3. No plan row, and `skipPlanning` set → `unplanned`. The one caller that sets it is a bug
+   investigation an operator resolved to _pickup_: they have read the cause and said one agent can fix
+   it whole, so no planner is owed ([38](38-bug-investigation.md#resolving-the-findings)).
+4. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
    verdict decides: `escalate`/`hold` → **fail open**; anything else → `planning`.
 
 The part count is not asked about. It used to be the _first_ question — "an `active` plan with no

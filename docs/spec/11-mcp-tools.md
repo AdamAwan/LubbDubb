@@ -29,6 +29,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `link_ticket`               | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `conclude_work`             | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `appraise_issue`            | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `report_investigation`      | The investigator's findings on a bug before it is planned: reproduction, root cause and confidence, locations, blast radius, and a recommendation an operator resolves. Fenced to `issue:<n>:investigate` origins. → [38](38-bug-investigation.md#the-findings)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `criteria_alignment`        | The alignment check's reading: how the operator's criteria for a goal line up with the ticket's own, point by point, under one verdict. Fenced to `issue:<n>:criteria-alignment` origins. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `prediction_judge`          | The sealed judge's one tool: `read` hands it the goal's prediction and plan, `mark` takes its moment-one reading. Fenced to `issue:<n>:prediction-judge`. → [14](14-persistence.md#the-prediction-judge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `assess_issue`              | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins. On `delivered` its answer asks for the goal's check set as well, where one is still owed — the half of the fold an operator's prompt override cannot drop. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -569,7 +570,7 @@ version stands. → [08](08-planning.md#the-alignment-check)
 
 ### `appraise_issue`
 
-Arguments `{status: 'workable'|'unclear', summary, missing?, profile?, parent?, area_path?}`. Rule `issue-appraisal`'s appraiser casts its verdict here, with
+Arguments `{status: 'workable'|'unclear', summary, missing?, profile?, parent?, area_path?, investigate?}`. Rule `issue-appraisal`'s appraiser casts its verdict here, with
 identity structural as everywhere else — no issue argument, the origin resolved from the credential.
 
 - **`missing` is required with `unclear` and dropped with `workable`** — one string per gap, each
@@ -601,8 +602,27 @@ identity structural as everywhere else — no issue argument, the origin resolve
   is already standing holds the funnel until a human answers, and the tool's own reply says so.
   → [02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)
 
+- **`investigate` is honoured only with `workable`** and dropped otherwise: true when the ticket reports
+  a bug whose cause is not known yet. It is stored on the appraisal row and carried on the `appraisal`
+  event, whose listener in the composition root puts the investigate label on the issue — once, at
+  record time, never by a later sweep. → [38](38-bug-investigation.md#the-label)
+
 It routes through `AgentManager.recordAppraisal` for the `appraisal` event, so the cockpit repaints on the
 verdict rather than on the next pulse.
+
+### `report_investigation`
+
+Arguments `{reproduction, root_cause, confidence: 'high'|'medium'|'low', locations, blast_radius,
+recommendation: 'plan'|'pickup'|'close'|'ask'}`. Rule `issue-investigate`'s one extra tool, placed on
+that rule's `RULE_TOOLS` row alone and named at its point of use. Fenced to `issue:<n>:investigate`
+origins: any other run is refused and nothing is recorded. The four text fields are required and
+non-blank, each at most 4 000 characters — an empty one is refused with a request to say what was
+found, or what could not be.
+
+The row is keyed on the issue (`issue:<n>`), overwritten by each report with its resolution reset, and
+fingerprinted against the title and body **the agent was dispatched with**, read off its task, as
+`appraise_issue` is. The recommendation is advice: the reply says the findings wait on an operator and
+there is nothing further to do. It does not append `DONE_REMINDER`. → [38](38-bug-investigation.md)
 
 ### `conclude_part`
 
@@ -1991,7 +2011,7 @@ So every tool is named in one of two places, and which one is a decision, not a 
   a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `appraise_issue`, `criteria_alignment`, `plan_submit`, `plan_not_needed`, `retro_submit`,
+  `appraise_issue`, `report_investigation`, `criteria_alignment`, `plan_submit`, `plan_not_needed`, `retro_submit`,
   `feature_summary`, `link_ticket`,
   the scratch pair, the validation pair. The planner's **two verdicts** sit here together, and that is the
   rule doing its work rather than an exception to it: `plan_submit` is fenced to `issue:<n>:plan` and

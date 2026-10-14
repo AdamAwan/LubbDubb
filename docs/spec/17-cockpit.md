@@ -797,6 +797,23 @@ An **unwatched** item is never intake, whatever a stale verdict says: nothing ap
 in, so a verdict on one is left over from before it was dropped, and the drop outranks it. Derived from
 `world.issues` and never the retained runs, for the profile gate's reason.
 
+**`findings` is a bug investigation's findings waiting on the operator** ([38](38-bug-investigation.md)).
+`findingsRows` (`src/asks/issueAsks.ts`) raises one per open goal whose current investigation has no
+resolution **and** whose pickup verdict quotes `FINDINGS_WAITING_REASON` — the reason
+`investigationHold` gives — so the row stands exactly while the findings are what holds the goal. Take
+the investigate label off and the hold goes, and the row with it: an ask for an answer that no longer
+gates anything would be a chore. It is `blocking` and `now` on the `sitting` row's terms — planning is
+waiting on the answer — and stage `plan` on the goal's track.
+
+The band draws the findings whole — reproduction, root cause with its confidence, where, blast radius —
+and names the agent's recommendation. Under them are the four resolutions (**Plan it**, **Straight to
+pickup**, **Close**, **Ask for info**), the recommended one in the primary tone and marked
+`· recommended`, and **Investigate again**, which clears the row so a fresh agent looks. All five go
+through `POST /api/issues/:number/investigation`
+([16](16-http-api.md#post-apiissuesnumberinvestigation)). The goal header carries an `Investigation ·`
+chip whenever a current record exists — amber while it waits, green once resolved, with the root cause
+and confidence on its title.
+
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
 there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
@@ -926,7 +943,7 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 
 `KIND_URGENCY` (`src/asks/queue.ts`) is total over `AskKind`, so a new kind is placed deliberately rather than inheriting
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
-`dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
+`dispatch`, `config`, the two proposals that gate work, `plan` and `merge`, and the two asks planning waits on, `sitting` and `findings`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
 `close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
 `description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
@@ -988,6 +1005,7 @@ within it.
 | `description_note`  | Description note | blue  | `¶`   | The diff raises something the description does not. A note.     |
 | `shortfall`         | Shortfall        | blue  | `✗`   | Delivered work that did not reach its goal.                     |
 | `intake`            | Intake           | blue  | `◌`   | The appraisal could not say a goal is workable.                 |
+| `findings`          | Findings         | blue  | `⌕`   | An investigation found a cause; you say what happens next.      |
 | `profile`           | Profile          | blue  | `⊙`   | Which profile a goal runs on.                                   |
 | `placement`         | Backlog          | amber | `▣`   | Nothing is held; the ticket is off the board.                   |
 | `bench`             | Bench            | blue  | `◆`   | Work only a person can do. Informative, not broken.             |
