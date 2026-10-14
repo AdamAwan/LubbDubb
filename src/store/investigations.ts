@@ -41,6 +41,16 @@ export class InvestigationStore {
     return this.get(originRef);
   }
 
+  labelApplied(originRef: string): boolean {
+    return this.ctx.prep(`SELECT 1 FROM issue_investigate_labels WHERE origin_ref=?`).get(originRef) !== undefined;
+  }
+
+  markLabelApplied(originRef: string): void {
+    this.ctx
+      .prep(`INSERT OR IGNORE INTO issue_investigate_labels (origin_ref, applied_at) VALUES (?, ?)`)
+      .run(originRef, this.ctx.now());
+  }
+
   clear(originRef: string): boolean {
     return this.ctx.prep(`DELETE FROM issue_investigations WHERE origin_ref=?`).run(originRef).changes > 0;
   }

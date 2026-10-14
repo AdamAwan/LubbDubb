@@ -1058,7 +1058,8 @@ is:
 The prompt carries the title and body, and the dispatch's `originTitle` / `originSummary` are what the
 findings are fingerprinted against. `readOnlyNote` and `relatedWorkNote` are appended. A resolution of
 _plan_ or _pickup_ appends the findings to the planner's or the pickup's prompt (`investigationNote`),
-and _pickup_ makes `resolvePlanRoute` answer `unplanned` ([08](08-planning.md#the-four-arms)).
+and _pickup_ makes `resolvePlanRoute` answer `unplanned` ([08](08-planning.md#the-four-arms)) — both
+only while the label is on.
 
 ## `issue-assess` — the assessor
 

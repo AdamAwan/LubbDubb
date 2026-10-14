@@ -4,8 +4,10 @@ import {
   GOAL_APPRAISAL_VERDICTS,
   type GoalAppraisalVerdictName,
   STORY_RUBRIC,
+  appraiserOrigin,
   validateGoalAppraisal,
 } from '../goalAppraisal.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import { toolSchema } from '../schema.js';
@@ -153,7 +155,21 @@ function recordedNote(
         'nothing is rejected — that stays a human decision.';
 }
 
-export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
+async function labelForInvestigation(deps: McpToolDeps, originRef: string | null): Promise<void> {
+  const origin = appraiserOrigin(originRef);
+  const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
+  if (issueNumber === null || deps.investigateLabel === undefined) return;
+  try {
+    await deps.investigateLabel(issueNumber);
+  } catch (err) {
+    deps.errors?.record({
+      source: 'server',
+      message: `Failed to label #${issueNumber} for investigation: ${(err as Error).message}`,
+    });
+  }
+}
+
+export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
   const profiles = deps.profiles ?? [];
   const names = profiles.map((p) => p.name);
   const tree = deps.areaPaths?.() ?? null;
@@ -161,14 +177,14 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
   return {
     description: appraisalDescription(profiles, areas),
     inputSchema: toolSchema(appraisalInput(profiles, areas)),
-    handler: (args) => {
+    handler: async (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
+      if (parsed.investigate) await labelForInvestigation(deps, task.originRef);
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         missing: parsed.missing,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
-        investigate: parsed.investigate,
       });
       if (!result.ok) return toolError(result.error);
       return ok({

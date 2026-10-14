@@ -742,14 +742,16 @@ distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 ticket reports a bug whose symptom is clear and whose cause nobody has stated. The ticket's type and
 tags are not consulted — a `Bug` type is how the reporter filed it, not whether the cause is known — so
 the appraiser, which has just read the ticket against the repository, is who judges it. The flag is
-not stored: it rides on the `appraisal` event and, at record time and only then, puts the investigate
-label on the issue. Nothing re-applies it later, so an operator who takes it off has the last word until a
-rewritten ticket is appraised again. With `unclear` it is dropped: a goal nobody can start from has its
-questions answered first. → [38](38-bug-investigation.md)
+not stored: the tool puts the investigate label on the issue, **before** it records the verdict, and
+only the first time the harness has ever labelled that issue (`issue_investigate_labels`). Nothing
+re-applies it — not a sweep, not a re-appraisal of a rewritten ticket — so an operator who takes it off
+has the last word. With `unclear` it is dropped: a goal nobody can start from has its questions
+answered first. → [38](38-bug-investigation.md)
 
 The investigation it asks for holds rule `issue-plan` and rule `issue-pickup` while it runs and while
 its findings wait on an operator — the hold is the investigation's, owned there, and lifted by removing
-the label.
+the label. Removing it lifts a _pickup_ resolution's skipped planning too: `investigationSkipsPlanning`
+reads the label as well as the record.
 
 `issuePickupStatus` reports it as its own status, `investigation`, asked after the active and
 standing-hold arms and before the plan route, so the chip says why no planner is coming rather than

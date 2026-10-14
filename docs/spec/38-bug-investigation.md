@@ -41,25 +41,31 @@ unwatched issue carrying it is left alone like any other.
 Two hands put it on:
 
 - **An operator, by hand**, on the tracker. That is the whole interface for "investigate this first".
-- **The goal appraisal, once.** `appraise_issue` takes an optional `investigate` flag, honoured only
-  with `workable` — an `unclear` ticket gets its questions first, and a goal nobody can start from has
-  no cause to look for ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)). It is not stored:
-  the `appraisal` event carries it, and nothing else does. A listener in
-  `src/system/system.ts` applies the label through `applyInvestigateLabel` (`src/issueWatch.ts`) — the
-  same `ActionSink.setIssueLabel` write the watch toggle makes — and folds it onto the stored world and
-  the ticket mirror, so the pulse after the appraisal sees the label without waiting for a hydrate.
-  Without that fold the planner, released when the appraiser exits, could start on the pulse between.
+- **The goal appraisal, once ever per issue.** `appraise_issue` takes an optional `investigate` flag,
+  honoured only with `workable` — an `unclear` ticket gets its questions first, and a goal nobody can
+  start from has no cause to look for ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)). The
+  flag itself is not stored. The tool hands it to the `investigateLabel` seam on `McpToolDeps`, wired in
+  `src/system/system.ts` to `applyInvestigateLabel` (`src/issueWatch.ts`) — the same
+  `ActionSink.setIssueLabel` write the watch toggle makes, folded onto the stored world and the ticket
+  mirror — and **awaits it before recording the verdict**.
 
-**The label is applied at record time and never by a sweep**, and that is what makes removing it
-stick. The appraiser's request is not kept anywhere a later pass could read it back, so there is
-nothing to reconcile the label against. An operator who takes the label off a ticket the
-appraiser labelled has answered _no, plan it as it is_, and a reconciler that put it back would
-overrule them on every pulse with nothing red. The label returns only if a fresh appraisal asks
-again — and an appraisal runs again only on a rewritten ticket, since its verdict is keyed to the
-text.
+**The label is in the world before the verdict exists.** The verdict is what releases the planner
+once the appraiser exits, and the appraiser is still live — so still `appraising` — for as long as its
+tool call is awaited. A write fired off after the verdict instead leaves a window in which a pulse
+dispatches the planner; the plan row it writes then retires rule `issue-investigate` for good, and
+the investigation the appraiser asked for never happens, with nothing red.
 
-A failed label write is recorded through `errors.record` and investigates nothing: the issue goes on
-to the planner as though the appraiser had not asked. That is the fail-open direction.
+**The label is applied once per issue, ever, and never by a sweep**, and that is what makes removing
+it stick. A label the harness put on is recorded in `issue_investigate_labels`; `applyInvestigateLabel`
+reads that first and writes nothing for an issue it has labelled before. An operator who takes the
+label off a ticket the appraiser labelled has answered _no, plan it as it is_ — and a reconciler, or a
+re-appraisal after the ticket is edited, that put it back would overrule them with nothing red. Only a
+write that landed is recorded, so a failed one is not the once. An operator can always put the label
+back by hand.
+
+A failed label write is recorded through `errors.record`, and the verdict is recorded all the same:
+the issue goes on to the planner as though the appraiser had not asked. That is the fail-open
+direction.
 
 ## The rule — `issue-investigate`
 
@@ -105,10 +111,11 @@ when the investigator's own origin is what is active, so the hold lasts as long 
 rather than only the pulse that proposed it. And it is load-bearing state: moved below `issue-plan`,
 the rule would compile, stop holding, and put a planner beside the investigator.
 
-**Removing the label lifts every hold**, both cases, on the next pulse. It is the one lever, so it has
-to be total: an operator who has decided the findings do not matter, or that a closed-out finding was
-wrong, should not have to find a second control to release the issue. What the label does _not_
-undo is a resolution's effect on the route and the prompt — those read the record, not the label
+**Removing the label lifts everything**, on the next pulse: both holds, a _pickup_ resolution's
+skipped planning, and the findings appended to the planner's or the pickup's prompt. It is the one
+lever, so it has to be total: an operator who has decided the findings do not matter, or that a
+closed-out finding was wrong, should not have to find a second control to release the issue — and
+an issue with the label off is worked exactly as one that never had it
 ([below](#resolving-the-findings)).
 
 ## The findings
@@ -146,12 +153,17 @@ the type, the tool's `recommendation` enum, the route's body and the cockpit's b
 In the cockpit the findings are a **`findings` ask** on the rail, standing while the pickup verdict is
 `investigation` and the findings are unanswered: the four fields drawn whole, the agent's recommendation marked on its button among the
 four resolutions, and **Investigate again** beside them. The goal header carries an `Investigation ·`
-chip while a current record exists. → [17](17-cockpit.md#hue-is-the-kind-weight-is-the-group)
+chip for a current record: the operator's answer once resolved, and _waiting on you_ only on the
+findings ask's own terms — pickup status `investigation` — so with the label off it says nothing
+asks. → [17](17-cockpit.md#hue-is-the-kind-weight-is-the-group)
 
 ## Resolving the findings
 
 `POST /api/issues/:number/investigation` with `{resolution}` writes the operator's answer; `{clear:
-true}` deletes the row.
+true}` deletes the row. A resolution is accepted only for the **current** record — one fingerprinted
+to the ticket text in the last world snapshot. A stale row is refused with 409: an answer to findings
+about an earlier text would be read back as an answer about this one if the ticket were reverted, and
+it holds or releases nothing now.
 
 | Resolution | What happens                                                                                                                                                                                                          |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -167,16 +179,17 @@ operator-overridable, and an override that never learned a `{findings}` token wo
 on exactly the deployments that customised most. It tells the agent the findings are one agent's
 reading, accepted by an operator, to be checked against the repository.
 
-The route and the note read the **record**, not the label: a `pickup` resolution skips planning and
-both resolved arms carry the note whether or not the label is still on. Taking the label off after
-resolving _pickup_ does not put a planner back on the issue; clearing the findings does.
+The route and the note read the record **and** the label (`investigationSkipsPlanning`,
+`investigationNote` both take the `InvestigationStanding`): taking the label off after resolving
+_pickup_ puts the planner back on the issue, and neither resolved arm carries the note any more. The
+label is the one lever, and an issue without it is worked as though nothing had been investigated.
 
 ## Fail open
 
 Every one of these leaves the issue to the ordinary funnel, exactly as it would be with no label:
 
 - no label, or a label the provider cannot attribute under `requireOwnLabel`;
-- a failed label write after an appraisal asked;
+- a failed label write after an appraisal asked — the verdict is recorded regardless;
 - an investigator that crashed, was killed or spent its attempt cap — `consider` returns false on an
   `escalate` or `hold` verdict and the rule passes no escalation, so nothing is written to
   `investigating`, no record exists to hold on, and the planner runs. **No escalation is raised**, the
@@ -198,9 +211,11 @@ cause.
 
 ## Persistence
 
-`issue_investigations` is a new table and needs no `ColumnMigrations` entry. Nothing is added to
-`issue_appraisals`: the appraiser's `investigate` flag is acted on when it is cast and not kept, which
-is also what keeps a sweep from having anything to re-apply. → [14](14-persistence.md#migrations)
+`issue_investigations` and `issue_investigate_labels` are new tables and need no `ColumnMigrations`
+entry. `issue_investigate_labels` (`origin_ref` `issue:<n>`, `applied_at`) records that the harness
+put the label on, never that it was asked to: nothing reads it but `applyInvestigateLabel`, to refuse
+a second write. Nothing is added to `issue_appraisals`: the appraiser's `investigate` flag is acted on
+when it is cast and not kept, which is also what keeps a sweep from having anything to re-apply. → [14](14-persistence.md#migrations)
 
 ## Tests
 
@@ -219,10 +234,13 @@ is also what keeps a sweep from having anything to re-apply. → [14](14-persist
 - `report_investigation` is named, placed only on the investigator's row, fenced to its origin, and
   fingerprints the text the agent was handed;
 - an appraisal that asks labels the issue once, one that does not ask leaves it, and an `unclear`
-  appraisal never labels;
-- the route resolves, clears, and refuses an unknown resolution with 400 and a missing record with 404.
+  appraisal never labels; the label is in the world before the verdict is recorded; a second
+  appraisal never labels again; a failed write still records the verdict and is not the once;
+- with the label off, a _pickup_ resolution skips nothing and the note is empty;
+- the route resolves, clears, and refuses an unknown resolution with 400, a missing record with 404
+  and a record about an earlier text with 409.
 
 `test/investigationCockpit.test.ts` covers the cockpit half: the pickup verdict's investigation reasons
 and their fall-back once answered or unlabelled, and the `findings` ask — what it draws, that it stands
 only while the pickup verdict says the findings hold the goal, and that each answer and **Investigate
-again** reach the route.
+again** reach the route — and that the header's _waiting on you_ chip follows the same status.

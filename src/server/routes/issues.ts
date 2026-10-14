@@ -259,9 +259,15 @@ function registerInvestigation(app: FastifyInstance, { system, hub }: RouteConte
         await harness.runCycle('manual');
         return { ok: true, investigation: null };
       }
-      const investigation = store.investigations.resolve(originRef, body.resolution);
-      if (investigation === null)
+      const recorded = store.investigations.get(originRef);
+      if (recorded === null)
         return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
+      const ticket = store.world.getWorldBaseline()?.issues.find((i) => i.number === params.number);
+      if (ticket === undefined || recorded.goalRef !== goalFingerprint(ticket.title, ticket.body))
+        return reply.code(409).send({
+          error: `the investigation recorded for #${params.number} is about an earlier text of the ticket; it is not current and cannot be resolved — clear it to investigate again`,
+        });
+      const investigation = store.investigations.resolve(originRef, body.resolution);
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, investigation };

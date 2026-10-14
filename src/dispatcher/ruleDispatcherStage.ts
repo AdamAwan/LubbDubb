@@ -87,7 +87,7 @@ export function planRoutes(
         plan,
         verdict: plannerVerdict(issue.number, plan, ctx.world.takenAt, ctx.recentDecisions, cooldown),
         existingParts: plan ? liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id)).length : 0,
-        skipPlanning: investigationSkipsPlanning(investigationStanding(investigations, issue.number).current),
+        skipPlanning: investigationSkipsPlanning(investigationStanding(investigations, issue.number)),
       }),
     );
   }

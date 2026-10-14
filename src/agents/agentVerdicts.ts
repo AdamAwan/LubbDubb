@@ -210,7 +210,7 @@ export function recordAppraisal(
   verdict: GoalAppraisalVerdictName,
   summary: string,
   profile: string | null,
-  placement?: { missing?: string[]; parent: number | null; areaPath: string | null; investigate?: boolean },
+  placement?: { missing?: string[]; parent: number | null; areaPath: string | null },
 ):
   | { ok: true; issueOrigin: string; verdict: GoalAppraisalVerdictName; profileHeld: boolean }
   | { ok: false; error: string } {
@@ -239,7 +239,6 @@ export function recordAppraisal(
     taskId: task.id,
     issueOrigin: origin.issueOrigin,
     verdict,
-    investigate: placement?.investigate === true,
   });
   return { ok: true, issueOrigin: origin.issueOrigin, verdict, profileHeld };
 }

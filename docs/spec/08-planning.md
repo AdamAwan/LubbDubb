@@ -199,8 +199,8 @@ Resolution order:
 1. A plan row with status `awaiting_approval` → `awaiting_approval`.
 2. A plan row with any status other than `planning` (`active`, `complete`, `abandoned`) → `parts`.
 3. No plan row, and `skipPlanning` set → `unplanned`. The one caller that sets it is a bug
-   investigation an operator resolved to _pickup_: they have read the cause and said one agent can fix
-   it whole, so no planner is owed ([38](38-bug-investigation.md#resolving-the-findings)).
+   investigation an operator resolved to _pickup_, while the investigate label is still on: they have
+   read the cause and said one agent can fix it whole, so no planner is owed ([38](38-bug-investigation.md#resolving-the-findings)).
 4. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
    verdict decides: `escalate`/`hold` → **fail open**; anything else → `planning`.
 

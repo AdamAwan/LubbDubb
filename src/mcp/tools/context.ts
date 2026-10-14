@@ -84,7 +84,7 @@ export interface AgentToolTarget {
     verdict: GoalAppraisalVerdictName,
     summary: string,
     profile: string | null,
-    placement?: { missing?: string[]; parent: number | null; areaPath: string | null; investigate?: boolean },
+    placement?: { missing?: string[]; parent: number | null; areaPath: string | null },
   ):
     | {
         ok: true;
@@ -186,6 +186,12 @@ export interface McpToolDeps {
    * → docs/spec/14-persistence.md#the-prediction-judge
    */
   judge?: JudgeChannel;
+  /**
+   * Puts the investigate label on an issue, once ever, and folds it onto the stored world. The
+   * appraisal awaits it before recording its verdict, so the label is in the world before the
+   * verdict can release the planner. → docs/spec/38-bug-investigation.md#the-label
+   */
+  investigateLabel?: (issueNumber: number) => Promise<void>;
   errors?: ErrorRecorder;
 }
 

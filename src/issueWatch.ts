@@ -2,6 +2,8 @@ import type { ErrorRecorder } from './errorLog.js';
 import { watchCascadeTargets } from './issueRelations.js';
 import type { IssueLabelInput, SendResult } from './sink/actionSink.js';
 import type { Store } from './store/store.js';
+import type { InvestigationStore } from './store/investigations.js';
+import { issueOriginRef } from './issueOrigins.js';
 import { investigateLabelFor, watchLabelFor } from './watchLabels.js';
 
 // → docs/spec/06-issue-pickup.md
@@ -56,10 +58,13 @@ export async function applyIssueWatch(
 
 export async function applyInvestigateLabel(
   ctx: IssueWatchContext,
+  applied: Pick<InvestigationStore, 'labelApplied' | 'markLabelApplied'>,
   issueNumber: number,
   because: string,
 ): Promise<void> {
-  await applyIssueLabel(
+  const originRef = issueOriginRef('root', issueNumber);
+  if (applied.labelApplied(originRef)) return;
+  const { landed } = await applyIssueLabel(
     ctx,
     investigateLabelFor(ctx.labelPrefix),
     [issueNumber],
@@ -67,6 +72,7 @@ export async function applyInvestigateLabel(
     'the investigate label',
     because,
   );
+  if (landed.includes(issueNumber)) applied.markLabelApplied(originRef);
 }
 
 async function applyIssueLabel(

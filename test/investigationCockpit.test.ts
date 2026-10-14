@@ -328,3 +328,13 @@ test('each answer resolves the investigation, and Investigate again clears it', 
     [number, null],
   ]);
 });
+
+test('the header says findings wait on you only while they hold the goal', async () => {
+  const { investigationChip } = await import('../web/src/view/issueAsks.js');
+  const goal = (s: ReturnType<typeof investigated>) => s.state.world.issues.find((i) => i.number === s.number)!;
+  assert.deepEqual(investigationChip(goal(investigated())), { text: 'waiting on you', tone: 'amber' });
+  const unheld = investigated({}, { status: 'planning', reasons: ['awaiting a planning agent'] });
+  assert.equal(investigationChip(goal(unheld)), null, 'with the label off there is no ask to wait on');
+  const answered = investigated({ resolution: 'close', resolvedAt: NOW });
+  assert.deepEqual(investigationChip(goal(answered)), { text: 'close', tone: 'green' });
+});

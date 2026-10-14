@@ -37,7 +37,6 @@ import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
 import { isSealedRule } from '../mcp/names.js';
 import { applyInvestigateLabel, issueWatchContext } from '../issueWatch.js';
-import { issueSubtreeNumber } from '../issueOrigins.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
@@ -276,6 +275,13 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     }),
     // The one agent that may read a prediction is handed it through this seam, never the store.
     judge: judgeSeam(predictions, store),
+    investigateLabel: (issueNumber: number): Promise<void> =>
+      applyInvestigateLabel(
+        issueWatchContext({ store, connector: sink, errors, config }),
+        store.investigations,
+        issueNumber,
+        'after the goal appraisal asked for an investigation',
+      ),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     errors,
   });
@@ -397,26 +403,7 @@ function logStandingMove(feature: number, before: string[], after: string[]): vo
   console.log(`[lubbdubb] feature #${feature} standing moved\n${moves.join('\n')}`);
 }
 
-function wireAgentEvents(
-  config: Config,
-  { store, errors, worktrees, sink }: Foundation,
-  { agents, escalations }: Fleet,
-): void {
-  agents.on('appraisal', ({ issueOrigin, investigate }) => {
-    const issueNumber = issueSubtreeNumber(issueOrigin);
-    if (!investigate || issueNumber === null) return;
-    applyInvestigateLabel(
-      issueWatchContext({ store, connector: sink, errors, config }),
-      issueNumber,
-      'after the goal appraisal asked for an investigation',
-    ).catch((err: unknown) =>
-      errors.record({
-        source: 'server',
-        message: `Failed to label #${issueNumber} for investigation: ${(err as Error).message}`,
-      }),
-    );
-  });
-
+function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, escalations }: Fleet): void {
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
     if (store.escalations.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.tasks.getTask(taskId);
@@ -466,7 +453,7 @@ function wireAgentEvents(
 function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
   const { store, errors, worktrees, runtimeControl, ingressInbox } = base;
   const { agents } = fleet;
-  wireAgentEvents(config, base, fleet);
+  wireAgentEvents(base, fleet);
 
   const localCycles = new CycleTrigger({
     run: () => harness.runCycle('local'),

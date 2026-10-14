@@ -902,8 +902,10 @@ Body `{resolution: 'plan'|'pickup'|'close'|'ask'}` or `{clear: true}`. The opera
 investigation's findings ([38](38-bug-investigation.md#resolving-the-findings)): _plan_ releases the
 planner with the findings appended, _pickup_ skips planning, _close_ and _ask_ keep the issue held while
 the label is on, and `clear` deletes the row — which, with the label still on, investigates again.
-**404** when no investigation is recorded for the issue; **400** on a non-integer issue number or any
-other body. Broadcasts `world:changed` and runs a cycle, so the planner or pickup it releases is
+**404** when no investigation is recorded for the issue; **409** on a resolution when the record is
+not current — the issue is not in the last world snapshot, or its text has been edited since the
+findings — so a stale row is never answered (`clear` is accepted either way); **400** on a
+non-integer issue number or any other body. Broadcasts `world:changed` and runs a cycle, so the planner or pickup it releases is
 dispatched now rather than on the next heartbeat. The issue's snapshot carries the current record as
 `investigation` — null when there is none, or when the ticket has been edited since.
 

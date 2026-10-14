@@ -77,7 +77,7 @@ export function issuePlan(s: StageContext): void {
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          investigationNote(investigationStanding(s.investigations, issue.number).current) +
+          investigationNote(investigationStanding(s.investigations, issue.number)) +
           s.watchNote +
           s.testPartNote +
           s.screenCheckNote,

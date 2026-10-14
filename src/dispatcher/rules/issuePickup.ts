@@ -40,7 +40,7 @@ export function issuePickup(s: StageContext): void {
             branch,
           }) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          investigationNote(investigationStanding(s.investigations, issue.number).current) +
+          investigationNote(investigationStanding(s.investigations, issue.number)) +
           s.watchDeclareNote +
           s.stateDeclareNote,
         originRef: origin,

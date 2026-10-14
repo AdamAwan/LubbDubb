@@ -327,7 +327,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
-    skipPlanning: investigationSkipsPlanning(investigation.current),
+    skipPlanning: investigationSkipsPlanning(investigation),
   });
   const gated = planGateStatus(planVerdict, plan, parts);
   if (gated) return gated;

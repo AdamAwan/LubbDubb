@@ -18,4 +18,12 @@ CREATE TABLE IF NOT EXISTS issue_investigations (
   resolution     TEXT,              -- null while it waits on the operator; else plan | pickup | close | ask
   resolved_at    TEXT
 );
+
+-- The issues the harness itself put the investigate label on, after a goal appraisal asked.
+-- Applied once per issue, ever: an operator who takes the label off has answered, and a later
+-- appraisal of a rewritten ticket must not put it back.
+CREATE TABLE IF NOT EXISTS issue_investigate_labels (
+  origin_ref TEXT PRIMARY KEY,  -- "issue:12"
+  applied_at TEXT NOT NULL
+);
 `;

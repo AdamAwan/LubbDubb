@@ -811,8 +811,10 @@ pickup**, **Close**, **Ask for info**), the recommended one in the primary tone 
 `· recommended`, and **Investigate again**, which clears the row so a fresh agent looks. All five go
 through `POST /api/issues/:number/investigation`
 ([16](16-http-api.md#post-apiissuesnumberinvestigation)). The goal header carries an `Investigation ·`
-chip whenever a current record exists — amber while it waits, green once resolved, with the root cause
-and confidence on its title.
+chip for a current record (`investigationChip`, `web/src/view/issueAsks.ts`) — green with the answer
+once resolved, amber _waiting on you_ only while the ask itself would stand (`awaitedFindings`: pickup
+status `investigation`), with the root cause and confidence on its title. Unanswered findings with
+the label off wait on nobody, so the header says nothing about them.
 
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:

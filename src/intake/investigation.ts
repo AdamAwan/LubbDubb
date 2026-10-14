@@ -48,12 +48,12 @@ export function investigationStanding(
   return standings?.get(issueNumber) ?? NO_INVESTIGATION;
 }
 
-export function investigationSkipsPlanning(investigation: IssueInvestigation | null): boolean {
-  return investigation?.resolution === 'pickup';
+export function investigationSkipsPlanning({ current, labelled }: InvestigationStanding): boolean {
+  return labelled && current?.resolution === 'pickup';
 }
 
-export function investigationNote(investigation: IssueInvestigation | null): string {
-  if (investigation === null) return '';
+export function investigationNote({ current: investigation, labelled }: InvestigationStanding): string {
+  if (!labelled || investigation === null) return '';
   if (investigation.resolution !== 'plan' && investigation.resolution !== 'pickup') return '';
   return (
     '\n\n## What the investigation found\n\n' +

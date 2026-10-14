@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
+import { investigationNote, investigationSkipsPlanning } from '../src/intake/investigation.js';
 import { investigateLabelFor, pickupLabels } from '../src/watchLabels.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system/system.js';
@@ -339,19 +340,108 @@ test('an appraisal asking for investigation labels the issue once, at record tim
   system.store.close?.();
 });
 
+const FINDINGS_ROW = {
+  originRef: 'issue:12',
+  by: 'a1',
+  reproduction: 'r',
+  rootCause: 'c',
+  confidence: 'low' as const,
+  locations: 'l',
+  blastRadius: 'b',
+  recommendation: 'ask' as const,
+};
+
+type LabelWrite = { number: number; label: string; present: boolean };
+
+function scriptLabels(system: System, write: (input: LabelWrite) => Promise<unknown>): void {
+  (system.connector as unknown as { setIssueLabel: typeof write }).setIssueLabel = write;
+}
+
+test('the label is in the world before the appraisal verdict that would release the planner', async () => {
+  const system = build();
+  system.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [], issues: [issue({ labels: [] })] });
+  let land!: () => void;
+  scriptLabels(system, () => new Promise((resolve) => (land = () => resolve({ ok: true }))));
+  const agent = spawnAgent(system, 'issue:12:appraisal');
+  const call = callTool(system, agent, 'appraise_issue', {
+    status: 'workable',
+    summary: 'A crash on an empty export, cause unknown.',
+    investigate: true,
+  });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(system.store.verdicts.getAppraisal('issue:12'), null, 'the verdict landed before the label');
+  land();
+  const res = await call;
+  assert.equal(res.isError, false, res.text);
+  assert.equal(system.store.verdicts.getAppraisal('issue:12')?.verdict, 'workable');
+  assert.ok(system.store.world.getWorldBaseline()?.issues[0]?.labels?.includes('investigate'));
+  system.store.close?.();
+});
+
+test('the harness applies the investigate label once per issue, ever', async () => {
+  const system = build();
+  const writes: LabelWrite[] = [];
+  scriptLabels(system, async (input) => {
+    writes.push(input);
+    return { ok: true };
+  });
+  const asks = { status: 'workable', summary: 'Cause unknown.', investigate: true };
+  await callTool(system, spawnAgent(system, 'issue:12:appraisal'), 'appraise_issue', asks);
+  assert.equal(writes.length, 1);
+  await callTool(system, spawnAgent(system, 'issue:12:appraisal'), 'appraise_issue', asks);
+  assert.equal(writes.length, 1, 'a re-appraisal put back a label the operator may have removed');
+  system.store.close?.();
+});
+
+test('a failed label write is recorded, still records the verdict, and does not count as applied', async () => {
+  const system = build();
+  let attempts = 0;
+  scriptLabels(system, async () => {
+    attempts++;
+    throw new Error('tracker down');
+  });
+  const asks = { status: 'workable', summary: 'Cause unknown.', investigate: true };
+  const res = await callTool(system, spawnAgent(system, 'issue:12:appraisal'), 'appraise_issue', asks);
+  assert.equal(res.isError, false, res.text);
+  assert.equal(system.store.verdicts.getAppraisal('issue:12')?.verdict, 'workable');
+  assert.ok(system.store.errors.listErrors().some((e) => e.message.includes('tracker down')));
+  await callTool(system, spawnAgent(system, 'issue:12:appraisal'), 'appraise_issue', asks);
+  assert.equal(attempts, 2, 'a write that never landed is not the once');
+  system.store.close?.();
+});
+
+test('with the label off, a resolved investigation skips nothing and appends nothing', () => {
+  const current = investigation({ resolution: 'pickup', resolvedAt: NOW });
+  assert.equal(investigationSkipsPlanning({ current, labelled: true, hold: null }), true);
+  assert.equal(investigationSkipsPlanning({ current, labelled: false, hold: null }), false);
+  assert.match(investigationNote({ current, labelled: true, hold: null }), /What the investigation found/);
+  assert.equal(investigationNote({ current, labelled: false, hold: null }), '');
+});
+
+test('the route refuses to resolve findings about an earlier text of the ticket', async () => {
+  const system = build();
+  system.store.world.setWorldBaseline({
+    takenAt: NOW,
+    pullRequests: [],
+    issues: [issue({ body: 'Rewritten: it throws on a single row too.' })],
+  });
+  system.store.investigations.record({ ...FINDINGS_ROW, goalRef: goalFingerprint(issue().title, issue().body) });
+  const { app } = await buildApp(system);
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/issues/12/investigation',
+    payload: { resolution: 'pickup' },
+  });
+  assert.equal(res.statusCode, 409, res.body);
+  assert.equal(system.store.investigations.get('issue:12')?.resolution, null);
+  await app.close();
+  system.store.close?.();
+});
+
 test('the operator resolves or clears the findings over the route', async () => {
   const system = build();
-  system.store.investigations.record({
-    originRef: 'issue:12',
-    goalRef: 'g',
-    by: 'a1',
-    reproduction: 'r',
-    rootCause: 'c',
-    confidence: 'low',
-    locations: 'l',
-    blastRadius: 'b',
-    recommendation: 'ask',
-  });
+  system.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [], issues: [issue()] });
+  system.store.investigations.record({ ...FINDINGS_ROW, goalRef: goalFingerprint(issue().title, issue().body) });
   const { app } = await buildApp(system);
   const bad = await app.inject({ method: 'POST', url: '/api/issues/12/investigation', payload: { resolution: 'x' } });
   assert.equal(bad.statusCode, 400);
