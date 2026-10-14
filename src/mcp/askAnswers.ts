@@ -138,13 +138,17 @@ const proposal: Answerer = (row, ctx) => {
       note: 'The reason, recorded with the verdict. Ask for one on a rejection.',
       ...EXTRA_CHOICES[row.kind],
     },
-    readFirst: [{ tool: 'proposal_read', args: { id: subject.proposalId } }, ...planReads(row)],
+    readFirst: [
+      { tool: 'proposal_read', args: { id: subject.proposalId } },
+      ...planReads(row, ctx.proposalKind(subject.proposalId)),
+    ],
   };
 };
 
-function planReads(row: AskRow): ToolCall[] {
+function planReads(row: AskRow, kind: ProposalKind | null): ToolCall[] {
+  if (row.kind !== 'plan' || kind === 'plan_amendment') return [];
   const issue = issueNumberOf(row);
-  return row.kind === 'plan' && issue !== null ? [{ tool: 'plan_read', args: { issue } }] : [];
+  return issue === null ? [] : [{ tool: 'plan_read', args: { issue } }];
 }
 
 const shortfall: Answerer = (row, ctx) => {

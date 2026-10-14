@@ -47,6 +47,7 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 
    **Where you can render a widget** (a `show_widget` tool, read its guide once per
    session first), draw it as one:
+
    - **The goal** beside the ask: `goal.title` and `ask.goalRef`, then its plan — "m of n
      merged" and each part as a numbered row with its `state`, the `here` one marked
      "this ask" in the kind's tone. `plan.withheld` → "plan not revealed yet", and
@@ -138,26 +139,16 @@ What they can say at any point:
 
 ### Kinds that need more care
 
-- **A plan is approved on what it says, never on its title.** Accepting one
-  starts the fleet spending, so before asking, put the plan itself in front of
-  them from `plan_read` — inside the card (or under the markdown card, before
-  your view):
-  - **Approach** — one or two sentences, from `approach` (or `reason`).
-  - **The parts**, numbered, in order: each part's title, a one-line scope, its
-    size, and what it waits on.
-  - **Out of scope** and **risks / open questions** — short, in the planner's
-    words; left out where empty.
-  - **How it will be checked** — `verification` and the validation check titles,
-    briefly.
-  - **Caveats** in full, from `proposal_read`, each with its label and detail.
-
-  Keep it scannable — a line per part, not an essay. Then ask "Release this plan
-  — n parts, the fleet starts work?" rather than "approve this?".
+- **A plan is approved on what it says, never on its title.** Before asking,
+  show it from `plan_read`, in or under the card: the approach in a sentence or
+  two; the parts, numbered, one line each with scope, size and what it waits on;
+  out of scope and risks where not empty; how it will be checked; and the
+  caveats in full from `proposal_read`, in the planner's words, before their ids
+  go in `acknowledged`. Then ask "Release this plan — n parts, the fleet starts
+  work?". An amendment has no `plan_read`: show its changes from `proposal_read`.
 
 - **A proposal is an act.** `accept` on a `merge` merges; on a `reply` it posts
-  publicly. Ask "shall I merge #412?", never "shall I approve this?". A plan's
-  caveats go to the operator in their own words before their ids go in
-  `acknowledged`. → the `fleet` skill's _Deciding a proposed act_.
+  publicly. Ask "shall I merge #412?", never "shall I approve this?". → the `fleet` skill's _Deciding a proposed act_.
 - **Secrets never go through this chat.** An ask that wants a credential, a token,
   a login or a key — a `supply` row, a bench task to provision something — is done
   by the operator themselves, wherever it belongs. Tell them what to do; when they

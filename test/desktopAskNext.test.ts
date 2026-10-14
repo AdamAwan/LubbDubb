@@ -362,6 +362,11 @@ test('a plan amendment is offered only the verdicts an amendment takes', () => {
   assert.ok(amendment.in === 'claude-code');
   assert.doesNotMatch(amendment.choose.verdict ?? '', /close_ticket|hold_ticket/, 'which the server refuses here');
   assert.match(amendment.choose.verdict ?? '', /"accept".*"reject"/);
+  assert.deepEqual(
+    amendment.readFirst,
+    [{ tool: 'proposal_read', args: { id: 'p1' } }],
+    'plan_read shows the running plan, not the amendment',
+  );
 });
 
 const SETUP: SetupReading = {

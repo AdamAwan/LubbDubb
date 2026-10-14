@@ -1490,8 +1490,8 @@ made executable, and has three shapes:
   operator's answer fills and what each means — offering only the values the tool accepts for that
   record: a `plan_amendment` is drawn as a `plan` ask, and is offered `accept` and `reject` without the
   two ticket verdicts `proposal_decide` refuses on it (the proposal's kind is looked up by id) — then `readFirst` where the decision needs a read
-  (`proposal_read` before every proposal, and `plan_read` after it for a `plan` ask, so a plan is put to
-  the operator as its parts and approach rather than as an id; `pr_assign` with only `pr` for the shortlist, `goal_read`
+  (`proposal_read` before every proposal, and `plan_read` after it for a new plan — never an amendment,
+  whose content is in `proposal_read` while `plan_read` shows the running plan; `pr_assign` with only `pr` for the shortlist, `goal_read`
   before an intake verdict, `validation_read` before a `validate` row), and `instead` where a second
   tool also settles it (`goal_gate` `overrule` for a shortfall asked as a plain question,
   `goal_control` `watched` for `unwatched` and `supply`).
