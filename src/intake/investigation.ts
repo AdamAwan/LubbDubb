@@ -18,12 +18,14 @@ export function investigateBranch(issueNumber: number): string {
 export interface InvestigationStanding {
   current: IssueInvestigation | null;
   labelled: boolean;
+  /** `current` while the label is on, else null — the findings dispatch acts on. */
+  inForce: IssueInvestigation | null;
   hold: string | null;
 }
 
 export type InvestigationStandings = ReadonlyMap<number, InvestigationStanding>;
 
-const NO_INVESTIGATION: InvestigationStanding = { current: null, labelled: false, hold: null };
+const NO_INVESTIGATION: InvestigationStanding = { current: null, labelled: false, inForce: null, hold: null };
 
 export function investigationStandings(
   issues: readonly Pick<Issue, 'number' | 'title' | 'body' | 'labels' | 'labelsAddedByViewer'>[],
@@ -36,7 +38,8 @@ export function investigationStandings(
     const stored = byOrigin.get(issueOriginRef('root', issue.number));
     const current = stored !== undefined && stored.goalRef === goalFingerprint(issue.title, issue.body) ? stored : null;
     const labelled = pickupLabels(issue, policy.requireOwnLabel).includes(policy.investigateLabel);
-    standings.set(issue.number, { current, labelled, hold: labelled ? investigationHold(current) : null });
+    const inForce = labelled ? current : null;
+    standings.set(issue.number, { current, labelled, inForce, hold: investigationHold(inForce) });
   }
   return standings;
 }
@@ -48,12 +51,12 @@ export function investigationStanding(
   return standings?.get(issueNumber) ?? NO_INVESTIGATION;
 }
 
-export function investigationSkipsPlanning({ current, labelled }: InvestigationStanding): boolean {
-  return labelled && current?.resolution === 'pickup';
+export function investigationSkipsPlanning({ inForce }: InvestigationStanding): boolean {
+  return inForce?.resolution === 'pickup';
 }
 
-export function investigationNote({ current: investigation, labelled }: InvestigationStanding): string {
-  if (!labelled || investigation === null) return '';
+export function investigationNote({ inForce: investigation }: InvestigationStanding): string {
+  if (investigation === null) return '';
   if (investigation.resolution !== 'plan' && investigation.resolution !== 'pickup') return '';
   return (
     '\n\n## What the investigation found\n\n' +

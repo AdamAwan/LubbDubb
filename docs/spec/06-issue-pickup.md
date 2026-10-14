@@ -751,7 +751,7 @@ answered first. → [38](38-bug-investigation.md)
 The investigation it asks for holds rule `issue-plan` and rule `issue-pickup` while it runs and while
 its findings wait on an operator — the hold is the investigation's, owned there, and lifted by removing
 the label. Removing it lifts a _pickup_ resolution's skipped planning too: `investigationSkipsPlanning`
-reads the label as well as the record.
+reads the standing's `inForce`, which is null with the label off.
 
 `issuePickupStatus` reports it as its own status, `investigation`, asked after the active and
 standing-hold arms and before the plan route, so the chip says why no planner is coming rather than
@@ -772,10 +772,11 @@ dispatcher quotes on the held `superseded` rows, so the chip and the queue canno
 four share `preplanAgentReason` with the appraisal arm, and so share its fail-open: once the
 investigator's attempt cap is spent (`escalate` or `hold`) the arm answers nothing and the issue falls
 through to the plan route, as the dispatcher does. Both sides read one `InvestigationStanding` per issue
-— the current record, whether the label is on, and the hold — built once by `investigationStandings`
-(`src/intake/investigation.ts`). `investigation` counts as in flight wherever `planning` does — the
+— the current record, whether the label is on, the record in force and the hold — built once by
+`investigationStandings` (`src/intake/investigation.ts`), the only place the label rule is applied. `investigation` counts as in flight wherever `planning` does — the
 runway ([25](25-supply.md)), the Overview's goals in flight and a Feature's fleet holds — and the
-cockpit's word for it is _investigating_. The `findings` ask stands on the first reason's case
+cockpit's word for it is _investigating_. The `findings` ask stands on the first reason's case, read
+off the snapshot's `investigationHold` rather than this status, which a higher-ranked one can hide
 ([17](17-cockpit.md)).
 
 ### It is held behind a story's predecessors

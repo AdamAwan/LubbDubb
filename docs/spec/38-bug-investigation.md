@@ -65,7 +65,8 @@ back by hand.
 
 A failed label write is recorded through `errors.record`, and the verdict is recorded all the same:
 the issue goes on to the planner as though the appraiser had not asked. That is the fail-open
-direction.
+direction. The recording is `applyIssueLabel`'s own (`src/issueWatch.ts`), which catches the tracker's
+refusal and returns; `appraise_issue` adds no catch of its own, so the failure is recorded once.
 
 ## The rule — `issue-investigate`
 
@@ -136,34 +137,41 @@ keyed `issue:<n>` — one row per issue, overwritten by each new report, which r
 **It is fingerprinted to the ticket text.** `goal_ref` is `goalFingerprint` of the title and body the
 investigator was **dispatched with**, read off its task, so an edit made mid-run is not swallowed.
 `investigationStandings` (`src/intake/investigation.ts`) reads each issue once into an
-`InvestigationStanding` — the record for its current text, whether the label is on, and the hold —
-and every reader goes through it, the dispatcher's `StageContext.investigations` and the pickup
+`InvestigationStanding` — the record for its current text (`current`), whether the label is on, the
+record **in force** (`inForce`: `current` while the label is on, else null) and the hold computed from
+it. That is the one place the label rule is applied: `investigationSkipsPlanning`, `investigationNote`
+and the hold read `inForce` and never re-check the label, and the cockpit reads the hold. Every reader
+goes through it, the dispatcher's `StageContext.investigations` and the pickup
 verdict's `IssuePickupContext.investigations` alike, so the two cannot disagree. A record whose
 fingerprint no longer matches is not current: an edited ticket has no current findings, so its holds lift and — with the label still on
 — the rule re-arms and investigates the new text. A rewrite usually means the reporter said
 something new, and findings about the old text are about a different report.
 
 The issue's state snapshot carries the current record as `Issue.investigation`, null when there is
-none ([16](16-http-api.md#post-apiissuesnumberinvestigation)), and its pickup verdict reads
+none, and the standing's hold beside it as `Issue.investigationHold`
+([16](16-http-api.md#post-apiissuesnumberinvestigation)), and its pickup verdict reads
 `investigation`, with the reason, while the label holds it ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)).
 The four answers are declared once, `INVESTIGATION_RESOLUTIONS` in `src/intake/investigationResolutions.ts`:
 the type, the tool's `recommendation` enum, the route's body and the cockpit's buttons (through
 `src/wire.ts`) all read it, so the cockpit cannot offer an answer the route refuses.
 
-In the cockpit the findings are a **`findings` ask** on the rail, standing while the pickup verdict is
-`investigation` and the findings are unanswered: the four fields drawn whole, the agent's recommendation marked on its button among the
+In the cockpit the findings are a **`findings` ask** on the rail, standing while `investigationHold` is
+set and the findings are unanswered — the hold, not the pickup verdict, which a higher-ranked status
+(`blocked`, say) would hide while the findings still hold the goal: the four fields drawn whole, the agent's recommendation marked on its button among the
 four resolutions, and **Investigate again** beside them. The goal header carries an `Investigation ·`
 chip for a current record: the operator's answer once resolved, and _waiting on you_ only on the
-findings ask's own terms — pickup status `investigation` — so with the label off it says nothing
+findings ask's own terms — `investigationHold` — so with the label off it says nothing
 asks. → [17](17-cockpit.md#hue-is-the-kind-weight-is-the-group)
 
 ## Resolving the findings
 
 `POST /api/issues/:number/investigation` with `{resolution}` writes the operator's answer; `{clear:
-true}` deletes the row. A resolution is accepted only for the **current** record — one fingerprinted
-to the ticket text in the last world snapshot. A stale row is refused with 409: an answer to findings
-about an earlier text would be read back as an answer about this one if the ticket were reverted, and
-it holds or releases nothing now.
+true}` deletes the row. A resolution is accepted only for the record **in force**, read through the
+same `investigationStanding` as everything else: one fingerprinted to the ticket text in the last
+world snapshot, on an issue that carries the label. A stale row is refused with 409: an answer to
+findings about an earlier text would be read back as an answer about this one if the ticket were
+reverted, and it holds or releases nothing now. So is a current row with the label off, for the same
+second reason — the findings gate nothing, and the answer would act only if the label came back.
 
 | Resolution | What happens                                                                                                                                                                                                          |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -238,9 +246,10 @@ when it is cast and not kept, which is also what keeps a sweep from having anyth
   appraisal never labels again; a failed write still records the verdict and is not the once;
 - with the label off, a _pickup_ resolution skips nothing and the note is empty;
 - the route resolves, clears, and refuses an unknown resolution with 400, a missing record with 404
-  and a record about an earlier text with 409.
+  and a record about an earlier text, or with the label off, with 409.
 
 `test/investigationCockpit.test.ts` covers the cockpit half: the pickup verdict's investigation reasons
 and their fall-back once answered or unlabelled, and the `findings` ask — what it draws, that it stands
-only while the pickup verdict says the findings hold the goal, and that each answer and **Investigate
-again** reach the route — and that the header's _waiting on you_ chip follows the same status.
+exactly while the hold says the findings hold the goal, a higher-ranked pickup status included, and
+that each answer and **Investigate again** reach the route — and that the header's _waiting on you_
+chip follows the same hold.

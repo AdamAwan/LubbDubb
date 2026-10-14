@@ -176,6 +176,7 @@ function injectedIssue(
     | 'delivery'
     | 'instructions'
     | 'investigation'
+    | 'investigationHold'
     | 'localValidation'
     | 'retrospective'
     | 'scratchpad'
@@ -193,6 +194,7 @@ function injectedIssue(
     delivery: null,
     appraisal: null,
     investigation: null,
+    investigationHold: null,
     retrospective: null,
     scratchpad: null,
     instructions: [],

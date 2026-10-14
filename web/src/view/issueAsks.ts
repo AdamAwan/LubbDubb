@@ -14,15 +14,17 @@ export function placementAskOf(row: { placementField?: 'parent' | 'areaPath' }, 
 /** The findings an ask stands on: recorded for the goal's current text, not yet answered, and holding the goal. */
 export function awaitedFindings(issue: Issue): IssueInvestigation | null {
   const found = issue.investigation;
-  return found !== null && found.resolution === null && issue.pickup.status === 'investigation' ? found : null;
+  return found !== null && found.resolution === null && issue.investigationHold !== null ? found : null;
 }
 
 /** The header's `Investigation ·` chip: an answer the operator gave, or findings that hold the goal on them. */
-export function investigationChip(issue: Issue): { text: string; tone: 'amber' | 'green' } | null {
-  const found = issue.investigation;
-  if (found === null) return null;
-  if (found.resolution !== null) return { text: found.resolution, tone: 'green' };
-  return awaitedFindings(issue) === null ? null : { text: 'waiting on you', tone: 'amber' };
+export function investigationChip(
+  issue: Issue,
+): { text: string; tone: 'amber' | 'green'; findings: IssueInvestigation } | null {
+  const findings = issue.investigation;
+  if (findings === null) return null;
+  if (findings.resolution !== null) return { text: findings.resolution, tone: 'green', findings };
+  return awaitedFindings(issue) === null ? null : { text: 'waiting on you', tone: 'amber', findings };
 }
 
 const FINDINGS_ANSWER: Record<InvestigationResolution, { label: string; title: string }> = {

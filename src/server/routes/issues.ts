@@ -18,6 +18,7 @@ import { clearGoalWork } from '../../runs/endRun.js';
 import { applyIssueWatch, issueWatchContext } from '../../issueWatch.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { INVESTIGATION_RESOLUTIONS } from '../../intake/investigationResolutions.js';
+import { investigationStanding, investigationStandings } from '../../intake/investigation.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { GoalAgentsPayload } from '../../wire.js';
@@ -262,10 +263,18 @@ function registerInvestigation(app: FastifyInstance, { system, hub }: RouteConte
       const recorded = store.investigations.get(originRef);
       if (recorded === null)
         return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
-      const ticket = store.world.getWorldBaseline()?.issues.find((i) => i.number === params.number);
-      if (ticket === undefined || recorded.goalRef !== goalFingerprint(ticket.title, ticket.body))
+      const tickets = store.world.getWorldBaseline()?.issues.filter((i) => i.number === params.number) ?? [];
+      const standing = investigationStanding(
+        investigationStandings(tickets, [recorded], system.issuePickup),
+        params.number,
+      );
+      if (standing.current === null)
         return reply.code(409).send({
           error: `the investigation recorded for #${params.number} is about an earlier text of the ticket; it is not current and cannot be resolved — clear it to investigate again`,
+        });
+      if (standing.inForce === null)
+        return reply.code(409).send({
+          error: `#${params.number} no longer carries the ${system.issuePickup.investigateLabel} label, so its findings hold nothing and cannot be resolved — put the label back to act on them`,
         });
       const investigation = store.investigations.resolve(originRef, body.resolution);
       hub.broadcast({ type: 'world:changed' });

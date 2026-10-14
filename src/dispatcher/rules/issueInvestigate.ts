@@ -15,7 +15,7 @@ export function issueInvestigate(s: StageContext): void {
   const { ctx } = s;
   for (const { issue } of s.eligibleIssues) {
     const standing = investigationStanding(s.investigations, issue.number);
-    if (!standing.labelled || standing.current !== null) continue;
+    if (!standing.labelled || standing.inForce !== null) continue;
     if (s.appraising.has(issue.number)) continue;
     if (s.plansByOrigin.has(issueOrigin(issue.number))) continue;
     if (hasWorkStarted(issue.number, ctx.tasks)) continue;

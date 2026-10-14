@@ -60,13 +60,13 @@ export function sittingRows(state: AskInputs): AskDraft[] {
   return rows;
 }
 
-// The findings hold planning and pickup, so the ask blocks. It stands exactly while the pickup
-// status is the investigation's and the findings are unanswered. → docs/spec/06-issue-pickup.md
+// The findings hold planning and pickup, so the ask blocks. It stands exactly while the findings
+// are unanswered and hold the goal. → docs/spec/06-issue-pickup.md
 export function findingsRows(state: AskInputs): AskDraft[] {
   const rows: AskDraft[] = [];
   for (const issue of state.world.issues) {
     const investigation = issue.investigation;
-    if (issue.pickup.status !== 'investigation' || investigation?.resolution !== null) continue;
+    if (issue.investigationHold === null || investigation?.resolution !== null) continue;
     const base = issueRow(issue.number);
     rows.push({
       ...base,

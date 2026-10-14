@@ -215,9 +215,10 @@ function view(state: CockpitView['state']): CockpitView {
 
 function investigated(
   over: Partial<IssueInvestigation> = {},
-  pickup: { status: 'investigation' | 'planning'; reasons: string[] } = {
-    status: 'investigation',
-    reasons: [FINDINGS_WAITING],
+  hold: string | null = FINDINGS_WAITING,
+  pickup: { status: 'investigation' | 'planning' | 'blocked'; reasons: string[] } = {
+    status: hold === null ? 'planning' : 'investigation',
+    reasons: [hold ?? 'awaiting a planning agent'],
   },
 ) {
   const state = buildDemoState().state;
@@ -227,6 +228,7 @@ function investigated(
       ? {
           ...i,
           investigation: findings(i, { originRef: `issue:${i.number}`, ...over }),
+          investigationHold: hold,
           pickup: { eligible: false, ...pickup },
         }
       : i,
@@ -276,18 +278,24 @@ test('unanswered findings are an ask that draws them, the four answers and a re-
   assert.doesNotMatch(html, /Plan it · recommended/, 'only the recommended answer is marked');
 });
 
-test('the ask stands only while the pickup status says the findings hold the goal', () => {
+test('the ask stands exactly while the findings hold the goal', () => {
   const answered = investigated({ resolution: 'plan', resolvedAt: NOW });
   assert.equal(
     view(answered.state).needsYou.some((n) => n.kind === 'findings'),
     false,
     'answered findings still ask',
   );
-  const unheld = investigated({}, { status: 'planning', reasons: ['awaiting a planning agent'] });
+  const unheld = investigated({}, null);
   assert.equal(
     view(unheld.state).needsYou.some((n) => n.kind === 'findings'),
     false,
     'findings with the label off hold nothing, so they ask nothing',
+  );
+  const outranked = investigated({}, FINDINGS_WAITING, { status: 'blocked', reasons: ['blocked by #7'] });
+  assert.equal(
+    view(outranked.state).needsYou.some((n) => n.kind === 'findings'),
+    true,
+    'a higher-ranked pickup status hid findings that still hold the goal',
   );
 });
 
@@ -332,9 +340,12 @@ test('each answer resolves the investigation, and Investigate again clears it', 
 test('the header says findings wait on you only while they hold the goal', async () => {
   const { investigationChip } = await import('../web/src/view/issueAsks.js');
   const goal = (s: ReturnType<typeof investigated>) => s.state.world.issues.find((i) => i.number === s.number)!;
-  assert.deepEqual(investigationChip(goal(investigated())), { text: 'waiting on you', tone: 'amber' });
-  const unheld = investigated({}, { status: 'planning', reasons: ['awaiting a planning agent'] });
-  assert.equal(investigationChip(goal(unheld)), null, 'with the label off there is no ask to wait on');
-  const answered = investigated({ resolution: 'close', resolvedAt: NOW });
-  assert.deepEqual(investigationChip(goal(answered)), { text: 'close', tone: 'green' });
+  const chip = (s: ReturnType<typeof investigated>) => {
+    const c = investigationChip(goal(s));
+    return c === null ? null : { text: c.text, tone: c.tone };
+  };
+  assert.deepEqual(chip(investigated()), { text: 'waiting on you', tone: 'amber' });
+  assert.equal(chip(investigated({}, null)), null, 'with the label off there is no ask to wait on');
+  const answered = investigated({ resolution: 'close', resolvedAt: NOW }, 'you marked the investigation for closing');
+  assert.deepEqual(chip(answered), { text: 'close', tone: 'green' });
 });

@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
-import { investigationNote, investigationSkipsPlanning } from '../src/intake/investigation.js';
+import {
+  investigationNote,
+  investigationSkipsPlanning,
+  investigationStanding,
+  investigationStandings,
+} from '../src/intake/investigation.js';
 import { investigateLabelFor, pickupLabels } from '../src/watchLabels.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system/system.js';
@@ -412,10 +417,17 @@ test('a failed label write is recorded, still records the verdict, and does not 
 
 test('with the label off, a resolved investigation skips nothing and appends nothing', () => {
   const current = investigation({ resolution: 'pickup', resolvedAt: NOW });
-  assert.equal(investigationSkipsPlanning({ current, labelled: true, hold: null }), true);
-  assert.equal(investigationSkipsPlanning({ current, labelled: false, hold: null }), false);
-  assert.match(investigationNote({ current, labelled: true, hold: null }), /What the investigation found/);
-  assert.equal(investigationNote({ current, labelled: false, hold: null }), '');
+  const standing = (labels: string[]) =>
+    investigationStanding(
+      investigationStandings([issue({ labels })], [current], { investigateLabel: 'investigate' }),
+      12,
+    );
+  assert.equal(investigationSkipsPlanning(standing(['investigate'])), true);
+  assert.equal(investigationSkipsPlanning(standing([])), false);
+  assert.match(investigationNote(standing(['investigate'])), /What the investigation found/);
+  assert.equal(investigationNote(standing([])), '');
+  assert.equal(standing([]).current, current, 'the findings still read as current with the label off');
+  assert.equal(standing([]).inForce, null);
 });
 
 test('the route refuses to resolve findings about an earlier text of the ticket', async () => {
@@ -433,6 +445,23 @@ test('the route refuses to resolve findings about an earlier text of the ticket'
     payload: { resolution: 'pickup' },
   });
   assert.equal(res.statusCode, 409, res.body);
+  assert.equal(system.store.investigations.get('issue:12')?.resolution, null);
+  await app.close();
+  system.store.close?.();
+});
+
+test('the route refuses to resolve current findings once the label is off', async () => {
+  const system = build();
+  system.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [], issues: [issue({ labels: [] })] });
+  system.store.investigations.record({ ...FINDINGS_ROW, goalRef: goalFingerprint(issue().title, issue().body) });
+  const { app } = await buildApp(system);
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/issues/12/investigation',
+    payload: { resolution: 'pickup' },
+  });
+  assert.equal(res.statusCode, 409, res.body);
+  assert.match(res.body, /label/);
   assert.equal(system.store.investigations.get('issue:12')?.resolution, null);
   await app.close();
   system.store.close?.();

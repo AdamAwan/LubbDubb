@@ -798,9 +798,10 @@ in, so a verdict on one is left over from before it was dropped, and the drop ou
 `world.issues` and never the retained runs, for the profile gate's reason.
 
 **`findings` is a bug investigation's findings waiting on the operator** ([38](38-bug-investigation.md)).
-`findingsRows` (`src/asks/issueAsks.ts`) raises one per goal whose pickup status is `investigation`
-**and** whose current investigation has no resolution — keyed on the typed status, never on a reason
-string — so the row stands exactly while the findings are what holds the goal. Take
+`findingsRows` (`src/asks/issueAsks.ts`) raises one per goal whose `investigationHold` is set **and**
+whose current investigation has no resolution — keyed on the hold the standing computed, never on a
+reason string nor on the pickup status, which a higher-ranked status (`blocked`) would hide — so the
+row stands exactly while the findings are what holds the goal. Take
 the investigate label off and the hold goes, and the row with it: an ask for an answer that no longer
 gates anything would be a chore. It is `blocking` and `now` on the `sitting` row's terms — planning is
 waiting on the answer — and stage `plan` on the goal's track.
@@ -812,8 +813,8 @@ pickup**, **Close**, **Ask for info**), the recommended one in the primary tone 
 through `POST /api/issues/:number/investigation`
 ([16](16-http-api.md#post-apiissuesnumberinvestigation)). The goal header carries an `Investigation ·`
 chip for a current record (`investigationChip`, `web/src/view/issueAsks.ts`) — green with the answer
-once resolved, amber _waiting on you_ only while the ask itself would stand (`awaitedFindings`: pickup
-status `investigation`), with the root cause and confidence on its title. Unanswered findings with
+once resolved, amber _waiting on you_ only while the ask itself would stand (`awaitedFindings`:
+`investigationHold` set), with the root cause and confidence on its title. Unanswered findings with
 the label off wait on nobody, so the header says nothing about them.
 
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —

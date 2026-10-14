@@ -11,6 +11,7 @@ import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
 import type { CiVerdict } from './ci/ciPolicy.js';
 import type { IssuePickupStatus } from './dispatcher/issuePickup.js';
 import type { PlacementAsk } from './intake/placement.js';
+import type { InvestigationStanding } from './intake/investigation.js';
 import type { DispatchRule } from './dispatcher/rules.js';
 import type { QueueItem } from './dispatcher/dispatcher.js';
 import type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
@@ -201,6 +202,8 @@ export interface Issue extends WorldIssue {
     areaPathUnset: boolean;
   } | null;
   investigation: IssueInvestigation | null;
+  /** Why the findings hold plan and pickup, or null — read here, never off `pickup.status`, which a higher-ranked status hides. */
+  investigationHold: InvestigationStanding['hold'];
   modelPin: { profile: string | null; ignoredTags: string[] };
   priority: { since: string } | null;
   retrospective: { summary: string; hasDocument: boolean; updatedAt: string } | null;

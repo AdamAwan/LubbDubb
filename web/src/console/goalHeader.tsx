@@ -127,11 +127,11 @@ function GoalIdent({ page, view }: { page: GoalPageView; view: CockpitView }): J
             Appraisal · {issue.appraisal.verdict}
           </Tag>
         )}
-        {investigation !== null && issue.investigation !== null && (
+        {investigation !== null && (
           <Tag
             tone={investigation.tone}
             fill
-            title={`${issue.investigation.confidence} confidence: ${issue.investigation.rootCause}`}
+            title={`${investigation.findings.confidence} confidence: ${investigation.findings.rootCause}`}
           >
             <Icon name="bug" size={12} />
             Investigation · {investigation.text}

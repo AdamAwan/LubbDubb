@@ -286,7 +286,7 @@ function investigationStatus(issue: Issue, ctx: IssuePickupContext, standing: In
     standing.hold ??
     preplanAgentReason(issue, ctx, {
       origin: investigateOrigin(issue.number),
-      settled: standing.current !== null,
+      settled: standing.inForce !== null,
       waiting: 'investigation agent waiting on you',
       running: 'being investigated before it is planned',
       cooldown: 'investigation on cooldown',

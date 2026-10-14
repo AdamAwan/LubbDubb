@@ -159,14 +159,7 @@ async function labelForInvestigation(deps: McpToolDeps, originRef: string | null
   const origin = appraiserOrigin(originRef);
   const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
   if (issueNumber === null || deps.investigateLabel === undefined) return;
-  try {
-    await deps.investigateLabel(issueNumber);
-  } catch (err) {
-    deps.errors?.record({
-      source: 'server',
-      message: `Failed to label #${issueNumber} for investigation: ${(err as Error).message}`,
-    });
-  }
+  await deps.investigateLabel(issueNumber);
 }
 
 export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
