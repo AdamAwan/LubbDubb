@@ -138,9 +138,14 @@ const proposal: Answerer = (row, ctx) => {
       note: 'The reason, recorded with the verdict. Ask for one on a rejection.',
       ...EXTRA_CHOICES[row.kind],
     },
-    readFirst: [{ tool: 'proposal_read', args: { id: subject.proposalId } }],
+    readFirst: [{ tool: 'proposal_read', args: { id: subject.proposalId } }, ...planReads(row)],
   };
 };
+
+function planReads(row: AskRow): ToolCall[] {
+  const issue = issueNumberOf(row);
+  return row.kind === 'plan' && issue !== null ? [{ tool: 'plan_read', args: { issue } }] : [];
+}
 
 const shortfall: Answerer = (row, ctx) => {
   const answer = proposal(row, ctx);

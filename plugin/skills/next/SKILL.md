@@ -20,7 +20,8 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    `id`; if it is refused as no longer standing, say so and carry on from the
    head. Every later call is plain `ask_next`.
 2. **Read more only where it helps them decide.** `answerWith.readFirst` names the
-   read that matters for this kind — `proposal_read` before any proposal,
+   read that matters for this kind — `proposal_read` before any proposal, and
+   `plan_read` for a plan,
    `pr_assign` with just `pr` for the shortlist, `validation_read` for checks. Beyond
    that, `goal_read`, `agent_read` and the real diff or code in this checkout are
    there when the decision turns on them. Do not read everything for every ask; an
@@ -46,7 +47,6 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 
    **Where you can render a widget** (a `show_widget` tool, read its guide once per
    session first), draw it as one:
-
    - **The goal** beside the ask: `goal.title` and `ask.goalRef`, then its plan — "m of n
      merged" and each part as a numbered row with its `state`, the `here` one marked
      "this ask" in the kind's tone. `plan.withheld` → "plan not revealed yet", and
@@ -79,7 +79,6 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 
    > **Claude's view (not LubbDubb's):** Accept the merge — CI is green and the
    > one review thread is answered. (high)
-
    - **Header** — its kind (`card.kind.label`) and its urgency said plainly: `now`
      is "fleet is stuck on this"; `next` needs nothing.
    - **Title** in bold, then the `question` in full where one came back.
@@ -138,6 +137,22 @@ What they can say at any point:
   `card.pr` — and offer to skip it.
 
 ### Kinds that need more care
+
+- **A plan is approved on what it says, never on its title.** Accepting one
+  starts the fleet spending, so before asking, put the plan itself in front of
+  them from `plan_read` — inside the card (or under the markdown card, before
+  your view):
+  - **Approach** — one or two sentences, from `approach` (or `reason`).
+  - **The parts**, numbered, in order: each part's title, a one-line scope, its
+    size, and what it waits on.
+  - **Out of scope** and **risks / open questions** — short, in the planner's
+    words; left out where empty.
+  - **How it will be checked** — `verification` and the validation check titles,
+    briefly.
+  - **Caveats** in full, from `proposal_read`, each with its label and detail.
+
+  Keep it scannable — a line per part, not an essay. Then ask "Release this plan
+  — n parts, the fleet starts work?" rather than "approve this?".
 
 - **A proposal is an act.** `accept` on a `merge` merges; on a `reply` it posts
   publicly. Ask "shall I merge #412?", never "shall I approve this?". A plan's
