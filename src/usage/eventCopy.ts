@@ -218,13 +218,20 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
     label: 'Released to planning',
     blurb: 'Planning was started, or an unclear goal declared workable',
   },
-  'intake.reject': {
+  'intake.waive': { label: 'Skipped the intake', blurb: 'The goal went to planning with nothing written down' },
+  'intake.abandon': { label: 'Dropped an intake draft', blurb: 'The intake form was backed out of unsaved' },
+  'investigation.accept': {
+    label: 'Sent a goal on after investigation',
+    blurb: 'Findings were answered with a plan or a straight pickup',
+  },
+  'investigation.reject': {
     label: 'Held a goal after investigation',
     blurb: 'Findings were answered with a close or a question for the reporter',
   },
-  'intake.undo': { label: 'Re-ran an investigation', blurb: 'The findings were thrown away to investigate again' },
-  'intake.waive': { label: 'Skipped the intake', blurb: 'The goal went to planning with nothing written down' },
-  'intake.abandon': { label: 'Dropped an intake draft', blurb: 'The intake form was backed out of unsaved' },
+  'investigation.undo': {
+    label: 'Re-ran an investigation',
+    blurb: 'The findings were thrown away to investigate again',
+  },
   'criteria.expand': { label: 'Opened the criteria', blurb: 'The criteria record or its writing form was opened' },
   'criteria.edit': { label: 'Wrote the criteria', blurb: 'A new version of what “done” means was appended' },
   'criteria.abandon': { label: 'Dropped a criteria draft', blurb: 'A criteria draft was cancelled unsaved' },

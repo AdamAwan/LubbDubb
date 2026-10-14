@@ -1,6 +1,8 @@
 import type { Issue, IssueInvestigation } from '../types.js';
 import { issueOriginRef } from '../issueOrigins.js';
+import { pickupLabels } from '../watchLabels.js';
 import { goalFingerprint } from './appraisal.js';
+import { investigationHold } from './investigationHold.js';
 
 // → docs/spec/06-issue-pickup.md
 
@@ -12,12 +14,38 @@ export function investigateBranch(issueNumber: number): string {
   return `investigate/issue/${issueNumber}`;
 }
 
-export function currentInvestigation(
-  investigation: IssueInvestigation | null | undefined,
-  issue: Pick<Issue, 'title' | 'body'>,
-): IssueInvestigation | null {
-  if (!investigation) return null;
-  return investigation.goalRef === goalFingerprint(issue.title, issue.body) ? investigation : null;
+/** One issue's investigation, read once: the findings for its current text, the label, and the hold. */
+export interface InvestigationStanding {
+  current: IssueInvestigation | null;
+  labelled: boolean;
+  hold: string | null;
+}
+
+export type InvestigationStandings = ReadonlyMap<number, InvestigationStanding>;
+
+const NO_INVESTIGATION: InvestigationStanding = { current: null, labelled: false, hold: null };
+
+export function investigationStandings(
+  issues: readonly Pick<Issue, 'number' | 'title' | 'body' | 'labels' | 'labelsAddedByViewer'>[],
+  investigations: readonly IssueInvestigation[],
+  policy: { investigateLabel: string; requireOwnLabel?: boolean },
+): Map<number, InvestigationStanding> {
+  const byOrigin = new Map(investigations.map((i) => [i.originRef, i]));
+  const standings = new Map<number, InvestigationStanding>();
+  for (const issue of issues) {
+    const stored = byOrigin.get(issueOriginRef('root', issue.number));
+    const current = stored !== undefined && stored.goalRef === goalFingerprint(issue.title, issue.body) ? stored : null;
+    const labelled = pickupLabels(issue, policy.requireOwnLabel).includes(policy.investigateLabel);
+    standings.set(issue.number, { current, labelled, hold: labelled ? investigationHold(current) : null });
+  }
+  return standings;
+}
+
+export function investigationStanding(
+  standings: InvestigationStandings | undefined,
+  issueNumber: number,
+): InvestigationStanding {
+  return standings?.get(issueNumber) ?? NO_INVESTIGATION;
 }
 
 export function investigationSkipsPlanning(investigation: IssueInvestigation | null): boolean {

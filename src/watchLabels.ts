@@ -13,11 +13,10 @@ export function investigateLabelFor(prefix: string): string {
   return prefix ? `${prefix}-investigate` : 'investigate';
 }
 
-export function carriesInvestigateLabel(
+/** The labels pickup reads: only the viewer's own under `requireOwnLabel`, else all of them. */
+export function pickupLabels(
   issue: { labels: string[]; labelsAddedByViewer?: string[] },
-  label: string,
   requireOwnLabel: boolean | undefined,
-): boolean {
-  const labels = requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
-  return labels.includes(label);
+): string[] {
+  return requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
 }

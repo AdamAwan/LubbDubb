@@ -179,7 +179,6 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
         profile: parsed.profile,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
-        investigate: parsed.investigate,
         note: recordedNote(parsed, result),
       });
     },

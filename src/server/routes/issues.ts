@@ -16,6 +16,8 @@ import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { clearGoalWork } from '../../runs/endRun.js';
 import { applyIssueWatch, issueWatchContext } from '../../issueWatch.js';
+import { issueOrigin } from '../../plans/planning.js';
+import { INVESTIGATION_RESOLUTIONS } from '../../intake/investigationResolutions.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { GoalAgentsPayload } from '../../wire.js';
@@ -240,24 +242,26 @@ function registerInvestigation(app: FastifyInstance, { system, hub }: RouteConte
   const { store, harness } = system;
   const InvestigationBody = z.union(
     [
-      z.object({ resolution: z.enum(['plan', 'pickup', 'close', 'ask']) }).strict(),
+      z.object({ resolution: z.enum(INVESTIGATION_RESOLUTIONS) }).strict(),
       z.object({ clear: z.literal(true) }).strict(),
     ],
-    { error: 'body must be { resolution: "plan" | "pickup" | "close" | "ask" } or { clear: true }' },
+    {
+      error: `body must be { resolution: ${INVESTIGATION_RESOLUTIONS.map((r) => `"${r}"`).join(' | ')} } or { clear: true }`,
+    },
   );
   app.post(
     '/api/issues/:number/investigation',
     checked({ params: IssueNumberParams, body: InvestigationBody }, async ({ params, body, reply }) => {
-      const originRef = issueConclusionOrigin(params.number);
+      const originRef = issueOrigin(params.number);
       if ('clear' in body) {
         store.investigations.clear(originRef);
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
         return { ok: true, investigation: null };
       }
-      if (store.investigations.get(originRef) === null)
-        return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
       const investigation = store.investigations.resolve(originRef, body.resolution);
+      if (investigation === null)
+        return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, investigation };

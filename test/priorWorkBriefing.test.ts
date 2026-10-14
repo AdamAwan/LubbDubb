@@ -171,7 +171,6 @@ test('the prose behind each standing verdict is carried, with who cast it', () =
       parentSettledAt: null,
       proposedAreaPath: null,
       areaPathSettledAt: null,
-      investigate: false,
       agentId: 'a1',
       taskId: 't1',
       commentRef: null,

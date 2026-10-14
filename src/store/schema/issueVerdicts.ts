@@ -89,7 +89,6 @@ CREATE TABLE IF NOT EXISTS issue_appraisals (
   parent_settled_at   TEXT,       -- when the operator answered that question
   proposed_area_path    TEXT,       -- the classification node it should sit on
   area_path_settled_at TEXT,      -- when the operator answered that one
-  investigate INTEGER NOT NULL DEFAULT 0, -- the appraiser asked for the cause to be investigated first
   agent_id    TEXT,                 -- null for an operator verdict
   task_id     TEXT,
   comment_ref TEXT,                 -- the one living comment on the ticket, edited in place

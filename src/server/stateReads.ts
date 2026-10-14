@@ -12,6 +12,7 @@ import { fleetHistory } from './fleetHistory.js';
 import { applyThreadReopens } from '../pr/prThreads.js';
 import { expiresAt } from '../ejection/policy.js';
 import type { IssuePickupContext } from '../dispatcher/issuePickup.js';
+import { investigationStandings } from '../intake/investigation.js';
 import { pausedIssueNumbers } from '../goalPause.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
@@ -286,7 +287,6 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
   const investigations = once(() => store.investigations.list());
-  const investigationsByOrigin = once(() => new Map(investigations().map((i) => [i.originRef, i])));
   return {
     validationChecks,
     checksByGoal,
@@ -305,7 +305,6 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     appraisals,
     appraisalsByOrigin,
     investigations,
-    investigationsByOrigin,
   };
 }
 
@@ -328,7 +327,7 @@ export function contextReads(r: VerdictReadsOn) {
     deliveries: deliveries(),
     deliverySignals: deliverySignals(),
     appraisals,
-    investigations: investigations(),
+    investigations: investigationStandings(world.issues, investigations(), system.issuePickup),
     closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
     obstacles: store.obstacles.obstacleBoard(),

@@ -2,6 +2,7 @@ import type { DispatchContext } from '../dispatcher.js';
 import type { AdmissionId, DispatchRuleId } from '../rules.js';
 import type { CooldownPolicy } from '../dispatchCooldown.js';
 import type { IssuePickupPolicy } from '../issuePickup.js';
+import type { InvestigationStandings } from '../../intake/investigation.js';
 import type { PromptTemplates } from '../promptTemplates.js';
 import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
@@ -17,7 +18,6 @@ import type {
   GoalCriteriaVersion,
   Issue,
   IssueAppraisal,
-  IssueInvestigation,
   IssueConclusion,
   IssueRelative,
   IssueShortfall,
@@ -79,9 +79,7 @@ export interface StageContext {
   redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
   investigating: Set<number>;
-  /** The investigation standing for this issue's current text, or null. → 06-issue-pickup.md */
-  investigationFor: (issue: Issue) => IssueInvestigation | null;
-  investigateLabelled: (issue: Issue) => boolean;
+  investigations: InvestigationStandings;
   assessing: Set<number>;
   /**
    * The cooldown gate every proposing rule shares: reads `dispatchVerdict` for the candidate's

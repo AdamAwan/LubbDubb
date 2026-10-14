@@ -13,25 +13,14 @@ export class InvestigationStore {
     this.ctx
       .prep(
         `INSERT INTO issue_investigations (origin_ref, goal_ref, by, reproduction, root_cause, confidence, locations, blast_radius, recommendation, decided_at, resolution, resolved_at)
-         VALUES (@originRef, @goalRef, @by, @reproduction, @rootCause, @confidence, @locations, @blastRadius, @recommendation, @decidedAt, NULL, NULL)
+         VALUES (@originRef, @goalRef, @by, @reproduction, @rootCause, @confidence, @locations, @blastRadius, @recommendation, @decidedAt, @resolution, @resolvedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET
            goal_ref=excluded.goal_ref, by=excluded.by, reproduction=excluded.reproduction,
            root_cause=excluded.root_cause, confidence=excluded.confidence, locations=excluded.locations,
            blast_radius=excluded.blast_radius, recommendation=excluded.recommendation,
-           decided_at=excluded.decided_at, resolution=NULL, resolved_at=NULL`,
+           decided_at=excluded.decided_at, resolution=excluded.resolution, resolved_at=excluded.resolved_at`,
       )
-      .run({
-        originRef: row.originRef,
-        goalRef: row.goalRef,
-        by: row.by,
-        reproduction: row.reproduction,
-        rootCause: row.rootCause,
-        confidence: row.confidence,
-        locations: row.locations,
-        blastRadius: row.blastRadius,
-        recommendation: row.recommendation,
-        decidedAt: row.decidedAt,
-      });
+      .run(row);
     return row;
   }
 

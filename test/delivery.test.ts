@@ -164,7 +164,7 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
 
 test('the chip and the rule answer the same question', () => {
   const base = {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-28T12:00:00.000Z',
     tasks: [],
@@ -186,7 +186,7 @@ test('the chip and the rule answer the same question', () => {
 
 test('an open PR or a live agent outranks the park — the honest reason wins', () => {
   const base = {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-28T12:00:00.000Z',
     tasks: [],

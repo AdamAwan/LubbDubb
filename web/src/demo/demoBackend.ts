@@ -3834,6 +3834,7 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   profile: 'Profiles',
   priority: 'Priority',
   intake: 'Intake',
+  investigation: 'Investigations',
   criteria: 'Goal criteria',
   prediction: 'Predictions',
   sequence: 'Story order',

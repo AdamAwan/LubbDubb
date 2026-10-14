@@ -123,7 +123,7 @@ export function findingsBody(row: NeedRow, view: CockpitView, actions: CockpitAc
             <AsyncButton
               key={resolution}
               tone={recommended ? 'primary' : undefined}
-              usage={resolution === 'plan' || resolution === 'pickup' ? 'intake.accept' : 'intake.reject'}
+              usage={resolution === 'plan' || resolution === 'pickup' ? 'investigation.accept' : 'investigation.reject'}
               onClick={() => actions.resolveInvestigation(issue.number, resolution)}
               title={recommended ? `Recommended — ${title}` : title}
             >
@@ -133,7 +133,7 @@ export function findingsBody(row: NeedRow, view: CockpitView, actions: CockpitAc
           );
         })}
         <AsyncButton
-          usage="intake.undo"
+          usage="investigation.undo"
           onClick={() => actions.resolveInvestigation(issue.number, null)}
           title="Throw these findings away — a fresh agent investigates the issue again"
         >

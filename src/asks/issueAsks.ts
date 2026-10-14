@@ -1,6 +1,5 @@
 import type { AskDraft, AskInputs } from './queue.js';
 import { askLine, opensAt } from './lines.js';
-import { FINDINGS_WAITING_REASON } from '../intake/investigationHold.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
@@ -62,13 +61,12 @@ export function sittingRows(state: AskInputs): AskDraft[] {
 }
 
 // The findings hold planning and pickup, so the ask blocks. It stands exactly while the pickup
-// status says the findings are what it waits on. → docs/spec/06-issue-pickup.md
+// status is the investigation's and the findings are unanswered. → docs/spec/06-issue-pickup.md
 export function findingsRows(state: AskInputs): AskDraft[] {
   const rows: AskDraft[] = [];
   for (const issue of state.world.issues) {
     const investigation = issue.investigation;
-    if (issue.state !== 'open' || investigation === null || investigation.resolution !== null) continue;
-    if (!issue.pickup.reasons.includes(FINDINGS_WAITING_REASON)) continue;
+    if (issue.pickup.status !== 'investigation' || investigation?.resolution !== null) continue;
     const base = issueRow(issue.number);
     rows.push({
       ...base,

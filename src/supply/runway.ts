@@ -81,7 +81,7 @@ export interface RunwayInput {
   standing: boolean;
 }
 
-const INFLIGHT = new Set(['active', 'has_pr', 'planning']);
+const INFLIGHT = new Set(['active', 'has_pr', 'planning', 'investigation']);
 const QUEUED = new Set(['eligible', 'blocked', 'cooldown']);
 const HELD = new Set(['escalated', 'delivered', 'retained', 'sitting']);
 

@@ -9,7 +9,7 @@ import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import { SITTING_REASON } from '../../intake/sitting.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
-import { investigationNote } from '../../intake/investigation.js';
+import { investigationNote, investigationStanding } from '../../intake/investigation.js';
 import { investigationSupersedes } from './issueInvestigate.js';
 import type { RuleHeld } from '../admission.js';
 import type { Issue, Plan } from '../../types.js';
@@ -77,7 +77,7 @@ export function issuePlan(s: StageContext): void {
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          investigationNote(s.investigationFor(issue)) +
+          investigationNote(investigationStanding(s.investigations, issue.number).current) +
           s.watchNote +
           s.testPartNote +
           s.screenCheckNote,

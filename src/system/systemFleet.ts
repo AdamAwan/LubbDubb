@@ -40,11 +40,9 @@ export function buildAgentManager(
   late: LateBinding,
 ) {
   const { store, connector, errors, watchLabel } = base;
-  const sequenceWatchPolicy: IssuePickupPolicy = {
+  const sequenceWatchPolicy: Pick<IssuePickupPolicy, 'watchLabel' | 'requireOwnLabel'> = {
     watchLabel,
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
-    priorityLabels: {},
-    defaultPriority: 0,
   };
 
   const featureBoard = (): FeatureBoardFacts | null =>

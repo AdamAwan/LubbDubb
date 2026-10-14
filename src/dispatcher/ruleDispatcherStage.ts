@@ -12,8 +12,7 @@ import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { blockedGoals } from '../obstacles/blocked.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { appraisalHold } from '../intake/appraisal.js';
-import { currentInvestigation, investigationSkipsPlanning } from '../intake/investigation.js';
-import { carriesInvestigateLabel, investigateLabelFor } from '../watchLabels.js';
+import { investigationSkipsPlanning, investigationStanding, investigationStandings } from '../intake/investigation.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../intake/profilePin.js';
 import { issueOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
@@ -68,16 +67,8 @@ export function issueGates(
   return { deliveryParked, appraisals, appraisalParked, retained, eligibleIssues };
 }
 
-export function investigationView(
-  ctx: DispatchContext,
-  pickup: IssuePickupPolicy,
-): Pick<StageContext, 'investigationFor' | 'investigateLabelled'> {
-  const investigations = new Map((ctx.investigations ?? []).map((i) => [i.originRef, i]));
-  const label = pickup.investigateLabel ?? investigateLabelFor('');
-  return {
-    investigationFor: (issue: Issue) => currentInvestigation(investigations.get(issueOrigin(issue.number)), issue),
-    investigateLabelled: (issue: Issue) => carriesInvestigateLabel(issue, label, pickup.requireOwnLabel),
-  };
+export function investigationView(ctx: DispatchContext, pickup: IssuePickupPolicy): StageContext['investigations'] {
+  return investigationStandings(ctx.world.issues, ctx.investigations ?? [], pickup);
 }
 
 export function planRoutes(
@@ -85,7 +76,7 @@ export function planRoutes(
   eligibleIssues: StageContext['eligibleIssues'],
   plansByOrigin: ReadonlyMap<string, Plan>,
   cooldown: CooldownPolicy,
-  investigationFor: StageContext['investigationFor'],
+  investigations: StageContext['investigations'],
 ): Map<number, PlanRouteVerdict> {
   const routes = new Map<number, PlanRouteVerdict>();
   for (const { issue } of eligibleIssues) {
@@ -96,7 +87,7 @@ export function planRoutes(
         plan,
         verdict: plannerVerdict(issue.number, plan, ctx.world.takenAt, ctx.recentDecisions, cooldown),
         existingParts: plan ? liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id)).length : 0,
-        skipPlanning: investigationSkipsPlanning(investigationFor(issue)),
+        skipPlanning: investigationSkipsPlanning(investigationStanding(investigations, issue.number).current),
       }),
     );
   }

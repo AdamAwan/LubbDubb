@@ -1,4 +1,5 @@
 import type { PlaceKey, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
+import type { INVESTIGATION_RESOLUTIONS } from './intake/investigationResolutions.js';
 
 // → docs/spec/03-world-model.md
 
@@ -733,7 +734,6 @@ export interface IssueAppraisal {
   parentSettledAt: string | null;
   proposedAreaPath: string | null;
   areaPathSettledAt: string | null;
-  investigate: boolean;
   agentId: string | null;
   taskId: string | null;
   commentRef: string | null;
@@ -743,7 +743,7 @@ export interface IssueAppraisal {
 
 export type InvestigationConfidence = 'high' | 'medium' | 'low';
 
-export type InvestigationResolution = 'plan' | 'pickup' | 'close' | 'ask';
+export type InvestigationResolution = (typeof INVESTIGATION_RESOLUTIONS)[number];
 
 export interface IssueInvestigation {
   originRef: string;

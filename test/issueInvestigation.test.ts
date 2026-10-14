@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
-import { carriesInvestigateLabel, investigateLabelFor } from '../src/watchLabels.js';
+import { investigateLabelFor, pickupLabels } from '../src/watchLabels.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system/system.js';
 import { buildApp } from '../src/server/app.js';
@@ -44,7 +44,6 @@ function workable(i: Issue = issue()): IssueAppraisal {
     parentSettledAt: null,
     proposedAreaPath: null,
     areaPathSettledAt: null,
-    investigate: true,
     agentId: null,
     taskId: null,
     commentRef: null,
@@ -137,8 +136,8 @@ test('the label is <prefix>-investigate, or bare without a prefix', () => {
   assert.equal(investigateLabelFor('lubbdubb'), 'lubbdubb-investigate');
   assert.equal(investigateLabelFor(''), 'investigate');
   const tagged = { labels: ['investigate'], labelsAddedByViewer: [] };
-  assert.equal(carriesInvestigateLabel(tagged, 'investigate', false), true);
-  assert.equal(carriesInvestigateLabel(tagged, 'investigate', true), false, 'own-label mode reads authorship');
+  assert.equal(pickupLabels(tagged, false).includes('investigate'), true);
+  assert.equal(pickupLabels(tagged, true).includes('investigate'), false, 'own-label mode reads authorship');
 });
 
 test('a labelled issue is investigated, read-only, before it is planned', async () => {
@@ -324,12 +323,10 @@ test('an appraisal asking for investigation labels the issue once, at record tim
   assert.equal(res.isError, false, res.text);
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(writes, [{ number: 12, label: 'investigate', present: true }]);
-  assert.equal(system.store.verdicts.getAppraisal('issue:12')?.investigate, true);
 
   await callTool(system, agent, 'appraise_issue', { status: 'workable', summary: 'Same reading.' });
   await new Promise((r) => setImmediate(r));
   assert.equal(writes.length, 1, 'only an appraisal that asks applies it');
-  assert.equal(system.store.verdicts.getAppraisal('issue:12')?.investigate, false);
 
   await callTool(system, agent, 'appraise_issue', {
     status: 'unclear',

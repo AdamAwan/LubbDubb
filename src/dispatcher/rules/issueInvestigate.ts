@@ -1,7 +1,7 @@
 import { hasWorkStarted } from '../../intake/appraisal.js';
-import { investigateBranch, investigateOrigin } from '../../intake/investigation.js';
-import { investigationHold } from '../../intake/investigationHold.js';
+import { investigateBranch, investigateOrigin, investigationStanding } from '../../intake/investigation.js';
 import { issueOrigin } from '../../plans/planning.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
@@ -14,9 +14,9 @@ import type { RawAction, StageContext } from './context.js';
 export function issueInvestigate(s: StageContext): void {
   const { ctx } = s;
   for (const { issue } of s.eligibleIssues) {
-    if (!s.investigateLabelled(issue)) continue;
+    const standing = investigationStanding(s.investigations, issue.number);
+    if (!standing.labelled || standing.current !== null) continue;
     if (s.appraising.has(issue.number)) continue;
-    if (s.investigationFor(issue) !== null) continue;
     if (s.plansByOrigin.has(issueOrigin(issue.number))) continue;
     if (hasWorkStarted(issue.number, ctx.tasks)) continue;
     const origin = investigateOrigin(issue.number);
@@ -24,8 +24,7 @@ export function issueInvestigate(s: StageContext): void {
       s.investigating.add(issue.number);
       continue;
     }
-    const root = issueOrigin(issue.number);
-    if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
+    if ([...s.activeOrigins].some((o) => issueSubtreeNumber(o) === issue.number)) continue;
 
     const branch = investigateBranch(issue.number);
     const title = `Investigate issue #${issue.number}`;
@@ -69,8 +68,8 @@ export function issueInvestigate(s: StageContext): void {
 
 /** The reason plan and pickup stand aside for the investigation, or null. Removing the label lifts it. */
 export function investigationSupersedes(s: StageContext, issue: Issue, reason: string): string | null {
-  if (!s.investigateLabelled(issue)) return null;
+  const { labelled, hold } = investigationStanding(s.investigations, issue.number);
+  if (!labelled) return null;
   if (s.investigating.has(issue.number)) return supersededReason('issue-investigate', reason);
-  const hold = investigationHold(s.investigationFor(issue), true);
   return hold === null ? null : `${reason} Held: ${hold}.`;
 }

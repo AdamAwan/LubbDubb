@@ -1084,6 +1084,7 @@ export type { BuildReading, SnoozeTarget, UpgradeAction } from './selfUpdate/upg
 export type { AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
 export { buildAskQueue } from './asks/queue.js';
 export { askLine, oneLine } from './asks/lines.js';
+export { INVESTIGATION_RESOLUTIONS } from './intake/investigationResolutions.js';
 export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
 export { PART_GROUP, PART_GROUP_WORD, type PartGroup } from './plans/partGroup.js';
 export { askGoal, type AskGoalPart } from './asks/askGoal.js';

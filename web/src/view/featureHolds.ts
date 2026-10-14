@@ -34,7 +34,7 @@ export interface FeatureHolds {
   agents: FeaturePresence[];
 }
 
-const FLEET_PICKUP = new Set<string>(['cooldown', 'blocked', 'planning', 'appraisal', 'obstacle']);
+const FLEET_PICKUP = new Set<string>(['cooldown', 'blocked', 'planning', 'appraisal', 'investigation', 'obstacle']);
 
 const FLEET_WIDE = new Set<NeedKind>([
   'config',

@@ -36,7 +36,7 @@ import { configuredRemoteRunBriefs } from '../validation/remote/briefing.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
 import { isSealedRule } from '../mcp/names.js';
-import { applyInvestigateLabel } from '../issueWatch.js';
+import { applyInvestigateLabel, issueWatchContext } from '../issueWatch.js';
 import { issueSubtreeNumber } from '../issueOrigins.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
@@ -405,19 +405,10 @@ function wireAgentEvents(
   agents.on('appraisal', ({ issueOrigin, investigate }) => {
     const issueNumber = issueSubtreeNumber(issueOrigin);
     if (!investigate || issueNumber === null) return;
-    const ctx = {
-      store,
-      sink,
-      errors,
-      labelPrefix: config.labelPrefix,
-      issueContainerTypes: config.issueContainerTypes,
-    };
-    void applyInvestigateLabel(ctx, issueNumber, 'after the goal appraisal asked for an investigation').catch(
-      (err: Error) =>
-        errors.record({
-          source: 'agent',
-          message: `Failed to label #${issueNumber} for investigation: ${err.message}`,
-        }),
+    void applyInvestigateLabel(
+      issueWatchContext({ store, connector: sink, errors, config }),
+      issueNumber,
+      'after the goal appraisal asked for an investigation',
     );
   });
 

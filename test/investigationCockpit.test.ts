@@ -7,12 +7,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
-import { FINDINGS_WAITING_REASON } from '../src/intake/investigationHold.js';
+import { investigationStandings } from '../src/intake/investigation.js';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { Issue as WireIssue } from '../web/src/types.js';
-import type { Issue, IssueAppraisal, IssueInvestigation, Task } from '../src/types.js';
+import type { Decision, Issue, IssueAppraisal, IssueInvestigation, Task } from '../src/types.js';
 import { withAsks } from './support/asks.js';
 import { decode } from './support/html.js';
 
@@ -25,6 +25,7 @@ const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 const NOW = '2026-10-14T12:00:00.000Z';
+const FINDINGS_WAITING = 'the investigation findings are waiting on you';
 
 function issue(over: Partial<Issue> = {}): Issue {
   return {
@@ -72,7 +73,6 @@ function workable(): IssueAppraisal {
     parentSettledAt: null,
     proposedAreaPath: null,
     areaPathSettledAt: null,
-    investigate: true,
     agentId: null,
     taskId: null,
     commentRef: null,
@@ -115,33 +115,78 @@ function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) 
   };
 }
 
+function standing(i: Issue, ...investigations: IssueInvestigation[]) {
+  return investigationStandings([i], investigations, { investigateLabel: 'investigate' });
+}
+
 test('an issue held for investigation says so, never that it awaits a planning agent', () => {
-  const awaiting = issuePickupStatus(issue(), pickupCtx());
+  const awaiting = issuePickupStatus(issue(), pickupCtx({ investigations: standing(issue()) }));
   assert.equal(awaiting.eligible, false);
+  assert.equal(awaiting.status, 'investigation');
   assert.equal(awaiting.reasons[0], 'awaiting an investigation before it is planned');
 
-  const running = issuePickupStatus(issue(), pickupCtx({ tasks: [task()] }));
+  const running = issuePickupStatus(issue(), pickupCtx({ tasks: [task()], investigations: standing(issue()) }));
+  assert.equal(running.status, 'investigation');
   assert.equal(running.reasons[0], 'being investigated before it is planned');
 
-  const waiting = issuePickupStatus(issue(), pickupCtx({ investigations: [findings(issue())] }));
+  const waiting = issuePickupStatus(issue(), pickupCtx({ investigations: standing(issue(), findings(issue())) }));
   assert.equal(waiting.eligible, false);
-  assert.equal(waiting.reasons[0], FINDINGS_WAITING_REASON);
+  assert.equal(waiting.status, 'investigation');
+  assert.equal(waiting.reasons[0], FINDINGS_WAITING);
+});
+
+function attempts(n: number, at: string): Decision[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `d${i}`,
+    cycleId: `c${i}`,
+    action: {
+      type: 'dispatch_code_agent',
+      branch: 'investigate/issue/12',
+      title: 'x',
+      prompt: 'x',
+      originRef: 'issue:12:investigate',
+      reason: 'x',
+    },
+    outcome: 'executed',
+    rule: 'issue-investigate',
+    admission: null,
+    detail: '',
+    createdAt: at,
+  })) as Decision[];
+}
+
+test('the investigator shares the appraiser’s cooldown and cap reading', () => {
+  const cooling = issuePickupStatus(
+    issue(),
+    pickupCtx({ investigations: standing(issue()), recentDecisions: attempts(1, NOW) }),
+  );
+  assert.equal(cooling.status, 'investigation');
+  assert.equal(cooling.reasons[0], 'investigation on cooldown');
+
+  const capped = issuePickupStatus(
+    issue(),
+    pickupCtx({ investigations: standing(issue()), recentDecisions: attempts(3, '2026-07-27T00:00:00.000Z') }),
+  );
+  assert.notEqual(capped.status, 'investigation', 'a capped investigator fails open, as the rule does');
 });
 
 test('answered findings, or no label, fall back to the ordinary planning reason', () => {
   const planned = issuePickupStatus(
     issue(),
-    pickupCtx({ investigations: [findings(issue(), { resolution: 'plan', resolvedAt: NOW })] }),
+    pickupCtx({ investigations: standing(issue(), findings(issue(), { resolution: 'plan', resolvedAt: NOW })) }),
   );
+  assert.equal(planned.status, 'planning');
   assert.equal(planned.reasons[0], 'awaiting a planning agent');
 
-  const unlabelled = issuePickupStatus(issue({ labels: [] }), pickupCtx({ investigations: [findings(issue())] }));
+  const bare = issue({ labels: [] });
+  const unlabelled = issuePickupStatus(bare, pickupCtx({ investigations: standing(bare, findings(bare)) }));
   assert.equal(unlabelled.reasons[0], 'awaiting a planning agent', 'the label is the only switch on the hold');
 
   const closing = issuePickupStatus(
     issue(),
-    pickupCtx({ investigations: [findings(issue(), { resolution: 'close', resolvedAt: NOW })] }),
+    pickupCtx({ investigations: standing(issue(), findings(issue(), { resolution: 'close', resolvedAt: NOW })) }),
   );
+  assert.equal(closing.status, 'investigation');
   assert.equal(closing.reasons[0], 'you marked the investigation for closing');
 });
 
@@ -168,7 +213,13 @@ function view(state: CockpitView['state']): CockpitView {
   });
 }
 
-function investigated(over: Partial<IssueInvestigation> = {}, reasons = [FINDINGS_WAITING_REASON]) {
+function investigated(
+  over: Partial<IssueInvestigation> = {},
+  pickup: { status: 'investigation' | 'planning'; reasons: string[] } = {
+    status: 'investigation',
+    reasons: [FINDINGS_WAITING],
+  },
+) {
   const state = buildDemoState().state;
   const target = state.world.issues.find((i) => i.state === 'open') as WireIssue;
   const issues = state.world.issues.map((i) =>
@@ -176,7 +227,7 @@ function investigated(over: Partial<IssueInvestigation> = {}, reasons = [FINDING
       ? {
           ...i,
           investigation: findings(i, { originRef: `issue:${i.number}`, ...over }),
-          pickup: { eligible: false, status: 'planning' as const, reasons },
+          pickup: { eligible: false, ...pickup },
         }
       : i,
   );
@@ -232,7 +283,7 @@ test('the ask stands only while the pickup status says the findings hold the goa
     false,
     'answered findings still ask',
   );
-  const unheld = investigated({}, ['awaiting a planning agent']);
+  const unheld = investigated({}, { status: 'planning', reasons: ['awaiting a planning agent'] });
   assert.equal(
     view(unheld.state).needsYou.some((n) => n.kind === 'findings'),
     false,

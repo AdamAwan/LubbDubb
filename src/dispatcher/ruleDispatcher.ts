@@ -1,3 +1,4 @@
+import { investigateLabelFor } from '../watchLabels.js';
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
 import type { PrRefStyle } from '../pr/prRef.js';
 import type { ValidatedAction } from './actions.js';
@@ -287,7 +288,6 @@ export class RuleDispatcher implements Dispatcher {
       ...sequencingView(ctx, pickup),
       ...this.policies(),
       ...workItemGates(pickup),
-      ...investigations,
       ctx,
       now,
       raw,
@@ -309,10 +309,11 @@ export class RuleDispatcher implements Dispatcher {
       profileOverrides,
       pinFor: pinResolver(ctx, plansByOrigin, profileOverrides),
       parentCandidates: candidateParents(ctx.world.issues, pickup.containerTypes),
-      routes: planRoutes(ctx, gates.eligibleIssues, plansByOrigin, this.cooldown, investigations.investigationFor),
+      routes: planRoutes(ctx, gates.eligibleIssues, plansByOrigin, this.cooldown, investigations),
       validationChecks: checksByOrigin(ctx.validationChecks ?? []),
       appraising: new Set<number>(),
       investigating: new Set<number>(),
+      investigations,
       assessing: new Set<number>(),
       redBaseChecks: redBaseChecks(openPrs),
       consider: considerWith(ctx, this.cooldown, raw, candidates),
@@ -388,6 +389,7 @@ function pickupPolicyOf(pickup: Partial<IssuePickupPolicy> = {}): IssuePickupPol
     ...pickup,
     priorityLabels: pickup.priorityLabels ?? {},
     defaultPriority: pickup.defaultPriority ?? 0,
+    investigateLabel: pickup.investigateLabel ?? investigateLabelFor(''),
   };
 }
 

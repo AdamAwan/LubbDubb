@@ -88,7 +88,7 @@ function input(over: Partial<RunwayInput> = {}): RunwayInput {
     policy: DEFAULT_RUNWAY,
     issues: [],
     pickup: {
-      policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 1 },
+      policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 1, investigateLabel: 'investigate' },
       cooldown: DEFAULT_COOLDOWN,
       now: NOW,
       tasks: [],
@@ -321,7 +321,13 @@ test('an unwatched container is a way in, and never double-counts its children',
       ],
       pickup: {
         ...input().pickup,
-        policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 1, containerTypes: ['Feature'] },
+        policy: {
+          watchLabel: WATCH,
+          priorityLabels: {},
+          defaultPriority: 1,
+          investigateLabel: 'investigate',
+          containerTypes: ['Feature'],
+        },
       },
     }),
   );

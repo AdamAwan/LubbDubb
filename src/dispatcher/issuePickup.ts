@@ -4,7 +4,6 @@ import type {
   Issue,
   IssueAppraisal,
   IssueDelivery,
-  IssueInvestigation,
   IssueRun,
   ObstacleBlock,
   ObstacleStanding,
@@ -18,9 +17,14 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
-import { currentInvestigation, investigateOrigin, investigationSkipsPlanning } from '../intake/investigation.js';
-import { investigationHold } from '../intake/investigationHold.js';
-import { carriesInvestigateLabel, investigateLabelFor } from '../watchLabels.js';
+import {
+  investigateOrigin,
+  investigationSkipsPlanning,
+  investigationStanding,
+  type InvestigationStanding,
+  type InvestigationStandings,
+} from '../intake/investigation.js';
+import { pickupLabels } from '../watchLabels.js';
 import { ALIGNING_REASON, SITTING_REASON, sittingHolds, type ClosedSittings } from '../intake/sitting.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
@@ -33,7 +37,7 @@ import type { IssueSequencing } from '../sequence/readiness.js';
 export interface IssuePickupPolicy {
   watchLabel?: string;
   requireOwnLabel?: boolean;
-  investigateLabel?: string;
+  investigateLabel: string;
   priorityLabels: Record<string, number>;
   defaultPriority: number;
   pickupStates?: string[];
@@ -97,17 +101,18 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   return { eligible: reasons.length === 0, reasons };
 }
 
-function issueWatchReason(issue: Issue, policy: IssuePickupPolicy): string | null {
+type WatchGatePolicy = Pick<IssuePickupPolicy, 'watchLabel' | 'requireOwnLabel'>;
+
+function issueWatchReason(issue: Issue, policy: WatchGatePolicy): string | null {
   if (!policy.watchLabel) return null;
-  const labels = policy.requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
-  if (labels.includes(policy.watchLabel)) return null;
+  if (pickupLabels(issue, policy.requireOwnLabel).includes(policy.watchLabel)) return null;
   if (policy.requireOwnLabel && issue.labels.includes(policy.watchLabel)) {
     return `watch label "${policy.watchLabel}" not added by you`;
   }
   return `no watch label "${policy.watchLabel}"`;
 }
 
-export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): string | null {
+export function issueWatchGateReason(issue: Issue, policy: WatchGatePolicy): string | null {
   return issueWatchReason(issue, policy);
 }
 
@@ -123,6 +128,7 @@ type IssuePickupStatusKind =
   | 'planning'
   | 'delivered'
   | 'appraisal'
+  | 'investigation'
   | 'sitting'
   | 'obstacle'
   | 'cooldown'
@@ -148,7 +154,7 @@ export interface IssuePickupContext {
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
   appraisals?: IssueAppraisal[];
-  investigations?: IssueInvestigation[];
+  investigations?: InvestigationStandings;
   closedSittings?: ClosedSittings;
   obstacleBlocks?: ObstacleBlock[];
   obstacles?: ObstacleStanding[];
@@ -274,31 +280,19 @@ function planningRouteStatus(
   return { eligible: false, status: 'planning', reasons: [reason] };
 }
 
-function investigationOf(issue: Issue, ctx: IssuePickupContext): IssueInvestigation | null {
-  return currentInvestigation(
-    ctx.investigations?.find((i) => i.originRef === issueOrigin(issue.number)),
-    issue,
-  );
-}
-
-function investigationStatus(
-  issue: Issue,
-  ctx: IssuePickupContext,
-  investigation: IssueInvestigation | null,
-  plan: Plan | null,
-): HeldStatus {
-  const label = ctx.policy.investigateLabel ?? investigateLabelFor('');
-  if (!carriesInvestigateLabel(issue, label, ctx.policy.requireOwnLabel)) return null;
-  const hold = investigationHold(investigation, true);
-  if (hold !== null) return { eligible: false, status: 'planning', reasons: [hold] };
-  if (investigation !== null || plan !== null || hasWorkStarted(issue.number, ctx.tasks)) return null;
-  const running = ctx.tasks.find((t) => t.originRef === investigateOrigin(issue.number) && isActiveTask(t));
-  const reason = running
-    ? running.status === 'waiting'
-      ? 'investigation agent waiting on you'
-      : 'being investigated before it is planned'
-    : 'awaiting an investigation before it is planned';
-  return { eligible: false, status: 'planning', reasons: [reason] };
+function investigationStatus(issue: Issue, ctx: IssuePickupContext, standing: InvestigationStanding): HeldStatus {
+  if (!standing.labelled) return null;
+  const reason =
+    standing.hold ??
+    preplanAgentReason(issue, ctx, {
+      origin: investigateOrigin(issue.number),
+      settled: standing.current !== null,
+      waiting: 'investigation agent waiting on you',
+      running: 'being investigated before it is planned',
+      cooldown: 'investigation on cooldown',
+      awaiting: 'awaiting an investigation before it is planned',
+    });
+  return reason === null ? null : { eligible: false, status: 'investigation', reasons: [reason] };
 }
 
 function attemptStatus(origin: string, ctx: IssuePickupContext): HeldStatus {
@@ -327,13 +321,13 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   if (ended) return ended;
 
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
-  const investigation = investigationOf(issue, ctx);
+  const investigation = investigationStanding(ctx.investigations, issue.number);
   const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
   const planVerdict = resolvePlanRoute({
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
-    skipPlanning: investigationSkipsPlanning(investigation),
+    skipPlanning: investigationSkipsPlanning(investigation.current),
   });
   const gated = planGateStatus(planVerdict, plan, parts);
   if (gated) return gated;
@@ -345,7 +339,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   const held =
     activeStatus(origin, ctx) ??
     standingHoldStatus(issue, origin, ctx) ??
-    investigationStatus(issue, ctx, investigation, plan) ??
+    investigationStatus(issue, ctx, investigation) ??
     planningRouteStatus(issue, ctx, planVerdict, plan) ??
     attemptStatus(origin, ctx);
   if (held) return held;
@@ -359,16 +353,38 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const origin = issueOriginRef('root', issue.number);
   const stored = ctx.appraisals?.find((a) => a.originRef === origin) ?? null;
-  const held = appraisalHold(stored, issue);
-  if (held) return held;
-  if (isAppraised(stored, issue)) return null;
-  if (hasWorkStarted(issue.number, ctx.tasks)) return null;
-  if (ctx.plans?.some((p) => p.originRef === origin)) return null;
-  const running = ctx.tasks.find((t) => t.originRef === appraisalOrigin(issue.number) && isActiveTask(t));
-  if (running) return running.status === 'waiting' ? 'goal appraisal waiting on you' : 'a goal appraisal is running';
-  const verdict = dispatchVerdict(appraisalOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown);
+  return (
+    appraisalHold(stored, issue) ??
+    preplanAgentReason(issue, ctx, {
+      origin: appraisalOrigin(issue.number),
+      settled: isAppraised(stored, issue),
+      waiting: 'goal appraisal waiting on you',
+      running: 'a goal appraisal is running',
+      cooldown: 'goal appraisal on cooldown',
+      awaiting: 'awaiting a goal appraisal',
+    })
+  );
+}
+
+interface PreplanAgent {
+  origin: string;
+  /** Its record already stands for the issue's current text. */
+  settled: boolean;
+  waiting: string;
+  running: string;
+  cooldown: string;
+  awaiting: string;
+}
+
+/** Why a read-only agent that runs before the planner holds the issue, or null once it no longer can. */
+function preplanAgentReason(issue: Issue, ctx: IssuePickupContext, agent: PreplanAgent): string | null {
+  if (agent.settled || hasWorkStarted(issue.number, ctx.tasks)) return null;
+  if (ctx.plans?.some((p) => p.originRef === issueOrigin(issue.number))) return null;
+  const running = ctx.tasks.find((t) => t.originRef === agent.origin && isActiveTask(t));
+  if (running) return running.status === 'waiting' ? agent.waiting : agent.running;
+  const verdict = dispatchVerdict(agent.origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
   if (verdict.kind === 'escalate' || verdict.kind === 'hold') return null;
-  return verdict.kind === 'cooldown' ? 'goal appraisal on cooldown' : 'awaiting a goal appraisal';
+  return verdict.kind === 'cooldown' ? agent.cooldown : agent.awaiting;
 }
 
 function countAttempts(origin: string, decisions: Decision[]): number {

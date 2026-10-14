@@ -2,7 +2,7 @@ import { issueOriginRef } from '../../issueOrigins.js';
 import { supersededReason } from '../admission.js';
 import { issueBranch } from '../issuePickup.js';
 import { relatedWorkNote } from '../../issueRelations.js';
-import { investigationNote } from '../../intake/investigation.js';
+import { investigationNote, investigationStanding } from '../../intake/investigation.js';
 import { investigationSupersedes } from './issueInvestigate.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
@@ -40,7 +40,7 @@ export function issuePickup(s: StageContext): void {
             branch,
           }) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
-          investigationNote(s.investigationFor(issue)) +
+          investigationNote(investigationStanding(s.investigations, issue.number).current) +
           s.watchDeclareNote +
           s.stateDeclareNote,
         originRef: origin,

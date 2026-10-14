@@ -217,7 +217,6 @@ export function recordAppraisal(
   const origin = appraiserOrigin(task.originRef);
   if (!origin.ok) return { ok: false, error: origin.error };
 
-  const investigate = verdict === 'workable' && placement?.investigate === true;
   const proposedProfile = ctx.opts.goalProfile && profile ? profile : null;
   const profileHeld =
     proposedProfile !== null && proposedProfile !== ctx.opts.goalProfile?.effective(origin.issueOrigin);
@@ -232,7 +231,6 @@ export function recordAppraisal(
     profileDiverges: profileHeld,
     proposedParent: placement?.parent ?? null,
     proposedAreaPath: placement?.areaPath ?? null,
-    investigate,
     agentId,
     taskId: task.id,
   });
@@ -241,7 +239,7 @@ export function recordAppraisal(
     taskId: task.id,
     issueOrigin: origin.issueOrigin,
     verdict,
-    investigate,
+    investigate: placement?.investigate === true,
   });
   return { ok: true, issueOrigin: origin.issueOrigin, verdict, profileHeld };
 }
