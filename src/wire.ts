@@ -140,6 +140,7 @@ import type {
   BotPrsReading,
   AssessedBotPr,
   BotPrRiskStanding,
+  IssueInvestigation,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -199,6 +200,7 @@ export interface Issue extends WorldIssue {
     /** Still on the project root and not declined — whether or not the appraisal proposed a path. */
     areaPathUnset: boolean;
   } | null;
+  investigation: IssueInvestigation | null;
   modelPin: { profile: string | null; ignoredTags: string[] };
   priority: { since: string } | null;
   retrospective: { summary: string; hasDocument: boolean; updatedAt: string } | null;

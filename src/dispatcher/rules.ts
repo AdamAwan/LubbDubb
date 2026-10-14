@@ -171,6 +171,13 @@ const RULES = [
       'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and posts, on the ticket, the list of what the author has to add and how to get help adding it; it ends by itself the moment the ticket is rewritten, or when an operator confirms the goal. Ranked ahead of the planner, because appraising a goal the planner is about to decompose is the whole point. It is held behind a story\u2019s declared predecessors like the planner and the pickup are: it reads the repository as it stands, so a story whose predecessor has not landed would be judged against a checkout missing what that predecessor was going to build \u2014 and unlike the hold, which is recomputed every pulse, the `unclear` that would come back is a record keyed to the ticket\u2019s text and outlives the reason for it. An appraiser that writes no verdict \u2014 crashed, killed or capped \u2014 leaves the issue to ordinary pickup, so a failure can never park one.',
   },
   {
+    id: 'issue-investigate',
+    kind: 'rule',
+    name: 'Bug needs investigating',
+    description:
+      'A watched open issue carrying the investigate label, with nothing started for it, gets one read-only code agent to find the cause before anything is planned: a reproduction, the root cause and how sure it is, where in the code it lives, what else it touches, and whether the issue should be planned, picked up whole, closed or sent back to its reporter. The label is the only switch — an operator sets it, or the goal appraisal sets it once when it reads a bug whose cause is not known yet — and removing it lifts every hold this rule places. While the investigator is out, and while its findings wait on an operator, the planner and the pickup stand aside; an operator who resolves the findings to *plan* has them appended to the planner\u2019s prompt, *pickup* skips planning, and *close* or *ask* keep the issue held until the label comes off or the ticket is rewritten. The findings are keyed to the ticket\u2019s text, so an edit re-arms it. An investigator that writes nothing \u2014 crashed, killed or capped \u2014 returns the issue to the funnel with no escalation, so a failure can never park one.',
+  },
+  {
     id: 'criteria-alignment',
     kind: 'rule',
     name: 'Your criteria against the ticket',

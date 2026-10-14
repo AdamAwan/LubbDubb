@@ -25,6 +25,7 @@ import {
   checksByOrigin,
   considerWith,
   cycleLookups,
+  investigationView,
   issueGates,
   pinResolver,
   planRoutes,
@@ -42,6 +43,7 @@ import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
 import { issueAppraisal } from './rules/issueAppraisal.js';
+import { issueInvestigate } from './rules/issueInvestigate.js';
 import { issuePlan } from './rules/issuePlan.js';
 import { criteriaAlignment } from './rules/criteriaAlignment.js';
 import { predictionJudge } from './rules/predictionJudge.js';
@@ -79,6 +81,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
   'issue-appraisal': issueAppraisal,
+  'issue-investigate': issueInvestigate,
   'criteria-alignment': criteriaAlignment,
   'issue-plan': issuePlan,
   'issue-assess': issueAssess,
@@ -276,6 +279,7 @@ export class RuleDispatcher implements Dispatcher {
     const { retained } = gates;
 
     const criteriaByOrigin = new Map((ctx.goalCriteria ?? []).map((c) => [c.originRef, c]));
+    const investigations = investigationView(ctx, pickup);
 
     return {
       ...cycleLookups(ctx),
@@ -283,6 +287,7 @@ export class RuleDispatcher implements Dispatcher {
       ...sequencingView(ctx, pickup),
       ...this.policies(),
       ...workItemGates(pickup),
+      ...investigations,
       ctx,
       now,
       raw,
@@ -304,9 +309,10 @@ export class RuleDispatcher implements Dispatcher {
       profileOverrides,
       pinFor: pinResolver(ctx, plansByOrigin, profileOverrides),
       parentCandidates: candidateParents(ctx.world.issues, pickup.containerTypes),
-      routes: planRoutes(ctx, gates.eligibleIssues, plansByOrigin, this.cooldown),
+      routes: planRoutes(ctx, gates.eligibleIssues, plansByOrigin, this.cooldown, investigations.investigationFor),
       validationChecks: checksByOrigin(ctx.validationChecks ?? []),
       appraising: new Set<number>(),
+      investigating: new Set<number>(),
       assessing: new Set<number>(),
       redBaseChecks: redBaseChecks(openPrs),
       consider: considerWith(ctx, this.cooldown, raw, candidates),

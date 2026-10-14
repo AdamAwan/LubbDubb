@@ -35,6 +35,7 @@ function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
     parentSettledAt: null,
     proposedAreaPath: null,
     areaPathSettledAt: null,
+    investigate: false,
     agentId: 'agent_1',
     taskId: 'task_1',
     commentRef: null,

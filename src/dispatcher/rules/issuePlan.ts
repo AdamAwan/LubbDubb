@@ -9,6 +9,8 @@ import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import { SITTING_REASON } from '../../intake/sitting.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
+import { investigationNote } from '../../intake/investigation.js';
+import { investigationSupersedes } from './issueInvestigate.js';
 import type { RuleHeld } from '../admission.js';
 import type { Issue, Plan } from '../../types.js';
 import type { RawAction, StageContext } from './context.js';
@@ -17,11 +19,14 @@ import type { RawAction, StageContext } from './context.js';
 
 function planHold(
   s: StageContext,
-  issueNumber: number,
+  issue: Issue,
   reason: string,
   planner: 'dispatch' | 'cooldown',
 ): { reason: string; held: RuleHeld | undefined } {
+  const issueNumber = issue.number;
   if (s.appraising.has(issueNumber)) return { reason: supersededReason('issue-appraisal', reason), held: 'superseded' };
+  const investigation = investigationSupersedes(s, issue, reason);
+  if (investigation !== null) return { reason: investigation, held: 'superseded' };
   if (s.sittingHolds(issueNumber))
     return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
   const waits = s.sequenceWaits.get(issueNumber);
@@ -49,7 +54,7 @@ export function issuePlan(s: StageContext): void {
     const reason = replan
       ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
       : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
-    const hold = planHold(s, issue.number, reason, route.planner);
+    const hold = planHold(s, issue, reason, route.planner);
     s.candidates.push({
       origin,
       rule: 'issue-plan',
@@ -72,6 +77,7 @@ export function issuePlan(s: StageContext): void {
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
+          investigationNote(s.investigationFor(issue)) +
           s.watchNote +
           s.testPartNote +
           s.screenCheckNote,

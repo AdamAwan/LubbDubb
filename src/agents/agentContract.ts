@@ -79,7 +79,9 @@ export interface AgentManagerEvents {
   progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
   conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
   assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
-  appraisal: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAppraisalVerdictName }];
+  appraisal: [
+    { agentId: string; taskId: string; issueOrigin: string; verdict: GoalAppraisalVerdictName; investigate: boolean },
+  ];
   goalMet: [{ agentId: string; taskId: string; issueOrigin: string }];
   partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
   scratch: [{ agentId: string; taskId: string; entry: ScratchEntry }];

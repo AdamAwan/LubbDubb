@@ -52,6 +52,7 @@ import { PrReviewStore, PR_REVIEW_COLUMNS } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrSplitStore } from './prSplits.js';
+import { InvestigationStore } from './investigations.js';
 import { BotPrRiskStore } from './botPrRisks.js';
 import { BotPrOutcomeStore } from './botPrOutcomes.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
@@ -178,6 +179,7 @@ export class Store {
   readonly prReviewRoutes: PrReviewRouteStore;
   readonly prReviewExternals: PrReviewExternalStore;
   readonly prSplits: PrSplitStore;
+  readonly investigations: InvestigationStore;
   readonly botPrRisks: BotPrRiskStore;
   readonly botPrOutcomes: BotPrOutcomeStore;
   readonly threadReopens: PrThreadReopenStore;
@@ -245,6 +247,7 @@ export class Store {
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewExternals = new PrReviewExternalStore(ctx);
     this.prSplits = new PrSplitStore(ctx);
+    this.investigations = new InvestigationStore(ctx);
     this.botPrRisks = new BotPrRiskStore(ctx);
     this.botPrOutcomes = new BotPrOutcomeStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);

@@ -88,5 +88,6 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     obstacles: store.obstacles.obstacleBoard(),
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
     criteriaAlignments: store.goalCriteria.listAlignments(),
+    investigations: store.investigations.list(),
   };
 }

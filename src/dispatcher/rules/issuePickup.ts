@@ -2,6 +2,8 @@ import { issueOriginRef } from '../../issueOrigins.js';
 import { supersededReason } from '../admission.js';
 import { issueBranch } from '../issuePickup.js';
 import { relatedWorkNote } from '../../issueRelations.js';
+import { investigationNote } from '../../intake/investigation.js';
+import { investigationSupersedes } from './issueInvestigate.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
@@ -12,13 +14,13 @@ export function issuePickup(s: StageContext): void {
     if (s.routes.get(issue.number)?.route !== 'unplanned') continue;
     const origin = issueOriginRef('root', issue.number);
     if (s.activeOrigins.has(origin)) continue;
-    const supersededBy = s.assessing.has(issue.number)
-      ? ('issue-assess' as const)
-      : s.appraising.has(issue.number)
-        ? ('issue-appraisal' as const)
-        : null;
     const branch = issueBranch(issue.number);
     const reason = `Open issue #${issue.number} has no open PR and no agent is on it.`;
+    const supersededBy = s.assessing.has(issue.number)
+      ? supersededReason('issue-assess', reason)
+      : s.appraising.has(issue.number)
+        ? supersededReason('issue-appraisal', reason)
+        : investigationSupersedes(s, issue, reason);
     const candidate: Candidate = {
       origin,
       rule: 'issue-pickup',
@@ -38,6 +40,7 @@ export function issuePickup(s: StageContext): void {
             branch,
           }) +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
+          investigationNote(s.investigationFor(issue)) +
           s.watchDeclareNote +
           s.stateDeclareNote,
         originRef: origin,
@@ -47,8 +50,8 @@ export function issuePickup(s: StageContext): void {
         reason,
       } satisfies RawAction,
     };
-    if (supersededBy) {
-      s.candidates.push({ ...candidate, held: 'superseded', reason: supersededReason(supersededBy, reason) });
+    if (supersededBy !== null) {
+      s.candidates.push({ ...candidate, held: 'superseded', reason: supersededBy });
       continue;
     }
     const waits = s.sequenceWaits.get(issue.number);

@@ -733,11 +733,31 @@ export interface IssueAppraisal {
   parentSettledAt: string | null;
   proposedAreaPath: string | null;
   areaPathSettledAt: string | null;
+  investigate: boolean;
   agentId: string | null;
   taskId: string | null;
   commentRef: string | null;
   decidedAt: string;
   updatedAt: string;
+}
+
+export type InvestigationConfidence = 'high' | 'medium' | 'low';
+
+export type InvestigationResolution = 'plan' | 'pickup' | 'close' | 'ask';
+
+export interface IssueInvestigation {
+  originRef: string;
+  goalRef: string;
+  by: string;
+  reproduction: string;
+  rootCause: string;
+  confidence: InvestigationConfidence;
+  locations: string;
+  blastRadius: string;
+  recommendation: InvestigationResolution;
+  decidedAt: string;
+  resolution: InvestigationResolution | null;
+  resolvedAt: string | null;
 }
 
 export interface ScratchEntry {

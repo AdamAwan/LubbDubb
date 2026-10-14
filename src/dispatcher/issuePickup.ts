@@ -4,6 +4,7 @@ import type {
   Issue,
   IssueAppraisal,
   IssueDelivery,
+  IssueInvestigation,
   IssueRun,
   ObstacleBlock,
   ObstacleStanding,
@@ -17,6 +18,7 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
+import { currentInvestigation, investigationSkipsPlanning } from '../intake/investigation.js';
 import { ALIGNING_REASON, SITTING_REASON, sittingHolds, type ClosedSittings } from '../intake/sitting.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
@@ -29,6 +31,7 @@ import type { IssueSequencing } from '../sequence/readiness.js';
 export interface IssuePickupPolicy {
   watchLabel?: string;
   requireOwnLabel?: boolean;
+  investigateLabel?: string;
   priorityLabels: Record<string, number>;
   defaultPriority: number;
   pickupStates?: string[];
@@ -143,6 +146,7 @@ export interface IssuePickupContext {
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
   appraisals?: IssueAppraisal[];
+  investigations?: IssueInvestigation[];
   closedSittings?: ClosedSittings;
   obstacleBlocks?: ObstacleBlock[];
   obstacles?: ObstacleStanding[];
@@ -299,6 +303,12 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
+    skipPlanning: investigationSkipsPlanning(
+      currentInvestigation(
+        ctx.investigations?.find((i) => i.originRef === issueOrigin(issue.number)),
+        issue,
+      ),
+    ),
   });
   const gated = planGateStatus(planVerdict, plan, parts);
   if (gated) return gated;

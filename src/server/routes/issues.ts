@@ -29,6 +29,7 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
   registerPlacement(app, ctx);
   registerSteering(app, ctx);
   registerVerdicts(app, ctx);
+  registerInvestigation(app, ctx);
   registerDeliveryOutcome(app, ctx);
   registerBugFiling(app, ctx);
   registerGoalAgents(app, ctx);
@@ -231,6 +232,35 @@ function registerSteering(app: FastifyInstance, { system, hub }: RouteContext): 
       if (!outcome.ok) return reply.code(409).send({ error: 'no standing instruction with that id' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, standing: outcome.standing };
+    }),
+  );
+}
+
+function registerInvestigation(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, harness } = system;
+  const InvestigationBody = z.union(
+    [
+      z.object({ resolution: z.enum(['plan', 'pickup', 'close', 'ask']) }).strict(),
+      z.object({ clear: z.literal(true) }).strict(),
+    ],
+    { error: 'body must be { resolution: "plan" | "pickup" | "close" | "ask" } or { clear: true }' },
+  );
+  app.post(
+    '/api/issues/:number/investigation',
+    checked({ params: IssueNumberParams, body: InvestigationBody }, async ({ params, body, reply }) => {
+      const originRef = issueConclusionOrigin(params.number);
+      if ('clear' in body) {
+        store.investigations.clear(originRef);
+        hub.broadcast({ type: 'world:changed' });
+        await harness.runCycle('manual');
+        return { ok: true, investigation: null };
+      }
+      if (store.investigations.get(originRef) === null)
+        return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
+      const investigation = store.investigations.resolve(originRef, body.resolution);
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, investigation };
     }),
   );
 }

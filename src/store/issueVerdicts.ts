@@ -30,6 +30,7 @@ export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
     proposed_area_path: 'TEXT',
     area_path_settled_at: 'TEXT',
     missing: 'TEXT',
+    investigate: 'INTEGER NOT NULL DEFAULT 0',
   },
 };
 
@@ -204,6 +205,7 @@ export class IssueVerdictStore {
     profileDiverges?: boolean;
     proposedParent?: number | null;
     proposedAreaPath?: string | null;
+    investigate?: boolean;
   }): IssueAppraisal {
     const ts = this.ctx.now();
     const prev = this.getAppraisal(input.originRef);
@@ -221,6 +223,7 @@ export class IssueVerdictStore {
       proposedAreaPath: input.proposedAreaPath ?? null,
       parentSettledAt: null,
       areaPathSettledAt: null,
+      investigate: input.investigate === true,
       agentId: input.agentId ?? null,
       taskId: input.taskId ?? null,
       commentRef: prev && prev.goalRef === input.goalRef ? prev.commentRef : null,
@@ -229,18 +232,18 @@ export class IssueVerdictStore {
     };
     this.recordVerdict(
       'appraisal',
-      `INSERT INTO issue_appraisals (origin_ref, verdict, summary, missing, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, agent_id, task_id, comment_ref, decided_at, updated_at)
-       VALUES (@originRef, @verdict, @summary, @missing, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @proposedParent, @parentSettledAt, @proposedAreaPath, @areaPathSettledAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
+      `INSERT INTO issue_appraisals (origin_ref, verdict, summary, missing, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, investigate, agent_id, task_id, comment_ref, decided_at, updated_at)
+       VALUES (@originRef, @verdict, @summary, @missing, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @proposedParent, @parentSettledAt, @proposedAreaPath, @areaPathSettledAt, @investigate, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
          verdict=excluded.verdict, summary=excluded.summary, missing=excluded.missing, goal_ref=excluded.goal_ref,
          by=excluded.by, proposed_profile=excluded.proposed_profile,
          profile_answered_at=excluded.profile_answered_at,
          proposed_parent=excluded.proposed_parent, parent_settled_at=excluded.parent_settled_at,
          proposed_area_path=excluded.proposed_area_path,
-         area_path_settled_at=excluded.area_path_settled_at,
+         area_path_settled_at=excluded.area_path_settled_at, investigate=excluded.investigate,
          agent_id=excluded.agent_id, task_id=excluded.task_id,
          comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
-      { ...row, missing: JSON.stringify(row.missing) },
+      { ...row, missing: JSON.stringify(row.missing), investigate: row.investigate ? 1 : 0 },
     );
     return row;
   }
@@ -335,6 +338,7 @@ interface IssueAppraisalRow {
   parent_settled_at: string | null;
   proposed_area_path: string | null;
   area_path_settled_at: string | null;
+  investigate: number | null;
   agent_id: string | null;
   task_id: string | null;
   comment_ref: string | null;
@@ -404,6 +408,7 @@ function rowToAppraisal(r: IssueAppraisalRow): IssueAppraisal {
     parentSettledAt: r.parent_settled_at ?? null,
     proposedAreaPath: r.proposed_area_path ?? null,
     areaPathSettledAt: r.area_path_settled_at ?? null,
+    investigate: r.investigate === 1,
     agentId: r.agent_id,
     taskId: r.task_id,
     commentRef: r.comment_ref,

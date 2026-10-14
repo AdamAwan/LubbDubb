@@ -12,6 +12,7 @@ import type {
   GoalPriority,
   IssueConclusion,
   IssueAppraisal,
+  IssueInvestigation,
   IssueDelivery,
   IssueShortfall,
   Job,
@@ -91,6 +92,7 @@ export interface DispatchContext {
   deliverySignals?: WorldEvent[];
   shortfalls?: IssueShortfall[];
   appraisals?: IssueAppraisal[];
+  investigations?: IssueInvestigation[];
   closedSittings?: ClosedSittings;
   goalCriteria?: GoalCriteriaVersion[];
   criteriaAlignments?: GoalCriteriaAlignment[];

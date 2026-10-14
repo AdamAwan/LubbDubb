@@ -8,3 +8,16 @@ export function isWatched(labels: string[] | undefined, watchLabel: string): boo
   if (!watchLabel) return true;
   return (labels ?? []).includes(watchLabel);
 }
+
+export function investigateLabelFor(prefix: string): string {
+  return prefix ? `${prefix}-investigate` : 'investigate';
+}
+
+export function carriesInvestigateLabel(
+  issue: { labels: string[]; labelsAddedByViewer?: string[] },
+  label: string,
+  requireOwnLabel: boolean | undefined,
+): boolean {
+  const labels = requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
+  return labels.includes(label);
+}

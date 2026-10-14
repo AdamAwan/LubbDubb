@@ -285,6 +285,8 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
   const validationPlanRecords = once(() => store.validation.listValidationPlanRecords());
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
+  const investigations = once(() => store.investigations.list());
+  const investigationsByOrigin = once(() => new Map(investigations().map((i) => [i.originRef, i])));
   return {
     validationChecks,
     checksByGoal,
@@ -302,12 +304,14 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     instructionsByOrigin,
     appraisals,
     appraisalsByOrigin,
+    investigations,
+    investigationsByOrigin,
   };
 }
 
 export function contextReads(r: VerdictReadsOn) {
   const { system, store, config, world, tasks, control, plans, planParts } = r;
-  const { deliveries, deliverySignals, appraisals, issueRuns } = r;
+  const { deliveries, deliverySignals, appraisals, investigations, issueRuns } = r;
   const recentDecisions = once(() => store.decisions.listDecisions(200));
   const pickupCtx = once((): IssuePickupContext => ({
     policy: {
@@ -324,6 +328,7 @@ export function contextReads(r: VerdictReadsOn) {
     deliveries: deliveries(),
     deliverySignals: deliverySignals(),
     appraisals,
+    investigations: investigations(),
     closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
     obstacles: store.obstacles.obstacleBoard(),

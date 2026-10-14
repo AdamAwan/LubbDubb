@@ -97,6 +97,14 @@ function appraisalInput(profiles: Profiles, areas: Areas) {
             .optional(),
         }
       : {}),
+    investigate: z
+      .boolean()
+      .describe(
+        'Only with "workable": true if this is a bug whose cause is not known yet — the symptom is clear but ' +
+          'nobody has said why it happens or where. The harness labels the issue for investigation once, ' +
+          'and a read-only agent finds the cause before anything is planned. Omit it otherwise.',
+      )
+      .optional(),
     parent: z
       .number()
       .int()
@@ -160,6 +168,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
         missing: parsed.missing,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
+        investigate: parsed.investigate,
       });
       if (!result.ok) return toolError(result.error);
       return ok({
@@ -170,6 +179,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
         profile: parsed.profile,
         parent: parsed.parent,
         areaPath: parsed.areaPath,
+        investigate: parsed.investigate,
         note: recordedNote(parsed, result),
       });
     },

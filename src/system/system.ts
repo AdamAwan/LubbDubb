@@ -36,6 +36,8 @@ import { configuredRemoteRunBriefs } from '../validation/remote/briefing.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
 import { isSealedRule } from '../mcp/names.js';
+import { applyInvestigateLabel } from '../issueWatch.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
@@ -395,7 +397,30 @@ function logStandingMove(feature: number, before: string[], after: string[]): vo
   console.log(`[lubbdubb] feature #${feature} standing moved\n${moves.join('\n')}`);
 }
 
-function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, escalations }: Fleet): void {
+function wireAgentEvents(
+  config: Config,
+  { store, errors, worktrees, sink }: Foundation,
+  { agents, escalations }: Fleet,
+): void {
+  agents.on('appraisal', ({ issueOrigin, investigate }) => {
+    const issueNumber = issueSubtreeNumber(issueOrigin);
+    if (!investigate || issueNumber === null) return;
+    const ctx = {
+      store,
+      sink,
+      errors,
+      labelPrefix: config.labelPrefix,
+      issueContainerTypes: config.issueContainerTypes,
+    };
+    void applyInvestigateLabel(ctx, issueNumber, 'after the goal appraisal asked for an investigation').catch(
+      (err: Error) =>
+        errors.record({
+          source: 'agent',
+          message: `Failed to label #${issueNumber} for investigation: ${err.message}`,
+        }),
+    );
+  });
+
   agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
     if (store.escalations.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.tasks.getTask(taskId);
@@ -445,7 +470,7 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
 function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
   const { store, errors, worktrees, runtimeControl, ingressInbox } = base;
   const { agents } = fleet;
-  wireAgentEvents(base, fleet);
+  wireAgentEvents(config, base, fleet);
 
   const localCycles = new CycleTrigger({
     run: () => harness.runCycle('local'),

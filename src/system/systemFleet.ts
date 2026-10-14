@@ -20,6 +20,7 @@ import { issueWatchGateReason, type IssuePickupPolicy } from '../dispatcher/issu
 import { featureSummariesOn } from '../features/featureBoard.js';
 import { featureRecords, type FeatureBoardFacts } from '../featureSummaries/featureRecord.js';
 import { resolveModelTag } from '../modelLabels.js';
+import { investigateLabelFor } from '../watchLabels.js';
 import { sequenceableFeatures } from '../sequence/sequence.js';
 import { LiveConfig } from '../config/configApply.js';
 import type { BuildOptions, LateBinding, Foundation, AgentRuntime } from './systemFoundation.js';
@@ -189,6 +190,7 @@ function buildDispatch(
 ) {
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
+    investigateLabel: investigateLabelFor(config.labelPrefix),
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,

@@ -84,7 +84,7 @@ export interface AgentToolTarget {
     verdict: GoalAppraisalVerdictName,
     summary: string,
     profile: string | null,
-    placement?: { missing?: string[]; parent: number | null; areaPath: string | null },
+    placement?: { missing?: string[]; parent: number | null; areaPath: string | null; investigate?: boolean },
   ):
     | {
         ok: true;

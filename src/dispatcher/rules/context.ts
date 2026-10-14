@@ -17,6 +17,7 @@ import type {
   GoalCriteriaVersion,
   Issue,
   IssueAppraisal,
+  IssueInvestigation,
   IssueConclusion,
   IssueRelative,
   IssueShortfall,
@@ -77,6 +78,10 @@ export interface StageContext {
   obstacles: readonly ObstacleStanding[];
   redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
+  investigating: Set<number>;
+  /** The investigation standing for this issue's current text, or null. → 06-issue-pickup.md */
+  investigationFor: (issue: Issue) => IssueInvestigation | null;
+  investigateLabelled: (issue: Issue) => boolean;
   assessing: Set<number>;
   /**
    * The cooldown gate every proposing rule shares: reads `dispatchVerdict` for the candidate's

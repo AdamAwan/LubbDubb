@@ -36,6 +36,7 @@ type IssueSeed = Omit<
   | 'conclusion'
   | 'delivery'
   | 'instructions'
+  | 'investigation'
   | 'localValidation'
   | 'modelPin'
   | 'priority'
@@ -53,6 +54,7 @@ function demoIssue(seed: IssueSeed): Issue {
     shortfall: null,
     delivery: null,
     appraisal: null,
+    investigation: null,
     modelPin: { profile: null, ignoredTags: [] },
     retrospective: null,
     scratchpad: null,

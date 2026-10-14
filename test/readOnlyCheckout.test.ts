@@ -79,6 +79,7 @@ function workableAppraisal(): IssueAppraisal {
     parentSettledAt: null,
     proposedAreaPath: null,
     areaPathSettledAt: null,
+    investigate: false,
     agentId: null,
     taskId: null,
     commentRef: null,

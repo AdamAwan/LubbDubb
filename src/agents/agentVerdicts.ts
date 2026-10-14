@@ -210,13 +210,14 @@ export function recordAppraisal(
   verdict: GoalAppraisalVerdictName,
   summary: string,
   profile: string | null,
-  placement?: { missing?: string[]; parent: number | null; areaPath: string | null },
+  placement?: { missing?: string[]; parent: number | null; areaPath: string | null; investigate?: boolean },
 ):
   | { ok: true; issueOrigin: string; verdict: GoalAppraisalVerdictName; profileHeld: boolean }
   | { ok: false; error: string } {
   const origin = appraiserOrigin(task.originRef);
   if (!origin.ok) return { ok: false, error: origin.error };
 
+  const investigate = verdict === 'workable' && placement?.investigate === true;
   const proposedProfile = ctx.opts.goalProfile && profile ? profile : null;
   const profileHeld =
     proposedProfile !== null && proposedProfile !== ctx.opts.goalProfile?.effective(origin.issueOrigin);
@@ -231,10 +232,17 @@ export function recordAppraisal(
     profileDiverges: profileHeld,
     proposedParent: placement?.parent ?? null,
     proposedAreaPath: placement?.areaPath ?? null,
+    investigate,
     agentId,
     taskId: task.id,
   });
-  ctx.events.emit('appraisal', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+  ctx.events.emit('appraisal', {
+    agentId,
+    taskId: task.id,
+    issueOrigin: origin.issueOrigin,
+    verdict,
+    investigate,
+  });
   return { ok: true, issueOrigin: origin.issueOrigin, verdict, profileHeld };
 }
 

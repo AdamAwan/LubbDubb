@@ -50,6 +50,7 @@ export function validateGoalAppraisal(
       profile: string | null;
       parent: number | null;
       areaPath: string | null;
+      investigate: boolean;
     }
   | { ok: false; error: string } {
   const verdict = args.status;
@@ -95,7 +96,12 @@ export function validateGoalAppraisal(
     profile: named.profile,
     parent: parent.parent,
     areaPath: area.areaPath,
+    investigate: asksInvestigation(verdict, args.investigate),
   };
+}
+
+function asksInvestigation(verdict: string, value: unknown): boolean {
+  return verdict === 'workable' && value === true;
 }
 
 function checkParent(value: unknown): { ok: true; parent: number | null } | { ok: false; error: string } {
