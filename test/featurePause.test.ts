@@ -104,7 +104,13 @@ test('the pause set is read every cycle, never snapshotted at construction', asy
 
 test('a pause reads as its own standing, never as "nobody watched this"', () => {
   const base: IssuePickupContext = {
-    policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 0, containerTypes: ['Feature'] },
+    policy: {
+      watchLabel: WATCH,
+      priorityLabels: {},
+      defaultPriority: 0,
+      investigateLabel: 'investigate',
+      containerTypes: ['Feature'],
+    },
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],

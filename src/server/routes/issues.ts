@@ -16,6 +16,9 @@ import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { clearGoalWork } from '../../runs/endRun.js';
 import { applyIssueWatch, issueWatchContext } from '../../issueWatch.js';
+import { issueOrigin } from '../../plans/planning.js';
+import { INVESTIGATION_RESOLUTIONS } from '../../intake/investigationResolutions.js';
+import { investigationStanding, investigationStandings } from '../../intake/investigation.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { GoalAgentsPayload } from '../../wire.js';
@@ -29,6 +32,7 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
   registerPlacement(app, ctx);
   registerSteering(app, ctx);
   registerVerdicts(app, ctx);
+  registerInvestigation(app, ctx);
   registerDeliveryOutcome(app, ctx);
   registerBugFiling(app, ctx);
   registerGoalAgents(app, ctx);
@@ -231,6 +235,55 @@ function registerSteering(app: FastifyInstance, { system, hub }: RouteContext): 
       if (!outcome.ok) return reply.code(409).send({ error: 'no standing instruction with that id' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, standing: outcome.standing };
+    }),
+  );
+}
+
+function registerInvestigation(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const { store, harness } = system;
+  const InvestigationBody = z.union(
+    [
+      z.object({ resolution: z.enum(INVESTIGATION_RESOLUTIONS) }).strict(),
+      z.object({ clear: z.literal(true) }).strict(),
+    ],
+    {
+      error: `body must be { resolution: ${INVESTIGATION_RESOLUTIONS.map((r) => `"${r}"`).join(' | ')} } or { clear: true }`,
+    },
+  );
+  app.post(
+    '/api/issues/:number/investigation',
+    checked({ params: IssueNumberParams, body: InvestigationBody }, async ({ params, body, reply }) => {
+      const originRef = issueOrigin(params.number);
+      if ('clear' in body) {
+        store.investigations.clear(originRef);
+        hub.broadcast({ type: 'world:changed' });
+        await harness.runCycle('manual');
+        return { ok: true, investigation: null };
+      }
+      const recorded = store.investigations.get(originRef);
+      if (recorded === null)
+        return reply.code(404).send({ error: `no investigation is recorded for #${params.number}` });
+      const tickets = store.world.getWorldBaseline()?.issues.filter((i) => i.number === params.number) ?? [];
+      if (tickets.length === 0)
+        return reply.code(409).send({
+          error: `#${params.number} is not in the last world snapshot, so its findings hold nothing and cannot be resolved`,
+        });
+      const standing = investigationStanding(
+        investigationStandings(tickets, [recorded], system.issuePickup),
+        params.number,
+      );
+      if (standing.current === null)
+        return reply.code(409).send({
+          error: `the investigation recorded for #${params.number} is about an earlier text of the ticket; it is not current and cannot be resolved — clear it to investigate again`,
+        });
+      if (standing.inForce === null)
+        return reply.code(409).send({
+          error: `#${params.number} no longer carries the ${system.issuePickup.investigateLabel} label, so its findings hold nothing and cannot be resolved — put the label back to act on them`,
+        });
+      const investigation = store.investigations.resolve(originRef, body.resolution);
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, investigation };
     }),
   );
 }

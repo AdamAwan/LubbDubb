@@ -25,6 +25,7 @@ import {
 import { watchBucket } from '../worldBuckets.js';
 import { StaleChip, StateChip } from './goalChips.js';
 import { LIVE_AGENT } from './goalRunners.js';
+import { investigationChip } from '../view/issueAsks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -97,6 +98,7 @@ export function Header({
 function GoalIdent({ page, view }: { page: GoalPageView; view: CockpitView }): JSX.Element {
   const { issue } = page;
   const { config } = view.state;
+  const investigation = investigationChip(issue);
   return (
     <div className="cn-ghid">
       <h1>
@@ -123,6 +125,16 @@ function GoalIdent({ page, view }: { page: GoalPageView; view: CockpitView }): J
           <Tag tone={issue.appraisal.verdict === 'workable' ? 'green' : 'amber'} fill title={issue.appraisal.summary}>
             <Icon name="scale" size={12} />
             Appraisal · {issue.appraisal.verdict}
+          </Tag>
+        )}
+        {investigation !== null && (
+          <Tag
+            tone={investigation.tone}
+            fill
+            title={`${investigation.findings.confidence} confidence: ${investigation.findings.rootCause}`}
+          >
+            <Icon name="bug" size={12} />
+            Investigation · {investigation.text}
           </Tag>
         )}
         {/* Prefixed with *whose* verdict it is, because the two words this chip

@@ -323,7 +323,7 @@ test('there is no timer arm — a verdict the world has not moved on still stand
 
 function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) {
   return {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
@@ -366,7 +366,9 @@ test('the chip says eligible exactly when the rule would dispatch — cap spent,
 test('an unwatched issue is reported as unwatched, never as awaiting an appraisal it will never get', () => {
   const status = issuePickupStatus(
     issue(),
-    pickupCtx({ policy: { priorityLabels: {}, defaultPriority: 0, watchLabel: 'agent-ready' } }),
+    pickupCtx({
+      policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate', watchLabel: 'agent-ready' },
+    }),
   );
   assert.equal(status.status, 'unwatched');
 });

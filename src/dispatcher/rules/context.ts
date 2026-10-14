@@ -2,6 +2,7 @@ import type { DispatchContext } from '../dispatcher.js';
 import type { AdmissionId, DispatchRuleId } from '../rules.js';
 import type { CooldownPolicy } from '../dispatchCooldown.js';
 import type { IssuePickupPolicy } from '../issuePickup.js';
+import type { InvestigationStandings } from '../../intake/investigation.js';
 import type { PromptTemplates } from '../promptTemplates.js';
 import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
@@ -77,6 +78,8 @@ export interface StageContext {
   obstacles: readonly ObstacleStanding[];
   redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
+  investigating: Set<number>;
+  investigations: InvestigationStandings;
   assessing: Set<number>;
   /**
    * The cooldown gate every proposing rule shares: reads `dispatchVerdict` for the candidate's

@@ -2,7 +2,9 @@ import type { ErrorRecorder } from './errorLog.js';
 import { watchCascadeTargets } from './issueRelations.js';
 import type { IssueLabelInput, SendResult } from './sink/actionSink.js';
 import type { Store } from './store/store.js';
-import { watchLabelFor } from './watchLabels.js';
+import type { InvestigationStore } from './store/investigations.js';
+import { issueOriginRef } from './issueOrigins.js';
+import { investigateLabelFor, watchLabelFor } from './watchLabels.js';
 
 // → docs/spec/06-issue-pickup.md
 
@@ -51,23 +53,53 @@ export async function applyIssueWatch(
   const targets =
     issue === undefined ? [issueNumber] : watchCascadeTargets(issue, world?.issues ?? [], ctx.issueContainerTypes);
 
+  return { label, targets, ...(await applyIssueLabel(ctx, label, targets, watched, `the watch tag`, because)) };
+}
+
+export async function applyInvestigateLabel(
+  ctx: IssueWatchContext,
+  applied: Pick<InvestigationStore, 'labelApplied' | 'markLabelApplied'>,
+  issueNumber: number,
+  because: string,
+): Promise<void> {
+  const originRef = issueOriginRef('root', issueNumber);
+  if (applied.labelApplied(originRef)) return;
+  const { landed } = await applyIssueLabel(
+    ctx,
+    investigateLabelFor(ctx.labelPrefix),
+    [issueNumber],
+    true,
+    'the investigate label',
+    because,
+  );
+  if (landed.includes(issueNumber)) applied.markLabelApplied(originRef);
+}
+
+async function applyIssueLabel(
+  ctx: IssueWatchContext,
+  label: string,
+  targets: number[],
+  present: boolean,
+  what: string,
+  because: string,
+): Promise<Pick<IssueWatchOutcome, 'landed' | 'failed'>> {
   const landed: number[] = [];
   const failed: { number: number; message: string }[] = [];
   for (const target of targets) {
     try {
-      await ctx.sink.setIssueLabel({ number: target, label, present: watched });
+      await ctx.sink.setIssueLabel({ number: target, label, present });
       landed.push(target);
     } catch (err) {
       const message = (err as Error).message;
       failed.push({ number: target, message });
       ctx.errors?.record({
         source: 'server',
-        message: `Failed to ${watched ? 'set' : 'drop'} the watch tag on #${target} ${because}: ${message}`,
+        message: `Failed to ${present ? 'set' : 'drop'} ${what} on #${target} ${because}: ${message}`,
       });
     }
   }
 
-  ctx.store.world.patchWorldLabels({ issues: landed, label, present: watched });
-  ctx.store.tickets.patchTicketLabels({ numbers: landed, label, present: watched });
-  return { label, targets, landed, failed };
+  ctx.store.world.patchWorldLabels({ issues: landed, label, present });
+  ctx.store.tickets.patchTicketLabels({ numbers: landed, label, present });
+  return { landed, failed };
 }

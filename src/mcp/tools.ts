@@ -3,6 +3,7 @@ import type { McpTool } from './protocol.js';
 import { retiredTools } from './retiredTools.js';
 import { buildToolContext, type McpIdentity, type McpToolDeps, type ToolFactory } from './tools/context.js';
 import { appraiseIssue } from './tools/appraiseIssue.js';
+import { reportInvestigation } from './tools/reportInvestigation.js';
 import { assessIssue } from './tools/assessIssue.js';
 import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
@@ -60,6 +61,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   assess_issue: assessIssue,
   conclude_part: concludePart,
   appraise_issue: appraiseIssue,
+  report_investigation: reportInvestigation,
   scratch_append: scratchAppend,
   scratch_read: scratchRead,
   retro_submit: retroSubmit,

@@ -234,7 +234,12 @@ export function recordAppraisal(
     agentId,
     taskId: task.id,
   });
-  ctx.events.emit('appraisal', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+  ctx.events.emit('appraisal', {
+    agentId,
+    taskId: task.id,
+    issueOrigin: origin.issueOrigin,
+    verdict,
+  });
   return { ok: true, issueOrigin: origin.issueOrigin, verdict, profileHeld };
 }
 

@@ -14,6 +14,7 @@ import type { AgentModels } from './agents/modelPolicy.js';
 import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
+import { investigationStandings } from './intake/investigation.js';
 import type { Action, IssueRun, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
 import { runPulse, type PulseDeps, type PulsePhase } from './system/pulseDesks.js';
@@ -469,6 +470,11 @@ export class Harness extends EventEmitter {
         deliveries: r.deliveries,
         deliverySignals: r.deliverySignals,
         appraisals: r.appraisals,
+        investigations: investigationStandings(
+          world.issues,
+          this.deps.store.investigations.list(),
+          this.deps.issuePickup,
+        ),
         closedSittings: r.intake.closedSittings,
         runs: issueRuns,
         headroom: r.headroom,

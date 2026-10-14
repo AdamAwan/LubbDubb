@@ -21,6 +21,7 @@ type PromptId =
   | 'issue-assess'
   | 'issue-assay'
   | 'issue-appraisal'
+  | 'issue-investigate'
   | 'criteria-alignment'
   | 'prediction-judge'
   | 'issue-retro'

@@ -67,7 +67,13 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
   const store = new Map<string, IssueShortfall>([['issue:12', shortfallRow()]]);
   assert.ok(store.get('issue:12'));
   const verdict = issuePickupStatus(issue(), {
-    policy: { watchLabel: '', priorityLabels: {}, defaultPriority: 0, requireOwnLabel: false },
+    policy: {
+      watchLabel: '',
+      priorityLabels: {},
+      defaultPriority: 0,
+      investigateLabel: 'investigate',
+      requireOwnLabel: false,
+    },
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],

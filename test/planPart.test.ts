@@ -364,6 +364,7 @@ test('parts inherit the parent issue, not its PR: un-watching stops them, a part
     watchLabel: 'lubbdubb-watch',
     priorityLabels: {},
     defaultPriority: 0,
+    investigateLabel: 'investigate',
   };
   const dispatcher = new RuleDispatcher({ pickup, defaultBranch: 'main', planning: enabled });
   const watched = issue(12, { labels: ['lubbdubb-watch'] });
@@ -397,7 +398,7 @@ test('parts inherit the parent issue, not its PR: un-watching stops them, a part
 test('the cockpit chip reports plan progress, not whichever part opened a PR last', () => {
   const parts = [part('a', 1, { status: 'merged' }), part('b', 2, { status: 'in_review', prNumber: 41 })];
   const ctx: IssuePickupContext = {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-25T12:00:00.000Z',
     tasks: [],

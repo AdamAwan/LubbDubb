@@ -4,8 +4,11 @@ import {
   GOAL_APPRAISAL_VERDICTS,
   type GoalAppraisalVerdictName,
   STORY_RUBRIC,
+  appraiserOrigin,
   validateGoalAppraisal,
 } from '../goalAppraisal.js';
+import { issueSubtreeNumber } from '../../issueOrigins.js';
+import { withDeadline } from '../../primitives.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import { toolSchema } from '../schema.js';
@@ -97,6 +100,14 @@ function appraisalInput(profiles: Profiles, areas: Areas) {
             .optional(),
         }
       : {}),
+    investigate: z
+      .boolean()
+      .describe(
+        'Only with "workable": true if this is a bug whose cause is not known yet — the symptom is clear but ' +
+          'nobody has said why it happens or where. The harness labels the issue for investigation once, ' +
+          'and a read-only agent finds the cause before anything is planned. Omit it otherwise.',
+      )
+      .optional(),
     parent: z
       .number()
       .int()
@@ -145,7 +156,24 @@ function recordedNote(
         'nothing is rejected — that stays a human decision.';
 }
 
-export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
+const LABEL_DEADLINE_MS = 30_000;
+
+async function labelForInvestigation(deps: McpToolDeps, originRef: string | null): Promise<void> {
+  const origin = appraiserOrigin(originRef);
+  const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
+  if (issueNumber === null || deps.investigateLabel === undefined) return;
+  try {
+    await withDeadline(deps.investigateLabel(issueNumber), LABEL_DEADLINE_MS, `labelling #${issueNumber} timed out`);
+  } catch (err) {
+    deps.errors?.record({
+      source: 'provider',
+      message: `Investigate label for #${issueNumber} did not land before the verdict`,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
   const profiles = deps.profiles ?? [];
   const names = profiles.map((p) => p.name);
   const tree = deps.areaPaths?.() ?? null;
@@ -153,9 +181,10 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
   return {
     description: appraisalDescription(profiles, areas),
     inputSchema: toolSchema(appraisalInput(profiles, areas)),
-    handler: (args) => {
+    handler: async (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
+      if (parsed.investigate) await labelForInvestigation(deps, task.originRef);
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         missing: parsed.missing,
         parent: parsed.parent,

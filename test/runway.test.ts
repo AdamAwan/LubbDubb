@@ -10,6 +10,7 @@ import {
 } from '../src/supply/runway.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
+import { investigationStandings } from '../src/intake/investigation.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +23,15 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { Store } from '../src/store/store.js';
 import { RunwayDesk } from '../src/supply/runwayDesk.js';
-import type { EscalationSpan, HumanTask, Issue, IssueAppraisal, IssueRun, Plan } from '../src/types.js';
+import type {
+  EscalationSpan,
+  HumanTask,
+  Issue,
+  IssueAppraisal,
+  IssueInvestigation,
+  IssueRun,
+  Plan,
+} from '../src/types.js';
 
 const NOW = '2026-08-21T09:00:00.000Z';
 const WATCH = 'lubbdubb-watch';
@@ -88,7 +97,7 @@ function input(over: Partial<RunwayInput> = {}): RunwayInput {
     policy: DEFAULT_RUNWAY,
     issues: [],
     pickup: {
-      policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 1 },
+      policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 1, investigateLabel: 'investigate' },
       cooldown: DEFAULT_COOLDOWN,
       now: NOW,
       tasks: [],
@@ -321,7 +330,13 @@ test('an unwatched container is a way in, and never double-counts its children',
       ],
       pickup: {
         ...input().pickup,
-        policy: { watchLabel: WATCH, priorityLabels: {}, defaultPriority: 1, containerTypes: ['Feature'] },
+        policy: {
+          watchLabel: WATCH,
+          priorityLabels: {},
+          defaultPriority: 1,
+          investigateLabel: 'investigate',
+          containerTypes: ['Feature'],
+        },
       },
     }),
   );
@@ -826,4 +841,43 @@ test('the band reads a standing supply row off the whole bench, not the hundred-
 
   await system.harness.runCycle('manual');
   assert.equal(system.store.humanTasks.listHumanTasksOfKind('supply')[0]!.status, 'open');
+});
+
+test('findings waiting on the operator are held, while an investigator still out is in flight', () => {
+  const labelled = [issue(1, { labels: [WATCH, 'investigate'] }), issue(2, { labels: [WATCH, 'investigate'] })];
+  const found: IssueInvestigation = {
+    originRef: 'issue:1',
+    goalRef: goalFingerprint(labelled[0]!.title, labelled[0]!.body),
+    by: 'a1',
+    reproduction: 'r',
+    rootCause: 'c',
+    confidence: 'high',
+    locations: 'l',
+    blastRadius: 'b',
+    recommendation: 'plan',
+    decidedAt: NOW,
+    resolution: null,
+    resolvedAt: null,
+  };
+  const base = input();
+  const r = readRunway(
+    input({
+      issues: labelled,
+      pickup: {
+        ...base.pickup,
+        tasks: [
+          {
+            id: 't2',
+            title: 'Investigate issue #2',
+            status: 'running',
+            originRef: 'issue:2:investigate',
+          } as RunwayInput['pickup']['tasks'][number],
+        ],
+        appraisals: [gate(1, { proposedProfile: null }), gate(2, { proposedProfile: null })],
+        investigations: investigationStandings(labelled, [found], base.pickup.policy),
+      },
+    }),
+  );
+  assert.equal(r.held, 1);
+  assert.equal(r.inflight, 1);
 });

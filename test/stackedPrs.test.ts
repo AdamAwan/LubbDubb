@@ -294,7 +294,7 @@ test('a conflict on an inheriting PR is still notified to its running agent', as
 
 test('a part held by the per-plan cap is queued as `capped`, not skipped', async () => {
   const dispatcher = new RuleDispatcher({
-    pickup: { priorityLabels: {}, defaultPriority: 0 },
+    pickup: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     defaultBranch: 'main',
     planning: {
       ...enabled,
@@ -352,7 +352,7 @@ test('a replan carries the current plan into the prompt, slugs included', async 
     part('b', 2, { status: 'ready', dependsOn: ['a'] }),
   ];
   const dispatcher = new RuleDispatcher({
-    pickup: { priorityLabels: {}, defaultPriority: 0 },
+    pickup: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     defaultBranch: 'main',
     planning: enabled,
   });
@@ -420,7 +420,7 @@ test('a replan that spends its attempts falls back to the existing parts, never 
 test('a complete plan says how to get out of it, rather than reading as still in flight', () => {
   const parts = [part('a', 1, { status: 'merged' }), part('b', 2, { status: 'merged' })];
   const ctx: IssuePickupContext = {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-25T12:00:00.000Z',
     tasks: [],

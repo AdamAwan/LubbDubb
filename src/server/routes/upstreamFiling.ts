@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { withDeadline } from '../../primitives.js';
 import { absentOr } from '../../schemaErrors.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { watchLabelFor } from '../../watchLabels.js';
@@ -13,13 +14,6 @@ import type { FilingTargetProbe, IssueFiled } from '../../wire.js';
 const MAX_ISSUE_TITLE = 200;
 
 const PROBE_TIMEOUT_MS = 8000;
-
-function withDeadline<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms);
-    work.then(resolve, reject).finally(() => clearTimeout(timer));
-  });
-}
 
 export function register(app: FastifyInstance, { system }: RouteContext): void {
   const { config, errors } = system;

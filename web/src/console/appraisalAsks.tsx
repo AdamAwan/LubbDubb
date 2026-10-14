@@ -8,7 +8,7 @@ import { DesktopLink } from '../components/DesktopLink.js';
 import { ButtonRow } from '../components/button.js';
 import { goalIssue } from '../view/goalRefs.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
-import { awaitedProfile } from '../view/issueAsks.js';
+import { awaitedFindings, awaitedProfile, FINDINGS_ANSWERS } from '../view/issueAsks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -94,6 +94,62 @@ export function profileBody(row: NeedRow, view: CockpitView, actions: CockpitAct
         </AsyncButton>
       </ButtonRow>
     </>
+  );
+}
+
+export function findingsBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  const issue = rowIssue(row, view);
+  const found = issue === undefined ? null : awaitedFindings(issue);
+  if (!issue || found === null) return null;
+  return (
+    <>
+      <p>
+        <strong>An agent investigated this before it was planned</strong> — nothing is planned or picked up for it until
+        you answer the findings.
+      </p>
+      <Finding label="Reproduction" text={found.reproduction} />
+      <Finding label={`Root cause · ${found.confidence} confidence`} text={found.rootCause} />
+      <Finding label="Where" text={found.locations} />
+      <Finding label="Blast radius" text={found.blastRadius} />
+      <p className="cn-tick">
+        The agent recommends{' '}
+        <strong>{FINDINGS_ANSWERS.find((a) => a.resolution === found.recommendation)?.label}</strong>. Planning it or
+        sending it straight to pickup carries these findings into the agent&rsquo;s brief.
+      </p>
+      <ButtonRow bar>
+        {FINDINGS_ANSWERS.map(({ resolution, label, title }) => {
+          const recommended = resolution === found.recommendation;
+          return (
+            <AsyncButton
+              key={resolution}
+              tone={recommended ? 'primary' : undefined}
+              usage={resolution === 'plan' || resolution === 'pickup' ? 'investigation.accept' : 'investigation.reject'}
+              onClick={() => actions.resolveInvestigation(issue.number, resolution)}
+              title={recommended ? `Recommended — ${title}` : title}
+            >
+              {label}
+              {recommended && ' · recommended'}
+            </AsyncButton>
+          );
+        })}
+        <AsyncButton
+          usage="investigation.undo"
+          onClick={() => actions.resolveInvestigation(issue.number, null)}
+          title="Throw these findings away — a fresh agent investigates the issue again"
+        >
+          Investigate again
+        </AsyncButton>
+      </ButtonRow>
+    </>
+  );
+}
+
+function Finding({ label, text }: { label: string; text: string }): JSX.Element | null {
+  if (text.trim() === '') return null;
+  return (
+    <p className="cn-tick">
+      <strong>{label}</strong> — {text}
+    </p>
   );
 }
 

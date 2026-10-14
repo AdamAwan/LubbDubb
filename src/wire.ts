@@ -11,6 +11,7 @@ import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
 import type { CiVerdict } from './ci/ciPolicy.js';
 import type { IssuePickupStatus } from './dispatcher/issuePickup.js';
 import type { PlacementAsk } from './intake/placement.js';
+import type { InvestigationStanding } from './intake/investigation.js';
 import type { DispatchRule } from './dispatcher/rules.js';
 import type { QueueItem } from './dispatcher/dispatcher.js';
 import type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
@@ -140,6 +141,7 @@ import type {
   BotPrsReading,
   AssessedBotPr,
   BotPrRiskStanding,
+  IssueInvestigation,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -199,6 +201,9 @@ export interface Issue extends WorldIssue {
     /** Still on the project root and not declined — whether or not the appraisal proposed a path. */
     areaPathUnset: boolean;
   } | null;
+  investigation: IssueInvestigation | null;
+  /** Why the findings hold plan and pickup, or null — read here, never off `pickup.status`, which a higher-ranked status hides. */
+  investigationHold: InvestigationStanding['hold'];
   modelPin: { profile: string | null; ignoredTags: string[] };
   priority: { since: string } | null;
   retrospective: { summary: string; hasDocument: boolean; updatedAt: string } | null;
@@ -1005,6 +1010,8 @@ export type {
   GoalReachStatus,
   GoalReveal,
   HumanTask,
+  InvestigationResolution,
+  IssueInvestigation,
   IssueSpend,
   Job,
   JobAttachment,
@@ -1080,6 +1087,7 @@ export type { BuildReading, SnoozeTarget, UpgradeAction } from './selfUpdate/upg
 export type { AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
 export { buildAskQueue } from './asks/queue.js';
 export { askLine, oneLine } from './asks/lines.js';
+export { INVESTIGATION_RESOLUTIONS } from './intake/investigationResolutions.js';
 export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
 export { PART_GROUP, PART_GROUP_WORD, type PartGroup } from './plans/partGroup.js';
 export { askGoal, type AskGoalPart } from './asks/askGoal.js';

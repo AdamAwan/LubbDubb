@@ -137,7 +137,7 @@ same issue.
 
 | Bucket        | Pickup status                                                      | What it means                                   |
 | ------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
-| **Inflight**  | `active` · `has_pr` · `planning`                                   | The fleet is on it. Drains over time.           |
+| **Inflight**  | `active` · `has_pr` · `planning` · `investigation`                 | The fleet is on it. Drains over time.           |
 | **Queued**    | `eligible` · `blocked` · `cooldown` · `appraisal`\*                | Unstarted supply the fleet may take.            |
 | **Reservoir** | `unwatched`                                                        | Not supply. One watch write away from being it. |
 | **Held**      | `escalated` · `delivered` · `retained` · `sitting` · `appraisal`\* | Parked on a person. The fleet cannot drain it.  |

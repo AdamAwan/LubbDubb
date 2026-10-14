@@ -226,7 +226,7 @@ const RUNWAY_LABEL: Record<SupplyState, string> = {
 };
 
 /** @public shared with the overview's alternative shapes, which draw the same set. */
-export const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
+export const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'investigation', 'delivered']);
 
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showKept, setShowKept] = useState(false);
@@ -346,6 +346,7 @@ export const PICKUP_WORD: Record<string, string> = {
   blocked: 'no capacity',
   retained: 'kept',
   container: 'a container',
+  investigation: 'investigating',
 };
 
 const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {

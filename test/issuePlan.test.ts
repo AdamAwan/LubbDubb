@@ -192,7 +192,7 @@ test('a spent planner attempt cap lets pickup run as it does today', async () =>
 
 function pickupCtx(extra: Partial<IssuePickupContext> = {}): IssuePickupContext {
   return {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-25T12:00:00.000Z',
     tasks: [],

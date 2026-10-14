@@ -11,6 +11,10 @@
 as "feature off": nothing is watch-gated, and everything open is worked. That is the escape hatch
 tests use.
 
+One more label is derived from the same prefix and is not a gate: `${prefix}-investigate` asks for a
+bug's cause to be found before it is planned, read under `requireOwnLabel` exactly as the watch tag is.
+→ [38](38-bug-investigation.md#the-label)
+
 `isWatched(labels, watchLabel)` is the whole of the gate, and it is total — it never throws. There is
 one question and two answers:
 
@@ -210,18 +214,19 @@ and abandoning an open PR mid-flight is not what "pause" says. The hold is on ne
 
 Assembled once in `src/system/system.ts` from config and handed to whichever dispatcher is selected:
 
-| Field             | From config                         | Effect                                                                                                       |
-| ----------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `watchLabel`      | derived from `labelPrefix`          | Opt-in gate. Empty = gate off.                                                                               |
-| `requireOwnLabel` | `userId` being set                  | Read `labelsAddedByViewer` instead of `labels` for the watch check.                                          |
-| `priorityLabels`  | `issuePriorityLabels`               | Label → weight.                                                                                              |
-| `defaultPriority` | `issueDefaultPriority`              | Weight when no label matches.                                                                                |
-| `pickupStates`    | `issuePickupStates`                 | Allowed provider-native workflow states.                                                                     |
-| `containerTypes`  | `issueContainerTypes`               | Item types that are never worked. Unset falls back to the default pair; `[]` is off.                         |
-| `parentedTypes`   | `issueParentedTypes`                | Item types expected to hang off a container. Unset falls back to the default list; `[]` is off.              |
-| `inReviewState`   | `issueInReviewState`                | The state rule `work-item-in-review` parks an item in.                                                       |
-| `inProgressState` | `issueInProgressState`              | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`.                         |
-| `pausedIssues`    | not config — the `goal_pauses` rows | The numbers held by an operator's pause, expanded through the hierarchy. Folded in per cycle, never at boot. |
+| Field              | From config                         | Effect                                                                                                                 |
+| ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `watchLabel`       | derived from `labelPrefix`          | Opt-in gate. Empty = gate off.                                                                                         |
+| `requireOwnLabel`  | `userId` being set                  | Read `labelsAddedByViewer` instead of `labels` for the watch check, and for the investigate label.                     |
+| `investigateLabel` | derived from `labelPrefix`          | The label rule `issue-investigate` reads. Bare `investigate` when the prefix is empty. → [38](38-bug-investigation.md) |
+| `priorityLabels`   | `issuePriorityLabels`               | Label → weight.                                                                                                        |
+| `defaultPriority`  | `issueDefaultPriority`              | Weight when no label matches.                                                                                          |
+| `pickupStates`     | `issuePickupStates`                 | Allowed provider-native workflow states.                                                                               |
+| `containerTypes`   | `issueContainerTypes`               | Item types that are never worked. Unset falls back to the default pair; `[]` is off.                                   |
+| `parentedTypes`    | `issueParentedTypes`                | Item types expected to hang off a container. Unset falls back to the default list; `[]` is off.                        |
+| `inReviewState`    | `issueInReviewState`                | The state rule `work-item-in-review` parks an item in.                                                                 |
+| `inProgressState`  | `issueInProgressState`              | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`.                                   |
+| `pausedIssues`     | not config — the `goal_pauses` rows | The numbers held by an operator's pause, expanded through the hierarchy. Folded in per cycle, never at boot.           |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -381,24 +386,25 @@ checked in the same order rule `issue-pickup` applies them, so it predicts what 
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
-| Status      | Meaning                                                                              |
-| ----------- | ------------------------------------------------------------------------------------ |
-| `done`      | Closed, and the harness holds no run at it.                                          |
-| `retained`  | Closed, but its run lives until the operator dismisses it.                           |
-| `abandoned` | Open, but the operator abandoned its run — nothing is scheduled for it again.        |
-| `planning`  | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
-| `has_pr`    | An open PR resolves it; the PR rules own it now.                                     |
-| `active`    | A task on this origin is queued / running / waiting on you.                          |
-| `container` | A Feature/Epic — its children are the work, never it.                                |
-| `unwatched` | Not opted in, or parked by the state gate.                                           |
-| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                                 |
-| `escalated` | Attempt cap spent; parked on a human.                                                |
-| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
-| `appraisal` | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
-| `sitting`   | Nothing holds it but your prediction and criteria, which planning waits for.         |
-| `obstacle`  | An agent could not finish it and named what stopped it — parked until that clears.   |
-| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
-| `eligible`  | Would be picked up next cycle.                                                       |
+| Status          | Meaning                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `done`          | Closed, and the harness holds no run at it.                                          |
+| `retained`      | Closed, but its run lives until the operator dismisses it.                           |
+| `abandoned`     | Open, but the operator abandoned its run — nothing is scheduled for it again.        |
+| `planning`      | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
+| `has_pr`        | An open PR resolves it; the PR rules own it now.                                     |
+| `active`        | A task on this origin is queued / running / waiting on you.                          |
+| `container`     | A Feature/Epic — its children are the work, never it.                                |
+| `unwatched`     | Not opted in, or parked by the state gate.                                           |
+| `cooldown`      | Attempted recently; waiting out the re-dispatch gap.                                 |
+| `escalated`     | Attempt cap spent; parked on a human.                                                |
+| `delivered`     | Assessed as delivered — parked until the world or the operator says otherwise.       |
+| `appraisal`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
+| `investigation` | Held for a bug investigation: one is owed or running, or its findings wait on you.   |
+| `sitting`       | Nothing holds it but your prediction and criteria, which planning waits for.         |
+| `obstacle`      | An agent could not finish it and named what stopped it — parked until that clears.   |
+| `blocked`       | Eligible, but dispatch is paused or the cap is reached.                              |
+| `eligible`      | Would be picked up next cycle.                                                       |
 
 The closed arm splits on the run, not on the tracker. A close is the tracker's answer and a run
 outlives it (issue #234), so `done` is kept for the case it was always right about — a closed ticket
@@ -729,6 +735,49 @@ distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 | `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text.        |
 | `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands, and posts the author's checklist on the ticket. |
 | _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                           |
+
+### A bug whose cause is not known
+
+`appraise_issue` takes an optional `investigate` flag, honoured only with `workable`: true when the
+ticket reports a bug whose symptom is clear and whose cause nobody has stated. The ticket's type and
+tags are not consulted — a `Bug` type is how the reporter filed it, not whether the cause is known — so
+the appraiser, which has just read the ticket against the repository, is who judges it. The flag is
+not stored: the tool puts the investigate label on the issue, **before** it records the verdict, and
+only the first time the harness has ever labelled that issue (`issue_investigate_labels`). Nothing
+re-applies it — not a sweep, not a re-appraisal of a rewritten ticket — so an operator who takes it off
+has the last word. With `unclear` it is dropped: a goal nobody can start from has its questions
+answered first. → [38](38-bug-investigation.md)
+
+The investigation it asks for holds rule `issue-plan` and rule `issue-pickup` while it runs and while
+its findings wait on an operator — the hold is the investigation's, owned there, and lifted by removing
+the label. Removing it lifts a _pickup_ resolution's skipped planning too: `investigationSkipsPlanning`
+reads the standing's `inForce`, which is null with the label off.
+
+`issuePickupStatus` reports it as its own status, `investigation`, asked after the active and
+standing-hold arms and before the plan route, so the chip says why no planner is coming rather than
+promising one. Only while the label is on; its reasons, in the order they are tried:
+
+| Reason                                                         | When                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `the investigation findings are waiting on you`                | A current record with no resolution.                                     |
+| `you marked the investigation for closing`                     | Resolved _close_.                                                        |
+| `you asked for more from the reporter after the investigation` | Resolved _ask_.                                                          |
+| `investigation agent waiting on you`                           | No record yet, the investigator is running and has parked on a question. |
+| `being investigated before it is planned`                      | No record yet, the investigator is running.                              |
+| `investigation on cooldown`                                    | No record yet, and the last investigator is inside its re-dispatch gap.  |
+| `awaiting an investigation before it is planned`               | No record, no plan, no work started, and no investigator live yet.       |
+
+The first three are `investigationHold`'s (`src/intake/investigationHold.ts`), the same strings the
+dispatcher quotes on the held `superseded` rows, so the chip and the queue cannot disagree. The last
+four share `preplanAgentReason` with the appraisal arm, and so share its fail-open: once the
+investigator's attempt cap is spent (`escalate` or `hold`) the arm answers nothing and the issue falls
+through to the plan route, as the dispatcher does. Both sides read one `InvestigationStanding` per issue
+— the current record, whether the label is on, the record in force and the hold — built once by
+`investigationStandings` (`src/intake/investigation.ts`), the only place the label rule is applied. `investigation` counts as in flight wherever `planning` does — the
+runway ([25](25-supply.md)), the Overview's goals in flight and a Feature's fleet holds — and the
+cockpit's word for it is _investigating_. The `findings` ask stands on the first reason's case, read
+off the snapshot's `investigationHold` rather than this status, which a higher-ranked one can hide
+([17](17-cockpit.md)).
 
 ### It is held behind a story's predecessors
 
@@ -1077,4 +1126,5 @@ that the operator ends by rewriting the ticket or clearing the verdict.
 
 With `planning`, `assessment` and `appraisal` all on, one issue can spend **three agents** before a line
 of its work is written. All three are on by default and each is one switch away from off; the cost is named here rather
-than discovered.
+than discovered. A bug carrying the investigate label spends a fourth, the investigator, between the appraisal
+and the planner ([38](38-bug-investigation.md#cost)).

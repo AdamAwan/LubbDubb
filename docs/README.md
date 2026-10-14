@@ -88,44 +88,45 @@ deliberately left unchecked, and why, is in
 
 ## The specification
 
-| #                                    | Document                   | Covers                                                                                                                  |
-| ------------------------------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [01](spec/01-overview.md)            | System overview            | What the harness is, its components, the pulse, the seams, the standing invariants                                      |
-| [02](spec/02-configuration.md)       | Configuration              | Every config key, its default, precedence, env overrides, path resolution                                               |
-| [03](spec/03-world-model.md)         | World model                | Domain types, the world snapshot, the ref vocabulary, world diffing, closed PRs                                         |
-| [04](spec/04-harness-cycle.md)       | The harness cycle          | Heartbeat, pulse ordering, coalescing, the world baseline, headroom, exclusion                                          |
-| [05](spec/05-dispatcher.md)          | Dispatch                   | The dispatcher seam, the rule book, ranking, the Up next queue, cooldowns, actions                                      |
-| [06](spec/06-issue-pickup.md)        | Issue pickup and labels    | The watch tag, priority, workflow states, the per-issue pickup verdict                                                  |
-| [07](spec/07-pull-requests.md)       | Pull requests              | Health predicates, conflicts, stacks, inherited CI, the merge gate                                                      |
-| [08](spec/08-planning.md)            | The planning funnel        | Plans, parts, the plan document, reconciliation, replan                                                                 |
-| [09](spec/09-execution.md)           | Action execution           | The executor's gates, outbound authority, task materialisation, worktrees, git                                          |
-| [10](spec/10-agent-runtimes.md)      | Agent runtimes             | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage                                                |
-| [11](spec/11-mcp-tools.md)           | The MCP tool channel       | The tools, identity, transport, launch flags, degradation, the operator's Claude Code plugin                            |
-| [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps | Flag sentinel, the file-events hook, artifact serving, file-overlap detection                                           |
-| [13](spec/13-jobs-and-tickets.md)    | Jobs, tickets, human tasks | The operator job queue, schedules, filing a tracker item, and work only a person does                                   |
-| [14](spec/14-persistence.md)         | Persistence                | The SQLite schema, migrations, the Store API surface, durability rules                                                  |
-| [15](spec/15-integrations.md)        | Integrations               | The connector/sink seams, and the fake, GitHub and Azure DevOps providers                                               |
-| [16](spec/16-http-api.md)            | HTTP and WebSocket API     | Every route, the state snapshot, the event stream                                                                       |
-| [17](spec/17-cockpit.md)             | The cockpit                | The console: the queue rail, goal pages, the overview, the backlog, live updates                                        |
-| [18](spec/18-observability.md)       | Observability              | The error log, decision log, activity feed, usage accounting, debug logging                                             |
-| [19](spec/19-development.md)         | Development and quality    | The `check` gate, test seams, the smoke run, build outputs                                                              |
-| [20](spec/20-validation.md)          | Validation                 | Test plans written after delivery, the plan's intent hint, resources, the verdict, and the close-out flag               |
-| [21](spec/21-self-update.md)         | Self-update                | The harness's own build: the watch, the drain, the handoff, the supervisor                                              |
-| [22](spec/22-pets.md)                | Pets                       | The vivarium: the eggs an operator's actions drop, hatching, beats, growth, the corner                                  |
-| [23](spec/23-local-runs.md)          | Local runs                 | The machine's one dev environment: which goal is in it, the process, the panel                                          |
-| [24](spec/24-environments.md)        | Environments               | Where landed work has got to: merge attribution, the probe, the three verdicts, the lens                                |
-| [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you                                    |
-| [26](spec/26-setup.md)               | Configuration health       | The checks that catch a silently-misconfigured harness, the fixes they carry, and the sheet that points it at a project |
-| [27](spec/27-obstacles.md)           | Obstacles                  | What is in the fleet's way: keys, the two-voice gate, who owns it, and how an agent is told to stand down               |
-| [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | One namespace per fleet, and the shared digest of what each one spent                                                   |
-| [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
-| [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
-| [32](spec/32-local-validation.md)    | Local validation           | The fleet driving that environment: the plan, the browser, the reading, and the fix it schedules                        |
-| [33](spec/33-story-sequencing.md)    | Story sequencing           | The order the stories under a Feature are worked in, where it comes from, and the hold it puts on a story               |
-| [34](spec/34-usage-metrics.md)       | Usage metrics              | What the harness asks of a person and what they do about it: the ledger, surface reach, the digest section              |
-| [35](spec/35-ejection.md)            | Ejection                   | Taking a running agent's work into your own Claude Code: the claim, the held slot, the handoff, the three ways back     |
-| [36](spec/36-remote-validation.md)   | Remote validation          | The sheet a goal's arrival assembles: its three row kinds, the gate, the runner contract, and what a `spec` reading is  |
-| [37](spec/37-bot-prs.md)             | Bot pull requests          | The separate read of a dependency bot's pull requests, how an update's size is read, and the tab that draws them        |
+| #                                    | Document                   | Covers                                                                                                                      |
+| ------------------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [01](spec/01-overview.md)            | System overview            | What the harness is, its components, the pulse, the seams, the standing invariants                                          |
+| [02](spec/02-configuration.md)       | Configuration              | Every config key, its default, precedence, env overrides, path resolution                                                   |
+| [03](spec/03-world-model.md)         | World model                | Domain types, the world snapshot, the ref vocabulary, world diffing, closed PRs                                             |
+| [04](spec/04-harness-cycle.md)       | The harness cycle          | Heartbeat, pulse ordering, coalescing, the world baseline, headroom, exclusion                                              |
+| [05](spec/05-dispatcher.md)          | Dispatch                   | The dispatcher seam, the rule book, ranking, the Up next queue, cooldowns, actions                                          |
+| [06](spec/06-issue-pickup.md)        | Issue pickup and labels    | The watch tag, priority, workflow states, the per-issue pickup verdict                                                      |
+| [07](spec/07-pull-requests.md)       | Pull requests              | Health predicates, conflicts, stacks, inherited CI, the merge gate                                                          |
+| [08](spec/08-planning.md)            | The planning funnel        | Plans, parts, the plan document, reconciliation, replan                                                                     |
+| [09](spec/09-execution.md)           | Action execution           | The executor's gates, outbound authority, task materialisation, worktrees, git                                              |
+| [10](spec/10-agent-runtimes.md)      | Agent runtimes             | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage                                                    |
+| [11](spec/11-mcp-tools.md)           | The MCP tool channel       | The tools, identity, transport, launch flags, degradation, the operator's Claude Code plugin                                |
+| [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps | Flag sentinel, the file-events hook, artifact serving, file-overlap detection                                               |
+| [13](spec/13-jobs-and-tickets.md)    | Jobs, tickets, human tasks | The operator job queue, schedules, filing a tracker item, and work only a person does                                       |
+| [14](spec/14-persistence.md)         | Persistence                | The SQLite schema, migrations, the Store API surface, durability rules                                                      |
+| [15](spec/15-integrations.md)        | Integrations               | The connector/sink seams, and the fake, GitHub and Azure DevOps providers                                                   |
+| [16](spec/16-http-api.md)            | HTTP and WebSocket API     | Every route, the state snapshot, the event stream                                                                           |
+| [17](spec/17-cockpit.md)             | The cockpit                | The console: the queue rail, goal pages, the overview, the backlog, live updates                                            |
+| [18](spec/18-observability.md)       | Observability              | The error log, decision log, activity feed, usage accounting, debug logging                                                 |
+| [19](spec/19-development.md)         | Development and quality    | The `check` gate, test seams, the smoke run, build outputs                                                                  |
+| [20](spec/20-validation.md)          | Validation                 | Test plans written after delivery, the plan's intent hint, resources, the verdict, and the close-out flag                   |
+| [21](spec/21-self-update.md)         | Self-update                | The harness's own build: the watch, the drain, the handoff, the supervisor                                                  |
+| [22](spec/22-pets.md)                | Pets                       | The vivarium: the eggs an operator's actions drop, hatching, beats, growth, the corner                                      |
+| [23](spec/23-local-runs.md)          | Local runs                 | The machine's one dev environment: which goal is in it, the process, the panel                                              |
+| [24](spec/24-environments.md)        | Environments               | Where landed work has got to: merge attribution, the probe, the three verdicts, the lens                                    |
+| [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you                                        |
+| [26](spec/26-setup.md)               | Configuration health       | The checks that catch a silently-misconfigured harness, the fixes they carry, and the sheet that points it at a project     |
+| [27](spec/27-obstacles.md)           | Obstacles                  | What is in the fleet's way: keys, the two-voice gate, who owns it, and how an agent is told to stand down                   |
+| [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | One namespace per fleet, and the shared digest of what each one spent                                                       |
+| [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                              |
+| [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust                   |
+| [32](spec/32-local-validation.md)    | Local validation           | The fleet driving that environment: the plan, the browser, the reading, and the fix it schedules                            |
+| [33](spec/33-story-sequencing.md)    | Story sequencing           | The order the stories under a Feature are worked in, where it comes from, and the hold it puts on a story                   |
+| [34](spec/34-usage-metrics.md)       | Usage metrics              | What the harness asks of a person and what they do about it: the ledger, surface reach, the digest section                  |
+| [35](spec/35-ejection.md)            | Ejection                   | Taking a running agent's work into your own Claude Code: the claim, the held slot, the handoff, the three ways back         |
+| [36](spec/36-remote-validation.md)   | Remote validation          | The sheet a goal's arrival assembles: its three row kinds, the gate, the runner contract, and what a `spec` reading is      |
+| [37](spec/37-bot-prs.md)             | Bot pull requests          | The separate read of a dependency bot's pull requests, how an update's size is read, and the tab that draws them            |
+| [38](spec/38-bug-investigation.md)   | Bug investigation          | The investigate label, the read-only investigator, the hold on plan and pickup, and the four ways its findings are resolved |
 
 ## Conventions used throughout
 

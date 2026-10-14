@@ -42,6 +42,7 @@ interface PlanRouteInput {
   plan: Plan | null;
   verdict: DispatchVerdict;
   existingParts?: number;
+  skipPlanning?: boolean;
 }
 
 export function plannerVerdict(
@@ -63,6 +64,8 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   if (plan) {
     if (plan.status === 'awaiting_approval') return { route: 'awaiting_approval' };
     if (plan.status !== 'planning') return { route: 'parts' };
+  } else if (input.skipPlanning === true) {
+    return { route: 'unplanned' };
   }
   const kind = input.verdict.kind;
   if (kind === 'escalate' || kind === 'hold') {

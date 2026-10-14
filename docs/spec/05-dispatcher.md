@@ -191,6 +191,7 @@ unconditional.
 | `work-item-in-review`      | Back off to review state                 | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                                                                                                                                                                                                                                                                |
 | `work-item-back-to-pickup` | Stranded in review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan. Asks a human once; moves nothing.                                                                                                                                                                                                                                    |
 | `issue-appraisal`          | Issue goal needs checking                | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
+| `issue-investigate`        | Bug needs investigating                  | —                    | A watched open issue carrying the investigate label, with nothing started and no findings against its current text. One read-only code agent on `issue:<n>:investigate` finds the cause; plan and pickup stand aside until an operator resolves the findings or the label comes off. → [38](38-bug-investigation.md)                                                                                                            |
 | `criteria-alignment`       | Your criteria against the ticket         | —                    | While a goal's intake sitting is open, the operator's criteria and the ticket's own are compared by one desk agent on `issue:<n>:criteria-alignment`. Holds nothing. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                 |
 | `issue-plan`               | Issue needs a plan                       | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
 | `issue-assess`             | Issue may be finished                    | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR. On `delivered` it writes the goal's validation check set too.                                                                                                                                                                                                                                                               |
@@ -399,10 +400,10 @@ and `StageContext.liveIssue` for the plan- and shortfall-driven rules, which ret
 retained issue. None of them leans on the stub's `closed` state: it would refuse them by coincidence,
 and coincidence is what a later change removes with nothing failing.
 
-**Two fields are written by one stage and read by later ones, and that ordering is load-bearing.**
-`appraising` and `assessing` are outputs of `issue-appraisal` and `issue-assess` and inputs to the stages
-after them (`issue-plan` reads the first; `issue-pickup` reads both) — the whole mechanism behind
-`superseded`. It works because `DISPATCH_PIPELINE` runs the writers first; moving either rule below
+**Three fields are written by one stage and read by later ones, and that ordering is load-bearing.**
+`appraising`, `investigating` and `assessing` are outputs of `issue-appraisal`, `issue-investigate` and
+`issue-assess` and inputs to the stages after them (`issue-plan` reads the first two; `issue-pickup`
+reads all three) — the whole mechanism behind `superseded`. It works because `DISPATCH_PIPELINE` runs the writers first; moving either rule below
 its readers would not fail to compile, it would silently stop suppressing and put two agents on one
 issue.
 
@@ -566,6 +567,10 @@ is no second list to keep in step with it. What each stage contributes:
    admission gate**; the planner is what it prices. What the split costs is one cold read, and that is
    paid back by [the handover](09-execution.md#handing-a-conversation-on) rather than by merging the
    stages.
+
+   **Investigations** (`issue-investigate`) follow directly, for the same reason one step on: finding
+   why a bug happens comes before deciding how to fix it, so an investigator ranks ahead of the planner
+   and supersedes both it and the pickup while it is pending or running. → [38](38-bug-investigation.md#the-holds)
 
 4. **Planners** (`issue-plan`) — a planner unblocks work, so it wins a slot before the work it
    unblocks.
@@ -1030,6 +1035,31 @@ the open containers it might belong to — **appended**, never interpolated, for
 picks from (issue #463): the appraisal's verdict now carries where the goal belongs on the backlog as well
 as whether it can be worked from, and neither placement holds anything.
 → [06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)
+
+## `issue-investigate` — finding the cause first
+
+Rule `issue-investigate` is **unconditional** but reads one switch, the investigate label
+(`${labelPrefix}-investigate`), which an operator sets by hand or the goal appraisal sets once. The
+label, the record and the resolutions are owned by [38](38-bug-investigation.md); the dispatcher's half
+is:
+
+- A **code** agent in a **read-only checkout** of `defaultBranch`, leased under `investigate/issue/<n>`,
+  origin `issue:<n>:investigate` — a deliberation family, so it is not prior work.
+- Driven off `eligibleIssues`, after `issue-appraisal`: an issue still being appraised is skipped, as is
+  one with findings against its current text, a plan row, work started, or anything live under
+  `issue:<n>`.
+- **Writes `investigating`** — before the active-origin guard when its own origin is the active one, as
+  `appraising` does — and `issue-plan` and `issue-pickup` read it through `investigationSupersedes`,
+  which also holds while a current record waits on the operator or was resolved _close_ or _ask_.
+  Every one of those holds reads the label first, so removing it lifts them all.
+- Held behind a story's predecessors like the appraiser, queued `sequenced`.
+- **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation.
+
+The prompt carries the title and body, and the dispatch's `originTitle` / `originSummary` are what the
+findings are fingerprinted against. `readOnlyNote` and `relatedWorkNote` are appended. A resolution of
+_plan_ or _pickup_ appends the findings to the planner's or the pickup's prompt (`investigationNote`),
+and _pickup_ makes `resolvePlanRoute` answer `unplanned` ([08](08-planning.md#the-four-arms)) — both
+only while the label is on.
 
 ## `issue-assess` — the assessor
 
@@ -1650,7 +1680,7 @@ spread into it in that order, which is the order `describe` returns them in.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `plan-amendment`,
 `issue-shortfall`,
-`plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
+`plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`, `issue-investigate`,
 `issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `remote-validation`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-split`, `pr-describe`, `pr-description-check`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `brief-ticket-body`, and the retired `work-item-ticket`,

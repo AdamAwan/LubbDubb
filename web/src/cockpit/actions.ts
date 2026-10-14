@@ -11,6 +11,7 @@ import type {
   WorkNodeView,
   CaveatAnswerInput,
   CheckDecline,
+  InvestigationResolution,
 } from '../types.js';
 import type { FeatureMode, OverviewShape, Place } from './place.js';
 import type { GoalTab } from '../view/goalPage.js';
@@ -219,6 +220,9 @@ export interface CockpitActions {
   ): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   setIssueAppraisal(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
+
+  /** Settle the investigation's findings, or — null — throw them away so the issue is investigated again. */
+  resolveInvestigation(issueNumber: number, resolution: InvestigationResolution | null): Promise<void>;
 
   addInstruction(issueNumber: number, text: string): Promise<void>;
 

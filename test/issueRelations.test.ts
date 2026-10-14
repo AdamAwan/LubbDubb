@@ -28,6 +28,7 @@ function relative(over: Partial<IssueRelative> = {}): IssueRelative {
 const POLICY: IssuePickupPolicy = {
   priorityLabels: {},
   defaultPriority: 0,
+  investigateLabel: 'investigate',
   containerTypes: [...DEFAULT_CONTAINER_TYPES],
 };
 

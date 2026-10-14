@@ -2,6 +2,7 @@ import type {
   PrDescriptionDraft,
   PrDescriptionVersion,
   RemoteSheetView,
+  InvestigationResolution,
   AgentFilesPayload,
   AllowanceInsights,
   Ejection,
@@ -174,6 +175,8 @@ function injectedIssue(
     | 'conclusion'
     | 'delivery'
     | 'instructions'
+    | 'investigation'
+    | 'investigationHold'
     | 'localValidation'
     | 'retrospective'
     | 'scratchpad'
@@ -190,6 +193,8 @@ function injectedIssue(
     shortfall: null,
     delivery: null,
     appraisal: null,
+    investigation: null,
+    investigationHold: null,
     retrospective: null,
     scratchpad: null,
     instructions: [],
@@ -1013,6 +1018,17 @@ class DemoServer {
         undefined,
         `issue:${issueNumber}`,
       );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  async resolveInvestigation(issueNumber: number, resolution: InvestigationResolution | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue?.investigation) {
+      issue.investigation =
+        resolution === null ? null : { ...issue.investigation, resolution, resolvedAt: new Date().toISOString() };
+      if (resolution === null || resolution === 'plan' || resolution === 'pickup') issue.investigationHold = null;
       this.dirty();
     }
     return { ok: true };
@@ -3821,6 +3837,7 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   profile: 'Profiles',
   priority: 'Priority',
   intake: 'Intake',
+  investigation: 'Investigations',
   criteria: 'Goal criteria',
   prediction: 'Predictions',
   sequence: 'Story order',
@@ -5063,6 +5080,8 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAppraisal(issueNumber, verdict),
+  resolveInvestigation: (issueNumber: number, resolution: InvestigationResolution | null) =>
+    getServer().resolveInvestigation(issueNumber, resolution),
   addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
   overruleShortfall: (issueNumber: number, text: string) => getServer().overruleShortfall(issueNumber, text),
   releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>

@@ -12,6 +12,7 @@ import { fleetHistory } from './fleetHistory.js';
 import { applyThreadReopens } from '../pr/prThreads.js';
 import { expiresAt } from '../ejection/policy.js';
 import type { IssuePickupContext } from '../dispatcher/issuePickup.js';
+import { investigationStandings } from '../intake/investigation.js';
 import { pausedIssueNumbers } from '../goalPause.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
@@ -285,6 +286,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
   const validationPlanRecords = once(() => store.validation.listValidationPlanRecords());
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
+  const investigations = once(() => store.investigations.list());
   return {
     validationChecks,
     checksByGoal,
@@ -302,12 +304,13 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     instructionsByOrigin,
     appraisals,
     appraisalsByOrigin,
+    investigations,
   };
 }
 
 export function contextReads(r: VerdictReadsOn) {
   const { system, store, config, world, tasks, control, plans, planParts } = r;
-  const { deliveries, deliverySignals, appraisals, issueRuns } = r;
+  const { deliveries, deliverySignals, appraisals, investigations, issueRuns } = r;
   const recentDecisions = once(() => store.decisions.listDecisions(200));
   const pickupCtx = once((): IssuePickupContext => ({
     policy: {
@@ -324,6 +327,7 @@ export function contextReads(r: VerdictReadsOn) {
     deliveries: deliveries(),
     deliverySignals: deliverySignals(),
     appraisals,
+    investigations: investigationStandings(world.issues, investigations(), system.issuePickup),
     closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
     obstacles: store.obstacles.obstacleBoard(),

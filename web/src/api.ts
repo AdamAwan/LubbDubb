@@ -6,6 +6,7 @@ import type {
   GoalWatchDeclaration,
   BuildReading,
   InsightsWindow,
+  InvestigationResolution,
   JobAttachmentInput,
   LocalRunView,
   LocalValidationView,
@@ -351,6 +352,11 @@ const realApi = {
     ),
   setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/appraisal`, { verdict }),
+  resolveInvestigation: (issueNumber: number, resolution: InvestigationResolution | null) =>
+    post<{ ok: true }>(
+      `/api/issues/${issueNumber}/investigation`,
+      resolution === null ? { clear: true } : { resolution },
+    ),
   raiseBug: (issueNumber: number, summary: string, title?: string) =>
     post<{ ok: true; filing: BugFiling }>(`/api/issues/${issueNumber}/bug`, { summary, title }),
   probeFilingTarget: () => authFetch('/api/issues/filing-target').then((r) => json<FilingTargetProbe>(r)),

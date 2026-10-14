@@ -60,6 +60,27 @@ export function sittingRows(state: AskInputs): AskDraft[] {
   return rows;
 }
 
+// The findings hold planning and pickup, so the ask blocks. It stands exactly while the findings
+// are unanswered and hold the goal. → docs/spec/06-issue-pickup.md
+export function findingsRows(state: AskInputs): AskDraft[] {
+  const rows: AskDraft[] = [];
+  for (const issue of state.world.issues) {
+    const investigation = issue.investigation;
+    if (issue.investigationHold === null || investigation?.resolution !== null) continue;
+    const base = issueRow(issue.number);
+    rows.push({
+      ...base,
+      id: `findings:${base.goalRef}`,
+      kind: 'findings',
+      group: 'blocking',
+      title: askLine('Investigated — the findings wait on your call', base.goalRef, state),
+      opens: opensAt(base.goalRef, state),
+      raisedAt: investigation.decidedAt,
+    });
+  }
+  return rows;
+}
+
 export function profileRows(state: AskInputs): AskDraft[] {
   const rows: AskDraft[] = [];
   for (const issue of state.world.issues) {

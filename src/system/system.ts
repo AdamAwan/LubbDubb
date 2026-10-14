@@ -36,6 +36,7 @@ import { configuredRemoteRunBriefs } from '../validation/remote/briefing.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
 import { isSealedRule } from '../mcp/names.js';
+import { applyInvestigateLabel, issueWatchContext } from '../issueWatch.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
@@ -274,6 +275,13 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     }),
     // The one agent that may read a prediction is handed it through this seam, never the store.
     judge: judgeSeam(predictions, store),
+    investigateLabel: (issueNumber: number): Promise<void> =>
+      applyInvestigateLabel(
+        issueWatchContext({ store, connector: sink, errors, config }),
+        store.investigations,
+        issueNumber,
+        'after the goal appraisal asked for an investigation',
+      ),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     errors,
   });

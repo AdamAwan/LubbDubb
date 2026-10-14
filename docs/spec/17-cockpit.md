@@ -797,6 +797,26 @@ An **unwatched** item is never intake, whatever a stale verdict says: nothing ap
 in, so a verdict on one is left over from before it was dropped, and the drop outranks it. Derived from
 `world.issues` and never the retained runs, for the profile gate's reason.
 
+**`findings` is a bug investigation's findings waiting on the operator** ([38](38-bug-investigation.md)).
+`findingsRows` (`src/asks/issueAsks.ts`) raises one per goal whose `investigationHold` is set **and**
+whose current investigation has no resolution — keyed on the hold the standing computed, never on a
+reason string nor on the pickup status, which a higher-ranked status (`blocked`) would hide — so the
+row stands exactly while the findings are what holds the goal. Take
+the investigate label off and the hold goes, and the row with it: an ask for an answer that no longer
+gates anything would be a chore. It is `blocking` and `now` on the `sitting` row's terms — planning is
+waiting on the answer — and stage `plan` on the goal's track.
+
+The band draws the findings whole — reproduction, root cause with its confidence, where, blast radius —
+and names the agent's recommendation. Under them are the four resolutions (**Plan it**, **Straight to
+pickup**, **Close**, **Ask for info**), the recommended one in the primary tone and marked
+`· recommended`, and **Investigate again**, which clears the row so a fresh agent looks. All five go
+through `POST /api/issues/:number/investigation`
+([16](16-http-api.md#post-apiissuesnumberinvestigation)). The goal header carries an `Investigation ·`
+chip for a current record (`investigationChip`, `web/src/view/issueAsks.ts`) — green with the answer
+once resolved, amber _waiting on you_ only while the ask itself would stand (`awaitedFindings`:
+`investigationHold` set), with the root cause and confidence on its title. Unanswered findings with
+the label off wait on nobody, so the header says nothing about them.
+
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
 there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
@@ -926,7 +946,7 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 
 `KIND_URGENCY` (`src/asks/queue.ts`) is total over `AskKind`, so a new kind is placed deliberately rather than inheriting
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
-`dispatch`, `config`, and the two proposals that gate work, `plan` and `merge`. `next` is an
+`dispatch`, `config`, the two proposals that gate work, `plan` and `merge`, and the two asks planning waits on, `sitting` and `findings`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
 `close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
 `description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
@@ -988,6 +1008,7 @@ within it.
 | `description_note`  | Description note | blue  | `¶`   | The diff raises something the description does not. A note.     |
 | `shortfall`         | Shortfall        | blue  | `✗`   | Delivered work that did not reach its goal.                     |
 | `intake`            | Intake           | blue  | `◌`   | The appraisal could not say a goal is workable.                 |
+| `findings`          | Findings         | blue  | `⌕`   | An investigation found a cause; you say what happens next.      |
 | `profile`           | Profile          | blue  | `⊙`   | Which profile a goal runs on.                                   |
 | `placement`         | Backlog          | amber | `▣`   | Nothing is held; the ticket is off the board.                   |
 | `bench`             | Bench            | blue  | `◆`   | Work only a person can do. Informative, not broken.             |
@@ -3941,7 +3962,7 @@ Three of them carry the rules that kept being forgotten:
   now wears the state column and the reasons stay behind it. The words are translated, because the
   kind is an identifier the dispatcher passes between its own rules and every one of them reached the
   glass unedited — `has_pr` is the shape of that, and it asks the operator to know the enum before the
-  row means anything: `in review`, `working`, `up next`, `no capacity`, `kept`, `a container`. A kind
+  row means anything: `in review`, `working`, `up next`, `no capacity`, `kept`, `a container`, `investigating`. A kind
   with no translation falls through as itself, so one added server-side degrades to the old reading
   rather than to a blank. `escalated` is the only `ask` — the one status parked on a person by design;
   `unwatched`, `blocked`, `cooldown` and `appraisal` are `hold`, the harness stopped and waiting on
@@ -6249,11 +6270,11 @@ Every row is its owner's wording — the rail row's own title, the pull request'
 (`PrAttention.reasons[0]`), the pickup gate's, the environment gate's. The mapping is a total table
 over unions that already name a party:
 
-| Bucket    | Reads                                                                                                                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **you**   | every needs-you row whose goal is one of the card's (or whose `pr:` origin belongs to one), and a pull request whose court is `you` that no such row already covers                         |
-| **fleet** | a goal whose pickup status is `cooldown`, `blocked` (the sequence hold), `planning`, `appraisal` or `obstacle`; an agent parked on the usage limit; a pull request whose court is `harness` |
-| **world** | a pull request whose court is `elsewhere` or `stalled`; a goal whose environment gate is holding (`gateHold`)                                                                               |
+| Bucket    | Reads                                                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **you**   | every needs-you row whose goal is one of the card's (or whose `pr:` origin belongs to one), and a pull request whose court is `you` that no such row already covers                                          |
+| **fleet** | a goal whose pickup status is `cooldown`, `blocked` (the sequence hold), `planning`, `appraisal`, `investigation` or `obstacle`; an agent parked on the usage limit; a pull request whose court is `harness` |
+| **world** | a pull request whose court is `elsewhere` or `stalled`; a goal whose environment gate is holding (`gateHold`)                                                                                                |
 
 `unwatched` is in none of them. An item nothing has read is neither queued nor held, and the brief's
 attention line already says so in the words that fit. `settled`, `done` and `unwatched` pull requests

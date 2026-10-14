@@ -10,6 +10,7 @@ import { validationVerdict } from '../validation/verdict.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { once, type ContextReadsOn } from './stateReads.js';
 import { localValidationView } from './stateLocalRunViews.js';
+import { investigationStanding } from '../intake/investigation.js';
 
 // → docs/spec/16-http-api.md
 
@@ -77,6 +78,7 @@ function issueEnricher(
   return (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
     const run = runByOrigin.get(origin);
+    const investigation = investigationStanding(pickupCtx().investigations, issue.number);
     return {
       ...issue,
       pickup: issuePickupStatus(issue, pickupCtx()),
@@ -89,6 +91,8 @@ function issueEnricher(
       shortfall: shortfallsByOrigin().get(origin) ?? null,
       delivery: standingDelivery(deliveriesByOrigin().get(origin), issue, pickupCtx()),
       appraisal: appraisalVerdictOf(appraisalsByOrigin().get(origin), issue, placementCtx),
+      investigation: investigation.current,
+      investigationHold: investigation.hold,
       modelPin: (({ profile, ignored }) => ({ profile, ignoredTags: ignored }))(
         resolveModelTag(issue.labels, config.labelPrefix, config.agentModels),
       ),

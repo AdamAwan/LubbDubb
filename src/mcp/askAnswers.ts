@@ -353,6 +353,10 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
   limit: cockpit(
     "An agent parked on the account's usage limit. The decision is the account's allowance, made in the cockpit.",
   ),
+  findings: cockpit(
+    'An investigation’s findings, settled on the goal in the cockpit where the reproduction, root cause and ' +
+      'recommendation are drawn beside the four answers.',
+  ),
   sitting: cockpit(
     'The operator’s own prediction and criteria, asked before the planner. A prediction typed through an ' +
       'assistant is not the blind guess it exists to be, so it is never taken here.',

@@ -48,6 +48,7 @@ const READ_ONCE_TABLES = [
   'goal_arrivals',
   'goal_watches',
   'issue_deliveries',
+  'issue_investigations',
   'issue_shortfalls',
   'remote_runs',
   'remote_sheet_rows',
@@ -55,7 +56,7 @@ const READ_ONCE_TABLES = [
 ];
 
 /** Room for a handful of new reads before the ceiling has to be argued for again. */
-const BOUND = 89;
+const BOUND = 90;
 
 function repeatedOver(counts: ReadonlyMap<string, number>, tables: readonly string[]): string[] {
   return [...counts]

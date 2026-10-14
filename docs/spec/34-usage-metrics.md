@@ -105,6 +105,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `profile`        | `accept` `reject`                                                                                       |
 | `priority`       | `create` `undo`                                                                                         |
 | `intake`         | `expand` `edit` `accept` `waive` `abandon` `open`                                                       |
+| `investigation`  | `accept` `reject` `undo`                                                                                |
 | `criteria`       | `expand` `edit` `abandon` `close`                                                                       |
 | `prediction`     | `expand` `create` `accept` `reject` `waive` `undo` `close`                                              |
 | `sequence`       | `accept` `reject` `open`                                                                                |
@@ -135,6 +136,12 @@ a retro is drawn flat and a pet's card is always whole — so `pr.expand`, `tick
 site is a **permanent silent zero**, which is the "never named" failure
 [`src/insights/mcpInsights.ts`](../../src/insights/mcpInsights.ts) exists to diagnose, one actor over. Each comes back
 on the day its control does.
+
+**A bug investigation's findings are their own subject, `investigation`**
+([38](38-bug-investigation.md#resolving-the-findings)), not a verb on `intake`: they are a different
+thing offered — an agent's reading to answer, not the goal's own text — and a subject is a thing. _Plan it_ and _Straight to pickup_ are
+`investigation.accept`; _Close_ and _Ask for info_ are `investigation.reject` — the goal stays held;
+**Investigate again** is `investigation.undo`, the findings thrown away.
 
 ### Each event declares where it is seen
 

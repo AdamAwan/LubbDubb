@@ -206,8 +206,6 @@ function standingFor(deps: DesktopToolDeps, feature: number): { key: string; mem
   const policy = {
     watchLabel: watchLabelFor(config.labelPrefix),
     requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
-    priorityLabels: {},
-    defaultPriority: 0,
   };
   const found = sequenceableFeatures(
     deps.store.world.getWorldBaseline()?.issues ?? [],

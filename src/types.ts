@@ -1,4 +1,5 @@
 import type { PlaceKey, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
+import type { INVESTIGATION_RESOLUTIONS } from './intake/investigationResolutions.js';
 
 // → docs/spec/03-world-model.md
 
@@ -738,6 +739,25 @@ export interface IssueAppraisal {
   commentRef: string | null;
   decidedAt: string;
   updatedAt: string;
+}
+
+export type InvestigationConfidence = 'high' | 'medium' | 'low';
+
+export type InvestigationResolution = (typeof INVESTIGATION_RESOLUTIONS)[number];
+
+export interface IssueInvestigation {
+  originRef: string;
+  goalRef: string;
+  by: string;
+  reproduction: string;
+  rootCause: string;
+  confidence: InvestigationConfidence;
+  locations: string;
+  blastRadius: string;
+  recommendation: InvestigationResolution;
+  decidedAt: string;
+  resolution: InvestigationResolution | null;
+  resolvedAt: string | null;
 }
 
 export interface ScratchEntry {

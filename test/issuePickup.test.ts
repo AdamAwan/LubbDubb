@@ -15,6 +15,7 @@ import { pastTheFunnel } from './support/plans.js';
 const SCHEME: IssuePickupPolicy = {
   priorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   defaultPriority: 2,
+  investigateLabel: 'investigate',
 };
 
 function issue(over: Partial<Issue> = {}): Issue {
@@ -40,13 +41,18 @@ test('issuePriority takes the highest weight when several priority labels are pr
 });
 
 test('isIssuePickupEligible: without a pickup label every issue is eligible, with no reasons', () => {
-  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0 };
+  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' };
   assert.deepEqual(isIssuePickupEligible(issue({ labels: [] }), policy), { eligible: true, reasons: [] });
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['bug'] }), policy), { eligible: true, reasons: [] });
 });
 
 test('isIssuePickupEligible: with a pickup label only labelled issues are eligible', () => {
-  const policy: IssuePickupPolicy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 };
+  const policy: IssuePickupPolicy = {
+    watchLabel: 'agent-ready',
+    priorityLabels: {},
+    defaultPriority: 0,
+    investigateLabel: 'investigate',
+  };
   assert.equal(isIssuePickupEligible(issue({ labels: ['agent-ready'] }), policy).eligible, true);
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['bug'] }), policy), {
     eligible: false,
@@ -61,6 +67,7 @@ test('isIssuePickupEligible: requireOwnLabel counts only the viewer-added tag', 
     requireOwnLabel: true,
     priorityLabels: {},
     defaultPriority: 0,
+    investigateLabel: 'investigate',
   };
   assert.equal(
     isIssuePickupEligible(issue({ labels: ['agent-ready'], labelsAddedByViewer: ['agent-ready'] }), policy).eligible,
@@ -77,12 +84,22 @@ test('isIssuePickupEligible: requireOwnLabel counts only the viewer-added tag', 
 });
 
 test('isIssuePickupEligible: requireOwnLabel is ignored when no pickup label is set', () => {
-  const policy: IssuePickupPolicy = { requireOwnLabel: true, priorityLabels: {}, defaultPriority: 0 };
+  const policy: IssuePickupPolicy = {
+    requireOwnLabel: true,
+    priorityLabels: {},
+    defaultPriority: 0,
+    investigateLabel: 'investigate',
+  };
   assert.equal(isIssuePickupEligible(issue({ labels: ['bug'] }), policy).eligible, true);
 });
 
 test('isIssuePickupEligible: state gate only picks up items in an allowed workItemState', () => {
-  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: ['Ready', 'Doing'] };
+  const policy: IssuePickupPolicy = {
+    priorityLabels: {},
+    defaultPriority: 0,
+    investigateLabel: 'investigate',
+    pickupStates: ['Ready', 'Doing'],
+  };
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready' }), policy).eligible, true);
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Doing' }), policy).eligible, true);
   assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'New' }), policy), {
@@ -95,6 +112,7 @@ test('isIssuePickupEligible: an item parked in the review state says "in review"
   const policy: IssuePickupPolicy = {
     priorityLabels: {},
     defaultPriority: 0,
+    investigateLabel: 'investigate',
     pickupStates: ['Ready'],
     inReviewState: 'In Review',
   };
@@ -105,12 +123,22 @@ test('isIssuePickupEligible: an item parked in the review state says "in review"
 });
 
 test('isIssuePickupEligible: the state gate is a no-op for issues with no workItemState', () => {
-  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: ['Ready'] };
+  const policy: IssuePickupPolicy = {
+    priorityLabels: {},
+    defaultPriority: 0,
+    investigateLabel: 'investigate',
+    pickupStates: ['Ready'],
+  };
   assert.equal(isIssuePickupEligible(issue({ workItemState: undefined }), policy).eligible, true);
 });
 
 test('isIssuePickupEligible: an empty pickupStates list leaves the state gate off', () => {
-  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: [] };
+  const policy: IssuePickupPolicy = {
+    priorityLabels: {},
+    defaultPriority: 0,
+    investigateLabel: 'investigate',
+    pickupStates: [],
+  };
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Anything' }), policy).eligible, true);
 });
 
@@ -119,6 +147,7 @@ test('isIssuePickupEligible: the state and label gates both report their reasons
     watchLabel: 'agent-ready',
     priorityLabels: {},
     defaultPriority: 0,
+    investigateLabel: 'investigate',
     pickupStates: ['Ready'],
   };
   assert.equal(
@@ -214,7 +243,7 @@ function run(over: Partial<IssueRun> = {}): IssueRun {
 
 function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
   return {
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: { maxAttempts: 3, cooldownMs: 60_000 },
     now: NOW,
     tasks: [],
@@ -291,13 +320,15 @@ test('issuePickupStatus: a finished task on the origin does not count as active'
 test('issuePickupStatus: an un-watched issue surfaces as unwatched with the intrinsic reasons', () => {
   const v = issuePickupStatus(
     issue({ labels: ['bug'] }),
-    ctx({ policy: { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 } }),
+    ctx({
+      policy: { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
+    }),
   );
   assert.deepEqual(v, { eligible: false, status: 'unwatched', reasons: ['no watch label "agent-ready"'] });
 });
 
 test('issuePickupStatus: the watch tag is the whole gate — no other label overrides it', () => {
-  const policy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 };
+  const policy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' };
   const both = issuePickupStatus(issue({ labels: ['agent-ready', 'agent-ignore'] }), ctx({ policy }));
   assert.deepEqual(both, { eligible: true, status: 'eligible', reasons: [] });
   const neither = issuePickupStatus(issue({ labels: ['agent-ignore'] }), ctx({ policy }));

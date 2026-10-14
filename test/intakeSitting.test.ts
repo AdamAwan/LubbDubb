@@ -116,7 +116,7 @@ test("the goal's current criteria are appended to the planner's prompt", async (
 
 test('the pickup verdict names the sitting, and only while no planner is on the goal', () => {
   const ctx = (extra: Partial<IssuePickupContext>): IssuePickupContext => ({
-    policy: { priorityLabels: {}, defaultPriority: 0 },
+    policy: { priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' },
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-25T12:00:00.000Z',
     tasks: [],
