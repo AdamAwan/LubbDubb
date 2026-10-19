@@ -9,11 +9,8 @@ const DEFAULT_EXPOSURE_FLOOR = 1;
 
 const DEFAULT_EXPOSURE_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
 
-export interface ExposureReading {
-  /** The share of traffic on a build carrying every commit asked about, 0–1; null where the probe did not answer. */
-  share: number | null;
-  detail: string | null;
-}
+/** The share of traffic on a build carrying every commit asked about, 0–1, or why the probe did not answer. */
+export type ExposureReading = { share: number; detail: null } | { share: null; detail: string };
 
 export interface ExposureRequest {
   environment: string;
@@ -70,7 +67,7 @@ export function unexposed(detail: string): ExposureReading {
  */
 export function exposureShortfall(environment: string, reading: ExposureReading, floor: number): string | null {
   if (reading.share === null)
-    return `the watch could not tell how much of ${environment} runs this change — ${reading.detail ?? 'the exposure probe did not answer'}`;
+    return `the watch could not tell how much of ${environment} runs this change — ${reading.detail}`;
   if (reading.share >= floor) return null;
   return (
     `${percent(reading.share)} of ${environment} runs a build carrying this change, below the ${percent(floor)} ` +

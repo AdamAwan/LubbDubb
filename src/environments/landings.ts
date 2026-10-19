@@ -168,3 +168,8 @@ function issueRefFor(pr: PullRequest, world: WorldSnapshot): string | null {
 function isGoalRoot(ref: string): boolean {
   return issueOriginNumber('root', ref) !== null;
 }
+
+/** A goal's landed commits on the integration branch. → docs/spec/24-environments.md#what-counts-as-a-landing */
+export function landedCommits(landings: readonly GoalLanding[], goalRef: string): string[] {
+  return landings.filter((l) => l.goalRef === goalRef && l.onIntegration !== false).map((l) => l.sha);
+}

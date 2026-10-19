@@ -13,15 +13,8 @@ import {
 // → docs/spec/24-environments.md
 
 export class FakeEnvironmentObserver implements EnvironmentObserver {
-  readonly asked: {
-    environment: string;
-    checkId: string;
-    kind: string;
-    query: string;
-    since: string;
-    commits?: readonly string[];
-  }[] = [];
-  readonly exposureAsked: { environment: string; commits: readonly string[] }[] = [];
+  readonly asked: Omit<EnvironmentObservationRequest, 'command'>[] = [];
+  readonly exposureAsked: Omit<ExposureRequest, 'command'>[] = [];
   /** The share the scripted exposure probe answers, echoing what it was asked; a string is printed verbatim. */
   exposureOutput: number | string | undefined;
 

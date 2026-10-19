@@ -7,6 +7,7 @@ import { watchFindings, watchWindowReadings } from './watchFinding.js';
 import { watchCheckVerdict } from './watchVerdict.js';
 import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './watchWindow.js';
 import { exposureFloor, exposureShortfall, watchSince } from './exposure.js';
+import { landedCommits } from './landings.js';
 
 // → docs/spec/24-environments.md
 
@@ -123,9 +124,7 @@ export class WatchDesk {
       if (environment?.watch === undefined) continue;
       const mine = checks.filter((c) => c.originRef === opened.goalRef);
       if (mine.length === 0) continue;
-      const commits = landings
-        .filter((l) => l.goalRef === opened.goalRef && l.onIntegration !== false)
-        .map((l) => l.sha);
+      const commits = landedCommits(landings, opened.goalRef);
       let window: WatchWindow | null;
       try {
         window = await this.exposed(environment, opened, mine, commits);
