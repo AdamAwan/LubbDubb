@@ -101,6 +101,7 @@ function window(over: Partial<WatchWindow> = {}): WatchWindow {
     settlesAt: new Date(NOW + 60_000).toISOString(),
     settledAt: null,
     extendedAt: null,
+    exposedAt: null,
     ...over,
   };
 }

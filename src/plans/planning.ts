@@ -74,7 +74,38 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   return { route: 'planning', planner: kind === 'cooldown' ? 'cooldown' : 'dispatch' };
 }
 
-export function watchNote(environments: readonly { name: string; watch?: { schema?: string } }[]): string {
+interface WatchedEnvironment {
+  name: string;
+  watch?: { schema?: string; exposure?: object };
+}
+
+/**
+ * Each watched environment's own schema prose, and — where it rolls out in stages — the rule that every
+ * query is scoped to traffic running the change. → docs/spec/29-post-deploy-watch.md#exposure
+ */
+function watchedEnvironmentLines(watched: readonly WatchedEnvironment[]): string[] {
+  const lines: string[] = [];
+  for (const env of watched) {
+    const schema = env.watch?.schema?.trim();
+    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
+  }
+  const staged = watched.filter((env) => env.watch?.exposure !== undefined).map((env) => env.name);
+  if (staged.length > 0)
+    lines.push(
+      '',
+      `**Staged rollout on ${staged.join(', ')}.** There a deploy is not an exposure: tenants move onto a new build ` +
+        'one at a time, so most of the traffic a window first sees still runs the build before this change. Scope ' +
+        'every query — signal, measure and presence alike — to traffic on a build carrying this change, the way the ' +
+        "environment's notes above say to (the goal's landed commits reach the environment's command as " +
+        '`LUBBDUBB_WATCH_COMMITS`). An unscoped signal reads the defect the change fixed on tenants that have not ' +
+        'upgraded, and an unscoped presence query proves the code path runs somewhere other than where the change ' +
+        'is. The harness holds every reading at unknown until enough of the environment runs the change, but it ' +
+        'cannot scope a query for you.',
+    );
+  return lines;
+}
+
+export function watchNote(environments: readonly WatchedEnvironment[]): string {
   const watched = environments.filter((env) => env.watch !== undefined);
   if (watched.length === 0) return '';
   const lines = [
@@ -115,14 +146,10 @@ export function watchNote(environments: readonly { name: string; watch?: { schem
     '',
     `Environments whose telemetry can be asked: ${watched.map((env) => env.name).join(', ')}.`,
   ];
-  for (const env of watched) {
-    const schema = env.watch?.schema?.trim();
-    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
-  }
-  return lines.join('\n');
+  return [...lines, ...watchedEnvironmentLines(watched)].join('\n');
 }
 
-export function watchDeclareNote(environments: readonly { name: string; watch?: { schema?: string } }[]): string {
+export function watchDeclareNote(environments: readonly WatchedEnvironment[]): string {
   const watched = environments.filter((env) => env.watch !== undefined);
   if (watched.length === 0) return '';
   const lines = [
@@ -160,11 +187,7 @@ export function watchDeclareNote(environments: readonly { name: string; watch?: 
     '',
     `Environments whose telemetry can be asked: ${watched.map((env) => env.name).join(', ')}.`,
   ];
-  for (const env of watched) {
-    const schema = env.watch?.schema?.trim();
-    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
-  }
-  return lines.join('\n');
+  return [...lines, ...watchedEnvironmentLines(watched)].join('\n');
 }
 
 /**

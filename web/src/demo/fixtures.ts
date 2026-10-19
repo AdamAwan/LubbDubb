@@ -2179,6 +2179,7 @@ export function buildDemoState(): DemoSeed {
         settlesAt: ago(-42),
         settledAt: null,
         extendedAt: ago(3),
+        exposedAt: null,
         checks: [
           {
             checkId: 'no-unbalanced-ledger-writes',
@@ -2254,6 +2255,7 @@ export function buildDemoState(): DemoSeed {
         settlesAt: ahead(60 * 30),
         settledAt: null,
         extendedAt: null,
+        exposedAt: null,
         checks: [
           {
             checkId: 'book-page-weight',

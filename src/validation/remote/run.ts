@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { EnvironmentProber } from '../../environments/prober.js';
+import { landedCommits } from '../../environments/landings.js';
 import type { GitObserver } from '../../git/gitObserver.js';
 import type { Store } from '../../store/store.js';
 import type { RemoteRun, RemoteSheetRow, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
@@ -437,10 +438,7 @@ export class RemoteRunDesk extends EventEmitter {
       };
     const deployedSha = deployed[0]!;
 
-    const landings = this.deps.store.environments
-      .listGoalLandings()
-      .filter((l) => l.goalRef === goalRef && l.onIntegration !== false)
-      .map((l) => l.sha);
+    const landings = landedCommits(this.deps.store.environments.listGoalLandings(), goalRef);
     if (landings.length === 0)
       return {
         deployedSha,

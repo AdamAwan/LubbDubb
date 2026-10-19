@@ -26,7 +26,7 @@ export const WATCH_COLUMNS: ColumnMigrations = {
     authored: "TEXT NOT NULL DEFAULT 'plan'",
   },
   watch_readings: { value: 'REAL' },
-  watch_windows: { extended_at: 'TEXT' },
+  watch_windows: { extended_at: 'TEXT', exposed_at: 'TEXT' },
 };
 
 export class WatchStore {
@@ -264,10 +264,21 @@ export class WatchStore {
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.ctx
       .prep(
-        `INSERT OR IGNORE INTO watch_windows (goal_ref, environment, opened_at, settles_at, settled_at, extended_at)
-         VALUES (@goalRef, @environment, @openedAt, @settlesAt, NULL, NULL)`,
+        `INSERT OR IGNORE INTO watch_windows
+           (goal_ref, environment, opened_at, settles_at, settled_at, extended_at, exposed_at)
+         VALUES (@goalRef, @environment, @openedAt, @settlesAt, NULL, NULL, NULL)`,
       )
       .run(input);
+  }
+
+  /** The rollout cleared the floor: the window's clock restarts from here. Stamped once. */
+  markWatchWindowExposed(goalRef: string, environment: string, exposedAt: string, settlesAt: string): void {
+    this.ctx
+      .prep(
+        `UPDATE watch_windows SET exposed_at=?, settles_at=?
+          WHERE goal_ref=? AND environment=? AND exposed_at IS NULL AND settled_at IS NULL`,
+      )
+      .run(exposedAt, settlesAt, goalRef, environment);
   }
 
   settleWatchWindow(goalRef: string, environment: string): void {
@@ -337,6 +348,7 @@ interface WatchWindowRow {
   settles_at: string;
   settled_at: string | null;
   extended_at: string | null;
+  exposed_at: string | null;
 }
 
 function hydrateWindow(row: WatchWindowRow): WatchWindow {
@@ -347,6 +359,7 @@ function hydrateWindow(row: WatchWindowRow): WatchWindow {
     settlesAt: row.settles_at,
     settledAt: row.settled_at,
     extendedAt: row.extended_at,
+    exposedAt: row.exposed_at,
   };
 }
 

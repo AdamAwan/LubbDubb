@@ -5,7 +5,9 @@ import type { EnvironmentObserver } from './observer.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchFindings, watchWindowReadings } from './watchFinding.js';
 import { watchCheckVerdict } from './watchVerdict.js';
-import { dueWindows, openableArrivals, settlingWindows } from './watchWindow.js';
+import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './watchWindow.js';
+import { exposureFloor, exposureShortfall, watchSince } from './exposure.js';
+import { landedCommits } from './landings.js';
 
 // → docs/spec/24-environments.md
 
@@ -116,12 +118,27 @@ export class WatchDesk {
     }
     const byName = new Map(this.deps.environments.map((e) => [e.name, e]));
     const checks = store.watches.listGoalWatches();
-    for (const window of due) {
-      const environment = byName.get(window.environment);
+    const landings = store.environments.listGoalLandings();
+    for (const opened of due) {
+      const environment = byName.get(opened.environment);
       if (environment?.watch === undefined) continue;
-      for (const check of checks.filter((c) => c.originRef === window.goalRef)) {
+      const mine = checks.filter((c) => c.originRef === opened.goalRef);
+      if (mine.length === 0) continue;
+      const commits = landedCommits(landings, opened.goalRef);
+      let window: WatchWindow | null;
+      try {
+        window = await this.exposed(environment, opened, mine, commits);
+      } catch (err) {
+        errors?.record({
+          source: 'cycle',
+          message: `reading exposure on ${opened.environment} for ${opened.goalRef} failed: ${(err as Error).message}`,
+        });
+        continue;
+      }
+      if (window === null) continue;
+      for (const check of mine) {
         try {
-          await this.readCheck(environment, window, check);
+          await this.readCheck(environment, window, check, commits);
         } catch (err) {
           errors?.record({
             source: 'cycle',
@@ -132,8 +149,53 @@ export class WatchDesk {
     }
   }
 
-  private async readCheck(environment: EnvironmentConfig, window: WatchWindow, check: GoalWatch): Promise<void> {
+  /**
+   * The window to read, or null where the rollout has not reached enough of the environment — in which
+   * case every check is recorded `unknown` and no query is run. → docs/spec/29-post-deploy-watch.md#exposure
+   */
+  private async exposed(
+    environment: EnvironmentConfig,
+    window: WatchWindow,
+    checks: readonly GoalWatch[],
+    commits: readonly string[],
+  ): Promise<WatchWindow | null> {
+    const exposure = environment.watch!.exposure;
+    if (exposure === undefined) return window;
+    const reading = await this.deps.observer.exposure({
+      environment: environment.name,
+      command: exposure.command,
+      commits,
+    });
+    const shortfall = exposureShortfall(environment.name, reading, exposureFloor(environment));
+    if (shortfall !== null) {
+      for (const check of checks)
+        this.deps.store.watches.recordWatchReading({
+          goalRef: window.goalRef,
+          environment: window.environment,
+          checkId: check.id,
+          value: null,
+          verdict: 'unknown',
+          rows: null,
+          detail: shortfall,
+        });
+      return null;
+    }
+    if (window.exposedAt !== null) return window;
+    const now = this.now();
+    const exposedAt = new Date(now).toISOString();
+    const settlesAt = new Date(now + watchWindowMs(environment)).toISOString();
+    this.deps.store.watches.markWatchWindowExposed(window.goalRef, window.environment, exposedAt, settlesAt);
+    return { ...window, exposedAt, settlesAt };
+  }
+
+  private async readCheck(
+    environment: EnvironmentConfig,
+    window: WatchWindow,
+    check: GoalWatch,
+    commits: readonly string[],
+  ): Promise<void> {
     const command = environment.watch!.observe;
+    const since = watchSince(window);
     const presence =
       check.presence === null
         ? null
@@ -143,7 +205,8 @@ export class WatchDesk {
             checkId: check.id,
             query: check.presence,
             kind: 'presence',
-            since: window.openedAt,
+            since,
+            commits,
           });
     const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
     const reading = silent
@@ -154,7 +217,8 @@ export class WatchDesk {
           checkId: check.id,
           query: check.query,
           kind: check.kind === 'measure' ? 'measure' : 'signal',
-          since: window.openedAt,
+          since,
+          commits,
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading });
     this.deps.store.watches.recordWatchReading({

@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS watch_windows (
   settles_at  TEXT NOT NULL,        -- opened_at + the environment's forMs
   settled_at  TEXT,                 -- NULL while it is still watching
   extended_at TEXT,                 -- when an operator last extended it; NULL means never extended
+  exposed_at  TEXT,                 -- when the rollout first cleared watch.exposure.atLeast; NULL before, or none declared
   PRIMARY KEY (goal_ref, environment)
 );
 
