@@ -367,6 +367,16 @@ operator's command is two lines and reads the query out of the variable. `{since
 substituted in what `LUBBDUBB_WATCH_QUERY` carries — a wrapper has nothing to fill in, and the instant
 is passed beside it only so one that assembles its own query can say what period it read.
 
+A window's reading also carries **`LUBBDUBB_WATCH_COMMITS`**: the goal's landed commits, the ones its
+arrival was confirmed on, space-separated. It names _the change_ rather than the build deployed now,
+which is what lets a wrapper on a staged rollout bind "tenants on any build that contains every one of
+these" ahead of the query — a hotfix mid-window is another build that contains them, not a narrower
+reading. It is absent at the [dry run](#the-dry-run), which is taken before anything has landed, so a
+wrapper that scopes on it must read unscoped when it is unset; the dry run proves syntax and nothing
+more either way. The harness cannot check that a wrapper scoped on it — an id echo proves the query
+was run, not how it was filtered — which is why a staged environment declares an
+[exposure](#exposure) as well, and why that is the backstop rather than the prose.
+
 This is a deliberate departure from `at`, which passes **nothing** in, and the reason for the
 departure is worth stating because it is the rule that keeps it safe. `at` refuses a parameter
 because an operator's command that never learned about a `{commit}` placeholder would silently
@@ -496,6 +506,48 @@ declares an `observe`; the goal declares at least one check; and the confirming 
 goal that declares its first check _after_ it arrived somewhere is therefore not watched there, which
 is the honest reading rather than a gap — the declaration is what the operator approved, and
 approving it after the deploy is approving it for the next one.
+
+### Exposure
+
+On many deployments _deployed_ is not _exposed_. Each tenant — or customer, cohort, ring — moves onto a
+new build only when its own upgrade, migration, flag flip or canary promotion happens, which can take
+hours or days. Until then most traffic still runs the previous build and still produces the failure
+the release fixed, so a signal reads _still failing_ for work that is fixed; and a presence query can
+read zero because no upgraded tenant has run the path yet. **The invariant: on a staged rollout a
+reading never comes out clean, or regressed, on traffic that does not run the change. Low exposure
+reads `unknown`, never passed or failed.**
+
+An environment declares it with `watch.exposure` (`src/environments/exposure.ts`):
+
+- **`command`** runs as `observe` does, with `LUBBDUBB_ENVIRONMENT` and `LUBBDUBB_WATCH_COMMITS`, and
+  prints **one JSON object**: `{"share": 0.42, "lubbdubbWatchCommits": "<the variable, verbatim>"}` —
+  the share of traffic on a build carrying _every_ commit named, between 0 and 1. The echo is
+  `observe`'s id echo for the same reason: a wrapper that ignores the commits and answers for whatever
+  is deployed now answers a wider question confidently, and without the echo that answer is
+  indistinguishable from the right one. Anything else — no echo, no number, a number outside 0–1, a
+  non-zero exit — is the probe not answering, which is `unknown` and never full exposure.
+- **`atLeast`** is the share below which a reading is `unknown`; it defaults to **1**, the only floor
+  at which an unscoped query reads nothing but the change. An operator lowers it deliberately, beside
+  queries scoped on `LUBBDUBB_WATCH_COMMITS`.
+- **`waitMs`** is how long a window waits for exposure, defaulting to seven days.
+
+The window pass asks the probe once per due window, before any query (`WatchDesk.exposed`). Below the
+floor, every check is recorded `unknown` with the share in words and **no query is run** — not a
+reading taken and then discarded, because a reading of the old build is not evidence about this one.
+An `unknown` files no bench row, so a slow rollout is a card saying so, not an alarm. The probe is
+asked again on every reading, including after exposure: a rollback that drops the share drops the
+readings back to `unknown` rather than letting the old build's traffic re-enter the window.
+
+The window **opens on arrival and is clocked from exposure**. It opens as any window does — the
+freshness guard and the arrival stamp are unchanged — but on an environment declaring an exposure its
+first end is `arrival + waitMs` rather than `arrival + forMs`. The first reading that clears the floor
+stamps `watch_windows.exposed_at` and moves the end to `exposed_at + forMs`, once; and from then on
+`{since}` is `exposed_at`, not the arrival (`watchSince`), so the hours the change spent reaching
+tenants are outside every query, the bench row's query included. A window that never reaches the floor
+settles at `waitMs` with every check `unknown`, which is what happened, and an operator can extend it.
+
+The baseline is unchanged: it is taken at the dry run, over all traffic, before the work arrived — a
+_before_ that no tenant of the change contributes to, which is the comparison it is meant to be.
 
 ### Closing
 
@@ -776,7 +828,25 @@ can write it; nothing in `src/mcp/` touches config.
 - a `holds` naming an obligation the harness does not file, so holding it would hold nothing;
 - a `describe` without an `observe`, which is a schema for a question nothing asks;
 - a `queryUrl` carrying neither `{query}` nor `{queryGzip}`, which links every check to the same page
-  with nothing of its own query in it ([running it](#running-it-where-the-environment-said-where)).
+  with nothing of its own query in it ([running it](#running-it-where-the-environment-said-where));
+- an `exposure` with no `command`, an `atLeast` outside (0, 1] — `90` meant as a percentage would
+  hold every reading at `unknown` for ever — or a `waitMs` that is not a positive duration.
+
+A staged environment adds one block to its `watch`:
+
+```jsonc
+"watch": {
+  "observe": "./scripts/telemetry.sh uk",
+  "exposure": { "command": "./scripts/exposure.sh uk", "atLeast": 0.9, "waitMs": 432000000 },
+}
+```
+
+**Planners are told.** Where any watched environment declares an `exposure`, the watch notes a planner
+and a working agent read (`watchNote`, `watchDeclareNote`, `src/plans/planning.ts`) append a paragraph
+naming it: every query — signal, measure and presence alike — is scoped to traffic on a build carrying
+the change, as that environment's `schema` says to. Appended after the schema prose, never
+interpolated ([05](05-dispatcher.md#prompt-templates)). Unscoped, "zero failures" may only mean nobody
+has upgraded yet. → [Exposure](#exposure)
 
 ## In the cockpit
 
@@ -900,7 +970,10 @@ question marks. A goal that declared no checks renders nothing either, because n
   once; each is watched separately, but a reading that regressed cannot say which of the four did it.
   The card reports what the goal's own declared checks say, and says nothing about causation.
 - **A rollback.** A settled watch is not re-opened, so an environment that goes back past the commit
-  keeps the verdict taken while it was there.
+  keeps the verdict taken while it was there. An open window on an environment declaring an
+  [exposure](#exposure) does see one — its readings drop back to `unknown` — and one without does not.
+- **Whether a query was scoped.** `LUBBDUBB_WATCH_COMMITS` reaches the wrapper; nothing proves the
+  wrapper filtered on it. The exposure floor is what bounds the cost of an unscoped query.
 - **Anything finer than `watchIntervalMs`.** A spike that opens and closes between two readings did
   not happen, as far as this is concerned.
 - **A check whose telemetry is correct and whose question is wrong.** The dry run catches a query
@@ -953,6 +1026,14 @@ that table's first added column and the one the warning is about — and it need
 stated reason rather than by luck: its null means **never extended**, which is exactly true of every
 row written before it existed. A column here whose null meant anything else would have to be gated on
 `ensureColumns`' report.
+
+`exposed_at` is the table's second added column, and its null **does** mean something — _the rollout
+has not cleared the floor_, which holds every reading at `unknown` and keeps `{since}` at the arrival.
+It needs no backfill anyway, and for a stated reason: the null is read only where the environment
+declares `watch.exposure`, and no deployment declared one before the column existed. An operator who
+adds one to an environment with open windows has those windows probed on their next reading, which is
+the correct reading of _not yet known to be exposed_; the first that clears the floor restarts its
+clock at `forMs`. Declared in `WATCH_COLUMNS`.
 
 `watch_readings` is bounded by `for` rather than by a retention rule: a window's readings are the
 evidence behind its verdict, and a rule that dropped them would leave the verdict standing with

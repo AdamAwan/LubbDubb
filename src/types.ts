@@ -2074,6 +2074,8 @@ export interface WatchWindow {
   settlesAt: string;
   settledAt: string | null;
   extendedAt: string | null;
+  /** When the rollout first cleared the environment's exposure floor; null before, and where none is declared. */
+  exposedAt: string | null;
 }
 
 export type WatchCheckVerdict = 'clean' | 'regressed' | 'unknown';

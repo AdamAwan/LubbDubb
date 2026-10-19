@@ -3,6 +3,7 @@ import type { EnvironmentGate, GoalWatch, HumanTask, WatchCheckVerdict, WatchRea
 import type { EnvironmentConfig } from './policy.js';
 import { watchQueryUrl } from './watchQueryUrl.js';
 import { withSince } from '../validation/watchQueryShape.js';
+import { watchSince } from './exposure.js';
 
 // → docs/spec/24-environments.md
 
@@ -59,7 +60,7 @@ export function watchWindowReadings(input: {
       regressed: checks.flatMap((check, i) => {
         const reading = read[i];
         if (reading?.verdict !== 'regressed') return [];
-        const query = withSince(check.query, window.openedAt);
+        const query = withSince(check.query, watchSince(window));
         return [
           {
             title: check.title,

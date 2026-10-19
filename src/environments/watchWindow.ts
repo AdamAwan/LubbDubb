@@ -1,6 +1,7 @@
 import type { GoalArrival, WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
+import { exposureWaitMs } from './exposure.js';
 
 // → docs/spec/24-environments.md
 
@@ -19,6 +20,15 @@ const DEFAULT_WINDOW_MS = 48 * 60 * 60 * 1000;
  */
 export function watchWindowMs(environment: EnvironmentConfig): number {
   return environment.watch?.forMs ?? DEFAULT_WINDOW_MS;
+}
+
+/**
+ * How long a newly opened window runs before anything moves its end. Where the environment rolls out in
+ * stages this is how long it waits for exposure; reaching it restarts the window at `forMs`.
+ * → docs/spec/29-post-deploy-watch.md#exposure
+ */
+function firstWindowMs(environment: EnvironmentConfig): number {
+  return environment.watch?.exposure === undefined ? watchWindowMs(environment) : exposureWaitMs(environment);
 }
 
 const WATCH_WINDOW_INTERVALS = 2;
@@ -48,7 +58,7 @@ export function openableArrivals(input: {
     const watchable = environment?.watch !== undefined && input.declared.has(arrival.goalRef);
     out.push({
       arrival,
-      settlesAt: watchable && fresh ? new Date(seen + watchWindowMs(environment)).toISOString() : null,
+      settlesAt: watchable && fresh ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
     });
   }
   return out;

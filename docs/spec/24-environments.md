@@ -464,6 +464,12 @@ The decision is pure and lives with the other three categories in `web/src/cockp
 }
 ```
 
+**Arrival is deployment, not exposure.** `at` says a commit is deployed; on an environment that rolls a
+build out to tenants in stages, most traffic may still run the previous one for days. Reach and arrival
+stay deployment facts — the gates an arrival opens are about the build being there — and exposure is a
+question only the [post-deploy watch](29-post-deploy-watch.md#exposure) asks, through an optional
+`watch.exposure` probe that is passed the goal's landed commits. `at` still takes no parameter.
+
 `environments` is `fileOnly` in `CONFIG_FIELDS`, for `whitelistedApprovals`' reason: each entry is a
 shell command the harness runs on a schedule, which is a thing to write deliberately in a file rather
 than to fill in beside twenty other rows. No agent can write it — nothing in `src/mcp/` touches

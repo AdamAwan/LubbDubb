@@ -49,6 +49,13 @@ interface EnvironmentWatch {
   forMs?: number;
   holds?: EnvironmentGate[];
   queryUrl?: string;
+  exposure?: EnvironmentWatchExposure;
+}
+
+interface EnvironmentWatchExposure {
+  command: string;
+  atLeast?: number;
+  waitMs?: number;
 }
 
 const ENVIRONMENT_GATES: readonly EnvironmentGate[] = ['validate', 'close_out'];
@@ -225,6 +232,28 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
     );
   validateWatchQueryUrl(watch.queryUrl, where);
   if (watch.holds !== undefined) validateWatchHolds(watch.holds, where);
+  if (watch.exposure !== undefined) validateWatchExposure(watch.exposure, where);
+}
+
+function validateWatchExposure(exposure: EnvironmentWatchExposure, where: string): void {
+  if (typeof exposure !== 'object' || exposure === null || Array.isArray(exposure))
+    throw new Error(`${where}: "watch.exposure" must be an object — {"command": "...", "atLeast": 0.9}.`);
+  if (typeof exposure.command !== 'string' || exposure.command.trim() === '')
+    throw new Error(
+      `${where}: "watch.exposure.command" must be a non-empty command that says what share of traffic runs a ` +
+        'build carrying the commits in LUBBDUBB_WATCH_COMMITS.',
+    );
+  const floor = exposure.atLeast;
+  if (floor !== undefined && (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0 || floor > 1))
+    throw new Error(
+      `${where}: "watch.exposure.atLeast" must be a share above 0 and at most 1 — the exposure below which a ` +
+        'reading is unknown.',
+    );
+  if (exposure.waitMs !== undefined && !isPositiveMs(exposure.waitMs))
+    throw new Error(
+      `${where}: "watch.exposure.waitMs" must be a positive number of milliseconds — how long a window waits ` +
+        'for the rollout before it settles unread.',
+    );
 }
 
 function validateWatchHolds(holds: NonNullable<EnvironmentWatch['holds']>, where: string): void {

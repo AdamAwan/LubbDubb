@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process';
 import { parseWatchResult, preparedQuery, unanswered, type WatchQueryKind, type WatchResult } from './watchResult.js';
 import { firstLine } from '../primitives.js';
+import { commitsVariable, parseExposure, unexposed, type ExposureReading, type ExposureRequest } from './exposure.js';
 
 // → docs/spec/24-environments.md
 
@@ -12,10 +13,13 @@ export interface EnvironmentObservationRequest {
   kind: WatchQueryKind;
   /** The instant the reading is about: what the query's `{since}` is replaced with. */
   since: string;
+  /** The goal's landed commits, for a query scoped to traffic running them; absent at the dry run. */
+  commits?: readonly string[];
 }
 
 export interface EnvironmentObserver {
   observe(request: EnvironmentObservationRequest): Promise<WatchResult>;
+  exposure(request: ExposureRequest): Promise<ExposureReading>;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -42,11 +46,35 @@ export class CommandEnvironmentObserver implements EnvironmentObserver {
             LUBBDUBB_WATCH_ID: request.checkId,
             LUBBDUBB_WATCH_QUERY: prepared.query,
             LUBBDUBB_WATCH_SINCE: request.since,
+            ...(request.commits === undefined ? {} : { LUBBDUBB_WATCH_COMMITS: commitsVariable(request.commits) }),
           },
         },
         (err, stdout, stderr) => {
           if (err !== null) return resolve(failure(err as ExecFailure, stderr));
           resolve(parseWatchResult(stdout, request.checkId, request.kind));
+        },
+      );
+    });
+  }
+
+  exposure(request: ExposureRequest): Promise<ExposureReading> {
+    if (request.commits.length === 0) return Promise.resolve(unexposed('the goal has no landed commit to ask about'));
+    return new Promise((resolve) => {
+      exec(
+        request.command,
+        {
+          cwd: this.repoRoot,
+          timeout: this.timeoutMs,
+          windowsHide: true,
+          env: {
+            ...process.env,
+            LUBBDUBB_ENVIRONMENT: request.environment,
+            LUBBDUBB_WATCH_COMMITS: commitsVariable(request.commits),
+          },
+        },
+        (err, stdout, stderr) => {
+          if (err !== null) return resolve(unexposed(failure(err as ExecFailure, stderr).detail ?? err.message));
+          resolve(parseExposure(stdout, request.commits));
         },
       );
     });
